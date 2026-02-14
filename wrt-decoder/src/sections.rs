@@ -298,15 +298,30 @@ fn parse_limits(bytes: &[u8], offset: usize) -> Result<(wrt_format::types::Limit
     let flags = bytes[offset];
     let mut new_offset = offset + 1;
 
-    // Read minimum
-    let (min, min_offset) = binary::read_leb128_u32(bytes, new_offset)?;
+    // Check memory64 flag (bit 2)
+    let memory64 = flags & 0x04 != 0;
+
+    // Read minimum - memory64 uses u64, regular uses u32
+    let (min, min_offset) = if memory64 {
+        let (val, off) = binary::read_leb128_u64(bytes, new_offset)?;
+        (val, off)
+    } else {
+        let (val, off) = binary::read_leb128_u32(bytes, new_offset)?;
+        (val as u64, off)
+    };
     new_offset = min_offset;
 
     // Check if maximum is present (flag bit 0)
     let max = if flags & 0x01 != 0 {
-        let (max_val, max_offset) = binary::read_leb128_u32(bytes, new_offset)?;
+        let (max_val, max_offset) = if memory64 {
+            let (val, off) = binary::read_leb128_u64(bytes, new_offset)?;
+            (val, off)
+        } else {
+            let (val, off) = binary::read_leb128_u32(bytes, new_offset)?;
+            (val as u64, off)
+        };
         new_offset = max_offset;
-        Some(max_val as u64)
+        Some(max_val)
     } else {
         None
     };
@@ -316,10 +331,10 @@ fn parse_limits(bytes: &[u8], offset: usize) -> Result<(wrt_format::types::Limit
 
     Ok((
         wrt_format::types::Limits {
-            min: min as u64,
+            min,
             max,
             shared,
-            memory64: false,
+            memory64,
         },
         new_offset,
     ))
@@ -636,7 +651,7 @@ pub mod parsers {
         );
 
         Ok((
-            wrt_foundation::MemoryType::new(foundation_limits, limits.shared),
+            wrt_foundation::MemoryType::new_with_memory64(foundation_limits, limits.shared, limits.memory64),
             new_offset,
         ))
     }

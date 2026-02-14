@@ -3506,6 +3506,7 @@ impl Module {
                     let memory_type = WrtMemoryType {
                         limits: WrtLimits { min: 0, max: None },  // Will be resolved via linking
                         shared: true,  // Component Model uses shared memory
+                        memory64: false,
                     };
                     ExternType::Memory(memory_type)
                 },
@@ -3627,6 +3628,7 @@ impl Module {
                     max: max_pages,
                 },
                 shared: false,
+                memory64: false,
             };
             runtime_module
                 .push_memory(MemoryWrapper::new(Memory::new(to_core_memory_type(

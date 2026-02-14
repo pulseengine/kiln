@@ -357,6 +357,7 @@ impl CoreModuleAdapter {
                         max: mem_adapter.limits.max,
                     },
                     shared: mem_adapter.shared,
+                    memory64: false,
                 })?),
                 kind: ExportKind::Value {
                     value_index: mem_adapter.core_index,

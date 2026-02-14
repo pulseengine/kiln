@@ -946,6 +946,7 @@ impl<'a> StreamingDecoder<'a> {
                         let memory_type = MemoryType {
                             limits,
                             shared: flags & 0x02 != 0, // bit 1 = shared
+                            memory64: flags & 0x04 != 0, // bit 2 = memory64
                         };
 
                         let import = Import {
@@ -1380,6 +1381,7 @@ impl<'a> StreamingDecoder<'a> {
             let memory_type = wrt_foundation::types::MemoryType {
                 limits: wrt_foundation::types::Limits { min, max },
                 shared,
+                memory64: is_memory64,
             };
 
             // Add to module

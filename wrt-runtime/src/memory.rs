@@ -517,6 +517,7 @@ impl wrt_foundation::traits::FromBytes for Memory {
                 max: if max == 0 { None } else { Some(max) },
             },
             shared: false,
+            memory64: false,
         };
         Self::new(to_core_memory_type(&memory_type)).map(|boxed| *boxed)
     }

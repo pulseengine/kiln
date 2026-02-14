@@ -3821,11 +3821,18 @@ impl FromBytes for TableType {
 pub struct MemoryType {
     pub limits: Limits,
     pub shared: bool,
+    /// Memory64 extension - uses i64 addresses instead of i32
+    pub memory64: bool,
 }
 
 impl MemoryType {
     pub const fn new(limits: Limits, shared: bool) -> Self {
-        Self { limits, shared }
+        Self { limits, shared, memory64: false }
+    }
+
+    /// Create a memory type with all options
+    pub const fn new_with_memory64(limits: Limits, shared: bool, memory64: bool) -> Self {
+        Self { limits, shared, memory64 }
     }
 }
 
@@ -3833,6 +3840,7 @@ impl Checksummable for MemoryType {
     fn update_checksum(&self, checksum: &mut Checksum) {
         self.limits.update_checksum(checksum);
         checksum.update(self.shared as u8);
+        checksum.update(self.memory64 as u8);
     }
 }
 
@@ -3844,6 +3852,7 @@ impl ToBytes for MemoryType {
     ) -> wrt_error::Result<()> {
         self.limits.to_bytes_with_provider(writer, provider)?;
         writer.write_u8(self.shared as u8)?;
+        writer.write_u8(self.memory64 as u8)?;
         Ok(())
     }
     // Default to_bytes method will be used if #cfg(feature = "default-provider") is
@@ -3866,7 +3875,17 @@ impl FromBytes for MemoryType {
                 ));
             },
         };
-        Ok(MemoryType { limits, shared })
+        let memory64_byte = reader.read_u8()?;
+        let memory64 = match memory64_byte {
+            0 => false,
+            1 => true,
+            _ => {
+                return Err(Error::runtime_execution_error(
+                    "Invalid memory64 flag value",
+                ));
+            },
+        };
+        Ok(MemoryType { limits, shared, memory64 })
     }
     // Default from_bytes method will be used if #cfg(feature = ")
     // is active

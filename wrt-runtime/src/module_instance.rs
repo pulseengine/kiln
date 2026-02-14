@@ -1164,7 +1164,11 @@ impl ModuleInstance {
                     let table_wrapper = &tables[table_idx];
                     let table = table_wrapper.inner();
 
-                    // Set each function reference in the table
+                    // Set each element in the table
+                    // Use the element segment's type to determine if we're dealing with
+                    // funcref or externref elements
+                    let is_externref = matches!(elem_segment.element_type, wrt_foundation::types::RefType::Externref);
+
                     for (item_idx, func_idx) in elem_segment.items.iter().enumerate() {
                         let table_offset = actual_offset + item_idx as u32;
 
@@ -1172,13 +1176,17 @@ impl ModuleInstance {
                         // u32::MAX = ref.null (null reference)
                         // u32::MAX - 1 = deferred (will be evaluated later by item_exprs)
                         let value = if func_idx == u32::MAX {
-                            // ref.null - set to null reference
-                            Some(WrtValue::FuncRef(None))
+                            // ref.null - set to null reference based on element type
+                            if is_externref {
+                                Some(WrtValue::ExternRef(None))
+                            } else {
+                                Some(WrtValue::FuncRef(None))
+                            }
                         } else if func_idx == u32::MAX - 1 {
                             // Deferred - skip, will be set by item_exprs processing below
                             continue;
                         } else {
-                            // Normal function reference
+                            // Normal function reference (only valid for funcref elements)
                             Some(WrtValue::FuncRef(Some(WrtFuncRef { index: func_idx })))
                         };
 

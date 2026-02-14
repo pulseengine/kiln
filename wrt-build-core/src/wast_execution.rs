@@ -105,6 +105,13 @@ impl WastEngine {
             .reevaluate_deferred_globals()
             .context("Failed to re-evaluate deferred globals")?;
 
+        // Resolve spectest table imports BEFORE populate_tables_from_module
+        // This ensures imported tables are available before element initialization
+        Self::resolve_spectest_table_imports(&module, &module_instance)?;
+
+        // Resolve table imports from registered modules (e.g., "module1" "shared-table")
+        self.resolve_registered_table_imports(&module, &module_instance)?;
+
         module_instance
             .populate_tables_from_module()
             .context("Failed to populate tables")?;
@@ -313,12 +320,13 @@ impl WastEngine {
         for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
             if mod_name == "spectest" && field_name == "memory" {
                 // Check if this is actually a memory import
-                if let Some(RuntimeImportDesc::Memory(mem_type)) = module.import_types.get(i) {
-                    // Create a memory with the imported type's limits
-                    // The spectest memory has at least 1 page and can grow
+                if let Some(RuntimeImportDesc::Memory(_mem_type)) = module.import_types.get(i) {
+                    // The spectest module provides a memory with 1-2 pages
+                    // The import type specifies minimum requirements, but the actual
+                    // spectest memory always has at least 1 page
                     let core_mem_type = CoreMemoryType {
-                        limits: mem_type.limits,
-                        shared: mem_type.shared,
+                        limits: Limits { min: 1, max: Some(2) },
+                        shared: false,
                     };
 
                     let memory = Memory::new(core_mem_type).map_err(|e| {
@@ -398,6 +406,110 @@ impl WastEngine {
                     // Non-spectest global import
                     global_import_idx += 1;
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Resolve spectest table imports
+    /// The spectest module provides a table export named "table"
+    /// This must be called BEFORE populate_tables_from_module() because
+    /// imported tables come before defined tables in the index space.
+    fn resolve_spectest_table_imports(
+        module: &Module,
+        module_instance: &Arc<wrt_runtime::module_instance::ModuleInstance>,
+    ) -> Result<()> {
+        use wrt_foundation::types::{Limits, RefType, TableType};
+        use wrt_runtime::module::{RuntimeImportDesc, TableWrapper};
+        use wrt_runtime::table::Table;
+
+        // The spectest table type: (table 10 20 funcref)
+        // Look for table imports from spectest
+        for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
+            if mod_name == "spectest" && field_name == "table" {
+                // Check if this is actually a table import
+                if let Some(RuntimeImportDesc::Table(_table_type)) = module.import_types.get(i) {
+                    // The spectest module provides a table with 10-20 funcref elements
+                    // The import type specifies minimum requirements, but the actual
+                    // spectest table always has at least 10 elements
+                    let spectest_table_type = TableType {
+                        element_type: RefType::Funcref,
+                        limits: Limits { min: 10, max: Some(20) },
+                    };
+                    let table = Table::new(spectest_table_type).map_err(|e| {
+                        anyhow::anyhow!("Failed to create spectest table: {:?}", e)
+                    })?;
+
+                    let wrapper = TableWrapper::new(table);
+
+                    // Add the table to the instance (at the appropriate import index)
+                    module_instance
+                        .set_table(0, wrapper)
+                        .map_err(|e| anyhow::anyhow!("Failed to set spectest table: {:?}", e))?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Resolve table imports from registered modules
+    /// This handles cross-module table sharing where a module imports a table
+    /// exported by another registered module (e.g., `(import "module1" "shared-table" (table 10 funcref))`)
+    fn resolve_registered_table_imports(
+        &self,
+        module: &Module,
+        module_instance: &Arc<wrt_runtime::module_instance::ModuleInstance>,
+    ) -> Result<()> {
+        use wrt_runtime::module::{RuntimeImportDesc, TableWrapper};
+
+        let mut table_import_idx = 0usize;
+
+        for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
+            // Check if this is a table import
+            if let Some(RuntimeImportDesc::Table(_)) = module.import_types.get(i) {
+                // Skip spectest imports (handled separately)
+                if mod_name == "spectest" {
+                    table_import_idx += 1;
+                    continue;
+                }
+
+                // Look up the registered module
+                if let Some(source_module_arc) = self.modules.get(mod_name) {
+                    // Find the exported table in the source module
+                    let bounded_field =
+                        wrt_foundation::bounded::BoundedString::<256>::from_str_truncate(
+                            field_name,
+                        )
+                        .map_err(|e| anyhow::anyhow!("Field name too long: {:?}", e))?;
+
+                    if let Some(export) = source_module_arc.exports.get(&bounded_field) {
+                        if export.kind == wrt_runtime::module::ExportKind::Table {
+                            let source_table_idx = export.index as usize;
+
+                            // Get the source module instance to access its table
+                            if let Some(source_instance_id) = self.instance_ids.get(mod_name) {
+                                // Get the table from the source instance via the engine
+                                if let Some(source_instance) = self.engine.get_instance(*source_instance_id) {
+                                    if let Ok(table_wrapper) = source_instance.table(source_table_idx as u32) {
+                                        // Share the table (clone the Arc, not the data)
+                                        module_instance
+                                            .set_table(table_import_idx, table_wrapper)
+                                            .map_err(|e| {
+                                                anyhow::anyhow!(
+                                                    "Failed to set imported table: {:?}",
+                                                    e
+                                                )
+                                            })?;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                table_import_idx += 1;
             }
         }
 
