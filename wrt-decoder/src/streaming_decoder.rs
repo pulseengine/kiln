@@ -807,12 +807,9 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 0x01 => {
                     // Table import - need to parse table type
-                    // ref_type (1 byte) + limits (flags + min, optional max)
-                    if offset >= data.len() {
-                        return Err(Error::parse_error("Unexpected end of table import"));
-                    }
-                    let ref_type_byte = data[offset];
-                    offset += 1;
+                    // ref_type (may be multi-byte for GC types) + limits (flags + min, optional max)
+                    let (ref_value_type, new_offset) = self.parse_value_type(data, offset)?;
+                    offset = new_offset;
 
                     // Parse limits
                     if offset >= data.len() {
@@ -848,12 +845,10 @@ impl<'a> StreamingDecoder<'a> {
                         use wrt_format::module::{Import, ImportDesc};
                         use wrt_foundation::types::{Limits, RefType, TableType};
 
-                        // Convert ref_type byte to RefType
-                        let ref_type = match ref_type_byte {
-                            0x70 => RefType::Funcref,
-                            0x6F => RefType::Externref,
-                            _ => RefType::Funcref, // Default for unknown
-                        };
+                        // Convert parsed ValueType to RefType
+                        let ref_type = RefType::try_from(ref_value_type).map_err(|_| {
+                            Error::parse_error("Unknown table element type in import")
+                        })?;
 
                         let limits = Limits { min, max };
 
@@ -978,12 +973,13 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 0x03 => {
                     // Global import - need to parse global type
-                    // value_type (1 byte) + mutability (1 byte)
-                    if offset + 1 >= data.len() {
+                    // value_type (may be multi-byte for GC types) + mutability (1 byte)
+                    let (value_type, new_offset) = self.parse_value_type(data, offset)?;
+                    offset = new_offset;
+
+                    if offset >= data.len() {
                         return Err(Error::parse_error("Unexpected end of global import"));
                     }
-                    let value_type_byte = data[offset];
-                    offset += 1;
                     let mutability_byte = data[offset];
                     offset += 1;
 
@@ -991,19 +987,6 @@ impl<'a> StreamingDecoder<'a> {
                     if mutability_byte != 0x00 && mutability_byte != 0x01 {
                         return Err(Error::parse_error("malformed mutability"));
                     }
-
-                    // Parse value type
-                    let value_type = match value_type_byte {
-                        0x7F => wrt_foundation::ValueType::I32,
-                        0x7E => wrt_foundation::ValueType::I64,
-                        0x7D => wrt_foundation::ValueType::F32,
-                        0x7C => wrt_foundation::ValueType::F64,
-                        0x7B => wrt_foundation::ValueType::V128,
-                        0x70 => wrt_foundation::ValueType::FuncRef,
-                        0x6F => wrt_foundation::ValueType::ExternRef,
-                        0x69 => wrt_foundation::ValueType::ExnRef,
-                        _ => return Err(Error::parse_error("Invalid global import value type")),
-                    };
 
                     #[cfg(feature = "tracing")]
                     trace!(import_index = i, value_type = ?value_type, mutable = (mutability_byte != 0), "import: global");
@@ -1162,22 +1145,13 @@ impl<'a> StreamingDecoder<'a> {
                 offset += 1;
             }
 
-            // Now parse the ref_type
-            if offset >= data.len() {
-                return Err(Error::parse_error(
-                    "Unexpected end of table section (ref_type)",
-                ));
-            }
-            let ref_type_byte = data[offset];
-            offset += 1;
+            // Now parse the ref_type using the full GC-aware parser
+            let (value_type, new_offset) = self.parse_value_type(data, offset)?;
+            offset = new_offset;
 
-            let element_type = match ref_type_byte {
-                0x70 => RefType::Funcref,   // funcref
-                0x6F => RefType::Externref, // externref
-                _ => {
-                    return Err(Error::parse_error("Unknown table element type"));
-                },
-            };
+            let element_type = RefType::try_from(value_type).map_err(|_| {
+                Error::parse_error("Unknown table element type")
+            })?;
 
             // Parse limits (flags + min, optional max)
             if offset >= data.len() {
@@ -1742,13 +1716,11 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 1 => {
                     // Passive, element type, expressions
-                    let elem_type = data[offset];
-                    offset += 1;
-                    let ref_type = match elem_type {
-                        0x70 => wrt_format::types::RefType::Funcref,
-                        0x6F => wrt_format::types::RefType::Externref,
-                        _ => wrt_format::types::RefType::Funcref,
-                    };
+                    let (vt, new_offset) = self.parse_value_type(data, offset)?;
+                    offset = new_offset;
+                    let ref_type = wrt_format::types::RefType::try_from(vt).map_err(|_| {
+                        Error::parse_error("Invalid element segment reference type")
+                    })?;
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: passive");
                     (PureElementMode::Passive, Vec::new(), ref_type)
@@ -1789,13 +1761,11 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 3 => {
                     // Declarative, element type, expressions
-                    let elem_type = data[offset];
-                    offset += 1;
-                    let ref_type = match elem_type {
-                        0x70 => wrt_format::types::RefType::Funcref,
-                        0x6F => wrt_format::types::RefType::Externref,
-                        _ => wrt_format::types::RefType::Funcref,
-                    };
+                    let (vt, new_offset) = self.parse_value_type(data, offset)?;
+                    offset = new_offset;
+                    let ref_type = wrt_format::types::RefType::try_from(vt).map_err(|_| {
+                        Error::parse_error("Invalid element segment reference type")
+                    })?;
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: declarative");
                     (PureElementMode::Declared, Vec::new(), ref_type)
@@ -1825,13 +1795,11 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 5 => {
                     // Passive, expressions with type
-                    let ref_type_byte = data[offset];
-                    offset += 1;
-                    let ref_type = match ref_type_byte {
-                        0x70 => wrt_format::types::RefType::Funcref,
-                        0x6F => wrt_format::types::RefType::Externref,
-                        _ => wrt_format::types::RefType::Funcref,
-                    };
+                    let (vt, new_offset) = self.parse_value_type(data, offset)?;
+                    offset = new_offset;
+                    let ref_type = wrt_format::types::RefType::try_from(vt).map_err(|_| {
+                        Error::parse_error("Invalid element segment reference type")
+                    })?;
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: passive with type");
                     (PureElementMode::Passive, Vec::new(), ref_type)
@@ -1848,18 +1816,11 @@ impl<'a> StreamingDecoder<'a> {
                     let offset_expr_bytes: Vec<u8> = data[expr_start..offset].to_vec();
 
                     // Parse ref_type (comes after offset expression, before items)
-                    if offset >= data.len() {
-                        return Err(Error::parse_error(
-                            "Unexpected end of element segment (ref_type)",
-                        ));
-                    }
-                    let ref_type_byte = data[offset];
-                    offset += 1;
-                    let ref_type = match ref_type_byte {
-                        0x70 => wrt_format::types::RefType::Funcref,
-                        0x6F => wrt_format::types::RefType::Externref,
-                        _ => wrt_format::types::RefType::Funcref,
-                    };
+                    let (vt, new_offset) = self.parse_value_type(data, offset)?;
+                    offset = new_offset;
+                    let ref_type = wrt_format::types::RefType::try_from(vt).map_err(|_| {
+                        Error::parse_error("Invalid element segment reference type")
+                    })?;
 
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, table_index = table_index, offset_expr_len = offset_expr_bytes.len(), ref_type = ?ref_type, "element: active with expressions");
@@ -1875,13 +1836,11 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 7 => {
                     // Declarative, expressions with type
-                    let ref_type_byte = data[offset];
-                    offset += 1;
-                    let ref_type = match ref_type_byte {
-                        0x70 => wrt_format::types::RefType::Funcref,
-                        0x6F => wrt_format::types::RefType::Externref,
-                        _ => wrt_format::types::RefType::Funcref,
-                    };
+                    let (vt, new_offset) = self.parse_value_type(data, offset)?;
+                    offset = new_offset;
+                    let ref_type = wrt_format::types::RefType::try_from(vt).map_err(|_| {
+                        Error::parse_error("Invalid element segment reference type")
+                    })?;
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: declarative with type");
                     (PureElementMode::Declared, Vec::new(), ref_type)
@@ -2050,34 +2009,40 @@ impl<'a> StreamingDecoder<'a> {
 
             // Code section index i corresponds to module-defined function at index (num_imports + i)
             let func_index = num_imports + i as usize;
+
+            // Parse local variable declarations first (requires &self for parse_value_type)
+            // We collect locals into a temporary vec to avoid borrow conflicts with self.module
+            let mut parsed_locals: Vec<(u32, wrt_foundation::types::ValueType)> = Vec::new();
+            let mut total_locals_count: usize = 0;
+            for _ in 0..local_count {
+                let (count, bytes) = read_leb128_u32(&data[body_start..body_end], body_offset)?;
+                body_offset += bytes;
+
+                if body_offset >= body_size as usize {
+                    return Err(Error::parse_error("Unexpected end of function body"));
+                }
+
+                // Use the full GC-aware value type parser for local types
+                let (vt, new_abs_offset) =
+                    self.parse_value_type(data, body_start + body_offset)?;
+                body_offset = new_abs_offset - body_start;
+
+                // Validate total locals against platform limits before allocation
+                total_locals_count += count as usize;
+                if total_locals_count > limits::MAX_FUNCTION_LOCALS {
+                    return Err(Error::parse_error(
+                        "Function exceeds maximum local count for platform",
+                    ));
+                }
+
+                parsed_locals.push((count, vt));
+            }
+
+            // Now apply the parsed locals to the function (requires &mut self.module)
             if let Some(func) = self.module.functions.get_mut(func_index) {
-                // Parse local variable declarations
-                for _ in 0..local_count {
-                    let (count, bytes) = read_leb128_u32(&data[body_start..body_end], body_offset)?;
-                    body_offset += bytes;
-
-                    if body_offset >= body_size as usize {
-                        return Err(Error::parse_error("Unexpected end of function body"));
-                    }
-
-                    let value_type = data[body_start + body_offset];
-                    body_offset += 1;
-
-                    // Convert to ValueType and add to locals
-                    let vt = match value_type {
-                        0x7F => wrt_foundation::types::ValueType::I32,
-                        0x7E => wrt_foundation::types::ValueType::I64,
-                        0x7D => wrt_foundation::types::ValueType::F32,
-                        0x7C => wrt_foundation::types::ValueType::F64,
-                        0x7B => wrt_foundation::types::ValueType::V128,
-                        0x70 => wrt_foundation::types::ValueType::FuncRef,
-                        0x6F => wrt_foundation::types::ValueType::ExternRef,
-                        0x69 => wrt_foundation::types::ValueType::ExnRef,
-                        _ => return Err(Error::parse_error("Invalid local type")),
-                    };
-
-                    // Validate total locals against platform limits before allocation
-                    let new_total = func.locals.len() + count as usize;
+                for (count, vt) in &parsed_locals {
+                    // Validate total locals including existing ones
+                    let new_total = func.locals.len() + *count as usize;
                     if new_total > limits::MAX_FUNCTION_LOCALS {
                         return Err(Error::parse_error(
                             "Function exceeds maximum local count for platform",
@@ -2089,12 +2054,12 @@ impl<'a> StreamingDecoder<'a> {
                         AllocationPhase::Decode,
                         "streaming_decoder:func_locals",
                         "locals",
-                        count as usize
+                        *count as usize
                     );
 
                     // Add 'count' locals of this type
-                    for _ in 0..count {
-                        func.locals.push(vt);
+                    for _ in 0..*count {
+                        func.locals.push(*vt);
                     }
                 }
 

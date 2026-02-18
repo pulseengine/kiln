@@ -146,10 +146,12 @@ use wrt_foundation::{
     values::{
         FloatBits32,
         FloatBits64,
+        V128,
         Value,
     },
 };
 
+use super::simd_ops;
 use crate::module_instance::ModuleInstance;
 
 /// Strip the version suffix from a WASI interface name.
@@ -6458,6 +6460,7 @@ impl StacklessEngine {
                                     match table.element_type() {
                                         wrt_foundation::types::RefType::Funcref => Value::FuncRef(None),
                                         wrt_foundation::types::RefType::Externref => Value::ExternRef(None),
+                                        wrt_foundation::types::RefType::Gc(_) => Value::FuncRef(None), // GC ref types default to null funcref
                                     }
                                 }
                             };
@@ -10051,6 +10054,2384 @@ impl StacklessEngine {
                         return Err(wrt_error::Error::runtime_error(
                             "GC instruction not yet fully implemented",
                         ));
+                    }
+
+                    // ========================================
+                    // SIMD Instructions (v128 operations)
+                    // ========================================
+                    Instruction::V128Const { bytes } => {
+                        operand_stack.push(Value::V128(V128::new(bytes)));
+                    }
+
+                    Instruction::SimdOp { opcode } => {
+                        match opcode {
+                            // ========================================
+                            // i8x16 comparison operations (0x23-0x2C)
+                            // ========================================
+                            0x23 => {
+                                // i8x16.eq
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..16 {
+                                        result[i] = if a.bytes[i] == b.bytes[i] { 0xFF } else { 0x00 };
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x24 => {
+                                // i8x16.ne
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..16 {
+                                        result[i] = if a.bytes[i] != b.bytes[i] { 0xFF } else { 0x00 };
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x25 => {
+                                // i8x16.lt_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..16 {
+                                        result[i] = if (a.bytes[i] as i8) < (b.bytes[i] as i8) { 0xFF } else { 0x00 };
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x26 => {
+                                // i8x16.lt_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..16 {
+                                        result[i] = if a.bytes[i] < b.bytes[i] { 0xFF } else { 0x00 };
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x27 => {
+                                // i8x16.gt_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..16 {
+                                        result[i] = if (a.bytes[i] as i8) > (b.bytes[i] as i8) { 0xFF } else { 0x00 };
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x28 => {
+                                // i8x16.gt_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..16 {
+                                        result[i] = if a.bytes[i] > b.bytes[i] { 0xFF } else { 0x00 };
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x29 => {
+                                // i8x16.le_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..16 {
+                                        result[i] = if (a.bytes[i] as i8) <= (b.bytes[i] as i8) { 0xFF } else { 0x00 };
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x2A => {
+                                // i8x16.le_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..16 {
+                                        result[i] = if a.bytes[i] <= b.bytes[i] { 0xFF } else { 0x00 };
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x2B => {
+                                // i8x16.ge_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..16 {
+                                        result[i] = if (a.bytes[i] as i8) >= (b.bytes[i] as i8) { 0xFF } else { 0x00 };
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x2C => {
+                                // i8x16.ge_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..16 {
+                                        result[i] = if a.bytes[i] >= b.bytes[i] { 0xFF } else { 0x00 };
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // i16x8 comparison operations (0x2D-0x36)
+                            // ========================================
+                            0x2D => {
+                                // i16x8.eq
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..8 {
+                                        let la = u16::from_le_bytes([a.bytes[i*2], a.bytes[i*2+1]]);
+                                        let lb = u16::from_le_bytes([b.bytes[i*2], b.bytes[i*2+1]]);
+                                        let r: u16 = if la == lb { 0xFFFF } else { 0x0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*2] = rb[0];
+                                        result[i*2+1] = rb[1];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x2E => {
+                                // i16x8.ne
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..8 {
+                                        let la = u16::from_le_bytes([a.bytes[i*2], a.bytes[i*2+1]]);
+                                        let lb = u16::from_le_bytes([b.bytes[i*2], b.bytes[i*2+1]]);
+                                        let r: u16 = if la != lb { 0xFFFF } else { 0x0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*2] = rb[0];
+                                        result[i*2+1] = rb[1];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x2F => {
+                                // i16x8.lt_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..8 {
+                                        let la = i16::from_le_bytes([a.bytes[i*2], a.bytes[i*2+1]]);
+                                        let lb = i16::from_le_bytes([b.bytes[i*2], b.bytes[i*2+1]]);
+                                        let r: u16 = if la < lb { 0xFFFF } else { 0x0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*2] = rb[0];
+                                        result[i*2+1] = rb[1];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x30 => {
+                                // i16x8.lt_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..8 {
+                                        let la = u16::from_le_bytes([a.bytes[i*2], a.bytes[i*2+1]]);
+                                        let lb = u16::from_le_bytes([b.bytes[i*2], b.bytes[i*2+1]]);
+                                        let r: u16 = if la < lb { 0xFFFF } else { 0x0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*2] = rb[0];
+                                        result[i*2+1] = rb[1];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x31 => {
+                                // i16x8.gt_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..8 {
+                                        let la = i16::from_le_bytes([a.bytes[i*2], a.bytes[i*2+1]]);
+                                        let lb = i16::from_le_bytes([b.bytes[i*2], b.bytes[i*2+1]]);
+                                        let r: u16 = if la > lb { 0xFFFF } else { 0x0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*2] = rb[0];
+                                        result[i*2+1] = rb[1];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x32 => {
+                                // i16x8.gt_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..8 {
+                                        let la = u16::from_le_bytes([a.bytes[i*2], a.bytes[i*2+1]]);
+                                        let lb = u16::from_le_bytes([b.bytes[i*2], b.bytes[i*2+1]]);
+                                        let r: u16 = if la > lb { 0xFFFF } else { 0x0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*2] = rb[0];
+                                        result[i*2+1] = rb[1];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x33 => {
+                                // i16x8.le_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..8 {
+                                        let la = i16::from_le_bytes([a.bytes[i*2], a.bytes[i*2+1]]);
+                                        let lb = i16::from_le_bytes([b.bytes[i*2], b.bytes[i*2+1]]);
+                                        let r: u16 = if la <= lb { 0xFFFF } else { 0x0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*2] = rb[0];
+                                        result[i*2+1] = rb[1];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x34 => {
+                                // i16x8.le_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..8 {
+                                        let la = u16::from_le_bytes([a.bytes[i*2], a.bytes[i*2+1]]);
+                                        let lb = u16::from_le_bytes([b.bytes[i*2], b.bytes[i*2+1]]);
+                                        let r: u16 = if la <= lb { 0xFFFF } else { 0x0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*2] = rb[0];
+                                        result[i*2+1] = rb[1];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x35 => {
+                                // i16x8.ge_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..8 {
+                                        let la = i16::from_le_bytes([a.bytes[i*2], a.bytes[i*2+1]]);
+                                        let lb = i16::from_le_bytes([b.bytes[i*2], b.bytes[i*2+1]]);
+                                        let r: u16 = if la >= lb { 0xFFFF } else { 0x0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*2] = rb[0];
+                                        result[i*2+1] = rb[1];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x36 => {
+                                // i16x8.ge_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..8 {
+                                        let la = u16::from_le_bytes([a.bytes[i*2], a.bytes[i*2+1]]);
+                                        let lb = u16::from_le_bytes([b.bytes[i*2], b.bytes[i*2+1]]);
+                                        let r: u16 = if la >= lb { 0xFFFF } else { 0x0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*2] = rb[0];
+                                        result[i*2+1] = rb[1];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // i32x4 comparison operations (0x37-0x40)
+                            // ========================================
+                            0x37 => {
+                                // i32x4.eq
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let la = u32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let lb = u32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if la == lb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x38 => {
+                                // i32x4.ne
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let la = u32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let lb = u32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if la != lb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x39 => {
+                                // i32x4.lt_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let la = i32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let lb = i32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if la < lb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x3A => {
+                                // i32x4.lt_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let la = u32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let lb = u32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if la < lb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x3B => {
+                                // i32x4.gt_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let la = i32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let lb = i32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if la > lb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x3C => {
+                                // i32x4.gt_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let la = u32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let lb = u32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if la > lb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x3D => {
+                                // i32x4.le_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let la = i32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let lb = i32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if la <= lb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x3E => {
+                                // i32x4.le_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let la = u32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let lb = u32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if la <= lb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x3F => {
+                                // i32x4.ge_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let la = i32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let lb = i32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if la >= lb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x40 => {
+                                // i32x4.ge_u
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let la = u32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let lb = u32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if la >= lb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // f32x4 comparison operations (0x41-0x46)
+                            // ========================================
+                            0x41 => {
+                                // f32x4.eq
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if fa == fb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x42 => {
+                                // f32x4.ne
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if fa != fb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x43 => {
+                                // f32x4.lt
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if fa < fb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x44 => {
+                                // f32x4.gt
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if fa > fb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x45 => {
+                                // f32x4.le
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if fa <= fb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x46 => {
+                                // f32x4.ge
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r: u32 = if fa >= fb { 0xFFFF_FFFF } else { 0x0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // f64x2 comparison operations (0x47-0x4C)
+                            // ========================================
+                            0x47 => {
+                                // f64x2.eq
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        let r: u64 = if fa == fb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*8..i*8+8].copy_from_slice(&rb);
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x48 => {
+                                // f64x2.ne
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        let r: u64 = if fa != fb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*8..i*8+8].copy_from_slice(&rb);
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x49 => {
+                                // f64x2.lt
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        let r: u64 = if fa < fb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*8..i*8+8].copy_from_slice(&rb);
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x4A => {
+                                // f64x2.gt
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        let r: u64 = if fa > fb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*8..i*8+8].copy_from_slice(&rb);
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x4B => {
+                                // f64x2.le
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        let r: u64 = if fa <= fb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*8..i*8+8].copy_from_slice(&rb);
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0x4C => {
+                                // f64x2.ge
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        let r: u64 = if fa >= fb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        let rb = r.to_le_bytes();
+                                        result[i*8..i*8+8].copy_from_slice(&rb);
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // i64x2 comparison operations (0xD6-0xDB)
+                            // ========================================
+                            0xD6 => {
+                                // i64x2.eq
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let la = u64::from_le_bytes(ab);
+                                        let lb = u64::from_le_bytes(bb);
+                                        let r: u64 = if la == lb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xD7 => {
+                                // i64x2.ne
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let la = u64::from_le_bytes(ab);
+                                        let lb = u64::from_le_bytes(bb);
+                                        let r: u64 = if la != lb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xD8 => {
+                                // i64x2.lt_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let la = i64::from_le_bytes(ab);
+                                        let lb = i64::from_le_bytes(bb);
+                                        let r: u64 = if la < lb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xD9 => {
+                                // i64x2.gt_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let la = i64::from_le_bytes(ab);
+                                        let lb = i64::from_le_bytes(bb);
+                                        let r: u64 = if la > lb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xDA => {
+                                // i64x2.le_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let la = i64::from_le_bytes(ab);
+                                        let lb = i64::from_le_bytes(bb);
+                                        let r: u64 = if la <= lb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xDB => {
+                                // i64x2.ge_s
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let la = i64::from_le_bytes(ab);
+                                        let lb = i64::from_le_bytes(bb);
+                                        let r: u64 = if la >= lb { 0xFFFF_FFFF_FFFF_FFFF } else { 0x0000_0000_0000_0000 };
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // f32x4 unary float operations
+                            // ========================================
+                            0xE0 => {
+                                // f32x4.abs
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let f = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let r = f.abs();
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xE1 => {
+                                // f32x4.neg
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let f = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let r = -f;
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xE3 => {
+                                // f32x4.sqrt
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let f = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let r = f.sqrt();
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // f32x4 binary arithmetic (0xE4-0xE7)
+                            // ========================================
+                            0xE4 => {
+                                // f32x4.add
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r = (fa + fb).to_le_bytes();
+                                        result[i*4] = r[0]; result[i*4+1] = r[1]; result[i*4+2] = r[2]; result[i*4+3] = r[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xE5 => {
+                                // f32x4.sub
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r = (fa - fb).to_le_bytes();
+                                        result[i*4] = r[0]; result[i*4+1] = r[1]; result[i*4+2] = r[2]; result[i*4+3] = r[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xE6 => {
+                                // f32x4.mul
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r = (fa * fb).to_le_bytes();
+                                        result[i*4] = r[0]; result[i*4+1] = r[1]; result[i*4+2] = r[2]; result[i*4+3] = r[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xE7 => {
+                                // f32x4.div
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r = (fa / fb).to_le_bytes();
+                                        result[i*4] = r[0]; result[i*4+1] = r[1]; result[i*4+2] = r[2]; result[i*4+3] = r[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // f32x4 min/max/pmin/pmax (0xE8-0xEB)
+                            // ========================================
+                            0xE8 => {
+                                // f32x4.min (IEEE min: NaN propagates, -0 < +0)
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r = if fa.is_nan() || fb.is_nan() {
+                                            // Produce a canonical NaN
+                                            f32::NAN
+                                        } else if fa == 0.0 && fb == 0.0 {
+                                            // -0 is less than +0
+                                            if fa.is_sign_negative() || fb.is_sign_negative() { -0.0_f32 } else { 0.0_f32 }
+                                        } else {
+                                            fa.min(fb)
+                                        };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xE9 => {
+                                // f32x4.max (IEEE max: NaN propagates, +0 > -0)
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        let r = if fa.is_nan() || fb.is_nan() {
+                                            f32::NAN
+                                        } else if fa == 0.0 && fb == 0.0 {
+                                            if fa.is_sign_positive() || fb.is_sign_positive() { 0.0_f32 } else { -0.0_f32 }
+                                        } else {
+                                            fa.max(fb)
+                                        };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xEA => {
+                                // f32x4.pmin: b < a ? b : a
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        // pmin(a, b) = b < a ? b : a
+                                        let r = if fb < fa { fb } else { fa };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xEB => {
+                                // f32x4.pmax: a < b ? b : a
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..4 {
+                                        let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
+                                        let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
+                                        // pmax(a, b) = a < b ? b : a
+                                        let r = if fa < fb { fb } else { fa };
+                                        let rb = r.to_le_bytes();
+                                        result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // f64x2 unary float operations
+                            // ========================================
+                            0xEC => {
+                                // f64x2.abs
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        let f = f64::from_le_bytes(ab);
+                                        let r = f.abs();
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xED => {
+                                // f64x2.neg
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        let f = f64::from_le_bytes(ab);
+                                        let r = -f;
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xEF => {
+                                // f64x2.sqrt
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        let f = f64::from_le_bytes(ab);
+                                        let r = f.sqrt();
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // f64x2 binary arithmetic (0xF0-0xF3)
+                            // ========================================
+                            0xF0 => {
+                                // f64x2.add
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        result[i*8..i*8+8].copy_from_slice(&(fa + fb).to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xF1 => {
+                                // f64x2.sub
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        result[i*8..i*8+8].copy_from_slice(&(fa - fb).to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xF2 => {
+                                // f64x2.mul
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        result[i*8..i*8+8].copy_from_slice(&(fa * fb).to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xF3 => {
+                                // f64x2.div
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        result[i*8..i*8+8].copy_from_slice(&(fa / fb).to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // f64x2 min/max/pmin/pmax (0xF4-0xF7)
+                            // ========================================
+                            0xF4 => {
+                                // f64x2.min (IEEE min: NaN propagates, -0 < +0)
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        let r = if fa.is_nan() || fb.is_nan() {
+                                            f64::NAN
+                                        } else if fa == 0.0 && fb == 0.0 {
+                                            if fa.is_sign_negative() || fb.is_sign_negative() { -0.0_f64 } else { 0.0_f64 }
+                                        } else {
+                                            fa.min(fb)
+                                        };
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xF5 => {
+                                // f64x2.max (IEEE max: NaN propagates, +0 > -0)
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        let r = if fa.is_nan() || fb.is_nan() {
+                                            f64::NAN
+                                        } else if fa == 0.0 && fb == 0.0 {
+                                            if fa.is_sign_positive() || fb.is_sign_positive() { 0.0_f64 } else { -0.0_f64 }
+                                        } else {
+                                            fa.max(fb)
+                                        };
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xF6 => {
+                                // f64x2.pmin: b < a ? b : a
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        // pmin(a, b) = b < a ? b : a
+                                        let r = if fb < fa { fb } else { fa };
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+                            0xF7 => {
+                                // f64x2.pmax: a < b ? b : a
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut result = [0u8; 16];
+                                    for i in 0..2 {
+                                        let mut ab = [0u8; 8];
+                                        let mut bb = [0u8; 8];
+                                        ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
+                                        bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
+                                        let fa = f64::from_le_bytes(ab);
+                                        let fb = f64::from_le_bytes(bb);
+                                        // pmax(a, b) = a < b ? b : a
+                                        let r = if fa < fb { fb } else { fa };
+                                        result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
+                                    }
+                                    operand_stack.push(Value::V128(V128::new(result)));
+                                }
+                            }
+
+                            // ========================================
+                            // i8x16.swizzle (0x0E)
+                            // ========================================
+                            0x0E => {
+                                if let (Some(Value::V128(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_swizzle(&a.bytes, &s.bytes))));
+                                }
+                            }
+
+                            // ========================================
+                            // Splat operations (0x0F-0x14)
+                            // ========================================
+                            0x0F => {
+                                // i8x16.splat
+                                if let Some(val) = operand_stack.pop() {
+                                    let v = match val { Value::I32(n) => n as u8, _ => 0u8 };
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::splat_i8x16(v))));
+                                }
+                            }
+                            0x10 => {
+                                // i16x8.splat
+                                if let Some(val) = operand_stack.pop() {
+                                    let v = match val { Value::I32(n) => n as u16, _ => 0u16 };
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::splat_i16x8(v))));
+                                }
+                            }
+                            0x11 => {
+                                // i32x4.splat
+                                if let Some(val) = operand_stack.pop() {
+                                    let v = match val { Value::I32(n) => n as u32, _ => 0u32 };
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::splat_i32x4(v))));
+                                }
+                            }
+                            0x12 => {
+                                // i64x2.splat
+                                if let Some(val) = operand_stack.pop() {
+                                    let v = match val { Value::I64(n) => n as u64, _ => 0u64 };
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::splat_i64x2(v))));
+                                }
+                            }
+                            0x13 => {
+                                // f32x4.splat
+                                if let Some(val) = operand_stack.pop() {
+                                    let v = match val { Value::F32(n) => n.value(), _ => 0.0f32 };
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::splat_f32x4(v))));
+                                }
+                            }
+                            0x14 => {
+                                // f64x2.splat
+                                if let Some(val) = operand_stack.pop() {
+                                    let v = match val { Value::F64(n) => n.value(), _ => 0.0f64 };
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::splat_f64x2(v))));
+                                }
+                            }
+
+                            // ========================================
+                            // v128 bitwise operations (0x4D-0x53)
+                            // ========================================
+                            0x4D => {
+                                // v128.not
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::v128_not(&a.bytes))));
+                                }
+                            }
+                            0x4E => {
+                                // v128.and
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::v128_and(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x4F => {
+                                // v128.andnot
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::v128_andnot(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x50 => {
+                                // v128.or
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::v128_or(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x51 => {
+                                // v128.xor
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::v128_xor(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x52 => {
+                                // v128.bitselect: (v1, v2, c) -> (v1 & c) | (v2 & ~c)
+                                if let (Some(Value::V128(c)), Some(Value::V128(v2)), Some(Value::V128(v1))) =
+                                    (operand_stack.pop(), operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::v128_bitselect(&v1.bytes, &v2.bytes, &c.bytes))));
+                                }
+                            }
+                            0x53 => {
+                                // v128.any_true
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(if simd_ops::v128_any_true(&a.bytes) { 1 } else { 0 }));
+                                }
+                            }
+
+                            // ========================================
+                            // Conversion: f32x4.demote/f64x2.promote (0x5E-0x5F)
+                            // ========================================
+                            0x5E => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f32x4_demote_f64x2_zero(&a.bytes))));
+                                }
+                            }
+                            0x5F => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f64x2_promote_low_f32x4(&a.bytes))));
+                                }
+                            }
+
+                            // ========================================
+                            // i8x16 unary (0x60-0x64)
+                            // ========================================
+                            0x60 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_abs(&a.bytes))));
+                                }
+                            }
+                            0x61 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_neg(&a.bytes))));
+                                }
+                            }
+                            0x62 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_popcnt(&a.bytes))));
+                                }
+                            }
+                            0x63 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(if simd_ops::i8x16_all_true(&a.bytes) { 1 } else { 0 }));
+                                }
+                            }
+                            0x64 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(simd_ops::i8x16_bitmask(&a.bytes) as i32));
+                                }
+                            }
+
+                            // i8x16 narrow (0x65-0x66)
+                            0x65 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_narrow_i16x8_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x66 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_narrow_i16x8_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // f32x4 ceil/floor/trunc/nearest (0x67-0x6A)
+                            0x67 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f32x4_ceil(&a.bytes))));
+                                }
+                            }
+                            0x68 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f32x4_floor(&a.bytes))));
+                                }
+                            }
+                            0x69 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f32x4_trunc(&a.bytes))));
+                                }
+                            }
+                            0x6A => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f32x4_nearest(&a.bytes))));
+                                }
+                            }
+
+                            // i8x16 shift/arith (0x6B-0x73)
+                            0x6B => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_shl(&a.bytes, s as u32))));
+                                }
+                            }
+                            0x6C => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_shr_s(&a.bytes, s as u32))));
+                                }
+                            }
+                            0x6D => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_shr_u(&a.bytes, s as u32))));
+                                }
+                            }
+                            0x6E => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_add(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x6F => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_add_sat_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x70 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_add_sat_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x71 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_sub(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x72 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_sub_sat_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x73 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_sub_sat_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // f64x2 ceil/floor (0x74-0x75)
+                            0x74 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f64x2_ceil(&a.bytes))));
+                                }
+                            }
+                            0x75 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f64x2_floor(&a.bytes))));
+                                }
+                            }
+
+                            // i8x16 min/max/avgr (0x76-0x7B)
+                            0x76 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_min_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x77 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_min_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x78 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_max_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x79 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_max_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            // f64x2.trunc (0x7A)
+                            0x7A => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f64x2_trunc(&a.bytes))));
+                                }
+                            }
+                            0x7B => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_avgr_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // Extended add pairwise (0x7C-0x7F)
+                            0x7C => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extadd_pairwise_i8x16_s(&a.bytes))));
+                                }
+                            }
+                            0x7D => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extadd_pairwise_i8x16_u(&a.bytes))));
+                                }
+                            }
+                            0x7E => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extadd_pairwise_i16x8_s(&a.bytes))));
+                                }
+                            }
+                            0x7F => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extadd_pairwise_i16x8_u(&a.bytes))));
+                                }
+                            }
+
+                            // i16x8 unary/test (0x80-0x84)
+                            0x80 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_abs(&a.bytes))));
+                                }
+                            }
+                            0x81 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_neg(&a.bytes))));
+                                }
+                            }
+                            0x82 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_q15mulr_sat_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x83 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(if simd_ops::i16x8_all_true(&a.bytes) { 1 } else { 0 }));
+                                }
+                            }
+                            0x84 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(simd_ops::i16x8_bitmask(&a.bytes) as i32));
+                                }
+                            }
+
+                            // i16x8 narrow (0x85-0x86)
+                            0x85 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_narrow_i32x4_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x86 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_narrow_i32x4_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // i16x8 extend (0x87-0x8A)
+                            0x87 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extend_low_i8x16_s(&a.bytes))));
+                                }
+                            }
+                            0x88 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extend_low_i8x16_u(&a.bytes))));
+                                }
+                            }
+                            0x89 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extend_high_i8x16_s(&a.bytes))));
+                                }
+                            }
+                            0x8A => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extend_high_i8x16_u(&a.bytes))));
+                                }
+                            }
+
+                            // i16x8 shift/arith (0x8B-0x95)
+                            0x8B => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_shl(&a.bytes, s as u32))));
+                                }
+                            }
+                            0x8C => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_shr_s(&a.bytes, s as u32))));
+                                }
+                            }
+                            0x8D => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_shr_u(&a.bytes, s as u32))));
+                                }
+                            }
+                            0x8E => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_add(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x8F => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_add_sat_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x90 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_add_sat_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x91 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_sub(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x92 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_sub_sat_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x93 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_sub_sat_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            // f64x2.nearest (0x94)
+                            0x94 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f64x2_nearest(&a.bytes))));
+                                }
+                            }
+                            0x95 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_mul(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // i16x8 min/max/avgr (0x96-0x9B)
+                            0x96 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_min_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x97 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_min_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x98 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_max_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x99 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_max_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x9B => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_avgr_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // i16x8 extended multiply (0x9C-0x9F)
+                            0x9C => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extmul_low_i8x16_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x9D => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extmul_high_i8x16_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x9E => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extmul_low_i8x16_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0x9F => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extmul_high_i8x16_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // i32x4 unary/test (0xA0-0xA4)
+                            0xA0 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_abs(&a.bytes))));
+                                }
+                            }
+                            0xA1 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_neg(&a.bytes))));
+                                }
+                            }
+                            0xA3 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(if simd_ops::i32x4_all_true(&a.bytes) { 1 } else { 0 }));
+                                }
+                            }
+                            0xA4 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(simd_ops::i32x4_bitmask(&a.bytes) as i32));
+                                }
+                            }
+
+                            // i32x4 extend (0xA7-0xAA)
+                            0xA7 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extend_low_i16x8_s(&a.bytes))));
+                                }
+                            }
+                            0xA8 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extend_low_i16x8_u(&a.bytes))));
+                                }
+                            }
+                            0xA9 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extend_high_i16x8_s(&a.bytes))));
+                                }
+                            }
+                            0xAA => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extend_high_i16x8_u(&a.bytes))));
+                                }
+                            }
+
+                            // i32x4 shift/arith (0xAB-0xB5)
+                            0xAB => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_shl(&a.bytes, s as u32))));
+                                }
+                            }
+                            0xAC => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_shr_s(&a.bytes, s as u32))));
+                                }
+                            }
+                            0xAD => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_shr_u(&a.bytes, s as u32))));
+                                }
+                            }
+                            0xAE => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_add(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xB1 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_sub(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xB5 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_mul(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // i32x4 min/max/dot (0xB6-0xBA)
+                            0xB6 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_min_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xB7 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_min_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xB8 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_max_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xB9 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_max_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xBA => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_dot_i16x8_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // i32x4 extended multiply (0xBC-0xBF)
+                            0xBC => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extmul_low_i16x8_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xBD => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extmul_high_i16x8_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xBE => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extmul_low_i16x8_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xBF => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extmul_high_i16x8_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // i64x2 unary/test (0xC0-0xC4)
+                            0xC0 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_abs(&a.bytes))));
+                                }
+                            }
+                            0xC1 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_neg(&a.bytes))));
+                                }
+                            }
+                            0xC3 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(if simd_ops::i64x2_all_true(&a.bytes) { 1 } else { 0 }));
+                                }
+                            }
+                            0xC4 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(simd_ops::i64x2_bitmask(&a.bytes) as i32));
+                                }
+                            }
+
+                            // i64x2 extend (0xC7-0xCA)
+                            0xC7 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extend_low_i32x4_s(&a.bytes))));
+                                }
+                            }
+                            0xC8 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extend_low_i32x4_u(&a.bytes))));
+                                }
+                            }
+                            0xC9 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extend_high_i32x4_s(&a.bytes))));
+                                }
+                            }
+                            0xCA => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extend_high_i32x4_u(&a.bytes))));
+                                }
+                            }
+
+                            // i64x2 shift/arith (0xCB-0xD5)
+                            0xCB => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_shl(&a.bytes, s as u32))));
+                                }
+                            }
+                            0xCC => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_shr_s(&a.bytes, s as u32))));
+                                }
+                            }
+                            0xCD => {
+                                if let (Some(Value::I32(s)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_shr_u(&a.bytes, s as u32))));
+                                }
+                            }
+                            0xCE => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_add(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xD1 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_sub(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xD5 => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_mul(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // i64x2 extended multiply (0xDC-0xDF)
+                            0xDC => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extmul_low_i32x4_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xDD => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extmul_high_i32x4_s(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xDE => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extmul_low_i32x4_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+                            0xDF => {
+                                if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extmul_high_i32x4_u(&a.bytes, &b.bytes))));
+                                }
+                            }
+
+                            // Conversion operations (0xF8-0xFF)
+                            0xF8 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_trunc_sat_f32x4_s(&a.bytes))));
+                                }
+                            }
+                            0xF9 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_trunc_sat_f32x4_u(&a.bytes))));
+                                }
+                            }
+                            0xFA => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f32x4_convert_i32x4_s(&a.bytes))));
+                                }
+                            }
+                            0xFB => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f32x4_convert_i32x4_u(&a.bytes))));
+                                }
+                            }
+                            0xFC => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_trunc_sat_f64x2_s_zero(&a.bytes))));
+                                }
+                            }
+                            0xFD => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_trunc_sat_f64x2_u_zero(&a.bytes))));
+                                }
+                            }
+                            0xFE => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f64x2_convert_low_i32x4_s(&a.bytes))));
+                                }
+                            }
+                            0xFF => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::f64x2_convert_low_i32x4_u(&a.bytes))));
+                                }
+                            }
+
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                error!("Unimplemented SIMD opcode at pc={}: 0x{:X}", pc, opcode);
+                                return Err(wrt_error::Error::runtime_error(
+                                    "Unimplemented SIMD instruction",
+                                ));
+                            }
+                        }
+                    }
+
+                    // ========================================
+                    // SIMD Memory Operations (v128.load, v128.store, etc.)
+                    // ========================================
+                    Instruction::SimdMemOp { opcode, memarg } => {
+                        match opcode {
+                            0x00 => {
+                                // v128.load
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 16, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 16];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => operand_stack.push(Value::V128(V128::new(buf))),
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x0B => {
+                                // v128.store
+                                if let Some(Value::V128(v)) = operand_stack.pop() {
+                                    let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                    let offset = effective_address_for_memory(addr, memarg.offset, 16, is_mem64)? as u32;
+                                    match instance.memory(memarg.memory_index as u32) {
+                                        Ok(mw) => {
+                                            match mw.0.write_shared(offset, &v.bytes) {
+                                                Ok(()) => {}
+                                                Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                            }
+                                        }
+                                        Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                    }
+                                }
+                            }
+                            0x01 => {
+                                // v128.load8x8_s
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 8, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 8];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let mut r = [0u8; 16];
+                                                for i in 0..8 { simd_ops::set_i16(&mut r, i, buf[i] as i8 as i16); }
+                                                operand_stack.push(Value::V128(V128::new(r)));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x02 => {
+                                // v128.load8x8_u
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 8, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 8];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let mut r = [0u8; 16];
+                                                for i in 0..8 { simd_ops::set_u16(&mut r, i, buf[i] as u16); }
+                                                operand_stack.push(Value::V128(V128::new(r)));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x03 => {
+                                // v128.load16x4_s
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 8, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 8];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let mut r = [0u8; 16];
+                                                for i in 0..4 {
+                                                    let v = i16::from_le_bytes([buf[i*2], buf[i*2+1]]);
+                                                    simd_ops::set_i32(&mut r, i, v as i32);
+                                                }
+                                                operand_stack.push(Value::V128(V128::new(r)));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x04 => {
+                                // v128.load16x4_u
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 8, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 8];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let mut r = [0u8; 16];
+                                                for i in 0..4 {
+                                                    let v = u16::from_le_bytes([buf[i*2], buf[i*2+1]]);
+                                                    simd_ops::set_u32(&mut r, i, v as u32);
+                                                }
+                                                operand_stack.push(Value::V128(V128::new(r)));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x05 => {
+                                // v128.load32x2_s
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 8, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 8];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let mut r = [0u8; 16];
+                                                for i in 0..2 {
+                                                    let v = i32::from_le_bytes([buf[i*4], buf[i*4+1], buf[i*4+2], buf[i*4+3]]);
+                                                    simd_ops::set_i64(&mut r, i, v as i64);
+                                                }
+                                                operand_stack.push(Value::V128(V128::new(r)));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x06 => {
+                                // v128.load32x2_u
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 8, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 8];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let mut r = [0u8; 16];
+                                                for i in 0..2 {
+                                                    let v = u32::from_le_bytes([buf[i*4], buf[i*4+1], buf[i*4+2], buf[i*4+3]]);
+                                                    simd_ops::set_u64(&mut r, i, v as u64);
+                                                }
+                                                operand_stack.push(Value::V128(V128::new(r)));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x07 => {
+                                // v128.load8_splat
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 1, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 1];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => operand_stack.push(Value::V128(V128::new([buf[0]; 16]))),
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x08 => {
+                                // v128.load16_splat
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 2, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 2];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let val = u16::from_le_bytes(buf);
+                                                operand_stack.push(Value::V128(V128::new(simd_ops::splat_i16x8(val))));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x09 => {
+                                // v128.load32_splat
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 4, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 4];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let val = u32::from_le_bytes(buf);
+                                                operand_stack.push(Value::V128(V128::new(simd_ops::splat_i32x4(val))));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x0A => {
+                                // v128.load64_splat
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 8, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 8];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let mut b8 = [0u8; 8];
+                                                b8.copy_from_slice(&buf);
+                                                let val = u64::from_le_bytes(b8);
+                                                operand_stack.push(Value::V128(V128::new(simd_ops::splat_i64x2(val))));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x5C => {
+                                // v128.load32_zero
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 4, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 4];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let mut r = [0u8; 16];
+                                                r[0..4].copy_from_slice(&buf);
+                                                operand_stack.push(Value::V128(V128::new(r)));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            0x5D => {
+                                // v128.load64_zero
+                                let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                let offset = effective_address_for_memory(addr, memarg.offset, 8, is_mem64)? as u32;
+                                match instance.memory(memarg.memory_index as u32) {
+                                    Ok(mw) => {
+                                        let mut buf = [0u8; 8];
+                                        match mw.0.read(offset, &mut buf) {
+                                            Ok(()) => {
+                                                let mut r = [0u8; 16];
+                                                r[0..8].copy_from_slice(&buf);
+                                                operand_stack.push(Value::V128(V128::new(r)));
+                                            }
+                                            Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                        }
+                                    }
+                                    Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                }
+                            }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                error!("Unimplemented SIMD memory opcode at pc={}: 0x{:X}", pc, opcode);
+                                return Err(wrt_error::Error::runtime_error("Unimplemented SIMD memory instruction"));
+                            }
+                        }
+                    }
+
+                    // ========================================
+                    // SIMD Shuffle (i8x16.shuffle)
+                    // ========================================
+                    Instruction::SimdShuffle { lanes } => {
+                        if let (Some(Value::V128(b)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                            operand_stack.push(Value::V128(V128::new(simd_ops::i8x16_shuffle(&a.bytes, &b.bytes, &lanes))));
+                        }
+                    }
+
+                    // ========================================
+                    // SIMD Lane Operations (extract/replace)
+                    // ========================================
+                    Instruction::SimdLaneOp { opcode, lane } => {
+                        match opcode {
+                            0x15 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(simd_ops::get_i8(&a.bytes, lane as usize) as i32));
+                                }
+                            }
+                            0x16 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(simd_ops::get_u8(&a.bytes, lane as usize) as i32));
+                                }
+                            }
+                            0x17 => {
+                                if let (Some(Value::I32(val)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut r = a.bytes;
+                                    simd_ops::set_u8(&mut r, lane as usize, val as u8);
+                                    operand_stack.push(Value::V128(V128::new(r)));
+                                }
+                            }
+                            0x18 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(simd_ops::get_i16(&a.bytes, lane as usize) as i32));
+                                }
+                            }
+                            0x19 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(simd_ops::get_u16(&a.bytes, lane as usize) as i32));
+                                }
+                            }
+                            0x1A => {
+                                if let (Some(Value::I32(val)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut r = a.bytes;
+                                    simd_ops::set_u16(&mut r, lane as usize, val as u16);
+                                    operand_stack.push(Value::V128(V128::new(r)));
+                                }
+                            }
+                            0x1B => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I32(simd_ops::get_i32(&a.bytes, lane as usize)));
+                                }
+                            }
+                            0x1C => {
+                                if let (Some(Value::I32(val)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut r = a.bytes;
+                                    simd_ops::set_i32(&mut r, lane as usize, val);
+                                    operand_stack.push(Value::V128(V128::new(r)));
+                                }
+                            }
+                            0x1D => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::I64(simd_ops::get_i64(&a.bytes, lane as usize)));
+                                }
+                            }
+                            0x1E => {
+                                if let (Some(Value::I64(val)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut r = a.bytes;
+                                    simd_ops::set_i64(&mut r, lane as usize, val);
+                                    operand_stack.push(Value::V128(V128::new(r)));
+                                }
+                            }
+                            0x1F => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::F32(FloatBits32::from_float(simd_ops::get_f32(&a.bytes, lane as usize))));
+                                }
+                            }
+                            0x20 => {
+                                if let (Some(Value::F32(val)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut r = a.bytes;
+                                    simd_ops::set_f32(&mut r, lane as usize, val.value());
+                                    operand_stack.push(Value::V128(V128::new(r)));
+                                }
+                            }
+                            0x21 => {
+                                if let Some(Value::V128(a)) = operand_stack.pop() {
+                                    operand_stack.push(Value::F64(FloatBits64::from_float(simd_ops::get_f64(&a.bytes, lane as usize))));
+                                }
+                            }
+                            0x22 => {
+                                if let (Some(Value::F64(val)), Some(Value::V128(a))) = (operand_stack.pop(), operand_stack.pop()) {
+                                    let mut r = a.bytes;
+                                    simd_ops::set_f64(&mut r, lane as usize, val.value());
+                                    operand_stack.push(Value::V128(V128::new(r)));
+                                }
+                            }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                error!("Unimplemented SIMD lane opcode at pc={}: 0x{:X}", pc, opcode);
+                                return Err(wrt_error::Error::runtime_error("Unimplemented SIMD lane instruction"));
+                            }
+                        }
+                    }
+
+                    // ========================================
+                    // SIMD Memory Lane Operations (load/store lane)
+                    // ========================================
+                    Instruction::SimdMemLaneOp { opcode, memarg, lane } => {
+                        match opcode {
+                            0x54 => {
+                                // v128.load8_lane
+                                if let Some(Value::V128(v)) = operand_stack.pop() {
+                                    let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                    let offset = effective_address_for_memory(addr, memarg.offset, 1, is_mem64)? as u32;
+                                    match instance.memory(memarg.memory_index as u32) {
+                                        Ok(mw) => {
+                                            let mut buf = [0u8; 1];
+                                            match mw.0.read(offset, &mut buf) {
+                                                Ok(()) => {
+                                                    let mut r = v.bytes;
+                                                    r[lane as usize] = buf[0];
+                                                    operand_stack.push(Value::V128(V128::new(r)));
+                                                }
+                                                Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                            }
+                                        }
+                                        Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                    }
+                                }
+                            }
+                            0x55 => {
+                                // v128.load16_lane
+                                if let Some(Value::V128(v)) = operand_stack.pop() {
+                                    let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                    let offset = effective_address_for_memory(addr, memarg.offset, 2, is_mem64)? as u32;
+                                    match instance.memory(memarg.memory_index as u32) {
+                                        Ok(mw) => {
+                                            let mut buf = [0u8; 2];
+                                            match mw.0.read(offset, &mut buf) {
+                                                Ok(()) => {
+                                                    let mut r = v.bytes;
+                                                    let o = lane as usize * 2;
+                                                    r[o] = buf[0]; r[o+1] = buf[1];
+                                                    operand_stack.push(Value::V128(V128::new(r)));
+                                                }
+                                                Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                            }
+                                        }
+                                        Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                    }
+                                }
+                            }
+                            0x56 => {
+                                // v128.load32_lane
+                                if let Some(Value::V128(v)) = operand_stack.pop() {
+                                    let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                    let offset = effective_address_for_memory(addr, memarg.offset, 4, is_mem64)? as u32;
+                                    match instance.memory(memarg.memory_index as u32) {
+                                        Ok(mw) => {
+                                            let mut buf = [0u8; 4];
+                                            match mw.0.read(offset, &mut buf) {
+                                                Ok(()) => {
+                                                    let mut r = v.bytes;
+                                                    let o = lane as usize * 4;
+                                                    r[o..o+4].copy_from_slice(&buf);
+                                                    operand_stack.push(Value::V128(V128::new(r)));
+                                                }
+                                                Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                            }
+                                        }
+                                        Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                    }
+                                }
+                            }
+                            0x57 => {
+                                // v128.load64_lane
+                                if let Some(Value::V128(v)) = operand_stack.pop() {
+                                    let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                    let offset = effective_address_for_memory(addr, memarg.offset, 8, is_mem64)? as u32;
+                                    match instance.memory(memarg.memory_index as u32) {
+                                        Ok(mw) => {
+                                            let mut buf = [0u8; 8];
+                                            match mw.0.read(offset, &mut buf) {
+                                                Ok(()) => {
+                                                    let mut r = v.bytes;
+                                                    let o = lane as usize * 8;
+                                                    r[o..o+8].copy_from_slice(&buf);
+                                                    operand_stack.push(Value::V128(V128::new(r)));
+                                                }
+                                                Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                            }
+                                        }
+                                        Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                    }
+                                }
+                            }
+                            0x58 => {
+                                // v128.store8_lane
+                                if let Some(Value::V128(v)) = operand_stack.pop() {
+                                    let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                    let offset = effective_address_for_memory(addr, memarg.offset, 1, is_mem64)? as u32;
+                                    match instance.memory(memarg.memory_index as u32) {
+                                        Ok(mw) => {
+                                            match mw.0.write_shared(offset, &[v.bytes[lane as usize]]) {
+                                                Ok(()) => {}
+                                                Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                            }
+                                        }
+                                        Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                    }
+                                }
+                            }
+                            0x59 => {
+                                // v128.store16_lane
+                                if let Some(Value::V128(v)) = operand_stack.pop() {
+                                    let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                    let offset = effective_address_for_memory(addr, memarg.offset, 2, is_mem64)? as u32;
+                                    let o = lane as usize * 2;
+                                    match instance.memory(memarg.memory_index as u32) {
+                                        Ok(mw) => {
+                                            match mw.0.write_shared(offset, &v.bytes[o..o+2]) {
+                                                Ok(()) => {}
+                                                Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                            }
+                                        }
+                                        Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                    }
+                                }
+                            }
+                            0x5A => {
+                                // v128.store32_lane
+                                if let Some(Value::V128(v)) = operand_stack.pop() {
+                                    let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                    let offset = effective_address_for_memory(addr, memarg.offset, 4, is_mem64)? as u32;
+                                    let o = lane as usize * 4;
+                                    match instance.memory(memarg.memory_index as u32) {
+                                        Ok(mw) => {
+                                            match mw.0.write_shared(offset, &v.bytes[o..o+4]) {
+                                                Ok(()) => {}
+                                                Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                            }
+                                        }
+                                        Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                    }
+                                }
+                            }
+                            0x5B => {
+                                // v128.store64_lane
+                                if let Some(Value::V128(v)) = operand_stack.pop() {
+                                    let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, memarg.memory_index as u32)?;
+                                    let offset = effective_address_for_memory(addr, memarg.offset, 8, is_mem64)? as u32;
+                                    let o = lane as usize * 8;
+                                    match instance.memory(memarg.memory_index as u32) {
+                                        Ok(mw) => {
+                                            match mw.0.write_shared(offset, &v.bytes[o..o+8]) {
+                                                Ok(()) => {}
+                                                Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                            }
+                                        }
+                                        Err(_) => return Err(wrt_error::Error::runtime_trap("out of bounds memory access")),
+                                    }
+                                }
+                            }
+                            _ => {
+                                #[cfg(feature = "tracing")]
+                                error!("Unimplemented SIMD memory lane opcode at pc={}: 0x{:X}", pc, opcode);
+                                return Err(wrt_error::Error::runtime_error("Unimplemented SIMD memory lane instruction"));
+                            }
+                        }
                     }
 
                     _ => {

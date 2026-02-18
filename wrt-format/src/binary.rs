@@ -2301,11 +2301,9 @@ pub mod with_alloc {
                 })?;
                 offset += 1;
                 let value_type = ValueType::from_binary(rt_byte)?;
-                element_type = match value_type {
-                    ValueType::FuncRef => RefType::Funcref,
-                    ValueType::ExternRef => RefType::Externref,
-                    _ => return Err(parse_error("Invalid ref type for element")),
-                };
+                element_type = RefType::try_from(value_type).map_err(|_| {
+                    parse_error("Invalid ref type for element")
+                })?;
 
                 let (exprs_vec, next_offset) = read_vector(bytes, offset, parse_init_expr)
                     .map_err(|e| {
@@ -2354,11 +2352,9 @@ pub mod with_alloc {
                 })?;
                 offset += 1;
                 let value_type = ValueType::from_binary(rt_byte)?;
-                element_type = match value_type {
-                    ValueType::FuncRef => RefType::Funcref,
-                    ValueType::ExternRef => RefType::Externref,
-                    _ => return Err(parse_error("Invalid ref type for element")),
-                };
+                element_type = RefType::try_from(value_type).map_err(|_| {
+                    parse_error("Invalid ref type for element")
+                })?;
 
                 let (exprs_vec, next_offset) = read_vector(bytes, offset, parse_init_expr)
                     .map_err(|e| {
@@ -2395,11 +2391,9 @@ pub mod with_alloc {
                 })?;
                 offset += 1;
                 let value_type = ValueType::from_binary(rt_byte)?;
-                element_type = match value_type {
-                    ValueType::FuncRef => RefType::Funcref,
-                    ValueType::ExternRef => RefType::Externref,
-                    _ => return Err(parse_error("Invalid ref type for element")),
-                };
+                element_type = RefType::try_from(value_type).map_err(|_| {
+                    parse_error("Invalid ref type for element")
+                })?;
 
                 let (exprs_vec, next_offset) = read_vector(bytes, offset, parse_init_expr)
                     .map_err(|e| {

@@ -60,6 +60,12 @@ impl RefNull {
         match self.ref_type {
             RefType::Funcref => Ok(Value::FuncRef(None)),
             RefType::Externref => Ok(Value::ExternRef(None)),
+            RefType::Gc(_) => {
+                // GC reference types: null reference for any GC type
+                // For now, represent as a null funcref since GC value representation
+                // is not yet fully implemented in the runtime
+                Ok(Value::FuncRef(None))
+            }
         }
     }
 }
@@ -531,10 +537,7 @@ mod tests {
 
 impl Validate for RefNull {
     fn validate(&self, ctx: &mut ValidationContext) -> Result<()> {
-        let ref_type = match self.ref_type {
-            RefType::Funcref => ValueType::FuncRef,
-            RefType::Externref => ValueType::ExternRef,
-        };
+        let ref_type = self.ref_type.to_value_type();
         validate_ref_op("ref.null", Some(ref_type), ctx)
     }
 }

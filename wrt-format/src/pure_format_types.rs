@@ -568,6 +568,7 @@ impl wrt_foundation::traits::ToBytes for PureElementSegment {
         let element_type_byte = match self.element_type {
             crate::types::RefType::Funcref => 0u8,
             crate::types::RefType::Externref => 1u8,
+            crate::types::RefType::Gc(_) => 1u8, // GC ref types serialize as externref for binary format
         };
         writer.write_all(&[element_type_byte])?;
         self.mode.to_bytes_with_provider(writer, provider)?;

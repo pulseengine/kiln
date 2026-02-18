@@ -1,0 +1,1486 @@
+//! SIMD (V128) operation helper functions
+//!
+//! Pure computation helpers for SIMD operations. These functions operate on
+//! `[u8; 16]` byte arrays in little-endian format, matching the WebAssembly
+//! V128 value representation.
+
+// ============================================================
+// Lane accessor helpers
+// ============================================================
+
+#[inline]
+pub fn get_i8(v: &[u8; 16], lane: usize) -> i8 {
+    v[lane] as i8
+}
+
+#[inline]
+pub fn set_i8(v: &mut [u8; 16], lane: usize, val: i8) {
+    v[lane] = val as u8;
+}
+
+#[inline]
+pub fn get_u8(v: &[u8; 16], lane: usize) -> u8 {
+    v[lane]
+}
+
+#[inline]
+pub fn set_u8(v: &mut [u8; 16], lane: usize, val: u8) {
+    v[lane] = val;
+}
+
+#[inline]
+pub fn get_i16(v: &[u8; 16], lane: usize) -> i16 {
+    i16::from_le_bytes([v[lane * 2], v[lane * 2 + 1]])
+}
+
+#[inline]
+pub fn set_i16(v: &mut [u8; 16], lane: usize, val: i16) {
+    let b = val.to_le_bytes();
+    v[lane * 2] = b[0];
+    v[lane * 2 + 1] = b[1];
+}
+
+#[inline]
+pub fn get_u16(v: &[u8; 16], lane: usize) -> u16 {
+    u16::from_le_bytes([v[lane * 2], v[lane * 2 + 1]])
+}
+
+#[inline]
+pub fn set_u16(v: &mut [u8; 16], lane: usize, val: u16) {
+    let b = val.to_le_bytes();
+    v[lane * 2] = b[0];
+    v[lane * 2 + 1] = b[1];
+}
+
+#[inline]
+pub fn get_i32(v: &[u8; 16], lane: usize) -> i32 {
+    let o = lane * 4;
+    i32::from_le_bytes([v[o], v[o + 1], v[o + 2], v[o + 3]])
+}
+
+#[inline]
+pub fn set_i32(v: &mut [u8; 16], lane: usize, val: i32) {
+    let o = lane * 4;
+    let b = val.to_le_bytes();
+    v[o] = b[0];
+    v[o + 1] = b[1];
+    v[o + 2] = b[2];
+    v[o + 3] = b[3];
+}
+
+#[inline]
+pub fn get_u32(v: &[u8; 16], lane: usize) -> u32 {
+    let o = lane * 4;
+    u32::from_le_bytes([v[o], v[o + 1], v[o + 2], v[o + 3]])
+}
+
+#[inline]
+pub fn set_u32(v: &mut [u8; 16], lane: usize, val: u32) {
+    let o = lane * 4;
+    let b = val.to_le_bytes();
+    v[o] = b[0];
+    v[o + 1] = b[1];
+    v[o + 2] = b[2];
+    v[o + 3] = b[3];
+}
+
+#[inline]
+pub fn get_i64(v: &[u8; 16], lane: usize) -> i64 {
+    let o = lane * 8;
+    let mut b = [0u8; 8];
+    b.copy_from_slice(&v[o..o + 8]);
+    i64::from_le_bytes(b)
+}
+
+#[inline]
+pub fn set_i64(v: &mut [u8; 16], lane: usize, val: i64) {
+    let o = lane * 8;
+    v[o..o + 8].copy_from_slice(&val.to_le_bytes());
+}
+
+#[inline]
+pub fn get_u64(v: &[u8; 16], lane: usize) -> u64 {
+    let o = lane * 8;
+    let mut b = [0u8; 8];
+    b.copy_from_slice(&v[o..o + 8]);
+    u64::from_le_bytes(b)
+}
+
+#[inline]
+pub fn set_u64(v: &mut [u8; 16], lane: usize, val: u64) {
+    let o = lane * 8;
+    v[o..o + 8].copy_from_slice(&val.to_le_bytes());
+}
+
+#[inline]
+pub fn get_f32(v: &[u8; 16], lane: usize) -> f32 {
+    let o = lane * 4;
+    f32::from_le_bytes([v[o], v[o + 1], v[o + 2], v[o + 3]])
+}
+
+#[inline]
+pub fn set_f32(v: &mut [u8; 16], lane: usize, val: f32) {
+    let o = lane * 4;
+    let b = val.to_le_bytes();
+    v[o] = b[0];
+    v[o + 1] = b[1];
+    v[o + 2] = b[2];
+    v[o + 3] = b[3];
+}
+
+#[inline]
+pub fn get_f64(v: &[u8; 16], lane: usize) -> f64 {
+    let o = lane * 8;
+    let mut b = [0u8; 8];
+    b.copy_from_slice(&v[o..o + 8]);
+    f64::from_le_bytes(b)
+}
+
+#[inline]
+pub fn set_f64(v: &mut [u8; 16], lane: usize, val: f64) {
+    let o = lane * 8;
+    v[o..o + 8].copy_from_slice(&val.to_le_bytes());
+}
+
+// ============================================================
+// Splat operations
+// ============================================================
+
+#[inline]
+pub fn splat_i8x16(val: u8) -> [u8; 16] {
+    [val; 16]
+}
+
+#[inline]
+pub fn splat_i16x8(val: u16) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, val);
+    }
+    r
+}
+
+#[inline]
+pub fn splat_i32x4(val: u32) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_u32(&mut r, i, val);
+    }
+    r
+}
+
+#[inline]
+pub fn splat_i64x2(val: u64) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    set_u64(&mut r, 0, val);
+    set_u64(&mut r, 1, val);
+    r
+}
+
+#[inline]
+pub fn splat_f32x4(val: f32) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_f32(&mut r, i, val);
+    }
+    r
+}
+
+#[inline]
+pub fn splat_f64x2(val: f64) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    set_f64(&mut r, 0, val);
+    set_f64(&mut r, 1, val);
+    r
+}
+
+// ============================================================
+// Bitwise operations
+// ============================================================
+
+#[inline]
+pub fn v128_not(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = !v[i];
+    }
+    r
+}
+
+#[inline]
+pub fn v128_and(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = a[i] & b[i];
+    }
+    r
+}
+
+#[inline]
+pub fn v128_andnot(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = a[i] & !b[i];
+    }
+    r
+}
+
+#[inline]
+pub fn v128_or(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = a[i] | b[i];
+    }
+    r
+}
+
+#[inline]
+pub fn v128_xor(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = a[i] ^ b[i];
+    }
+    r
+}
+
+#[inline]
+pub fn v128_bitselect(v1: &[u8; 16], v2: &[u8; 16], c: &[u8; 16]) -> [u8; 16] {
+    // result = (v1 & c) | (v2 & ~c)
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = (v1[i] & c[i]) | (v2[i] & !c[i]);
+    }
+    r
+}
+
+#[inline]
+pub fn v128_any_true(v: &[u8; 16]) -> bool {
+    v.iter().any(|&b| b != 0)
+}
+
+// ============================================================
+// i8x16 operations
+// ============================================================
+
+#[inline]
+pub fn i8x16_swizzle(a: &[u8; 16], s: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        let idx = s[i] as usize;
+        r[i] = if idx < 16 { a[idx] } else { 0 };
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_shuffle(a: &[u8; 16], b: &[u8; 16], lanes: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    let combined: [u8; 32] = {
+        let mut c = [0u8; 32];
+        c[..16].copy_from_slice(a);
+        c[16..].copy_from_slice(b);
+        c
+    };
+    for i in 0..16 {
+        let idx = lanes[i] as usize;
+        r[i] = if idx < 32 { combined[idx] } else { 0 };
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_abs(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = (v[i] as i8).wrapping_abs() as u8;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_neg(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = (v[i] as i8).wrapping_neg() as u8;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_popcnt(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = v[i].count_ones() as u8;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_all_true(v: &[u8; 16]) -> bool {
+    v.iter().all(|&b| b != 0)
+}
+
+#[inline]
+pub fn i8x16_bitmask(v: &[u8; 16]) -> u32 {
+    let mut mask = 0u32;
+    for i in 0..16 {
+        if (v[i] as i8) < 0 {
+            mask |= 1 << i;
+        }
+    }
+    mask
+}
+
+#[inline]
+pub fn i8x16_add(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = a[i].wrapping_add(b[i]);
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_sub(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = a[i].wrapping_sub(b[i]);
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_add_sat_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = (a[i] as i8).saturating_add(b[i] as i8) as u8;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_add_sat_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = a[i].saturating_add(b[i]);
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_sub_sat_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = (a[i] as i8).saturating_sub(b[i] as i8) as u8;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_sub_sat_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = a[i].saturating_sub(b[i]);
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_min_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        let va = a[i] as i8;
+        let vb = b[i] as i8;
+        r[i] = if va < vb { va } else { vb } as u8;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_min_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = a[i].min(b[i]);
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_max_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        let va = a[i] as i8;
+        let vb = b[i] as i8;
+        r[i] = if va > vb { va } else { vb } as u8;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_max_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = a[i].max(b[i]);
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_avgr_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = ((a[i] as u16 + b[i] as u16 + 1) / 2) as u8;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_shl(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = (shift % 8) as u8;
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = v[i] << s;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_shr_s(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = (shift % 8) as u8;
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = ((v[i] as i8) >> s) as u8;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_shr_u(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = (shift % 8) as u8;
+    let mut r = [0u8; 16];
+    for i in 0..16 {
+        r[i] = v[i] >> s;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_narrow_i16x8_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let va = get_i16(a, i) as i32;
+        r[i] = va.max(-128).min(127) as i8 as u8;
+    }
+    for i in 0..8 {
+        let vb = get_i16(b, i) as i32;
+        r[i + 8] = vb.max(-128).min(127) as i8 as u8;
+    }
+    r
+}
+
+#[inline]
+pub fn i8x16_narrow_i16x8_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let va = get_i16(a, i) as i32;
+        r[i] = va.max(0).min(255) as u8;
+    }
+    for i in 0..8 {
+        let vb = get_i16(b, i) as i32;
+        r[i + 8] = vb.max(0).min(255) as u8;
+    }
+    r
+}
+
+// ============================================================
+// i16x8 operations
+// ============================================================
+
+#[inline]
+pub fn i16x8_abs(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_i16(&mut r, i, get_i16(v, i).wrapping_abs());
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_neg(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_i16(&mut r, i, get_i16(v, i).wrapping_neg());
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_all_true(v: &[u8; 16]) -> bool {
+    for i in 0..8 {
+        if get_u16(v, i) == 0 {
+            return false;
+        }
+    }
+    true
+}
+
+#[inline]
+pub fn i16x8_bitmask(v: &[u8; 16]) -> u32 {
+    let mut mask = 0u32;
+    for i in 0..8 {
+        if get_i16(v, i) < 0 {
+            mask |= 1 << i;
+        }
+    }
+    mask
+}
+
+#[inline]
+pub fn i16x8_add(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, get_u16(a, i).wrapping_add(get_u16(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_sub(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, get_u16(a, i).wrapping_sub(get_u16(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_mul(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, get_u16(a, i).wrapping_mul(get_u16(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_add_sat_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_i16(&mut r, i, get_i16(a, i).saturating_add(get_i16(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_add_sat_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, get_u16(a, i).saturating_add(get_u16(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_sub_sat_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_i16(&mut r, i, get_i16(a, i).saturating_sub(get_i16(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_sub_sat_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, get_u16(a, i).saturating_sub(get_u16(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_shl(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = (shift % 16) as u16;
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, get_u16(v, i) << s);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_shr_s(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = (shift % 16) as u16;
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_i16(&mut r, i, get_i16(v, i) >> s);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_shr_u(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = (shift % 16) as u16;
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, get_u16(v, i) >> s);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_min_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let va = get_i16(a, i);
+        let vb = get_i16(b, i);
+        set_i16(&mut r, i, if va < vb { va } else { vb });
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_min_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, get_u16(a, i).min(get_u16(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_max_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let va = get_i16(a, i);
+        let vb = get_i16(b, i);
+        set_i16(&mut r, i, if va > vb { va } else { vb });
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_max_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, get_u16(a, i).max(get_u16(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_avgr_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let sum = get_u16(a, i) as u32 + get_u16(b, i) as u32 + 1;
+        set_u16(&mut r, i, (sum / 2) as u16);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_narrow_i32x4_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_i32(a, i) as i64;
+        set_i16(&mut r, i, va.max(-32768).min(32767) as i16);
+    }
+    for i in 0..4 {
+        let vb = get_i32(b, i) as i64;
+        set_i16(&mut r, i + 4, vb.max(-32768).min(32767) as i16);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_narrow_i32x4_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_i32(a, i) as i64;
+        set_u16(&mut r, i, va.max(0).min(65535) as u16);
+    }
+    for i in 0..4 {
+        let vb = get_i32(b, i) as i64;
+        set_u16(&mut r, i + 4, vb.max(0).min(65535) as u16);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_extend_low_i8x16_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_i16(&mut r, i, v[i] as i8 as i16);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_extend_low_i8x16_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, v[i] as u16);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_extend_high_i8x16_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_i16(&mut r, i, v[i + 8] as i8 as i16);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_extend_high_i8x16_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        set_u16(&mut r, i, v[i + 8] as u16);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_q15mulr_sat_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let va = get_i16(a, i) as i32;
+        let vb = get_i16(b, i) as i32;
+        // Q15 multiply: (a * b + 0x4000) >> 15, saturated to i16
+        let product = ((va * vb) + 0x4000) >> 15;
+        set_i16(&mut r, i, product.max(-32768).min(32767) as i16);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_extadd_pairwise_i8x16_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let a = v[i * 2] as i8 as i16;
+        let b = v[i * 2 + 1] as i8 as i16;
+        set_i16(&mut r, i, a + b);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_extadd_pairwise_i8x16_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let a = v[i * 2] as u16;
+        let b = v[i * 2 + 1] as u16;
+        set_u16(&mut r, i, a + b);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_extmul_low_i8x16_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let va = a[i] as i8 as i16;
+        let vb = b[i] as i8 as i16;
+        set_i16(&mut r, i, va * vb);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_extmul_high_i8x16_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let va = a[i + 8] as i8 as i16;
+        let vb = b[i + 8] as i8 as i16;
+        set_i16(&mut r, i, va * vb);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_extmul_low_i8x16_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let va = a[i] as u16;
+        let vb = b[i] as u16;
+        set_u16(&mut r, i, va * vb);
+    }
+    r
+}
+
+#[inline]
+pub fn i16x8_extmul_high_i8x16_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let va = a[i + 8] as u16;
+        let vb = b[i + 8] as u16;
+        set_u16(&mut r, i, va * vb);
+    }
+    r
+}
+
+// ============================================================
+// i32x4 operations
+// ============================================================
+
+#[inline]
+pub fn i32x4_abs(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_i32(&mut r, i, get_i32(v, i).wrapping_abs());
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_neg(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_i32(&mut r, i, get_i32(v, i).wrapping_neg());
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_all_true(v: &[u8; 16]) -> bool {
+    for i in 0..4 {
+        if get_u32(v, i) == 0 {
+            return false;
+        }
+    }
+    true
+}
+
+#[inline]
+pub fn i32x4_bitmask(v: &[u8; 16]) -> u32 {
+    let mut mask = 0u32;
+    for i in 0..4 {
+        if get_i32(v, i) < 0 {
+            mask |= 1 << i;
+        }
+    }
+    mask
+}
+
+#[inline]
+pub fn i32x4_add(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_u32(&mut r, i, get_u32(a, i).wrapping_add(get_u32(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_sub(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_u32(&mut r, i, get_u32(a, i).wrapping_sub(get_u32(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_mul(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_u32(&mut r, i, get_u32(a, i).wrapping_mul(get_u32(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_shl(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = shift % 32;
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_u32(&mut r, i, get_u32(v, i) << s);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_shr_s(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = shift % 32;
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_i32(&mut r, i, get_i32(v, i) >> s);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_shr_u(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = shift % 32;
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_u32(&mut r, i, get_u32(v, i) >> s);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_min_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_i32(a, i);
+        let vb = get_i32(b, i);
+        set_i32(&mut r, i, if va < vb { va } else { vb });
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_min_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_u32(&mut r, i, get_u32(a, i).min(get_u32(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_max_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_i32(a, i);
+        let vb = get_i32(b, i);
+        set_i32(&mut r, i, if va > vb { va } else { vb });
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_max_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_u32(&mut r, i, get_u32(a, i).max(get_u32(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_dot_i16x8_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let a0 = get_i16(a, i * 2) as i32;
+        let a1 = get_i16(a, i * 2 + 1) as i32;
+        let b0 = get_i16(b, i * 2) as i32;
+        let b1 = get_i16(b, i * 2 + 1) as i32;
+        set_i32(&mut r, i, a0 * b0 + a1 * b1);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_extend_low_i16x8_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_i32(&mut r, i, get_i16(v, i) as i32);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_extend_low_i16x8_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_u32(&mut r, i, get_u16(v, i) as u32);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_extend_high_i16x8_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_i32(&mut r, i, get_i16(v, i + 4) as i32);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_extend_high_i16x8_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_u32(&mut r, i, get_u16(v, i + 4) as u32);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_extadd_pairwise_i16x8_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let a = get_i16(v, i * 2) as i32;
+        let b = get_i16(v, i * 2 + 1) as i32;
+        set_i32(&mut r, i, a + b);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_extadd_pairwise_i16x8_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let a = get_u16(v, i * 2) as u32;
+        let b = get_u16(v, i * 2 + 1) as u32;
+        set_u32(&mut r, i, a + b);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_extmul_low_i16x8_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_i16(a, i) as i32;
+        let vb = get_i16(b, i) as i32;
+        set_i32(&mut r, i, va * vb);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_extmul_high_i16x8_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_i16(a, i + 4) as i32;
+        let vb = get_i16(b, i + 4) as i32;
+        set_i32(&mut r, i, va * vb);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_extmul_low_i16x8_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_u16(a, i) as u32;
+        let vb = get_u16(b, i) as u32;
+        set_u32(&mut r, i, va * vb);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_extmul_high_i16x8_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_u16(a, i + 4) as u32;
+        let vb = get_u16(b, i + 4) as u32;
+        set_u32(&mut r, i, va * vb);
+    }
+    r
+}
+
+// ============================================================
+// i64x2 operations
+// ============================================================
+
+#[inline]
+pub fn i64x2_abs(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_i64(&mut r, i, get_i64(v, i).wrapping_abs());
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_neg(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_i64(&mut r, i, get_i64(v, i).wrapping_neg());
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_all_true(v: &[u8; 16]) -> bool {
+    get_u64(v, 0) != 0 && get_u64(v, 1) != 0
+}
+
+#[inline]
+pub fn i64x2_bitmask(v: &[u8; 16]) -> u32 {
+    let mut mask = 0u32;
+    if get_i64(v, 0) < 0 { mask |= 1; }
+    if get_i64(v, 1) < 0 { mask |= 2; }
+    mask
+}
+
+#[inline]
+pub fn i64x2_add(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_u64(&mut r, i, get_u64(a, i).wrapping_add(get_u64(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_sub(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_u64(&mut r, i, get_u64(a, i).wrapping_sub(get_u64(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_mul(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_u64(&mut r, i, get_u64(a, i).wrapping_mul(get_u64(b, i)));
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_shl(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = (shift % 64) as u64;
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_u64(&mut r, i, get_u64(v, i) << s);
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_shr_s(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = (shift % 64) as u64;
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_i64(&mut r, i, get_i64(v, i) >> s);
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_shr_u(v: &[u8; 16], shift: u32) -> [u8; 16] {
+    let s = (shift % 64) as u64;
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_u64(&mut r, i, get_u64(v, i) >> s);
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_extend_low_i32x4_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_i64(&mut r, i, get_i32(v, i) as i64);
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_extend_low_i32x4_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_u64(&mut r, i, get_u32(v, i) as u64);
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_extend_high_i32x4_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_i64(&mut r, i, get_i32(v, i + 2) as i64);
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_extend_high_i32x4_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_u64(&mut r, i, get_u32(v, i + 2) as u64);
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_extmul_low_i32x4_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let va = get_i32(a, i) as i64;
+        let vb = get_i32(b, i) as i64;
+        set_i64(&mut r, i, va * vb);
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_extmul_high_i32x4_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let va = get_i32(a, i + 2) as i64;
+        let vb = get_i32(b, i + 2) as i64;
+        set_i64(&mut r, i, va * vb);
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_extmul_low_i32x4_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let va = get_u32(a, i) as u64;
+        let vb = get_u32(b, i) as u64;
+        set_u64(&mut r, i, va * vb);
+    }
+    r
+}
+
+#[inline]
+pub fn i64x2_extmul_high_i32x4_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let va = get_u32(a, i + 2) as u64;
+        let vb = get_u32(b, i + 2) as u64;
+        set_u64(&mut r, i, va * vb);
+    }
+    r
+}
+
+// ============================================================
+// Conversion operations
+// ============================================================
+
+#[inline]
+pub fn i32x4_trunc_sat_f32x4_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let f = get_f32(v, i);
+        let val = if f.is_nan() {
+            0i32
+        } else if f >= i32::MAX as f32 {
+            i32::MAX
+        } else if f <= i32::MIN as f32 {
+            i32::MIN
+        } else {
+            f as i32
+        };
+        set_i32(&mut r, i, val);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_trunc_sat_f32x4_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let f = get_f32(v, i);
+        let val = if f.is_nan() || f <= -1.0 {
+            0u32
+        } else if f >= u32::MAX as f32 {
+            u32::MAX
+        } else {
+            f as u32
+        };
+        set_u32(&mut r, i, val);
+    }
+    r
+}
+
+#[inline]
+pub fn f32x4_convert_i32x4_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_f32(&mut r, i, get_i32(v, i) as f32);
+    }
+    r
+}
+
+#[inline]
+pub fn f32x4_convert_i32x4_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_f32(&mut r, i, get_u32(v, i) as f32);
+    }
+    r
+}
+
+#[inline]
+pub fn i32x4_trunc_sat_f64x2_s_zero(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let f = get_f64(v, i);
+        let val = if f.is_nan() {
+            0i32
+        } else if f >= i32::MAX as f64 {
+            i32::MAX
+        } else if f <= i32::MIN as f64 {
+            i32::MIN
+        } else {
+            f as i32
+        };
+        set_i32(&mut r, i, val);
+    }
+    // lanes 2 and 3 are zero (already zeroed)
+    r
+}
+
+#[inline]
+pub fn i32x4_trunc_sat_f64x2_u_zero(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let f = get_f64(v, i);
+        let val = if f.is_nan() || f <= -1.0 {
+            0u32
+        } else if f >= u32::MAX as f64 {
+            u32::MAX
+        } else {
+            f as u32
+        };
+        set_u32(&mut r, i, val);
+    }
+    // lanes 2 and 3 are zero (already zeroed)
+    r
+}
+
+#[inline]
+pub fn f64x2_convert_low_i32x4_s(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_f64(&mut r, i, get_i32(v, i) as f64);
+    }
+    r
+}
+
+#[inline]
+pub fn f64x2_convert_low_i32x4_u(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_f64(&mut r, i, get_u32(v, i) as f64);
+    }
+    r
+}
+
+#[inline]
+pub fn f32x4_demote_f64x2_zero(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_f32(&mut r, i, get_f64(v, i) as f32);
+    }
+    // lanes 2 and 3 are zero (already zeroed)
+    r
+}
+
+#[inline]
+pub fn f64x2_promote_low_f32x4(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_f64(&mut r, i, get_f32(v, i) as f64);
+    }
+    r
+}
+
+// ============================================================
+// Ceil/Floor/Trunc/Nearest for floats (0xE2 = f32x4.ceil, etc.)
+// ============================================================
+
+#[inline]
+pub fn f32x4_ceil(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_f32(&mut r, i, get_f32(v, i).ceil());
+    }
+    r
+}
+
+#[inline]
+pub fn f32x4_floor(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_f32(&mut r, i, get_f32(v, i).floor());
+    }
+    r
+}
+
+#[inline]
+pub fn f32x4_trunc(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        set_f32(&mut r, i, get_f32(v, i).trunc());
+    }
+    r
+}
+
+#[inline]
+pub fn f32x4_nearest(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let f = get_f32(v, i);
+        // Round to nearest, ties to even (banker's rounding)
+        let rounded = f.round();
+        // Check for tie: if the fractional part is exactly 0.5
+        let frac = (f - f.floor()).abs();
+        let result = if (frac - 0.5).abs() < f32::EPSILON {
+            // Tie: round to even
+            if rounded as i64 % 2 != 0 {
+                // rounded is odd, go to even
+                if f > 0.0 { rounded - 1.0 } else { rounded + 1.0 }
+            } else {
+                rounded
+            }
+        } else {
+            rounded
+        };
+        set_f32(&mut r, i, result);
+    }
+    r
+}
+
+#[inline]
+pub fn f64x2_ceil(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_f64(&mut r, i, get_f64(v, i).ceil());
+    }
+    r
+}
+
+#[inline]
+pub fn f64x2_floor(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_f64(&mut r, i, get_f64(v, i).floor());
+    }
+    r
+}
+
+#[inline]
+pub fn f64x2_trunc(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        set_f64(&mut r, i, get_f64(v, i).trunc());
+    }
+    r
+}
+
+#[inline]
+pub fn f64x2_nearest(v: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let f = get_f64(v, i);
+        let rounded = f.round();
+        let frac = (f - f.floor()).abs();
+        let result = if (frac - 0.5).abs() < f64::EPSILON {
+            if rounded as i64 % 2 != 0 {
+                if f > 0.0 { rounded - 1.0 } else { rounded + 1.0 }
+            } else {
+                rounded
+            }
+        } else {
+            rounded
+        };
+        set_f64(&mut r, i, result);
+    }
+    r
+}

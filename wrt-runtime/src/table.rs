@@ -221,6 +221,7 @@ impl wrt_foundation::traits::Checksummable for Table {
         let element_type_byte = match self.ty.element_type {
             WrtRefType::Funcref => 0u8,
             WrtRefType::Externref => 1u8,
+            WrtRefType::Gc(_) => 2u8,
         };
         checksum.update_slice(&element_type_byte.to_le_bytes());
         checksum.update_slice(&self.ty.limits.min.to_le_bytes());
@@ -243,6 +244,7 @@ impl wrt_foundation::traits::ToBytes for Table {
         let element_type_byte = match self.ty.element_type {
             WrtRefType::Funcref => 0u8,
             WrtRefType::Externref => 1u8,
+            WrtRefType::Gc(_) => 2u8,
         };
         writer.write_all(&element_type_byte.to_le_bytes())?;
         writer.write_all(&self.ty.limits.min.to_le_bytes())
@@ -309,6 +311,7 @@ impl Table {
         let init_val = match ty.element_type {
             WrtRefType::Funcref => Some(WrtValue::FuncRef(None)),
             WrtRefType::Externref => Some(WrtValue::ExternRef(None)),
+            WrtRefType::Gc(_) => Some(WrtValue::FuncRef(None)), // GC null ref
         };
 
         #[cfg(feature = "tracing")]
@@ -452,7 +455,7 @@ impl Table {
         }
 
         if let Some(ref val) = value {
-            let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+            let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref) | (WrtValue::FuncRef(_), WrtRefType::Gc(_)) | (WrtValue::ExternRef(_), WrtRefType::Gc(_)));
             if !val_matches {
                 return Err(Error::validation_error(
                     "Element value type doesn't match table element type",
@@ -494,7 +497,7 @@ impl Table {
         }
 
         if let Some(ref val) = value {
-            let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+            let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref) | (WrtValue::FuncRef(_), WrtRefType::Gc(_)) | (WrtValue::ExternRef(_), WrtRefType::Gc(_)));
             if !val_matches {
                 return Err(Error::validation_error(
                     "Element value type doesn't match table element type",
@@ -522,7 +525,7 @@ impl Table {
     ///
     /// Returns an error if the table cannot be grown
     pub fn grow_shared(&self, delta: u32, init_value_from_arg: WrtValue) -> Result<u32> {
-        let init_val_matches = matches!((&init_value_from_arg, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+        let init_val_matches = matches!((&init_value_from_arg, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref) | (WrtValue::FuncRef(_), WrtRefType::Gc(_)) | (WrtValue::ExternRef(_), WrtRefType::Gc(_)));
         if !init_val_matches {
             return Err(Error::validation_error(
                 "Grow operation init value type doesn't match table element type",
@@ -678,7 +681,7 @@ impl Table {
         }
         for (i, val_opt) in init_data.iter().enumerate() {
             if let Some(val) = val_opt {
-                let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+                let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref) | (WrtValue::FuncRef(_), WrtRefType::Gc(_)) | (WrtValue::ExternRef(_), WrtRefType::Gc(_)));
                 if !val_matches {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }
@@ -703,7 +706,7 @@ impl Table {
     ///
     /// Returns an error if the table cannot be grown
     pub fn grow(&mut self, delta: u32, init_value_from_arg: WrtValue) -> Result<u32> {
-        let init_val_matches = matches!((&init_value_from_arg, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+        let init_val_matches = matches!((&init_value_from_arg, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref) | (WrtValue::FuncRef(_), WrtRefType::Gc(_)) | (WrtValue::ExternRef(_), WrtRefType::Gc(_)));
         if !init_val_matches {
             return Err(Error::validation_error(
                 "Grow operation init value type doesn't match table element type",
@@ -760,7 +763,7 @@ impl Table {
     /// Returns an error if the index is out of bounds or the table element type
     /// isn't a funcref
     pub fn set_func(&mut self, idx: u32, func_idx: u32) -> Result<()> {
-        if !matches!(self.ty.element_type, WrtRefType::Funcref) {
+        if !matches!(self.ty.element_type, WrtRefType::Funcref | WrtRefType::Gc(_)) {
             return Err(Error::runtime_execution_error(
                 "Table element type must be funcref",
             ));
@@ -799,7 +802,7 @@ impl Table {
         }
         for (i, val_opt) in init_data.iter().enumerate() {
             if let Some(val) = val_opt {
-                let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+                let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref) | (WrtValue::FuncRef(_), WrtRefType::Gc(_)) | (WrtValue::ExternRef(_), WrtRefType::Gc(_)));
                 if !val_matches {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }

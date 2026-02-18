@@ -4390,7 +4390,7 @@ impl Checksummable for TableWrapper {
     fn update_checksum(&self, checksum: &mut Checksum) {
         // Use table size and element type for checksum
         checksum.update_slice(&self.0.size().to_le_bytes());
-        checksum.update_slice(&(self.0.ty.element_type as u8).to_le_bytes());
+        checksum.update_slice(&[self.0.ty.element_type.to_value_type().to_binary()]);
     }
 }
 
@@ -4405,7 +4405,7 @@ impl ToBytes for TableWrapper {
         _provider: &P,
     ) -> Result<()> {
         writer.write_all(&self.0.size().to_le_bytes())?;
-        writer.write_all(&(self.0.ty.element_type as u8).to_le_bytes())?;
+        writer.write_all(&[self.0.ty.element_type.to_value_type().to_binary()])?;
         writer.write_all(&self.0.ty.limits.min.to_le_bytes())?;
         Ok(())
     }

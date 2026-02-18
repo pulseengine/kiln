@@ -13,7 +13,7 @@
 use anyhow::{Context, Result, anyhow};
 use std::collections::HashSet;
 use wrt_format::module::{Function, Global, ImportDesc, Module};
-use wrt_format::pure_format_types::{PureElementInit, PureElementMode, PureElementSegment};
+use wrt_format::pure_format_types::{PureDataMode, PureElementInit, PureElementMode, PureElementSegment};
 use wrt_format::types::RefType;
 use wrt_foundation::ValueType;
 
@@ -127,6 +127,7 @@ impl StackType {
         match rt {
             wrt_foundation::RefType::Funcref => StackType::FuncRef,
             wrt_foundation::RefType::Externref => StackType::ExternRef,
+            wrt_foundation::RefType::Gc(_) => StackType::FuncRef, // GC ref types treated as funcref for validation
         }
     }
 }
@@ -199,8 +200,15 @@ impl WastModuleValidator {
         // Validate start function
         Self::validate_start_function(module)?;
 
-        // Validate export names are unique
+        // Validate export names are unique and indices are valid
         Self::validate_export_names(module)?;
+        Self::validate_export_indices(module)?;
+
+        // Validate element segment table references
+        Self::validate_element_segment_tables(module)?;
+
+        // Validate data segment memory references
+        Self::validate_data_segment_memories(module)?;
 
         Ok(())
     }
@@ -212,6 +220,74 @@ impl WastModuleValidator {
         for export in &module.exports {
             if !seen_names.insert(export.name.as_str()) {
                 return Err(anyhow!("duplicate export name"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate that all export indices reference valid items
+    fn validate_export_indices(module: &Module) -> Result<()> {
+        let total_funcs = Self::total_functions(module);
+        let total_tables = Self::total_tables(module);
+        let total_memories = Self::total_memories(module);
+        let total_globals = Self::total_globals(module);
+        let total_tags = Self::total_tags(module);
+
+        for export in &module.exports {
+            match export.kind {
+                wrt_format::module::ExportKind::Function => {
+                    if (export.index as usize) >= total_funcs {
+                        return Err(anyhow!("unknown function"));
+                    }
+                },
+                wrt_format::module::ExportKind::Table => {
+                    if (export.index as usize) >= total_tables {
+                        return Err(anyhow!("unknown table"));
+                    }
+                },
+                wrt_format::module::ExportKind::Memory => {
+                    if (export.index as usize) >= total_memories {
+                        return Err(anyhow!("unknown memory"));
+                    }
+                },
+                wrt_format::module::ExportKind::Global => {
+                    if (export.index as usize) >= total_globals {
+                        return Err(anyhow!("unknown global"));
+                    }
+                },
+                wrt_format::module::ExportKind::Tag => {
+                    if (export.index as usize) >= total_tags {
+                        return Err(anyhow!("unknown tag"));
+                    }
+                },
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate that active element segments reference valid tables
+    fn validate_element_segment_tables(module: &Module) -> Result<()> {
+        let total_tables = Self::total_tables(module);
+
+        for elem in &module.elements {
+            if let PureElementMode::Active { table_index, .. } = &elem.mode {
+                if (*table_index as usize) >= total_tables {
+                    return Err(anyhow!("unknown table"));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate that active data segments reference valid memories
+    fn validate_data_segment_memories(module: &Module) -> Result<()> {
+        let total_memories = Self::total_memories(module);
+
+        for data in &module.data {
+            if let PureDataMode::Active { memory_index, .. } = &data.mode {
+                if (*memory_index as usize) >= total_memories {
+                    return Err(anyhow!("unknown memory"));
+                }
             }
         }
         Ok(())
@@ -1088,8 +1164,8 @@ impl WastModuleValidator {
                     let (func_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                     offset = new_offset;
 
-                    if func_idx as usize >= module.functions.len() + module.imports.len() {
-                        return Err(anyhow!("call: invalid function index {}", func_idx));
+                    if func_idx as usize >= Self::total_functions(module) {
+                        return Err(anyhow!("unknown function"));
                     }
 
                     // Pop arguments and push results
@@ -1175,6 +1251,11 @@ impl WastModuleValidator {
                     // Parse function index
                     let (func_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                     offset = new_offset;
+
+                    // Validate function index
+                    if func_idx as usize >= Self::total_functions(module) {
+                        return Err(anyhow!("unknown function"));
+                    }
 
                     // Get the called function's type (handles both imports and local functions)
                     let called_func_type = Self::get_function_type(module, func_idx)?;
@@ -1451,7 +1532,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_for_opcode(code, offset, module, opcode)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let addr_type = if Self::is_memory64(module, mem_idx) {
@@ -1474,7 +1555,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_for_opcode(code, offset, module, opcode)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let addr_type = if Self::is_memory64(module, mem_idx) {
@@ -1497,7 +1578,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_for_opcode(code, offset, module, opcode)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let addr_type = if Self::is_memory64(module, mem_idx) {
@@ -1520,7 +1601,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_for_opcode(code, offset, module, opcode)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let addr_type = if Self::is_memory64(module, mem_idx) {
@@ -1544,7 +1625,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_for_opcode(code, offset, module, opcode)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let addr_type = if Self::is_memory64(module, mem_idx) {
@@ -1573,7 +1654,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_for_opcode(code, offset, module, opcode)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     // Pop value (i32)
@@ -1605,7 +1686,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_for_opcode(code, offset, module, opcode)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     // Pop value (i64)
@@ -1637,7 +1718,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_for_opcode(code, offset, module, opcode)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     // Pop value (f32)
@@ -1669,7 +1750,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_for_opcode(code, offset, module, opcode)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     // Pop value (f64)
@@ -1701,7 +1782,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_for_opcode(code, offset, module, opcode)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     // Pop value type based on opcode
@@ -1736,9 +1817,6 @@ impl WastModuleValidator {
                 0x3F => {
                     // memory.size - push i32/i64 (current memory size in pages)
                     // For memory64, returns i64; otherwise i32
-                    if !Self::has_memory(module) {
-                        return Err(anyhow!("unknown memory"));
-                    }
                     // Read memory index (usually 0x00 for default memory)
                     let mem_idx = if offset < code.len() {
                         let idx = code[offset] as u32;
@@ -1747,6 +1825,10 @@ impl WastModuleValidator {
                     } else {
                         0
                     };
+                    // Validate memory index
+                    if mem_idx as usize >= Self::total_memories(module) {
+                        return Err(anyhow!("unknown memory"));
+                    }
                     // Memory64 returns i64, regular memory returns i32
                     if Self::is_memory64(module, mem_idx) {
                         stack.push(StackType::I64);
@@ -1757,9 +1839,6 @@ impl WastModuleValidator {
                 0x40 => {
                     // memory.grow - pop i32/i64 (delta pages), push i32/i64 (previous size or -1)
                     // For memory64, takes and returns i64; otherwise i32
-                    if !Self::has_memory(module) {
-                        return Err(anyhow!("unknown memory"));
-                    }
                     // Read memory index (usually 0x00 for default memory)
                     let mem_idx = if offset < code.len() {
                         let idx = code[offset] as u32;
@@ -1768,6 +1847,10 @@ impl WastModuleValidator {
                     } else {
                         0
                     };
+                    // Validate memory index
+                    if mem_idx as usize >= Self::total_memories(module) {
+                        return Err(anyhow!("unknown memory"));
+                    }
                     let frame_height = Self::current_frame_height(&frames);
                     // Memory64 uses i64 for delta and result, regular uses i32
                     let size_type = if Self::is_memory64(module, mem_idx) {
@@ -2701,11 +2784,18 @@ impl WastModuleValidator {
                         },
                         // memory.init (0x08): [i32, i32, i32] -> []
                         0x08 => {
-                            // Skip data_idx and mem_idx
-                            let (_data_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (data_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
-                            let (_mem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (mem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            // Validate data segment index
+                            if data_idx as usize >= module.data.len() {
+                                return Err(anyhow!("unknown data segment"));
+                            }
+                            // Validate memory index
+                            if mem_idx as usize >= Self::total_memories(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
                             // Pop n (length), s (source offset), d (dest offset) in reverse
                             if !Self::pop_type(
                                 &mut stack,
@@ -2734,15 +2824,26 @@ impl WastModuleValidator {
                         },
                         // data.drop (0x09): [] -> []
                         0x09 => {
-                            let (_data_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (data_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            // Validate data segment index
+                            if data_idx as usize >= module.data.len() {
+                                return Err(anyhow!("unknown data segment"));
+                            }
                         },
                         // memory.copy (0x0A): [i32, i32, i32] -> []
                         0x0A => {
-                            let (_dst_mem, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (dst_mem, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
-                            let (_src_mem, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (src_mem, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            // Validate both memory indices
+                            if dst_mem as usize >= Self::total_memories(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            if src_mem as usize >= Self::total_memories(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
                             // Pop n (length), s (source), d (dest) in reverse
                             if !Self::pop_type(
                                 &mut stack,
@@ -2771,8 +2872,12 @@ impl WastModuleValidator {
                         },
                         // memory.fill (0x0B): [i32, i32, i32] -> []
                         0x0B => {
-                            let (_mem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (mem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            // Validate memory index
+                            if mem_idx as usize >= Self::total_memories(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
                             // Pop n (length), val (value), d (dest) in reverse
                             if !Self::pop_type(
                                 &mut stack,
@@ -2801,10 +2906,18 @@ impl WastModuleValidator {
                         },
                         // table.init (0x0C): [i32, i32, i32] -> []
                         0x0C => {
-                            let (_elem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (elem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
-                            let (_table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            // Validate element segment index
+                            if elem_idx as usize >= module.elements.len() {
+                                return Err(anyhow!("unknown elem segment"));
+                            }
+                            // Validate table index
+                            if table_idx as usize >= Self::total_tables(module) {
+                                return Err(anyhow!("unknown table"));
+                            }
                             // Pop n, s, d in reverse
                             if !Self::pop_type(
                                 &mut stack,
@@ -2833,15 +2946,26 @@ impl WastModuleValidator {
                         },
                         // elem.drop (0x0D): [] -> []
                         0x0D => {
-                            let (_elem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (elem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            // Validate element segment index
+                            if elem_idx as usize >= module.elements.len() {
+                                return Err(anyhow!("unknown elem segment"));
+                            }
                         },
                         // table.copy (0x0E): [i32, i32, i32] -> []
                         0x0E => {
-                            let (_dst_table, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (dst_table, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
-                            let (_src_table, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (src_table, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            // Validate both table indices
+                            if dst_table as usize >= Self::total_tables(module) {
+                                return Err(anyhow!("unknown table"));
+                            }
+                            if src_table as usize >= Self::total_tables(module) {
+                                return Err(anyhow!("unknown table"));
+                            }
                             // Pop n, s, d in reverse
                             if !Self::pop_type(
                                 &mut stack,
@@ -2913,8 +3037,12 @@ impl WastModuleValidator {
                         },
                         // table.size (0x10): [] -> [i32]
                         0x10 => {
-                            let (_table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            // Validate table index
+                            if table_idx as usize >= Self::total_tables(module) {
+                                return Err(anyhow!("unknown table"));
+                            }
                             stack.push(StackType::I32);
                         },
                         // table.fill (0x11): [i32, ref, i32] -> []
@@ -2983,9 +3111,10 @@ impl WastModuleValidator {
                     match simd_opcode {
                         // v128.load variants (0x00-0x0A): [i32] -> [v128]
                         0x00..=0x0A => {
-                            let (_, o) = Self::parse_varuint32(code, offset)?; // align
+                            let (align, o) = Self::parse_varuint32(code, offset)?;
                             let (_, o) = Self::parse_varuint32(code, o)?;      // offset
                             offset = o;
+                            Self::validate_simd_alignment(simd_opcode, align)?;
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -2993,8 +3122,9 @@ impl WastModuleValidator {
                         },
                         // v128.store (0x0B): [i32, v128] -> []
                         0x0B => {
-                            let (_, o) = Self::parse_varuint32(code, offset)?;
+                            let (align, o) = Self::parse_varuint32(code, offset)?;
                             let (_, o) = Self::parse_varuint32(code, o)?;
+                            Self::validate_simd_alignment(simd_opcode, align)?;
                             offset = o;
                             if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
@@ -3161,8 +3291,9 @@ impl WastModuleValidator {
                         },
                         // v128.load*_lane (0x54-0x57): [i32, v128] -> [v128]
                         0x54..=0x57 => {
-                            let (_, o) = Self::parse_varuint32(code, offset)?;
+                            let (align, o) = Self::parse_varuint32(code, offset)?;
                             let (_, o) = Self::parse_varuint32(code, o)?;
+                            Self::validate_simd_alignment(simd_opcode, align)?;
                             offset = o;
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
                             offset += 1;
@@ -3176,8 +3307,9 @@ impl WastModuleValidator {
                         },
                         // v128.store*_lane (0x58-0x5B): [i32, v128] -> []
                         0x58..=0x5B => {
-                            let (_, o) = Self::parse_varuint32(code, offset)?;
+                            let (align, o) = Self::parse_varuint32(code, offset)?;
                             let (_, o) = Self::parse_varuint32(code, o)?;
+                            Self::validate_simd_alignment(simd_opcode, align)?;
                             offset = o;
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
                             offset += 1;
@@ -3190,8 +3322,9 @@ impl WastModuleValidator {
                         },
                         // v128.load32_zero, v128.load64_zero (0x5C, 0x5D): [i32] -> [v128]
                         0x5C | 0x5D => {
-                            let (_, o) = Self::parse_varuint32(code, offset)?;
+                            let (align, o) = Self::parse_varuint32(code, offset)?;
                             let (_, o) = Self::parse_varuint32(code, o)?;
+                            Self::validate_simd_alignment(simd_opcode, align)?;
                             offset = o;
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
@@ -3670,8 +3803,10 @@ impl WastModuleValidator {
     }
 
     /// Get the total number of functions (imports + defined)
+    /// Note: The decoder pushes placeholder entries into module.functions for imported functions,
+    /// so module.functions.len() already includes both imports and defined functions.
     fn total_functions(module: &Module) -> usize {
-        Self::count_function_imports(module) + module.functions.len()
+        module.functions.len()
     }
 
     /// Count the number of tag imports in a module
@@ -3905,6 +4040,63 @@ impl WastModuleValidator {
         Ok(())
     }
 
+    /// Get the maximum allowed alignment (as log2) for a SIMD memory operation opcode
+    /// SIMD opcodes are the sub-opcode after the 0xFD prefix
+    /// Returns None if the opcode is not a SIMD memory operation
+    fn max_alignment_for_simd_opcode(simd_opcode: u32) -> Option<u32> {
+        match simd_opcode {
+            // v128.load (16 bytes): max align = 4 (2^4 = 16)
+            0x00 => Some(4),
+            // v128.load8x8_s, v128.load8x8_u (8 bytes): max align = 3
+            0x01 | 0x02 => Some(3),
+            // v128.load16x4_s, v128.load16x4_u (8 bytes): max align = 3
+            0x03 | 0x04 => Some(3),
+            // v128.load32x2_s, v128.load32x2_u (8 bytes): max align = 3
+            0x05 | 0x06 => Some(3),
+            // v128.load8_splat (1 byte): max align = 0
+            0x07 => Some(0),
+            // v128.load16_splat (2 bytes): max align = 1
+            0x08 => Some(1),
+            // v128.load32_splat (4 bytes): max align = 2
+            0x09 => Some(2),
+            // v128.load64_splat (8 bytes): max align = 3
+            0x0A => Some(3),
+            // v128.store (16 bytes): max align = 4
+            0x0B => Some(4),
+            // v128.load8_lane (1 byte): max align = 0
+            0x54 => Some(0),
+            // v128.load16_lane (2 bytes): max align = 1
+            0x55 => Some(1),
+            // v128.load32_lane (4 bytes): max align = 2
+            0x56 => Some(2),
+            // v128.load64_lane (8 bytes): max align = 3
+            0x57 => Some(3),
+            // v128.store8_lane (1 byte): max align = 0
+            0x58 => Some(0),
+            // v128.store16_lane (2 bytes): max align = 1
+            0x59 => Some(1),
+            // v128.store32_lane (4 bytes): max align = 2
+            0x5A => Some(2),
+            // v128.store64_lane (8 bytes): max align = 3
+            0x5B => Some(3),
+            // v128.load32_zero (4 bytes): max align = 2
+            0x5C => Some(2),
+            // v128.load64_zero (8 bytes): max align = 3
+            0x5D => Some(3),
+            _ => None,
+        }
+    }
+
+    /// Validate that a SIMD memory operation's alignment doesn't exceed the natural alignment
+    fn validate_simd_alignment(simd_opcode: u32, align: u32) -> Result<()> {
+        if let Some(max_align) = Self::max_alignment_for_simd_opcode(simd_opcode) {
+            if align > max_align {
+                return Err(anyhow!("alignment must not be larger than natural"));
+            }
+        }
+        Ok(())
+    }
+
     /// Pop a value from the stack, checking its type
     /// The `min_height` parameter is the stack height at the current frame's entry -
     /// we cannot pop below this level (those values belong to the parent frame)
@@ -4023,10 +4215,24 @@ impl WastModuleValidator {
     /// Parse memory arguments (memarg) for load/store instructions
     /// Returns (mem_idx, offset_parsed), advancing the code offset
     /// For memory64, the offset is encoded as u64 instead of u32
+    /// Also validates alignment against the natural alignment for the given opcode,
+    /// and validates that the memory index is in range.
     fn parse_memarg(
         code: &[u8],
         offset: usize,
         module: &Module,
+    ) -> Result<(u32, usize)> {
+        Self::parse_memarg_for_opcode(code, offset, module, 0xFF)
+    }
+
+    /// Parse memory arguments with opcode-specific alignment validation.
+    /// The opcode parameter is used to check alignment constraints.
+    /// Returns (mem_idx, offset_parsed).
+    fn parse_memarg_for_opcode(
+        code: &[u8],
+        offset: usize,
+        module: &Module,
+        opcode: u8,
     ) -> Result<(u32, usize)> {
         // Parse alignment (encoded as power of 2 with optional memory index flag)
         let (align_with_flags, new_offset) = Self::parse_varuint32(code, offset)?;
@@ -4034,13 +4240,26 @@ impl WastModuleValidator {
 
         // Check for multi-memory flag (bit 6 of alignment)
         // When set, the memory index follows the alignment
-        let mem_idx = if (align_with_flags & 0x40) != 0 {
+        let has_mem_idx_flag = (align_with_flags & 0x40) != 0;
+        let align = align_with_flags & 0x3F; // Lower 6 bits are the alignment
+
+        let mem_idx = if has_mem_idx_flag {
             let (idx, new_off) = Self::parse_varuint32(code, current_offset)?;
             current_offset = new_off;
             idx
         } else {
             0 // Default to memory 0
         };
+
+        // Validate memory index is in range
+        if mem_idx as usize >= Self::total_memories(module) {
+            return Err(anyhow!("unknown memory"));
+        }
+
+        // Validate alignment against natural alignment for this opcode
+        if opcode != 0xFF {
+            Self::validate_alignment(opcode, align)?;
+        }
 
         // Parse offset - for memory64, this is encoded as u64
         if Self::is_memory64(module, mem_idx) {

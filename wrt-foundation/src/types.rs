@@ -547,6 +547,12 @@ pub enum RefType {
     Funcref,
     /// External reference type
     Externref,
+    /// GC reference type with full heap type and nullability support.
+    /// This variant enables tables, element segments, and locals to use
+    /// any reference type from the GC proposal (anyref, eqref, i31ref,
+    /// structref, arrayref, nullref, nullfuncref, nullexternref, or
+    /// typed references like (ref null $type_idx)).
+    Gc(GcRefType),
 }
 
 impl RefType {
@@ -555,6 +561,7 @@ impl RefType {
         match self {
             RefType::Funcref => ValueType::FuncRef,
             RefType::Externref => ValueType::ExternRef,
+            RefType::Gc(gc) => gc.to_value_type(),
         }
     }
 
@@ -562,6 +569,13 @@ impl RefType {
         match vt {
             ValueType::FuncRef => Ok(RefType::Funcref),
             ValueType::ExternRef => Ok(RefType::Externref),
+            ValueType::AnyRef => Ok(RefType::Gc(GcRefType::ANYREF)),
+            ValueType::EqRef => Ok(RefType::Gc(GcRefType::EQREF)),
+            ValueType::I31Ref => Ok(RefType::Gc(GcRefType::I31REF)),
+            ValueType::StructRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
+            ValueType::ArrayRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
+            ValueType::NullFuncRef => Ok(RefType::Gc(GcRefType::NULLFUNCREF)),
+            ValueType::ExnRef => Ok(RefType::Gc(GcRefType::EXNREF)),
             _ => Err(Error::runtime_execution_error(
                 "Invalid ValueType for RefType conversion",
             )),
@@ -612,6 +626,7 @@ impl From<RefType> for ValueType {
         match rt {
             RefType::Funcref => ValueType::FuncRef,
             RefType::Externref => ValueType::ExternRef,
+            RefType::Gc(gc) => gc.to_value_type(),
         }
     }
 }
@@ -624,6 +639,14 @@ impl TryFrom<ValueType> for RefType {
         match vt {
             ValueType::FuncRef => Ok(RefType::Funcref),
             ValueType::ExternRef => Ok(RefType::Externref),
+            ValueType::AnyRef => Ok(RefType::Gc(GcRefType::ANYREF)),
+            ValueType::EqRef => Ok(RefType::Gc(GcRefType::EQREF)),
+            ValueType::I31Ref => Ok(RefType::Gc(GcRefType::I31REF)),
+            ValueType::StructRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
+            ValueType::ArrayRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
+            ValueType::NullFuncRef => Ok(RefType::Gc(GcRefType::NULLFUNCREF)),
+            ValueType::ExnRef => Ok(RefType::Gc(GcRefType::EXNREF)),
+            ValueType::TypedFuncRef(idx, nullable) => Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Concrete(idx)))),
             _ => Err(Error::runtime_execution_error(
                 "Invalid ValueType for RefType try_from conversion",
             )),
@@ -791,6 +814,7 @@ impl GcRefType {
         match rt {
             RefType::Funcref => Self::FUNCREF,
             RefType::Externref => Self::EXTERNREF,
+            RefType::Gc(gc) => gc,
         }
     }
 
@@ -804,6 +828,37 @@ impl GcRefType {
             }
         } else {
             None // MVP RefType is always nullable
+        }
+    }
+
+    /// Convert GC reference type to ValueType
+    #[must_use]
+    pub fn to_value_type(self) -> ValueType {
+        match self.heap_type {
+            HeapType::Func => {
+                if self.nullable {
+                    ValueType::FuncRef
+                } else {
+                    ValueType::TypedFuncRef(0, false) // non-nullable func
+                }
+            }
+            HeapType::Extern => ValueType::ExternRef,
+            HeapType::Any => ValueType::AnyRef,
+            HeapType::Eq => ValueType::EqRef,
+            HeapType::I31 => ValueType::I31Ref,
+            HeapType::Struct => ValueType::StructRef(0),
+            HeapType::Array => ValueType::ArrayRef(0),
+            HeapType::Exn => ValueType::ExnRef,
+            HeapType::NoFunc => ValueType::NullFuncRef,
+            HeapType::NoExtern => ValueType::ExternRef, // closest approximation
+            HeapType::None => ValueType::AnyRef, // closest approximation for nullref
+            HeapType::Concrete(idx) => {
+                if self.nullable {
+                    ValueType::TypedFuncRef(idx, true)
+                } else {
+                    ValueType::TypedFuncRef(idx, false)
+                }
+            }
         }
     }
 
