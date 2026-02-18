@@ -615,11 +615,12 @@ pub fn create_shared_memory(
 
     // Create memory instance
     let core_mem_type = CoreMemoryType {
-        limits: wrt_foundation::types::Limits {
+        limits:   wrt_foundation::types::Limits {
             min: memory_type.min_pages(),
             max: memory_type.max_pages(),
         },
-        shared: memory_type.is_shared(),
+        shared:   memory_type.is_shared(),
+        memory64: false,
     };
 
     let memory_impl = Memory::new(core_mem_type)

@@ -202,8 +202,9 @@ impl MultiMemoryInstance {
     pub fn new(memory_index: u32, memory_type: MemoryType) -> Result<Self> {
         // Convert MemoryType to CoreMemoryType for Memory::new()
         let core_mem_type = CoreMemoryType {
-            limits: memory_type.limits,
-            shared: memory_type.shared,
+            limits:   memory_type.limits,
+            shared:   memory_type.shared,
+            memory64: memory_type.memory64,
         };
         let memory = Memory::new(core_mem_type)
             .map_err(|_| Error::runtime_execution_error("Failed to create memory instance"))?;

@@ -381,13 +381,16 @@ impl WastModuleValidator {
                         return Err(anyhow!("size minimum must not be greater than maximum"));
                     }
                 }
-                // Check memory size bounds (65536 pages max)
-                if memory.limits.min > WASM_MAX_MEMORY_PAGES {
-                    return Err(anyhow!("memory size"));
-                }
-                if let Some(max) = memory.limits.max {
-                    if max > WASM_MAX_MEMORY_PAGES {
+                // Check memory size bounds (65536 pages max for memory32)
+                // memory64 supports much larger sizes
+                if !memory.memory64 {
+                    if memory.limits.min > WASM_MAX_MEMORY_PAGES {
                         return Err(anyhow!("memory size"));
+                    }
+                    if let Some(max) = memory.limits.max {
+                        if max > WASM_MAX_MEMORY_PAGES {
+                            return Err(anyhow!("memory size"));
+                        }
                     }
                 }
             }
@@ -401,13 +404,16 @@ impl WastModuleValidator {
                     return Err(anyhow!("size minimum must not be greater than maximum"));
                 }
             }
-            // Check memory size bounds (65536 pages max)
-            if memory.limits.min > WASM_MAX_MEMORY_PAGES {
-                return Err(anyhow!("memory size"));
-            }
-            if let Some(max) = memory.limits.max {
-                if max > WASM_MAX_MEMORY_PAGES {
+            // Check memory size bounds (65536 pages max for memory32)
+            // memory64 supports much larger sizes
+            if !memory.memory64 {
+                if memory.limits.min > WASM_MAX_MEMORY_PAGES {
                     return Err(anyhow!("memory size"));
+                }
+                if let Some(max) = memory.limits.max {
+                    if max > WASM_MAX_MEMORY_PAGES {
+                        return Err(anyhow!("memory size"));
+                    }
                 }
             }
         }

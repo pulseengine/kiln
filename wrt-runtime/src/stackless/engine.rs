@@ -473,6 +473,76 @@ fn calculate_effective_address(base: i32, offset: u64, size: u32) -> wrt_error::
     Ok(effective_addr)
 }
 
+/// Calculate effective memory address for memory64 with overflow checking.
+/// For memory64, the base address is i64 (treated as u64), and there is no 4GB limit.
+#[inline]
+fn calculate_effective_address_64(base: i64, offset: u64, size: u32) -> wrt_error::Result<u64> {
+    // Convert base to u64 (WebAssembly treats addresses as unsigned)
+    let base_u64 = base as u64;
+
+    // Check for overflow in base + offset
+    let effective_addr = base_u64
+        .checked_add(offset)
+        .ok_or_else(|| wrt_error::Error::runtime_trap("out of bounds memory access"))?;
+
+    // Check for overflow when adding access size
+    let _end_addr = effective_addr
+        .checked_add(size as u64)
+        .ok_or_else(|| wrt_error::Error::runtime_trap("out of bounds memory access"))?;
+
+    Ok(effective_addr)
+}
+
+/// Extract a memory base address from the operand stack, handling both i32 and i64.
+/// For memory64 memories, the address is i64; for memory32, it's i32.
+/// Returns (base_as_i64, is_memory64).
+#[inline]
+fn pop_memory_address(
+    operand_stack: &mut Vec<Value>,
+    instance: &Arc<crate::module_instance::ModuleInstance>,
+    memory_index: u32,
+) -> wrt_error::Result<(i64, bool)> {
+    let is_memory64 = instance.memory(memory_index)
+        .map(|mw| mw.0.ty.memory64)
+        .unwrap_or(false);
+
+    if is_memory64 {
+        match operand_stack.pop() {
+            Some(Value::I64(addr)) => Ok((addr, true)),
+            Some(other) => {
+                // Wrong type on stack - this is a validation error, but handle gracefully
+                operand_stack.push(other);
+                Err(wrt_error::Error::runtime_trap("type mismatch: expected i64 address for memory64"))
+            }
+            None => Err(wrt_error::Error::runtime_trap("stack underflow")),
+        }
+    } else {
+        match operand_stack.pop() {
+            Some(Value::I32(addr)) => Ok((addr as i64, false)),
+            Some(other) => {
+                operand_stack.push(other);
+                Err(wrt_error::Error::runtime_trap("type mismatch: expected i32 address for memory32"))
+            }
+            None => Err(wrt_error::Error::runtime_trap("stack underflow")),
+        }
+    }
+}
+
+/// Calculate the effective address from a base address, handling both memory32 and memory64.
+#[inline]
+fn effective_address_for_memory(
+    base: i64,
+    offset: u64,
+    size: u32,
+    is_memory64: bool,
+) -> wrt_error::Result<u64> {
+    if is_memory64 {
+        calculate_effective_address_64(base, offset, size)
+    } else {
+        calculate_effective_address(base as i32, offset, size)
+    }
+}
+
 impl StacklessEngine {
     /// Create a new stackless engine
     #[cfg(any(feature = "std", feature = "alloc"))]
@@ -1694,6 +1764,8 @@ impl StacklessEngine {
                                     wrt_foundation::ValueType::I64 => Value::I64(0),
                                     wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
                                     wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                                    wrt_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                                    wrt_foundation::ValueType::ExternRef => Value::ExternRef(None),
                                     _ => Value::I32(0),
                                 };
                                 results.push(default_value);
@@ -1858,6 +1930,8 @@ impl StacklessEngine {
                             wrt_foundation::ValueType::I64 => Value::I64(0),
                             wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
                             wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                            wrt_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                            wrt_foundation::ValueType::ExternRef => Value::ExternRef(None),
                             _ => Value::I32(0),
                         };
                         locals.push(default_value);
@@ -1877,6 +1951,8 @@ impl StacklessEngine {
                             wrt_foundation::ValueType::I64 => Value::I64(0),
                             wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
                             wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                            wrt_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                            wrt_foundation::ValueType::ExternRef => Value::ExternRef(None),
                             _ => Value::I32(0),
                         };
                         for _ in 0..local_decl.count {
@@ -4091,60 +4167,45 @@ impl StacklessEngine {
                     // IMPORTANT: Use instance.memory() for initialized memory, not module.get_memory()
                     // The instance has data segments applied, the module is just a template
                     Instruction::I32Load(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            // Calculate effective address with overflow checking (4 bytes for i32)
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!("I32Load: reading from address {} (base={}, offset={})", offset, addr, mem_arg.offset);
-                            // Get memory from INSTANCE (not module) - instance has initialized data
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 4];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = i32::from_le_bytes(buffer);
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I32(value));
-                                        }
-                                        Err(e) => {
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load: memory read failed: {:?}", e);
-                                            #[cfg(feature = "tracing")]
-                                            error!(
-                                                offset = format_args!("0x{:x}", offset),
-                                                base = format_args!("0x{:x}", addr as u32),
-                                                mem_arg_offset = mem_arg.offset,
-                                                func_idx = func_idx,
-                                                pc = pc,
-                                                "[MEM-OOB] I32Load failed"
-                                            );
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 4, is_mem64)? as u32;
+                        #[cfg(feature = "tracing")]
+                        trace!("I32Load: reading from address {} (base={}, offset={})", offset, addr, mem_arg.offset);
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 4];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = i32::from_le_bytes(buffer);
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load: read value {} from address {}", value, offset);
+                                        operand_stack.push(Value::I32(value));
+                                    }
+                                    Err(_e) => {
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load: memory read failed: {:?}", _e);
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(e) => {
-                                    #[cfg(feature = "tracing")]
-                                    trace!("I32Load: failed to get memory at index {}: {:?}", mem_arg.memory_index, e);
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_e) => {
+                                #[cfg(feature = "tracing")]
+                                trace!("I32Load: failed to get memory at index {}: {:?}", mem_arg.memory_index, _e);
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I32Store(mem_arg) => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            // Calculate effective address with overflow checking (4 bytes for i32)
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
+                        if let Some(Value::I32(value)) = operand_stack.pop() {
+                            let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                            let offset = effective_address_for_memory(addr, mem_arg.offset, 4, is_mem64)? as u32;
                             #[cfg(feature = "tracing")]
                             trace!("I32Store: writing value {} to address {} (base={}, offset={})", value, offset, addr, mem_arg.offset);
-
-                            // Get memory from INSTANCE (not module) - instance has initialized data
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = value.to_le_bytes();
-                                    // ASIL-B COMPLIANT: Use write_shared for thread-safe writes
                                     match memory.write_shared(offset, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
@@ -4162,114 +4223,109 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I32Load8S(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!("I32Load8S: reading from address {}", offset);
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 1];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = buffer[0] as i8 as i32; // Sign extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load8S: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I32(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 1, is_mem64)? as u32;
+                        #[cfg(feature = "tracing")]
+                        trace!("I32Load8S: reading from address {}", offset);
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 1];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = buffer[0] as i8 as i32; // Sign extend
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load8S: read value {} from address {}", value, offset);
+                                        operand_stack.push(Value::I32(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I32Load8U(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 1];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = buffer[0] as i32; // Zero extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load8U: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I32(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 1, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 1];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = buffer[0] as i32; // Zero extend
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load8U: read value {} from address {}", value, offset);
+                                        operand_stack.push(Value::I32(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I32Load16S(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 2];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = i16::from_le_bytes(buffer) as i32; // Sign extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load16S: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I32(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 2, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 2];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = i16::from_le_bytes(buffer) as i32; // Sign extend
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load16S: read value {} from address {}", value, offset);
+                                        operand_stack.push(Value::I32(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I32Load16U(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 2];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = u16::from_le_bytes(buffer) as i32; // Zero extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load16U: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I32(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 2, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 2];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = u16::from_le_bytes(buffer) as i32; // Zero extend
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load16U: read value {} from address {}", value, offset);
+                                        operand_stack.push(Value::I32(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I32Store8(mem_arg) => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
-
+                        if let Some(Value::I32(value)) = operand_stack.pop() {
+                            let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index)?;
+                            let offset = effective_address_for_memory(addr, mem_arg.offset, 1, is_mem64)? as u32;
                             #[cfg(feature = "tracing")]
                             trace!("I32Store8: writing byte {} to address {}", value & 0xFF, offset);
-
                             match instance.memory(mem_arg.memory_index) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -4288,8 +4344,9 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I32Store16(mem_arg) => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
+                        if let Some(Value::I32(value)) = operand_stack.pop() {
+                            let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                            let offset = effective_address_for_memory(addr, mem_arg.offset, 2, is_mem64)? as u32;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -4311,58 +4368,37 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I64Load(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 8];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = i64::from_le_bytes(buffer);
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load: read value {} from address {}", value, offset);
-                                            #[cfg(all(feature = "std", feature = "tracing"))]
-                                            {
-                                                trace!(
-                                                    value = value,
-                                                    value_hex = format_args!("0x{:x}", value as u64),
-                                                    offset = format_args!("{:#x}", offset),
-                                                    "[I64Load] 64-bit load"
-                                                );
-                                                // Debug: show memory identity for datetime location
-                                                if offset >= 0xffe40 && offset <= 0xffe50 {
-                                                    // Get pointer to the actual Memory data via Arc::as_ptr
-                                                    use std::sync::Arc;
-                                                    let arc_ptr = Arc::as_ptr(&memory_wrapper.0);
-                                                    trace!(
-                                                        instance_id = instance_id,
-                                                        memory_arc_ptr = format_args!("{:p}", arc_ptr),
-                                                        "[I64Load-DEBUG] Datetime memory access"
-                                                    );
-                                                }
-                                            }
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 8, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 8];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = i64::from_le_bytes(buffer);
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I64Load: read value {} from address {}", value, offset);
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Store(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                            let offset = effective_address_for_memory(addr, mem_arg.offset, 8, is_mem64)? as u32;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = value.to_le_bytes();
-                                    // ASIL-B COMPLIANT: Use write_shared for thread-safe writes
                                     match memory.write_shared(offset, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
@@ -4385,194 +4421,134 @@ impl StacklessEngine {
                     // I64 Partial Load Instructions (load narrower value, extend to i64)
                     // ========================================
                     Instruction::I64Load8S(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load8S] Signed byte load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 1];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = buffer[0] as i8 as i64; // Sign extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load8S: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 1, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 1];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = buffer[0] as i8 as i64; // Sign extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Load8U(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load8U] Unsigned byte load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 1];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = buffer[0] as i64; // Zero extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load8U: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 1, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 1];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = buffer[0] as i64; // Zero extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Load16S(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load16S] Signed 16-bit load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 2];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = i16::from_le_bytes(buffer) as i64; // Sign extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load16S: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 2, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 2];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = i16::from_le_bytes(buffer) as i64; // Sign extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Load16U(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load16U] Unsigned 16-bit load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 2];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = u16::from_le_bytes(buffer) as i64; // Zero extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load16U: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 2, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 2];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = u16::from_le_bytes(buffer) as i64; // Zero extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Load32S(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load32S] Signed 32-bit load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 4];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = i32::from_le_bytes(buffer) as i64; // Sign extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load32S: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 4, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 4];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = i32::from_le_bytes(buffer) as i64; // Sign extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Load32U(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load32U] Unsigned 32-bit load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 4];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = u32::from_le_bytes(buffer) as i64; // Zero extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load32U: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 4, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 4];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = u32::from_le_bytes(buffer) as i64; // Zero extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
@@ -4580,94 +4556,57 @@ impl StacklessEngine {
                     // I64 Partial Store Instructions (store lower bits of i64)
                     // ========================================
                     Instruction::I64Store8(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                value = value & 0xFF,
-                                "[I64Store8] Store low 8 bits of i64"
-                            );
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                            let offset = effective_address_for_memory(addr, mem_arg.offset, 1, is_mem64)? as u32;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = [(value & 0xFF) as u8];
-                                    // ASIL-B COMPLIANT: Use write_shared for thread-safe writes
                                     match memory.write_shared(offset, &bytes) {
-                                        Ok(()) => {
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Store8: successfully wrote value {} to address {}", value & 0xFF, offset);
-                                        }
+                                        Ok(()) => {}
                                         Err(_e) => {
                                             return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_e) => {
-                                    #[cfg(feature = "tracing")]
-                                    trace!("I64Store8: failed to get memory at index {}", mem_arg.memory_index);
                                     return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
                     }
                     Instruction::I64Store16(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                value = value & 0xFFFF,
-                                "[I64Store16] Store low 16 bits of i64"
-                            );
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                            let offset = effective_address_for_memory(addr, mem_arg.offset, 2, is_mem64)? as u32;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = (value as u16).to_le_bytes();
-                                    // ASIL-B COMPLIANT: Use write_shared for thread-safe writes
                                     match memory.write_shared(offset, &bytes) {
-                                        Ok(()) => {
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Store16: successfully wrote value {} to address {}", value & 0xFFFF, offset);
-                                        }
+                                        Ok(()) => {}
                                         Err(_e) => {
                                             return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_e) => {
-                                    #[cfg(feature = "tracing")]
-                                    trace!("I64Store16: failed to get memory at index {}", mem_arg.memory_index);
                                     return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
                     }
                     Instruction::I64Store32(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                value = value & 0xFFFFFFFF,
-                                "[I64Store32] Store low 32 bits of i64"
-                            );
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                            let offset = effective_address_for_memory(addr, mem_arg.offset, 4, is_mem64)? as u32;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = (value as u32).to_le_bytes();
-                                    // ASIL-B COMPLIANT: Use write_shared for thread-safe writes
                                     match memory.write_shared(offset, &bytes) {
-                                        Ok(()) => {
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Store32: successfully wrote value {} to address {}", value & 0xFFFFFFFF, offset);
-                                        }
+                                        Ok(()) => {}
                                         Err(_e) => {
                                             return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                         }
@@ -4690,46 +4629,31 @@ impl StacklessEngine {
                         operand_stack.push(Value::F64(FloatBits64(bits)));
                     }
                     Instruction::F32Load(mem_arg) => {
-                        #[cfg(feature = "tracing")]
-                        trace!("F32Load: stack before pop has {} elements", operand_stack.len());
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!("F32Load: addr={}, offset={}, mem_idx={}", addr, offset, mem_arg.memory_index);
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 4];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let bits = u32::from_le_bytes(buffer);
-                                            #[cfg(feature = "tracing")]
-                                            trace!("F32Load: read bytes {:?}, bits={:#x}, pushing F32", buffer, bits);
-                                            operand_stack.push(Value::F32(FloatBits32(bits)));
-                                            #[cfg(feature = "tracing")]
-                                            trace!("F32Load: stack after push has {} elements", operand_stack.len());
-                                        }
-                                        Err(e) => {
-                                            #[cfg(feature = "tracing")]
-                                            error!("F32Load: memory read error: {:?}", e);
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 4, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 4];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let bits = u32::from_le_bytes(buffer);
+                                        operand_stack.push(Value::F32(FloatBits32(bits)));
+                                    }
+                                    Err(_e) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(e) => {
-                                    #[cfg(feature = "tracing")]
-                                    error!("F32Load: memory access error: {:?}", e);
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
                             }
-                        } else {
-                            #[cfg(feature = "tracing")]
-                            error!("F32Load: stack was empty or top was not I32!");
+                            Err(_e) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                            }
                         }
                     }
                     Instruction::F32Store(mem_arg) => {
-                        if let (Some(Value::F32(bits)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
+                        if let Some(Value::F32(bits)) = operand_stack.pop() {
+                            let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                            let offset = effective_address_for_memory(addr, mem_arg.offset, 4, is_mem64)? as u32;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -4745,31 +4669,31 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::F64Load(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 8];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let bits = u64::from_le_bytes(buffer);
-                                            operand_stack.push(Value::F64(FloatBits64(bits)));
-                                        }
-                                        Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                        let offset = effective_address_for_memory(addr, mem_arg.offset, 8, is_mem64)? as u32;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 8];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let bits = u64::from_le_bytes(buffer);
+                                        operand_stack.push(Value::F64(FloatBits64(bits)));
+                                    }
+                                    Err(_) => {
+                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::F64Store(mem_arg) => {
-                        if let (Some(Value::F64(bits)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
+                        if let Some(Value::F64(bits)) = operand_stack.pop() {
+                            let (addr, is_mem64) = pop_memory_address(&mut operand_stack, &instance, mem_arg.memory_index as u32)?;
+                            let offset = effective_address_for_memory(addr, mem_arg.offset, 8, is_mem64)? as u32;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -5659,13 +5583,20 @@ impl StacklessEngine {
                             Ok(memory_wrapper) => {
                                 let memory = &memory_wrapper.0;
                                 let size_in_pages = memory.size();
+                                let is_memory64 = memory.ty.memory64;
                                 #[cfg(feature = "tracing")]
                                 trace!(
                                     memory_idx = memory_idx,
                                     size_in_pages = size_in_pages,
+                                    is_memory64 = is_memory64,
                                     "[MemorySize] Retrieved memory size"
                                 );
-                                operand_stack.push(Value::I32(size_in_pages as i32));
+                                // memory64 returns i64, memory32 returns i32
+                                if is_memory64 {
+                                    operand_stack.push(Value::I64(size_in_pages as i64));
+                                } else {
+                                    operand_stack.push(Value::I32(size_in_pages as i32));
+                                }
                             }
                             Err(e) => {
                                 #[cfg(feature = "tracing")]
@@ -5676,50 +5607,88 @@ impl StacklessEngine {
                     }
                     Instruction::MemoryGrow(memory_idx) => {
                         // Pop the number of pages to grow
-                        if let Some(Value::I32(delta)) = operand_stack.pop() {
-                            if delta < 0 {
-                                // Negative delta is invalid, return -1 (failure)
-                                #[cfg(feature = "tracing")]
-                                trace!("MemoryGrow: negative delta {}, pushing -1", delta);
-                                operand_stack.push(Value::I32(-1));
+                        // For memory64, delta is i64; for memory32, delta is i32
+                        // First, check if this is a memory64 memory
+                        let is_memory64 = instance.memory(memory_idx as u32)
+                            .map(|mw| mw.0.ty.memory64)
+                            .unwrap_or(false);
+
+                        let delta_pages: i64 = if is_memory64 {
+                            match operand_stack.pop() {
+                                Some(Value::I64(d)) => d,
+                                _ => {
+                                    operand_stack.push(Value::I64(-1));
+                                    continue;
+                                }
+                            }
+                        } else {
+                            match operand_stack.pop() {
+                                Some(Value::I32(d)) => d as i64,
+                                _ => {
+                                    operand_stack.push(Value::I32(-1));
+                                    continue;
+                                }
+                            }
+                        };
+
+                        if delta_pages < 0 {
+                            // Negative delta is invalid, return -1 (failure)
+                            #[cfg(feature = "tracing")]
+                            trace!("MemoryGrow: negative delta {}, pushing -1", delta_pages);
+                            if is_memory64 {
+                                operand_stack.push(Value::I64(-1));
                             } else {
-                                // Use instance memory for grow (has initialized data segments)
-                                match instance.memory(memory_idx as u32) {
-                                    Ok(memory_wrapper) => {
-                                        let memory = &memory_wrapper.0;
-                                        let current_size = memory.size();
-                                        #[cfg(feature = "tracing")]
-                                        trace!(
-                                            memory_idx = memory_idx,
-                                            delta = delta,
-                                            current_size = current_size,
-                                            "[MemoryGrow] Attempting to grow memory"
-                                        );
-                                        match memory.grow_shared(delta as u32) {
-                                            Ok(prev_pages) => {
-                                                #[cfg(feature = "tracing")]
-                                                trace!(
-                                                    memory_idx = memory_idx,
-                                                    prev_pages = prev_pages,
-                                                    new_pages = prev_pages + delta as u32,
-                                                    "[MemoryGrow] Success"
-                                                );
+                                operand_stack.push(Value::I32(-1));
+                            }
+                        } else {
+                            // Use instance memory for grow (has initialized data segments)
+                            match instance.memory(memory_idx as u32) {
+                                Ok(memory_wrapper) => {
+                                    let memory = &memory_wrapper.0;
+                                    let current_size = memory.size();
+                                    #[cfg(feature = "tracing")]
+                                    trace!(
+                                        memory_idx = memory_idx,
+                                        delta = delta_pages,
+                                        current_size = current_size,
+                                        "[MemoryGrow] Attempting to grow memory"
+                                    );
+                                    match memory.grow_shared(delta_pages as u32) {
+                                        Ok(prev_pages) => {
+                                            #[cfg(feature = "tracing")]
+                                            trace!(
+                                                memory_idx = memory_idx,
+                                                prev_pages = prev_pages,
+                                                new_pages = prev_pages + delta_pages as u32,
+                                                "[MemoryGrow] Success"
+                                            );
+                                            if is_memory64 {
+                                                operand_stack.push(Value::I64(prev_pages as i64));
+                                            } else {
                                                 operand_stack.push(Value::I32(prev_pages as i32));
                                             }
-                                            Err(e) => {
-                                                #[cfg(feature = "tracing")]
-                                                warn!(
-                                                    memory_idx = memory_idx,
-                                                    error = ?e,
-                                                    "[MemoryGrow] Failed"
-                                                );
+                                        }
+                                        Err(e) => {
+                                            #[cfg(feature = "tracing")]
+                                            warn!(
+                                                memory_idx = memory_idx,
+                                                error = ?e,
+                                                "[MemoryGrow] Failed"
+                                            );
+                                            if is_memory64 {
+                                                operand_stack.push(Value::I64(-1));
+                                            } else {
                                                 operand_stack.push(Value::I32(-1));
                                             }
                                         }
                                     }
-                                    Err(e) => {
-                                        #[cfg(feature = "tracing")]
-                                        trace!("MemoryGrow: memory[{}] not found: {:?}", memory_idx, e);
+                                }
+                                Err(e) => {
+                                    #[cfg(feature = "tracing")]
+                                    trace!("MemoryGrow: memory[{}] not found: {:?}", memory_idx, e);
+                                    if is_memory64 {
+                                        operand_stack.push(Value::I64(-1));
+                                    } else {
                                         operand_stack.push(Value::I32(-1));
                                     }
                                 }
@@ -6405,27 +6374,81 @@ impl StacklessEngine {
                         }
                     }
 
+                    Instruction::BrOnNonNull(br_label_idx) => {
+                        // Pop reference, branch if non-null (keep ref), fall through if null (drop ref)
+                        if let Some(ref_val) = operand_stack.pop() {
+                            let is_null = matches!(&ref_val,
+                                Value::FuncRef(None) | Value::ExternRef(None) |
+                                Value::ExnRef(None) | Value::I31Ref(None) |
+                                Value::StructRef(None) | Value::ArrayRef(None)
+                            );
+                            #[cfg(feature = "tracing")]
+                            trace!("BrOnNonNull: label={}, is_null={}", br_label_idx, is_null);
+                            if !is_null {
+                                // Non-null: push reference back and branch
+                                operand_stack.push(ref_val);
+                                if br_label_idx as usize >= block_stack.len() {
+                                    #[cfg(feature = "tracing")]
+                                    trace!("BrOnNonNull: branching out of function");
+                                    break;
+                                }
+                                let target_depth = block_stack.len() - 1 - br_label_idx as usize;
+                                if let Some((block_type, start_pc, _block_type_idx, _entry_stack_height)) = block_stack.get(target_depth).copied() {
+                                    if block_type == "loop" {
+                                        pc = start_pc;
+                                    } else {
+                                        let mut depth = 1;
+                                        let mut search_pc = pc + 1;
+                                        while depth > 0 && search_pc < instructions.len() {
+                                            #[cfg(feature = "std")]
+                                            if let Some(search_instr) = instructions.get(search_pc) {
+                                                match search_instr {
+                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
+                                                    Instruction::End => depth -= 1,
+                                                    _ => {}
+                                                }
+                                            }
+                                            #[cfg(not(feature = "std"))]
+                                            if let Ok(search_instr) = instructions.get(search_pc) {
+                                                match search_instr {
+                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
+                                                    Instruction::End => depth -= 1,
+                                                    _ => {}
+                                                }
+                                            }
+                                            if depth > 0 { search_pc += 1; }
+                                        }
+                                        pc = search_pc;
+                                    }
+                                }
+                                continue;
+                            }
+                            // Null: fall through, reference is already consumed (dropped)
+                        }
+                    }
+
                     // ==================== TABLE OPERATIONS ====================
                     Instruction::TableGet(table_idx) => {
                         // table.get: [i32] -> [ref]
                         // Pop index from stack, get element from table at that index
                         if let Some(Value::I32(elem_idx)) = operand_stack.pop() {
+                            // Treat the i32 as u32 per the WebAssembly spec
+                            let idx = elem_idx as u32;
                             #[cfg(feature = "tracing")]
                             trace!(
                                 table_idx = table_idx,
-                                elem_idx = elem_idx,
+                                elem_idx = idx,
                                 "[TableGet] Getting element from table"
                             );
 
-                            if elem_idx < 0 {
-                                return Err(wrt_error::Error::runtime_trap(
-                                    "table.get: index cannot be negative",
-                                ));
-                            }
-
                             // Get the table from the instance
                             let table = instance.table(table_idx)?;
-                            let elem = table.get(elem_idx as u32)?;
+                            if idx >= table.size() {
+                                return Err(wrt_error::Error::runtime_trap(
+                                    "out of bounds table access",
+                                ));
+                            }
+                            let elem = table.get(idx)?;
 
                             // Push the element (or null ref) onto the stack
                             let value = match elem {
@@ -6464,19 +6487,15 @@ impl StacklessEngine {
                         })?;
 
                         if let Value::I32(elem_idx) = idx {
+                            // Treat the i32 as u32 per the WebAssembly spec
+                            let idx_u32 = elem_idx as u32;
                             #[cfg(feature = "tracing")]
                             trace!(
                                 table_idx = table_idx,
-                                elem_idx = elem_idx,
+                                elem_idx = idx_u32,
                                 value = ?value,
                                 "[TableSet] Setting element in table"
                             );
-
-                            if elem_idx < 0 {
-                                return Err(wrt_error::Error::runtime_trap(
-                                    "table.set: index cannot be negative",
-                                ));
-                            }
 
                             // Validate value is a reference type
                             let table_value = match &value {
@@ -6491,7 +6510,12 @@ impl StacklessEngine {
 
                             // Get the table and set the element
                             let table = instance.table(table_idx)?;
-                            table.set(elem_idx as u32, table_value)?;
+                            if idx_u32 >= table.size() {
+                                return Err(wrt_error::Error::runtime_trap(
+                                    "out of bounds table access",
+                                ));
+                            }
+                            table.set(idx_u32, table_value)?;
 
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -10100,6 +10124,8 @@ impl StacklessEngine {
                     wrt_foundation::ValueType::I64 => Value::I64(0),
                     wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
                     wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                    wrt_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                    wrt_foundation::ValueType::ExternRef => Value::ExternRef(None),
                     _ => Value::I32(0),
                 };
                 results.push(default_value)?;
@@ -10188,8 +10214,9 @@ impl StacklessEngine {
                 wrt_foundation::ValueType::I64 => Value::I64(0),
                 wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0.0f32.to_bits())),
                 wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0.0f64.to_bits())),
-                // Add other types as needed
-                _ => Value::I32(0), // Default fallback
+                wrt_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                wrt_foundation::ValueType::ExternRef => Value::ExternRef(None),
+                _ => Value::I32(0),
             };
             results
                 .push(default_value)
@@ -10261,6 +10288,8 @@ impl StacklessEngine {
                 wrt_foundation::ValueType::I64 => Value::I64(0),
                 wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0.0f32.to_bits())),
                 wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0.0f64.to_bits())),
+                wrt_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                wrt_foundation::ValueType::ExternRef => Value::ExternRef(None),
                 _ => Value::I32(0),
             };
             results

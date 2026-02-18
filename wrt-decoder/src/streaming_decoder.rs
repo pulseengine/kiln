@@ -900,20 +900,26 @@ impl<'a> StreamingDecoder<'a> {
                         };
 
                         // Validate memory64 limits
-                        if min64 > MAX_MEMORY_PAGES as u64 {
+                        // memory64 supports up to 2^48 pages (each 64KB = 2^16 bytes, total 2^64 bytes)
+                        const MAX_MEMORY64_PAGES: u64 = 1u64 << 48;
+                        if min64 > MAX_MEMORY64_PAGES {
                             return Err(Error::validation_error(
-                                "memory size must be at most 65536 pages (4 GiB)",
+                                "memory size must be at most 2^48 pages (16 EiB)",
                             ));
                         }
                         if let Some(max64) = max64 {
-                            if max64 > MAX_MEMORY_PAGES as u64 {
+                            if max64 > MAX_MEMORY64_PAGES {
                                 return Err(Error::validation_error(
-                                    "memory size must be at most 65536 pages (4 GiB)",
+                                    "memory size must be at most 2^48 pages (16 EiB)",
                                 ));
                             }
                         }
 
-                        (min64 as u32, max64.map(|v| v as u32))
+                        // Truncate to u32 for now (our runtime doesn't support >4GB anyway)
+                        // but accept the module as valid
+                        let min_clamped = if min64 > u32::MAX as u64 { u32::MAX } else { min64 as u32 };
+                        let max_clamped = max64.map(|v| if v > u32::MAX as u64 { u32::MAX } else { v as u32 });
+                        (min_clamped, max_clamped)
                     } else {
                         let (min, bytes_read) = read_leb128_u32(data, offset)?;
                         offset += bytes_read;
@@ -1346,22 +1352,27 @@ impl<'a> StreamingDecoder<'a> {
                     None
                 };
 
-                // Validate memory64 limits (still have a limit, though higher)
-                // For non-memory64 tests, values > 65536 pages should fail
-                if min64 > MAX_MEMORY_PAGES as u64 {
+                // Validate memory64 limits
+                // memory64 supports up to 2^48 pages (each 64KB = 2^16 bytes, total 2^64 bytes)
+                const MAX_MEMORY64_PAGES: u64 = 1u64 << 48;
+                if min64 > MAX_MEMORY64_PAGES {
                     return Err(Error::validation_error(
-                        "memory size must be at most 65536 pages (4 GiB)",
+                        "memory size must be at most 2^48 pages (16 EiB)",
                     ));
                 }
                 if let Some(max64) = max64 {
-                    if max64 > MAX_MEMORY_PAGES as u64 {
+                    if max64 > MAX_MEMORY64_PAGES {
                         return Err(Error::validation_error(
-                            "memory size must be at most 65536 pages (4 GiB)",
+                            "memory size must be at most 2^48 pages (16 EiB)",
                         ));
                     }
                 }
 
-                (min64 as u32, max64.map(|v| v as u32))
+                // Truncate to u32 for now (our runtime doesn't support >4GB anyway)
+                // but accept the module as valid
+                let min_clamped = if min64 > u32::MAX as u64 { u32::MAX } else { min64 as u32 };
+                let max_clamped = max64.map(|v| if v > u32::MAX as u64 { u32::MAX } else { v as u32 });
+                (min_clamped, max_clamped)
             } else {
                 let (min, bytes_read) = read_leb128_u32(data, offset)?;
                 offset += bytes_read;
@@ -1383,16 +1394,20 @@ impl<'a> StreamingDecoder<'a> {
                 return Err(Error::validation_error("shared memory must have maximum"));
             }
 
-            if min > MAX_MEMORY_PAGES {
-                return Err(Error::validation_error(
-                    "memory size must be at most 65536 pages (4 GiB)",
-                ));
-            }
-            if let Some(max_val) = max {
-                if max_val > MAX_MEMORY_PAGES {
+            // Only validate against 65536 limit for non-memory64 memories
+            // memory64 limits were already validated above
+            if !is_memory64 {
+                if min > MAX_MEMORY_PAGES {
                     return Err(Error::validation_error(
                         "memory size must be at most 65536 pages (4 GiB)",
                     ));
+                }
+                if let Some(max_val) = max {
+                    if max_val > MAX_MEMORY_PAGES {
+                        return Err(Error::validation_error(
+                            "memory size must be at most 65536 pages (4 GiB)",
+                        ));
+                    }
                 }
             }
 

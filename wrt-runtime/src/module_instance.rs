@@ -934,21 +934,25 @@ impl ModuleInstance {
                 // Get the memory index (default to 0 if not specified)
                 let memory_idx = data_segment.memory_idx.unwrap_or(0);
 
-                // Get the offset expression and evaluate it
-                let offset = if let Some(ref offset_expr) = data_segment.offset_expr {
-                    // Evaluate the offset expression - for now, assume it's a constant
-                    // In a complete implementation, we'd need to evaluate the expression
-                    // Most data segments use simple i32.const instructions for offsets
+                // Get the offset expression and evaluate it.
+                // Use u64 to support both memory32 (i32.const) and memory64 (i64.const) offsets.
+                let offset: u64 = if let Some(ref offset_expr) = data_segment.offset_expr {
+                    // Evaluate the offset expression - handles both i32.const and i64.const
                     // WrtExpr has instructions field that contains parsed Instructions
                     let expr_instructions = &offset_expr.instructions;
 
-                    // Check if we have an I32Const or GlobalGet instruction
+                    // Check if we have an I32Const, I64Const, or GlobalGet instruction
                     if !expr_instructions.is_empty() {
                         match &expr_instructions[0] {
                             wrt_foundation::types::Instruction::I32Const(value) => {
                                 #[cfg(feature = "tracing")]
                                 debug!("Data segment {} has I32Const offset: {}", idx, value);
-                                *value as u32
+                                *value as u32 as u64
+                            }
+                            wrt_foundation::types::Instruction::I64Const(value) => {
+                                #[cfg(feature = "tracing")]
+                                debug!("Data segment {} has I64Const offset: {}", idx, value);
+                                *value as u64
                             }
                             wrt_foundation::types::Instruction::GlobalGet(global_idx) => {
                                 // Look up the global value for the offset
@@ -961,50 +965,55 @@ impl ModuleInstance {
                                 #[cfg(not(feature = "std"))]
                                 let globals = self.globals.lock();
 
-                                // Get the global value
+                                // Get the global value - support both I32 and I64 globals
                                 if let Some(global_wrapper) = globals.iter().nth(*global_idx as usize) {
                                     match global_wrapper.0.read() {
                                         Ok(global) => {
                                             match global.get() {
                                                 wrt_foundation::values::Value::I32(v) => {
                                                     #[cfg(feature = "tracing")]
-                                                    debug!("Data segment {} global offset value: {}", idx, v);
-                                                    *v as u32
+                                                    debug!("Data segment {} global offset value (i32): {}", idx, v);
+                                                    *v as u32 as u64
+                                                },
+                                                wrt_foundation::values::Value::I64(v) => {
+                                                    #[cfg(feature = "tracing")]
+                                                    debug!("Data segment {} global offset value (i64): {}", idx, v);
+                                                    *v as u64
                                                 },
                                                 _ => {
-                                                    #[cfg(feature = "tracing")]
-                                                    debug!("Data segment {} global has non-i32 type, using 0", idx);
-                                                    0
+                                                    return Err(Error::runtime_error(
+                                                        "Data segment global offset has unexpected type"
+                                                    ));
                                                 }
                                             }
                                         },
                                         Err(_) => {
-                                            #[cfg(feature = "tracing")]
-                                            debug!("Data segment {} failed to read global, using 0", idx);
-                                            0
+                                            return Err(Error::runtime_error(
+                                                "Failed to read global for data segment offset"
+                                            ));
                                         }
                                     }
                                 } else {
-                                    #[cfg(feature = "tracing")]
-                                    debug!("Data segment {} global index {} out of range, using 0", idx, global_idx);
-                                    0
+                                    return Err(Error::runtime_error(
+                                        "Data segment references invalid global index"
+                                    ));
                                 }
                             }
-                            _ => {
-                                // For other instructions, default to 0
-                                #[cfg(feature = "tracing")]
-                                debug!("Data segment {} has non-constant offset expression, using 0", idx);
-                                0
+                            _other => {
+                                // Unsupported offset expression instruction
+                                return Err(Error::runtime_error(
+                                    "Data segment has unsupported offset expression instruction"
+                                ));
                             }
                         }
                     } else {
                         // Empty expression means offset 0
                         #[cfg(feature = "tracing")]
                         debug!("Data segment {} has empty offset expression, using 0", idx);
-                        0
+                        0u64
                     }
                 } else {
-                    0
+                    0u64
                 };
 
                 #[cfg(feature = "tracing")]
@@ -1044,8 +1053,9 @@ impl ModuleInstance {
                     "Writing data to memory"
                 );
 
-                // Use the thread-safe write_shared method for Arc<Memory>
-                memory.write_shared(offset, init_data)?;
+                // Use the thread-safe write method for Arc<Memory>
+                // write_shared_u64 handles both memory32 (small offsets) and memory64 (large offsets)
+                memory.write_shared_u64(offset, init_data)?;
 
                 #[cfg(feature = "tracing")]
                 wrt_foundation::tracing::trace!(segment_idx = idx, "Successfully wrote data segment");

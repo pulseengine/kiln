@@ -638,8 +638,9 @@ impl MemoryValue {
     pub fn new(ty: MemoryType) -> Result<Self> {
         // Convert MemoryType to CoreMemoryType for Memory::new
         let core_ty = wrt_runtime::CoreMemoryType {
-            limits: ty.limits,
-            shared: ty.shared,
+            limits:   ty.limits,
+            shared:   ty.shared,
+            memory64: ty.memory64,
         };
         let memory = Memory::new(core_ty)?;
         Ok(Self {
@@ -665,8 +666,9 @@ impl MemoryValue {
     pub fn new_with_name(ty: MemoryType, name: &str) -> Result<Self> {
         // Convert MemoryType to CoreMemoryType for Memory::new_with_name
         let core_ty = wrt_runtime::CoreMemoryType {
-            limits: ty.limits,
-            shared: ty.shared,
+            limits:   ty.limits,
+            shared:   ty.shared,
+            memory64: ty.memory64,
         };
         let memory = Memory::new_with_name(core_ty, name)?;
         Ok(Self {

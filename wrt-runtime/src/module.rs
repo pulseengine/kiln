@@ -151,8 +151,9 @@ type BoundedBinary = wrt_foundation::bounded::BoundedVec<u8, 65536, RuntimeProvi
 /// Convert MemoryType to CoreMemoryType
 fn to_core_memory_type(memory_type: WrtMemoryType) -> CoreMemoryType {
     CoreMemoryType {
-        limits: memory_type.limits,
-        shared: memory_type.shared,
+        limits:   memory_type.limits,
+        shared:   memory_type.shared,
+        memory64: memory_type.memory64,
     }
 }
 
@@ -4514,6 +4515,7 @@ fn value_type_to_u8(vt: WrtValueType) -> u8 {
         WrtValueType::I31Ref => 11,
         WrtValueType::AnyRef => 12,
         WrtValueType::EqRef => 13,
+        WrtValueType::NullFuncRef => 14,
         _ => 255, // fallback for other types
     }
 }
@@ -4668,6 +4670,7 @@ impl FromBytes for GlobalWrapper {
             11 => ValueType::I31Ref,
             12 => ValueType::AnyRef,
             13 => ValueType::EqRef,
+            14 => ValueType::NullFuncRef,
             _ => ValueType::I32, // Default fallback
         };
 
@@ -4693,8 +4696,9 @@ impl FromBytes for GlobalWrapper {
                 let v = ((value_high as u64) << 32) | (value_low as u64);
                 Value::F64(wrt_foundation::values::FloatBits64(v))
             },
-            ValueType::FuncRef => {
+            ValueType::FuncRef | ValueType::NullFuncRef => {
                 // 0xFFFFFFFF means None, otherwise it's an index
+                // NullFuncRef is the bottom type for funcref, uses same representation
                 if value_low == 0xFFFFFFFF {
                     Value::FuncRef(None)
                 } else {

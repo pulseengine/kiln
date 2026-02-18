@@ -31,9 +31,11 @@ mod types {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct CoreMemoryType {
         /// Memory limits
-        pub limits: crate::types::Limits,
+        pub limits:   crate::types::Limits,
         /// Whether the memory is shared
-        pub shared: bool,
+        pub shared:   bool,
+        /// Memory64 extension - uses i64 addresses instead of i32
+        pub memory64: bool,
     }
 
     /// Clean core WebAssembly table type without provider parameters

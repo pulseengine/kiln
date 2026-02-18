@@ -190,8 +190,9 @@ pub const MAX_PAGES: u32 = 65536;
 /// Convert MemoryType to CoreMemoryType
 fn to_core_memory_type(memory_type: &MemoryType) -> CoreMemoryType {
     CoreMemoryType {
-        limits: memory_type.limits,
-        shared: memory_type.shared,
+        limits:   memory_type.limits,
+        shared:   memory_type.shared,
+        memory64: memory_type.memory64,
     }
 }
 
@@ -1103,6 +1104,69 @@ impl Memory {
             {
                 use wrt_foundation::tracing::error;
                 error!("write_shared bounds check FAILED: end {} > mem_size {}", end, mem_size);
+            }
+            return Err(Error::memory_out_of_bounds("Memory write out of bounds"));
+        }
+
+        // Track access
+        self.increment_access_count(offset_usize, size);
+
+        // ASIL-B: Thread-safe write with Mutex
+        #[cfg(feature = "std")]
+        self.data.lock().unwrap().write_data(offset_usize, buffer)?;
+        #[cfg(not(feature = "std"))]
+        self.data.write().write_data(offset_usize, buffer)?;
+
+        // Update metrics
+        self.update_peak_memory();
+
+        Ok(())
+    }
+
+    /// Thread-safe write operation that accepts a 64-bit offset.
+    ///
+    /// This is needed for memory64 modules where data segment offsets
+    /// are specified as i64.const expressions. The offset is safely
+    /// converted to the internal representation.
+    ///
+    /// # Arguments
+    ///
+    /// * `offset` - The 64-bit offset to write to
+    /// * `buffer` - The buffer to write from
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the offset exceeds addressable memory or the
+    /// memory access is invalid.
+    pub fn write_shared_u64(&self, offset: u64, buffer: &[u8]) -> Result<()> {
+        // Empty write is always successful
+        if buffer.is_empty() {
+            return Ok(());
+        }
+
+        // Convert u64 offset to usize directly for bounds checking.
+        // On 64-bit platforms usize is u64, on 32-bit platforms this
+        // will fail for very large offsets (which is correct behavior).
+        let offset_usize = usize::try_from(offset)
+            .map_err(|_| Error::memory_out_of_bounds("Memory64 offset exceeds addressable range"))?;
+        let size = buffer.len();
+        let end = offset_usize
+            .checked_add(size)
+            .ok_or_else(|| Error::memory_out_of_bounds("Memory write would overflow"))?;
+
+        let mem_size = self.size_in_bytes();
+        #[cfg(feature = "tracing")]
+        {
+            use wrt_foundation::tracing::debug;
+            debug!("write_shared_u64: offset={}, size={}, end={}, mem_size={}, pages={}",
+                   offset_usize, size, end, mem_size, self.current_pages.load(Ordering::Relaxed));
+        }
+
+        if end > mem_size {
+            #[cfg(feature = "tracing")]
+            {
+                use wrt_foundation::tracing::error;
+                error!("write_shared_u64 bounds check FAILED: end {} > mem_size {}", end, mem_size);
             }
             return Err(Error::memory_out_of_bounds("Memory write out of bounds"));
         }
