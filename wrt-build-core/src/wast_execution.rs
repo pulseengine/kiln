@@ -448,6 +448,7 @@ impl WastEngine {
                     let spectest_table_type = TableType {
                         element_type: RefType::Funcref,
                         limits: Limits { min: 10, max: Some(20) },
+                        table64: false,
                     };
                     let table = Table::new(spectest_table_type).map_err(|e| {
                         anyhow::anyhow!("Failed to create spectest table: {:?}", e)

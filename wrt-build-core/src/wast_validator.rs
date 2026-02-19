@@ -576,11 +576,14 @@ impl WastModuleValidator {
                 // Control flow
                 0x00 => {
                     // unreachable
+                    // Per spec: after unconditional branch/trap, stack becomes polymorphic
+                    // Truncate stack to frame base so subsequent pops are polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
+                        stack.truncate(frame.stack_height);
                     }
                 },
                 0x01 => {
@@ -860,12 +863,13 @@ impl WastModuleValidator {
                         }
                     }
 
-                    // Mark current frame as unreachable
+                    // Mark current frame as unreachable and truncate stack
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
+                        stack.truncate(frame.stack_height);
                     }
                 },
                 0x09 => {
@@ -882,12 +886,13 @@ impl WastModuleValidator {
                         return Err(anyhow!("rethrow: not in try block"));
                     }
 
-                    // Mark current frame as unreachable
+                    // Mark current frame as unreachable and truncate stack
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
+                        stack.truncate(frame.stack_height);
                     }
                 },
                 0x0A => {
@@ -904,12 +909,13 @@ impl WastModuleValidator {
                         return Err(anyhow!("type mismatch"));
                     }
 
-                    // Mark current frame as unreachable
+                    // Mark current frame as unreachable and truncate stack
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
+                        stack.truncate(frame.stack_height);
                     }
                 },
 
@@ -1005,12 +1011,13 @@ impl WastModuleValidator {
                         Self::is_unreachable(&frames),
                     )?;
 
-                    // Mark current frame as unreachable
+                    // Mark current frame as unreachable and truncate stack
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
+                        stack.truncate(frame.stack_height);
                     }
                 },
                 0x0D => {
@@ -1128,12 +1135,13 @@ impl WastModuleValidator {
                         Self::is_unreachable(&frames),
                     )?;
 
-                    // Mark current frame as unreachable
+                    // Mark current frame as unreachable and truncate stack
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
+                        stack.truncate(frame.stack_height);
                     }
                 },
                 0x0F => {
@@ -1152,11 +1160,13 @@ impl WastModuleValidator {
                         }
                     }
 
+                    // Mark current frame as unreachable and truncate stack
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
+                        stack.truncate(frame.stack_height);
                     }
                 },
                 0x10 => {
@@ -1218,10 +1228,15 @@ impl WastModuleValidator {
                     let func_type = &module.types[type_idx as usize];
                     let frame_height = Self::current_frame_height(&frames);
 
-                    // Pop table index (must be i32)
+                    // Pop table index (i32 or i64 for table64)
+                    let idx_type = if Self::is_table64(module, table_idx) {
+                        StackType::I64
+                    } else {
+                        StackType::I32
+                    };
                     if !Self::pop_type(
                         &mut stack,
-                        StackType::I32,
+                        idx_type,
                         frame_height,
                         Self::is_unreachable(&frames),
                     ) {
@@ -1289,12 +1304,13 @@ impl WastModuleValidator {
                     }
 
                     // return_call is a terminating instruction (like return)
-                    // Mark current frame as unreachable
+                    // Mark current frame as unreachable and truncate stack
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
+                        stack.truncate(frame.stack_height);
                     }
                 },
                 0x13 => {
@@ -1340,10 +1356,15 @@ impl WastModuleValidator {
 
                     let frame_height = Self::current_frame_height(&frames);
 
-                    // Pop table index (must be i32)
+                    // Pop table index (i32 or i64 for table64)
+                    let idx_type = if Self::is_table64(module, table_idx) {
+                        StackType::I64
+                    } else {
+                        StackType::I32
+                    };
                     if !Self::pop_type(
                         &mut stack,
-                        StackType::I32,
+                        idx_type,
                         frame_height,
                         Self::is_unreachable(&frames),
                     ) {
@@ -1364,12 +1385,13 @@ impl WastModuleValidator {
                     }
 
                     // return_call_indirect is a terminating instruction (like return)
-                    // Mark current frame as unreachable
+                    // Mark current frame as unreachable and truncate stack
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
+                        stack.truncate(frame.stack_height);
                     }
                 },
 
@@ -1965,7 +1987,8 @@ impl WastModuleValidator {
                     }
                 },
                 0x25 => {
-                    // table.get: [i32] -> [t] where t is the table element type
+                    // table.get: [at] -> [t] where t is the table element type
+                    // at = i64 for table64, i32 otherwise
                     let (table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                     offset = new_offset;
 
@@ -1977,8 +2000,13 @@ impl WastModuleValidator {
                     let frame_height = Self::current_frame_height(&frames);
                     let unreachable = Self::is_unreachable(&frames);
 
-                    // Pop index (must be i32)
-                    if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                    // Pop index (i32 or i64 for table64)
+                    let idx_type = if Self::is_table64(module, table_idx) {
+                        StackType::I64
+                    } else {
+                        StackType::I32
+                    };
+                    if !Self::pop_type(&mut stack, idx_type, frame_height, unreachable) {
                         return Err(anyhow!("type mismatch"));
                     }
 
@@ -1991,7 +2019,8 @@ impl WastModuleValidator {
                     }
                 },
                 0x26 => {
-                    // table.set: [i32, t] -> [] where t is the table element type
+                    // table.set: [at, t] -> [] where t is the table element type
+                    // at = i64 for table64, i32 otherwise
                     let (table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                     offset = new_offset;
 
@@ -2027,8 +2056,13 @@ impl WastModuleValidator {
                         return Err(anyhow!("type mismatch"));
                     }
 
-                    // Pop index (must be i32)
-                    if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                    // Pop index (i32 or i64 for table64)
+                    let idx_type = if Self::is_table64(module, table_idx) {
+                        StackType::I64
+                    } else {
+                        StackType::I32
+                    };
+                    if !Self::pop_type(&mut stack, idx_type, frame_height, unreachable) {
                         return Err(anyhow!("type mismatch"));
                     }
                 },
@@ -2782,7 +2816,8 @@ impl WastModuleValidator {
                             }
                             stack.push(StackType::I64);
                         },
-                        // memory.init (0x08): [i32, i32, i32] -> []
+                        // memory.init (0x08): [at, i32, i32] -> []
+                        // at = memory's index type (i64 for memory64, i32 otherwise)
                         0x08 => {
                             let (data_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
@@ -2796,7 +2831,12 @@ impl WastModuleValidator {
                             if mem_idx as usize >= Self::total_memories(module) {
                                 return Err(anyhow!("unknown memory"));
                             }
-                            // Pop n (length), s (source offset), d (dest offset) in reverse
+                            let idx_type = if Self::is_memory64(module, mem_idx) {
+                                StackType::I64
+                            } else {
+                                StackType::I32
+                            };
+                            // Pop n (length: i32), s (source offset: i32), d (dest offset: at) in reverse
                             if !Self::pop_type(
                                 &mut stack,
                                 StackType::I32,
@@ -2815,7 +2855,7 @@ impl WastModuleValidator {
                             }
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                idx_type,
                                 frame_height,
                                 unreachable,
                             ) {
@@ -2831,7 +2871,8 @@ impl WastModuleValidator {
                                 return Err(anyhow!("unknown data segment"));
                             }
                         },
-                        // memory.copy (0x0A): [i32, i32, i32] -> []
+                        // memory.copy (0x0A): [at_d, at_s, n] -> []
+                        // n type = i64 if either src or dst is memory64
                         0x0A => {
                             let (dst_mem, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
@@ -2844,10 +2885,16 @@ impl WastModuleValidator {
                             if src_mem as usize >= Self::total_memories(module) {
                                 return Err(anyhow!("unknown memory"));
                             }
+                            let dst_is_64 = Self::is_memory64(module, dst_mem);
+                            let src_is_64 = Self::is_memory64(module, src_mem);
+                            let dst_type = if dst_is_64 { StackType::I64 } else { StackType::I32 };
+                            let src_type = if src_is_64 { StackType::I64 } else { StackType::I32 };
+                            // Length type: i64 if either memory is memory64
+                            let len_type = if dst_is_64 || src_is_64 { StackType::I64 } else { StackType::I32 };
                             // Pop n (length), s (source), d (dest) in reverse
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                len_type,
                                 frame_height,
                                 unreachable,
                             ) {
@@ -2855,7 +2902,7 @@ impl WastModuleValidator {
                             }
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                src_type,
                                 frame_height,
                                 unreachable,
                             ) {
@@ -2863,14 +2910,15 @@ impl WastModuleValidator {
                             }
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                dst_type,
                                 frame_height,
                                 unreachable,
                             ) {
                                 return Err(anyhow!("type mismatch"));
                             }
                         },
-                        // memory.fill (0x0B): [i32, i32, i32] -> []
+                        // memory.fill (0x0B): [at, i32, at] -> []
+                        // at = memory's index type (i64 for memory64, i32 otherwise)
                         0x0B => {
                             let (mem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
@@ -2878,10 +2926,15 @@ impl WastModuleValidator {
                             if mem_idx as usize >= Self::total_memories(module) {
                                 return Err(anyhow!("unknown memory"));
                             }
-                            // Pop n (length), val (value), d (dest) in reverse
+                            let idx_type = if Self::is_memory64(module, mem_idx) {
+                                StackType::I64
+                            } else {
+                                StackType::I32
+                            };
+                            // Pop n (length: at), val (value: i32), d (dest: at) in reverse
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                idx_type,
                                 frame_height,
                                 unreachable,
                             ) {
@@ -2897,14 +2950,15 @@ impl WastModuleValidator {
                             }
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                idx_type,
                                 frame_height,
                                 unreachable,
                             ) {
                                 return Err(anyhow!("type mismatch"));
                             }
                         },
-                        // table.init (0x0C): [i32, i32, i32] -> []
+                        // table.init (0x0C): [at, i32, i32] -> []
+                        // at = table's index type (i64 for table64, i32 otherwise)
                         0x0C => {
                             let (elem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
@@ -2918,7 +2972,12 @@ impl WastModuleValidator {
                             if table_idx as usize >= Self::total_tables(module) {
                                 return Err(anyhow!("unknown table"));
                             }
-                            // Pop n, s, d in reverse
+                            let idx_type = if Self::is_table64(module, table_idx) {
+                                StackType::I64
+                            } else {
+                                StackType::I32
+                            };
+                            // Pop n (length: i32), s (source: i32), d (dest: at) in reverse
                             if !Self::pop_type(
                                 &mut stack,
                                 StackType::I32,
@@ -2937,7 +2996,7 @@ impl WastModuleValidator {
                             }
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                idx_type,
                                 frame_height,
                                 unreachable,
                             ) {
@@ -2953,7 +3012,8 @@ impl WastModuleValidator {
                                 return Err(anyhow!("unknown elem segment"));
                             }
                         },
-                        // table.copy (0x0E): [i32, i32, i32] -> []
+                        // table.copy (0x0E): [at_d, at_s, n] -> []
+                        // n type = i64 if either src or dst is table64
                         0x0E => {
                             let (dst_table, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
@@ -2966,10 +3026,16 @@ impl WastModuleValidator {
                             if src_table as usize >= Self::total_tables(module) {
                                 return Err(anyhow!("unknown table"));
                             }
-                            // Pop n, s, d in reverse
+                            let dst_is_64 = Self::is_table64(module, dst_table);
+                            let src_is_64 = Self::is_table64(module, src_table);
+                            let dst_type = if dst_is_64 { StackType::I64 } else { StackType::I32 };
+                            let src_type = if src_is_64 { StackType::I64 } else { StackType::I32 };
+                            // Length type: i64 if either table is table64
+                            let len_type = if dst_is_64 || src_is_64 { StackType::I64 } else { StackType::I32 };
+                            // Pop n (length), s (source), d (dest) in reverse
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                len_type,
                                 frame_height,
                                 unreachable,
                             ) {
@@ -2977,7 +3043,7 @@ impl WastModuleValidator {
                             }
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                src_type,
                                 frame_height,
                                 unreachable,
                             ) {
@@ -2985,14 +3051,15 @@ impl WastModuleValidator {
                             }
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                dst_type,
                                 frame_height,
                                 unreachable,
                             ) {
                                 return Err(anyhow!("type mismatch"));
                             }
                         },
-                        // table.grow (0x0F): [ref, i32] -> [i32]
+                        // table.grow (0x0F): [ref, at] -> [at]
+                        // at = i64 for table64, i32 otherwise
                         0x0F => {
                             let (table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
@@ -3011,10 +3078,16 @@ impl WastModuleValidator {
                                 StackType::Unknown
                             };
 
-                            // Pop n (delta)
+                            let idx_type = if Self::is_table64(module, table_idx) {
+                                StackType::I64
+                            } else {
+                                StackType::I32
+                            };
+
+                            // Pop n (delta: at)
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                idx_type,
                                 frame_height,
                                 unreachable,
                             ) {
@@ -3033,9 +3106,10 @@ impl WastModuleValidator {
                             } else if !unreachable {
                                 return Err(anyhow!("type mismatch"));
                             }
-                            stack.push(StackType::I32);
+                            stack.push(idx_type);
                         },
-                        // table.size (0x10): [] -> [i32]
+                        // table.size (0x10): [] -> [at]
+                        // at = i64 for table64, i32 otherwise
                         0x10 => {
                             let (table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
@@ -3043,9 +3117,15 @@ impl WastModuleValidator {
                             if table_idx as usize >= Self::total_tables(module) {
                                 return Err(anyhow!("unknown table"));
                             }
-                            stack.push(StackType::I32);
+                            let idx_type = if Self::is_table64(module, table_idx) {
+                                StackType::I64
+                            } else {
+                                StackType::I32
+                            };
+                            stack.push(idx_type);
                         },
-                        // table.fill (0x11): [i32, ref, i32] -> []
+                        // table.fill (0x11): [at, ref, at] -> []
+                        // at = i64 for table64, i32 otherwise
                         0x11 => {
                             let (table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
@@ -3064,10 +3144,16 @@ impl WastModuleValidator {
                                 StackType::Unknown
                             };
 
-                            // Pop n (length)
+                            let idx_type = if Self::is_table64(module, table_idx) {
+                                StackType::I64
+                            } else {
+                                StackType::I32
+                            };
+
+                            // Pop n (length: at)
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                idx_type,
                                 frame_height,
                                 unreachable,
                             ) {
@@ -3086,10 +3172,10 @@ impl WastModuleValidator {
                             } else if !unreachable {
                                 return Err(anyhow!("type mismatch"));
                             }
-                            // Pop i (dest)
+                            // Pop i (dest: at)
                             if !Self::pop_type(
                                 &mut stack,
-                                StackType::I32,
+                                idx_type,
                                 frame_height,
                                 unreachable,
                             ) {
@@ -3518,6 +3604,25 @@ impl WastModuleValidator {
 
                     stack.push(StackType::FuncRef);
                 },
+                // SIMD prefix (0xFD) - handle v128.const
+                0xFD => {
+                    // Read the SIMD sub-opcode (LEB128 encoded)
+                    let (simd_opcode, new_pos) = Self::read_leb128_unsigned(init_bytes, pos)?;
+                    pos = new_pos;
+                    match simd_opcode {
+                        // v128.const = 0x0C: [] -> [v128] - 16 byte immediate
+                        0x0C => {
+                            if pos + 16 > init_bytes.len() {
+                                return Err(anyhow!("Truncated v128.const in constant expression"));
+                            }
+                            pos += 16;
+                            stack.push(StackType::V128);
+                        },
+                        _ => {
+                            return Err(anyhow!("constant expression required"));
+                        },
+                    }
+                },
                 // Extended constant expressions (WebAssembly 2.0)
                 // i32.add, i32.sub, i32.mul - pop 2 i32, push 1 i32
                 0x6A | 0x6B | 0x6C => {
@@ -3670,7 +3775,6 @@ impl WastModuleValidator {
     /// Memory indices include both imported and defined memories:
     /// - Indices 0..N-1 are imported memories
     /// - Indices N+ are defined memories
-    #[allow(dead_code)]
     fn is_memory64(module: &Module, mem_idx: u32) -> bool {
         let num_mem_imports = Self::count_memory_imports(module);
 
@@ -3735,6 +3839,32 @@ impl WastModuleValidator {
             // This is a defined table
             let defined_idx = table_idx as usize - num_table_imports;
             module.tables.get(defined_idx).map(|t| t.element_type)
+        }
+    }
+
+    /// Check if a table at the given index uses 64-bit indexing (Table64)
+    /// Table indices include both imported and defined tables:
+    /// - Indices 0..N-1 are imported tables
+    /// - Indices N+ are defined tables
+    fn is_table64(module: &Module, table_idx: u32) -> bool {
+        let num_table_imports = Self::count_table_imports(module);
+
+        if (table_idx as usize) < num_table_imports {
+            // This is an imported table - find it in imports Vec
+            let mut import_idx = 0;
+            for import in &module.imports {
+                if let ImportDesc::Table(table_type) = &import.desc {
+                    if import_idx == table_idx as usize {
+                        return table_type.table64;
+                    }
+                    import_idx += 1;
+                }
+            }
+            false
+        } else {
+            // This is a defined table
+            let defined_idx = table_idx as usize - num_table_imports;
+            module.tables.get(defined_idx).map_or(false, |t| t.table64)
         }
     }
 

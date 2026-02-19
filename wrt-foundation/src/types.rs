@@ -3953,6 +3953,8 @@ pub struct TableType {
     /// The size limits of the table, specifying initial and optional maximum
     /// size.
     pub limits:       Limits,
+    /// Table64 extension - uses i64 indices instead of i32
+    pub table64:      bool,
 }
 
 // Generic constructor, still valid as it doesn't depend on P.
@@ -3964,6 +3966,16 @@ impl TableType {
         Self {
             element_type,
             limits,
+            table64: false,
+        }
+    }
+
+    /// Creates a new `TableType` with all options including table64.
+    pub const fn new_with_table64(element_type: RefType, limits: Limits, table64: bool) -> Self {
+        Self {
+            element_type,
+            limits,
+            table64,
         }
     }
 }
@@ -3973,6 +3985,7 @@ impl Checksummable for TableType {
     fn update_checksum(&self, checksum: &mut Checksum) {
         self.element_type.update_checksum(checksum);
         self.limits.update_checksum(checksum);
+        self.table64.update_checksum(checksum);
     }
 }
 
@@ -3984,6 +3997,7 @@ impl ToBytes for TableType {
     ) -> wrt_error::Result<()> {
         self.element_type.to_bytes_with_provider(writer, provider)?;
         self.limits.to_bytes_with_provider(writer, provider)?;
+        self.table64.to_bytes_with_provider(writer, provider)?;
         Ok(())
     }
     // Default to_bytes method will be used if #cfg(feature = "default-provider") is
@@ -3997,9 +4011,11 @@ impl FromBytes for TableType {
     ) -> wrt_error::Result<Self> {
         let element_type = RefType::from_bytes_with_provider(reader, provider)?;
         let limits = Limits::from_bytes_with_provider(reader, provider)?;
+        let table64 = bool::from_bytes_with_provider(reader, provider)?;
         Ok(TableType {
             element_type,
             limits,
+            table64,
         })
     }
     // Default from_bytes method will be used if #cfg(feature = "default-provider")

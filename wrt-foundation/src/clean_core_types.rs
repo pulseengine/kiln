@@ -45,6 +45,8 @@ mod types {
         pub element_type: crate::types::RefType,
         /// Table size limits
         pub limits:       crate::types::Limits,
+        /// Table64 extension - uses i64 indices instead of i32
+        pub table64:      bool,
     }
 
     /// Clean core WebAssembly global type without provider parameters

@@ -378,6 +378,7 @@ impl CoreModuleAdapter {
                         max: table_adapter.limits.max,
                     },
                     element_type: RefType::Funcref,
+                    table64: false,
                 },
                 table: wrt_runtime::table::Table::new(wrt_foundation::types::TableType {
                     limits: wrt_foundation::types::Limits {
@@ -385,6 +386,7 @@ impl CoreModuleAdapter {
                         max: table_adapter.limits.max,
                     },
                     element_type: RefType::Funcref,
+                    table64: false,
                 })?,
             };
 
@@ -396,6 +398,7 @@ impl CoreModuleAdapter {
                         max: table_adapter.limits.max,
                     },
                     element_type: RefType::Funcref,
+                    table64: false,
                 },
                 table: BoundedVec::new(),
             };

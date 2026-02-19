@@ -4713,25 +4713,25 @@ impl StacklessEngine {
                     // F32 Arithmetic operations
                     Instruction::F32Add => {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = a.value() + b.value();
+                            let result = simd_ops::canonicalize_f32(a.value() + b.value());
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Sub => {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = a.value() - b.value();
+                            let result = simd_ops::canonicalize_f32(a.value() - b.value());
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Mul => {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = a.value() * b.value();
+                            let result = simd_ops::canonicalize_f32(a.value() * b.value());
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Div => {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = a.value() / b.value();
+                            let result = simd_ops::canonicalize_f32(a.value() / b.value());
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
@@ -4750,38 +4750,42 @@ impl StacklessEngine {
                     }
                     Instruction::F32Ceil => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
-                            let result = a.value().ceil();
+                            let result = simd_ops::canonicalize_f32(a.value().ceil());
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Floor => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
-                            let result = a.value().floor();
+                            let result = simd_ops::canonicalize_f32(a.value().floor());
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Trunc => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
-                            let result = a.value().trunc();
+                            let result = simd_ops::canonicalize_f32(a.value().trunc());
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Nearest => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let f = a.value();
-                            // Round to nearest even (banker's rounding)
-                            let result = if f.fract().abs() == 0.5 {
+                            // WebAssembly nearest: round-to-nearest-even, preserving -0.0
+                            let result = if f.is_nan() || f.is_infinite() || f == 0.0 {
+                                f // preserves -0.0, +0.0, NaN, +-inf
+                            } else if f.fract().abs() == 0.5 {
                                 let floor = f.floor();
                                 if floor as i32 % 2 == 0 { floor } else { f.ceil() }
                             } else {
                                 f.round()
                             };
-                            operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
+                            // Preserve sign of zero: if result is zero, sign matches input
+                            let result = if result == 0.0 && f.is_sign_negative() { -0.0_f32 } else { result };
+                            operand_stack.push(Value::F32(FloatBits32(simd_ops::canonicalize_f32(result).to_bits())));
                         }
                     }
                     Instruction::F32Sqrt => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
-                            let result = a.value().sqrt();
+                            let result = simd_ops::canonicalize_f32(a.value().sqrt());
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
@@ -4789,10 +4793,10 @@ impl StacklessEngine {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let fa = a.value();
                             let fb = b.value();
-                            // WebAssembly spec: If either operand is NaN, return NaN
+                            // WebAssembly spec: If either operand is NaN, return canonical NaN
                             // If both are zero with different signs, return -0.0
                             let result = if fa.is_nan() || fb.is_nan() {
-                                f32::NAN
+                                f32::from_bits(0x7FC0_0000) // canonical NaN
                             } else if fa == 0.0 && fb == 0.0 {
                                 if fa.is_sign_negative() || fb.is_sign_negative() { -0.0 } else { 0.0 }
                             } else {
@@ -4805,10 +4809,10 @@ impl StacklessEngine {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let fa = a.value();
                             let fb = b.value();
-                            // WebAssembly spec: If either operand is NaN, return NaN
+                            // WebAssembly spec: If either operand is NaN, return canonical NaN
                             // If both are zero with different signs, return +0.0
                             let result = if fa.is_nan() || fb.is_nan() {
-                                f32::NAN
+                                f32::from_bits(0x7FC0_0000) // canonical NaN
                             } else if fa == 0.0 && fb == 0.0 {
                                 if fa.is_sign_positive() || fb.is_sign_positive() { 0.0 } else { -0.0 }
                             } else {
@@ -4826,25 +4830,25 @@ impl StacklessEngine {
                     // F64 Arithmetic operations
                     Instruction::F64Add => {
                         if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = f64::from_bits(a.0) + f64::from_bits(b.0);
+                            let result = simd_ops::canonicalize_f64(f64::from_bits(a.0) + f64::from_bits(b.0));
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Sub => {
                         if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = f64::from_bits(a.0) - f64::from_bits(b.0);
+                            let result = simd_ops::canonicalize_f64(f64::from_bits(a.0) - f64::from_bits(b.0));
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Mul => {
                         if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = f64::from_bits(a.0) * f64::from_bits(b.0);
+                            let result = simd_ops::canonicalize_f64(f64::from_bits(a.0) * f64::from_bits(b.0));
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Div => {
                         if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = f64::from_bits(a.0) / f64::from_bits(b.0);
+                            let result = simd_ops::canonicalize_f64(f64::from_bits(a.0) / f64::from_bits(b.0));
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
@@ -4900,37 +4904,42 @@ impl StacklessEngine {
                     }
                     Instruction::F64Ceil => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
-                            let result = f64::from_bits(a.0).ceil();
+                            let result = simd_ops::canonicalize_f64(f64::from_bits(a.0).ceil());
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Floor => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
-                            let result = f64::from_bits(a.0).floor();
+                            let result = simd_ops::canonicalize_f64(f64::from_bits(a.0).floor());
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Trunc => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
-                            let result = f64::from_bits(a.0).trunc();
+                            let result = simd_ops::canonicalize_f64(f64::from_bits(a.0).trunc());
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Nearest => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let f = f64::from_bits(a.0);
-                            let result = if f.fract().abs() == 0.5 {
+                            // WebAssembly nearest: round-to-nearest-even, preserving -0.0
+                            let result = if f.is_nan() || f.is_infinite() || f == 0.0 {
+                                f // preserves -0.0, +0.0, NaN, +-inf
+                            } else if f.fract().abs() == 0.5 {
                                 let floor = f.floor();
                                 if floor as i64 % 2 == 0 { floor } else { f.ceil() }
                             } else {
                                 f.round()
                             };
-                            operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
+                            // Preserve sign of zero: if result is zero, sign matches input
+                            let result = if result == 0.0 && f.is_sign_negative() { -0.0_f64 } else { result };
+                            operand_stack.push(Value::F64(FloatBits64(simd_ops::canonicalize_f64(result).to_bits())));
                         }
                     }
                     Instruction::F64Sqrt => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
-                            let result = f64::from_bits(a.0).sqrt();
+                            let result = simd_ops::canonicalize_f64(f64::from_bits(a.0).sqrt());
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
@@ -4939,7 +4948,7 @@ impl StacklessEngine {
                             let fa = f64::from_bits(a.0);
                             let fb = f64::from_bits(b.0);
                             let result = if fa.is_nan() || fb.is_nan() {
-                                f64::NAN
+                                f64::from_bits(0x7FF8_0000_0000_0000) // canonical NaN
                             } else if fa == 0.0 && fb == 0.0 {
                                 if fa.is_sign_negative() || fb.is_sign_negative() { -0.0 } else { 0.0 }
                             } else {
@@ -4953,7 +4962,7 @@ impl StacklessEngine {
                             let fa = f64::from_bits(a.0);
                             let fb = f64::from_bits(b.0);
                             let result = if fa.is_nan() || fb.is_nan() {
-                                f64::NAN
+                                f64::from_bits(0x7FF8_0000_0000_0000) // canonical NaN
                             } else if fa == 0.0 && fb == 0.0 {
                                 if fa.is_sign_positive() || fb.is_sign_positive() { 0.0 } else { -0.0 }
                             } else {
@@ -5020,13 +5029,13 @@ impl StacklessEngine {
                     }
                     Instruction::F64PromoteF32 => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
-                            let result = f32::from_bits(a.0) as f64;
+                            let result = simd_ops::canonicalize_f64(f32::from_bits(a.0) as f64);
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F32DemoteF64 => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
-                            let result = f64::from_bits(a.0) as f32;
+                            let result = simd_ops::canonicalize_f32(f64::from_bits(a.0) as f32);
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
@@ -10808,7 +10817,7 @@ impl StacklessEngine {
                                     let mut result = [0u8; 16];
                                     for i in 0..4 {
                                         let f = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
-                                        let r = f.sqrt();
+                                        let r = simd_ops::canonicalize_f32(f.sqrt());
                                         let rb = r.to_le_bytes();
                                         result[i*4] = rb[0]; result[i*4+1] = rb[1]; result[i*4+2] = rb[2]; result[i*4+3] = rb[3];
                                     }
@@ -10826,7 +10835,7 @@ impl StacklessEngine {
                                     for i in 0..4 {
                                         let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
                                         let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
-                                        let r = (fa + fb).to_le_bytes();
+                                        let r = simd_ops::canonicalize_f32(fa + fb).to_le_bytes();
                                         result[i*4] = r[0]; result[i*4+1] = r[1]; result[i*4+2] = r[2]; result[i*4+3] = r[3];
                                     }
                                     operand_stack.push(Value::V128(V128::new(result)));
@@ -10839,7 +10848,7 @@ impl StacklessEngine {
                                     for i in 0..4 {
                                         let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
                                         let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
-                                        let r = (fa - fb).to_le_bytes();
+                                        let r = simd_ops::canonicalize_f32(fa - fb).to_le_bytes();
                                         result[i*4] = r[0]; result[i*4+1] = r[1]; result[i*4+2] = r[2]; result[i*4+3] = r[3];
                                     }
                                     operand_stack.push(Value::V128(V128::new(result)));
@@ -10852,7 +10861,7 @@ impl StacklessEngine {
                                     for i in 0..4 {
                                         let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
                                         let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
-                                        let r = (fa * fb).to_le_bytes();
+                                        let r = simd_ops::canonicalize_f32(fa * fb).to_le_bytes();
                                         result[i*4] = r[0]; result[i*4+1] = r[1]; result[i*4+2] = r[2]; result[i*4+3] = r[3];
                                     }
                                     operand_stack.push(Value::V128(V128::new(result)));
@@ -10865,7 +10874,7 @@ impl StacklessEngine {
                                     for i in 0..4 {
                                         let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
                                         let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
-                                        let r = (fa / fb).to_le_bytes();
+                                        let r = simd_ops::canonicalize_f32(fa / fb).to_le_bytes();
                                         result[i*4] = r[0]; result[i*4+1] = r[1]; result[i*4+2] = r[2]; result[i*4+3] = r[3];
                                     }
                                     operand_stack.push(Value::V128(V128::new(result)));
@@ -10883,8 +10892,7 @@ impl StacklessEngine {
                                         let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
                                         let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
                                         let r = if fa.is_nan() || fb.is_nan() {
-                                            // Produce a canonical NaN
-                                            f32::NAN
+                                            f32::from_bits(0x7FC0_0000) // canonical NaN
                                         } else if fa == 0.0 && fb == 0.0 {
                                             // -0 is less than +0
                                             if fa.is_sign_negative() || fb.is_sign_negative() { -0.0_f32 } else { 0.0_f32 }
@@ -10905,7 +10913,7 @@ impl StacklessEngine {
                                         let fa = f32::from_le_bytes([a.bytes[i*4], a.bytes[i*4+1], a.bytes[i*4+2], a.bytes[i*4+3]]);
                                         let fb = f32::from_le_bytes([b.bytes[i*4], b.bytes[i*4+1], b.bytes[i*4+2], b.bytes[i*4+3]]);
                                         let r = if fa.is_nan() || fb.is_nan() {
-                                            f32::NAN
+                                            f32::from_bits(0x7FC0_0000) // canonical NaN
                                         } else if fa == 0.0 && fb == 0.0 {
                                             if fa.is_sign_positive() || fb.is_sign_positive() { 0.0_f32 } else { -0.0_f32 }
                                         } else {
@@ -10987,7 +10995,7 @@ impl StacklessEngine {
                                         let mut ab = [0u8; 8];
                                         ab.copy_from_slice(&a.bytes[i*8..i*8+8]);
                                         let f = f64::from_le_bytes(ab);
-                                        let r = f.sqrt();
+                                        let r = simd_ops::canonicalize_f64(f.sqrt());
                                         result[i*8..i*8+8].copy_from_slice(&r.to_le_bytes());
                                     }
                                     operand_stack.push(Value::V128(V128::new(result)));
@@ -11008,7 +11016,7 @@ impl StacklessEngine {
                                         bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
                                         let fa = f64::from_le_bytes(ab);
                                         let fb = f64::from_le_bytes(bb);
-                                        result[i*8..i*8+8].copy_from_slice(&(fa + fb).to_le_bytes());
+                                        result[i*8..i*8+8].copy_from_slice(&simd_ops::canonicalize_f64(fa + fb).to_le_bytes());
                                     }
                                     operand_stack.push(Value::V128(V128::new(result)));
                                 }
@@ -11024,7 +11032,7 @@ impl StacklessEngine {
                                         bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
                                         let fa = f64::from_le_bytes(ab);
                                         let fb = f64::from_le_bytes(bb);
-                                        result[i*8..i*8+8].copy_from_slice(&(fa - fb).to_le_bytes());
+                                        result[i*8..i*8+8].copy_from_slice(&simd_ops::canonicalize_f64(fa - fb).to_le_bytes());
                                     }
                                     operand_stack.push(Value::V128(V128::new(result)));
                                 }
@@ -11040,7 +11048,7 @@ impl StacklessEngine {
                                         bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
                                         let fa = f64::from_le_bytes(ab);
                                         let fb = f64::from_le_bytes(bb);
-                                        result[i*8..i*8+8].copy_from_slice(&(fa * fb).to_le_bytes());
+                                        result[i*8..i*8+8].copy_from_slice(&simd_ops::canonicalize_f64(fa * fb).to_le_bytes());
                                     }
                                     operand_stack.push(Value::V128(V128::new(result)));
                                 }
@@ -11056,7 +11064,7 @@ impl StacklessEngine {
                                         bb.copy_from_slice(&b.bytes[i*8..i*8+8]);
                                         let fa = f64::from_le_bytes(ab);
                                         let fb = f64::from_le_bytes(bb);
-                                        result[i*8..i*8+8].copy_from_slice(&(fa / fb).to_le_bytes());
+                                        result[i*8..i*8+8].copy_from_slice(&simd_ops::canonicalize_f64(fa / fb).to_le_bytes());
                                     }
                                     operand_stack.push(Value::V128(V128::new(result)));
                                 }
@@ -11077,7 +11085,7 @@ impl StacklessEngine {
                                         let fa = f64::from_le_bytes(ab);
                                         let fb = f64::from_le_bytes(bb);
                                         let r = if fa.is_nan() || fb.is_nan() {
-                                            f64::NAN
+                                            f64::from_bits(0x7FF8_0000_0000_0000) // canonical NaN
                                         } else if fa == 0.0 && fb == 0.0 {
                                             if fa.is_sign_negative() || fb.is_sign_negative() { -0.0_f64 } else { 0.0_f64 }
                                         } else {
@@ -11100,7 +11108,7 @@ impl StacklessEngine {
                                         let fa = f64::from_le_bytes(ab);
                                         let fb = f64::from_le_bytes(bb);
                                         let r = if fa.is_nan() || fb.is_nan() {
-                                            f64::NAN
+                                            f64::from_bits(0x7FF8_0000_0000_0000) // canonical NaN
                                         } else if fa == 0.0 && fb == 0.0 {
                                             if fa.is_sign_positive() || fb.is_sign_positive() { 0.0_f64 } else { -0.0_f64 }
                                         } else {
@@ -11488,12 +11496,12 @@ impl StacklessEngine {
                             }
                             0x88 => {
                                 if let Some(Value::V128(a)) = operand_stack.pop() {
-                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extend_low_i8x16_u(&a.bytes))));
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extend_high_i8x16_s(&a.bytes))));
                                 }
                             }
                             0x89 => {
                                 if let Some(Value::V128(a)) = operand_stack.pop() {
-                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extend_high_i8x16_s(&a.bytes))));
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i16x8_extend_low_i8x16_u(&a.bytes))));
                                 }
                             }
                             0x8A => {
@@ -11639,12 +11647,12 @@ impl StacklessEngine {
                             }
                             0xA8 => {
                                 if let Some(Value::V128(a)) = operand_stack.pop() {
-                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extend_low_i16x8_u(&a.bytes))));
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extend_high_i16x8_s(&a.bytes))));
                                 }
                             }
                             0xA9 => {
                                 if let Some(Value::V128(a)) = operand_stack.pop() {
-                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extend_high_i16x8_s(&a.bytes))));
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i32x4_extend_low_i16x8_u(&a.bytes))));
                                 }
                             }
                             0xAA => {
@@ -11764,12 +11772,12 @@ impl StacklessEngine {
                             }
                             0xC8 => {
                                 if let Some(Value::V128(a)) = operand_stack.pop() {
-                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extend_low_i32x4_u(&a.bytes))));
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extend_high_i32x4_s(&a.bytes))));
                                 }
                             }
                             0xC9 => {
                                 if let Some(Value::V128(a)) = operand_stack.pop() {
-                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extend_high_i32x4_s(&a.bytes))));
+                                    operand_stack.push(Value::V128(V128::new(simd_ops::i64x2_extend_low_i32x4_u(&a.bytes))));
                                 }
                             }
                             0xCA => {

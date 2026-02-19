@@ -855,6 +855,7 @@ impl<'a> StreamingDecoder<'a> {
                         let table_type = TableType {
                             element_type: ref_type,
                             limits,
+                            table64: flags & 0x04 != 0,
                         };
 
                         let import = Import {
@@ -1263,7 +1264,7 @@ impl<'a> StreamingDecoder<'a> {
             trace!(table_index = i, element_type = ?element_type, min = min, max = ?max, "table parsed");
 
             // Create table type and add to module
-            let table_type = TableType::new(element_type, Limits { min, max });
+            let table_type = TableType::new_with_table64(element_type, Limits { min, max }, flags & 0x04 != 0);
             self.module.tables.push(table_type);
 
             #[cfg(feature = "tracing")]
@@ -1288,12 +1289,8 @@ impl<'a> StreamingDecoder<'a> {
         #[cfg(feature = "tracing")]
         trace!(count = count, "process_memory_section");
 
-        // WebAssembly core spec: only one memory is allowed without the multi-memory proposal
-        // Total memories = imported memories + defined memories
-        let total_memories = self.num_memory_imports + count as usize;
-        if total_memories > 1 {
-            return Err(Error::validation_error("multiple memories"));
-        }
+        // Multi-memory proposal is now part of the WebAssembly spec.
+        // Multiple memories are allowed.
 
         // Process each memory one at a time
         for i in 0..count {

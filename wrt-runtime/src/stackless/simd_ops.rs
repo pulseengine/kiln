@@ -5,6 +5,38 @@
 //! V128 value representation.
 
 // ============================================================
+// NaN canonicalization helpers
+// ============================================================
+// WebAssembly spec requires all NaN results to be canonical quiet NaN.
+// Canonical NaN: f32 = 0x7FC00000, f64 = 0x7FF8000000000000
+
+/// Canonical quiet NaN for f32 (positive, quiet, no payload)
+const CANONICAL_NAN_F32: u32 = 0x7FC0_0000;
+
+/// Canonical quiet NaN for f64 (positive, quiet, no payload)
+const CANONICAL_NAN_F64: u64 = 0x7FF8_0000_0000_0000;
+
+/// If the f32 value is NaN, replace with canonical quiet NaN.
+#[inline]
+pub fn canonicalize_f32(v: f32) -> f32 {
+    if v.is_nan() {
+        f32::from_bits(CANONICAL_NAN_F32)
+    } else {
+        v
+    }
+}
+
+/// If the f64 value is NaN, replace with canonical quiet NaN.
+#[inline]
+pub fn canonicalize_f64(v: f64) -> f64 {
+    if v.is_nan() {
+        f64::from_bits(CANONICAL_NAN_F64)
+    } else {
+        v
+    }
+}
+
+// ============================================================
 // Lane accessor helpers
 // ============================================================
 
@@ -1366,7 +1398,7 @@ pub fn f64x2_convert_low_i32x4_u(v: &[u8; 16]) -> [u8; 16] {
 pub fn f32x4_demote_f64x2_zero(v: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..2 {
-        set_f32(&mut r, i, get_f64(v, i) as f32);
+        set_f32(&mut r, i, canonicalize_f32(get_f64(v, i) as f32));
     }
     // lanes 2 and 3 are zero (already zeroed)
     r
@@ -1376,7 +1408,7 @@ pub fn f32x4_demote_f64x2_zero(v: &[u8; 16]) -> [u8; 16] {
 pub fn f64x2_promote_low_f32x4(v: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..2 {
-        set_f64(&mut r, i, get_f32(v, i) as f64);
+        set_f64(&mut r, i, canonicalize_f64(get_f32(v, i) as f64));
     }
     r
 }
@@ -1389,7 +1421,7 @@ pub fn f64x2_promote_low_f32x4(v: &[u8; 16]) -> [u8; 16] {
 pub fn f32x4_ceil(v: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..4 {
-        set_f32(&mut r, i, get_f32(v, i).ceil());
+        set_f32(&mut r, i, canonicalize_f32(get_f32(v, i).ceil()));
     }
     r
 }
@@ -1398,7 +1430,7 @@ pub fn f32x4_ceil(v: &[u8; 16]) -> [u8; 16] {
 pub fn f32x4_floor(v: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..4 {
-        set_f32(&mut r, i, get_f32(v, i).floor());
+        set_f32(&mut r, i, canonicalize_f32(get_f32(v, i).floor()));
     }
     r
 }
@@ -1407,7 +1439,7 @@ pub fn f32x4_floor(v: &[u8; 16]) -> [u8; 16] {
 pub fn f32x4_trunc(v: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..4 {
-        set_f32(&mut r, i, get_f32(v, i).trunc());
+        set_f32(&mut r, i, canonicalize_f32(get_f32(v, i).trunc()));
     }
     r
 }
@@ -1417,31 +1449,46 @@ pub fn f32x4_nearest(v: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..4 {
         let f = get_f32(v, i);
-        // Round to nearest, ties to even (banker's rounding)
-        let rounded = f.round();
-        // Check for tie: if the fractional part is exactly 0.5
-        let frac = (f - f.floor()).abs();
-        let result = if (frac - 0.5).abs() < f32::EPSILON {
-            // Tie: round to even
-            if rounded as i64 % 2 != 0 {
-                // rounded is odd, go to even
-                if f > 0.0 { rounded - 1.0 } else { rounded + 1.0 }
-            } else {
-                rounded
-            }
-        } else {
-            rounded
-        };
-        set_f32(&mut r, i, result);
+        let result = wasm_nearest_f32(f);
+        set_f32(&mut r, i, canonicalize_f32(result));
     }
     r
+}
+
+/// WebAssembly nearest (round-to-nearest-even) for f32.
+/// Preserves -0.0, NaN, and infinities. Ties round to even.
+/// When result is zero, sign matches the input.
+#[inline]
+fn wasm_nearest_f32(f: f32) -> f32 {
+    if f.is_nan() || f.is_infinite() || f == 0.0 {
+        return f; // preserves -0.0, +0.0, NaN, +-inf
+    }
+    let rounded = f.round();
+    // Check for tie: if the fractional part is exactly 0.5
+    let result = if (f - f.floor()).abs() == 0.5 {
+        // Tie: round to even
+        if rounded % 2.0 != 0.0 {
+            // rounded is odd, go to even
+            if f > 0.0 { rounded - 1.0 } else { rounded + 1.0 }
+        } else {
+            rounded
+        }
+    } else {
+        rounded
+    };
+    // Preserve sign of zero: if result is zero, sign matches input
+    if result == 0.0 && f.is_sign_negative() {
+        -0.0_f32
+    } else {
+        result
+    }
 }
 
 #[inline]
 pub fn f64x2_ceil(v: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..2 {
-        set_f64(&mut r, i, get_f64(v, i).ceil());
+        set_f64(&mut r, i, canonicalize_f64(get_f64(v, i).ceil()));
     }
     r
 }
@@ -1450,7 +1497,7 @@ pub fn f64x2_ceil(v: &[u8; 16]) -> [u8; 16] {
 pub fn f64x2_floor(v: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..2 {
-        set_f64(&mut r, i, get_f64(v, i).floor());
+        set_f64(&mut r, i, canonicalize_f64(get_f64(v, i).floor()));
     }
     r
 }
@@ -1459,7 +1506,7 @@ pub fn f64x2_floor(v: &[u8; 16]) -> [u8; 16] {
 pub fn f64x2_trunc(v: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..2 {
-        set_f64(&mut r, i, get_f64(v, i).trunc());
+        set_f64(&mut r, i, canonicalize_f64(get_f64(v, i).trunc()));
     }
     r
 }
@@ -1469,18 +1516,37 @@ pub fn f64x2_nearest(v: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..2 {
         let f = get_f64(v, i);
-        let rounded = f.round();
-        let frac = (f - f.floor()).abs();
-        let result = if (frac - 0.5).abs() < f64::EPSILON {
-            if rounded as i64 % 2 != 0 {
-                if f > 0.0 { rounded - 1.0 } else { rounded + 1.0 }
-            } else {
-                rounded
-            }
-        } else {
-            rounded
-        };
-        set_f64(&mut r, i, result);
+        let result = wasm_nearest_f64(f);
+        set_f64(&mut r, i, canonicalize_f64(result));
     }
     r
+}
+
+/// WebAssembly nearest (round-to-nearest-even) for f64.
+/// Preserves -0.0, NaN, and infinities. Ties round to even.
+/// When result is zero, sign matches the input.
+#[inline]
+fn wasm_nearest_f64(f: f64) -> f64 {
+    if f.is_nan() || f.is_infinite() || f == 0.0 {
+        return f; // preserves -0.0, +0.0, NaN, +-inf
+    }
+    let rounded = f.round();
+    // Check for tie: if the fractional part is exactly 0.5
+    let result = if (f - f.floor()).abs() == 0.5 {
+        // Tie: round to even
+        if rounded % 2.0 != 0.0 {
+            // rounded is odd, go to even
+            if f > 0.0 { rounded - 1.0 } else { rounded + 1.0 }
+        } else {
+            rounded
+        }
+    } else {
+        rounded
+    };
+    // Preserve sign of zero: if result is zero, sign matches input
+    if result == 0.0 && f.is_sign_negative() {
+        -0.0_f64
+    } else {
+        result
+    }
 }

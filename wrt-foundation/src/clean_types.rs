@@ -377,6 +377,8 @@ mod types {
         pub element_type: RefType,
         /// Table limits
         pub limits:       Limits,
+        /// Table64 extension - uses i64 indices instead of i32
+        pub table64:      bool,
     }
 
     impl Default for TableType {
@@ -384,6 +386,7 @@ mod types {
             Self {
                 element_type: RefType::FuncRef,
                 limits:       Limits::default(),
+                table64:      false,
             }
         }
     }

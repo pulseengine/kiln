@@ -615,6 +615,7 @@ pub mod parsers {
             wrt_foundation::TableType {
                 element_type: ref_type,
                 limits: foundation_limits,
+                table64: limits.memory64,
             },
             offset,
         ))

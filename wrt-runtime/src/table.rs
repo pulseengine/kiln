@@ -211,6 +211,7 @@ impl Default for Table {
                 min: 0,
                 max: Some(1),
             },
+            table64: false,
         };
         Self::new(table_type).unwrap()
     }
@@ -277,6 +278,7 @@ impl wrt_foundation::traits::FromBytes for Table {
                 min,
                 max: Some(min + 1),
             },
+            table64: false,
         };
         Self::new(table_type)
     }
@@ -365,6 +367,7 @@ impl Table {
                 min: capacity,
                 max: Some(capacity),
             },
+            table64: false,
         };
         Self::new(table_type)
     }

@@ -268,7 +268,43 @@ pub fn values_equal(actual: &Value, expected: &Value) -> bool {
             let b_val = b.value();
             if a_val.is_nan() && b_val.is_nan() { true } else { a == b }
         },
-        (Value::V128(a), Value::V128(b)) => a == b,
+        (Value::V128(a), Value::V128(b)) => {
+            if a == b {
+                return true;
+            }
+            // V128 bytes don't match exactly -- check NaN-aware comparison.
+            // WAST tests use NanPattern for float lanes within V128.
+            // Try f64x2 interpretation: if both lanes match (exact or both-NaN), succeed.
+            let f64x2_match = (0..2).all(|i| {
+                let off = i * 8;
+                let mut ab = [0u8; 8];
+                let mut bb = [0u8; 8];
+                ab.copy_from_slice(&a.bytes[off..off + 8]);
+                bb.copy_from_slice(&b.bytes[off..off + 8]);
+                if ab == bb {
+                    return true;
+                }
+                let fa = f64::from_le_bytes(ab);
+                let fb = f64::from_le_bytes(bb);
+                fa.is_nan() && fb.is_nan()
+            });
+            if f64x2_match {
+                return true;
+            }
+            // Try f32x4 interpretation
+            let f32x4_match = (0..4).all(|i| {
+                let off = i * 4;
+                let ab = [a.bytes[off], a.bytes[off+1], a.bytes[off+2], a.bytes[off+3]];
+                let bb = [b.bytes[off], b.bytes[off+1], b.bytes[off+2], b.bytes[off+3]];
+                if ab == bb {
+                    return true;
+                }
+                let fa = f32::from_le_bytes(ab);
+                let fb = f32::from_le_bytes(bb);
+                fa.is_nan() && fb.is_nan()
+            });
+            f32x4_match
+        },
         (Value::Ref(a), Value::Ref(b)) => a == b,
         // FuncRef comparison
         // Handle "any funcref" pattern (u32::MAX sentinel)

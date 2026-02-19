@@ -3496,6 +3496,7 @@ impl Module {
                     let table_type = WrtTableType {
                         element_type: WrtRefType::Funcref,
                         limits:       WrtLimits { min: 0, max: None },
+                        table64: false,
                     };
                     ExternType::Table(table_type)
                 },
@@ -3974,6 +3975,7 @@ impl Default for TableWrapper {
                 min: 0,
                 max: Some(1),
             },
+            table64: false,
         };
         Self::new(Table::new(table_type).unwrap())
     }
@@ -4431,6 +4433,7 @@ impl FromBytes for TableWrapper {
                 min: 0,
                 max: Some(1),
             },
+            table64: false,
         };
 
         let table = Table::new(table_type).map_err(|_| {
