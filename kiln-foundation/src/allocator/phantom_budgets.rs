@@ -22,8 +22,8 @@ pub enum CrateId {
     Debug            = 12,
     Error            = 13,
     VerificationTool = 14,
-    Wrt              = 15,
-    Wrtd             = 16,
+    Kiln             = 15,
+    Kilnd            = 16,
 }
 
 /// Compile-time memory budgets per crate (in bytes)
@@ -43,8 +43,8 @@ pub const CRATE_BUDGETS: [usize; 17] = [
     1024 * 1024, // Debug: 1 MiB
     64 * 1024,   // Error: 64 KiB
     128 * 1024,  // VerificationTool: 128 KiB
-    2048 * 1024, // Wrt: 2 MiB
-    512 * 1024,  // Wrtd: 512 KiB
+    2048 * 1024, // Kiln: 2 MiB
+    512 * 1024,  // Kilnd: 512 KiB
 ];
 
 /// Error type for capacity violations
@@ -96,7 +96,7 @@ mod tests {
     fn test_crate_budgets() {
         assert_eq!(CRATE_BUDGETS[CrateId::Foundation as usize], 256 * 1024);
         assert_eq!(CRATE_BUDGETS[CrateId::Runtime as usize], 1024 * 1024);
-        assert_eq!(CRATE_BUDGETS[CrateId::Wrt as usize], 2048 * 1024);
+        assert_eq!(CRATE_BUDGETS[CrateId::Kiln as usize], 2048 * 1024);
     }
 
     #[test]

@@ -1,59 +1,59 @@
 # Example Memory Budget Configuration
-# 
-# This file shows how to configure custom memory budgets for WRT crates.
+#
+# This file shows how to configure custom memory budgets for Kiln crates.
 # Copy this to memory_budget.toml to use custom budgets.
 #
 # Values can include unit suffixes: KB, MB, GB
 # Without a suffix, values are interpreted as bytes.
 
 # Foundation layer - core memory management
-"wrt-foundation" = "8MB"
+"kiln-foundation" = "8MB"
 
 # Runtime layer - execution engine
-"wrt-runtime" = "16MB"
+"kiln-runtime" = "16MB"
 
 # Component Model support
-"wrt-component" = "12MB"
+"kiln-component" = "12MB"
 
 # WebAssembly decoding and parsing
-"wrt-decoder" = "4MB"
+"kiln-decoder" = "4MB"
 
 # Format handling and WIT parsing
-"wrt-format" = "2MB"
+"kiln-format" = "2MB"
 
 # Host environment integration
-"wrt-host" = "4MB"
+"kiln-host" = "4MB"
 
 # Debug and development tools
-"wrt-debug" = "2MB"
+"kiln-debug" = "2MB"
 
 # Platform abstraction layer
-"wrt-platform" = "8MB"
+"kiln-platform" = "8MB"
 
 # Instruction execution
-"wrt-instructions" = "4MB"
+"kiln-instructions" = "4MB"
 
 # Logging infrastructure
-"wrt-logging" = "1MB"
+"kiln-logging" = "1MB"
 
 # Interception and monitoring
-"wrt-intercept" = "1MB"
+"kiln-intercept" = "1MB"
 
 # Panic handling
-"wrt-panic" = "512KB"
+"kiln-panic" = "512KB"
 
 # Synchronization primitives
-"wrt-sync" = "1MB"
+"kiln-sync" = "1MB"
 
 # Mathematical operations
-"wrt-math" = "512KB"
+"kiln-math" = "512KB"
 
 # Error handling
-"wrt-error" = "256KB"
+"kiln-error" = "256KB"
 
 # Helper utilities
 
 # Environment Variables:
 # You can also override budgets using environment variables:
-# export WRT_BUDGET_WRT_FOUNDATION=10485760  # 10MB in bytes
-# export WRT_BUDGET_WRT_RUNTIME=33554432     # 32MB in bytes
+# export KILN_BUDGET_KILN_FOUNDATION=10485760  # 10MB in bytes
+# export KILN_BUDGET_KILN_RUNTIME=33554432     # 32MB in bytes

@@ -768,7 +768,7 @@ impl ExecutionLimitsConfig {
                 max_concurrent_tasks: None,
                 max_yields_per_step: None,
                 limit_source: LimitSource::BinaryMetadata {
-                    section_name: "wrt.resource_limits".to_owned(),
+                    section_name: "kiln.resource_limits".to_owned(),
                     verified_hash: binary_hash,
                 },
             })

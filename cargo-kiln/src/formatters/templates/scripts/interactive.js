@@ -1,4 +1,4 @@
-// Interactive features for cargo-wrt HTML reports
+// Interactive features for cargo-kiln HTML reports
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize all interactive features

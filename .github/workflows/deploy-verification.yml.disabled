@@ -53,11 +53,11 @@ jobs:
           target
         key: ${{ runner.os }}-deploy-${{ hashFiles('**/Cargo.lock') }}
 
-    - name: Install KANI and cargo-wrt
+    - name: Install KANI and cargo-kiln
       run: |
         cargo install --locked kani-verifier
         cargo kani setup
-        cargo install --path cargo-wrt --locked
+        cargo install --path cargo-kiln --locked
 
     - name: Run pre-deployment verification
       id: verify
@@ -77,7 +77,7 @@ jobs:
         EOF
         
         echo "## Build Verification" >> deployment-verification.md
-        if cargo-wrt build --output json > build-results.json 2>&1; then
+        if cargo-kiln build --output json > build-results.json 2>&1; then
           echo "✅ Build successful" >> deployment-verification.md
           echo "BUILD_STATUS=success" >> $GITHUB_ENV
         else
@@ -88,7 +88,7 @@ jobs:
         
         echo "" >> deployment-verification.md
         echo "## Test Suite Results" >> deployment-verification.md
-        if cargo-wrt test --output json > test-results.json 2>&1; then
+        if cargo-kiln test --output json > test-results.json 2>&1; then
           echo "✅ All tests passed" >> deployment-verification.md
           echo "TEST_STATUS=success" >> $GITHUB_ENV
         else
@@ -107,7 +107,7 @@ jobs:
         for level in a b c d; do
           echo "### ASIL-${level^^} Verification" >> deployment-verification.md
           
-          if cargo-wrt kani-verify --asil-profile $level --output json > kani-$level.json 2>&1; then
+          if cargo-kiln kani-verify --asil-profile $level --output json > kani-$level.json 2>&1; then
             echo "✅ ASIL-${level^^} verification passed" >> deployment-verification.md
             
             # Extract coverage info
@@ -180,7 +180,7 @@ jobs:
 
     - name: Install deployment tools
       run: |
-        cargo install --path cargo-wrt --locked
+        cargo install --path cargo-kiln --locked
 
     - name: Prepare staging deployment
       run: |
@@ -188,7 +188,7 @@ jobs:
         echo "Verification hash: ${{ needs.prepare-verification.outputs.verification-hash }}"
         
         # Create deployment package
-        cargo-wrt build --release
+        cargo-kiln build --release
         
         # Create staging manifest
         cat > staging-manifest.json << EOF
@@ -200,9 +200,9 @@ jobs:
           "asil_level": "A",
           "deployment_target": "staging",
           "artifacts": [
-            "libwrt.rlib",
-            "libwrt_foundation.rlib",
-            "cargo-wrt"
+            "libkiln.rlib",
+            "libkiln_foundation.rlib",
+            "cargo-kiln"
           ]
         }
         EOF
@@ -266,14 +266,14 @@ jobs:
 
     - name: Install deployment tools
       run: |
-        cargo install --path cargo-wrt --locked
+        cargo install --path cargo-kiln --locked
 
     - name: Create production deployment
       run: |
         echo "Creating production deployment..."
         
         # Build with production optimizations
-        cargo-wrt build --release --profile production
+        cargo-kiln build --release --profile production
         
         # Create production manifest
         cat > production-manifest.json << EOF
@@ -287,9 +287,9 @@ jobs:
           "certification_ready": true,
           "safety_verified": true,
           "artifacts": [
-            "libwrt.rlib",
-            "libwrt_foundation.rlib", 
-            "cargo-wrt",
+            "libkiln.rlib",
+            "libkiln_foundation.rlib", 
+            "cargo-kiln",
             "verification-evidence.zip"
           ]
         }
@@ -337,14 +337,14 @@ jobs:
 
     - name: Install certification tools
       run: |
-        cargo install --path cargo-wrt --locked
+        cargo install --path cargo-kiln --locked
 
     - name: Generate certification package
       run: |
         echo "Generating certification evidence package..."
         
         # Create comprehensive verification report
-        cargo-wrt verify --asil d --output json > certification-verification.json
+        cargo-kiln verify --asil d --output json > certification-verification.json
         
         # Create certification manifest
         cat > certification-manifest.json << EOF

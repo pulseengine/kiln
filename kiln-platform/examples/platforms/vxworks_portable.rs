@@ -190,7 +190,7 @@ fn show_vxworks_concepts() {
     println!("    .build()?;";
     println!("");
     println!("// Use with Kiln runtime");
-    println!("let runtime = wrt::Runtime::builder()");
+    println!("let runtime = kiln::Runtime::builder()");
     println!("    .with_allocator(Box::new(allocator))");
     println!("    .with_futex(Box::new(futex))");
     println!("    .build()?;";

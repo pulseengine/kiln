@@ -1,10 +1,10 @@
-# WRT Platform Support for {{ PLATFORM_NAME }}
+# Kiln Platform Support for {{ PLATFORM_NAME }}
 
-[![Crates.io](https://img.shields.io/crates/v/wrt-platform-{{ platform_name }}.svg)](https://crates.io/crates/wrt-platform-{{ platform_name }})
-[![Documentation](https://docs.rs/wrt-platform-{{ platform_name }}/badge.svg)](https://docs.rs/wrt-platform-{{ platform_name }})
+[![Crates.io](https://img.shields.io/crates/v/kiln-platform-{{ platform_name }}.svg)](https://crates.io/crates/kiln-platform-{{ platform_name }})
+[![Documentation](https://docs.rs/kiln-platform-{{ platform_name }}/badge.svg)](https://docs.rs/kiln-platform-{{ platform_name }})
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 
-This crate provides {{ PLATFORM_NAME }}-specific implementations of WRT's core traits, enabling high-performance WebAssembly runtime support on {{ PLATFORM_NAME }} systems.
+This crate provides {{ PLATFORM_NAME }}-specific implementations of Kiln's core traits, enabling high-performance WebAssembly runtime support on {{ PLATFORM_NAME }} systems.
 
 ## Features
 
@@ -20,14 +20,14 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-wrt = "0.2"
-wrt-platform-{{ platform_name }} = "0.1"
+kiln = "0.2"
+kiln-platform-{{ platform_name }} = "0.1"
 ```
 
 Basic usage:
 
 ```rust
-use wrt_platform_{{ platform_name }}::{{ PlatformName }}Platform;
+use kiln_platform_{{ platform_name }}::{{ PlatformName }}Platform;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Detect platform capabilities
@@ -37,8 +37,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let allocator = platform.create_allocator_boxed()?;
     let futex = platform.create_futex_boxed()?;
     
-    // Use with WRT runtime
-    let runtime = wrt::Runtime::builder()
+    // Use with Kiln runtime
+    let runtime = kiln::Runtime::builder()
         .with_allocator(allocator)
         .with_futex(futex)
         .build()?;
@@ -70,7 +70,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 The platform can be configured for different use cases:
 
 ```rust
-use wrt_platform_{{ platform_name }}::*;
+use kiln_platform_{{ platform_name }}::*;
 
 // High-performance configuration
 let allocator = {{ PlatformName }}AllocatorBuilder::new()
@@ -89,7 +89,7 @@ let futex = {{ PlatformName }}FutexBuilder::new()
 ## Requirements
 
 - {{ PLATFORM_NAME }} {{ MIN_VERSION }} or later
-- Rust 1.70+ (for MSRV compatibility with WRT)
+- Rust 1.70+ (for MSRV compatibility with Kiln)
 
 ### Optional Dependencies
 
@@ -118,7 +118,7 @@ This crate supports {{ PLATFORM_NAME }} on the following architectures:
 
 Benchmark results on {{ PLATFORM_NAME }} ({{ BENCHMARK_SYSTEM }}):
 
-| Operation | wrt-platform-{{ platform_name }} | Generic Implementation | Improvement |
+| Operation | kiln-platform-{{ platform_name }} | Generic Implementation | Improvement |
 |-----------|----------------------------------|-----------------------|-------------|
 | Page Allocation | {{ ALLOC_TIME }}μs | {{ GENERIC_ALLOC_TIME }}μs | {{ ALLOC_IMPROVEMENT }}x |
 | Futex Wait/Wake | {{ FUTEX_TIME }}ns | {{ GENERIC_FUTEX_TIME }}ns | {{ FUTEX_IMPROVEMENT }}x |
@@ -181,6 +181,6 @@ at your option.
 
 ## Related Projects
 
-- [WRT](https://github.com/wrt-org/wrt) - The core WebAssembly runtime
-- [wrt-platform](https://github.com/wrt-org/wrt/tree/main/wrt-platform) - Platform abstraction layer
+- [Kiln](https://github.com/pulseengine/kiln) - The core WebAssembly runtime
+- [kiln-platform](https://github.com/pulseengine/kiln/tree/main/kiln-platform) - Platform abstraction layer
 - [{{ platform_name }}-sys](https://github.com/{{ platform_name }}/{{ platform_name }}-sys) - Low-level {{ PLATFORM_NAME }} bindings
