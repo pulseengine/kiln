@@ -10,8 +10,8 @@
 # *.rs @rust-team
 
 # Specify owners for specific crates
-# wrt/src/ @wrt-core-team
-# wrt-component/src/ @wrt-component-team
+# kiln/src/ @kiln-core-team
+# kiln-component/src/ @kiln-component-team
 
 # Documentation files
 # docs/ @docs-team

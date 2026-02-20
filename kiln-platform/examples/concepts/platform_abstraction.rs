@@ -49,7 +49,7 @@ fn show_external_platform_strategy() {
     println!("\n   External Crate Pattern:");
     println!("   ```");
     println!("   [dependencies]");
-    println!("   wrt = \"0.2\"");
+    println!("   kiln = \"0.2\"");
     println!("   kiln-platform-myos = \"0.1\"  # External platform support");
     println!("   ```");
     
@@ -230,7 +230,7 @@ fn show_external_crate_template() {
     println!("       let futex = platform.create_futex_boxed()?;";
     println!("       ");
     println!("       // Use with Kiln runtime");
-    println!("       let runtime = wrt::Runtime::builder()");
+    println!("       let runtime = kiln::Runtime::builder()");
     println!("           .with_allocator(allocator)");
     println!("           .with_futex(futex)");
     println!("           .build()?;";

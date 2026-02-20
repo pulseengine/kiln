@@ -1,7 +1,7 @@
 target/
 docs/_build/
 docs/build/
-docs/source/wrt*
+docs/source/kiln*
 docs/source/changelog.md
 
 # Documentation virtual environment
@@ -18,12 +18,12 @@ docs/source/changelog.md
 external/
 
 # Ignore duplicated directories
-wrt/wrt/
+kiln/kiln/
 
-wrt/testsuite
+kiln/testsuite
 wast_failed.md
-wrt/target
-wrtd/target
+kiln/target
+kilnd/target
 docs/source/_generated_symbols.rst
 docs/source/_generated_coverage_summary.rst
 docs/source/_static/versions.json

@@ -25,7 +25,7 @@ use kiln_foundation::{
 };
 
 /// Standard custom section name for resource limits
-pub const RESOURCE_LIMITS_SECTION_NAME: &str = "wrt.resource_limits";
+pub const RESOURCE_LIMITS_SECTION_NAME: &str = "kiln.resource_limits";
 
 /// Version of the resource limits format (for future compatibility)
 pub const RESOURCE_LIMITS_VERSION: u32 = 1;

@@ -19,26 +19,26 @@ jobs:
         include:
           - name: "Default"
             features: ""
-            package: "wrtd"
+            package: "kilnd"
           - name: "QM"
             features: "qm"
-            package: "wrtd"
+            package: "kilnd"
           - name: "ASIL-A"
             features: "asil-a"
-            package: "wrtd"
+            package: "kilnd"
           - name: "ASIL-B"
             features: "asil-b"
-            package: "wrtd"
+            package: "kilnd"
           - name: "Minimal"
             features: "--no-default-features"
-            package: "wrtd"
+            package: "kilnd"
             no_default: true
           - name: "Runtime STD"
             features: "std"
-            package: "wrt-runtime"
+            package: "kiln-runtime"
           - name: "Runtime Alloc"
             features: "alloc"
-            package: "wrt-runtime"
+            package: "kiln-runtime"
     
     steps:
     - uses: actions/checkout@v5
@@ -76,7 +76,7 @@ jobs:
         fi
     
     - name: Test ${{ matrix.name }}
-      if: matrix.package != 'wrtd'
+      if: matrix.package != 'kilnd'
       run: |
         if [ "${{ matrix.features }}" = "" ]; then
           cargo test -p ${{ matrix.package }} capability
@@ -106,7 +106,7 @@ jobs:
         echo "$PWD/wabt-1.0.34/bin" >> $GITHUB_PATH
     
     - name: Run capability integration tests
-      run: cargo test -p wrt-runtime capability_integration_tests -- --nocapture || true
+      run: cargo test -p kiln-runtime capability_integration_tests -- --nocapture || true
 
   summary:
     name: Test Summary

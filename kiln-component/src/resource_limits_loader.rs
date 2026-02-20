@@ -48,7 +48,7 @@ use crate::{
 
 /// Extract resource limits from a WebAssembly binary
 ///
-/// This function searches for the "wrt.resource_limits" custom section
+/// This function searches for the "kiln.resource_limits" custom section
 /// and decodes it into an ASILExecutionConfig.
 pub fn extract_resource_limits_from_binary(
     wasm_bytes: &[u8],
@@ -208,7 +208,7 @@ fn convert_to_asil_config(
         limit_source: if binary_hash.is_some() {
             use crate::async_::fuel_async_executor::LimitSource;
             LimitSource::BinaryMetadata {
-                section_name: String::from("wrt.resource_limits"),
+                section_name: String::from("kiln.resource_limits"),
                 verified_hash: binary_hash.unwrap(),
             }
         } else {

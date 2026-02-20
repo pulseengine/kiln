@@ -57,7 +57,7 @@ cargo-kiln --help
 The Kiln project uses a **single, unified memory management system** based on capabilities:
 
 - **Primary API**: `safe_managed_alloc!(size, crate_id)` - ALL memory allocation goes through this macro
-- **Factory System**: `CapabilityWrtFactory` - Capability-based factory for advanced use cases
+- **Factory System**: `CapabilityKilnFactory` - Capability-based factory for advanced use cases
 - **Automatic Cleanup**: RAII-based automatic memory management
 - **NO LEGACY PATTERNS**: All `NoStdProvider::<SIZE>::default()` patterns have been eliminated
 
@@ -494,7 +494,7 @@ The Kiln project has completed its migration to a unified build system:
 - **Single System**: 100% capability-based memory management
 - **Consistent API**: `safe_managed_alloc!()` throughout - NO EXCEPTIONS
 - **NO Legacy Patterns**: All `NoStdProvider::<SIZE>::default()` patterns eliminated
-- **Modern Factory**: `CapabilityWrtFactory` for advanced use cases
+- **Modern Factory**: `CapabilityKilnFactory` for advanced use cases
 - **Automatic Cleanup**: RAII-based memory management
 - **Proper Error Handling**: All allocation failures handled via `Result` types
 

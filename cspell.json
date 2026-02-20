@@ -2,7 +2,7 @@
   "version": "0.2",
   "language": "en",
   "words": [
-    "WRT", "wrtd", "Zephyr", "WASM", "WebAssembly", "toolchain", "clippy",
+    "Kiln", "kilnd", "Zephyr", "WASM", "WebAssembly", "toolchain", "clippy",
     "rustfmt", "crate", "crates", "serde", "struct", "enum", "fn", "impl",
     "alloc", "no_std", "bytecode", "Kani", "Miri", "Tarpaulin", "Geiger",
     "udeps", "semver", "cargo", "xtask", "Ralf", "Beier", "SPDX",

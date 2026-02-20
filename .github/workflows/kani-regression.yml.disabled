@@ -4,22 +4,22 @@ on:
   push:
     branches: [ main, develop, resource-implementation ]
     paths:
-      - 'wrt-foundation/src/**'
-      - 'wrt-component/src/**'
-      - 'wrt-runtime/src/**'
-      - 'wrt-decoder/src/**'
-      - 'wrt-format/src/**'
-      - 'cargo-wrt/**'
+      - 'kiln-foundation/src/**'
+      - 'kiln-component/src/**'
+      - 'kiln-runtime/src/**'
+      - 'kiln-decoder/src/**'
+      - 'kiln-format/src/**'
+      - 'cargo-kiln/**'
       - '.github/workflows/kani-regression.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
-      - 'wrt-foundation/src/**'
-      - 'wrt-component/src/**'
-      - 'wrt-runtime/src/**'
-      - 'wrt-decoder/src/**'
-      - 'wrt-format/src/**'
-      - 'cargo-wrt/**'
+      - 'kiln-foundation/src/**'
+      - 'kiln-component/src/**'
+      - 'kiln-runtime/src/**'
+      - 'kiln-decoder/src/**'
+      - 'kiln-format/src/**'
+      - 'cargo-kiln/**'
       - '.github/workflows/kani-regression.yml'
   schedule:
     # Run nightly KANI verification at 2 AM UTC
@@ -112,15 +112,15 @@ jobs:
         # Verify installation
         kani --version
 
-    - name: Install cargo-wrt
+    - name: Install cargo-kiln
       run: |
-        cargo install --path cargo-wrt --locked
+        cargo install --path cargo-kiln --locked
 
     - name: Verify KANI installation
       run: |
         which kani
         kani --version
-        cargo-wrt setup --check || true
+        cargo-kiln setup --check || true
 
     - name: Run KANI verification
       id: verify
@@ -146,8 +146,8 @@ jobs:
           OUTPUT_FILE="kani-results-${{ matrix.asil_level }}.json"
         fi
         
-        echo "Running: cargo-wrt kani-verify $ARGS"
-        cargo-wrt kani-verify $ARGS 2>&1 | tee "$OUTPUT_FILE"
+        echo "Running: cargo-kiln kani-verify $ARGS"
+        cargo-kiln kani-verify $ARGS 2>&1 | tee "$OUTPUT_FILE"
         KANI_EXIT_CODE=$?
         
         # Parse results and set status

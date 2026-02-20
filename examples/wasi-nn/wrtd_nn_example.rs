@@ -7,7 +7,7 @@
 
 #[cfg(all(feature = "std", feature = "wasi", feature = "wasi-nn"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use kilnd::{WrtdConfig, WrtdEngine, EngineMode};
+    use kilnd::{KilndConfig, KilndEngine, EngineMode};
     use kiln_wasi::{
         WasiCapabilities, WasiNeuralNetworkCapabilities,
         nn::{initialize_nn, capabilities::create_nn_capability},
@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use kiln_foundation::verification::VerificationLevel;
     
     // Create kilnd configuration
-    let mut config = WrtdConfig::default());
+    let mut config = KilndConfig::default());
     config.enable_wasi = true;
     config.engine_mode = EngineMode::Interpreter;
     
@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config.wasi_capabilities = Some(wasi_caps;
     
     // Create and initialize the engine
-    let mut engine = WrtdEngine::new(config)?;
+    let mut engine = KilndEngine::new(config)?;
     
     // Initialize WASI-NN subsystem
     #[cfg(feature = "wasi-nn")]

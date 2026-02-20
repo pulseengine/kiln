@@ -1,6 +1,6 @@
-//! WRT Platform Support for {{ PLATFORM_NAME }}
+//! Kiln Platform Support for {{ PLATFORM_NAME }}
 //!
-//! This crate provides platform-specific implementations of WRT's core traits
+//! This crate provides platform-specific implementations of Kiln's core traits
 //! for the {{ PLATFORM_NAME }} operating system/platform.
 //!
 //! # Features
@@ -13,15 +13,15 @@
 //! # Quick Start
 //!
 //! ```rust
-//! use wrt_platform_{{ platform_name }}::{{ PlatformName }}Platform;
+//! use kiln_platform_{{ platform_name }}::{{ PlatformName }}Platform;
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let platform = {{ PlatformName }}Platform::detect()?;
 //!     let allocator = platform.create_allocator_boxed()?;
 //!     let futex = platform.create_futex_boxed()?;
-//!     
-//!     // Use with WRT runtime
-//!     let runtime = wrt::Runtime::builder()
+//!
+//!     // Use with Kiln runtime
+//!     let runtime = kiln::Runtime::builder()
 //!         .with_allocator(allocator)
 //!         .with_futex(futex)
 //!         .build()?;
@@ -44,8 +44,8 @@ extern crate std;
 extern crate alloc;
 
 // Re-export core traits for convenience
-pub use wrt_platform::{PageAllocator, FutexLike, WASM_PAGE_SIZE};
-pub use wrt_error::{Error, Result};
+pub use kiln_platform::{PageAllocator, FutexLike, WASM_PAGE_SIZE};
+pub use kiln_error::{Error, Result};
 
 // Platform-specific modules
 mod allocator;

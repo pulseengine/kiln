@@ -25,17 +25,17 @@ if [ -n "$test_files" ]; then
     exit 1
 fi
 
-# Check if cargo-wrt is available
-if command -v cargo-wrt &> /dev/null; then
-    # Run validation check using cargo-wrt
-    echo "🔍 Running cargo-wrt validation checks..."
-    if ! cargo-wrt validate --check-test-files; then
+# Check if cargo-kiln is available
+if command -v cargo-kiln &> /dev/null; then
+    # Run validation check using cargo-kiln
+    echo "🔍 Running cargo-kiln validation checks..."
+    if ! cargo-kiln validate --check-test-files; then
         echo -e "${RED}❌ Validation failed!${NC}"
         exit 1
     fi
 else
-    echo -e "${YELLOW}⚠️  Warning: cargo-wrt not found. Install it for better validation:${NC}"
-    echo "  cargo install --path cargo-wrt"
+    echo -e "${YELLOW}⚠️  Warning: cargo-kiln not found. Install it for better validation:${NC}"
+    echo "  cargo install --path cargo-kiln"
 fi
 
 echo -e "${GREEN}✅ No test files found in src/ directories${NC}"
@@ -45,10 +45,10 @@ echo ""
 echo "🔍 Checking code formatting with cargo fmt..."
 
 # Use the project's unified build tool for formatting check
-if ! cargo-wrt check --strict; then
+if ! cargo-kiln check --strict; then
     echo -e "${RED}❌ Error: Code formatting issues detected!${NC}"
     echo ""
-    echo "Please run 'cargo-wrt check' or 'cargo fmt' to format your code before committing."
+    echo "Please run 'cargo-kiln check' or 'cargo fmt' to format your code before committing."
     echo ""
     echo "To bypass this check (not recommended), use:"
     echo "  git commit --no-verify"

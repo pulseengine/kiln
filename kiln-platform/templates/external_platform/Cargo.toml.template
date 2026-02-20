@@ -1,17 +1,17 @@
 [package]
-name = "wrt-platform-{{ PLATFORM_NAME }}"
+name = "kiln-platform-{{ PLATFORM_NAME }}"
 version = "0.1.0"
 edition = "2021"
-description = "WRT platform support for {{ PLATFORM_NAME }}"
+description = "Kiln platform support for {{ PLATFORM_NAME }}"
 keywords = ["wasm", "runtime", "{{ platform_name }}", "platform"]
 categories = ["wasm", "os"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/{{ YOUR_USERNAME }}/wrt-platform-{{ platform_name }}"
+repository = "https://github.com/{{ YOUR_USERNAME }}/kiln-platform-{{ platform_name }}"
 readme = "README.md"
 
 [dependencies]
-wrt-platform = { version = "0.2", default-features = false }
-wrt-error = { version = "0.2", default-features = false }
+kiln-platform = { version = "0.2", default-features = false }
+kiln-error = { version = "0.2", default-features = false }
 
 # Add your platform-specific dependencies here
 # {{ platform_name }}-sys = "1.0"  # Example: platform system bindings
@@ -22,8 +22,8 @@ wrt-error = { version = "0.2", default-features = false }
 
 [features]
 default = ["std"]
-std = ["wrt-platform/std", "wrt-error/std"]
-alloc = ["wrt-platform/alloc", "wrt-error/alloc"]
+std = ["kiln-platform/std", "kiln-error/std"]
+alloc = ["kiln-platform/alloc", "kiln-error/alloc"]
 
 # Platform-specific feature flags
 # hardware-acceleration = []

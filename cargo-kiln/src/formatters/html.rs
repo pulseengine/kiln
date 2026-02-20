@@ -67,7 +67,7 @@ impl HtmlFormatter {
             {}
         </main>
         <footer>
-            <p>Generated with <a href="https://github.com/pulseengine/wrt">cargo-kiln</a></p>
+            <p>Generated with <a href="https://github.com/pulseengine/kiln">cargo-kiln</a></p>
         </footer>
     </div>
     {}

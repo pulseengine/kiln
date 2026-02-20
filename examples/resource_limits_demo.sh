@@ -13,14 +13,14 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🚀 WRT Resource Limits Configuration Demo${NC}"
+echo -e "${BLUE}🚀 Kiln Resource Limits Configuration Demo${NC}"
 echo "=============================================="
 echo
 
-# Check if cargo-wrt is available
-if ! command -v cargo-wrt &> /dev/null; then
-    echo -e "${RED}❌ cargo-wrt not found. Please build it first:${NC}"
-    echo "   cargo build --bin cargo-wrt"
+# Check if cargo-kiln is available
+if ! command -v cargo-kiln &> /dev/null; then
+    echo -e "${RED}❌ cargo-kiln not found. Please build it first:${NC}"
+    echo "   cargo build --bin cargo-kiln"
     exit 1
 fi
 
@@ -84,12 +84,12 @@ fi
 echo
 
 echo -e "${YELLOW}📝 Step 3: Embedding resource limits into WebAssembly binary${NC}"
-echo "Command: cargo-wrt embed-limits hello.wasm -c limits.toml --validate --replace"
+echo "Command: cargo-kiln embed-limits hello.wasm -c limits.toml --validate --replace"
 echo
 
 # Note: This command may fail if dependencies aren't properly set up
 # The important thing is demonstrating the interface
-if cargo-wrt embed-limits hello.wasm -c limits.toml --validate --replace 2>/dev/null; then
+if cargo-kiln embed-limits hello.wasm -c limits.toml --validate --replace 2>/dev/null; then
     echo -e "${GREEN}✅ Successfully embedded resource limits!${NC}"
     
     # Check if the custom section was added (basic check)
@@ -153,8 +153,8 @@ echo -e "${YELLOW}📝 Step 5: Configuration Chain Summary${NC}"
 echo "The complete configuration chain works as follows:"
 echo
 echo "1. 📄 TOML Configuration (limits.toml)"
-echo "   ↓ cargo-wrt embed-limits"
-echo "2. 🔧 Binary Custom Section (wrt.resource_limits)"
+echo "   ↓ cargo-kiln embed-limits"
+echo "2. 🔧 Binary Custom Section (kiln.resource_limits)"
 echo "   ↓ Runtime loads binary"
 echo "3. 🏃 ASILExecutionConfig (runtime configuration)"
 echo "   ↓ spawn_task_with_binary()"
@@ -186,7 +186,7 @@ echo
 
 echo -e "${YELLOW}🛠️  Usage Examples:${NC}"
 echo "# Embed limits with ASIL-D validation:"
-echo "cargo-wrt embed-limits module.wasm -c limits.toml --asil ASIL-D --validate"
+echo "cargo-kiln embed-limits module.wasm -c limits.toml --asil ASIL-D --validate"
 echo
 echo "# Use in runtime (Rust code):"
 echo "let executor = FuelAsyncExecutor::new(ASILExecutionMode::ASIL_D);"
