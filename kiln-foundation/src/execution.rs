@@ -1,4 +1,4 @@
-//! Execution-related types shared across the WRT ecosystem
+//! Execution-related types shared across the Kiln ecosystem
 //!
 //! This module contains execution configuration and statistics types that are
 //! used by both the runtime and component model implementations.

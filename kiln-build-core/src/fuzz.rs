@@ -1,4 +1,4 @@
-//! Fuzzing support for WRT components
+//! Fuzzing support for Kiln components
 //!
 //! Provides integration with cargo-fuzz for comprehensive fuzzing
 //! of WebAssembly parsing, component models, and runtime operations.

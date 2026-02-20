@@ -1,6 +1,6 @@
 # Test Fixtures
 
-This directory contains test assets used across the WRT test suite.
+This directory contains test assets used across the Kiln test suite.
 
 ## Structure
 

@@ -1,4 +1,4 @@
-# Rustfmt configuration for WRT consistency
+# Rustfmt configuration for Kiln consistency
 # Only stable options to avoid crashes
 
 # Basic formatting

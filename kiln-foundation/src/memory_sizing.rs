@@ -59,7 +59,7 @@ macro_rules! impl_size_selector {
     };
 }
 
-/// Size recommendations for common WRT types
+/// Size recommendations for common Kiln types
 pub mod recommendations {
     use super::size_classes;
 

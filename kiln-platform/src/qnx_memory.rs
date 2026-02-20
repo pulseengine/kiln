@@ -211,7 +211,7 @@ impl QnxAllocator {
             unsafe {
                 let id = ffi::mem_partition_create(
                     0, // no special flags
-                    b"wrt_memory\0".as_ptr(),
+                    b"kiln_memory\0".as_ptr(),
                     ffi::mem_partition_getid(),
                 );
                 if id != 0 {

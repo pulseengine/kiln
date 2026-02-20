@@ -1,4 +1,4 @@
-# WebAssembly Runtime (WRT) Decoder
+# WebAssembly Runtime (Kiln) Decoder
 
 A modular WebAssembly binary decoder supporting both core modules and Component Model components.
 
@@ -41,7 +41,7 @@ A higher-level API providing a consistent streaming parser interface:
 For general parsing, use the streaming interface:
 
 ```rust
-use wrt_decoder::parser::{Parser, Payload};
+use kiln_decoder::parser::{Parser, Payload};
 
 // Create a parser
 let parser = Parser::new(Some(wasm_binary), false);
@@ -63,10 +63,10 @@ For complete parsing in one step:
 
 ```rust
 // For core modules:
-let module = wrt_decoder::parser::parse_module(wasm_binary)?;
+let module = kiln_decoder::parser::parse_module(wasm_binary)?;
 
 // For components:
-let component = wrt_decoder::parser::parse_component(wasm_binary)?;
+let component = kiln_decoder::parser::parse_component(wasm_binary)?;
 ```
 
 ## Design Principles

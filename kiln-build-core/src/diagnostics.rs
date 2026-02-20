@@ -1,7 +1,7 @@
 //! Unified diagnostic system for LSP-compatible error reporting
 //!
 //! This module provides a standardized way to collect, format, and output
-//! diagnostics from all WRT build operations. The diagnostic format is
+//! diagnostics from all Kiln build operations. The diagnostic format is
 //! compatible with the Language Server Protocol (LSP) specification.
 
 use std::{

@@ -1,6 +1,6 @@
-# WRT Platform Examples
+# Kiln Platform Examples
 
-This directory contains comprehensive examples demonstrating how to use and extend the WRT platform abstraction layer.
+This directory contains comprehensive examples demonstrating how to use and extend the Kiln platform abstraction layer.
 
 ## Directory Structure
 
@@ -16,7 +16,7 @@ examples/
 
 ### 1. Understanding Platform Concepts
 
-Start with the conceptual examples to understand WRT's platform abstraction:
+Start with the conceptual examples to understand Kiln's platform abstraction:
 
 - [`concepts/platform_abstraction.rs`](concepts/platform_abstraction.rs) - Core concepts and trait system
 
@@ -73,7 +73,7 @@ cargo build --features=platform-linux,platform-macos
 
 ### 🧠 Concepts (`concepts/`)
 
-Educational examples that explain WRT's platform abstraction concepts:
+Educational examples that explain Kiln's platform abstraction concepts:
 
 - **Platform Abstraction**: Core traits and design patterns
 - **Zero-Cost Abstractions**: How traits compile to optimal code
@@ -89,7 +89,7 @@ Real-world usage examples for supported platforms:
 
 ### 🌐 External Platforms (`external/`)
 
-Complete guides for extending WRT with new platforms:
+Complete guides for extending Kiln with new platforms:
 
 - **Custom Platform**: Full implementation example
 - **Integration Guide**: Step-by-step development process
@@ -101,7 +101,7 @@ Complete guides for extending WRT with new platforms:
 
 1. **Start Here**: `concepts/platform_abstraction.rs`
 2. **Your Platform**: Find your platform in `platforms/`
-3. **Integration**: See how it works with WRT runtime
+3. **Integration**: See how it works with Kiln runtime
 
 ### For Platform Developers
 
@@ -154,12 +154,12 @@ The [`../templates/`](../templates/) directory contains starter templates:
 
 | Platform | Status | Examples | Real Implementation |
 |----------|--------|-----------|-------------------|
-| Linux | ✅ Core | ✅ | ✅ In wrt-platform |
-| macOS | ✅ Core | ✅ | ✅ In wrt-platform |
-| QNX | ✅ Core | ✅ | ✅ In wrt-platform |
-| VxWorks | ✅ Core | ✅ | ✅ In wrt-platform |
-| Zephyr | ✅ Core | ⚠️ | ✅ In wrt-platform |
-| Tock OS | ✅ Core | ⚠️ | ✅ In wrt-platform |
+| Linux | ✅ Core | ✅ | ✅ In kiln-platform |
+| macOS | ✅ Core | ✅ | ✅ In kiln-platform |
+| QNX | ✅ Core | ✅ | ✅ In kiln-platform |
+| VxWorks | ✅ Core | ✅ | ✅ In kiln-platform |
+| Zephyr | ✅ Core | ⚠️ | ✅ In kiln-platform |
+| Tock OS | ✅ Core | ⚠️ | ✅ In kiln-platform |
 | Custom | ✅ External | ✅ | 📝 Your implementation |
 
 **Legend**: ✅ Available, ⚠️ Limited, ❌ Not supported, 📝 Developer provided
@@ -199,7 +199,7 @@ fn main() {
 
 After exploring these examples:
 
-1. **Try WRT**: Integrate with the main WRT runtime
+1. **Try Kiln**: Integrate with the main Kiln runtime
 2. **Build Applications**: Create WebAssembly applications using your platform
 3. **Optimize Performance**: Profile and tune for your specific use case
 4. **Contribute Back**: Share your platform implementations with the community

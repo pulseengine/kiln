@@ -163,7 +163,7 @@ impl VxWorksThread {
             }
 
             let closure_ptr = Box::into_raw(Box::new(f)) as *mut c_void;
-            let name_ptr = config.name.as_ref().map(|n| n.as_ptr()).unwrap_or(b"wrt_task\0".as_ptr);
+            let name_ptr = config.name.as_ref().map(|n| n.as_ptr()).unwrap_or(b"kiln_task\0".as_ptr);
 
             let priority = config.priority.unwrap_or(100); // Default VxWorks priority
             let mut options = 0;

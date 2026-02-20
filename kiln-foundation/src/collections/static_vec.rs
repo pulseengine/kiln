@@ -12,7 +12,7 @@
 //! Static vector with inline storage and compile-time capacity.
 //!
 //! `StaticVec<T, N>` is inspired by the `heapless` crate but is fully self-contained
-//! within the WRT project. It provides a fixed-capacity vector where all storage is
+//! within the Kiln project. It provides a fixed-capacity vector where all storage is
 //! inline (no heap allocation, no Provider abstraction).
 //!
 //! # Characteristics

@@ -7,7 +7,7 @@
 
 ### Current Validation Infrastructure
 
-The existing `WastModuleValidator` in `wrt-build-core/src/wast_validator.rs` (~3700 lines) already implements substantial validation:
+The existing `WastModuleValidator` in `kiln-build-core/src/wast_validator.rs` (~3700 lines) already implements substantial validation:
 - Type checking on operand stack
 - Control flow tracking (block, loop, if, else, try)
 - Function and memory reference validation
@@ -45,50 +45,50 @@ The existing `WastModuleValidator` in `wrt-build-core/src/wast_validator.rs` (~3
 ### Phase 1: Quick Wins (High Impact, Low Effort)
 
 #### 1.1 Duplicate Export Name Validation
-- **File**: `wrt-build-core/src/wast_validator.rs`
+- **File**: `kiln-build-core/src/wast_validator.rs`
 - **Error message**: "duplicate export name"
 - **Implementation**: Add HashSet tracking during export validation
 - **Complexity**: Low
 
 #### 1.2 Table Type Compatibility
-- **File**: `wrt-build-core/src/wast_validator.rs`
+- **File**: `kiln-build-core/src/wast_validator.rs`
 - **Error message**: "type mismatch"
 - **Implementation**: Validate table.get/table.set/table.fill match table element types
 - **Complexity**: Low
 
 #### 1.3 Element Segment Table Index Bounds
-- **File**: `wrt-build-core/src/wast_validator.rs`
+- **File**: `kiln-build-core/src/wast_validator.rs`
 - **Implementation**: Check table index in element segments is valid
 - **Complexity**: Low
 
 ### Phase 2: Medium Effort Improvements
 
 #### 2.1 Uninitialized Local Tracking (GC Proposal)
-- **File**: `wrt-build-core/src/wast_validator.rs`
+- **File**: `kiln-build-core/src/wast_validator.rs`
 - **Error message**: "uninitialized local"
 - **Implementation**: Track which reference-typed locals have been assigned before use
 - **Complexity**: Medium - requires local dataflow analysis through control flow
 
 #### 2.2 Enhanced Constant Expression Validation
-- **File**: `wrt-build-core/src/wast_validator.rs`, `validate_const_expr_typed()`
+- **File**: `kiln-build-core/src/wast_validator.rs`, `validate_const_expr_typed()`
 - **Missing**: Some extended constant expression operations from proposals
 - **Complexity**: Low
 
 #### 2.3 Memory64 Address Type Validation
-- **File**: `wrt-build-core/src/wast_validator.rs`
+- **File**: `kiln-build-core/src/wast_validator.rs`
 - **Implementation**: Validate address types match memory index size
 - **Complexity**: Medium
 
 ### Phase 3: Completeness (Lower Priority)
 
 #### 3.1 Complete SIMD Instruction Validation
-- **File**: `wrt-build-core/src/wast_validator.rs`, opcode 0xFD handling
+- **File**: `kiln-build-core/src/wast_validator.rs`, opcode 0xFD handling
 - **Current**: Simplified - assumes V128 binary ops
 - **Missing**: Individual SIMD instruction type signatures
 - **Complexity**: High - many opcodes
 
 #### 3.2 Atomic Operations Validation (Threads Proposal)
-- **File**: `wrt-build-core/src/wast_validator.rs`
+- **File**: `kiln-build-core/src/wast_validator.rs`
 - **Missing**: atomic.wait/notify, atomic RMW operations
 - **Complexity**: Medium
 
@@ -117,16 +117,16 @@ The existing `WastModuleValidator` in `wrt-build-core/src/wast_validator.rs` (~3
 
 | File | Purpose |
 |------|---------|
-| `wrt-build-core/src/wast_validator.rs` | Core validator - main implementation target |
-| `wrt-build-core/src/wast_execution.rs` | Integration point where validator is called |
-| `wrt-decoder/src/decoder.rs` | Could add early validation during parsing |
-| `wrt-format/src/module.rs` | Module structure reference |
+| `kiln-build-core/src/wast_validator.rs` | Core validator - main implementation target |
+| `kiln-build-core/src/wast_execution.rs` | Integration point where validator is called |
+| `kiln-decoder/src/decoder.rs` | Could add early validation during parsing |
+| `kiln-format/src/module.rs` | Module structure reference |
 
 ---
 
 ## Testing Strategy
 
-1. Run `cargo-wrt testsuite --run-wast` to establish baseline
+1. Run `cargo-kiln testsuite --run-wast` to establish baseline
 2. For each validation added:
    - Add unit test in `wast_validator.rs`
    - Verify against official testsuite files

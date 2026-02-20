@@ -1,4 +1,4 @@
-// WRT - kiln-component
+// Kiln - kiln-component
 // Module: Advanced Threading Built-ins
 // SW-REQ-ID: REQ_ADVANCED_THREADING_001
 //

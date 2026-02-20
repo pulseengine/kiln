@@ -1,7 +1,7 @@
-//! Safety Verification Framework for cargo-wrt
+//! Safety Verification Framework for cargo-kiln
 //!
 //! This module provides comprehensive safety verification integrated with
-//! cargo-wrt's diagnostic system, requirements traceability, and ASIL-tagged
+//! cargo-kiln's diagnostic system, requirements traceability, and ASIL-tagged
 //! testing. Inspired by SCORE's verification methodology.
 
 use std::{collections::HashMap, fmt};
@@ -61,7 +61,7 @@ impl DiagnosticCollection {
 }
 
 /// Safety verification framework that coordinates all verification activities
-/// Integrates with cargo-wrt's diagnostic and output systems
+/// Integrates with cargo-kiln's diagnostic and output systems
 #[derive(Debug)]
 pub struct SafetyVerificationFramework {
     /// Registry of all safety requirements
@@ -103,8 +103,8 @@ impl SafetyVerificationFramework {
             "safety-verification".to_string(),
         );
 
-        // Generate standard safety requirements based on WRT needs
-        let standard_requirements = self.generate_wrt_safety_requirements();
+        // Generate standard safety requirements based on Kiln needs
+        let standard_requirements = self.generate_kiln_safety_requirements();
         let count = standard_requirements.len();
 
         for req in standard_requirements {
@@ -500,7 +500,7 @@ impl SafetyVerificationFramework {
         (readiness, diagnostics)
     }
 
-    /// Convert safety verification results to cargo-wrt diagnostics
+    /// Convert safety verification results to cargo-kiln diagnostics
     pub fn to_diagnostics(&self, output_format: OutputFormat) -> BuildResult<DiagnosticCollection> {
         let mut diagnostics = DiagnosticCollection::new(
             self.workspace_root.clone(),
@@ -577,13 +577,13 @@ impl SafetyVerificationFramework {
 
     // Private helper methods
 
-    fn generate_wrt_safety_requirements(&self) -> Vec<SafetyRequirement> {
+    fn generate_kiln_safety_requirements(&self) -> Vec<SafetyRequirement> {
         use super::model::{RequirementType, VerificationMethod};
 
         vec![
             {
                 let mut req = SafetyRequirement::new(
-                    RequirementId::new("WRT_MEM_001"),
+                    RequirementId::new("KILN_MEM_001"),
                     "Memory Safety".to_string(),
                     "All memory allocations must be bounded and verified through \
                      safe_managed_alloc"
@@ -598,7 +598,7 @@ impl SafetyVerificationFramework {
             },
             {
                 let mut req = SafetyRequirement::new(
-                    RequirementId::new("WRT_RUNTIME_001"),
+                    RequirementId::new("KILN_RUNTIME_001"),
                     "Runtime Safety Context".to_string(),
                     "Runtime must maintain safety context with ASIL tracking throughout execution"
                         .to_string(),
@@ -614,7 +614,7 @@ impl SafetyVerificationFramework {
             },
             {
                 let mut req = SafetyRequirement::new(
-                    RequirementId::new("WRT_COMPONENT_001"),
+                    RequirementId::new("KILN_COMPONENT_001"),
                     "Component Isolation".to_string(),
                     "Components must be isolated with resource bounds and memory budgets"
                         .to_string(),
@@ -632,7 +632,7 @@ impl SafetyVerificationFramework {
             },
             {
                 let mut req = SafetyRequirement::new(
-                    RequirementId::new("WRT_PLATFORM_001"),
+                    RequirementId::new("KILN_PLATFORM_001"),
                     "Platform Abstraction".to_string(),
                     "Platform abstractions must maintain safety properties across all supported \
                      targets"
@@ -1130,12 +1130,12 @@ mod tests {
     }
 
     #[test]
-    fn test_wrt_safety_requirements_generation() {
+    fn test_kiln_safety_requirements_generation() {
         let framework = SafetyVerificationFramework::new(PathBuf::from("/tmp"));
-        let requirements = framework.generate_wrt_safety_requirements();
+        let requirements = framework.generate_kiln_safety_requirements();
 
         assert!(!requirements.is_empty());
-        assert!(requirements.iter().any(|r| r.id.as_str() == "WRT_MEM_001"));
-        assert!(requirements.iter().any(|r| r.id.as_str() == "WRT_RUNTIME_001"));
+        assert!(requirements.iter().any(|r| r.id.as_str() == "KILN_MEM_001"));
+        assert!(requirements.iter().any(|r| r.id.as_str() == "KILN_RUNTIME_001"));
     }
 }

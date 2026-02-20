@@ -22,7 +22,7 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # RUST_LOG: "info,cargo_wrt=debug,dagger_sdk=debug" # Optional: for more detailed Dagger logs
+  # RUST_LOG: "info,cargo_kiln=debug,dagger_sdk=debug" # Optional: for more detailed Dagger logs
 
 jobs:
   ci_checks_and_docs:

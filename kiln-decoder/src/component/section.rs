@@ -1,4 +1,4 @@
-// WRT - kiln-decoder
+// Kiln - kiln-decoder
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT

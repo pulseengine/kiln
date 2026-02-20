@@ -1,8 +1,8 @@
-//! Platform verification with external limit integration for cargo-wrt
+//! Platform verification with external limit integration for cargo-kiln
 //!
 //! Provides verification capabilities that integrate with CLI args, environment
 //! variables, configuration files, and container discovery. Integrated with
-//! cargo-wrt's diagnostic system.
+//! cargo-kiln's diagnostic system.
 
 use std::{
     collections::HashMap,
@@ -172,7 +172,7 @@ impl Default for PlatformVerificationConfig {
     }
 }
 
-/// Platform verification engine with cargo-wrt integration
+/// Platform verification engine with cargo-kiln integration
 #[derive(Debug)]
 pub struct PlatformVerificationEngine {
     /// Configuration
@@ -413,7 +413,7 @@ impl PlatformVerificationEngine {
         Ok((result, diagnostics))
     }
 
-    /// Convert platform verification to cargo-wrt diagnostics
+    /// Convert platform verification to cargo-kiln diagnostics
     pub fn to_diagnostics(&self, output_format: OutputFormat) -> BuildResult<DiagnosticCollection> {
         let mut diagnostics = DiagnosticCollection::new(
             self.workspace_root.clone(),
@@ -586,7 +586,7 @@ impl PlatformVerificationEngine {
         limits: &mut ComprehensivePlatformLimits,
         diagnostics: &mut DiagnosticCollection,
     ) -> BuildResult<()> {
-        if let Some(memory) = self.config.sources.env_vars.get("WRT_MAX_MEMORY") {
+        if let Some(memory) = self.config.sources.env_vars.get("KILN_MAX_MEMORY") {
             if let Ok(value) = parse_memory_string(memory) {
                 limits.max_total_memory = value;
                 diagnostics.add_diagnostic(
@@ -595,7 +595,7 @@ impl PlatformVerificationEngine {
                         Range::single_line(0, 0, 0),
                         Severity::Info,
                         format!(
-                            "Environment override: WRT_MAX_MEMORY = {}MB",
+                            "Environment override: KILN_MAX_MEMORY = {}MB",
                             value / (1024 * 1024)
                         ),
                         "platform-verification".to_string(),
@@ -605,19 +605,19 @@ impl PlatformVerificationEngine {
             }
         }
 
-        if let Some(wasm_memory) = self.config.sources.env_vars.get("WRT_MAX_WASM_MEMORY") {
+        if let Some(wasm_memory) = self.config.sources.env_vars.get("KILN_MAX_WASM_MEMORY") {
             if let Ok(value) = parse_memory_string(wasm_memory) {
                 limits.max_wasm_linear_memory = value;
             }
         }
 
-        if let Some(stack) = self.config.sources.env_vars.get("WRT_MAX_STACK") {
+        if let Some(stack) = self.config.sources.env_vars.get("KILN_MAX_STACK") {
             if let Ok(value) = parse_memory_string(stack) {
                 limits.max_stack_bytes = value;
             }
         }
 
-        if let Some(components) = self.config.sources.env_vars.get("WRT_MAX_COMPONENTS") {
+        if let Some(components) = self.config.sources.env_vars.get("KILN_MAX_COMPONENTS") {
             if let Ok(value) = components.parse::<usize>() {
                 limits.max_components = value;
             }
@@ -951,7 +951,7 @@ impl PlatformVerificationConfigBuilder {
     pub fn build(mut self) -> PlatformVerificationConfig {
         // Auto-detect environment variables
         for (key, value) in env::vars() {
-            if key.starts_with("WRT_") {
+            if key.starts_with("KILN_") {
                 self.config.sources.env_vars.insert(key, value);
             }
         }

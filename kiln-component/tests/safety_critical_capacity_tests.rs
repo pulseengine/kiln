@@ -391,7 +391,7 @@ mod safety_critical_feature_tests {
     /// Test that safety-critical builds enforce stricter limits
     #[test]
     fn test_safety_critical_enforcement() {
-        // In safety-critical mode, all allocations should use WRT allocator
+        // In safety-critical mode, all allocations should use Kiln allocator
         let vec_result = new_component_vec::<u32>();
         assert!(vec_result.is_ok());
 

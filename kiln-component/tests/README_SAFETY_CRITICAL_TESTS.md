@@ -1,6 +1,6 @@
-# Safety-Critical Test Suite for WRT Component
+# Safety-Critical Test Suite for Kiln Component
 
-This directory contains comprehensive test files for validating the safety-critical features of the WRT allocator integration in wrt-component.
+This directory contains comprehensive test files for validating the safety-critical features of the Kiln allocator integration in kiln-component.
 
 ## Test Files
 
@@ -86,16 +86,16 @@ All tests target **ASIL-C** compliance with:
 
 ```bash
 # Run all safety-critical tests
-cargo test -p wrt-component safety_critical
+cargo test -p kiln-component safety_critical
 
 # Run with safety-critical feature flag
-cargo test -p wrt-component --features safety-critical
+cargo test -p kiln-component --features safety-critical
 
 # Run specific test suite
-cargo test -p wrt-component safety_critical_capacity_tests
+cargo test -p kiln-component safety_critical_capacity_tests
 
 # Run in no_std environment
-cargo test -p wrt-component --no-default-features
+cargo test -p kiln-component --no-default-features
 ```
 
 ## Key Testing Patterns

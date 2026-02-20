@@ -1,4 +1,4 @@
-//! Configuration management for the WRT build system
+//! Configuration management for the Kiln build system
 
 use std::path::PathBuf;
 

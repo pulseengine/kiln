@@ -1,4 +1,4 @@
-//! Error types for the WRT build system
+//! Error types for the Kiln build system
 
 use std::fmt;
 

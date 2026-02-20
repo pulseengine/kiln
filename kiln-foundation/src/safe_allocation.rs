@@ -129,7 +129,7 @@ pub mod capability_factories {
 }
 
 // safe_managed_alloc macro moved to lib.rs to avoid duplicates
-// It's now the primary allocation interface for WRT
+// It's now the primary allocation interface for Kiln
 
 /// Capability-aware macro for creating providers
 ///

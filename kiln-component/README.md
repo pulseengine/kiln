@@ -1,6 +1,6 @@
-# wrt-component
+# kiln-component
 
-WebAssembly Component Model support for WRT.
+WebAssembly Component Model support for Kiln.
 
 ## Current Status
 
@@ -19,10 +19,10 @@ WebAssembly Component Model support for WRT.
 
 ## Usage
 
-Components are executed through `wrtd`:
+Components are executed through `kilnd`:
 
 ```bash
-wrtd my_component.wasm --component
+kilnd my_component.wasm --component
 ```
 
 ## Component Model Support
@@ -46,7 +46,7 @@ Additional interfaces in development.
 
 ## no_std Support
 
-Works in `no_std` environments using bounded collections from `wrt-foundation`.
+Works in `no_std` environments using bounded collections from `kiln-foundation`.
 
 ## License
 

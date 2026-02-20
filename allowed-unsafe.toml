@@ -115,7 +115,7 @@ asil_justification = "ASIL-A: Error message indicating unsafe code requirement, 
 
 # CFI integration - Control flow integrity
 [[allowed]]
-file = "wrt/src/cfi_integration.rs"
+file = "kiln/src/cfi_integration.rs"
 line = 415
 function = "validate_cfi"
 reason = "CFI validation requires unsafe pointer dereferencing for stack validation"
@@ -131,7 +131,7 @@ asil_justification = "ASIL-A: Bounds-checked memory access with capability valid
 
 # Test code - Not production
 [[allowed]]
-file = "wrt/tests/wasm_testsuite.rs"
+file = "kiln/tests/wasm_testsuite.rs"
 function = "test_v128_values"
 reason = "Test code for SIMD value verification"
 asil_justification = "Test code only - not included in production builds"

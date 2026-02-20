@@ -4,7 +4,7 @@
 //! showing conditional compilation patterns for platform-specific code.
 //! 
 //! This is part of the platform-specific examples that show how external developers
-//! can implement and use platform extensions with WRT.
+//! can implement and use platform extensions with Kiln.
 
 #[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
 use kiln_platform::{
@@ -123,7 +123,7 @@ fn example_threading() {
 #[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
 fn example_complete_integration() {
     println!("\n=== Example 5: Complete Integration ===");
-    println!("VxWorks platform integrated with WRT runtime");
+    println!("VxWorks platform integrated with Kiln runtime");
 }
 
 // This function demonstrates the concepts even on non-VxWorks platforms
@@ -143,7 +143,7 @@ fn show_vxworks_concepts() {
     println!("\n3. Synchronization:");
     println!("   - RTP: POSIX semaphores (sem_init, sem_wait, sem_post)");
     println!("   - LKM: VxWorks semaphores (semBCreate, semTake, semGive)");
-    println!("   - Both provide futex-like semantics for WRT");
+    println!("   - Both provide futex-like semantics for Kiln");
     
     println!("\n4. Threading:");
     println!("   - RTP: POSIX threads (pthread_create, pthread_join)");
@@ -161,7 +161,7 @@ fn show_vxworks_concepts() {
     println!("\n6. Platform Integration:");
     println!("   - Implements kiln_platform::PageAllocator trait");
     println!("   - Implements kiln_platform::FutexLike trait");
-    println!("   - Works seamlessly with WRT runtime components");
+    println!("   - Works seamlessly with Kiln runtime components");
     
     println!("\n7. Real-time Features:");
     println!("   - Priority inheritance for semaphores");
@@ -189,7 +189,7 @@ fn show_vxworks_concepts() {
     println!("let futex = VxWorksFutexBuilder::new(context)");
     println!("    .build()?;";
     println!("");
-    println!("// Use with WRT runtime");
+    println!("// Use with Kiln runtime");
     println!("let runtime = wrt::Runtime::builder()");
     println!("    .with_allocator(Box::new(allocator))");
     println!("    .with_futex(Box::new(futex))");
@@ -351,5 +351,5 @@ fn demonstrate_trait_usage() {
         Err(e) => println!("✗ Wake failed: {}", e),
     }
     
-    println!("\nThis demonstrates how VxWorks types implement WRT traits!");
+    println!("\nThis demonstrates how VxWorks types implement Kiln traits!");
 }

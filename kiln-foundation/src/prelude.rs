@@ -124,7 +124,7 @@ pub use hashbrown::HashMap as BHashMap;
 // Dynamic collections (HashSet, Arc) are only available for managed-allocation and
 // std-allocation Higher safety levels use bounded or static alternatives
 
-// Re-export from kiln_error - this is the standard Result type for WRT
+// Re-export from kiln_error - this is the standard Result type for Kiln
 pub use kiln_error::prelude::*;
 pub use kiln_error::{
     codes,

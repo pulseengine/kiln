@@ -1,4 +1,4 @@
-// WRT - kiln-component
+// Kiln - kiln-component
 // Module: Async Context Management Built-ins
 // SW-REQ-ID: REQ_ASYNC_CONTEXT_001
 //

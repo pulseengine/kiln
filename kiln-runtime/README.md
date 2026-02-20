@@ -1,6 +1,6 @@
-# wrt-runtime
+# kiln-runtime
 
-WebAssembly execution engine for WRT.
+WebAssembly execution engine for Kiln.
 
 ## Current Status
 
@@ -26,7 +26,7 @@ WebAssembly execution engine for WRT.
 The runtime uses a stackless execution model suitable for constrained environments:
 
 ```rust
-use wrt_runtime::stackless::StacklessEngine;
+use kiln_runtime::stackless::StacklessEngine;
 
 let engine = StacklessEngine::new();
 engine.instantiate_module(&module)?;
@@ -41,7 +41,7 @@ engine.call_function("_start", &[])?;
 
 ## no_std Support
 
-Works in `no_std` environments using bounded collections from `wrt-foundation`. All collections have compile-time capacity limits.
+Works in `no_std` environments using bounded collections from `kiln-foundation`. All collections have compile-time capacity limits.
 
 ## License
 

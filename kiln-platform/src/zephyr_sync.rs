@@ -1,11 +1,11 @@
 #![allow(unsafe_code)]
 #![allow(dead_code)]
 // Allow unsafe FFI calls to Zephyr kernel
-// WRT - kiln-platform
+// Kiln - kiln-platform
 // Module: Zephyr Synchronization Primitives
 // SW-REQ-ID: REQ_PLATFORM_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 

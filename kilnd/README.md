@@ -1,4 +1,4 @@
-# wrtd - WebAssembly Runtime Daemon
+# kilnd - WebAssembly Runtime Daemon
 
 Command-line runtime for executing WebAssembly components with WASI Preview 2 support.
 
@@ -7,7 +7,7 @@ Command-line runtime for executing WebAssembly components with WASI Preview 2 su
 **Early Development** - Basic component execution works:
 
 ```bash
-wrtd hello_rust.wasm --component
+kilnd hello_rust.wasm --component
 # Output: Hello wasm component world from Rust!
 ```
 
@@ -27,26 +27,26 @@ wrtd hello_rust.wasm --component
 ## Installation
 
 ```bash
-cargo build --bin wrtd --features "std,wrt-execution" --release
+cargo build --bin kilnd --features "std,kiln-execution" --release
 ```
 
 ## Usage
 
 ```bash
 # Run a WebAssembly component
-wrtd component.wasm --component
+kilnd component.wasm --component
 
 # With resource limits
-wrtd component.wasm --component --fuel 100000 --memory 1048576
+kilnd component.wasm --component --fuel 100000 --memory 1048576
 
 # Enable memory profiling
-wrtd component.wasm --component --memory-profile
+kilnd component.wasm --component --memory-profile
 ```
 
 ### CLI Options
 
 ```
-wrtd [OPTIONS] <module.wasm>
+kilnd [OPTIONS] <module.wasm>
 
 Options:
   --component          Enable component model (required for .wasm components)
@@ -62,13 +62,13 @@ Options:
 
 ```bash
 # Run Rust-compiled WASI Preview 2 component
-wrtd hello_rust.wasm --component
+kilnd hello_rust.wasm --component
 
 # Run with fuel limit to prevent infinite loops
-wrtd compute.wasm --component --fuel 1000000
+kilnd compute.wasm --component --fuel 1000000
 
 # Profile memory usage
-wrtd large_module.wasm --component --memory-profile
+kilnd large_module.wasm --component --memory-profile
 ```
 
 ## License

@@ -1,6 +1,6 @@
-# wrt-host
+# kiln-host
 
-Host function infrastructure for the WebAssembly Runtime (WRT).
+Host function infrastructure for the WebAssembly Runtime (Kiln).
 
 This crate provides the core infrastructure for registering and managing host functions that can be called from WebAssembly components. It follows the Component Model specification for host functions and the Canonical ABI.
 
@@ -14,7 +14,7 @@ This crate provides the core infrastructure for registering and managing host fu
 ## Usage
 
 ```rust
-use wrt_host::{CallbackRegistry, HostFunctionHandler, CloneableFn};
+use kiln_host::{CallbackRegistry, HostFunctionHandler, CloneableFn};
 
 // Create a callback registry
 let mut registry = CallbackRegistry::new();

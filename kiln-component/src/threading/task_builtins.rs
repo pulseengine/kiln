@@ -1,4 +1,4 @@
-// WRT - kiln-component
+// Kiln - kiln-component
 // Module: Task Management Built-ins
 // SW-REQ-ID: REQ_TASK_BUILTINS_001
 //

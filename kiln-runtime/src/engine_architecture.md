@@ -2,7 +2,7 @@
 
 ## Overview
 
-The WRT engine architecture provides a layered approach to WebAssembly execution with clear separation of concerns between core functionality and optional capabilities.
+The Kiln engine architecture provides a layered approach to WebAssembly execution with clear separation of concerns between core functionality and optional capabilities.
 
 ## Engine Hierarchy
 
@@ -155,7 +155,7 @@ impl LazyEngine {
 ```rust
 pub fn initialize_engine_system() -> Result<()> {
     // Initialize memory system first
-    wrt_foundation::memory::initialize()?;
+    kiln_foundation::memory::initialize()?;
     
     // Pre-create engine instances
     ENGINE_POOL.lock()?.initialize()?;

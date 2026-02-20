@@ -9,7 +9,7 @@ use kiln_component::{
 };
 
 fn main() {
-    println!("=== WRT Unified Execution Engine Demo ===\n");
+    println!("=== Kiln Unified Execution Engine Demo ===\n");
 
     // Demo 1: Basic synchronous execution
     demo_synchronous_execution();

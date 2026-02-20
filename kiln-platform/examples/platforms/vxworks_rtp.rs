@@ -113,7 +113,7 @@ fn example_rtp_threading() {
     let thread_config = VxWorksThreadConfig {
         context: VxWorksContext::Rtp,
         stack_size: 16384,
-        name: Some("wrt_worker".to_string()),
+        name: Some("kiln_worker".to_string()),
         floating_point: true,
         detached: false,
         ..Default::default()
@@ -130,7 +130,7 @@ fn example_rtp_threading() {
 
 #[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
 fn example_rtp_integration() {
-    println!("\n=== RTP Integration with WRT ===");
+    println!("\n=== RTP Integration with Kiln ===");
     
     println!("RTP integration features:");
     println!("✓ Standard C library compatibility");

@@ -6,7 +6,7 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Simplified Unified Type System for WRT Foundation
+//! Simplified Unified Type System for Kiln Foundation
 //!
 //! This module provides a simplified version of the unified type system
 //! that avoids complex type alias issues while still providing the

@@ -1,6 +1,6 @@
 //! Performance benchmarks for real WASM execution capability
 //!
-//! These benchmarks validate the performance characteristics of the WRT
+//! These benchmarks validate the performance characteristics of the Kiln
 //! framework's real WebAssembly execution engine, measuring instruction
 //! parsing, execution, and memory management performance under QM and ASIL-B
 //! safety levels.

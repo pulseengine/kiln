@@ -1,9 +1,9 @@
-//! Documentation Verification Framework for cargo-wrt
+//! Documentation Verification Framework for cargo-kiln
 //!
 //! This module provides comprehensive documentation verification for
 //! safety-critical systems, ensuring that all requirements, implementations,
 //! and tests are properly documented according to ASIL standards. Integrated
-//! with cargo-wrt's diagnostic system.
+//! with cargo-kiln's diagnostic system.
 
 use std::{collections::HashMap, fmt, path::PathBuf};
 
@@ -20,7 +20,7 @@ use crate::{
 };
 
 /// Documentation verification framework that ensures proper documentation
-/// coverage for safety-critical requirements with cargo-wrt integration
+/// coverage for safety-critical requirements with cargo-kiln integration
 #[derive(Debug)]
 pub struct DocumentationVerificationFramework {
     /// Registry of requirements to verify documentation for
@@ -289,7 +289,7 @@ impl DocumentationVerificationFramework {
         (report, diagnostics)
     }
 
-    /// Convert documentation verification to cargo-wrt diagnostics
+    /// Convert documentation verification to cargo-kiln diagnostics
     pub fn to_diagnostics(&self, output_format: OutputFormat) -> BuildResult<DiagnosticCollection> {
         let mut diagnostics = DiagnosticCollection::new(
             self.workspace_root.clone(),

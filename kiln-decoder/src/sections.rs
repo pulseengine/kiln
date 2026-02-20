@@ -504,7 +504,7 @@ pub mod parsers {
         // Convert kiln_format::Import to kiln_foundation::Import
         // Since Table and Memory are now type aliases to foundation types, this should
         // work directly
-        let mut wrt_imports = Vec::with_capacity(format_imports.len());
+        let mut kiln_imports = Vec::with_capacity(format_imports.len());
         let provider = kiln_foundation::safe_managed_alloc!(
             65536,
             kiln_foundation::budget_aware_provider::CrateId::Decoder
@@ -518,7 +518,7 @@ pub mod parsers {
             let item_name = kiln_foundation::bounded::WasmName::try_from_str(&format_import.name)
                 .map_err(|_| Error::parse_error("Item name too long for bounded string"))?;
 
-            let wrt_desc = match format_import.desc {
+            let kiln_desc = match format_import.desc {
                 kiln_format::module::ImportDesc::Function(type_idx) => {
                     kiln_foundation::types::ImportDesc::Function(type_idx)
                 },
@@ -542,20 +542,20 @@ pub mod parsers {
                 },
             };
 
-            wrt_imports.push(KilnFoundationImport {
+            kiln_imports.push(KilnFoundationImport {
                 module_name,
                 item_name,
-                desc: wrt_desc,
+                desc: kiln_desc,
             });
         }
 
-        Ok(wrt_imports)
+        Ok(kiln_imports)
     }
 
     /// Parse a table section
     pub fn parse_table_section(bytes: &[u8]) -> Result<Vec<KilnTableType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
-        let mut wrt_tables = Vec::with_capacity(count as usize);
+        let mut kiln_tables = Vec::with_capacity(count as usize);
 
         // Parse format tables and convert directly to foundation types
         for _ in 0..count {
@@ -564,10 +564,10 @@ pub mod parsers {
 
             // Since kiln_format::module::Table is now a type alias to
             // kiln_foundation::TableType, we can use it directly
-            wrt_tables.push(format_table);
+            kiln_tables.push(format_table);
         }
 
-        Ok(wrt_tables)
+        Ok(kiln_tables)
     }
 
     fn parse_format_module_table(
@@ -623,7 +623,7 @@ pub mod parsers {
     /// Parse a memory section
     pub fn parse_memory_section(bytes: &[u8]) -> Result<Vec<KilnMemoryType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
-        let mut wrt_memories = Vec::with_capacity(count as usize);
+        let mut kiln_memories = Vec::with_capacity(count as usize);
 
         // Parse format memories and convert directly to foundation types
         for _ in 0..count {
@@ -632,10 +632,10 @@ pub mod parsers {
 
             // Since kiln_format::module::Memory is now a type alias to
             // kiln_foundation::MemoryType, we can use it directly
-            wrt_memories.push(format_memory);
+            kiln_memories.push(format_memory);
         }
 
-        Ok(wrt_memories)
+        Ok(kiln_memories)
     }
 
     fn parse_format_module_memory(
@@ -690,7 +690,7 @@ pub mod parsers {
     /// Parse a global section
     pub fn parse_global_section(bytes: &[u8]) -> Result<Vec<KilnGlobalType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
-        let mut wrt_globals = Vec::with_capacity(count as usize);
+        let mut kiln_globals = Vec::with_capacity(count as usize);
 
         for _ in 0..count {
             let (format_global_type, new_offset) = parse_format_global_type(bytes, offset)?;
@@ -745,14 +745,14 @@ pub mod parsers {
 
             // Convert FormatGlobalType to kiln_foundation::GlobalType
             // Both types have the same structure (value_type and mutable)
-            let wrt_global = KilnGlobalType {
+            let kiln_global = KilnGlobalType {
                 value_type: format_global_type.value_type,
                 mutable: format_global_type.mutable,
             };
 
-            wrt_globals.push(wrt_global);
+            kiln_globals.push(kiln_global);
         }
-        Ok(wrt_globals)
+        Ok(kiln_globals)
     }
 
     /// Parse an export section with memory optimization
@@ -801,7 +801,7 @@ pub mod parsers {
     /// Parse an element section
     pub fn parse_element_section(bytes: &[u8]) -> Result<Vec<KilnElementSegment>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
-        let mut wrt_elements = Vec::with_capacity(count as usize);
+        let mut kiln_elements = Vec::with_capacity(count as usize);
 
         for _ in 0..count {
             // Parse using pure format type
@@ -810,9 +810,9 @@ pub mod parsers {
             offset = new_offset;
 
             // Use the pure element segment directly (it's already the right type)
-            wrt_elements.push(pure_element);
+            kiln_elements.push(pure_element);
         }
-        Ok(wrt_elements)
+        Ok(kiln_elements)
     }
 
     /// Parse a code section with memory optimization
@@ -854,7 +854,7 @@ pub mod parsers {
     /// Parse a data section
     pub fn parse_data_section(bytes: &[u8]) -> Result<Vec<KilnDataSegment>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
-        let mut wrt_data_segments = Vec::with_capacity(count as usize);
+        let mut kiln_data_segments = Vec::with_capacity(count as usize);
 
         for _ in 0..count {
             // Parse using pure format type
@@ -864,8 +864,8 @@ pub mod parsers {
             offset = new_offset;
 
             // Use the pure data segment directly (it's already the right type)
-            wrt_data_segments.push(pure_data_segment);
+            kiln_data_segments.push(pure_data_segment);
         }
-        Ok(wrt_data_segments)
+        Ok(kiln_data_segments)
     }
 }

@@ -1,12 +1,12 @@
-# `wrt-foundation`
+# `kiln-foundation`
 
-Foundation library providing core types and memory safety primitives for the WebAssembly Runtime (WRT).
+Foundation library providing core types and memory safety primitives for the WebAssembly Runtime (Kiln).
 
 ## Overview
 
-`wrt-foundation` serves as the core foundation layer for the WRT ecosystem, providing essential types, memory safety abstractions, bounded collections, and other fundamental building blocks required by all WRT components.
+`kiln-foundation` serves as the core foundation layer for the Kiln ecosystem, providing essential types, memory safety abstractions, bounded collections, and other fundamental building blocks required by all Kiln components.
 
-This crate was previously named `wrt-foundation`. See [WRT_FOUNDATION_MIGRATION.md](../WRT_FOUNDATION_MIGRATION.md) for details on the migration.
+This crate was previously named `kiln-foundation`. See [KILN_FOUNDATION_MIGRATION.md](../KILN_FOUNDATION_MIGRATION.md) for details on the migration.
 
 ## Features
 
@@ -23,7 +23,7 @@ This crate was previously named `wrt-foundation`. See [WRT_FOUNDATION_MIGRATION.
 ### Safe Memory Operations
 
 ```rust
-use wrt_foundation::{safe_memory::SafeSlice, KilnResult};
+use kiln_foundation::{safe_memory::SafeSlice, KilnResult};
 
 fn safe_memory_example(buffer: &[u8]) -> KilnResult<u32> {
     // Create a safe view over the buffer with bounds checking
@@ -39,7 +39,7 @@ fn safe_memory_example(buffer: &[u8]) -> KilnResult<u32> {
 ### Bounded Collections
 
 ```rust
-use wrt_foundation::{BoundedVec, CapacityError};
+use kiln_foundation::{BoundedVec, CapacityError};
 
 fn bounded_vector_example() -> Result<(), CapacityError> {
     // Create a vector with a maximum capacity of 10 elements

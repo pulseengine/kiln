@@ -1,4 +1,4 @@
-//! Demonstration of the WRT internal compile-time allocator system
+//! Demonstration of the Kiln internal compile-time allocator system
 //!
 //! This example shows how the allocator system is now integrated directly
 //! into kiln-foundation without external dependencies.
@@ -11,17 +11,17 @@ use kiln_foundation::allocator::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🚀 WRT Internal Allocator System Demo");
+    println!("🚀 Kiln Internal Allocator System Demo");
     println!("=====================================");
 
     // Demonstrate compile-time verified collections
     demo_internal_collections()?;
 
-    // Show integration with existing WRT foundation
+    // Show integration with existing Kiln foundation
     demo_foundation_integration()?;
 
     println!("\n✅ Internal allocator integration successful!");
-    println!("🏆 WRT foundation now includes A+ safety-critical allocator!");
+    println!("🏆 Kiln foundation now includes A+ safety-critical allocator!");
 
     Ok(())
 }
@@ -43,14 +43,14 @@ fn demo_internal_collections() -> Result<(), Box<dyn std::error::Error>> {
 
     // The compiler verifies these allocations fit within crate budgets
     foundation_vec.push(42)?;
-    component_vec.push("Hello Internal WRT".to_string())?;
+    component_vec.push("Hello Internal Kiln".to_string())?;
 
     println!("✓ Internal allocations verified at compile time!");
 
     Ok(())
 }
 
-/// Show integration with existing WRT foundation
+/// Show integration with existing Kiln foundation
 fn demo_foundation_integration() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🔗 2. Foundation Integration");
     println!("-----------------------------");

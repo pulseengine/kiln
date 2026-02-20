@@ -42,7 +42,7 @@ mod feature_flag_tests {
     fn test_safety_critical_enabled() {
         // When safety-critical is enabled, all allocations must be bounded
 
-        // Verify we're using WRT allocator
+        // Verify we're using Kiln allocator
         let guard_result = safe_managed_alloc!(1024, CrateId::Component);
         assert!(guard_result.is_ok() || matches!(guard_result, Err(KilnError::OutOfMemory)));
 
@@ -107,7 +107,7 @@ mod feature_flag_tests {
     #[test]
     fn test_std_with_safety_critical() {
         // Most restrictive configuration
-        // Should use WRT allocator even with std available
+        // Should use Kiln allocator even with std available
 
         let vec_result = new_component_vec::<u64>();
         assert!(vec_result.is_ok());

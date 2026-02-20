@@ -1,6 +1,6 @@
-# wrt-debug
+# kiln-debug
 
-DWARF debug information support for WebAssembly Runtime (WRT).
+DWARF debug information support for WebAssembly Runtime (Kiln).
 
 ## Overview
 
@@ -25,7 +25,7 @@ This crate provides zero-allocation DWARF debug information parsing for WebAssem
 ## Usage
 
 ```rust
-use wrt_debug::prelude::*;
+use kiln_debug::prelude::*;
 
 // Create debug info parser
 let mut debug_info = DwarfDebugInfo::new(module_bytes);
@@ -82,14 +82,14 @@ See [FEATURES.md](FEATURES.md) for detailed information about feature flags and 
 
 ```toml
 [dependencies]
-wrt-debug = { version = "0.1", default-features = false }
+kiln-debug = { version = "0.1", default-features = false }
 ```
 
 ### Runtime Integration
 
 ```toml
 [dependencies]
-wrt-runtime = { version = "0.2", features = ["debug"] }
+kiln-runtime = { version = "0.2", features = ["debug"] }
 ```
 
 ## Limitations

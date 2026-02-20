@@ -1,4 +1,4 @@
-# wrt-logging
+# kiln-logging
 
 > Logging infrastructure for WebAssembly components
 
@@ -17,16 +17,16 @@ Enables WebAssembly components to log messages to the host environment. Provides
 
 ```toml
 [dependencies]
-wrt-logging = "0.1"
+kiln-logging = "0.1"
 ```
 
 ```rust
-use wrt_logging::{LogHandler, LogLevel};
+use kiln_logging::{LogHandler, LogLevel};
 
 struct ConsoleLogger;
 
 impl LogHandler for ConsoleLogger {
-    fn handle_log(&self, level: LogLevel, message: &str) -> wrt_logging::Result<()> {
+    fn handle_log(&self, level: LogLevel, message: &str) -> kiln_logging::Result<()> {
         println!("{:?}: {}", level, message);
         Ok(())
     }
@@ -39,5 +39,5 @@ runtime.register_log_handler(handler);
 
 ## See Also
 
-- [API Documentation](https://docs.rs/wrt-logging)
+- [API Documentation](https://docs.rs/kiln-logging)
 - [Component Model Guide](../docs/source/user_guide/component_model.rst)

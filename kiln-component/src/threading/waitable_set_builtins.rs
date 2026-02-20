@@ -1,4 +1,4 @@
-// WRT - kiln-component
+// Kiln - kiln-component
 // Module: Waitable Set Canonical Operations
 // SW-REQ-ID: REQ_WAITABLE_SET_001
 //

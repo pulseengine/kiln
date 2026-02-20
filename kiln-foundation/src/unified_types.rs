@@ -1,7 +1,7 @@
-//! Unified Type System for WRT Foundation
+//! Unified Type System for Kiln Foundation
 //!
 //! This module provides platform-configurable bounded collections that resolve
-//! type conflicts across the WRT ecosystem. It establishes a unified type
+//! type conflicts across the Kiln ecosystem. It establishes a unified type
 //! hierarchy that can be configured for different platform constraints while
 //! maintaining type consistency.
 

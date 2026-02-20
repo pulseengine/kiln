@@ -14,7 +14,7 @@ use std::collections::BTreeMap as HashMap;
 pub const STATE_VERSION: u32 = 1;
 
 /// Magic bytes that identify Kiln state sections
-pub const STATE_MAGIC: &[u8; 4] = b"WRT\0";
+pub const STATE_MAGIC: &[u8; 4] = b"KLN\0";
 
 /// Represents the version of a WebAssembly Component Model binary
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

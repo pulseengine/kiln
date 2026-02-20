@@ -1,6 +1,6 @@
-//! Benchmarks comparing WRT allocator vs standard library collections
+//! Benchmarks comparing Kiln allocator vs standard library collections
 //!
-//! This module benchmarks the performance of WRT's safety-critical allocator
+//! This module benchmarks the performance of Kiln's safety-critical allocator
 //! against standard library collections to validate performance parity.
 
 #![allow(unused_imports)]
@@ -19,7 +19,7 @@ const SMALL_SIZE: usize = 10;
 const MEDIUM_SIZE: usize = 100;
 const LARGE_SIZE: usize = 1000;
 
-// Memory limits for WRT collections
+// Memory limits for Kiln collections
 const VEC_LIMIT: usize = 2048;
 const MAP_LIMIT: usize = 2048;
 
@@ -39,7 +39,7 @@ fn bench_vec_push(c: &mut Criterion) {
             })
         });
 
-        // WRT Vec benchmark
+        // Kiln Vec benchmark
         #[cfg(feature = "safety-critical")]
         group.bench_with_input(BenchmarkId::new("kiln_vec", size), size, |b, &size| {
             b.iter(|| {
@@ -82,7 +82,7 @@ fn bench_vec_iteration(c: &mut Criterion) {
             })
         });
 
-        // WRT Vec iteration
+        // Kiln Vec iteration
         #[cfg(feature = "safety-critical")]
         group.bench_with_input(BenchmarkId::new("kiln_vec", size), &kiln_vec, |b, vec| {
             b.iter(|| {
@@ -114,7 +114,7 @@ fn bench_map_insert(c: &mut Criterion) {
             })
         });
 
-        // WRT HashMap benchmark
+        // Kiln HashMap benchmark
         #[cfg(feature = "safety-critical")]
         group.bench_with_input(BenchmarkId::new("kiln_hashmap", size), size, |b, &size| {
             b.iter(|| {
@@ -161,7 +161,7 @@ fn bench_map_lookup(c: &mut Criterion) {
             })
         });
 
-        // WRT HashMap lookup
+        // Kiln HashMap lookup
         #[cfg(feature = "safety-critical")]
         group.bench_with_input(BenchmarkId::new("kiln_hashmap", size), &kiln_map, |b, map| {
             b.iter(|| {

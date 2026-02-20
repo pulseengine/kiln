@@ -1,7 +1,7 @@
 //! ResourceTable Memory Budget Integration
 //!
 //! This module demonstrates and tests the integration between ResourceTable
-//! and the WRT memory budget system for ASIL-D compliance.
+//! and the Kiln memory budget system for ASIL-D compliance.
 //!
 //! SW-REQ-ID: REQ_MEM_001 - Memory bounds checking
 //! SW-REQ-ID: REQ_MEM_002 - Budget enforcement

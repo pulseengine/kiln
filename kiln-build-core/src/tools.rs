@@ -24,7 +24,7 @@ pub struct ToolInfo {
     pub install_command: String,
     /// Whether this tool is required for basic functionality
     pub required: bool,
-    /// Which cargo-wrt commands need this tool
+    /// Which cargo-kiln commands need this tool
     pub used_by: Vec<String>,
 }
 
@@ -360,7 +360,7 @@ impl ToolManager {
             let message = format!(
                 "❌ {} is required for the '{}' command but is not installed.\n\n📝 {}: {}\n\n💿 \
                  To install:\n{}\n\n💡 After installation, you can verify it works with:\n{} \
-                 --version\n\n🔧 You can also run 'cargo-wrt setup --all' to install recommended \
+                 --version\n\n🔧 You can also run 'cargo-kiln setup --all' to install recommended \
                  tools.",
                 tool_name.bright_red(),
                 command.bright_cyan(),

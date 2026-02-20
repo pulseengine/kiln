@@ -1,12 +1,12 @@
-# WRT - wrt-platform
+# Kiln - kiln-platform
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Platform Abstraction Layer (PAL) for the WRT WebAssembly Runtime.
+Platform Abstraction Layer (PAL) for the Kiln WebAssembly Runtime.
 
 ## Overview
 
-This crate provides traits and implementations for platform-specific functionalities required by the WRT runtime, primarily:
+This crate provides traits and implementations for platform-specific functionalities required by the Kiln runtime, primarily:
 
 *   **Memory Management:** The `PageAllocator` trait abstracts the allocation, growth, and protection of memory regions suitable for WebAssembly linear memory.
 *   **Synchronization:** The `FutexLike` trait abstracts low-level wait/notify operations needed for Wasm atomics.
@@ -25,13 +25,13 @@ Add this crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-wrt-platform = { path = "path/to/wrt-platform" } # Or version = "..."
+kiln-platform = { path = "path/to/kiln-platform" } # Or version = "..."
 ```
 
 Use the traits via the prelude:
 
 ```rust
-use wrt_platform::prelude::*;
+use kiln_platform::prelude::*;
 
 #[cfg(feature = "std")] // Example using fallback
 fn main() -> Result<(), Error> {
@@ -60,9 +60,9 @@ This crate aims to be suitable for safety-critical environments.
 
 *   It uses `#![forbid(unsafe_code)]` by default. Platform-specific backends requiring `unsafe` for OS interactions will contain justified `unsafe` blocks, potentially isolated in submodules.
 *   It uses `panic = "abort"`.
-*   It depends on `wrt-error` for standardized error handling.
+*   It depends on `kiln-error` for standardized error handling.
 
-Refer to the main WRT project documentation for detailed safety guidelines.
+Refer to the main Kiln project documentation for detailed safety guidelines.
 
 ## License
 

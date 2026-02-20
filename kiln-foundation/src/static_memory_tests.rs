@@ -1,7 +1,7 @@
 //! Runtime Verification Tests for Static Memory Enforcement
 //!
 //! This module provides comprehensive tests to verify that static memory
-//! principles are properly enforced throughout the WRT runtime.
+//! principles are properly enforced throughout the Kiln runtime.
 
 // Tests currently disabled - to be updated for modern capability-based system
 #![cfg(all(test, feature = "disabled_during_migration"))]

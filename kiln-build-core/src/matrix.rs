@@ -177,46 +177,46 @@ impl MatrixVerifier {
     /// Get default build configurations
     fn default_configurations() -> Vec<BuildConfiguration> {
         vec![
-            // WRT Library Configurations
+            // Kiln Library Configurations
             BuildConfiguration {
-                name: "WRT no_std + alloc".to_string(),
-                package: "wrt".to_string(),
+                name: "Kiln no_std + alloc".to_string(),
+                package: "kiln".to_string(),
                 features: vec!["alloc".to_string()],
                 asil_level: AsilLevel::Core,
             },
             BuildConfiguration {
-                name: "WRT ASIL-D (no_std + alloc)".to_string(),
-                package: "wrt".to_string(),
+                name: "Kiln ASIL-D (no_std + alloc)".to_string(),
+                package: "kiln".to_string(),
                 features: vec!["alloc".to_string(), "safety-asil-d".to_string()],
                 asil_level: AsilLevel::AsilD,
             },
             BuildConfiguration {
-                name: "WRT ASIL-C (no_std + alloc)".to_string(),
-                package: "wrt".to_string(),
+                name: "Kiln ASIL-C (no_std + alloc)".to_string(),
+                package: "kiln".to_string(),
                 features: vec!["alloc".to_string(), "safety-asil-c".to_string()],
                 asil_level: AsilLevel::AsilC,
             },
             BuildConfiguration {
-                name: "WRT ASIL-B (no_std + alloc)".to_string(),
-                package: "wrt".to_string(),
+                name: "Kiln ASIL-B (no_std + alloc)".to_string(),
+                package: "kiln".to_string(),
                 features: vec!["alloc".to_string(), "safety-asil-b".to_string()],
                 asil_level: AsilLevel::AsilB,
             },
             BuildConfiguration {
-                name: "WRT Development (std)".to_string(),
-                package: "wrt".to_string(),
+                name: "Kiln Development (std)".to_string(),
+                package: "kiln".to_string(),
                 features: vec!["std".to_string()],
                 asil_level: AsilLevel::Development,
             },
             BuildConfiguration {
-                name: "WRT Development with Optimization".to_string(),
-                package: "wrt".to_string(),
+                name: "Kiln Development with Optimization".to_string(),
+                package: "kiln".to_string(),
                 features: vec!["std".to_string(), "optimize".to_string()],
                 asil_level: AsilLevel::Development,
             },
             BuildConfiguration {
-                name: "WRT Server".to_string(),
-                package: "wrt".to_string(),
+                name: "Kiln Server".to_string(),
+                package: "kiln".to_string(),
                 features: vec![
                     "std".to_string(),
                     "optimize".to_string(),
@@ -224,10 +224,10 @@ impl MatrixVerifier {
                 ],
                 asil_level: AsilLevel::Server,
             },
-            // WRTD Binary Configurations
+            // Kilnd Binary Configurations
             BuildConfiguration {
-                name: "WRTD ASIL-D Runtime".to_string(),
-                package: "wrtd".to_string(),
+                name: "Kilnd ASIL-D Runtime".to_string(),
+                package: "kilnd".to_string(),
                 features: vec![
                     "safety-asil-d".to_string(),
                     "kiln-execution".to_string(),
@@ -236,8 +236,8 @@ impl MatrixVerifier {
                 asil_level: AsilLevel::AsilD,
             },
             BuildConfiguration {
-                name: "WRTD ASIL-C Runtime".to_string(),
-                package: "wrtd".to_string(),
+                name: "Kilnd ASIL-C Runtime".to_string(),
+                package: "kilnd".to_string(),
                 features: vec![
                     "safety-asil-c".to_string(),
                     "kiln-execution".to_string(),
@@ -246,8 +246,8 @@ impl MatrixVerifier {
                 asil_level: AsilLevel::AsilC,
             },
             BuildConfiguration {
-                name: "WRTD ASIL-B Runtime".to_string(),
-                package: "wrtd".to_string(),
+                name: "Kilnd ASIL-B Runtime".to_string(),
+                package: "kilnd".to_string(),
                 features: vec![
                     "safety-asil-b".to_string(),
                     "kiln-execution".to_string(),
@@ -256,8 +256,8 @@ impl MatrixVerifier {
                 asil_level: AsilLevel::AsilB,
             },
             BuildConfiguration {
-                name: "WRTD Development Runtime".to_string(),
-                package: "wrtd".to_string(),
+                name: "Kilnd Development Runtime".to_string(),
+                package: "kilnd".to_string(),
                 features: vec![
                     "std".to_string(),
                     "kiln-execution".to_string(),
@@ -266,8 +266,8 @@ impl MatrixVerifier {
                 asil_level: AsilLevel::Development,
             },
             BuildConfiguration {
-                name: "WRTD Server Runtime".to_string(),
-                package: "wrtd".to_string(),
+                name: "Kilnd Server Runtime".to_string(),
+                package: "kilnd".to_string(),
                 features: vec!["std".to_string(), "kiln-execution".to_string()],
                 asil_level: AsilLevel::Server,
             },
@@ -549,7 +549,7 @@ impl MatrixVerifier {
         let output = Command::new("cargo")
             .arg("kani")
             .arg("-p")
-            .arg("wrt")
+            .arg("kiln")
             .arg("--features")
             .arg("no_std,alloc,kani,safety-asil-d")
             .output();

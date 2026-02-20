@@ -216,7 +216,7 @@ impl BuildSystem {
         // Generate HTML report
         let mut html = String::new();
         html.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
-        html.push_str("<title>WRT Memory Budget Report</title>\n");
+        html.push_str("<title>Kiln Memory Budget Report</title>\n");
         html.push_str("<style>\n");
         html.push_str("body { font-family: Arial, sans-serif; margin: 40px; }\n");
         html.push_str("table { border-collapse: collapse; width: 100%; }\n");
@@ -227,7 +227,7 @@ impl BuildSystem {
         html.push_str(".good { background-color: #d4edda; }\n");
         html.push_str("</style>\n</head>\n<body>\n");
 
-        html.push_str("<h1>WRT Memory Budget Report</h1>\n");
+        html.push_str("<h1>Kiln Memory Budget Report</h1>\n");
         html.push_str(&format!(
             "<p>Generated: {}</p>\n",
             chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC")

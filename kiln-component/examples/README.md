@@ -1,6 +1,6 @@
-# WRT Unified Execution Agent Examples
+# Kiln Unified Execution Agent Examples
 
-This directory contains examples demonstrating the unified execution agent system in the WRT (WebAssembly Runtime) project.
+This directory contains examples demonstrating the unified execution agent system in the Kiln (WebAssembly Runtime) project.
 
 ## Overview
 
@@ -83,14 +83,14 @@ The unified system provides a clear migration path from individual legacy agents
 
 1. **Basic Usage:**
 ```rust
-use wrt_component::{UnifiedExecutionAgent, AgentConfiguration};
+use kiln_component::{UnifiedExecutionAgent, AgentConfiguration};
 
 let agent = UnifiedExecutionAgent::new(AgentConfiguration::default());
 ```
 
 2. **With Agent Registry:**
 ```rust
-use wrt_component::{AgentRegistry, AgentCreationOptions, PreferredAgentType};
+use kiln_component::{AgentRegistry, AgentCreationOptions, PreferredAgentType};
 
 let mut registry = AgentRegistry::new();
 let agent_id = registry.create_agent(AgentCreationOptions::default())?;
@@ -98,7 +98,7 @@ let agent_id = registry.create_agent(AgentCreationOptions::default())?;
 
 3. **Hybrid Mode:**
 ```rust
-use wrt_component::{ExecutionMode, HybridModeFlags};
+use kiln_component::{ExecutionMode, HybridModeFlags};
 
 let agent = UnifiedExecutionAgent::new_hybrid(HybridModeFlags {
     async_enabled: true,

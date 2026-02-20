@@ -1,6 +1,6 @@
-# WRT Tests - Unified Test Workspace
+# Kiln Tests - Unified Test Workspace
 
-This workspace provides a unified testing infrastructure for the WebAssembly Runtime (WRT) project.
+This workspace provides a unified testing infrastructure for the WebAssembly Runtime (Kiln) project.
 
 ## Structure
 
@@ -18,34 +18,34 @@ This workspace provides a unified testing infrastructure for the WebAssembly Run
 
 ## Running Tests
 
-### Using cargo-wrt (Recommended)
+### Using cargo-kiln (Recommended)
 ```bash
-# Run all tests via cargo-wrt
-cargo-wrt test
+# Run all tests via cargo-kiln
+cargo-kiln test
 
 # Verify no_std compatibility across all crates
-cargo-wrt no-std
+cargo-kiln no-std
 
 # Quick partial verification with verbose output
-cargo-wrt no-std --detailed
+cargo-kiln no-std --detailed
 ```
 
 ### Direct Cargo Commands
 ```bash
 # All integration tests
-cargo test -p wrt-tests-integration
+cargo test -p kiln-tests-integration
 
 # Specific test categories
-cargo test -p wrt-tests-integration component_model
-cargo test -p wrt-tests-integration runtime
-cargo test -p wrt-tests-integration platform
-cargo test -p wrt-tests-integration no_std
-cargo test -p wrt-tests-integration security
+cargo test -p kiln-tests-integration component_model
+cargo test -p kiln-tests-integration runtime
+cargo test -p kiln-tests-integration platform
+cargo test -p kiln-tests-integration no_std
+cargo test -p kiln-tests-integration security
 ```
 
 ## Test Registry
 
-The unified test registry (`wrt-test-registry`) provides:
+The unified test registry (`kiln-test-registry`) provides:
 - Consistent test runners across std/no_std environments
 - Test discovery and coordination
 - Standardized test reporting

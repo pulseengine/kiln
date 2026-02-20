@@ -1,4 +1,4 @@
-// WRT - kiln-component
+// Kiln - kiln-component
 // No-std tests for async Component Model features
 // SW-REQ-ID: REQ_ASYNC_NO_STD_TESTS_001
 //

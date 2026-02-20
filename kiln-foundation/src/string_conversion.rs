@@ -1,7 +1,7 @@
 //! String conversion traits for component model integration
 //!
 //! This module provides conversion traits between different string types used
-//! in the WRT framework, particularly for component model integration where
+//! in the Kiln framework, particularly for component model integration where
 //! strings need to be converted between format, runtime, and component representations.
 
 use crate::{
