@@ -94,7 +94,7 @@ impl MemoryProviderFactory {
                 Ok(Box::new(provider))
             },
             MemoryProviderType::CapabilityAware => {
-                Ok(Box::new(CapabilityWrtFactory::new_with_budget()?))
+                Ok(Box::new(CapabilityKilnFactory::new_with_budget()?))
             },
             MemoryProviderType::Test => {
                 let provider = safe_managed_alloc!(131072, CrateId::Test)?;

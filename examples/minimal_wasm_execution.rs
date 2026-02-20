@@ -1,11 +1,11 @@
-//! Minimal example showing actual WASM execution with WRT
+//! Minimal example showing actual WASM execution with Kiln
 //! This demonstrates that we can actually execute WASM code, not just simulate
 
-use wrt::prelude::*;
-use wrt::engine::Engine;
+use kiln::prelude::*;
+use kiln::engine::Engine;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== WRT Minimal WASM Execution Demo ===\n");
+    println!("=== Kiln Minimal WASM Execution Demo ===\n");
     
     // Create a simple WASM module that adds two numbers
     let wat_code = r#"
@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         0x0b                                              // End
     ];
     
-    println!("1. Creating WRT Engine...");
+    println!("1. Creating Kiln Engine...");
     let mut engine = Engine::new()?;
     
     println!("2. Loading WASM module ({} bytes)...", wasm_bytes.len());

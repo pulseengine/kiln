@@ -1,7 +1,7 @@
-//! cargo-wrt - Unified build tool for WRT (WebAssembly Runtime)
+//! cargo-kiln - Unified build tool for Kiln (WebAssembly Runtime)
 //!
-//! This is the main CLI entry point for the WRT build system, providing a clean
-//! interface to the wrt-build-core library. It replaces the fragmented approach
+//! This is the main CLI entry point for the Kiln build system, providing a clean
+//! interface to the kiln-build-core library. It replaces the fragmented approach
 //! of justfile, xtask, and shell scripts with a single, AI-friendly tool.
 
 // Standard library imports
@@ -12,8 +12,8 @@ use anyhow::{Context, Result};
 use chrono;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-// Internal crates (wrt_* imports)
-use wrt_build_core::{
+// Internal crates (kiln_* imports)
+use kiln_build_core::{
     BuildConfig, BuildSystem,
     cache::CacheManager,
     config::{AsilLevel, BuildProfile},
@@ -38,43 +38,43 @@ use helpers::{
     run_no_std_tests,
 };
 
-/// WRT Build System - Unified tool for building, testing, and verifying WRT
+/// Kiln Build System - Unified tool for building, testing, and verifying Kiln
 #[derive(Parser)]
-#[command(name = "cargo-wrt")]
+#[command(name = "cargo-kiln")]
 #[command(
     version,
-    about = "Unified build tool for WRT (WebAssembly Runtime)",
+    about = "Unified build tool for Kiln (WebAssembly Runtime)",
     long_about = "
-Unified build tool for WRT (WebAssembly Runtime)
+Unified build tool for Kiln (WebAssembly Runtime)
 
 Usage:
-  cargo-wrt <COMMAND>           # Direct usage
-  cargo wrt <COMMAND>           # As Cargo subcommand
+  cargo-kiln <COMMAND>           # Direct usage
+  cargo kiln <COMMAND>           # As Cargo subcommand
 
 Basic Examples:
-  cargo-wrt build --package wrt
-  cargo wrt build --package wrt
-  cargo-wrt fuzz --list
-  cargo wrt verify --asil d
+  cargo-kiln build --package kiln
+  cargo kiln build --package kiln
+  cargo-kiln fuzz --list
+  cargo kiln verify --asil d
 
 Diagnostic System Examples:
   # JSON output for tooling/AI agents
-  cargo-wrt build --output json
+  cargo-kiln build --output json
   
   # Filter errors only
-  cargo-wrt build --output json --filter-severity error
+  cargo-kiln build --output json --filter-severity error
   
   # Enable caching for faster incremental builds
-  cargo-wrt build --cache
+  cargo-kiln build --cache
   
   # Show only new/changed diagnostics
-  cargo-wrt build --cache --diff-only
+  cargo-kiln build --cache --diff-only
   
   # Group diagnostics by file
-  cargo-wrt build --output json --group-by file
+  cargo-kiln build --output json --group-by file
   
   # Filter by source tool
-  cargo-wrt check --output json --filter-source clippy
+  cargo-kiln check --output json --filter-source clippy
 
 Output Formats:
   --output human        Human-readable with colors (default)
@@ -82,10 +82,10 @@ Output Formats:
   --output json-lines   Streaming JSON (one diagnostic per line)
 
 Advanced Diagnostic Help:
-  cargo-wrt help diagnostics    Comprehensive diagnostic system guide
+  cargo-kiln help diagnostics    Comprehensive diagnostic system guide
 "
 )]
-#[command(author = "WRT Team")]
+#[command(author = "Kiln Team")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -230,7 +230,7 @@ impl From<AsilArg> for AsilLevel {
 /// Available subcommands
 #[derive(Subcommand)]
 enum Commands {
-    /// Build all WRT components
+    /// Build all Kiln components
     Build {
         /// Build specific crate only
         #[arg(long, short)]
@@ -301,7 +301,7 @@ enum Commands {
     /// Generate test configuration file
     TestConfig {
         /// Output path for configuration file
-        #[arg(long, default_value = "wrt-test.toml")]
+        #[arg(long, default_value = "kiln-test.toml")]
         output: String,
 
         /// Generate example configuration
@@ -393,11 +393,11 @@ enum Commands {
         detailed: bool,
     },
 
-    /// Build WRTD (WebAssembly Runtime Daemon) binaries
-    Wrtd {
+    /// Build KILND (WebAssembly Runtime Daemon) binaries
+    Kilnd {
         /// Build specific runtime variant
         #[arg(long, value_enum)]
-        variant: Option<WrtdVariant>,
+        variant: Option<KilndVariant>,
 
         /// Test binaries after building
         #[arg(long)]
@@ -988,9 +988,9 @@ enum SafetyCommand {
 
     /// Initialize safety verification framework
     Init {
-        /// Initialize with WRT-specific safety requirements
+        /// Initialize with Kiln-specific safety requirements
         #[arg(long)]
-        wrt_requirements: bool,
+        kiln_requirements: bool,
 
         /// Force overwrite existing configuration
         #[arg(long)]
@@ -1100,9 +1100,9 @@ enum ToolVersionCommand {
     },
 }
 
-/// WRTD runtime variants
+/// KILND runtime variants
 #[derive(clap::ValueEnum, Clone, Copy, Debug)]
-enum WrtdVariant {
+enum KilndVariant {
     Std,
     Alloc,
     NoStd,
@@ -1171,24 +1171,24 @@ fn create_filter_options(cli: &Cli) -> Result<FilterOptionsBuilder> {
 
 /// Get cache path for the workspace
 fn get_cache_path(workspace_root: &std::path::Path) -> std::path::PathBuf {
-    workspace_root.join("target").join("wrt-cache").join("diagnostics.json")
+    workspace_root.join("target").join("kiln-cache").join("diagnostics.json")
 }
 
-/// Parse command line arguments, handling both `cargo-wrt` and `cargo wrt`
+/// Parse command line arguments, handling both `cargo-kiln` and `cargo kiln`
 /// patterns
 fn parse_args() -> Cli {
     let args: Vec<String> = std::env::args().collect();
 
     // Check if we're being called as a Cargo subcommand
-    // Pattern: ["cargo-wrt", "wrt", "build", ...] vs ["cargo-wrt", "build", ...]
-    let is_cargo_subcommand = args.len() > 1 && args[1] == "wrt";
+    // Pattern: ["cargo-kiln", "kiln", "build", ...] vs ["cargo-kiln", "build", ...]
+    let is_cargo_subcommand = args.len() > 1 && args[1] == "kiln";
 
     if is_cargo_subcommand {
-        // We're being called as `cargo wrt`, so skip the "wrt" argument
-        // Create new args without the "wrt" part
+        // We're being called as `cargo kiln`, so skip the "kiln" argument
+        // Create new args without the "kiln" part
         let mut filtered_args = vec![args[0].clone()]; // Keep binary name
 
-        // Add remaining arguments (skip the "wrt" at position 1)
+        // Add remaining arguments (skip the "kiln" at position 1)
         if args.len() > 2 {
             filtered_args.extend(args[2..].iter().cloned());
         }
@@ -1200,7 +1200,7 @@ fn parse_args() -> Cli {
 
         Cli::parse_from(filtered_args)
     } else {
-        // Normal `cargo-wrt` call
+        // Normal `cargo-kiln` call
         Cli::parse()
     }
 }
@@ -1210,7 +1210,7 @@ async fn main() -> Result<()> {
     // Initialize the memory system at the very beginning
     // This must happen before any other operations to prevent stack overflow
     // when creating engines or using capability-based memory
-    if let Err(e) = wrt_foundation::memory_init::MemoryInitializer::initialize() {
+    if let Err(e) = kiln_foundation::memory_init::MemoryInitializer::initialize() {
         eprintln!("Warning: Failed to initialize memory system: {}", e);
         // Continue execution - the system should still work with default
         // providers
@@ -1223,7 +1223,7 @@ async fn main() -> Result<()> {
         return Ok(());
     }
     if args.len() >= 3
-        && args[1] == "wrt"
+        && args[1] == "kiln"
         && args[2] == "help"
         && args.get(3) == Some(&"diagnostics".to_string())
     {
@@ -1231,14 +1231,14 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Handle both `cargo-wrt` and `cargo wrt` calling patterns
+    // Handle both `cargo-kiln` and `cargo kiln` calling patterns
     let cli = parse_args();
 
     // Print header
     if cli.verbose {
         let args: Vec<String> = std::env::args().collect();
         let calling_pattern =
-            if args.len() > 1 && args[1] == "wrt" { "cargo wrt" } else { "cargo-wrt" };
+            if args.len() > 1 && args[1] == "kiln" { "cargo kiln" } else { "cargo-kiln" };
 
         println!(
             "{} {} v{}",
@@ -1246,7 +1246,7 @@ async fn main() -> Result<()> {
             calling_pattern,
             env!("CARGO_PKG_VERSION")
         );
-        println!("{} WebAssembly Runtime Build System", "📦".bright_green());
+        println!("{} Kiln Build System", "📦".bright_green());
         println!();
     }
 
@@ -1385,11 +1385,11 @@ async fn main() -> Result<()> {
             continue_on_error,
             detailed,
         } => cmd_no_std(&build_system, *continue_on_error, *detailed, &global.output).await,
-        Commands::Wrtd {
+        Commands::Kilnd {
             variant,
             test,
             cross,
-        } => cmd_wrtd(&build_system, *variant, *test, *cross).await,
+        } => cmd_kilnd(&build_system, *variant, *test, *cross).await,
         Commands::Ci { fail_fast, json } => cmd_ci(&build_system, *fail_fast, *json).await,
         Commands::Clean { all } => cmd_clean(&build_system, *all, &mut global).await,
         Commands::VerifyMatrix {
@@ -1640,7 +1640,7 @@ async fn cmd_build(
                 || global.group_by.is_some()
             {
                 let filter_options = global.build_filter_options()?;
-                let processor = wrt_build_core::filtering::DiagnosticProcessor::new(
+                let processor = kiln_build_core::filtering::DiagnosticProcessor::new(
                     build_system.workspace_root().to_path_buf(),
                 );
                 let grouped = processor.process(&diagnostics, &filter_options)?;
@@ -1763,7 +1763,7 @@ async fn cmd_test(
     match output_format {
         OutputFormat::Json | OutputFormat::JsonLines => {
             // Use diagnostic-based test output with caching and filtering
-            let mut test_options = wrt_build_core::test::TestOptions::default();
+            let mut test_options = kiln_build_core::test::TestOptions::default();
             test_options.filter = filter;
             test_options.nocapture = nocapture;
             test_options.integration = !unit_only;
@@ -1800,7 +1800,7 @@ async fn cmd_test(
                 || global.group_by.is_some()
             {
                 let filter_options = global.build_filter_options()?;
-                let processor = wrt_build_core::filtering::DiagnosticProcessor::new(
+                let processor = kiln_build_core::filtering::DiagnosticProcessor::new(
                     build_system.workspace_root().to_path_buf(),
                 );
                 let grouped = processor.process(&diagnostics, &filter_options)?;
@@ -1851,7 +1851,7 @@ async fn cmd_test(
                 return Ok(());
             }
 
-            let mut test_options = wrt_build_core::test::TestOptions::default();
+            let mut test_options = kiln_build_core::test::TestOptions::default();
             test_options.filter = filter;
             test_options.nocapture = nocapture;
             test_options.integration = !unit_only;
@@ -1930,14 +1930,14 @@ async fn cmd_test_no_std(
 
 /// Test configuration generation command implementation
 async fn cmd_test_config(output: String, example: bool, global: &mut GlobalArgs) -> Result<()> {
-    use test_config::WrtTestConfig;
+    use test_config::KilnTestConfig;
 
     let config = if example {
         global.output.info("Generating example test configuration");
-        WrtTestConfig::example_config()
+        KilnTestConfig::example_config()
     } else {
         global.output.info("Generating default test configuration");
-        WrtTestConfig::default()
+        KilnTestConfig::default()
     };
 
     config.save_to_file(&output).context("Failed to save test configuration file")?;
@@ -1946,7 +1946,7 @@ async fn cmd_test_config(output: String, example: bool, global: &mut GlobalArgs)
 
     if example {
         global.output.info("Edit the configuration file to customize test behavior");
-        global.output.info("Use 'cargo-wrt test-asil' to run ASIL-specific tests");
+        global.output.info("Use 'cargo-kiln test-asil' to run ASIL-specific tests");
     }
 
     Ok(())
@@ -1964,7 +1964,7 @@ async fn cmd_verify(
     cli: &Cli,
     global: &mut GlobalArgs,
 ) -> Result<()> {
-    let mut options = wrt_build_core::verify::VerificationOptions::default();
+    let mut options = kiln_build_core::verify::VerificationOptions::default();
     options.target_asil = asil.into();
     options.kani = !no_kani;
     options.miri = !no_miri;
@@ -1973,7 +1973,7 @@ async fn cmd_verify(
     // Load allowed unsafe configuration if it exists
     let allowed_unsafe_path = build_system.workspace_root().join("allowed-unsafe.toml");
     if allowed_unsafe_path.exists() {
-        match wrt_build_core::verify::AllowedUnsafeConfig::load_from_file(&allowed_unsafe_path) {
+        match kiln_build_core::verify::AllowedUnsafeConfig::load_from_file(&allowed_unsafe_path) {
             Ok(config) => {
                 options.allowed_unsafe = Some(config);
                 if use_colors {
@@ -2041,7 +2041,7 @@ async fn cmd_verify(
                 || global.group_by.is_some()
             {
                 let filter_options = global.build_filter_options()?;
-                let processor = wrt_build_core::filtering::DiagnosticProcessor::new(
+                let processor = kiln_build_core::filtering::DiagnosticProcessor::new(
                     build_system.workspace_root().to_path_buf(),
                 );
                 let grouped = processor.process(&diagnostics, &filter_options)?;
@@ -2116,7 +2116,7 @@ async fn cmd_docs(
     output_dir: Option<String>,
     multi_version: Option<String>,
 ) -> Result<()> {
-    use wrt_build_core::tools::ToolManager;
+    use kiln_build_core::tools::ToolManager;
 
     // Check if multi-version documentation is requested
     if let Some(versions_str) = multi_version {
@@ -2262,7 +2262,7 @@ async fn cmd_check(
                 || global.group_by.is_some()
             {
                 let filter_options = global.build_filter_options()?;
-                let processor = wrt_build_core::filtering::DiagnosticProcessor::new(
+                let processor = kiln_build_core::filtering::DiagnosticProcessor::new(
                     build_system.workspace_root().to_path_buf(),
                 );
                 let grouped = processor.process(&diagnostics, &filter_options)?;
@@ -2350,20 +2350,20 @@ async fn cmd_no_std(
     Ok(())
 }
 
-/// WRTD command implementation
-async fn cmd_wrtd(
+/// KILND command implementation
+async fn cmd_kilnd(
     build_system: &BuildSystem,
-    variant: Option<WrtdVariant>,
+    variant: Option<KilndVariant>,
     test: bool,
     cross: bool,
 ) -> Result<()> {
-    println!("{} Building WRTD binaries...", "🏗️".bright_blue());
+    println!("{} Building KILND binaries...", "🏗️".bright_blue());
 
-    build_system.build_wrtd_binaries().context("WRTD build failed")?;
+    build_system.build_kilnd_binaries().context("KILND build failed")?;
 
     if test {
-        println!("{} Testing WRTD binaries...", "🧪".bright_blue());
-        // TODO: Implement WRTD testing
+        println!("{} Testing KILND binaries...", "🧪".bright_blue());
+        // TODO: Implement KILND testing
     }
 
     Ok(())
@@ -2467,19 +2467,19 @@ async fn cmd_clean(build_system: &BuildSystem, all: bool, global: &mut GlobalArg
             output.indent(&format!("Removed {}", target_dir.display()));
         }
 
-        // Remove cargo-wrt target if it exists
-        let cargo_wrt_target = workspace_root.join("cargo-wrt").join("target");
-        if cargo_wrt_target.exists() {
-            std::fs::remove_dir_all(&cargo_wrt_target)
-                .context("Failed to remove cargo-wrt target directory")?;
-            output.indent(&format!("Removed {}", cargo_wrt_target.display()));
+        // Remove cargo-kiln target if it exists
+        let cargo_kiln_target = workspace_root.join("cargo-kiln").join("target");
+        if cargo_kiln_target.exists() {
+            std::fs::remove_dir_all(&cargo_kiln_target)
+                .context("Failed to remove cargo-kiln target directory")?;
+            output.indent(&format!("Removed {}", cargo_kiln_target.display()));
         }
 
-        // Remove wrt-build-core target if it exists
-        let build_core_target = workspace_root.join("wrt-build-core").join("target");
+        // Remove kiln-build-core target if it exists
+        let build_core_target = workspace_root.join("kiln-build-core").join("target");
         if build_core_target.exists() {
             std::fs::remove_dir_all(&build_core_target)
-                .context("Failed to remove wrt-build-core target directory")?;
+                .context("Failed to remove kiln-build-core target directory")?;
             output.indent(&format!("Removed {}", build_core_target.display()));
         }
     } else {
@@ -2506,7 +2506,7 @@ async fn cmd_verify_matrix(
     output_dir: String,
     verbose: bool,
 ) -> Result<()> {
-    use wrt_build_core::matrix::MatrixVerifier;
+    use kiln_build_core::matrix::MatrixVerifier;
 
     let verifier = MatrixVerifier::new(verbose);
     let results = verifier.run_verification()?;
@@ -2531,7 +2531,7 @@ async fn cmd_simulate_ci(
     verbose: bool,
     output_dir: String,
 ) -> Result<()> {
-    use wrt_build_core::ci::CiSimulator;
+    use kiln_build_core::ci::CiSimulator;
 
     let workspace_root = build_system.workspace_root().to_path_buf();
     let simulator = CiSimulator::new(workspace_root, verbose);
@@ -2556,10 +2556,10 @@ async fn cmd_kani_verify(
     verbose: bool,
     extra_args: Vec<String>,
 ) -> Result<()> {
-    use wrt_build_core::kani::{KaniConfig, KaniVerifier};
+    use kiln_build_core::kani::{KaniConfig, KaniVerifier};
 
     // Check if KANI is available
-    if !wrt_build_core::kani::is_kani_available() {
+    if !kiln_build_core::kani::is_kani_available() {
         anyhow::bail!(
             "KANI is not available. Please install it with: cargo install --locked kani-verifier \
              && cargo kani setup"
@@ -2601,7 +2601,7 @@ async fn cmd_validate(
     all: bool,
     verbose: bool,
 ) -> Result<()> {
-    use wrt_build_core::validation::CodeValidator;
+    use kiln_build_core::validation::CodeValidator;
 
     let workspace_root = build_system.workspace_root().to_path_buf();
     let validator = CodeValidator::new(workspace_root.clone(), verbose);
@@ -2658,7 +2658,7 @@ async fn cmd_validate(
 
     if !all && !check_test_files && !check_docs && !audit_docs {
         // If no specific checks requested, run all
-        let all_passed = wrt_build_core::validation::run_all_validations(&workspace_root, verbose)
+        let all_passed = kiln_build_core::validation::run_all_validations(&workspace_root, verbose)
             .context("Failed to run validation checks")?;
 
         if !all_passed {
@@ -2694,7 +2694,7 @@ async fn cmd_setup(
     if all || check {
         println!("{} Checking tool availability...", "🔍".bright_cyan());
 
-        use wrt_build_core::tools::ToolManager;
+        use kiln_build_core::tools::ToolManager;
         let tool_manager = ToolManager::new();
         tool_manager.print_tool_status();
         println!();
@@ -2708,7 +2708,7 @@ async fn cmd_setup(
     if all || install {
         println!("{} Installing optional tools...", "💿".bright_cyan());
 
-        use wrt_build_core::tools::ToolManager;
+        use kiln_build_core::tools::ToolManager;
         let tool_manager = ToolManager::new();
 
         if let Err(e) = tool_manager.install_all_needed_tools() {
@@ -2758,9 +2758,9 @@ async fn cmd_setup(
         println!("  --all      Do everything (check + hooks + install)");
         println!();
         println!("Examples:");
-        println!("  cargo-wrt setup --check");
-        println!("  cargo-wrt setup --install");
-        println!("  cargo-wrt setup --all");
+        println!("  cargo-kiln setup --check");
+        println!("  cargo-kiln setup --install");
+        println!("  cargo-kiln setup --all");
     }
 
     Ok(())
@@ -2768,7 +2768,7 @@ async fn cmd_setup(
 
 /// Tool versions command implementation  
 async fn cmd_tool_versions(build_system: &BuildSystem, command: ToolVersionCommand) -> Result<()> {
-    use wrt_build_core::{tool_versions::ToolVersionConfig, tools::ToolManager};
+    use kiln_build_core::{tool_versions::ToolVersionConfig, tools::ToolManager};
 
     match command {
         ToolVersionCommand::Generate { force, all } => {
@@ -2807,7 +2807,7 @@ async fn cmd_tool_versions(build_system: &BuildSystem, command: ToolVersionComma
             );
             println!();
             println!("  💡 Edit the file to customize tool versions and requirements");
-            println!("  🔄 Run 'cargo-wrt tool-versions check' to validate");
+            println!("  🔄 Run 'cargo-kiln tool-versions check' to validate");
         },
 
         ToolVersionCommand::Check { verbose, tool } => {
@@ -2862,7 +2862,7 @@ async fn cmd_tool_versions(build_system: &BuildSystem, command: ToolVersionComma
 
             if !config_path.exists() {
                 anyhow::bail!(
-                    "Tool version file not found at {}\nRun 'cargo-wrt tool-versions generate' \
+                    "Tool version file not found at {}\nRun 'cargo-kiln tool-versions generate' \
                      first",
                     config_path.display()
                 );
@@ -2900,7 +2900,7 @@ async fn cmd_fuzz(
     list: bool,
     package: Option<String>,
 ) -> Result<()> {
-    use wrt_build_core::fuzz::FuzzOptions;
+    use kiln_build_core::fuzz::FuzzOptions;
 
     if list {
         println!("{} Available fuzz targets:", "🎯".bright_blue());
@@ -2987,7 +2987,7 @@ async fn cmd_test_features(
         println!("  Testing predefined feature groups");
     }
 
-    // TODO: Implement feature testing through wrt-build-core
+    // TODO: Implement feature testing through kiln-build-core
     println!("{} Feature testing completed", "✅".bright_green());
     Ok(())
 }
@@ -3009,7 +3009,7 @@ async fn cmd_testsuite(
 ) -> Result<()> {
     if clean {
         println!("{} Cleaning extracted test files...", "🧹".bright_blue());
-        // TODO: Implement cleaning through wrt-build-core
+        // TODO: Implement cleaning through kiln-build-core
         return Ok(());
     }
 
@@ -3021,16 +3021,16 @@ async fn cmd_testsuite(
         if let Some(wabt) = wabt_path {
             println!("  Using WABT tools at: {}", wabt);
         }
-        // TODO: Implement extraction through wrt-build-core
+        // TODO: Implement extraction through kiln-build-core
     }
 
     if validate {
         println!("{} Validating test modules...", "✅".bright_blue());
-        // TODO: Implement validation through wrt-build-core
+        // TODO: Implement validation through kiln-build-core
     }
 
     if run_wast {
-        use wrt_build_core::wast::{ReportFormat, WastConfig, WastTestRunner};
+        use kiln_build_core::wast::{ReportFormat, WastConfig, WastTestRunner};
 
         println!("{} Running WAST test suite...", "🧪".bright_blue());
 
@@ -3104,9 +3104,9 @@ async fn cmd_testsuite(
                                 println!("\n📄 {}", file_result.file_path.bright_cyan());
                                 for directive in &file_result.directive_results {
                                     let status_icon = match directive.result {
-                                        wrt_build_core::wast::TestResult::Passed => "✅",
-                                        wrt_build_core::wast::TestResult::Failed => "❌",
-                                        wrt_build_core::wast::TestResult::Skipped => "⏭️",
+                                        kiln_build_core::wast::TestResult::Passed => "✅",
+                                        kiln_build_core::wast::TestResult::Failed => "❌",
+                                        kiln_build_core::wast::TestResult::Skipped => "⏭️",
                                     };
                                     println!(
                                         "  {} {} ({})",
@@ -3123,11 +3123,11 @@ async fn cmd_testsuite(
                         let total_files = results.len();
                         let passed_files = results
                             .iter()
-                            .filter(|r| r.status == wrt_build_core::wast::TestResult::Passed)
+                            .filter(|r| r.status == kiln_build_core::wast::TestResult::Passed)
                             .count();
                         let failed_files = results
                             .iter()
-                            .filter(|r| r.status == wrt_build_core::wast::TestResult::Failed)
+                            .filter(|r| r.status == kiln_build_core::wast::TestResult::Failed)
                             .count();
 
                         println!("\n{} Overall Results:", "📈".bright_blue());
@@ -3193,9 +3193,9 @@ async fn cmd_testsuite(
         println!("  --run-wast     Run WAST test suite");
         println!();
         println!("Examples:");
-        println!("  cargo-wrt testsuite --run-wast");
-        println!("  cargo-wrt testsuite --run-wast --wast-filter \"simd\"");
-        println!("  cargo-wrt testsuite --run-wast --per-assertion --output json");
+        println!("  cargo-kiln testsuite --run-wast");
+        println!("  cargo-kiln testsuite --run-wast --wast-filter \"simd\"");
+        println!("  cargo-kiln testsuite --run-wast --per-assertion --output json");
     }
 
     Ok(())
@@ -3209,7 +3209,7 @@ async fn cmd_requirements(
     use_colors: bool,
     cli: &Cli,
 ) -> Result<()> {
-    use wrt_build_core::requirements::{
+    use kiln_build_core::requirements::{
         EnhancedRequirementsVerifier, Requirements,
         model::{ComplianceReport, RequirementType},
     };
@@ -3556,15 +3556,15 @@ async fn cmd_requirements(
 
                 println!("\n🚀 Try these commands:");
                 println!(
-                    "  cargo-wrt requirements verify --enhanced --path {}",
+                    "  cargo-kiln requirements verify --enhanced --path {}",
                     req_path.display()
                 );
                 println!(
-                    "  cargo-wrt requirements score --by-asil --path {}",
+                    "  cargo-kiln requirements score --by-asil --path {}",
                     req_path.display()
                 );
                 println!(
-                    "  cargo-wrt requirements missing --all --path {}",
+                    "  cargo-kiln requirements missing --all --path {}",
                     req_path.display()
                 );
             }
@@ -3581,7 +3581,7 @@ async fn cmd_wasm(
     use_colors: bool,
     cli: &Cli,
 ) -> Result<()> {
-    use wrt_build_core::wasm::{WasmVerifier, create_minimal_module, verify_modules};
+    use kiln_build_core::wasm::{WasmVerifier, create_minimal_module, verify_modules};
 
     let workspace_root = build_system.workspace_root();
 
@@ -3624,7 +3624,7 @@ async fn cmd_wasm(
                     println!("\n📋 Diagnostic Output:");
                     println!("───────────────────");
                     let formatter =
-                        wrt_build_core::formatters::FormatterFactory::create(*output_format);
+                        kiln_build_core::formatters::FormatterFactory::create(*output_format);
                     println!("{}", formatter.format_collection(&diagnostics));
                 }
             }
@@ -3872,14 +3872,14 @@ async fn cmd_safety(
             include_platform,
             detailed,
         } => {
-            let asil_level = wrt_build_core::config::AsilLevel::from(asil);
+            let asil_level = kiln_build_core::config::AsilLevel::from(asil);
 
             // Import the safety verification framework
-            use wrt_build_core::requirements::{Requirements, SafetyVerificationFramework};
+            use kiln_build_core::requirements::{Requirements, SafetyVerificationFramework};
 
             let mut framework = SafetyVerificationFramework::new(workspace_root.clone());
 
-            // Load WRT-specific safety requirements
+            // Load Kiln-specific safety requirements
             let (_count, load_diagnostics) =
                 framework.load_requirements_from_source(&requirements)?;
 
@@ -3912,7 +3912,7 @@ async fn cmd_safety(
             }
 
             // Format and display results
-            let formatter = wrt_build_core::formatters::FormatterFactory::create_with_options(
+            let formatter = kiln_build_core::formatters::FormatterFactory::create_with_options(
                 *output_format,
                 true,
                 use_colors,
@@ -3973,9 +3973,9 @@ async fn cmd_safety(
             test_results,
             coverage_data,
         } => {
-            let asil_level = wrt_build_core::config::AsilLevel::from(asil);
+            let asil_level = kiln_build_core::config::AsilLevel::from(asil);
 
-            use wrt_build_core::requirements::{Requirements, SafetyVerificationFramework};
+            use kiln_build_core::requirements::{Requirements, SafetyVerificationFramework};
 
             let mut framework = SafetyVerificationFramework::new(workspace_root.clone());
 
@@ -4005,7 +4005,7 @@ async fn cmd_safety(
             let (readiness, diagnostics) = framework.check_certification_readiness(asil_level);
 
             // Format and display results
-            let formatter = wrt_build_core::formatters::FormatterFactory::create_with_options(
+            let formatter = kiln_build_core::formatters::FormatterFactory::create_with_options(
                 *output_format,
                 true,
                 use_colors,
@@ -4065,7 +4065,7 @@ async fn cmd_safety(
             output,
             format,
         } => {
-            use wrt_build_core::requirements::{Requirements, SafetyVerificationFramework};
+            use kiln_build_core::requirements::{Requirements, SafetyVerificationFramework};
 
             let mut framework = SafetyVerificationFramework::new(workspace_root.clone());
 
@@ -4175,7 +4175,7 @@ async fn cmd_safety(
                 _ => {
                     // Human-readable format
                     let mut content = String::new();
-                    content.push_str(&format!("🛡️  WRT Safety Verification Report\n"));
+                    content.push_str(&format!("🛡️  Kiln Safety Verification Report\n"));
                     content.push_str(&format!("════════════════════════════════\n\n"));
                     content.push_str(&format!(
                         "Overall Compliance: {:.1}%\n",
@@ -4241,7 +4241,7 @@ async fn cmd_safety(
             }
 
             // Also output diagnostics
-            let formatter = wrt_build_core::formatters::FormatterFactory::create_with_options(
+            let formatter = kiln_build_core::formatters::FormatterFactory::create_with_options(
                 *output_format,
                 true,
                 use_colors,
@@ -4260,12 +4260,12 @@ async fn cmd_safety(
             coverage_type,
             failure_reason,
         } => {
-            use wrt_build_core::requirements::{
+            use kiln_build_core::requirements::{
                 RequirementId, SafetyVerificationFramework, TestCoverageType, TestResult,
             };
 
             let mut framework = SafetyVerificationFramework::new(workspace_root.clone());
-            let asil_level = wrt_build_core::config::AsilLevel::from(asil);
+            let asil_level = kiln_build_core::config::AsilLevel::from(asil);
 
             // Parse verified requirements
             let verified_requirements = if let Some(req_list) = verifies {
@@ -4293,7 +4293,7 @@ async fn cmd_safety(
 
             let diagnostics = framework.record_test_result(test_result);
 
-            let formatter = wrt_build_core::formatters::FormatterFactory::create_with_options(
+            let formatter = kiln_build_core::formatters::FormatterFactory::create_with_options(
                 *output_format,
                 true,
                 use_colors,
@@ -4323,7 +4323,7 @@ async fn cmd_safety(
             function_coverage,
             coverage_file,
         } => {
-            use wrt_build_core::requirements::{CoverageData, FileCoverage};
+            use kiln_build_core::requirements::{CoverageData, FileCoverage};
 
             let coverage_data = if let Some(file) = coverage_file {
                 // TODO: Load from JSON file
@@ -4357,9 +4357,9 @@ async fn cmd_safety(
             verified_features,
             failed_features,
         } => {
-            use wrt_build_core::requirements::PlatformVerification;
+            use kiln_build_core::requirements::PlatformVerification;
 
-            let asil_level = wrt_build_core::config::AsilLevel::from(asil);
+            let asil_level = kiln_build_core::config::AsilLevel::from(asil);
 
             let verified = verified_features
                 .unwrap_or_default()
@@ -4399,19 +4399,19 @@ async fn cmd_safety(
         },
 
         SafetyCommand::Init {
-            wrt_requirements,
+            kiln_requirements,
             force,
         } => {
-            use wrt_build_core::requirements::SafetyVerificationFramework;
+            use kiln_build_core::requirements::SafetyVerificationFramework;
 
             let mut framework = SafetyVerificationFramework::new(workspace_root.clone());
 
-            if wrt_requirements {
-                // Initialize with WRT-specific safety requirements
+            if kiln_requirements {
+                // Initialize with Kiln-specific safety requirements
                 let (_count, diagnostics) =
-                    framework.load_requirements_from_source("wrt-safety-requirements")?;
+                    framework.load_requirements_from_source("kiln-safety-requirements")?;
 
-                let formatter = wrt_build_core::formatters::FormatterFactory::create_with_options(
+                let formatter = kiln_build_core::formatters::FormatterFactory::create_with_options(
                     *output_format,
                     true,
                     use_colors,
@@ -4419,7 +4419,7 @@ async fn cmd_safety(
                 print!("{}", formatter.format_collection(&diagnostics));
 
                 println!(
-                    "{} Initialized safety verification with WRT-specific requirements",
+                    "{} Initialized safety verification with Kiln-specific requirements",
                     "✅".bright_green()
                 );
             } else {
@@ -4465,7 +4465,7 @@ async fn cmd_safety(
             check_implementations,
             check_api,
         } => {
-            use wrt_build_core::requirements::{
+            use kiln_build_core::requirements::{
                 DocumentationVerificationConfig, DocumentationVerificationFramework, Requirements,
             };
 
@@ -4488,14 +4488,14 @@ async fn cmd_safety(
 
             // Perform documentation verification
             let (result, diagnostics) = if let Some(asil_level) = asil {
-                let asil_level = wrt_build_core::config::AsilLevel::from(asil_level);
+                let asil_level = kiln_build_core::config::AsilLevel::from(asil_level);
                 framework.verify_asil_documentation(asil_level)?
             } else {
                 framework.verify_all_documentation()?
             };
 
             // Format and display results
-            let formatter = wrt_build_core::formatters::FormatterFactory::create_with_options(
+            let formatter = kiln_build_core::formatters::FormatterFactory::create_with_options(
                 *output_format,
                 true,
                 use_colors,
@@ -4548,7 +4548,7 @@ async fn cmd_safety(
             output,
             format,
         } => {
-            use wrt_build_core::requirements::{DocumentationVerificationFramework, Requirements};
+            use kiln_build_core::requirements::{DocumentationVerificationFramework, Requirements};
 
             let mut framework = DocumentationVerificationFramework::new(workspace_root.clone());
 
@@ -4646,7 +4646,7 @@ async fn cmd_safety(
                 _ => {
                     // Human-readable format
                     let mut content = String::new();
-                    content.push_str(&format!("📚 WRT Documentation Compliance Report\n"));
+                    content.push_str(&format!("📚 Kiln Documentation Compliance Report\n"));
                     content.push_str(&format!("═══════════════════════════════════════\n\n"));
                     content.push_str(&format!(
                         "Overall Compliance: {:.1}%\n",
@@ -4669,11 +4669,11 @@ async fn cmd_safety(
                         content.push_str("📊 ASIL Documentation Compliance:\n");
                         let mut sorted_asil: Vec<_> = doc_report.asil_compliance.iter().collect();
                         sorted_asil.sort_by_key(|(asil, _)| match asil {
-                            wrt_build_core::config::AsilLevel::QM => 0,
-                            wrt_build_core::config::AsilLevel::A => 1,
-                            wrt_build_core::config::AsilLevel::B => 2,
-                            wrt_build_core::config::AsilLevel::C => 3,
-                            wrt_build_core::config::AsilLevel::D => 4,
+                            kiln_build_core::config::AsilLevel::QM => 0,
+                            kiln_build_core::config::AsilLevel::A => 1,
+                            kiln_build_core::config::AsilLevel::B => 2,
+                            kiln_build_core::config::AsilLevel::C => 3,
+                            kiln_build_core::config::AsilLevel::D => 4,
                         });
                         for (asil, compliance) in sorted_asil {
                             content.push_str(&format!("  {}: {:.1}%\n", asil, compliance));
@@ -4706,7 +4706,7 @@ async fn cmd_safety(
             }
 
             // Also output diagnostics
-            let formatter = wrt_build_core::formatters::FormatterFactory::create_with_options(
+            let formatter = kiln_build_core::formatters::FormatterFactory::create_with_options(
                 *output_format,
                 true,
                 use_colors,
@@ -4721,11 +4721,11 @@ async fn cmd_safety(
 /// Print comprehensive diagnostic system help
 fn print_diagnostic_help() {
     println!(
-        r#"{} WRT Diagnostic System - Comprehensive Guide
+        r#"{} Kiln Diagnostic System - Comprehensive Guide
 
 {}
 
-The WRT build system includes a unified diagnostic system with LSP-compatible
+The Kiln build system includes a unified diagnostic system with LSP-compatible
 structured output, caching, filtering, grouping, and differential analysis.
 
 {} Global Diagnostic Flags (work with build, test, verify, check):
@@ -4752,32 +4752,32 @@ structured output, caching, filtering, grouping, and differential analysis.
 {} Common Usage Patterns:
 
   {} Basic Error Analysis:
-    cargo-wrt build --output json --filter-severity error
-    cargo-wrt check --output json --filter-source clippy
+    cargo-kiln build --output json --filter-severity error
+    cargo-kiln check --output json --filter-source clippy
 
   {} Incremental Development Workflow:
     # Initial baseline
-    cargo-wrt build --cache --clear-cache
+    cargo-kiln build --cache --clear-cache
     
     # Subsequent runs - see only new issues
-    cargo-wrt build --cache --diff-only
+    cargo-kiln build --cache --diff-only
     
     # Focus on errors only
-    cargo-wrt build --cache --diff-only --filter-severity error
+    cargo-kiln build --cache --diff-only --filter-severity error
 
   {} Code Quality Analysis:
     # Group warnings by file for focused fixes
-    cargo-wrt check --output json --group-by file --filter-severity warning
+    cargo-kiln check --output json --group-by file --filter-severity warning
     
     # Limit output for manageable chunks
-    cargo-wrt check --output json --limit 10
+    cargo-kiln check --output json --limit 10
 
   {} CI/CD Integration:
     # Generate structured reports
-    cargo-wrt verify --output json --filter-source kani,miri
+    cargo-kiln verify --output json --filter-source kani,miri
     
     # Stream processing for large outputs
-    cargo-wrt build --output json-lines | process_diagnostics
+    cargo-kiln build --output json-lines | process_diagnostics
 
 {} JSON Diagnostic Format:
 
@@ -4828,23 +4828,23 @@ structured output, caching, filtering, grouping, and differential analysis.
 {} Advanced Examples:
 
   {} Multi-tool Analysis:
-    cargo-wrt verify --output json --filter-source "rustc,clippy,miri"
+    cargo-kiln verify --output json --filter-source "rustc,clippy,miri"
 
   {} File-specific Focus:
-    cargo-wrt build --output json --filter-file "wrt-foundation/*"
+    cargo-kiln build --output json --filter-file "kiln-foundation/*"
 
   {} Severity Prioritization:
-    cargo-wrt build --output json --group-by severity --limit 20
+    cargo-kiln build --output json --group-by severity --limit 20
 
   {} JSON Processing with jq:
     # Extract error messages
-    cargo-wrt build --output json | jq '.diagnostics[] | select(.severity == "error") | .message'
+    cargo-kiln build --output json | jq '.diagnostics[] | select(.severity == "error") | .message'
     
     # Count diagnostics by file
-    cargo-wrt build --output json | jq '.diagnostics | group_by(.file) | map({{file: .[0].file, count: length}})'
+    cargo-kiln build --output json | jq '.diagnostics | group_by(.file) | map({{file: .[0].file, count: length}})'
     
     # Check for errors programmatically
-    cargo-wrt build --output json | jq '.summary.errors > 0'
+    cargo-kiln build --output json | jq '.summary.errors > 0'
 
 {} Integration Notes:
   - Exit code 0: No errors present
@@ -4852,7 +4852,7 @@ structured output, caching, filtering, grouping, and differential analysis.
   - Compatible with IDEs via LSP diagnostic publishing
   - Cacheable for CI/CD performance optimization
 
-For command-specific help: cargo-wrt <command> --help
+For command-specific help: cargo-kiln <command> --help
 "#,
         "🔧".bright_blue(),
         "═".repeat(60).bright_blue(),
@@ -4880,8 +4880,8 @@ For command-specific help: cargo-wrt <command> --help
 
 /// Generate a markdown report for WAST test results
 fn generate_markdown_report(
-    runner: &wrt_build_core::wast::WastTestRunner,
-    results: &[wrt_build_core::wast::WastFileResult],
+    runner: &kiln_build_core::wast::WastTestRunner,
+    results: &[kiln_build_core::wast::WastFileResult],
     total_time: std::time::Duration,
 ) -> String {
     let mut report = String::new();
@@ -4945,9 +4945,9 @@ fn generate_markdown_report(
 
     for file_result in results {
         let status_icon = match file_result.status {
-            wrt_build_core::wast::TestResult::Passed => "✅ Passed",
-            wrt_build_core::wast::TestResult::Failed => "❌ Failed",
-            wrt_build_core::wast::TestResult::Skipped => "⏭️ Skipped",
+            kiln_build_core::wast::TestResult::Passed => "✅ Passed",
+            kiln_build_core::wast::TestResult::Failed => "❌ Failed",
+            kiln_build_core::wast::TestResult::Skipped => "⏭️ Skipped",
         };
         report.push_str(&format!(
             "| {} | {} | {} | {}ms |\n",
@@ -4961,7 +4961,7 @@ fn generate_markdown_report(
     // Failed tests details
     let failed_files: Vec<_> = results
         .iter()
-        .filter(|r| r.status == wrt_build_core::wast::TestResult::Failed)
+        .filter(|r| r.status == kiln_build_core::wast::TestResult::Failed)
         .collect();
     if !failed_files.is_empty() {
         report.push_str("\n## Failed Tests Details\n\n");
@@ -4973,7 +4973,7 @@ fn generate_markdown_report(
             }
 
             for directive in &file_result.directive_results {
-                if directive.result == wrt_build_core::wast::TestResult::Failed {
+                if directive.result == kiln_build_core::wast::TestResult::Failed {
                     report.push_str(&format!(
                         "- **{}**: {}\n",
                         directive.directive_name,
@@ -4986,7 +4986,7 @@ fn generate_markdown_report(
     }
 
     report.push_str("\n---\n");
-    report.push_str("*Generated by cargo-wrt testsuite*\n");
+    report.push_str("*Generated by cargo-kiln testsuite*\n");
 
     report
 }

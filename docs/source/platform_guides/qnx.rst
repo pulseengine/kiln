@@ -2,7 +2,7 @@
 QNX Installation Guide
 ======================
 
-WRT provides specialized support for QNX Neutrino, the real-time operating system used in safety-critical automotive, medical, and industrial applications.
+Kiln provides specialized support for QNX Neutrino, the real-time operating system used in safety-critical automotive, medical, and industrial applications.
 
 .. contents:: On this page
    :local:
@@ -98,16 +98,16 @@ Installation Methods
 Source Installation
 -------------------
 
-**Build WRT for QNX:**
+**Build Kiln for QNX:**
 
 .. code-block:: bash
 
    # Set QNX environment
    source ~/qnx710/qnxsdp-env.sh
 
-   # Clone WRT repository
-   git clone https://github.com/pulseengine/wrt.git
-   cd wrt
+   # Clone Kiln repository
+   git clone https://github.com/pulseengine/kiln.git
+   cd kiln
 
    # Build for QNX x86_64
    cargo build --target x86_64-pc-nto-qnx710 --release
@@ -129,22 +129,22 @@ Source Installation
 Momentics IDE Integration
 -------------------------
 
-**Import WRT as Momentics project:**
+**Import Kiln as Momentics project:**
 
 1. Open QNX Momentics IDE
 2. File → Import → General → Existing Projects
-3. Select WRT directory
+3. Select Kiln directory
 4. Configure build targets
 
-**Create new QNX project with WRT:**
+**Create new QNX project with Kiln:**
 
 .. code-block:: bash
 
    # Create QNX application project
-   qnx-create-project --type=application --name=wrt-app
+   qnx-create-project --type=application --name=kiln-app
 
-   # Add WRT dependency to Makefile
-   LIBS += -lwrt
+   # Add Kiln dependency to Makefile
+   LIBS += -lkiln
 
 QNX-Specific Configuration
 =========================
@@ -152,7 +152,7 @@ QNX-Specific Configuration
 Resource Managers
 -----------------
 
-WRT integrates with QNX resource managers:
+Kiln integrates with QNX resource managers:
 
 **Memory management:**
 
@@ -169,7 +169,7 @@ WRT integrates with QNX resource managers:
 
 .. code-block:: toml
 
-   # WRT configuration for QNX
+   # Kiln configuration for QNX
    [qnx]
    priority = 10          # Real-time priority
    scheduling = "FIFO"    # Scheduling policy
@@ -183,7 +183,7 @@ Message Passing
 .. code-block:: rust
 
    // QNX message passing integration
-   use wrt_qnx::messaging::*;
+   use kiln_qnx::messaging::*;
 
    let channel = ChannelCreate(0)?;
    let connection = ConnectAttach(0, 0, channel, _NTO_SIDE_CHANNEL, 0)?;
@@ -198,18 +198,18 @@ Scheduling and Priorities
 
 .. code-block:: bash
 
-   # Set WRT process priority
-   pidin -p wrtd
-   nice -n -10 wrtd module.wasm
+   # Set Kiln process priority
+   pidin -p kilnd
+   nice -n -10 kilnd module.wasm
 
    # Use real-time scheduling
-   chrt -f 50 wrtd module.wasm
+   chrt -f 50 kilnd module.wasm
 
 **Thread priorities:**
 
 .. code-block:: toml
 
-   # WRT thread configuration
+   # Kiln thread configuration
    [runtime.threads]
    main_priority = 50
    worker_priority = 45
@@ -239,7 +239,7 @@ Memory Management
 .. code-block:: bash
 
    # Pre-allocate memory pools
-   export WRT_PREALLOC_SIZE=67108864  # 64MB
+   export KILN_PREALLOC_SIZE=67108864  # 64MB
 
 Interrupt Handling
 -----------------
@@ -251,7 +251,7 @@ Interrupt Handling
    # Show interrupt assignments
    pidin -P interrupts
 
-   # Set WRT interrupt affinity
+   # Set Kiln interrupt affinity
    echo 2 > /proc/irq/24/smp_affinity
 
 Safety and Reliability
@@ -265,7 +265,7 @@ Fault Tolerance
 .. code-block:: bash
 
    # Use QNX High Availability
-   ham_node -i 1 -p 100 wrtd
+   ham_node -i 1 -p 100 kilnd
 
    # Configure watchdog
    wdtkick -t 5000 &
@@ -291,7 +291,7 @@ Memory Protection
 .. code-block:: bash
 
    # Show memory layout
-   pidin -m wrtd
+   pidin -m kilnd
 
    # Configure memory protection
    mprotect address size PROT_READ
@@ -316,10 +316,10 @@ QNX-Specific Optimizations
 .. code-block:: bash
 
    # Bind to specific CPU cores
-   runon -c 1,2 wrtd module.wasm
+   runon -c 1,2 kilnd module.wasm
 
    # Check CPU affinity
-   pidin -A wrtd
+   pidin -A kilnd
 
 **Memory optimization:**
 
@@ -355,21 +355,21 @@ Target System Deployment
 .. code-block:: bash
 
    # Copy via network
-   scp target/aarch64-unknown-nto-qnx710/release/wrtd root@qnx-target:/usr/bin/
+   scp target/aarch64-unknown-nto-qnx710/release/kilnd root@qnx-target:/usr/bin/
 
    # Copy via USB
    mount -t dos /dev/umass0 /mnt
-   cp wrtd /mnt/
+   cp kilnd /mnt/
 
 **System integration:**
 
 .. code-block:: bash
 
    # Add to system startup
-   echo "wrtd /opt/modules/app.wasm &" >> /etc/rc.d/rc.local
+   echo "kilnd /opt/modules/app.wasm &" >> /etc/rc.d/rc.local
 
    # Create system service
-   slinger -d -P /usr/bin/wrtd
+   slinger -d -P /usr/bin/kilnd
 
 Automotive Integration
 ---------------------
@@ -379,10 +379,10 @@ Automotive Integration
 .. code-block:: c
 
    // AUTOSAR RTE integration
-   #include "Rte_WrtComponent.h"
+   #include "Rte_KilnComponent.h"
    
-   Std_ReturnType WrtComponent_Init(void) {
-       return wrt_runtime_init();
+   Std_ReturnType KilnComponent_Init(void) {
+       return kiln_runtime_init();
    }
 
 **CAN bus integration:**
@@ -392,8 +392,8 @@ Automotive Integration
    # Start CAN driver
    dev-can-mx6x -c 1000000
 
-   # Configure WRT for CAN
-   export WRT_CAN_INTERFACE=can0
+   # Configure Kiln for CAN
+   export KILN_CAN_INTERFACE=can0
 
 Testing and Validation
 ======================
@@ -442,7 +442,7 @@ Real-Time Testing
 
    # Stress test under load
    cpuhog 90 &
-   wrtd --stress-test module.wasm
+   kilnd --stress-test module.wasm
 
 Troubleshooting
 ===============
@@ -466,7 +466,7 @@ Common Issues
 .. code-block:: bash
 
    # Check library dependencies
-   ldd wrtd
+   ldd kilnd
 
    # Debug with slogger
    slogger &
@@ -477,7 +477,7 @@ Common Issues
 .. code-block:: bash
 
    # Profile with system profiler
-   profiler -P wrtd &
+   profiler -P kilnd &
 
    # Check real-time behavior
    tracelogger -s 1000
@@ -490,20 +490,20 @@ Memory Issues
 .. code-block:: bash
 
    # Use QNX memory analysis
-   memtrace -o /tmp/memtrace.out wrtd module.wasm
+   memtrace -o /tmp/memtrace.out kilnd module.wasm
 
    # Show memory statistics
-   pidin -m wrtd
+   pidin -m kilnd
 
 **Stack overflow:**
 
 .. code-block:: bash
 
    # Increase stack size
-   export WRT_STACK_SIZE=2097152
+   export KILN_STACK_SIZE=2097152
 
    # Enable stack checking
-   export WRT_STACK_CHECK=1
+   export KILN_STACK_CHECK=1
 
 Next Steps
 ==========

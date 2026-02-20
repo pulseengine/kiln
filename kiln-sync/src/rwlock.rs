@@ -29,7 +29,7 @@ use std::sync::Arc;
 use std::vec::Vec;
 
 #[cfg(feature = "std")] // Gate this import as it's only used by parking_impl (std-gated)
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
@@ -53,10 +53,10 @@ const WRITE_LOCK_STATE: usize = usize::MAX;
 /// # Examples
 ///
 /// ```
-/// use wrt_sync::WrtRwLock;
+/// use kiln_sync::KilnRwLock;
 ///
 /// // Create a new RwLock
-/// let lock = WrtRwLock::new(42);
+/// let lock = KilnRwLock::new(42);
 ///
 /// // Acquire a read lock
 /// let reader = lock.read();
@@ -76,7 +76,7 @@ const WRITE_LOCK_STATE: usize = usize::MAX;
 /// let reader = lock.read();
 /// assert_eq!(*reader, 100);
 /// ```
-pub struct WrtRwLock<T: ?Sized> {
+pub struct KilnRwLock<T: ?Sized> {
     /// Atomically tracks the lock state.
     /// Encoding:
     /// - 0: Unlocked
@@ -86,49 +86,49 @@ pub struct WrtRwLock<T: ?Sized> {
     data:  UnsafeCell<T>,
 }
 
-/// A guard that provides read access to the data protected by a `WrtRwLock`.
+/// A guard that provides read access to the data protected by a `KilnRwLock`.
 #[clippy::has_significant_drop]
-pub struct WrtRwLockReadGuard<'a, T: ?Sized + 'a> {
-    lock: &'a WrtRwLock<T>,
+pub struct KilnRwLockReadGuard<'a, T: ?Sized + 'a> {
+    lock: &'a KilnRwLock<T>,
 }
 
-/// A guard that provides write access to the data protected by a `WrtRwLock`.
+/// A guard that provides write access to the data protected by a `KilnRwLock`.
 #[clippy::has_significant_drop]
-pub struct WrtRwLockWriteGuard<'a, T: ?Sized + 'a> {
-    lock: &'a WrtRwLock<T>,
+pub struct KilnRwLockWriteGuard<'a, T: ?Sized + 'a> {
+    lock: &'a KilnRwLock<T>,
 }
 
 // Allow the lock to be shared across threads.
 // Safety: Requires correct implementation of locking mechanisms.
 /// # Safety
-/// This implementation of `Send` for `WrtRwLock<T>` is safe if `T` is `Send +
+/// This implementation of `Send` for `KilnRwLock<T>` is safe if `T` is `Send +
 /// Sync`. Access to the `UnsafeCell` data is protected by the atomic `state`
 /// variable, ensuring that data races do not occur. `T` must be `Sync` because
 /// multiple readers can access it concurrently.
-unsafe impl<T: ?Sized + Send + Sync> Send for WrtRwLock<T> {}
+unsafe impl<T: ?Sized + Send + Sync> Send for KilnRwLock<T> {}
 /// # Safety
-/// This implementation of `Sync` for `WrtRwLock<T>` is safe if `T` is `Send +
+/// This implementation of `Sync` for `KilnRwLock<T>` is safe if `T` is `Send +
 /// Sync`. The atomic `state` variable ensures that access to the `UnsafeCell`
 /// data is synchronized. Multiple threads can safely hold references
-/// (`&WrtRwLock<T>`) and access the data via read or write guards, which manage
+/// (`&KilnRwLock<T>`) and access the data via read or write guards, which manage
 /// the lock state.
-unsafe impl<T: ?Sized + Send + Sync> Sync for WrtRwLock<T> {}
+unsafe impl<T: ?Sized + Send + Sync> Sync for KilnRwLock<T> {}
 
-impl<T> WrtRwLock<T> {
-    /// Creates a new `WrtRwLock` protecting the given data.
+impl<T> KilnRwLock<T> {
+    /// Creates a new `KilnRwLock` protecting the given data.
     #[inline]
     pub const fn new(data: T) -> Self {
-        WrtRwLock {
+        KilnRwLock {
             state: AtomicUsize::new(0), // Start unlocked
             data:  UnsafeCell::new(data),
         }
     }
 }
 
-impl<T: ?Sized> WrtRwLock<T> {
+impl<T: ?Sized> KilnRwLock<T> {
     /// Acquires a read lock, spinning until available.
     #[inline]
-    pub fn read(&self) -> WrtRwLockReadGuard<'_, T> {
+    pub fn read(&self) -> KilnRwLockReadGuard<'_, T> {
         loop {
             let current_state = self.state.load(Ordering::Relaxed);
             // Check if write-locked
@@ -140,7 +140,7 @@ impl<T: ?Sized> WrtRwLock<T> {
                     Ordering::Acquire, // Ensure reads happen after lock acquisition
                     Ordering::Relaxed,
                 ) {
-                    Ok(_) => return WrtRwLockReadGuard { lock: self },
+                    Ok(_) => return KilnRwLockReadGuard { lock: self },
                     Err(_) => continue, // State changed, retry loop
                 }
             }
@@ -151,7 +151,7 @@ impl<T: ?Sized> WrtRwLock<T> {
 
     /// Acquires a write lock, spinning until available.
     #[inline]
-    pub fn write(&self) -> WrtRwLockWriteGuard<'_, T> {
+    pub fn write(&self) -> KilnRwLockWriteGuard<'_, T> {
         loop {
             // Attempt to acquire write lock if currently unlocked (state == 0)
             match self.state.compare_exchange_weak(
@@ -160,7 +160,7 @@ impl<T: ?Sized> WrtRwLock<T> {
                 Ordering::Acquire, // Ensure writes happen after lock acquisition
                 Ordering::Relaxed,
             ) {
-                Ok(_) => return WrtRwLockWriteGuard { lock: self },
+                Ok(_) => return KilnRwLockWriteGuard { lock: self },
                 Err(current_state) => {
                     // If it failed because it was already locked (read or write), spin.
                     // If current_state was 0 but compare_exchange failed spuriously,
@@ -176,7 +176,7 @@ impl<T: ?Sized> WrtRwLock<T> {
 
     /// Attempts to acquire a read lock without blocking.
     #[inline]
-    pub fn try_read(&self) -> Option<WrtRwLockReadGuard<'_, T>> {
+    pub fn try_read(&self) -> Option<KilnRwLockReadGuard<'_, T>> {
         let current_state = self.state.load(Ordering::Relaxed);
 
         if current_state == WRITE_LOCK_STATE {
@@ -193,7 +193,7 @@ impl<T: ?Sized> WrtRwLock<T> {
                 Ordering::Acquire,
                 Ordering::Relaxed,
             ) {
-                Ok(_) => Some(WrtRwLockReadGuard { lock: self }),
+                Ok(_) => Some(KilnRwLockReadGuard { lock: self }),
                 Err(_) => None, // State changed, CAS failed
             }
         }
@@ -201,7 +201,7 @@ impl<T: ?Sized> WrtRwLock<T> {
 
     /// Attempts to acquire a write lock without blocking.
     #[inline]
-    pub fn try_write(&self) -> Option<WrtRwLockWriteGuard<'_, T>> {
+    pub fn try_write(&self) -> Option<KilnRwLockWriteGuard<'_, T>> {
         match self.state.compare_exchange(
             // Use strong exchange for try_ versions
             0,
@@ -209,7 +209,7 @@ impl<T: ?Sized> WrtRwLock<T> {
             Ordering::Acquire,
             Ordering::Relaxed,
         ) {
-            Ok(_) => Some(WrtRwLockWriteGuard { lock: self }),
+            Ok(_) => Some(KilnRwLockWriteGuard { lock: self }),
             Err(_) => None, // Failed (already locked or state changed)
         }
     }
@@ -217,7 +217,7 @@ impl<T: ?Sized> WrtRwLock<T> {
 
 // Read Guard Implementation
 
-impl<T: ?Sized> Deref for WrtRwLockReadGuard<'_, T> {
+impl<T: ?Sized> Deref for KilnRwLockReadGuard<'_, T> {
     type Target = T;
 
     #[inline]
@@ -225,14 +225,14 @@ impl<T: ?Sized> Deref for WrtRwLockReadGuard<'_, T> {
         // Safety: Guard ensures read lock is held.
         // # Safety
         // This `unsafe` block dereferences the raw pointer from `UnsafeCell::get()`.
-        // It is safe because a `WrtRwLockReadGuard` only exists when a read lock
-        // is held on the associated `WrtRwLock`. This guarantees shared, read-only
+        // It is safe because a `KilnRwLockReadGuard` only exists when a read lock
+        // is held on the associated `KilnRwLock`. This guarantees shared, read-only
         // access to the data is valid.
         unsafe { &*self.lock.data.get() }
     }
 }
 
-impl<T: ?Sized> Drop for WrtRwLockReadGuard<'_, T> {
+impl<T: ?Sized> Drop for KilnRwLockReadGuard<'_, T> {
     #[inline]
     fn drop(&mut self) {
         // Decrement reader count.
@@ -244,7 +244,7 @@ impl<T: ?Sized> Drop for WrtRwLockReadGuard<'_, T> {
 
 // Write Guard Implementation
 
-impl<T: ?Sized> Deref for WrtRwLockWriteGuard<'_, T> {
+impl<T: ?Sized> Deref for KilnRwLockWriteGuard<'_, T> {
     type Target = T;
 
     #[inline]
@@ -252,8 +252,8 @@ impl<T: ?Sized> Deref for WrtRwLockWriteGuard<'_, T> {
         // Safety: Guard ensures write lock is held.
         // # Safety
         // This `unsafe` block dereferences the raw pointer from `UnsafeCell::get()`.
-        // It is safe because a `WrtRwLockWriteGuard` only exists when a write lock
-        // is held on the associated `WrtRwLock`. This guarantees shared (for `&` access
+        // It is safe because a `KilnRwLockWriteGuard` only exists when a write lock
+        // is held on the associated `KilnRwLock`. This guarantees shared (for `&` access
         // via `deref`) or exclusive (for `&mut` access via `deref_mut`) access to data.
         // In this `deref` case, it provides a shared reference from an exclusive lock
         // context.
@@ -261,19 +261,19 @@ impl<T: ?Sized> Deref for WrtRwLockWriteGuard<'_, T> {
     }
 }
 
-impl<T: ?Sized> DerefMut for WrtRwLockWriteGuard<'_, T> {
+impl<T: ?Sized> DerefMut for KilnRwLockWriteGuard<'_, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         // Safety: Guard ensures write lock is held.
         // # Safety
         // This `unsafe` block dereferences the raw pointer from `UnsafeCell::get()`
-        // for mutable access. It is safe because a `WrtRwLockWriteGuard` only
+        // for mutable access. It is safe because a `KilnRwLockWriteGuard` only
         // exists when a write lock is held, guaranteeing exclusive access to the data.
         unsafe { &mut *self.lock.data.get() }
     }
 }
 
-impl<T: ?Sized> Drop for WrtRwLockWriteGuard<'_, T> {
+impl<T: ?Sized> Drop for KilnRwLockWriteGuard<'_, T> {
     #[inline]
     fn drop(&mut self) {
         // Set state back to unlocked (0).
@@ -283,17 +283,17 @@ impl<T: ?Sized> Drop for WrtRwLockWriteGuard<'_, T> {
     }
 }
 
-impl<T: ?Sized + fmt::Debug> fmt::Debug for WrtRwLock<T> {
+impl<T: ?Sized + fmt::Debug> fmt::Debug for KilnRwLock<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Attempt a non-blocking read for Debug representation if possible,
         // otherwise indicate locked status. Avoids deadlocking Debug.
         if let Some(guard) = self.try_read() {
             // Access data through the guard for Debug formatting.
             // No direct unsafe access needed here as guard provides safe access.
-            f.debug_struct("WrtRwLock").field("data", &&*guard).finish()
+            f.debug_struct("KilnRwLock").field("data", &&*guard).finish()
         } else {
             // Could also try_write to see if it's exclusively locked, but for simplicity:
-            f.debug_struct("WrtRwLock").field("data", &"<locked>").finish()
+            f.debug_struct("KilnRwLock").field("data", &"<locked>").finish()
         }
     }
 }
@@ -344,7 +344,7 @@ pub mod parking_impl {
     // Max value for readers, special marker for writer
 
     /// A `RwLock` that uses `std::thread::park` for blocking.
-    pub struct WrtParkingRwLock<T: ?Sized> {
+    pub struct KilnParkingRwLock<T: ?Sized> {
         state:          AtomicUsize,
         writer_waiting: AtomicBool, // True if a writer is parked, waiting for the lock
         waiters:        Arc<WaitQueue>,
@@ -469,43 +469,43 @@ pub mod parking_impl {
     /// `Send` is safe if `T` is `Send + Sync` because the internal
     /// `Arc<WaitQueue>` and `CoreUnsafeCell<T>` are managed in a
     /// thread-safe manner. Access to `data` is guarded by the lock state.
-    unsafe impl<T: ?Sized + Send + Sync> Send for WrtParkingRwLock<T> {}
+    unsafe impl<T: ?Sized + Send + Sync> Send for KilnParkingRwLock<T> {}
     /// # Safety
     /// `Sync` is safe if `T` is `Send + Sync` for similar reasons to `Send`.
     /// The lock state and synchronization primitives ensure that multiple
     /// threads can safely interact with the lock.
-    unsafe impl<T: ?Sized + Send + Sync> Sync for WrtParkingRwLock<T> {}
+    unsafe impl<T: ?Sized + Send + Sync> Sync for KilnParkingRwLock<T> {}
 
     /// A guard that provides read access to data protected by a
-    /// `WrtParkingRwLock`.
+    /// `KilnParkingRwLock`.
     ///
     /// When the guard is dropped, the read lock is released.
     #[clippy::has_significant_drop]
-    pub struct WrtParkingRwLockReadGuard<'a, T: ?Sized + 'a> {
-        lock: &'a WrtParkingRwLock<T>,
+    pub struct KilnParkingRwLockReadGuard<'a, T: ?Sized + 'a> {
+        lock: &'a KilnParkingRwLock<T>,
     }
 
     /// A guard that provides write access to data protected by a
-    /// `WrtParkingRwLock`.
+    /// `KilnParkingRwLock`.
     ///
     /// When the guard is dropped, the write lock is released.
     #[clippy::has_significant_drop]
-    pub struct WrtParkingRwLockWriteGuard<'a, T: ?Sized + 'a> {
-        lock: &'a WrtParkingRwLock<T>,
+    pub struct KilnParkingRwLockWriteGuard<'a, T: ?Sized + 'a> {
+        lock: &'a KilnParkingRwLock<T>,
     }
 
-    impl<T> WrtParkingRwLock<T> {
-        /// Creates a new `WrtParkingRwLock` in an unlocked state, ready for
+    impl<T> KilnParkingRwLock<T> {
+        /// Creates a new `KilnParkingRwLock` in an unlocked state, ready for
         /// use.
         ///
         /// # Examples
         ///
         /// ```
-        /// use wrt_sync::parking_impl::WrtParkingRwLock;
-        /// let lock = WrtParkingRwLock::new(0);
+        /// use kiln_sync::parking_impl::KilnParkingRwLock;
+        /// let lock = KilnParkingRwLock::new(0);
         /// ```
         pub fn new(data: T) -> Self {
-            WrtParkingRwLock {
+            KilnParkingRwLock {
                 state:          AtomicUsize::new(UNLOCKED),
                 writer_waiting: AtomicBool::new(false),
                 waiters:        Arc::new(WaitQueue::new()),
@@ -514,7 +514,7 @@ pub mod parking_impl {
         }
     }
 
-    impl<T: ?Sized> WrtParkingRwLock<T> {
+    impl<T: ?Sized> KilnParkingRwLock<T> {
         /// Acquires a read lock.
         ///
         /// Returns a RAII guard which will release the lock when dropped.
@@ -522,7 +522,7 @@ pub mod parking_impl {
         /// # Errors
         ///
         /// Returns a `PoisonError` if the lock is poisoned.
-        pub fn read(&self) -> Result<WrtParkingRwLockReadGuard<'_, T>> {
+        pub fn read(&self) -> Result<KilnParkingRwLockReadGuard<'_, T>> {
             loop {
                 let current_state = self.state.load(Ordering::Relaxed);
                 if current_state < usize::MAX - 1 && !self.writer_waiting.load(Ordering::Relaxed) {
@@ -532,7 +532,7 @@ pub mod parking_impl {
                         Ordering::Acquire,
                         Ordering::Relaxed,
                     ) {
-                        Ok(_) => return Ok(WrtParkingRwLockReadGuard { lock: self }),
+                        Ok(_) => return Ok(KilnParkingRwLockReadGuard { lock: self }),
                         Err(_) => continue, // CAS failed, retry
                     }
                 }
@@ -558,7 +558,7 @@ pub mod parking_impl {
         /// # Errors
         ///
         /// Returns a `PoisonError` if the lock is poisoned.
-        pub fn write(&self) -> Result<WrtParkingRwLockWriteGuard<'_, T>> {
+        pub fn write(&self) -> Result<KilnParkingRwLockWriteGuard<'_, T>> {
             self.writer_waiting.store(true, Ordering::Relaxed);
             loop {
                 match self.state.compare_exchange_weak(
@@ -568,7 +568,7 @@ pub mod parking_impl {
                     Ordering::Relaxed,
                 ) {
                     Ok(_) => {
-                        return Ok(WrtParkingRwLockWriteGuard { lock: self });
+                        return Ok(KilnParkingRwLockWriteGuard { lock: self });
                     },
                     Err(_current_state) => {
                         if !self.waiters.register_writer()? {
@@ -587,7 +587,7 @@ pub mod parking_impl {
 
         /// Attempts to acquire a read lock without blocking.
         #[inline]
-        pub fn try_read(&self) -> Option<WrtParkingRwLockReadGuard<'_, T>> {
+        pub fn try_read(&self) -> Option<KilnParkingRwLockReadGuard<'_, T>> {
             let current_state = self.state.load(Ordering::Relaxed);
             if current_state != usize::MAX - 1 && !self.writer_waiting.load(Ordering::Relaxed) {
                 match self.state.compare_exchange(
@@ -596,7 +596,7 @@ pub mod parking_impl {
                     Ordering::Acquire,
                     Ordering::Relaxed,
                 ) {
-                    Ok(_) => Some(WrtParkingRwLockReadGuard { lock: self }),
+                    Ok(_) => Some(KilnParkingRwLockReadGuard { lock: self }),
                     Err(_) => None, // State changed, CAS failed
                 }
             } else {
@@ -606,21 +606,21 @@ pub mod parking_impl {
 
         /// Attempts to acquire a write lock without blocking.
         #[inline]
-        pub fn try_write(&self) -> Option<WrtParkingRwLockWriteGuard<'_, T>> {
+        pub fn try_write(&self) -> Option<KilnParkingRwLockWriteGuard<'_, T>> {
             if self
                 .state
                 .compare_exchange(0, usize::MAX - 1, Ordering::Acquire, Ordering::Relaxed)
                 .is_ok()
             {
                 self.writer_waiting.store(true, Ordering::Relaxed); // Mark writer active
-                Some(WrtParkingRwLockWriteGuard { lock: self })
+                Some(KilnParkingRwLockWriteGuard { lock: self })
             } else {
                 None
             }
         }
     }
 
-    impl<T: ?Sized> CoreDeref for WrtParkingRwLockReadGuard<'_, T> {
+    impl<T: ?Sized> CoreDeref for KilnParkingRwLockReadGuard<'_, T> {
         type Target = T;
 
         #[inline]
@@ -632,7 +632,7 @@ pub mod parking_impl {
         }
     }
 
-    impl<T: ?Sized> Drop for WrtParkingRwLockReadGuard<'_, T> {
+    impl<T: ?Sized> Drop for KilnParkingRwLockReadGuard<'_, T> {
         fn drop(&mut self) {
             let old_state = self.lock.state.fetch_sub(1, core::sync::atomic::Ordering::Release);
             if old_state == 1
@@ -644,7 +644,7 @@ pub mod parking_impl {
         }
     }
 
-    impl<T: ?Sized> CoreDeref for WrtParkingRwLockWriteGuard<'_, T> {
+    impl<T: ?Sized> CoreDeref for KilnParkingRwLockWriteGuard<'_, T> {
         type Target = T;
 
         #[inline]
@@ -656,7 +656,7 @@ pub mod parking_impl {
         }
     }
 
-    impl<T: ?Sized> CoreDerefMut for WrtParkingRwLockWriteGuard<'_, T> {
+    impl<T: ?Sized> CoreDerefMut for KilnParkingRwLockWriteGuard<'_, T> {
         #[inline]
         fn deref_mut(&mut self) -> &mut Self::Target {
             // # Safety
@@ -666,7 +666,7 @@ pub mod parking_impl {
         }
     }
 
-    impl<T: ?Sized> Drop for WrtParkingRwLockWriteGuard<'_, T> {
+    impl<T: ?Sized> Drop for KilnParkingRwLockWriteGuard<'_, T> {
         fn drop(&mut self) {
             self.lock.state.store(0, core::sync::atomic::Ordering::Release);
             // Wake up any waiting readers or a writer. Readers are prioritized if present.
@@ -683,12 +683,12 @@ pub mod parking_impl {
         }
     }
 
-    impl<T: ?Sized + CoreFmt::Debug> CoreFmt::Debug for WrtParkingRwLock<T> {
+    impl<T: ?Sized + CoreFmt::Debug> CoreFmt::Debug for KilnParkingRwLock<T> {
         fn fmt(&self, f: &mut CoreFmt::Formatter<'_>) -> CoreFmt::Result {
             if let Some(guard) = self.try_read() {
-                f.debug_struct("WrtParkingRwLock").field("data", &&*guard).finish()
+                f.debug_struct("KilnParkingRwLock").field("data", &&*guard).finish()
             } else {
-                f.debug_struct("WrtParkingRwLock").field("data", &"<locked>").finish()
+                f.debug_struct("KilnParkingRwLock").field("data", &"<locked>").finish()
             }
         }
     }
@@ -700,7 +700,7 @@ pub mod parking_impl {
             thread,
         };
 
-        use super::WrtParkingRwLock;
+        use super::KilnParkingRwLock;
         use crate::prelude::{
             AtomicBool,
             Ordering,
@@ -708,7 +708,7 @@ pub mod parking_impl {
 
         #[test]
         fn test_parking_rwlock_basic() {
-            let lock = WrtParkingRwLock::new(42);
+            let lock = KilnParkingRwLock::new(42);
 
             {
                 let r = lock.read().unwrap();
@@ -724,7 +724,7 @@ pub mod parking_impl {
 
         #[test]
         fn test_parking_rwlock_concurrent_reads() {
-            let lock = Arc::new(WrtParkingRwLock::new(123));
+            let lock = Arc::new(KilnParkingRwLock::new(123));
             let mut handles = vec![];
 
             for _ in 0..5 {
@@ -743,7 +743,7 @@ pub mod parking_impl {
 
         #[test]
         fn test_parking_rwlock_writer_blocks_readers() {
-            let lock = Arc::new(WrtParkingRwLock::new(0));
+            let lock = Arc::new(KilnParkingRwLock::new(0));
             let writer_ready = Arc::new(AtomicBool::new(false));
             let reader_finished_first_attempt = Arc::new(AtomicBool::new(false));
 
@@ -785,7 +785,7 @@ pub mod parking_impl {
 
         #[test]
         fn test_parking_rwlock_try_operations() {
-            let lock = WrtParkingRwLock::new(0);
+            let lock = KilnParkingRwLock::new(0);
             let w_opt = lock.try_write();
             assert!(w_opt.is_some());
             let mut w_guard = w_opt.unwrap();
@@ -816,14 +816,14 @@ mod tests {
 
     #[test]
     fn test_rwlock_new_read() {
-        let lock = WrtRwLock::new(10);
+        let lock = KilnRwLock::new(10);
         let val = lock.read();
         assert_eq!(*val, 10);
     }
 
     #[test]
     fn test_rwlock_new_write_read() {
-        let lock = WrtRwLock::new(0);
+        let lock = KilnRwLock::new(0);
         {
             let mut w = lock.write();
             *w = 20;
@@ -834,7 +834,7 @@ mod tests {
 
     #[test]
     fn test_rwlock_multiple_readers() {
-        let lock = WrtRwLock::new(30);
+        let lock = KilnRwLock::new(30);
         let r1 = lock.read();
         let r2 = lock.read();
         assert_eq!(*r1, 30);
@@ -845,7 +845,7 @@ mod tests {
 
     #[test]
     fn test_rwlock_try_read_write() {
-        let lock = WrtRwLock::new(5);
+        let lock = KilnRwLock::new(5);
 
         if let Some(r_guard) = lock.try_read() {
             assert_eq!(*r_guard, 5);

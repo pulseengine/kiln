@@ -16,7 +16,7 @@ use core::{
 #[cfg(feature = "std")]
 use std::thread;
 
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec,
     bounded_collections::BoundedMap,
     budget_aware_provider::CrateId,
@@ -24,7 +24,7 @@ use wrt_foundation::{
     safe_managed_alloc,
     safe_memory::{NoStdProvider, SafeMemory},
 };
-use wrt_platform::sync::{FutexLike, SpinFutex};
+use kiln_platform::sync::{FutexLike, SpinFutex};
 
 #[cfg(feature = "std")]
 use std::sync::Mutex;
@@ -60,8 +60,8 @@ impl fmt::Display for ThreadSpawnError {
 #[cfg(feature = "std")]
 impl std::error::Error for ThreadSpawnError {}
 
-// Conversion to wrt_error::Error for unified error handling
-impl From<ThreadSpawnError> for wrt_error::Error {
+// Conversion to kiln_error::Error for unified error handling
+impl From<ThreadSpawnError> for kiln_error::Error {
     fn from(err: ThreadSpawnError) -> Self {
         match err.kind {
             ThreadSpawnErrorKind::ResourceLimitExceeded => {
@@ -89,7 +89,7 @@ impl From<ThreadSpawnError> for wrt_error::Error {
     }
 }
 
-pub type ThreadSpawnResult<T> = wrt_error::Result<T>;
+pub type ThreadSpawnResult<T> = kiln_error::Result<T>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ThreadId(u32);
@@ -115,7 +115,7 @@ pub struct ThreadConfiguration {
 }
 
 impl ThreadConfiguration {
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         let provider = safe_managed_alloc!(65536, CrateId::Component)?;
         Ok(Self {
             stack_size: DEFAULT_STACK_SIZE,
@@ -124,7 +124,7 @@ impl ThreadConfiguration {
             detached: false,
             cpu_affinity: None,
             capabilities: BoundedVec::new()
-                .map_err(|_| wrt_error::Error::resource_exhausted("Error occurred"))?,
+                .map_err(|_| kiln_error::Error::resource_exhausted("Error occurred"))?,
         })
     }
 }
@@ -189,13 +189,13 @@ pub struct ComponentThreadManager {
 }
 
 impl ComponentThreadManager {
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         let provider = safe_managed_alloc!(65536, CrateId::Component)?;
         Ok(Self {
             threads: BoundedMap::new(),
             component_threads: BoundedMap::new(),
             spawn_requests: BoundedVec::new()
-                .map_err(|_| wrt_error::Error::resource_exhausted("Error occurred"))?,
+                .map_err(|_| kiln_error::Error::resource_exhausted("Error occurred"))?,
             next_thread_id: AtomicU32::new(1),
             task_manager: TaskManager::new(),
             virt_manager: None,
@@ -245,12 +245,12 @@ impl ComponentThreadManager {
         let handle = self
             .threads
             .get(&thread_id)
-            .ok_or_else(|| wrt_error::Error::runtime_execution_error("Error occurred"))?;
+            .ok_or_else(|| kiln_error::Error::runtime_execution_error("Error occurred"))?;
 
         if handle.detached {
-            return Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::ComponentRuntime,
-                wrt_error::codes::COMPONENT_THREAD_JOIN_FAILED,
+            return Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::ComponentRuntime,
+                kiln_error::codes::COMPONENT_THREAD_JOIN_FAILED,
                 "Error message needed",
             ));
         }

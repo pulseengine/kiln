@@ -1,4 +1,4 @@
-// WRT - wrt-error
+// Kiln - kiln-error
 // Module: ASIL-aware Error Macros
 // SW-REQ-ID: REQ_SAFETY_ASIL_001
 //
@@ -16,7 +16,7 @@
 /// # Examples
 ///
 /// ```ignore
-/// use wrt_error::{asil_error, ErrorCategory, codes};
+/// use kiln_error::{asil_error, ErrorCategory, codes};
 ///
 /// // Create a safety-critical error (requires ASIL-B or higher)
 /// let error = asil_error!(
@@ -69,7 +69,7 @@ macro_rules! asil_error {
 /// # Examples
 ///
 /// ```ignore
-/// use wrt_error::{monitor_error, Error, ErrorCategory, codes};
+/// use kiln_error::{monitor_error, Error, ErrorCategory, codes};
 ///
 /// let monitor = SafetyMonitor::new();
 /// let error = Error::new(ErrorCategory::Memory, codes::MEMORY_OUT_OF_BOUNDS, "Out of bounds");
@@ -107,7 +107,7 @@ macro_rules! monitor_error {
 /// # Examples
 ///
 /// ```ignore
-/// use wrt_error::{asil_assert, Error, ErrorCategory, codes};
+/// use kiln_error::{asil_assert, Error, ErrorCategory, codes};
 ///
 /// fn validate_index(index: usize, max: usize) -> Result<(), Error> {
 ///     asil_assert!(
@@ -170,7 +170,7 @@ macro_rules! asil_assert {
 /// # Examples
 ///
 /// ```ignore
-/// use wrt_error::{safety_error, codes};
+/// use kiln_error::{safety_error, codes};
 ///
 /// // This will only compile with ASIL-C or higher
 /// let error = safety_error!(

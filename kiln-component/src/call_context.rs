@@ -35,13 +35,13 @@ use alloc::{collections::BTreeMap as HashMap, format, string::String, vec::Vec};
 #[cfg(feature = "std")]
 use std::{collections::HashMap, format, string::String, vec::Vec};
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-use wrt_foundation::collections::{StaticMap as BoundedMap, StaticVec};
+use kiln_foundation::collections::{StaticMap as BoundedMap, StaticVec};
 
 // For no_std, override prelude's bounded::BoundedVec with StaticVec
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticVec as BoundedVec;
+use kiln_foundation::collections::StaticVec as BoundedVec;
 
 // Import ComponentValue consistently from canonical_abi
 use crate::canonical_abi::ComponentValue;

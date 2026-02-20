@@ -1,10 +1,10 @@
 #![deny(warnings)]
 
-use wrt_component::type_conversion::bidirectional::*;
-use wrt_format::component::{
+use kiln_component::type_conversion::bidirectional::*;
+use kiln_format::component::{
     ExternType as FormatExternType, ResourceRepresentation, ValType as FormatValType,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     ExternType as TypesExternType,
     component::ResourceType,
     component_value::ValType as TypesValType,

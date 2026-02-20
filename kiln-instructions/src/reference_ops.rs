@@ -9,11 +9,11 @@
 //! These operations support the WebAssembly reference types proposal
 //! and work across std, `no_std+alloc`, and pure `no_std` environments.
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     types::{
         RefType,
         ValueType,
@@ -300,7 +300,7 @@ impl ReferenceOp {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use wrt_foundation::values::ExternRef;
+    use kiln_foundation::values::ExternRef;
 
     use super::*;
 

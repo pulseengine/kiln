@@ -58,7 +58,7 @@ Linux futexes are the gold standard - fast, flexible, and feature-rich:
    :caption: Linux futex with all features
    :linenos:
 
-   use wrt_platform::{LinuxFutex, LinuxFutexBuilder};
+   use kiln_platform::{LinuxFutex, LinuxFutexBuilder};
    use std::time::Duration;
    
    fn create_linux_futex() -> Result<LinuxFutex, Error> {
@@ -90,7 +90,7 @@ macOS doesn't have futexes, but we can build something similar:
    :caption: macOS synchronization primitive
    :linenos:
 
-   use wrt_platform::{MacOsFutex, MacOsFutexBuilder};
+   use kiln_platform::{MacOsFutex, MacOsFutexBuilder};
    
    fn create_macos_futex() -> Result<MacOsFutex, Error> {
        MacOsFutexBuilder::new()
@@ -118,7 +118,7 @@ QNX shines with its real-time synchronization features:
    :caption: QNX real-time synchronization
    :linenos:
 
-   use wrt_platform::{QnxFutex, QnxFutexBuilder, QnxSyncPriority};
+   use kiln_platform::{QnxFutex, QnxFutexBuilder, QnxSyncPriority};
    
    fn create_qnx_realtime_futex() -> Result<QnxFutex, Error> {
        QnxFutexBuilder::new()
@@ -147,7 +147,7 @@ Embedded platforms need lightweight primitives:
    :linenos:
 
    // Zephyr: Using kernel semaphores
-   use wrt_platform::{ZephyrFutex, ZephyrSemaphoreFutex};
+   use kiln_platform::{ZephyrFutex, ZephyrSemaphoreFutex};
    
    fn create_zephyr_sync() -> Result<ZephyrFutex, Error> {
        // Option 1: Direct futex-like primitive
@@ -163,7 +163,7 @@ Embedded platforms need lightweight primitives:
    }
    
    // Tock: IPC-based synchronization
-   use wrt_platform::{TockFutex, TockFutexBuilder};
+   use kiln_platform::{TockFutex, TockFutexBuilder};
    
    fn create_tock_sync() -> Result<TockFutex, Error> {
        TockFutexBuilder::new()
@@ -182,7 +182,7 @@ When you need maximum performance, go lock-free:
    :caption: Platform-optimized lock-free structures
    :linenos:
 
-   use wrt_platform::advanced_sync::{
+   use kiln_platform::advanced_sync::{
        LockFreeAllocator, 
        LockFreeMpscQueue,
        WaitFreeSpscQueue
@@ -224,7 +224,7 @@ Prevent priority inversion in real-time systems:
    :caption: Priority inheritance implementation
    :linenos:
 
-   use wrt_platform::advanced_sync::{PriorityInheritanceMutex, Priority};
+   use kiln_platform::advanced_sync::{PriorityInheritanceMutex, Priority};
    
    fn priority_safe_critical_section() -> Result<(), Error> {
        let mutex = PriorityInheritanceMutex::new(42);
@@ -252,7 +252,7 @@ Advanced RwLock with upgrade capabilities:
    :caption: Upgradeable read locks
    :linenos:
 
-   use wrt_platform::advanced_sync::AdvancedRwLock;
+   use kiln_platform::advanced_sync::AdvancedRwLock;
    
    fn upgradeable_reads() -> Result<(), Error> {
        let lock = AdvancedRwLock::new(vec![1, 2, 3]);
@@ -281,7 +281,7 @@ Different platforms have different optimal spin strategies:
    :caption: Adaptive spinning based on platform
    :linenos:
 
-   use wrt_platform::sync::{SpinFutex, SpinFutexBuilder};
+   use kiln_platform::sync::{SpinFutex, SpinFutexBuilder};
    
    fn create_adaptive_spinlock() -> Result<SpinFutex, Error> {
        let detector = PlatformDetector::new();
@@ -321,7 +321,7 @@ Keep synchronization local to NUMA nodes:
    :caption: NUMA-aware locking
    :linenos:
 
-   use wrt_platform::advanced_sync::NumaAwareMutex;
+   use kiln_platform::advanced_sync::NumaAwareMutex;
    
    fn numa_optimized_sync() -> Result<(), Error> {
        // Create per-NUMA-node mutexes
@@ -350,7 +350,7 @@ Track futex operations for debugging:
 
    #[cfg(debug_assertions)]
    fn create_debug_futex() -> Result<impl FutexLike, Error> {
-       use wrt_platform::sync::DebugFutex;
+       use kiln_platform::sync::DebugFutex;
        
        DebugFutex::new()
            .with_operation_tracking(true)

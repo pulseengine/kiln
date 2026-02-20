@@ -9,7 +9,7 @@ use alloc::boxed::Box;
 use std::boxed::Box;
 
 // Implement required traits for BoundedVec compatibility
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedString,
     budget_aware_provider::CrateId,
     collections::StaticVec as BoundedVec,
@@ -24,26 +24,26 @@ use super::{Instant, ResourceId};
 macro_rules! impl_basic_traits {
     ($type:ty, $default_val:expr) => {
         impl Checksummable for $type {
-            fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+            fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
                 0u32.update_checksum(checksum);
             }
         }
 
         impl ToBytes for $type {
-            fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 &self,
                 _writer: &mut WriteStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<()> {
+            ) -> kiln_error::Result<()> {
                 Ok(())
             }
         }
 
         impl FromBytes for $type {
-            fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 _reader: &mut ReadStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<Self> {
+            ) -> kiln_error::Result<Self> {
                 Ok($default_val)
             }
         }
@@ -173,7 +173,7 @@ pub struct ResourceTable {
 
 impl ResourceTable {
     /// Create a new resource table
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             resources: BoundedVec::new().unwrap(),
             next_id: 1,
@@ -186,7 +186,7 @@ impl ResourceTable {
     pub fn with_config(
         memory_strategy: MemoryStrategy,
         verification_level: VerificationLevel,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             resources: BoundedVec::new().unwrap(),
             next_id: 1,
@@ -196,7 +196,7 @@ impl ResourceTable {
     }
 
     /// Insert a resource and return its ID
-    pub fn insert(&mut self, resource: Resource) -> wrt_error::Result<ResourceId> {
+    pub fn insert(&mut self, resource: Resource) -> kiln_error::Result<ResourceId> {
         let id = ResourceId(self.next_id);
         self.next_id += 1;
 
@@ -211,7 +211,7 @@ impl ResourceTable {
         // No empty slot found, try to add new one
         self.resources
             .push(Some(resource))
-            .map_err(|_| wrt_error::Error::resource_exhausted("Error occurred"))?;
+            .map_err(|_| kiln_error::Error::resource_exhausted("Error occurred"))?;
 
         Ok(id)
     }
@@ -265,7 +265,7 @@ impl ResourceTable {
         &mut self,
         type_idx: u32,
         data: Box<dyn core::any::Any + Send + Sync>,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         // Convert Box to raw pointer
         let data_ptr = Box::into_raw(data) as *mut () as usize;
 
@@ -279,20 +279,20 @@ impl ResourceTable {
 
     /// Get a resource by handle (compatibility method)
     /// Returns the resource ID for get/get_mut operations
-    pub fn get_resource(&self, handle: u32) -> wrt_error::Result<ResourceId> {
+    pub fn get_resource(&self, handle: u32) -> kiln_error::Result<ResourceId> {
         let id = ResourceId(handle);
         if self.get(id).is_some() {
             Ok(id)
         } else {
-            Err(wrt_error::Error::resource_error("Resource not found"))
+            Err(kiln_error::Error::resource_error("Resource not found"))
         }
     }
 
     /// Drop/remove a resource by handle (compatibility method)
-    pub fn drop_resource(&mut self, handle: u32) -> wrt_error::Result<()> {
+    pub fn drop_resource(&mut self, handle: u32) -> kiln_error::Result<()> {
         let id = ResourceId(handle);
         self.remove(id)
-            .ok_or_else(|| wrt_error::Error::resource_error("Resource not found"))?;
+            .ok_or_else(|| kiln_error::Error::resource_error("Resource not found"))?;
         Ok(())
     }
 }

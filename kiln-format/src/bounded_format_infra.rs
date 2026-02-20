@@ -3,8 +3,8 @@
 //! This module provides bounded alternatives for format collections
 //! to ensure static memory allocation throughout the format structures.
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     bounded::{BoundedString, BoundedVec},
     no_std_hashmap::BoundedHashMap,
     safe_memory::NoStdProvider,
@@ -89,9 +89,9 @@ pub type BoundedWorldMap<V> = BoundedHashMap<BoundedModuleName, V, MAX_WORLD_ITE
 /// Create a new bounded params vector
 pub fn new_params_vec<T>() -> Result<BoundedParamsVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -104,9 +104,9 @@ where
 /// Create a new bounded results vector
 pub fn new_results_vec<T>() -> Result<BoundedResultsVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -119,9 +119,9 @@ where
 /// Create a new bounded fields vector
 pub fn new_fields_vec<T>() -> Result<BoundedFieldsVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -134,9 +134,9 @@ where
 /// Create a new bounded cases vector
 pub fn new_cases_vec<T>() -> Result<BoundedCasesVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -173,9 +173,9 @@ pub fn bounded_field_from_str(s: &str) -> Result<BoundedFieldName> {
 /// Create a new bounded interface map
 pub fn new_interface_map<V>() -> Result<BoundedInterfaceMap<V>>
 where
-    V: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    V: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -188,9 +188,9 @@ where
 /// Create a new bounded world map
 pub fn new_world_map<V>() -> Result<BoundedWorldMap<V>>
 where
-    V: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    V: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq

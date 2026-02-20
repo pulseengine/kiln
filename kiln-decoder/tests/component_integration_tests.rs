@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use wrt_decoder::component::decode_component;
-    use wrt_error::Result;
-    use wrt_format::component::FormatValType;
+    use kiln_decoder::component::decode_component;
+    use kiln_error::Result;
+    use kiln_format::component::FormatValType;
 
     #[test]
     fn test_decode_simple_component() -> Result<()> {
@@ -13,7 +13,7 @@ mod tests {
         let component = create_mock_component()?;
 
         // Encode the component
-        let binary = wrt_decoder::component::encode_component(&component)?;
+        let binary = kiln_decoder::component::encode_component(&component)?;
 
         // Decode the binary
         let decoded_component = decode_component(&binary)?;
@@ -25,35 +25,35 @@ mod tests {
         Ok(())
     }
 
-    fn create_mock_component() -> Result<wrt_format::component::Component> {
-        let mut component = wrt_format::component::Component::new();
+    fn create_mock_component() -> Result<kiln_format::component::Component> {
+        let mut component = kiln_format::component::Component::new();
 
         // Add a simple function import
-        component.imports.push(wrt_format::component::Import {
-            name: wrt_format::component::ImportName {
+        component.imports.push(kiln_format::component::Import {
+            name: kiln_format::component::ImportName {
                 namespace: "env".to_string(),
                 name: "import_func".to_string(),
                 nested: Vec::new(),
                 package: None,
             },
-            ty: wrt_format::component::ExternType::Function {
+            ty: kiln_format::component::ExternType::Function {
                 params: vec![("param".to_string(), FormatValType::S32)],
                 results: vec![FormatValType::S32],
             },
         });
 
         // Add a simple function export
-        component.exports.push(wrt_format::component::Export {
-            name: wrt_format::component::ExportName {
+        component.exports.push(kiln_format::component::Export {
+            name: kiln_format::component::ExportName {
                 name: "export_func".to_string(),
                 is_resource: false,
                 semver: None,
                 integrity: None,
                 nested: Vec::new(),
             },
-            sort: wrt_format::component::Sort::Function,
+            sort: kiln_format::component::Sort::Function,
             idx: 0,
-            ty: Some(wrt_format::component::ExternType::Function {
+            ty: Some(kiln_format::component::ExternType::Function {
                 params: vec![("param".to_string(), FormatValType::S32)],
                 results: vec![FormatValType::S32],
             }),

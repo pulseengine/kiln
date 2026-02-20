@@ -3,7 +3,7 @@
 CPU Resource Management and Budgets
 ====================================
 
-This section documents CPU resource management in Pulseengine (WRT Edition), including
+This section documents CPU resource management in Pulseengine (Kiln Edition), including
 execution budgets, performance monitoring, and resource allocation across different environments.
 
 .. arch_component:: ARCH_COMP_CPU_001
@@ -21,7 +21,7 @@ CPU Budget Architecture
 Execution Budget Framework
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-CPU resources are managed through a budget-based system (``wrt-runtime/src/execution.rs:289-356``):
+CPU resources are managed through a budget-based system (``kiln-runtime/src/execution.rs:289-356``):
 
 .. code-block:: rust
 

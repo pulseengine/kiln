@@ -11,10 +11,10 @@ use std::{boxed::Box, collections::HashMap, vec::Vec};
 #[cfg(feature = "std")]
 use std::{fmt, mem};
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     collections::StaticVec as BoundedVec,
-    // component::WrtComponentType, // Not available
+    // component::KilnComponentType, // Not available
     component_value::ComponentValue,
     prelude::*,
     // resource::ResourceHandle, // Not available
@@ -27,7 +27,7 @@ use crate::{
 };
 
 // Placeholder types for missing imports
-// WrtComponentType now exported from crate root
+// KilnComponentType now exported from crate root
 // ResourceHandle now exported from crate root
 pub type ResourceLifecycleManager = ();
 
@@ -270,7 +270,7 @@ impl BlastZoneConfig {
 
 impl BlastZone {
     /// Create a new blast zone from configuration
-    pub fn new(config: BlastZoneConfig) -> wrt_error::Result<Self> {
+    pub fn new(config: BlastZoneConfig) -> kiln_error::Result<Self> {
         Ok(Self {
             config,
             health: ZoneHealth::Healthy,
@@ -288,9 +288,9 @@ impl BlastZone {
     }
 
     /// Add a component to this blast zone
-    pub fn add_component(&mut self, component_id: u32) -> wrt_error::Result<()> {
+    pub fn add_component(&mut self, component_id: u32) -> kiln_error::Result<()> {
         if self.components.len() >= self.config.max_components {
-            return Err(wrt_error::Error::resource_exhausted(
+            return Err(kiln_error::Error::resource_exhausted(
                 "Blast zone at capacity",
             ));
         }
@@ -302,7 +302,7 @@ impl BlastZone {
         #[cfg(not(any(feature = "std",)))]
         {
             self.components.push(component_id).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Failed to add component to zone")
+                kiln_error::Error::resource_exhausted("Failed to add component to zone")
             })?;
         }
 
@@ -351,7 +351,7 @@ impl BlastZone {
     }
 
     /// Attempt recovery of this blast zone
-    pub fn attempt_recovery(&mut self) -> wrt_error::Result<bool> {
+    pub fn attempt_recovery(&mut self) -> kiln_error::Result<bool> {
         self.recovery_attempts += 1;
         self.health = ZoneHealth::Recovering;
 
@@ -392,7 +392,7 @@ impl BlastZone {
         &mut self,
         memory_delta: isize,
         resource_delta: i32,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Update memory usage
         if memory_delta < 0 {
             let decrease = (-memory_delta) as usize;
@@ -400,7 +400,7 @@ impl BlastZone {
         } else {
             let increase = memory_delta as usize;
             if self.memory_used + increase > self.config.memory_budget {
-                return Err(wrt_error::Error::resource_exhausted(
+                return Err(kiln_error::Error::resource_exhausted(
                     "Memory budget exceeded",
                 ));
             }
@@ -414,7 +414,7 @@ impl BlastZone {
         } else {
             let increase = resource_delta as u32;
             if self.resources_used + increase > self.config.max_resources {
-                return Err(wrt_error::Error::resource_exhausted(
+                return Err(kiln_error::Error::resource_exhausted(
                     "Resource limit exceeded",
                 ));
             }
@@ -460,7 +460,7 @@ impl BlastZone {
 
 impl BlastZoneManager {
     /// Create a new blast zone manager
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             zones: HashMap::new(),
@@ -484,7 +484,7 @@ impl BlastZoneManager {
     }
 
     /// Create a new blast zone
-    pub fn create_zone(&mut self, config: BlastZoneConfig) -> wrt_error::Result<u32> {
+    pub fn create_zone(&mut self, config: BlastZoneConfig) -> kiln_error::Result<u32> {
         let zone_id = config.zone_id;
         let zone = BlastZone::new(config)?;
 
@@ -496,21 +496,21 @@ impl BlastZoneManager {
         {
             self.zones
                 .push((zone_id, zone))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many blast zones"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many blast zones"))?;
         }
 
         Ok(zone_id)
     }
 
     /// Assign a component to a blast zone
-    pub fn assign_component(&mut self, component_id: u32, zone_id: u32) -> wrt_error::Result<()> {
+    pub fn assign_component(&mut self, component_id: u32, zone_id: u32) -> kiln_error::Result<()> {
         // Find and update the zone
         #[cfg(feature = "std")]
         {
             let zone = self
                 .zones
                 .get_mut(&zone_id)
-                .ok_or_else(|| wrt_error::Error::invalid_value("Zone not found"))?;
+                .ok_or_else(|| kiln_error::Error::invalid_value("Zone not found"))?;
             zone.add_component(component_id)?;
             self.component_zones.insert(component_id, zone_id);
         }
@@ -525,11 +525,11 @@ impl BlastZoneManager {
                 }
             }
             if !zone_found {
-                return Err(wrt_error::Error::invalid_value("Zone not found"));
+                return Err(kiln_error::Error::invalid_value("Zone not found"));
             }
             self.component_zones
                 .push((component_id, zone_id))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many component mappings"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many component mappings"))?;
         }
 
         Ok(())
@@ -541,13 +541,13 @@ impl BlastZoneManager {
         component_id: u32,
         reason: &str,
         timestamp: u64,
-    ) -> wrt_error::Result<ContainmentPolicy> {
+    ) -> kiln_error::Result<ContainmentPolicy> {
         self.global_failure_count += 1;
 
         // Find the zone containing this component
         let zone_id = self
             .get_component_zone(component_id)
-            .ok_or_else(|| wrt_error::Error::invalid_value("Component not in any zone"))?;
+            .ok_or_else(|| kiln_error::Error::invalid_value("Component not in any zone"))?;
 
         // Record the failure
         let failure = ZoneFailure {
@@ -645,7 +645,7 @@ impl BlastZoneManager {
     }
 
     /// Add an isolation policy
-    pub fn add_policy(&mut self, policy: IsolationPolicy) -> wrt_error::Result<()> {
+    pub fn add_policy(&mut self, policy: IsolationPolicy) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             self.policies.push(policy);
@@ -654,7 +654,7 @@ impl BlastZoneManager {
         {
             self.policies
                 .push(policy)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many policies"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many policies"))?;
         }
         Ok(())
     }
@@ -677,13 +677,13 @@ impl BlastZoneManager {
     }
 
     /// Attempt recovery of a failed zone
-    pub fn recover_zone(&mut self, zone_id: u32) -> wrt_error::Result<bool> {
+    pub fn recover_zone(&mut self, zone_id: u32) -> kiln_error::Result<bool> {
         #[cfg(feature = "std")]
         {
             let zone = self
                 .zones
                 .get_mut(&zone_id)
-                .ok_or_else(|| wrt_error::Error::invalid_value("Zone not found"))?;
+                .ok_or_else(|| kiln_error::Error::invalid_value("Zone not found"))?;
             zone.attempt_recovery()
         }
         #[cfg(not(any(feature = "std",)))]
@@ -693,7 +693,7 @@ impl BlastZoneManager {
                     return zone.attempt_recovery();
                 }
             }
-            Err(wrt_error::Error::invalid_value("Zone not found"))
+            Err(kiln_error::Error::invalid_value("Zone not found"))
         }
     }
 

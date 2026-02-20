@@ -8,7 +8,7 @@ QNX Platform Features
    
    -- QNX systems programmer
 
-QNX Neutrino RTOS is the platform of choice for safety-critical systems. From cars to medical devices, from trains to nuclear reactors, QNX provides the determinism and reliability that keeps the world running. Let's explore how WRT leverages QNX's unique features.
+QNX Neutrino RTOS is the platform of choice for safety-critical systems. From cars to medical devices, from trains to nuclear reactors, QNX provides the determinism and reliability that keeps the world running. Let's explore how Kiln leverages QNX's unique features.
 
 .. admonition:: What You'll Learn
    :class: note
@@ -29,7 +29,7 @@ QNX is a microkernel RTOS where everything runs in user space:
    :caption: QNX system architecture awareness
    :linenos:
 
-   use wrt_platform::qnx_detection;
+   use kiln_platform::qnx_detection;
    
    fn understand_qnx_system() -> Result<QnxSystemInfo, Error> {
        let info = qnx_detection::get_system_info()?;
@@ -60,7 +60,7 @@ QNX's killer feature for safety-critical systems:
    :caption: Memory partition management
    :linenos:
 
-   use wrt_platform::{
+   use kiln_platform::{
        QnxMemoryPartition, 
        QnxMemoryPartitionBuilder,
        QnxPartitionFlags
@@ -115,7 +115,7 @@ Dynamic resource allocation with guarantees:
    :caption: Adaptive partition scheduling
    :linenos:
 
-   use wrt_platform::qnx_adaptive::{
+   use kiln_platform::qnx_adaptive::{
        AdaptivePartition,
        AdaptivePartitionBuilder,
        PartitionBudget
@@ -160,7 +160,7 @@ QNX's real-time scheduler in action:
    :caption: Real-time thread configuration
    :linenos:
 
-   use wrt_platform::qnx_realtime::{
+   use kiln_platform::qnx_realtime::{
        SchedPolicy,
        ThreadAttributes,
        inherit_scheduling
@@ -204,7 +204,7 @@ QNX's native IPC for zero-copy communication:
    :caption: QNX message passing
    :linenos:
 
-   use wrt_platform::qnx_ipc::{
+   use kiln_platform::qnx_ipc::{
        Channel,
        Message,
        MessageType
@@ -268,7 +268,7 @@ Create a POSIX-compliant WebAssembly device:
    :caption: QNX resource manager
    :linenos:
 
-   use wrt_platform::qnx_resource_manager::{
+   use kiln_platform::qnx_resource_manager::{
        ResourceManager,
        ResourceManagerBuilder,
        IoHandlers
@@ -327,7 +327,7 @@ Using QNX HAM for fault tolerance:
    :caption: High Availability Manager integration
    :linenos:
 
-   use wrt_platform::qnx_ham::{
+   use kiln_platform::qnx_ham::{
        Ham,
        Entity,
        Condition,
@@ -386,7 +386,7 @@ QNX features for safety-critical systems:
    :caption: Safety-critical configuration
    :linenos:
 
-   use wrt_platform::qnx_safety::{
+   use kiln_platform::qnx_safety::{
        SafetyLevel,
        WatchdogConfig,
        ErrorHandler
@@ -446,7 +446,7 @@ QNX's system profiler integration:
    :caption: Performance monitoring
    :linenos:
 
-   use wrt_platform::qnx_profiling::{
+   use kiln_platform::qnx_profiling::{
        SystemProfiler,
        TraceEvent
    };

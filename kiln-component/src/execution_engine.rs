@@ -15,12 +15,12 @@ extern crate alloc;
 use alloc::{boxed::Box, format, string::String, vec, vec::Vec};
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId, collections::StaticVec as BoundedVec,
     component_value::ComponentValue, safe_managed_alloc,
 };
 #[cfg(feature = "std")]
-use wrt_foundation::{
+use kiln_foundation::{
     collections::StaticVec as BoundedVec, component_value::ComponentValue, prelude::*,
 };
 
@@ -57,7 +57,7 @@ where
 use crate::{
     components::component::{Component, ComponentInstance, ComponentType, ExportType, ImportType},
     memory_layout::MemoryLayout,
-    prelude::WrtComponentType,
+    prelude::KilnComponentType,
     string_encoding::StringEncoding,
     types::{ValType, Value},
     unified_execution_agent_stubs::{
@@ -69,7 +69,7 @@ use crate::{
 // Temporary module alias for canonical_abi types
 mod canonical_abi {
     #[cfg(feature = "std")]
-    pub use wrt_foundation::component_value::ComponentValue;
+    pub use kiln_foundation::component_value::ComponentValue;
 
     pub use crate::types::ValType as ComponentType;
     #[cfg(not(feature = "std"))]
@@ -100,7 +100,7 @@ pub struct CallFrame {
 
 impl CallFrame {
     /// Create a new call frame
-    pub fn new(instance_id: u32, function_index: u32) -> wrt_error::Result<Self> {
+    pub fn new(instance_id: u32, function_index: u32) -> kiln_error::Result<Self> {
         Ok(Self {
             instance_id,
             function_index,
@@ -113,7 +113,7 @@ impl CallFrame {
     }
 
     /// Push a local variable
-    pub fn push_local(&mut self, value: Value) -> wrt_error::Result<()> {
+    pub fn push_local(&mut self, value: Value) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             self.locals.push(value);
@@ -123,25 +123,25 @@ impl CallFrame {
         {
             self.locals
                 .push(value)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many local variables"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many local variables"))?;
             Ok(())
         }
     }
 
     /// Get a local variable by index
-    pub fn get_local(&self, index: usize) -> wrt_error::Result<&Value> {
+    pub fn get_local(&self, index: usize) -> kiln_error::Result<&Value> {
         self.locals
             .get(index)
-            .ok_or_else(|| wrt_error::Error::validation_invalid_input("Invalid input"))
+            .ok_or_else(|| kiln_error::Error::validation_invalid_input("Invalid input"))
     }
 
     /// Set a local variable by index
-    pub fn set_local(&mut self, index: usize, value: Value) -> wrt_error::Result<()> {
+    pub fn set_local(&mut self, index: usize, value: Value) -> kiln_error::Result<()> {
         if index < self.locals.len() {
             self.locals[index] = value;
             Ok(())
         } else {
-            Err(wrt_error::Error::validation_invalid_input("Invalid input"))
+            Err(kiln_error::Error::validation_invalid_input("Invalid input"))
         }
     }
 }
@@ -149,10 +149,10 @@ impl CallFrame {
 /// Host function callback trait
 pub trait HostFunction: Send + Sync {
     /// Call the host function with the given arguments
-    fn call(&mut self, args: &[Value]) -> wrt_error::Result<Value>;
+    fn call(&mut self, args: &[Value]) -> kiln_error::Result<Value>;
 
     /// Get the function signature
-    fn signature(&self) -> &WrtComponentType<ComponentProvider>;
+    fn signature(&self) -> &KilnComponentType<ComponentProvider>;
 }
 
 /// Component execution engine
@@ -176,7 +176,7 @@ pub struct ComponentExecutionEngine {
     #[cfg(feature = "std")]
     host_functions: Vec<Box<dyn HostFunction>>,
     #[cfg(not(any(feature = "std",)))]
-    host_functions: BoundedVec<fn(&[Value]) -> wrt_error::Result<Value>, 64>,
+    host_functions: BoundedVec<fn(&[Value]) -> kiln_error::Result<Value>, 64>,
 
     /// Current component instance
     current_instance: Option<u32>,
@@ -228,7 +228,7 @@ impl fmt::Display for ExecutionState {
 
 impl ComponentExecutionEngine {
     /// Create a new component execution engine
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             call_stack: Vec::new(),
@@ -248,7 +248,7 @@ impl ComponentExecutionEngine {
 
     /// Create a new component execution engine with custom runtime bridge
     /// configuration
-    pub fn with_runtime_config(bridge_config: RuntimeBridgeConfig) -> wrt_error::Result<Self> {
+    pub fn with_runtime_config(bridge_config: RuntimeBridgeConfig) -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             call_stack: Vec::new(),
@@ -271,7 +271,7 @@ impl ComponentExecutionEngine {
     pub fn register_host_function(
         &mut self,
         func: Box<dyn HostFunction>,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         let index = self.host_functions.len() as u32;
         self.host_functions.push(func);
         Ok(index)
@@ -281,12 +281,12 @@ impl ComponentExecutionEngine {
     #[cfg(not(any(feature = "std",)))]
     pub fn register_host_function(
         &mut self,
-        func: fn(&[Value]) -> wrt_error::Result<Value>,
-    ) -> wrt_error::Result<u32> {
+        func: fn(&[Value]) -> kiln_error::Result<Value>,
+    ) -> kiln_error::Result<u32> {
         let index = self.host_functions.len() as u32;
         self.host_functions
             .push(func)
-            .map_err(|_| wrt_error::Error::resource_exhausted("Too many host functions"))?;
+            .map_err(|_| kiln_error::Error::resource_exhausted("Too many host functions"))?;
         Ok(index)
     }
 
@@ -296,7 +296,7 @@ impl ComponentExecutionEngine {
         instance_id: u32,
         function_index: u32,
         args: &[Value],
-    ) -> wrt_error::Result<Value> {
+    ) -> kiln_error::Result<Value> {
         self.state = ExecutionState::Running;
         self.current_instance = Some(instance_id);
 
@@ -317,7 +317,7 @@ impl ComponentExecutionEngine {
         {
             self.call_stack
                 .push(frame)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Call stack overflow"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Call stack overflow"))?;
         }
 
         // Execute the function
@@ -348,11 +348,11 @@ impl ComponentExecutionEngine {
         &mut self,
         function_index: u32,
         args: &[Value],
-    ) -> wrt_error::Result<Value> {
+    ) -> kiln_error::Result<Value> {
         // Get current instance ID
         let instance_id = self
             .current_instance
-            .ok_or_else(|| wrt_error::Error::runtime_error("No current instance set"))?;
+            .ok_or_else(|| kiln_error::Error::runtime_error("No current instance set"))?;
 
         // Convert component values to canonical ABI format
         let component_values = self.convert_values_to_component(args)?;
@@ -372,20 +372,20 @@ impl ComponentExecutionEngine {
         let result = self
             .runtime_bridge
             .execute_component_function(instance_id, &function_name, &component_values)
-            .map_err(|_| wrt_error::Error::runtime_error("Failed to execute component function"))?;
+            .map_err(|_| kiln_error::Error::runtime_error("Failed to execute component function"))?;
 
         // Convert result back to engine value format
         self.convert_component_value_to_value(&result)
     }
 
     /// Call a host function
-    pub fn call_host_function(&mut self, index: u32, args: &[Value]) -> wrt_error::Result<Value> {
+    pub fn call_host_function(&mut self, index: u32, args: &[Value]) -> kiln_error::Result<Value> {
         #[cfg(feature = "std")]
         {
             if let Some(func) = self.host_functions.get_mut(index as usize) {
                 func.call(args)
             } else {
-                Err(wrt_error::Error::validation_invalid_input("Invalid input"))
+                Err(kiln_error::Error::validation_invalid_input("Invalid input"))
             }
         }
         #[cfg(not(any(feature = "std",)))]
@@ -393,7 +393,7 @@ impl ComponentExecutionEngine {
             if let Some(func) = self.host_functions.get(index as usize) {
                 func(args)
             } else {
-                Err(wrt_error::Error::validation_invalid_input("Invalid input"))
+                Err(kiln_error::Error::validation_invalid_input("Invalid input"))
             }
         }
     }
@@ -418,12 +418,12 @@ impl ComponentExecutionEngine {
         &mut self,
         type_id: u32,
         data: ComponentValue<ComponentProvider>,
-    ) -> wrt_error::Result<ResourceHandle> {
+    ) -> kiln_error::Result<ResourceHandle> {
         self.resource_manager.create_resource(type_id, data)
     }
 
     /// Drop a resource
-    pub fn drop_resource(&mut self, handle: ResourceHandle) -> wrt_error::Result<()> {
+    pub fn drop_resource(&mut self, handle: ResourceHandle) -> kiln_error::Result<()> {
         self.resource_manager.drop_resource(handle)
     }
 
@@ -431,7 +431,7 @@ impl ComponentExecutionEngine {
     pub fn borrow_resource(
         &mut self,
         handle: ResourceHandle,
-    ) -> wrt_error::Result<&ComponentValue<ComponentProvider>> {
+    ) -> kiln_error::Result<&ComponentValue<ComponentProvider>> {
         self.resource_manager.borrow_resource(handle)
     }
 
@@ -440,7 +440,7 @@ impl ComponentExecutionEngine {
         &mut self,
         handle: ResourceHandle,
         new_owner: u32,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.resource_manager.transfer_ownership(handle, new_owner)
     }
 
@@ -495,7 +495,7 @@ impl ComponentExecutionEngine {
     fn convert_values_to_component(
         &self,
         values: &[Value],
-    ) -> wrt_error::Result<Vec<ComponentValue<ComponentProvider>>> {
+    ) -> kiln_error::Result<Vec<ComponentValue<ComponentProvider>>> {
         let mut component_values = Vec::new();
         for value in values {
             let component_value = self.convert_value_to_component(value)?;
@@ -509,7 +509,7 @@ impl ComponentExecutionEngine {
     fn convert_values_to_component(
         &self,
         values: &[Value],
-    ) -> wrt_error::Result<Vec<ComponentValue<ComponentProvider>>> {
+    ) -> kiln_error::Result<Vec<ComponentValue<ComponentProvider>>> {
         let mut component_values = Vec::new();
         for value in values {
             let component_value = self.convert_value_to_component(value)?;
@@ -522,7 +522,7 @@ impl ComponentExecutionEngine {
     fn convert_value_to_component(
         &self,
         value: &Value,
-    ) -> wrt_error::Result<ComponentValue<ComponentProvider>> {
+    ) -> kiln_error::Result<ComponentValue<ComponentProvider>> {
         match value {
             Value::Bool(b) => Ok(ComponentValue::Bool(*b)),
             Value::U8(v) => Ok(ComponentValue::U8(*v)),
@@ -534,17 +534,17 @@ impl ComponentExecutionEngine {
             Value::S32(v) => Ok(ComponentValue::S32(*v)),
             Value::S64(v) => Ok(ComponentValue::S64(*v)),
             Value::F32(v) => Ok(ComponentValue::F32(
-                wrt_foundation::float_repr::FloatBits32::from_f32(*v),
+                kiln_foundation::float_repr::FloatBits32::from_f32(*v),
             )),
             Value::F64(v) => Ok(ComponentValue::F64(
-                wrt_foundation::float_repr::FloatBits64::from_f64(*v),
+                kiln_foundation::float_repr::FloatBits64::from_f64(*v),
             )),
             Value::Char(c) => Ok(ComponentValue::Char(*c)),
             #[cfg(feature = "std")]
             Value::String(s) => {
                 // Convert BoundedString to std String for ComponentValue
                 let str_slice = s.as_str().map_err(|_| {
-                    wrt_error::Error::validation_invalid_input(
+                    kiln_error::Error::validation_invalid_input(
                         "Failed to convert BoundedString to str",
                     )
                 })?;
@@ -554,13 +554,13 @@ impl ComponentExecutionEngine {
             Value::String(s) => {
                 // Convert BoundedString to String for ComponentValue
                 let str_slice = s.as_str().map_err(|_| {
-                    wrt_error::Error::validation_invalid_input(
+                    kiln_error::Error::validation_invalid_input(
                         "Failed to convert BoundedString to str",
                     )
                 })?;
                 Ok(ComponentValue::String(String::from(str_slice)))
             },
-            _ => Err(wrt_error::Error::validation_invalid_input("Invalid input")),
+            _ => Err(kiln_error::Error::validation_invalid_input("Invalid input")),
         }
     }
 
@@ -568,7 +568,7 @@ impl ComponentExecutionEngine {
     fn convert_component_value_to_value(
         &self,
         component_value: &ComponentValue<ComponentProvider>,
-    ) -> wrt_error::Result<Value> {
+    ) -> kiln_error::Result<Value> {
         match component_value {
             ComponentValue::Bool(b) => Ok(Value::Bool(*b)),
             ComponentValue::U8(v) => Ok(Value::U8(*v)),
@@ -586,13 +586,13 @@ impl ComponentExecutionEngine {
             ComponentValue::String(s) => {
                 // Convert std String to BoundedString for Value
                 let _provider = safe_managed_alloc!(2048, CrateId::Component).map_err(|_| {
-                    wrt_error::Error::validation_invalid_input(
+                    kiln_error::Error::validation_invalid_input(
                         "Failed to allocate memory provider for string conversion",
                     )
                 })?;
-                let bounded_str = wrt_foundation::bounded::BoundedString::try_from_str(s.as_str())
+                let bounded_str = kiln_foundation::bounded::BoundedString::try_from_str(s.as_str())
                     .map_err(|_| {
-                        wrt_error::Error::validation_invalid_input(
+                        kiln_error::Error::validation_invalid_input(
                             "Failed to convert String to BoundedString",
                         )
                     })?;
@@ -602,19 +602,19 @@ impl ComponentExecutionEngine {
             ComponentValue::String(s) => {
                 // Convert String to BoundedString for Value
                 let _provider = safe_managed_alloc!(2048, CrateId::Component).map_err(|_| {
-                    wrt_error::Error::validation_invalid_input(
+                    kiln_error::Error::validation_invalid_input(
                         "Failed to allocate memory provider for string conversion",
                     )
                 })?;
-                let bounded_str = wrt_foundation::bounded::BoundedString::try_from_str(s.as_str())
+                let bounded_str = kiln_foundation::bounded::BoundedString::try_from_str(s.as_str())
                     .map_err(|_| {
-                        wrt_error::Error::validation_invalid_input(
+                        kiln_error::Error::validation_invalid_input(
                             "Failed to convert String to BoundedString",
                         )
                     })?;
                 Ok(Value::String(bounded_str))
             },
-            _ => Err(wrt_error::Error::validation_invalid_input("Invalid input")),
+            _ => Err(kiln_error::Error::validation_invalid_input("Invalid input")),
         }
     }
 
@@ -625,7 +625,7 @@ impl ComponentExecutionEngine {
         module_name: &str,
         function_count: u32,
         memory_size: u32,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         let module_name_string = {
             #[cfg(feature = "std")]
             {
@@ -635,12 +635,12 @@ impl ComponentExecutionEngine {
             {
                 // In no_std mode, convert BoundedString to String for runtime_bridge
                 let provider = safe_managed_alloc!(512, CrateId::Component)
-                    .map_err(|_| wrt_error::Error::validation_invalid_input("Invalid input"))?;
-                let bounded: wrt_foundation::bounded::BoundedString<256> =
-                    wrt_foundation::bounded::BoundedString::try_from_str(module_name)
-                        .map_err(|_| wrt_error::Error::validation_invalid_input("Invalid input"))?;
+                    .map_err(|_| kiln_error::Error::validation_invalid_input("Invalid input"))?;
+                let bounded: kiln_foundation::bounded::BoundedString<256> =
+                    kiln_foundation::bounded::BoundedString::try_from_str(module_name)
+                        .map_err(|_| kiln_error::Error::validation_invalid_input("Invalid input"))?;
                 let str_slice = bounded.as_str().map_err(|_| {
-                    wrt_error::Error::validation_invalid_input(
+                    kiln_error::Error::validation_invalid_input(
                         "Failed to convert BoundedString to str",
                     )
                 })?;
@@ -654,7 +654,7 @@ impl ComponentExecutionEngine {
                 function_count,
                 memory_size,
             )
-            .map_err(|_| wrt_error::Error::runtime_error("Conversion error"))
+            .map_err(|_| kiln_error::Error::runtime_error("Conversion error"))
     }
 
     /// Register a host function with the runtime bridge
@@ -663,18 +663,18 @@ impl ComponentExecutionEngine {
         &mut self,
         name: &str,
         func: F,
-    ) -> wrt_error::Result<usize>
+    ) -> kiln_error::Result<usize>
     where
         F: Fn(
                 &[ComponentValue<ComponentProvider>],
             )
-                -> core::result::Result<ComponentValue<ComponentProvider>, wrt_error::Error>
+                -> core::result::Result<ComponentValue<ComponentProvider>, kiln_error::Error>
             + Send
             + Sync
             + 'static,
     {
         use crate::canonical_abi::ComponentType;
-        use wrt_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
+        use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
 
         let name_string = String::from(name);
 
@@ -691,7 +691,7 @@ impl ComponentExecutionEngine {
             let provider_params =
                 safe_managed_alloc!(4096, CrateId::Component).expect("Memory allocation failed");
             let mut params =
-                wrt_foundation::BoundedVec::<ComponentType, 16, ComponentProvider>::new(
+                kiln_foundation::BoundedVec::<ComponentType, 16, ComponentProvider>::new(
                     provider_params,
                 )
                 .expect("BoundedVec creation failed");
@@ -700,7 +700,7 @@ impl ComponentExecutionEngine {
             let provider_returns =
                 safe_managed_alloc!(4096, CrateId::Component).expect("Memory allocation failed");
             let mut returns =
-                wrt_foundation::BoundedVec::<ComponentType, 16, ComponentProvider>::new(
+                kiln_foundation::BoundedVec::<ComponentType, 16, ComponentProvider>::new(
                     provider_returns,
                 )
                 .expect("BoundedVec creation failed");
@@ -715,7 +715,7 @@ impl ComponentExecutionEngine {
 
         self.runtime_bridge
             .register_host_function(name_string, signature, func)
-            .map_err(|_| wrt_error::Error::runtime_error("Conversion error"))
+            .map_err(|_| kiln_error::Error::runtime_error("Conversion error"))
     }
 
     /// Register a host function with the runtime bridge (no_std version)
@@ -726,33 +726,33 @@ impl ComponentExecutionEngine {
         func: fn(
             &[ComponentValue<ComponentProvider>],
         )
-            -> core::result::Result<ComponentValue<ComponentProvider>, wrt_error::Error>,
-    ) -> wrt_error::Result<usize> {
+            -> core::result::Result<ComponentValue<ComponentProvider>, kiln_error::Error>,
+    ) -> kiln_error::Result<usize> {
         use crate::canonical_abi::ComponentType;
 
         let provider = safe_managed_alloc!(512, CrateId::Component)
-            .map_err(|_| wrt_error::Error::validation_invalid_input("Invalid input"))?;
-        let name_bounded: wrt_foundation::bounded::BoundedString<64> =
-            wrt_foundation::bounded::BoundedString::try_from_str(name)
-                .map_err(|_| wrt_error::Error::validation_invalid_input("Invalid input"))?;
+            .map_err(|_| kiln_error::Error::validation_invalid_input("Invalid input"))?;
+        let name_bounded: kiln_foundation::bounded::BoundedString<64> =
+            kiln_foundation::bounded::BoundedString::try_from_str(name)
+                .map_err(|_| kiln_error::Error::validation_invalid_input("Invalid input"))?;
 
         // Convert BoundedString to String for FunctionSignature.name
         let name_str = name_bounded.as_str().map_err(|_| {
-            wrt_error::Error::validation_invalid_input("Failed to convert BoundedString to str")
+            kiln_error::Error::validation_invalid_input("Failed to convert BoundedString to str")
         })?;
         let name_string = String::from(name_str);
 
         let signature = crate::component_instantiation::FunctionSignature {
             name: name_string,
-            params: wrt_foundation::collections::StaticVec::from_slice(&[ComponentType::S32])
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many parameters"))?,
-            returns: wrt_foundation::collections::StaticVec::from_slice(&[ComponentType::S32])
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many return values"))?,
+            params: kiln_foundation::collections::StaticVec::from_slice(&[ComponentType::S32])
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many parameters"))?,
+            returns: kiln_foundation::collections::StaticVec::from_slice(&[ComponentType::S32])
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many return values"))?,
         };
 
         self.runtime_bridge
             .register_host_function(name_bounded, signature, func)
-            .map_err(|_| wrt_error::Error::runtime_error("Conversion error"))
+            .map_err(|_| kiln_error::Error::runtime_error("Conversion error"))
     }
 }
 

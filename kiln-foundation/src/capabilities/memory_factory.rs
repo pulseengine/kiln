@@ -360,7 +360,7 @@ impl MemoryFactory {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use wrt_foundation::{
+    /// use kiln_foundation::{
     ///     capabilities::MemoryFactory,
     ///     budget_aware_provider::CrateId,
     /// };
@@ -373,7 +373,7 @@ impl MemoryFactory {
     /// functions.push(parse_function()?);
     ///
     /// // When _scope drops, memory resets to checkpoint
-    /// # Ok::<(), wrt_foundation::Error>(())
+    /// # Ok::<(), kiln_foundation::Error>(())
     /// ```
     pub fn enter_module_scope(
         crate_id: CrateId,
@@ -416,7 +416,7 @@ impl MemoryFactory {
     /// # Example
     ///
     /// ```rust,no_run
-    /// use wrt_foundation::{
+    /// use kiln_foundation::{
     ///     capabilities::MemoryFactory,
     ///     budget_aware_provider::CrateId,
     ///     telemetry_info,
@@ -440,7 +440,7 @@ impl MemoryFactory {
     ///          report.total_allocations,
     ///          report.failed_allocations,
     ///          report.health_score);
-    /// # Ok::<(), wrt_foundation::Error>(())
+    /// # Ok::<(), kiln_foundation::Error>(())
     /// ```
     #[cfg(doc)]
     pub fn example() {}

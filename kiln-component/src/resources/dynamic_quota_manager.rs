@@ -12,11 +12,11 @@ use std::{boxed::Box, collections::HashMap, vec::Vec};
 #[cfg(feature = "std")]
 use std::{fmt, mem};
 
-use wrt_foundation::{
+use kiln_foundation::{
     MemoryProvider,
     budget_aware_provider::CrateId,
     collections::StaticVec as BoundedVec,
-    // component::WrtComponentType, // Not available
+    // component::KilnComponentType, // Not available
     component_value::ComponentValue,
     prelude::*,
     // resource::ResourceHandle, // Not available
@@ -25,7 +25,7 @@ use wrt_foundation::{
 };
 
 // Placeholder types for missing imports
-pub type WrtComponentType = u32;
+pub type KilnComponentType = u32;
 pub type ResourceHandle = u32;
 
 use crate::{
@@ -405,7 +405,7 @@ impl QuotaNode {
 
 impl DynamicQuotaManager {
     /// Create a new dynamic quota manager
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             nodes: HashMap::new(),
@@ -437,7 +437,7 @@ impl DynamicQuotaManager {
     }
 
     /// Create a new quota manager with resource manager integration
-    pub fn with_resource_manager(resource_manager: ResourceManager) -> wrt_error::Result<Self> {
+    pub fn with_resource_manager(resource_manager: ResourceManager) -> kiln_error::Result<Self> {
         let mut manager = Self::new()?;
         manager.resource_manager = Some(resource_manager);
         Ok(manager)
@@ -446,7 +446,7 @@ impl DynamicQuotaManager {
     /// Create a new quota manager with blast zone integration
     pub fn with_blast_zone_manager(
         blast_zone_manager: BlastZoneManager,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut manager = Self::new()?;
         manager.blast_zone_manager = Some(blast_zone_manager);
         Ok(manager)
@@ -465,7 +465,7 @@ impl DynamicQuotaManager {
         parent_id: Option<u32>,
         resource_type: ResourceType,
         max_quota: u64,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         let node_id = self.next_node_id;
         self.next_node_id += 1;
 
@@ -486,14 +486,14 @@ impl DynamicQuotaManager {
         {
             self.nodes
                 .push((node_id, node))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many quota nodes"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many quota nodes"))?;
         }
 
         Ok(node_id)
     }
 
     /// Request quota allocation
-    pub fn request_quota(&mut self, request: &QuotaRequest) -> wrt_error::Result<QuotaResponse> {
+    pub fn request_quota(&mut self, request: &QuotaRequest) -> kiln_error::Result<QuotaResponse> {
         // Find the appropriate quota node
         let node_id = self.find_quota_node(
             request.entity_id,
@@ -526,7 +526,7 @@ impl DynamicQuotaManager {
             {
                 self.reservations
                     .push((reservation_id, (node_id, request.amount)))
-                    .map_err(|_| wrt_error::Error::resource_exhausted("Too many reservations"))?;
+                    .map_err(|_| kiln_error::Error::resource_exhausted("Too many reservations"))?;
             }
 
             // Integrate with memory provider if available
@@ -564,7 +564,7 @@ impl DynamicQuotaManager {
     }
 
     /// Release quota allocation
-    pub fn release_quota(&mut self, reservation_id: u32) -> wrt_error::Result<()> {
+    pub fn release_quota(&mut self, reservation_id: u32) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             if let Some((node_id, amount)) = self.reservations.remove(&reservation_id) {
@@ -602,7 +602,7 @@ impl DynamicQuotaManager {
         &mut self,
         system_load: f64,
         available_resources: u64,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             for node in self.nodes.values_mut() {
@@ -642,7 +642,7 @@ impl DynamicQuotaManager {
         entity_id: u32,
         entity_type: QuotaNodeType,
         resource_type: ResourceType,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         #[cfg(feature = "std")]
         {
             for (node_id, node) in &self.nodes {
@@ -666,17 +666,17 @@ impl DynamicQuotaManager {
             }
         }
 
-        Err(wrt_error::Error::invalid_value("Quota node not found"))
+        Err(kiln_error::Error::invalid_value("Quota node not found"))
     }
 
     /// Check hierarchical quota constraints
-    fn check_hierarchical_quota(&self, node_id: u32, amount: u64) -> wrt_error::Result<bool> {
+    fn check_hierarchical_quota(&self, node_id: u32, amount: u64) -> kiln_error::Result<bool> {
         let mut current_id = Some(node_id);
 
         while let Some(id) = current_id {
             let node = self
                 .get_quota_status(id)
-                .ok_or_else(|| wrt_error::Error::invalid_value("Invalid node ID"))?;
+                .ok_or_else(|| kiln_error::Error::invalid_value("Invalid node ID"))?;
 
             if !node.can_allocate(amount) {
                 return Ok(false);
@@ -694,7 +694,7 @@ impl DynamicQuotaManager {
         node_id: u32,
         amount: u64,
         timestamp: u64,
-    ) -> wrt_error::Result<bool> {
+    ) -> kiln_error::Result<bool> {
         let mut current_id = Some(node_id);
         #[cfg(feature = "std")]
         let mut allocated_nodes = Vec::new();
@@ -763,7 +763,7 @@ impl DynamicQuotaManager {
         node_id: u32,
         amount: u64,
         timestamp: u64,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let mut current_id = Some(node_id);
 
         while let Some(id) = current_id {

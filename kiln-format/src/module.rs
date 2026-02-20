@@ -20,21 +20,21 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
 #[cfg(not(any(feature = "std")))]
-use wrt_foundation::traits::BoundedCapacity;
-use wrt_foundation::{
+use kiln_foundation::traits::BoundedCapacity;
+use kiln_foundation::{
     types::{
         FuncType,
-        Import as WrtImport,
-        ImportDesc as WrtImportDesc,
-        MemoryType as WrtMemoryType,
-        TableType as WrtTableType,
+        Import as KilnImport,
+        ImportDesc as KilnImportDesc,
+        MemoryType as KilnMemoryType,
+        TableType as KilnTableType,
         TagType,
     },
     RefType,
@@ -87,8 +87,8 @@ impl Default for Function {
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::Checksummable for Function {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Function {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.type_idx.to_le_bytes());
         // For Vec<ValueType>, we need to checksum each element
         for local in &self.locals {
@@ -100,14 +100,14 @@ impl wrt_foundation::traits::Checksummable for Function {
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::ToBytes for Function {
+impl kiln_foundation::traits::ToBytes for Function {
     fn to_bytes_with_provider<PStream>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         _provider: &PStream,
     ) -> Result<()>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         stream.write_all(&self.type_idx.to_le_bytes())?;
         // Write locals count and then each local
@@ -123,13 +123,13 @@ impl wrt_foundation::traits::ToBytes for Function {
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::FromBytes for Function {
+impl kiln_foundation::traits::FromBytes for Function {
     fn from_bytes_with_provider<PStream>(
-        stream: &mut wrt_foundation::traits::ReadStream,
+        stream: &mut kiln_foundation::traits::ReadStream,
         provider: &PStream,
     ) -> Result<Self>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         let mut idx_bytes = [0u8; 4];
         stream.read_exact(&mut idx_bytes)?;
@@ -179,16 +179,16 @@ pub struct Function {
 ///
 /// WebAssembly 1.0 allows at most one memory per module.
 /// Memory64 extension allows memories with 64-bit addressing.
-pub type Memory = WrtMemoryType;
+pub type Memory = KilnMemoryType;
 
 /// WebAssembly table definition  
-pub type Table = WrtTableType;
+pub type Table = KilnTableType;
 
 /// WebAssembly global definition - Pure No_std Version
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Global<
-    P: wrt_foundation::MemoryProvider + Clone + Default + Eq = wrt_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<1024>,
 > {
     /// Global type
     pub global_type: FormatGlobalType,
@@ -197,8 +197,8 @@ pub struct Global<
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> Global<P> {
-    fn new() -> wrt_error::Result<Self> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Global<P> {
+    fn new() -> kiln_error::Result<Self> {
         Ok(Global {
             global_type: FormatGlobalType::default(),
             init:        crate::WasmVec::new(P::default())?,
@@ -207,7 +207,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> Global<P> {
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> Default for Global<P> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Default for Global<P> {
     fn default() -> Self {
         Global {
             global_type: FormatGlobalType::default(),
@@ -217,26 +217,26 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> Default for Globa
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::traits::Checksummable
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::Checksummable
     for Global<P>
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.global_type.update_checksum(checksum);
         self.init.update_checksum(checksum);
     }
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::traits::ToBytes
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::ToBytes
     for Global<P>
 {
     fn to_bytes_with_provider<PStream>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         provider: &PStream,
     ) -> Result<()>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         self.global_type.to_bytes_with_provider(stream, provider)?;
         self.init.to_bytes_with_provider(stream, provider)?;
@@ -245,15 +245,15 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::t
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::traits::FromBytes
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::FromBytes
     for Global<P>
 {
     fn from_bytes_with_provider<PStream>(
-        stream: &mut wrt_foundation::traits::ReadStream,
+        stream: &mut kiln_foundation::traits::ReadStream,
         provider: &PStream,
     ) -> Result<Self>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         let global_type = FormatGlobalType::from_bytes_with_provider(stream, provider)?;
         let init = crate::WasmVec::from_bytes_with_provider(stream, provider)?;
@@ -307,7 +307,7 @@ impl DataMode {
 #[allow(deprecated)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Data<
-    P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = wrt_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = kiln_foundation::NoStdProvider<1024>,
 > {
     /// Data mode (active or passive)
     pub mode:       DataMode,
@@ -321,7 +321,7 @@ pub struct Data<
 
 #[cfg(not(any(feature = "std")))]
 #[allow(deprecated)]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default for Data<P> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default for Data<P> {
     fn default() -> Self {
         Self {
             mode:       DataMode::Passive,
@@ -350,10 +350,10 @@ impl Default for Data {
 // Implement Checksummable for Data - no_std version
 #[cfg(not(any(feature = "std")))]
 #[allow(deprecated)]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::Checksummable for Data<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::Checksummable for Data<P>
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.mode.update_checksum(checksum);
         checksum.update_slice(&self.memory_idx.to_le_bytes());
         self.offset.update_checksum(checksum);
@@ -364,8 +364,8 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
 // Binary std/no_std choice
 #[cfg(feature = "std")]
 #[allow(deprecated)]
-impl wrt_foundation::traits::Checksummable for Data {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Data {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.mode.update_checksum(checksum);
         checksum.update_slice(&self.memory_idx.to_le_bytes());
         checksum.update_slice(&self.offset);
@@ -376,8 +376,8 @@ impl wrt_foundation::traits::Checksummable for Data {
 // Implement ToBytes for Data - no_std version
 #[cfg(not(any(feature = "std")))]
 #[allow(deprecated)]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::ToBytes for Data<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::ToBytes for Data<P>
 {
     fn serialized_size(&self) -> usize {
         1 + // mode discriminant
@@ -386,11 +386,11 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
         self.init.serialized_size()
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         stream.write_u8(self.mode as u8)?;
         stream.write_all(&self.memory_idx.to_le_bytes())?;
         self.offset.to_bytes_with_provider(stream, provider)?;
@@ -402,7 +402,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
 // Binary std/no_std choice
 #[cfg(feature = "std")]
 #[allow(deprecated)]
-impl wrt_foundation::traits::ToBytes for Data {
+impl kiln_foundation::traits::ToBytes for Data {
     fn serialized_size(&self) -> usize {
         1 + // mode discriminant
         4 + // memory_idx
@@ -410,11 +410,11 @@ impl wrt_foundation::traits::ToBytes for Data {
         4 + self.init.len() // length prefix + data
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         stream.write_u8(self.mode as u8)?;
         stream.write_all(&self.memory_idx.to_le_bytes())?;
         // Write length-prefixed vectors
@@ -429,19 +429,19 @@ impl wrt_foundation::traits::ToBytes for Data {
 // Implement FromBytes for Data - no_std version
 #[cfg(not(any(feature = "std")))]
 #[allow(deprecated)]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::FromBytes for Data<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::FromBytes for Data<P>
 {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mode_byte = reader.read_u8()?;
         let mode = match mode_byte {
             0 => DataMode::Active,
             1 => DataMode::Passive,
             _ => {
-                return Err(wrt_error::Error::runtime_execution_error(
+                return Err(kiln_error::Error::runtime_execution_error(
                     "Invalid data mode byte",
                 ))
             },
@@ -466,17 +466,17 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
 // Binary std/no_std choice
 #[cfg(feature = "std")]
 #[allow(deprecated)]
-impl wrt_foundation::traits::FromBytes for Data {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for Data {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mode_byte = reader.read_u8()?;
         let mode = match mode_byte {
             0 => DataMode::Active,
             1 => DataMode::Passive,
             _ => {
-                return Err(wrt_error::Error::runtime_execution_error(
+                return Err(kiln_error::Error::runtime_execution_error(
                     "Invalid data mode byte",
                 ))
             },
@@ -510,24 +510,24 @@ impl wrt_foundation::traits::FromBytes for Data {
 
 // Implement Checksummable for DataMode
 #[allow(deprecated)]
-impl wrt_foundation::traits::Checksummable for DataMode {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for DataMode {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&[*self as u8]);
     }
 }
 
 // Implement ToBytes for DataMode
 #[allow(deprecated)]
-impl wrt_foundation::traits::ToBytes for DataMode {
+impl kiln_foundation::traits::ToBytes for DataMode {
     fn serialized_size(&self) -> usize {
         1 // Just the discriminant byte
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         stream.write_u8(*self as u8)?;
         Ok(())
     }
@@ -535,18 +535,18 @@ impl wrt_foundation::traits::ToBytes for DataMode {
 
 // Implement FromBytes for DataMode
 #[allow(deprecated)]
-impl wrt_foundation::traits::FromBytes for DataMode {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for DataMode {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => Ok(DataMode::Active),
             1 => Ok(DataMode::Passive),
-            _ => Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Validation,
-                wrt_error::codes::PARSE_ERROR,
+            _ => Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Validation,
+                kiln_error::codes::PARSE_ERROR,
                 "Invalid data mode discriminant",
             )),
         }
@@ -611,7 +611,7 @@ impl Data {
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ElementInit<
-    P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = wrt_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = kiln_foundation::NoStdProvider<1024>,
 > {
     /// A vector of function indices (for funcref element type when expressions
     /// are not used).
@@ -623,14 +623,14 @@ pub enum ElementInit<
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> ElementInit<P> {
-    fn new() -> wrt_error::Result<Self> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> ElementInit<P> {
+    fn new() -> kiln_error::Result<Self> {
         Ok(Self::FuncIndices(crate::WasmVec::new(P::default())?))
     }
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default
     for ElementInit<P>
 {
     fn default() -> Self {
@@ -640,10 +640,10 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Defau
 
 // Implement Checksummable for ElementInit - no_std version
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::Checksummable for ElementInit<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::Checksummable for ElementInit<P>
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::FuncIndices(indices) => {
                 checksum.update_slice(&[0u8]); // discriminant
@@ -659,8 +659,8 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
 
 // Binary std/no_std choice
 #[cfg(feature = "std")]
-impl wrt_foundation::traits::Checksummable for ElementInit {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ElementInit {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::FuncIndices(indices) => {
                 checksum.update_slice(&[0u8]); // discriminant
@@ -680,8 +680,8 @@ impl wrt_foundation::traits::Checksummable for ElementInit {
 
 // Implement ToBytes for ElementInit - no_std version
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::ToBytes for ElementInit<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::ToBytes for ElementInit<P>
 {
     fn serialized_size(&self) -> usize {
         1 + match self {
@@ -691,11 +691,11 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
         }
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::FuncIndices(indices) => {
                 stream.write_u8(0u8)?; // discriminant
@@ -712,7 +712,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
 
 // Binary std/no_std choice
 #[cfg(feature = "std")]
-impl wrt_foundation::traits::ToBytes for ElementInit {
+impl kiln_foundation::traits::ToBytes for ElementInit {
     fn serialized_size(&self) -> usize {
         1 + match self {
             // 1 byte for discriminant
@@ -721,11 +721,11 @@ impl wrt_foundation::traits::ToBytes for ElementInit {
         }
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::FuncIndices(indices) => {
                 stream.write_u8(0u8)?; // discriminant
@@ -749,13 +749,13 @@ impl wrt_foundation::traits::ToBytes for ElementInit {
 
 // Implement FromBytes for ElementInit - no_std version
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::FromBytes for ElementInit<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::FromBytes for ElementInit<P>
 {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => {
@@ -766,7 +766,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
                 let exprs = crate::WasmVec::from_bytes_with_provider(reader, provider)?;
                 Ok(Self::Expressions(exprs))
             },
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Invalid element init discriminant",
             )),
         }
@@ -775,11 +775,11 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
 
 // Binary std/no_std choice
 #[cfg(feature = "std")]
-impl wrt_foundation::traits::FromBytes for ElementInit {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for ElementInit {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => {
@@ -809,7 +809,7 @@ impl wrt_foundation::traits::FromBytes for ElementInit {
                 }
                 Ok(Self::Expressions(exprs))
             },
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Invalid element init discriminant",
             )),
         }
@@ -840,7 +840,7 @@ impl Default for ElementInit {
 /// Version
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ElementMode<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = wrt_foundation::NoStdProvider<1024>>
+pub enum ElementMode<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = kiln_foundation::NoStdProvider<1024>>
 {
     /// Active segment: associated with a table and an offset.
     Active {
@@ -858,7 +858,7 @@ pub enum ElementMode<P: wrt_foundation::MemoryProvider + Clone + Default + Parti
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default
     for ElementMode<P>
 {
     fn default() -> Self {
@@ -877,10 +877,10 @@ impl Default for ElementMode {
 // Implement Checksummable for ElementMode - no_std version
 #[cfg(not(any(feature = "std")))]
 #[allow(deprecated)]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::Checksummable for ElementMode<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::Checksummable for ElementMode<P>
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::Active {
                 table_index,
@@ -903,8 +903,8 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
 // Binary std/no_std choice
 #[cfg(feature = "std")]
 #[allow(deprecated)]
-impl wrt_foundation::traits::Checksummable for ElementMode {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ElementMode {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::Active {
                 table_index,
@@ -927,8 +927,8 @@ impl wrt_foundation::traits::Checksummable for ElementMode {
 // Implement ToBytes for ElementMode - no_std version
 #[cfg(not(any(feature = "std")))]
 #[allow(deprecated)]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::ToBytes for ElementMode<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::ToBytes for ElementMode<P>
 {
     fn serialized_size(&self) -> usize {
         1 + match self {
@@ -939,11 +939,11 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
         }
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::Active {
                 table_index,
@@ -967,11 +967,11 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
 // Implement FromBytes for ElementMode - no_std version
 #[cfg(not(any(feature = "std")))]
 #[allow(deprecated)]
-impl wrt_foundation::traits::FromBytes for ElementMode {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for ElementMode {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => {
@@ -986,7 +986,7 @@ impl wrt_foundation::traits::FromBytes for ElementMode {
             },
             1 => Ok(Self::Passive),
             2 => Ok(Self::Declared),
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Invalid element mode discriminant",
             )),
         }
@@ -1038,7 +1038,7 @@ impl ElementMode {
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Element<
-    P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = wrt_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = kiln_foundation::NoStdProvider<1024>,
 > {
     /// The type of elements in this segment (funcref or externref).
     pub element_type: RefType,
@@ -1049,7 +1049,7 @@ pub struct Element<
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default for Element<P> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default for Element<P> {
     fn default() -> Self {
         Self {
             element_type: RefType::Funcref,
@@ -1061,8 +1061,8 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Defau
 
 // Implement ToBytes for Element - no_std version
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::ToBytes for Element<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::ToBytes for Element<P>
 {
     fn serialized_size(&self) -> usize {
         1 + self.element_type.serialized_size()
@@ -1070,11 +1070,11 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
             + self.mode.serialized_size()
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(0x00)?; // Element section marker
         self.element_type.to_bytes_with_provider(writer, provider)?;
         self.init.to_bytes_with_provider(writer, provider)?;
@@ -1084,13 +1084,13 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
 
 // Implement FromBytes for Element - no_std version
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::FromBytes for Element<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::FromBytes for Element<P>
 {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let _marker = reader.read_u8()?; // Element section marker
         let element_type = RefType::from_bytes_with_provider(reader, provider)?;
         let init = ElementInit::from_bytes_with_provider(reader, provider)?;
@@ -1124,10 +1124,10 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
 
 // Implement Checksummable for Element - no_std version
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::Checksummable for Element<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::Checksummable for Element<P>
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.element_type.update_checksum(checksum);
         self.init.update_checksum(checksum);
         self.mode.update_checksum(checksum);
@@ -1184,10 +1184,10 @@ impl Default for Export {
 }
 
 #[cfg(not(any(feature = "std")))]
-impl wrt_foundation::traits::Checksummable
+impl kiln_foundation::traits::Checksummable
     for Export
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.name.update_checksum(checksum);
         checksum.update_slice(&[self.kind as u8]);
         checksum.update_slice(&self.index.to_le_bytes());
@@ -1195,16 +1195,16 @@ impl wrt_foundation::traits::Checksummable
 }
 
 #[cfg(not(any(feature = "std")))]
-impl wrt_foundation::traits::ToBytes
+impl kiln_foundation::traits::ToBytes
     for Export
 {
     fn to_bytes_with_provider<PStream>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         provider: &PStream,
     ) -> Result<()>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         self.name.to_bytes_with_provider(stream, provider)?;
         stream.write_u8(self.kind as u8)?;
@@ -1214,15 +1214,15 @@ impl wrt_foundation::traits::ToBytes
 }
 
 #[cfg(not(any(feature = "std")))]
-impl wrt_foundation::traits::FromBytes
+impl kiln_foundation::traits::FromBytes
     for Export
 {
     fn from_bytes_with_provider<PStream>(
-        stream: &mut wrt_foundation::traits::ReadStream,
+        stream: &mut kiln_foundation::traits::ReadStream,
         provider: &PStream,
     ) -> Result<Self>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         let name = crate::WasmString::from_bytes_with_provider(stream, provider)?;
         let mut kind_byte = [0u8; 1];
@@ -1274,7 +1274,7 @@ pub enum ExportKind {
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Import<
-    P: wrt_foundation::MemoryProvider + Clone + Default + Eq = wrt_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<1024>,
 > {
     /// Module name (where to import from)
     pub module: crate::WasmString,
@@ -1299,7 +1299,7 @@ pub struct Import {
 /// WebAssembly import description - Pure No_std Version
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ImportDesc<P: wrt_foundation::MemoryProvider = wrt_foundation::NoStdProvider<1024>> {
+pub enum ImportDesc<P: kiln_foundation::MemoryProvider = kiln_foundation::NoStdProvider<1024>> {
     /// Function import (type index)
     Function(u32, core::marker::PhantomData<P>),
     /// Table import
@@ -1313,14 +1313,14 @@ pub enum ImportDesc<P: wrt_foundation::MemoryProvider = wrt_foundation::NoStdPro
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> Default for ImportDesc<P> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Default for ImportDesc<P> {
     fn default() -> Self {
         ImportDesc::Function(0, core::marker::PhantomData)
     }
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> Default for Import<P> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Default for Import<P> {
     fn default() -> Self {
         Import {
             module: crate::WasmString::default(),
@@ -1331,10 +1331,10 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> Default for Impor
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::traits::Checksummable
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::Checksummable
     for ImportDesc<P>
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             ImportDesc::Function(idx, _) => {
                 checksum.update_slice(&idx.to_le_bytes());
@@ -1356,10 +1356,10 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::t
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::traits::Checksummable
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::Checksummable
     for Import<P>
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.module.update_checksum(checksum);
         self.name.update_checksum(checksum);
         self.desc.update_checksum(checksum);
@@ -1367,16 +1367,16 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::t
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::traits::ToBytes
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::ToBytes
     for ImportDesc<P>
 {
     fn to_bytes_with_provider<PStream>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         _provider: &PStream,
     ) -> Result<()>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         match self {
             ImportDesc::Function(idx, _) => {
@@ -1402,16 +1402,16 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::t
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::traits::ToBytes
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::ToBytes
     for Import<P>
 {
     fn to_bytes_with_provider<PStream>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         provider: &PStream,
     ) -> Result<()>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         self.module.to_bytes_with_provider(stream, provider)?;
         self.name.to_bytes_with_provider(stream, provider)?;
@@ -1421,15 +1421,15 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::t
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::traits::FromBytes
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::FromBytes
     for ImportDesc<P>
 {
     fn from_bytes_with_provider<PStream>(
-        stream: &mut wrt_foundation::traits::ReadStream,
+        stream: &mut kiln_foundation::traits::ReadStream,
         _provider: &PStream,
     ) -> Result<Self>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         let mut tag = [0u8; 1];
         stream.read_exact(&mut tag)?;
@@ -1453,7 +1453,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::t
                 // Memory
                 // FAIL LOUD: Memory imports must have explicit types parsed from binary
                 // Per CLAUDE.md NO FALLBACK LOGIC rule, we must not use defaults
-                Err(wrt_error::Error::parse_error(
+                Err(kiln_error::Error::parse_error(
                     "Memory import parsing not yet implemented - must parse limits from binary"
                 ))
             },
@@ -1471,7 +1471,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::t
                 let idx = u32::from_le_bytes(idx_bytes);
                 Ok(ImportDesc::Tag(idx, core::marker::PhantomData))
             },
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Invalid import descriptor tag",
             )),
         }
@@ -1479,15 +1479,15 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::t
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> wrt_foundation::traits::FromBytes
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> kiln_foundation::traits::FromBytes
     for Import<P>
 {
     fn from_bytes_with_provider<PStream>(
-        stream: &mut wrt_foundation::traits::ReadStream,
+        stream: &mut kiln_foundation::traits::ReadStream,
         provider: &PStream,
     ) -> Result<Self>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         let module = crate::WasmString::from_bytes_with_provider(stream, provider)?;
         let name = crate::WasmString::from_bytes_with_provider(stream, provider)?;
@@ -1533,26 +1533,26 @@ impl Default for TypeInformationEntry {
 }
 
 #[cfg(not(any(feature = "std")))]
-impl wrt_foundation::traits::Checksummable
+impl kiln_foundation::traits::Checksummable
     for TypeInformationEntry
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.type_index.to_le_bytes());
         self.name.update_checksum(checksum);
     }
 }
 
 #[cfg(not(any(feature = "std")))]
-impl wrt_foundation::traits::ToBytes
+impl kiln_foundation::traits::ToBytes
     for TypeInformationEntry
 {
     fn to_bytes_with_provider<PStream>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         provider: &PStream,
     ) -> Result<()>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         stream.write_all(&self.type_index.to_le_bytes())?;
         self.name.to_bytes_with_provider(stream, provider)?;
@@ -1561,15 +1561,15 @@ impl wrt_foundation::traits::ToBytes
 }
 
 #[cfg(not(any(feature = "std")))]
-impl wrt_foundation::traits::FromBytes
+impl kiln_foundation::traits::FromBytes
     for TypeInformationEntry
 {
     fn from_bytes_with_provider<PStream>(
-        stream: &mut wrt_foundation::traits::ReadStream,
+        stream: &mut kiln_foundation::traits::ReadStream,
         provider: &PStream,
     ) -> Result<Self>
     where
-        PStream: wrt_foundation::MemoryProvider,
+        PStream: kiln_foundation::MemoryProvider,
     {
         let mut idx_bytes = [0u8; 4];
         stream.read_exact(&mut idx_bytes)?;
@@ -1594,7 +1594,7 @@ pub struct TypeInformationEntry {
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeInformationSection<
-    P: wrt_foundation::MemoryProvider + Clone + Default + Eq = wrt_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<1024>,
 > {
     pub entries: crate::WasmVec<TypeInformationEntry, P>,
 }
@@ -1611,7 +1611,7 @@ pub struct TypeInformationSection {
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone)]
 pub struct Module<
-    P: wrt_foundation::MemoryProvider + Clone + Default + Eq = wrt_foundation::NoStdProvider<1024>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq = kiln_foundation::NoStdProvider<1024>,
 > {
     /// Function type signatures
     pub types:             crate::WasmVec<FuncType, P>,
@@ -1646,14 +1646,14 @@ pub struct Module<
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> Default for Module<P> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Default for Module<P> {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> Module<P> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Module<P> {
     /// Create a new empty module for no_std environments
     pub fn new() -> Self {
         Self {
@@ -1692,7 +1692,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + Eq> Module<P> {
 #[derive(Debug, Clone)]
 pub struct Module {
     /// Function type signatures
-    pub types:             Vec<wrt_foundation::CleanCoreFuncType>,
+    pub types:             Vec<kiln_foundation::CleanCoreFuncType>,
     /// Function definitions (code)
     pub functions:         Vec<Function>,
     /// Table definitions
@@ -1833,10 +1833,10 @@ impl Validatable for Module {
 }
 
 // Table serialization methods are inherited from
-// wrt_foundation::types::TableType
+// kiln_foundation::types::TableType
 
 // Memory serialization methods are inherited from
-// wrt_foundation::types::MemoryType
+// kiln_foundation::types::MemoryType
 
 #[cfg(test)]
 mod tests {

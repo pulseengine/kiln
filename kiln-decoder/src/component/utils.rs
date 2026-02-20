@@ -2,9 +2,9 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-use wrt_format::binary;
+use kiln_format::binary;
 #[cfg(feature = "std")]
-use wrt_format::component::FormatValType;
+use kiln_format::component::FormatValType;
 
 use crate::{Error, Result, prelude::*};
 
@@ -19,10 +19,10 @@ pub fn add_section(binary: &mut Vec<u8>, section_id: u8, content: &[u8]) {
 /// Add a section to the binary with the given ID and content (no_std version)
 #[cfg(not(feature = "std"))]
 pub fn add_section(
-    binary: &mut wrt_foundation::BoundedVec<
+    binary: &mut kiln_foundation::BoundedVec<
         u8,
         256,
-        wrt_foundation::safe_memory::NoStdProvider<4096>,
+        kiln_foundation::safe_memory::NoStdProvider<4096>,
     >,
     section_id: u8,
     content: &[u8],
@@ -136,43 +136,43 @@ pub fn parse_val_type(bytes: &[u8], offset: usize) -> Result<(FormatValType, usi
 /// Parse a ValType from binary format (no_std stub)
 #[cfg(not(feature = "std"))]
 pub fn parse_val_type(_bytes: &[u8], _offset: usize) -> Result<(u8, usize)> {
-    use wrt_error::{ErrorCategory, codes};
+    use kiln_error::{ErrorCategory, codes};
     Err(Error::runtime_execution_error(
         "Value type parsing not implemented in no_std",
     ))
 }
 
 pub fn invalid_component_format(_message: &str) -> Error {
-    use wrt_error::{ErrorCategory, codes};
+    use kiln_error::{ErrorCategory, codes};
     Error::validation_error("Invalid component format")
 }
 
 pub fn invalid_component_data(_message: &str) -> Error {
-    use wrt_error::{ErrorCategory, codes};
+    use kiln_error::{ErrorCategory, codes};
     Error::validation_error("Invalid component data ")
 }
 
 pub fn invalid_component_section(_message: &str) -> Error {
-    use wrt_error::{ErrorCategory, codes};
+    use kiln_error::{ErrorCategory, codes};
     Error::validation_error("Invalid component section ")
 }
 
 pub fn invalid_component_value(_message: &str) -> Error {
-    use wrt_error::{ErrorCategory, codes};
+    use kiln_error::{ErrorCategory, codes};
     Error::validation_error("Invalid component value ")
 }
 
 pub fn parse_error(_message: &str) -> Error {
-    use wrt_error::{ErrorCategory, codes};
+    use kiln_error::{ErrorCategory, codes};
     Error::parse_error("Parse error ")
 }
 
 pub fn parse_error_with_context(_message: &str, _context: &str) -> Error {
-    use wrt_error::{ErrorCategory, codes};
+    use kiln_error::{ErrorCategory, codes};
     Error::parse_error("Parse error with context ")
 }
 
 pub fn parse_error_with_position(_message: &str, _position: usize) -> Error {
-    use wrt_error::{ErrorCategory, codes};
+    use kiln_error::{ErrorCategory, codes};
     Error::parse_error("Position parse failed ")
 }

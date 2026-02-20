@@ -1,7 +1,7 @@
 //! WAST Test Suite Integration
 //!
 //! This module provides comprehensive WAST test infrastructure that integrates
-//! with the existing wrt-build-core framework. It supports all WAST directive
+//! with the existing kiln-build-core framework. It supports all WAST directive
 //! types and provides proper categorization, error handling, and resource
 //! management.
 
@@ -20,8 +20,8 @@ use wast::{
     core::{NanPattern, V128Const, V128Pattern, WastArgCore, WastRetCore},
     parser::{self, ParseBuffer},
 };
-use wrt_foundation::capabilities::memory_factory::MemoryFactory;
-use wrt_foundation::values::Value;
+use kiln_foundation::capabilities::memory_factory::MemoryFactory;
+use kiln_foundation::values::Value;
 
 use crate::{
     diagnostics::{Diagnostic, Position, Range, Severity},
@@ -759,9 +759,9 @@ impl WastTestRunner {
                 // Function trapped - check if the error matches expected message
                 let error_str = e.to_string();
 
-                // Check if the error is a WRT error we can analyze
-                if let Some(wrt_error) = e.downcast_ref::<wrt_error::Error>() {
-                    if is_expected_trap(&wrt_error.to_string(), expected_message) {
+                // Check if the error is a Kiln error we can analyze
+                if let Some(kiln_error) = e.downcast_ref::<kiln_error::Error>() {
+                    if is_expected_trap(&kiln_error.to_string(), expected_message) {
                         self.stats.passed += 1;
                         Ok(WastDirectiveInfo {
                             test_type: WastTestType::ErrorHandling,
@@ -1539,7 +1539,7 @@ impl WastTestRunner {
 
                             if path.is_dir() {
                                 // Skip legacy directory - contains deprecated exception handling tests
-                                // WRT implements only modern exception handling (try_table + exnref)
+                                // Kiln implements only modern exception handling (try_table + exnref)
                                 if path.file_name().map_or(false, |n| n == "legacy") {
                                     continue;
                                 }

@@ -1,7 +1,7 @@
 #\!/bin/bash
 
 # Comprehensive fix for all corrupted error messages in async files
-for file in /Users/r/git/wrt2/wrt-component/src/async_/*.rs; do
+for file in /Users/r/git/wrt2/kiln-component/src/async_/*.rs; do
     if [ -f "$file" ]; then
         echo "Fixing $(basename $file)..."
         

@@ -7,7 +7,7 @@ ASIL-A Safety Case
    :align: right
    :alt: Safety Case Icon
 
-This document presents the formal safety case for WRT (WebAssembly Runtime) components deployed at ASIL-A level according to ISO 26262:2018.
+This document presents the formal safety case for Kiln (WebAssembly Runtime) components deployed at ASIL-A level according to ISO 26262:2018.
 
 .. contents:: Table of Contents
    :local:
@@ -19,14 +19,14 @@ Safety Case Overview
 Safety Claim
 ------------
 
-**Top-Level Safety Claim**: WRT foundation components are sufficiently safe for deployment in ASIL-A automotive applications when configured and integrated according to this safety case.
+**Top-Level Safety Claim**: Kiln foundation components are sufficiently safe for deployment in ASIL-A automotive applications when configured and integrated according to this safety case.
 
 Scope of Safety Case
 --------------------
 
 This safety case covers:
 
-- WRT foundation memory management system
+- Kiln foundation memory management system
 - Capability-based allocation mechanisms
 - Runtime safety monitoring system
 - Production telemetry infrastructure
@@ -53,7 +53,7 @@ Safety Arguments
 Argument 1: Memory Safety
 --------------------------
 
-**Claim G1**: WRT memory management is sufficiently safe for ASIL-A applications.
+**Claim G1**: Kiln memory management is sufficiently safe for ASIL-A applications.
 
 **Argument Structure**:
 
@@ -344,9 +344,9 @@ Operating Environment Assumptions
 
 **A2: Integration Context**
 - Integration performed by qualified safety engineers
-- System-level safety mechanisms complement WRT safety features
+- System-level safety mechanisms complement Kiln safety features
 - Proper configuration according to safety requirements
-- System-level hazard analysis includes WRT components
+- System-level hazard analysis includes Kiln components
 
 **A3: Usage Constraints**
 - No dynamic memory allocation after system initialization
@@ -447,7 +447,7 @@ Conclusion
 Safety Case Summary
 -------------------
 
-This safety case demonstrates that WRT foundation components provide sufficient safety assurance for ASIL-A automotive applications through:
+This safety case demonstrates that Kiln foundation components provide sufficient safety assurance for ASIL-A automotive applications through:
 
 ✅ **Comprehensive Safety Mechanisms**: Capability-based allocation with runtime monitoring
 ✅ **Formal Verification**: 83% KANI coverage with focus on safety-critical properties  
@@ -458,7 +458,7 @@ This safety case demonstrates that WRT foundation components provide sufficient 
 Safety Claim Conclusion
 ------------------------
 
-**The safety case concludes that WRT foundation components are sufficiently safe for deployment in ASIL-A automotive applications when:**
+**The safety case concludes that Kiln foundation components are sufficiently safe for deployment in ASIL-A automotive applications when:**
 
 1. Configured according to ASIL-A requirements
 2. Integrated following the provided guidelines

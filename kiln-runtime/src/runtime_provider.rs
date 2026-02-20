@@ -5,10 +5,10 @@
 //! small sizes and platform allocation for large sizes to prevent stack
 //! overflow.
 
-use wrt_error::Error;
-// Box is re-exported by wrt_foundation
-use wrt_foundation::Box;
-use wrt_foundation::{
+use kiln_error::Error;
+// Box is re-exported by kiln_foundation
+use kiln_foundation::Box;
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     capabilities::{
         CapabilityAwareProvider,
@@ -37,7 +37,7 @@ pub enum SmartRuntimeProvider {
 
 impl SmartRuntimeProvider {
     /// Create a new runtime provider with appropriate allocation strategy
-    pub fn new(size: usize, crate_id: CrateId) -> wrt_error::Result<Self> {
+    pub fn new(size: usize, crate_id: CrateId) -> kiln_error::Result<Self> {
         if size <= STACK_ALLOCATION_THRESHOLD {
             // Use stack allocation for small sizes
             let base_provider = NoStdProvider::<4096>::default();
@@ -65,6 +65,6 @@ impl SmartRuntimeProvider {
 // trait directly The actual Provider implementations are in the wrapped types
 
 /// Create a runtime provider that uses appropriate allocation strategy
-pub fn create_smart_runtime_provider(size: usize) -> wrt_error::Result<SmartRuntimeProvider> {
+pub fn create_smart_runtime_provider(size: usize) -> kiln_error::Result<SmartRuntimeProvider> {
     SmartRuntimeProvider::new(size, CrateId::Runtime)
 }

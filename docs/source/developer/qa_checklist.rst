@@ -260,9 +260,9 @@ Tools and Resources
 Validation Tools
 ----------------
 
-- ``cargo-wrt docs --private`` - Build and check documentation
-- ``cargo-wrt docs --open`` - Build and preview locally
-- ``cargo-wrt verify --detailed`` - Run comprehensive verification
+- ``cargo-kiln docs --private`` - Build and check documentation
+- ``cargo-kiln docs --open`` - Build and preview locally
+- ``cargo-kiln verify --detailed`` - Run comprehensive verification
 - ``cargo test --doc`` - Test Rust examples
 
 References

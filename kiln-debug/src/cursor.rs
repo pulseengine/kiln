@@ -4,8 +4,8 @@
 
 //! DWARF data cursor for zero-copy parsing
 
-use wrt_error::{Error, Result};
-use wrt_format::binary::{read_leb128_i32, read_leb128_i64, read_leb128_u32, read_leb128_u64};
+use kiln_error::{Error, Result};
+use kiln_format::binary::{read_leb128_i32, read_leb128_i64, read_leb128_u32, read_leb128_u64};
 
 /// DWARF parsing cursor
 pub struct DwarfCursor<'a> {

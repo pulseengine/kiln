@@ -8,7 +8,7 @@ skinparam stereotypeABackgroundColor #DFE6E9
 title Pulseengine Crate & Module Structure
 
 package "Foundation Layer" <<Crate>> #E6F3FF {
-    package "wrt-foundation" {
+    package "kiln-foundation" {
         class SafeMemory <<module>> {
             + MemoryProvider trait
             + MemoryValidator
@@ -37,9 +37,9 @@ package "Foundation Layer" <<Crate>> #E6F3FF {
         }
     }
     
-    package "wrt-error" {
+    package "kiln-error" {
         class ErrorTypes <<module>> {
-            + WrtError enum
+            + KilnError enum
             + ErrorKind enum
             + ErrorContext
             --
@@ -48,7 +48,7 @@ package "Foundation Layer" <<Crate>> #E6F3FF {
         }
     }
     
-    package "wrt-sync" {
+    package "kiln-sync" {
         class Synchronization <<module>> {
             + Mutex<T>
             + RwLock<T>
@@ -60,7 +60,7 @@ package "Foundation Layer" <<Crate>> #E6F3FF {
 }
 
 package "Execution Layer" <<Crate>> #FFEAA7 {
-    package "wrt-runtime" {
+    package "kiln-runtime" {
         class ModuleInstance <<module>> {
             + memories: Vec<Memory>
             + tables: Vec<Table>
@@ -90,7 +90,7 @@ package "Execution Layer" <<Crate>> #FFEAA7 {
         }
     }
     
-    package "wrt-instructions" {
+    package "kiln-instructions" {
         class Instructions <<module>> {
             + Instruction enum
             + ExecutionContext
@@ -112,7 +112,7 @@ package "Execution Layer" <<Crate>> #FFEAA7 {
 }
 
 package "Component Model" <<Crate>> #DFE6E9 {
-    package "wrt-component" {
+    package "kiln-component" {
         class ComponentInstance <<module>> {
             + imports: ImportMap
             + exports: ExportMap
@@ -142,7 +142,7 @@ package "Component Model" <<Crate>> #DFE6E9 {
 }
 
 package "Platform Layer" <<Crate>> #B2BEC3 {
-    package "wrt-platform" {
+    package "kiln-platform" {
         interface PlatformMemory <<interface>> {
             + allocate()
             + deallocate()

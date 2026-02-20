@@ -28,7 +28,7 @@ Let's start with the star of the show - ``BoundedVec``. It's like ``Vec``, but w
    :caption: Your first BoundedVec (std environment)
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        bounded::{BoundedVec, CapacityError},
        safe_memory::StdProvider,
    };
@@ -71,7 +71,7 @@ Working in a no_std environment? Meet ``NoStdProvider``:
 
    #![no_std]
    
-   use wrt_foundation::{
+   use kiln_foundation::{
        bounded::{BoundedVec, CapacityError},
        safe_memory::NoStdProvider,
    };
@@ -98,13 +98,13 @@ Working in a no_std environment? Meet ``NoStdProvider``:
 The Power of MemoryProvider 💪
 ------------------------------
 
-What's this ``MemoryProvider`` business? It's how WRT stays flexible:
+What's this ``MemoryProvider`` business? It's how Kiln stays flexible:
 
 .. code-block:: rust
    :caption: Understanding MemoryProviders
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        prelude::*,
        bounded::{BoundedVec, BoundedStack, BoundedString},
        safe_memory::{NoStdProvider, StdProvider, MemoryProvider},
@@ -156,13 +156,13 @@ What's this ``MemoryProvider`` business? It's how WRT stays flexible:
 Advanced Collections: Queue, Map, and More! 📚
 ----------------------------------------------
 
-WRT provides a full suite of bounded collections:
+Kiln provides a full suite of bounded collections:
 
 .. code-block:: rust
    :caption: The bounded collection family
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        bounded_collections::{
            BoundedQueue, BoundedDeque, BoundedMap, BoundedSet,
        },
@@ -232,7 +232,7 @@ Working with WebAssembly names? There's a type for that:
    :caption: BoundedString for WASM names
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        bounded::{BoundedString, WasmName, MAX_WASM_NAME_LENGTH},
        safe_memory::NoStdProvider,
    };
@@ -272,7 +272,7 @@ Here's an example ring buffer implementation using bounded collections:
    :caption: Ring buffer for sensor data
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        bounded::{BoundedVec, CapacityError},
        safe_memory::NoStdProvider,
        verification::VerificationLevel,
@@ -360,7 +360,7 @@ Let's talk about handling ``CapacityError`` gracefully:
    :caption: Error handling patterns
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        bounded::{BoundedVec, CapacityError},
        safe_memory::NoStdProvider,
        Error, ErrorCategory,

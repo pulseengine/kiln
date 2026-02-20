@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Bounded Collections
 // SW-REQ-ID: REQ_MEMORY_003, REQ_COLLECTION_BOUNDED_001
 //
@@ -150,10 +150,10 @@ use std::string::String;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use wrt_error::ErrorCategory as WrtErrorCategory; // And added here as a top-level import -
+use kiln_error::ErrorCategory as KilnErrorCategory; // And added here as a top-level import -
                                                   // Keep ErrorCategory qualified
-                                                  // Use the modern Result type from wrt_error
-type Result<T> = wrt_error::Result<T>;
+                                                  // Use the modern Result type from kiln_error
+type Result<T> = kiln_error::Result<T>;
 
 // Binary std/no_std choice
 
@@ -208,7 +208,7 @@ use crate::{
     },
 };
 
-// WrtResult type alias has been removed - use wrt_error::Result<T> directly
+// KilnResult type alias has been removed - use kiln_error::Result<T> directly
 // use std::collections::hash_map::RandomState; // For a default hasher -
 // BoundedHashMap not found, this is likely unused for no_std
 
@@ -456,48 +456,48 @@ impl From<BoundedError> for crate::Error {
     fn from(err: BoundedError) -> Self {
         let (category, code, static_message_prefix) = match err.kind {
             BoundedErrorKind::CapacityExceeded => (
-                WrtErrorCategory::FoundationRuntime,
+                KilnErrorCategory::FoundationRuntime,
                 codes::FOUNDATION_BOUNDED_CAPACITY_EXCEEDED,
                 "Foundation bounded capacity exceeded",
             ),
             BoundedErrorKind::InvalidCapacity => (
-                WrtErrorCategory::FoundationRuntime,
+                KilnErrorCategory::FoundationRuntime,
                 codes::FOUNDATION_SAFETY_CONSTRAINT_VIOLATED,
                 "Foundation invalid capacity constraint",
             ),
             BoundedErrorKind::ConversionError => (
-                WrtErrorCategory::FoundationRuntime,
+                KilnErrorCategory::FoundationRuntime,
                 codes::FOUNDATION_MEMORY_PROVIDER_FAILED,
                 "Foundation bounded conversion error",
             ),
             BoundedErrorKind::SliceError => (
-                WrtErrorCategory::FoundationRuntime,
+                KilnErrorCategory::FoundationRuntime,
                 codes::FOUNDATION_MEMORY_PROVIDER_FAILED,
                 "Foundation bounded slice error",
             ),
             BoundedErrorKind::Utf8Error => (
-                WrtErrorCategory::FoundationRuntime,
+                KilnErrorCategory::FoundationRuntime,
                 codes::FOUNDATION_VERIFICATION_FAILED,
                 "Foundation bounded UTF-8 error",
             ),
             BoundedErrorKind::ItemTooLarge => (
-                WrtErrorCategory::FoundationRuntime,
+                KilnErrorCategory::FoundationRuntime,
                 codes::FOUNDATION_ALLOCATION_BUDGET_EXCEEDED,
                 "Foundation bounded item too large",
             ),
             BoundedErrorKind::VerificationError => (
-                WrtErrorCategory::FoundationRuntime,
+                KilnErrorCategory::FoundationRuntime,
                 codes::FOUNDATION_VERIFICATION_FAILED,
                 "Foundation bounded verification failed",
             ),
         };
 
-        // wrt_error::Error expects a &'static str.
+        // kiln_error::Error expects a &'static str.
         // We use the static prefix determined by the kind.
         // Binary std/no_std choice
         // it might offer more specifics, but we must choose one &'static str.
         // For simplicity, we'll use the matched static_message_prefix.
-        // More complex message construction would require changes to wrt_error::Error
+        // More complex message construction would require changes to kiln_error::Error
         // or careful management of static strings.
         #[cfg(not(any(feature = "std")))]
         let message = if err.description_static != static_message_prefix {
@@ -513,7 +513,7 @@ impl From<BoundedError> for crate::Error {
 
         #[cfg(feature = "std")]
         // Binary std/no_std choice
-        // for WrtError's &'static str message. So we must use static_message_prefix.
+        // for KilnError's &'static str message. So we must use static_message_prefix.
         let message = static_message_prefix;
 
         crate::Error::new(category, code, static_message_prefix)
@@ -522,13 +522,13 @@ impl From<BoundedError> for crate::Error {
 
 impl From<crate::Error> for BoundedError {
     fn from(err: crate::Error) -> Self {
-        // Determine a BoundedErrorKind based on the wrt_error::Error
+        // Determine a BoundedErrorKind based on the kiln_error::Error
         // This is a basic mapping; more sophisticated mapping might be needed.
         let kind = match err.category {
-            WrtErrorCategory::Capacity => BoundedErrorKind::CapacityExceeded,
-            WrtErrorCategory::Memory => BoundedErrorKind::SliceError, // Or another memory
+            KilnErrorCategory::Capacity => BoundedErrorKind::CapacityExceeded,
+            KilnErrorCategory::Memory => BoundedErrorKind::SliceError, // Or another memory
             // related kind
-            WrtErrorCategory::Parse | WrtErrorCategory::Validation => {
+            KilnErrorCategory::Parse | KilnErrorCategory::Validation => {
                 BoundedErrorKind::ConversionError
             },
             _ => BoundedErrorKind::VerificationError, // Default or a more generic kind
@@ -542,10 +542,10 @@ impl From<crate::Error> for BoundedError {
             // Binary std/no_std choice
             // kind.
             let static_desc = match kind {
-                BoundedErrorKind::CapacityExceeded => "Capacity exceeded (from WrtError)",
-                BoundedErrorKind::SliceError => "Slice error (from WrtError)",
-                BoundedErrorKind::ConversionError => "Conversion error (from WrtError)",
-                _ => "Verification error (from WrtError)",
+                BoundedErrorKind::CapacityExceeded => "Capacity exceeded (from KilnError)",
+                BoundedErrorKind::SliceError => "Slice error (from KilnError)",
+                BoundedErrorKind::ConversionError => "Conversion error (from KilnError)",
+                _ => "Verification error (from KilnError)",
             };
             BoundedError::new(kind, static_desc)
         }
@@ -1475,8 +1475,8 @@ where
     /// ```
     /// # #[cfg(feature = "std")]
     /// # {
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -1561,8 +1561,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -1611,8 +1611,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -1671,8 +1671,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -1792,8 +1792,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -1917,8 +1917,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -2023,8 +2023,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -2067,8 +2067,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -2126,8 +2126,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -2185,8 +2185,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -2231,8 +2231,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -2306,8 +2306,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -2394,8 +2394,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// # use core::cmp::Ordering;
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
@@ -2487,8 +2487,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<(u32, u32), 10, _>::new(provider).unwrap();
@@ -2518,8 +2518,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<i32, 10, _>::new(provider).unwrap();
@@ -2551,8 +2551,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<i32, 10, _>::new(provider).unwrap();
@@ -2622,8 +2622,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<(i32, &str), 10, _>::new(provider).unwrap();
@@ -2657,8 +2657,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<i32, 10, _>::new(provider).unwrap();
@@ -2694,8 +2694,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<i32, 10, _>::new(provider).unwrap();
@@ -2779,8 +2779,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<(i32, &str), 10, _>::new(provider).unwrap();
@@ -2818,8 +2818,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<i32, 10, _>::new(provider).unwrap();
@@ -2936,8 +2936,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<i32, 10, _>::new(provider).unwrap();
@@ -3009,8 +3009,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -3044,8 +3044,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut vec = BoundedVec::<u32, 10, _>::new(provider).unwrap();
@@ -3070,8 +3070,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedVec;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedVec;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// let slice = &[1, 2, 3, 4, 5];
@@ -3942,8 +3942,8 @@ impl<const N_BYTES: usize>
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedString;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedString;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut s = BoundedString::<10, _>::from_str_truncate("Hello").unwrap();
@@ -3979,8 +3979,8 @@ impl<const N_BYTES: usize>
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedString;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedString;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut s = BoundedString::<10, _>::from_str_truncate("Hello", provider).unwrap();
@@ -3997,8 +3997,8 @@ impl<const N_BYTES: usize>
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedString;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedString;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let s = BoundedString::<10, _>::from_str_truncate("Hello, World", provider).unwrap();
@@ -4015,8 +4015,8 @@ impl<const N_BYTES: usize>
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedString;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedString;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let s = BoundedString::<10, _>::from_str_truncate("Hello, Wor", provider).unwrap();
@@ -4042,8 +4042,8 @@ impl<const N_BYTES: usize>
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedString;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedString;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let mut s = BoundedString::<10, _>::from_str_truncate("Hello").unwrap();
@@ -4070,8 +4070,8 @@ impl<const N_BYTES: usize>
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedString;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedString;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let s = BoundedString::<20, _>::from_str_truncate("Hello WORLD", provider).unwrap();
@@ -4095,8 +4095,8 @@ impl<const N_BYTES: usize>
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedString;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedString;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let s = BoundedString::<20, _>::from_str_truncate("Hello World", provider).unwrap();
@@ -4116,8 +4116,8 @@ impl<const N_BYTES: usize>
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedString;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedString;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let s = BoundedString::<10, _>::from_str_truncate("Hello", provider).unwrap();
@@ -4132,8 +4132,8 @@ impl<const N_BYTES: usize>
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedString;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedString;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let s = BoundedString::<20, _>::from_str_truncate("Hello World", provider).unwrap();
@@ -4348,8 +4348,8 @@ impl<const N_BYTES: usize>
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::bounded::BoundedString;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::bounded::BoundedString;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let s = BoundedString::<20, _>::from_str_truncate("Hello,World,Rust", provider).unwrap();

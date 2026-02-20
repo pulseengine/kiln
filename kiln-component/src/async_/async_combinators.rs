@@ -17,12 +17,12 @@ use core::{
 #[cfg(feature = "std")]
 use std::sync::Weak;
 
-use wrt_foundation::{
+use kiln_foundation::{
     Arc, CrateId, Mutex,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     safe_managed_alloc,
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::TaskId;
@@ -65,27 +65,27 @@ pub struct AsyncCombinators {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct CombinatorId(u64);
 
-impl wrt_foundation::traits::Checksummable for CombinatorId {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CombinatorId {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for CombinatorId {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for CombinatorId {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_foundation::traits::FromBytes for CombinatorId {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for CombinatorId {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u64::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -112,14 +112,14 @@ pub enum CombinatorType {
     /// Join all futures
     Join {
         futures: Vec<BoxedFuture>,
-        results: Vec<Option<WrtComponentValue<ComponentProvider>>>,
+        results: Vec<Option<KilnComponentValue<ComponentProvider>>>,
         completed_count: AtomicU32,
     },
     /// Race futures (first to complete)
     Race {
         futures: Vec<BoxedFuture>,
         winner_index: Option<usize>,
-        winner_result: Option<WrtComponentValue<ComponentProvider>>,
+        winner_result: Option<KilnComponentValue<ComponentProvider>>,
     },
     /// Timeout wrapper
     Timeout {
@@ -131,15 +131,15 @@ pub enum CombinatorType {
     /// Try join (all or error)
     TryJoin {
         futures: Vec<BoxedFuture>,
-        results: Vec<Option<core::result::Result<WrtComponentValue<ComponentProvider>, Error>>>,
+        results: Vec<Option<core::result::Result<KilnComponentValue<ComponentProvider>, Error>>>,
         failed: AtomicBool,
     },
     /// Zip futures together
     Zip {
         future_a: BoxedFuture,
         future_b: BoxedFuture,
-        result_a: Option<WrtComponentValue<ComponentProvider>>,
-        result_b: Option<WrtComponentValue<ComponentProvider>>,
+        result_a: Option<KilnComponentValue<ComponentProvider>>,
+        result_b: Option<KilnComponentValue<ComponentProvider>>,
     },
 }
 
@@ -233,7 +233,7 @@ impl CombinatorType {
 /// Boxed future type for combinators
 type BoxedFuture = Pin<
     Box<
-        dyn CoreFuture<Output = core::result::Result<WrtComponentValue<ComponentProvider>, Error>>
+        dyn CoreFuture<Output = core::result::Result<KilnComponentValue<ComponentProvider>, Error>>
             + Send,
     >,
 >;
@@ -318,7 +318,7 @@ impl AsyncCombinators {
                 async move {
                     // Simulate select operation
                     // In real implementation, would poll all futures and return first ready
-                    Ok(vec![WrtComponentValue::<ComponentProvider>::U32(0)]) // Index of selected
+                    Ok(vec![KilnComponentValue::<ComponentProvider>::U32(0)]) // Index of selected
                     // future
                 },
                 ComponentAsyncTaskType::AsyncOperation,
@@ -450,8 +450,8 @@ impl AsyncCombinators {
                     // Simulate race operation
                     // In real implementation, would poll all futures and return first ready
                     Ok(vec![
-                        WrtComponentValue::<ComponentProvider>::U32(0),
-                        WrtComponentValue::<ComponentProvider>::U32(42),
+                        KilnComponentValue::<ComponentProvider>::U32(0),
+                        KilnComponentValue::<ComponentProvider>::U32(42),
                     ])
                     // Index and result
                 },
@@ -511,7 +511,7 @@ impl AsyncCombinators {
                         // Simulate timeout
                         Err(Error::runtime_execution_error("Timeout occurred"))
                     } else {
-                        Ok(vec![WrtComponentValue::<ComponentProvider>::U32(42)])
+                        Ok(vec![KilnComponentValue::<ComponentProvider>::U32(42)])
                     }
                 },
                 ComponentAsyncTaskType::AsyncOperation,
@@ -622,8 +622,8 @@ impl AsyncCombinators {
                     // Simulate zip operation
                     // In real implementation, would poll both futures until both complete
                     Ok(vec![
-                        WrtComponentValue::<ComponentProvider>::U32(1),
-                        WrtComponentValue::<ComponentProvider>::U32(2),
+                        KilnComponentValue::<ComponentProvider>::U32(1),
+                        KilnComponentValue::<ComponentProvider>::U32(2),
                     ])
                     // (a, b) tuple
                 },
@@ -804,7 +804,7 @@ pub fn create_timeout_future(duration_ms: u64) -> BoxedFuture {
     Box::pin(async move {
         // Simulate timeout
         if duration_ms > 0 {
-            Ok(WrtComponentValue::<ComponentProvider>::U32(1)) // Success
+            Ok(KilnComponentValue::<ComponentProvider>::U32(1)) // Success
         } else {
             Err(Error::runtime_execution_error("Timeout expired"))
         }
@@ -814,7 +814,7 @@ pub fn create_timeout_future(duration_ms: u64) -> BoxedFuture {
 /// Create a simple delay future
 pub fn create_delay_future(
     delay_ms: u64,
-    value: WrtComponentValue<ComponentProvider>,
+    value: KilnComponentValue<ComponentProvider>,
 ) -> BoxedFuture {
     Box::pin(async move {
         // Simulate delay

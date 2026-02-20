@@ -8,13 +8,13 @@
 
 use core::sync::atomic::AtomicU32;
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
 #[cfg(feature = "std")]
-use wrt_platform::threading::{
+use kiln_platform::threading::{
     Thread,
     ThreadHandle,
     ThreadSpawnOptions,
@@ -194,7 +194,7 @@ impl ThreadInfo {
             stack_size,
             priority,
             parent_thread,
-            created_at: wrt_foundation::current_time_ns(),
+            created_at: kiln_foundation::current_time_ns(),
             completed_at: None,
         }
     }
@@ -255,7 +255,7 @@ impl ThreadExecutionContext {
     pub fn update_state(&mut self, new_state: ThreadState) {
         self.info.state = new_state;
         if new_state.is_completed() {
-            self.info.completed_at = Some(wrt_platform::time::current_time_ns());
+            self.info.completed_at = Some(kiln_platform::time::current_time_ns());
         }
     }
 
@@ -424,12 +424,12 @@ impl ThreadManager {
 
         // Create thread spawn options
         let thread_priority = match context.info.priority {
-            0..=20 => wrt_platform::threading::ThreadPriority::Idle,
-            21..=40 => wrt_platform::threading::ThreadPriority::Low,
-            41..=60 => wrt_platform::threading::ThreadPriority::Normal,
-            61..=80 => wrt_platform::threading::ThreadPriority::High,
-            81..=100 => wrt_platform::threading::ThreadPriority::Realtime,
-            _ => wrt_platform::threading::ThreadPriority::Normal, // fallback
+            0..=20 => kiln_platform::threading::ThreadPriority::Idle,
+            21..=40 => kiln_platform::threading::ThreadPriority::Low,
+            41..=60 => kiln_platform::threading::ThreadPriority::Normal,
+            61..=80 => kiln_platform::threading::ThreadPriority::High,
+            81..=100 => kiln_platform::threading::ThreadPriority::Realtime,
+            _ => kiln_platform::threading::ThreadPriority::Normal, // fallback
         };
 
         let spawn_options = ThreadSpawnOptions {
@@ -440,7 +440,7 @@ impl ThreadManager {
 
         // Spawn platform thread (feature-gated)
         #[cfg(feature = "std")]
-        let handle = wrt_platform::threading::spawn_thread(spawn_options, move || {
+        let handle = kiln_platform::threading::spawn_thread(spawn_options, move || {
             // Thread execution logic would go here
             // This is a placeholder for the actual WebAssembly execution
             Ok(())
@@ -603,7 +603,7 @@ impl ThreadManager {
             .ok_or_else(|| {
                 Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::INVALID_ARGUMENT,
+                    kiln_error::codes::INVALID_ARGUMENT,
                     "Invalid thread ID",
                 )
             })

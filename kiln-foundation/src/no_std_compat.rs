@@ -12,8 +12,8 @@ use crate::NoStdProvider;
 /// 
 /// # Examples
 /// ```
-/// # use wrt_foundation::no_std_compat::bounded_vec;
-/// # use wrt_foundation::NoStdProvider;
+/// # use kiln_foundation::no_std_compat::bounded_vec;
+/// # use kiln_foundation::NoStdProvider;
 /// let v = bounded_vec![NoStdProvider::default(); 1, 2, 3];
 /// ```
 #[macro_export]
@@ -71,7 +71,7 @@ macro_rules! bounded_format {
 // Remove problematic type aliases, provide concrete helpers instead
 
 /// Helper to create a `BoundedVec` with standard capacity and default provider
-pub fn create_bounded_vec<T>() -> wrt_error::Result<BoundedVec<T, 1024, NoStdProvider<{1024 * 8}>>>
+pub fn create_bounded_vec<T>() -> kiln_error::Result<BoundedVec<T, 1024, NoStdProvider<{1024 * 8}>>>
 where
     T: Sized + Checksummable + crate::traits::ToBytes + crate::traits::FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -81,14 +81,14 @@ where
 }
 
 /// Helper to create an empty `BoundedString` with default provider  
-pub fn create_bounded_string() -> wrt_error::Result<BoundedString<256, NoStdProvider<256>>> {
+pub fn create_bounded_string() -> kiln_error::Result<BoundedString<256, NoStdProvider<256>>> {
     BoundedString::from_str_truncate("").map_err(|e| {
         crate::Error::runtime_execution_error("Failed to create empty bounded string")
     })
 }
 
 /// Helper to create `BoundedString` from `&str`
-pub fn create_bounded_string_from(s: &str) -> wrt_error::Result<BoundedString<256, NoStdProvider<256>>> {
+pub fn create_bounded_string_from(s: &str) -> kiln_error::Result<BoundedString<256, NoStdProvider<256>>> {
     BoundedString::try_from_str(s, NoStdProvider::default()).map_err(|e| {
         crate::Error::new(
             crate::ErrorCategory::Parse,

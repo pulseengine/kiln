@@ -1,6 +1,6 @@
-//! Verification module for wrt-logging using Kani.
+//! Verification module for kiln-logging using Kani.
 //!
-//! This module contains verification harnesses for the wrt-logging crate.
+//! This module contains verification harnesses for the kiln-logging crate.
 //! It is only included when the `kani` feature is enabled.
 
 use super::*;
@@ -47,7 +47,7 @@ fn verify_log_operation() {
 fn verify_logging_ext() {
     #[cfg(feature = "std")]
     {
-        use wrt_host::CallbackRegistry;
+        use kiln_host::CallbackRegistry;
 
         use crate::handler::LoggingExt;
 

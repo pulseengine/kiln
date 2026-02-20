@@ -1,7 +1,7 @@
 @startuml
 
 package "Memory Subsystem" {
-  package "wrt-runtime" {
+  package "kiln-runtime" {
     [Memory] as Memory
     [SafeSlice] as SafeSlice
     [MemoryType] as MemType
@@ -16,7 +16,7 @@ package "Memory Subsystem" {
     Memory --> MemArcExt : implements
   }
   
-  package "wrt-foundation" {
+  package "kiln-foundation" {
     [Limits] as Limits
     [MemoryTypes] as MemTypes
     [SafeMemory] as SafeMem
@@ -26,7 +26,7 @@ package "Memory Subsystem" {
     SafeSlice --> SafeMem
   }
   
-  package "wrt-instructions" {
+  package "kiln-instructions" {
     [MemoryOps] as MemOps
     [MemoryLoad] as MemLoad
     [MemoryStore] as MemStore

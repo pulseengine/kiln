@@ -1,4 +1,4 @@
-/// Define our own enum for memory access mode since wrt_intercept doesn't have
+/// Define our own enum for memory access mode since kiln_intercept doesn't have
 /// one
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryAccessMode {

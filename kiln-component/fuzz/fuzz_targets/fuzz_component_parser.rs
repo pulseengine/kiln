@@ -1,7 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use wrt_component::{
+use kiln_component::{
     parser,
     parser_integration::{ComponentLoader, ValidationLevel},
     ComponentInstanceId,

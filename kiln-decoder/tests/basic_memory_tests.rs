@@ -2,8 +2,8 @@
 
 #[cfg(feature = "std")]
 mod memory_tests {
-    use wrt_decoder::memory_optimized::{MemoryPool, check_bounds_u32, safe_usize_conversion};
-    use wrt_foundation::NoStdProvider;
+    use kiln_decoder::memory_optimized::{MemoryPool, check_bounds_u32, safe_usize_conversion};
+    use kiln_foundation::NoStdProvider;
 
     #[test]
     fn test_bounds_checking() {
@@ -48,7 +48,7 @@ mod memory_tests {
 
 #[cfg(feature = "std")]
 mod string_tests {
-    use wrt_decoder::optimized_string::parse_utf8_string_inplace;
+    use kiln_decoder::optimized_string::parse_utf8_string_inplace;
 
     #[test]
     fn test_string_parsing() {

@@ -1,15 +1,15 @@
-//! Integration tests for WASI-NN with wrtd
+//! Integration tests for WASI-NN with kilnd
 
 #![cfg(all(feature = "wasi-nn", feature = "preview2"))]
 
-use wrt_foundation::{
+use kiln_foundation::{
     memory_init::{
         init_crate_memory,
-        init_wrt_memory,
+        init_kiln_memory,
     },
     CrateId,
 };
-use wrt_wasi::{
+use kiln_wasi::{
     nn::{
         backend::initialize_backends,
         capabilities::{
@@ -37,7 +37,7 @@ use wrt_wasi::{
 #[test]
 fn test_wasi_nn_full_initialization() {
     // Initialize memory system first
-    init_wrt_memory().unwrap();
+    init_kiln_memory().unwrap();
     init_crate_memory(CrateId::Wasi).unwrap();
 
     // Create capabilities
@@ -81,14 +81,14 @@ fn test_nn_subsystem_init() {
     initialize_context_store().unwrap();
 
     // Verify we can get the capability
-    let retrieved = wrt_wasi::nn::get_nn_capability();
+    let retrieved = kiln_wasi::nn::get_nn_capability();
     assert!(retrieved.is_ok());
 }
 
 /// Test WASI-NN capability restrictions
 #[test]
 fn test_nn_capability_restrictions() {
-    use wrt_wasi::nn::capabilities::{
+    use kiln_wasi::nn::capabilities::{
         BoundedNNCapability,
         DynamicNNCapability,
         ModelFormat,
@@ -115,11 +115,11 @@ fn test_nn_capability_restrictions() {
     // Test static capability (ASIL-B)
     let static_cap = StaticNNCapability::new(&[]).unwrap();
     // Static capability should have Continuous verification level
-    let foundation_level: wrt_foundation::verification::VerificationLevel =
+    let foundation_level: kiln_foundation::verification::VerificationLevel =
         static_cap.verification_level().into();
     assert_eq!(
         foundation_level,
-        wrt_foundation::verification::VerificationLevel::Full
+        kiln_foundation::verification::VerificationLevel::Full
     );
 }
 
@@ -127,7 +127,7 @@ fn test_nn_capability_restrictions() {
 #[test]
 fn test_wasi_capabilities_with_nn() {
     // Initialize memory system first
-    init_wrt_memory().unwrap();
+    init_kiln_memory().unwrap();
     init_crate_memory(CrateId::Wasi).unwrap();
 
     // Create minimal capabilities
@@ -149,21 +149,21 @@ fn test_wasi_capabilities_with_nn() {
 #[test]
 fn test_verification_level_mapping() {
     // Test that each level maps correctly
-    let foundation_standard: wrt_foundation::verification::VerificationLevel =
+    let foundation_standard: kiln_foundation::verification::VerificationLevel =
         VerificationLevel::Standard.into();
     let qm_caps =
         WasiNeuralNetworkCapabilities::for_verification_level(foundation_standard).unwrap();
     assert_eq!(qm_caps.verification_level, foundation_standard);
     assert!(qm_caps.dynamic_loading);
 
-    let foundation_sampling: wrt_foundation::verification::VerificationLevel =
+    let foundation_sampling: kiln_foundation::verification::VerificationLevel =
         VerificationLevel::Sampling.into();
     let asil_a_caps =
         WasiNeuralNetworkCapabilities::for_verification_level(foundation_sampling).unwrap();
     assert_eq!(asil_a_caps.verification_level, foundation_sampling);
     assert!(asil_a_caps.dynamic_loading);
 
-    let foundation_continuous: wrt_foundation::verification::VerificationLevel =
+    let foundation_continuous: kiln_foundation::verification::VerificationLevel =
         VerificationLevel::Continuous.into();
     let asil_b_caps =
         WasiNeuralNetworkCapabilities::for_verification_level(foundation_continuous).unwrap();
@@ -175,7 +175,7 @@ fn test_verification_level_mapping() {
 /// Test tensor operations with different capabilities
 #[test]
 fn test_tensor_operations() {
-    use wrt_wasi::nn::{
+    use kiln_wasi::nn::{
         capabilities::DynamicNNCapability,
         Tensor,
         TensorDimensions,
@@ -191,7 +191,7 @@ fn test_tensor_operations() {
 
     // Try to create tensor exceeding limits
     let capability =
-        DynamicNNCapability::with_limits(wrt_wasi::nn::capabilities::NNResourceLimits {
+        DynamicNNCapability::with_limits(kiln_wasi::nn::capabilities::NNResourceLimits {
             max_tensor_memory: 100,
             ..Default::default()
         });

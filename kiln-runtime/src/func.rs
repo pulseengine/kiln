@@ -3,8 +3,8 @@
 //! This module provides the implementation for WebAssembly function types.
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::types::FuncType as RuntimeFuncType;
-use wrt_foundation::{
+use kiln_foundation::types::FuncType as RuntimeFuncType;
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
 };
@@ -19,10 +19,10 @@ pub struct Function {
     /// Function type signature
     pub func_type:      RuntimeFuncType,
     /// Function body (placeholder)
-    pub body: wrt_foundation::bounded::BoundedVec<
+    pub body: kiln_foundation::bounded::BoundedVec<
         u8,
         4096,
-        wrt_foundation::safe_memory::NoStdProvider<8192>,
+        kiln_foundation::safe_memory::NoStdProvider<8192>,
     >,
     /// Function index in the module (optional)
     pub function_index: Option<u32>,
@@ -31,11 +31,11 @@ pub struct Function {
 impl Function {
     /// Create a new function
     #[cfg(feature = "std")]
-    pub fn new(func_type: RuntimeFuncType) -> Result<Self, wrt_error::Error> {
+    pub fn new(func_type: RuntimeFuncType) -> Result<Self, kiln_error::Error> {
         let provider = safe_managed_alloc!(8192, CrateId::Runtime)?;
         Ok(Self {
             func_type,
-            body: wrt_foundation::bounded::BoundedVec::new(provider)?,
+            body: kiln_foundation::bounded::BoundedVec::new(provider)?,
             function_index: None,
         })
     }
@@ -43,11 +43,11 @@ impl Function {
     #[cfg(not(feature = "std"))]
     pub fn new(
         func_type: RuntimeFuncType,
-    ) -> Result<Self, wrt_error::Error> {
+    ) -> Result<Self, kiln_error::Error> {
         let provider = safe_managed_alloc!(8192, CrateId::Runtime)?;
         Ok(Self {
             func_type,
-            body: wrt_foundation::bounded::BoundedVec::new(provider)?,
+            body: kiln_foundation::bounded::BoundedVec::new(provider)?,
             function_index: None,
         })
     }
@@ -57,11 +57,11 @@ impl Function {
     pub fn new_with_index(
         func_type: RuntimeFuncType,
         index: u32,
-    ) -> Result<Self, wrt_error::Error> {
+    ) -> Result<Self, kiln_error::Error> {
         let provider = safe_managed_alloc!(8192, CrateId::Runtime)?;
         Ok(Self {
             func_type,
-            body: wrt_foundation::bounded::BoundedVec::new(provider)?,
+            body: kiln_foundation::bounded::BoundedVec::new(provider)?,
             function_index: Some(index),
         })
     }
@@ -70,11 +70,11 @@ impl Function {
     pub fn new_with_index(
         func_type: RuntimeFuncType,
         index: u32,
-    ) -> Result<Self, wrt_error::Error> {
+    ) -> Result<Self, kiln_error::Error> {
         let provider = safe_managed_alloc!(8192, CrateId::Runtime)?;
         Ok(Self {
             func_type,
-            body: wrt_foundation::bounded::BoundedVec::new(provider)?,
+            body: kiln_foundation::bounded::BoundedVec::new(provider)?,
             function_index: Some(index),
         })
     }

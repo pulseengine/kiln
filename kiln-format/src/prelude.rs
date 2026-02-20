@@ -1,14 +1,14 @@
-//! Prelude module for wrt-format
+//! Prelude module for kiln-format
 //!
 //! This module provides a unified set of imports for both std and no_std
 //! environments. It re-exports commonly used types and traits to ensure
-//! consistency across all crates in the WRT project and simplify imports in
+//! consistency across all crates in the Kiln project and simplify imports in
 //! individual modules.
 
 // Core imports for both std and no_std environments
 // Import synchronization primitives for no_std
 // For a no_std implementation, we should use appropriate no_std compatible sync
-// primitives since wrt-sync is not implemented yet, we use spin-based locks as
+// primitives since kiln-sync is not implemented yet, we use spin-based locks as
 // a placeholder
 #[cfg(not(feature = "std"))]
 pub use core::cell::{
@@ -42,8 +42,8 @@ pub use core::{
     str,
 };
 
-// Re-export from wrt-error
-pub use wrt_error::{
+// Re-export from kiln-error
+pub use kiln_error::{
     codes,
     kinds,
     Error,
@@ -54,23 +54,23 @@ pub use wrt_error::{
 };
 // Binary std/no_std choice
 #[cfg(feature = "std")]
-pub use wrt_foundation::component_value::{
+pub use kiln_foundation::component_value::{
     ComponentValue,
     ValType,
 };
 #[cfg(feature = "std")]
-pub use wrt_foundation::safe_memory::StdProvider as StdMemoryProvider;
+pub use kiln_foundation::safe_memory::StdProvider as StdMemoryProvider;
 // Re-export additional clean types when allocation is available
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub use wrt_foundation::CleanExternType;
+pub use kiln_foundation::CleanExternType;
 // Conditional imports for safety features
 #[cfg(feature = "safety")]
-pub use wrt_foundation::MemoryProvider;
+pub use kiln_foundation::MemoryProvider;
 // No-std memory provider
 #[cfg(all(feature = "safety", not(feature = "std")))]
-pub use wrt_foundation::NoStdProvider as NoStdMemoryProvider;
-// Re-export clean types from wrt-foundation
-pub use wrt_foundation::{
+pub use kiln_foundation::NoStdProvider as NoStdMemoryProvider;
+// Re-export clean types from kiln-foundation
+pub use kiln_foundation::{
     // Legacy types for compatibility
     types::{
         BlockType,
@@ -86,14 +86,14 @@ pub use wrt_foundation::{
     SafeSlice,
 };
 #[cfg(not(any(feature = "std")))]
-pub use wrt_foundation::{
+pub use kiln_foundation::{
     BoundedMap,
     BoundedString,
     BoundedVec,
 };
 // Clean types without provider parameters - only when allocation is available
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub use wrt_foundation::{
+pub use kiln_foundation::{
     CleanFuncType,
     CleanGlobalType,
     CleanMemoryType,
@@ -103,7 +103,7 @@ pub use wrt_foundation::{
 };
 // Re-export type factory types - only when allocation is available
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub use wrt_foundation::{
+pub use kiln_foundation::{
     ComponentTypeFactory,
     RuntimeTypeFactory,
     TypeFactory,
@@ -123,25 +123,25 @@ pub use crate::{
         block_type_to_format_block_type,
         convert,
         format_block_type_to_block_type,
-        format_limits_to_wrt_limits,
+        format_limits_to_kiln_limits,
         format_value_type,
         format_value_type as value_type_to_byte,
         parse_value_type,
         validate,
         validate_format,
         validate_option,
-        wrt_limits_to_format_limits,
+        kiln_limits_to_format_limits,
     },
     // Error conversion utilities
     error::{
         parse_error,
         runtime_error,
-        to_wrt_error,
+        to_kiln_error,
         type_error,
         validation_error,
-        wrt_runtime_error,
-        wrt_type_error,
-        wrt_validation_error,
+        kiln_runtime_error,
+        kiln_type_error,
+        kiln_validation_error,
         IntoError,
     },
     // Section constants
@@ -172,22 +172,22 @@ pub use crate::{
 
 /// Create a SafeSlice from a byte slice
 #[cfg(feature = "safety")]
-pub fn safe_slice(data: &[u8]) -> wrt_error::Result<wrt_foundation::safe_memory::SafeSlice<'_>> {
-    wrt_foundation::safe_memory::SafeSlice::new(data)
+pub fn safe_slice(data: &[u8]) -> kiln_error::Result<kiln_foundation::safe_memory::SafeSlice<'_>> {
+    kiln_foundation::safe_memory::SafeSlice::new(data)
 }
 
 /// Create a SafeSlice with specific verification level
 #[cfg(feature = "safety")]
 pub fn safe_slice_with_verification(
     data: &[u8],
-    level: wrt_foundation::verification::VerificationLevel,
-) -> wrt_error::Result<wrt_foundation::safe_memory::SafeSlice<'_>> {
-    wrt_foundation::safe_memory::SafeSlice::with_verification_level(data, level)
+    level: kiln_foundation::verification::VerificationLevel,
+) -> kiln_error::Result<kiln_foundation::safe_memory::SafeSlice<'_>> {
+    kiln_foundation::safe_memory::SafeSlice::with_verification_level(data, level)
 }
 
 /// Create a memory provider from a byte slice (changed from Vec<u8>)
 #[cfg(all(feature = "safety", feature = "std"))] // StdMemoryProvider likely needs std
-pub fn memory_provider(data: &[u8]) -> wrt_foundation::safe_memory::StdProvider {
+pub fn memory_provider(data: &[u8]) -> kiln_foundation::safe_memory::StdProvider {
     // StdMemoryProvider::new takes Vec, this needs adjustment or StdMemoryProvider
     // needs a from_slice For now, let's assume StdMemoryProvider can be created
     // from a slice or this function is std-only. This function is problematic
@@ -195,26 +195,26 @@ pub fn memory_provider(data: &[u8]) -> wrt_foundation::safe_memory::StdProvider 
     // StdMemoryProvider to have a method that takes a slice if appropriate,
     // or this helper should be cfg-gated more strictly or use a different provider
     // for no_std. Tentatively, creating a Vec here if std is available.
-    wrt_foundation::safe_memory::StdProvider::new(data.to_vec())
+    kiln_foundation::safe_memory::StdProvider::new(data.to_vec())
 }
 
 /// Create a memory provider with specific capacity
 #[cfg(all(feature = "safety", feature = "std"))] // StdMemoryProvider likely needs std
-pub fn memory_provider_with_capacity(capacity: usize) -> wrt_foundation::safe_memory::StdProvider {
-    wrt_foundation::safe_memory::StdProvider::with_capacity(capacity)
+pub fn memory_provider_with_capacity(capacity: usize) -> kiln_foundation::safe_memory::StdProvider {
+    kiln_foundation::safe_memory::StdProvider::with_capacity(capacity)
 }
 
 // Factory function for creating providers using capability system
 #[cfg(not(feature = "std"))]
-pub fn create_format_provider<const N: usize>() -> wrt_error::Result<
-    wrt_foundation::capabilities::CapabilityAwareProvider<wrt_foundation::NoStdProvider<N>>,
+pub fn create_format_provider<const N: usize>() -> kiln_error::Result<
+    kiln_foundation::capabilities::CapabilityAwareProvider<kiln_foundation::NoStdProvider<N>>,
 > {
-    use wrt_foundation::{
+    use kiln_foundation::{
         capability_context,
         safe_capability_alloc,
         CrateId,
     };
-    let context: wrt_error::Result<_> = capability_context!(dynamic(CrateId::Format, N));
+    let context: kiln_error::Result<_> = capability_context!(dynamic(CrateId::Format, N));
     let context = context?;
     safe_capability_alloc!(context, CrateId::Format, N)
 }
@@ -226,12 +226,12 @@ pub trait Prelude {}
 pub mod std_prelude {
     // External crate imports
     // Result type
-    pub use wrt_error::Result;
+    pub use kiln_error::Result;
     // Binary std/no_std choice
     #[cfg(feature = "std")]
-    pub use wrt_foundation::component_value::ValType;
-    // Base types from wrt_foundation - fix incorrect paths
-    pub use wrt_foundation::{
+    pub use kiln_foundation::component_value::ValType;
+    // Base types from kiln_foundation - fix incorrect paths
+    pub use kiln_foundation::{
         // These types appear to be from the component module
         component::ComponentType,
         // SafeMemory types
@@ -260,25 +260,25 @@ pub mod std_prelude {
         block_type_to_format_block_type,
         convert,
         format_block_type_to_block_type,
-        format_limits_to_wrt_limits,
+        format_limits_to_kiln_limits,
         format_value_type,
         format_value_type as value_type_to_byte,
         parse_value_type,
         validate,
         validate_format,
         validate_option,
-        wrt_limits_to_format_limits,
+        kiln_limits_to_format_limits,
     };
     // Error handling
     pub use crate::error::{
         parse_error,
         runtime_error,
-        to_wrt_error,
+        to_kiln_error,
         type_error,
         validation_error,
-        wrt_runtime_error,
-        wrt_type_error,
-        wrt_validation_error,
+        kiln_runtime_error,
+        kiln_type_error,
+        kiln_validation_error,
         IntoError,
     };
     // Format types - fix incorrect modules
@@ -301,8 +301,8 @@ impl Prelude for crate::component::Component {}
 pub mod no_std_prelude {
     // Re-export collection types for no_std
     // External crate imports
-    // Base error types from wrt_error
-    pub use wrt_error::{
+    // Base error types from kiln_error
+    pub use kiln_error::{
         codes,
         kinds,
         Error,
@@ -313,9 +313,9 @@ pub mod no_std_prelude {
     };
     // Binary std/no_std choice
     #[cfg(feature = "std")]
-    pub use wrt_foundation::component_value::ValType;
-    // Base types from wrt_foundation - fix incorrect paths
-    pub use wrt_foundation::{
+    pub use kiln_foundation::component_value::ValType;
+    // Base types from kiln_foundation - fix incorrect paths
+    pub use kiln_foundation::{
         // These types appear to be from the component module
         component::ComponentType,
         // SafeMemory types
@@ -339,7 +339,7 @@ pub mod no_std_prelude {
         verification::VerificationLevel,
     };
     #[cfg(not(any(feature = "std")))]
-    pub use wrt_foundation::{
+    pub use kiln_foundation::{
         BoundedMap,
         BoundedString,
         BoundedVec,
@@ -350,25 +350,25 @@ pub mod no_std_prelude {
         block_type_to_format_block_type,
         convert,
         format_block_type_to_block_type,
-        format_limits_to_wrt_limits,
+        format_limits_to_kiln_limits,
         format_value_type,
         format_value_type as value_type_to_byte,
         parse_value_type,
         validate,
         validate_format,
         validate_option,
-        wrt_limits_to_format_limits,
+        kiln_limits_to_format_limits,
     };
     // Error handling
     pub use crate::error::{
         parse_error,
         runtime_error,
-        to_wrt_error,
+        to_kiln_error,
         type_error,
         validation_error,
-        wrt_runtime_error,
-        wrt_type_error,
-        wrt_validation_error,
+        kiln_runtime_error,
+        kiln_type_error,
+        kiln_validation_error,
         IntoError,
     };
     // Format types - fix incorrect modules

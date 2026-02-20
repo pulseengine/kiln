@@ -24,7 +24,7 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
@@ -88,7 +88,7 @@ impl IpcChannel for LinuxDomainSocket {
     where
         Self: Sized,
     {
-        let socket_path = format!("/tmp/wrt_{}.sock", name);
+        let socket_path = format!("/tmp/kiln_{}.sock", name);
 
         // Remove existing socket file if it exists
         let _ = std::fs::remove_file(&socket_path);
@@ -108,7 +108,7 @@ impl IpcChannel for LinuxDomainSocket {
     where
         Self: Sized,
     {
-        let socket_path = format!("/tmp/wrt_ipc_{}.sock", name);
+        let socket_path = format!("/tmp/kiln_ipc_{}.sock", name);
 
         // Connect to existing socket
         let _stream = UnixStream::connect(&socket_path)

@@ -1,11 +1,11 @@
-//! Unit tests for cargo-wrt helper modules
+//! Unit tests for cargo-kiln helper modules
 //!
 //! Comprehensive unit tests for all helper module functionality
 //! to ensure reliability and correctness.
 
 #[cfg(test)]
 mod output_tests {
-    use wrt_build_core::formatters::OutputFormat;
+    use kiln_build_core::formatters::OutputFormat;
 
     use super::super::output::*;
 
@@ -44,7 +44,7 @@ mod output_tests {
 mod progress_tests {
     use std::time::Duration;
 
-    use wrt_build_core::formatters::OutputFormat;
+    use kiln_build_core::formatters::OutputFormat;
 
     use super::super::progress::*;
 
@@ -162,7 +162,7 @@ edition = "2021"
     fn test_smart_defaults() {
         let context = ProjectContext {
             workspace_root: std::path::PathBuf::from("/test"),
-            project_type: ProjectType::WrtWorkspace,
+            project_type: ProjectType::KilnWorkspace,
             features: ProjectFeatures::default(),
             git_context: None,
             ci_context: None,
@@ -178,7 +178,7 @@ edition = "2021"
         assert_eq!(output_format, "human");
 
         let cache_settings = defaults.suggest_cache_settings();
-        assert!(cache_settings); // WRT workspace should use cache
+        assert!(cache_settings); // Kiln workspace should use cache
     }
 
     #[test]
@@ -407,7 +407,7 @@ mod performance_tests {
 
 #[cfg(test)]
 mod error_handling_tests {
-    use wrt_build_core::formatters::OutputFormat;
+    use kiln_build_core::formatters::OutputFormat;
 
     use super::super::{OutputManager, error_handling::*};
 
@@ -551,7 +551,7 @@ mod help_system_tests {
             brief: "Test command",
             description: "This is a test command for unit testing",
             examples: vec![CommandExample {
-                command: "cargo-wrt test-command",
+                command: "cargo-kiln test-command",
                 description: "Run test command",
                 output_sample: None,
             }],
@@ -589,13 +589,13 @@ mod help_system_tests {
         let help_system = HelpSystem::new();
 
         let overview = help_system.format_overview_help(false);
-        assert!(overview.contains("cargo-wrt"));
+        assert!(overview.contains("cargo-kiln"));
         assert!(overview.contains("Build Commands"));
         assert!(overview.contains("build"));
         assert!(overview.contains("test"));
 
         let overview_colored = help_system.format_overview_help(true);
-        assert!(overview_colored.contains("cargo-wrt"));
+        assert!(overview_colored.contains("cargo-kiln"));
     }
 
     #[test]
@@ -616,12 +616,12 @@ mod help_system_tests {
     #[test]
     fn test_command_example() {
         let example = CommandExample {
-            command: "cargo-wrt test --verbose",
+            command: "cargo-kiln test --verbose",
             description: "Run tests with verbose output",
             output_sample: Some("Running tests...\ntest result: ok"),
         };
 
-        assert_eq!(example.command, "cargo-wrt test --verbose");
+        assert_eq!(example.command, "cargo-kiln test --verbose");
         assert_eq!(example.description, "Run tests with verbose output");
         assert!(example.output_sample.is_some());
     }

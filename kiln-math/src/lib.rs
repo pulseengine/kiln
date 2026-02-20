@@ -1,9 +1,9 @@
 // Copyright (c) 2025 R T
 // SPDX-License-Identifier: MIT
-// Project: WRT
-// Module: wrt-math (SW-REQ-ID-TBD)
+// Project: Kiln
+// Module: kiln-math (SW-REQ-ID-TBD)
 
-//! Mathematical operations and types for WRT.
+//! Mathematical operations and types for Kiln.
 //! Provides implementations for WebAssembly numeric instructions.
 
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -60,12 +60,12 @@ pub use safety::{
 // Re-export SIMD operations when platform feature is enabled
 #[cfg(feature = "platform")]
 pub use simd::SimdOperations;
-// Re-export error type from wrt-error for convenience
-pub use wrt_error::Error as WrtMathError; // Alias specific to this crate context
-pub use wrt_error::Result as WrtMathResult; // Alias specific to this crate context
+// Re-export error type from kiln-error for convenience
+pub use kiln_error::Error as KilnMathError; // Alias specific to this crate context
+pub use kiln_error::Result as KilnMathResult; // Alias specific to this crate context
 
 // Panic handler disabled to avoid conflicts with other crates
-// // Provide a panic handler only when wrt-math is being tested in isolation
+// // Provide a panic handler only when kiln-math is being tested in isolation
 // #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {

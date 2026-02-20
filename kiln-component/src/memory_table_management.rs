@@ -12,10 +12,10 @@ use std::{fmt, mem, slice};
 use std::{boxed::Box, vec::Vec};
 
 #[cfg(feature = "std")]
-use wrt_foundation::{collections::StaticVec as BoundedVec, component_value::ComponentValue, prelude::*};
+use kiln_foundation::{collections::StaticVec as BoundedVec, component_value::ComponentValue, prelude::*};
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     collections::StaticVec as BoundedVec,
     safe_memory::NoStdProvider,
     budget_aware_provider::CrateId,
@@ -209,21 +209,21 @@ pub struct MemoryAccess {
 
 impl ComponentMemoryManager {
     /// Create a new memory manager
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             memories: Vec::new(),
             #[cfg(not(any(feature = "std", )))]
             memories: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
-                BoundedVec::new().map_err(|_| wrt_error::Error::resource_exhausted("Failed to create memory manager"))?
+                BoundedVec::new().map_err(|_| kiln_error::Error::resource_exhausted("Failed to create memory manager"))?
             },
             #[cfg(feature = "std")]
             sharing_policies: Vec::new(),
             #[cfg(not(any(feature = "std", )))]
             sharing_policies: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
-                BoundedVec::new().map_err(|_| wrt_error::Error::resource_exhausted("Failed to create sharing policies"))?
+                BoundedVec::new().map_err(|_| kiln_error::Error::resource_exhausted("Failed to create sharing policies"))?
             },
             total_allocated: 0,
             max_memory: 256 * 1024 * 1024, // 256MB default
@@ -241,13 +241,13 @@ impl ComponentMemoryManager {
         limits: MemoryLimits,
         shared: bool,
         owner: Option<u32>,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         let memory_id = self.memories.len() as u32;
 
         // Check memory limits
         let initial_size = limits.min as usize * WASM_PAGE_SIZE;
         if self.total_allocated + initial_size > self.max_memory {
-            return Err(wrt_error::Error::resource_exhausted("Memory limit exceeded"))
+            return Err(kiln_error::Error::resource_exhausted("Memory limit exceeded"))
             ;
         }
 
@@ -262,7 +262,7 @@ impl ComponentMemoryManager {
         {
             for _ in 0..initial_size {
                 data.push(0u8).map_err(|_| {
-                    wrt_error::Error::resource_exhausted("Memory allocation failed")
+                    kiln_error::Error::resource_exhausted("Memory allocation failed")
                 })?;
                 })?;
             }
@@ -284,7 +284,7 @@ impl ComponentMemoryManager {
         #[cfg(not(any(feature = "std", )))]
         {
             self.memories.push(memory).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Too many memories")
+                kiln_error::Error::resource_exhausted("Too many memories")
             })?;
             })?;
         }
@@ -310,22 +310,22 @@ impl ComponentMemoryManager {
         offset: u32,
         size: u32,
         instance_id: Option<u32>,
-    ) -> wrt_error::Result<Vec<u8>> {
+    ) -> kiln_error::Result<Vec<u8>> {
         let memory = self
             .get_memory(memory_id)
-            .ok_or_else(|| wrt_error::Error::validation_invalid_input("Invalid input"))
+            .ok_or_else(|| kiln_error::Error::validation_invalid_input("Invalid input"))
             ))?;
 
         // Check permissions
         if !self.check_read_permission(memory_id, instance_id)? {
-            return Err(wrt_error::Error::runtime_error("Read permission denied"))
+            return Err(kiln_error::Error::runtime_error("Read permission denied"))
             ;
         }
 
         // Check bounds
         let end_offset = offset as usize + size as usize;
         if end_offset > memory.data.len() {
-            return Err(wrt_error::Error::validation_invalid_input("Invalid input"))
+            return Err(kiln_error::Error::validation_invalid_input("Invalid input"))
             ;
         }
 
@@ -351,7 +351,7 @@ impl ComponentMemoryManager {
         offset: u32,
         data: &[u8],
         instance_id: Option<u32>,
-    ) -> wrt_error::Result<MemoryAccess> {
+    ) -> kiln_error::Result<MemoryAccess> {
         // Check permissions first
         if !self.check_write_permission(memory_id, instance_id)? {
             let provider = safe_managed_alloc!(512, CrateId::Component)?;
@@ -364,7 +364,7 @@ impl ComponentMemoryManager {
 
         let memory = self
             .get_memory_mut(memory_id)
-            .ok_or_else(|| wrt_error::Error::validation_invalid_input("Invalid input"))
+            .ok_or_else(|| kiln_error::Error::validation_invalid_input("Invalid input"))
             ))?;
 
         // Check bounds
@@ -394,15 +394,15 @@ impl ComponentMemoryManager {
         memory_id: u32,
         pages: u32,
         instance_id: Option<u32>,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         let memory = self
             .get_memory_mut(memory_id)
-            .ok_or_else(|| wrt_error::Error::validation_invalid_input("Invalid input"))
+            .ok_or_else(|| kiln_error::Error::validation_invalid_input("Invalid input"))
             ))?;
 
         // Check permissions
         if !self.check_write_permission(memory_id, instance_id)? {
-            return Err(wrt_error::Error::runtime_error("Write permission denied"))
+            return Err(kiln_error::Error::runtime_error("Write permission denied"))
             ;
         }
 
@@ -412,7 +412,7 @@ impl ComponentMemoryManager {
         // Check limits
         if let Some(max) = memory.limits.max {
             if new_pages > max as usize {
-                return Err(wrt_error::Error::validation_invalid_input("Invalid input"))
+                return Err(kiln_error::Error::validation_invalid_input("Invalid input"))
                 ;
             }
         }
@@ -420,7 +420,7 @@ impl ComponentMemoryManager {
         // Check global memory limit
         let additional_size = pages as usize * WASM_PAGE_SIZE;
         if self.total_allocated + additional_size > self.max_memory {
-            return Err(wrt_error::Error::resource_exhausted("Memory limit exceeded"))
+            return Err(kiln_error::Error::resource_exhausted("Memory limit exceeded"))
             ;
         }
 
@@ -434,7 +434,7 @@ impl ComponentMemoryManager {
         {
             for _ in 0..additional_size {
                 memory.data.push(0u8).map_err(|_| {
-                    wrt_error::Error::resource_exhausted("Memory allocation failed")
+                    kiln_error::Error::resource_exhausted("Memory allocation failed")
                 })?;
                 })?;
             }
@@ -445,10 +445,10 @@ impl ComponentMemoryManager {
     }
 
     /// Check read permission
-    fn check_read_permission(&self, memory_id: u32, instance_id: Option<u32>) -> wrt_error::Result<bool> {
+    fn check_read_permission(&self, memory_id: u32, instance_id: Option<u32>) -> kiln_error::Result<bool> {
         let memory = self
             .get_memory(memory_id)
-            .ok_or_else(|| wrt_error::Error::validation_invalid_input("Invalid input"))
+            .ok_or_else(|| kiln_error::Error::validation_invalid_input("Invalid input"))
             ))?;
 
         if !memory.permissions.read {
@@ -471,10 +471,10 @@ impl ComponentMemoryManager {
     }
 
     /// Check write permission
-    fn check_write_permission(&self, memory_id: u32, instance_id: Option<u32>) -> wrt_error::Result<bool> {
+    fn check_write_permission(&self, memory_id: u32, instance_id: Option<u32>) -> kiln_error::Result<bool> {
         let memory = self
             .get_memory(memory_id)
-            .ok_or_else(|| wrt_error::Error::validation_invalid_input("Invalid input"))
+            .ok_or_else(|| kiln_error::Error::validation_invalid_input("Invalid input"))
             ))?;
 
         if !memory.permissions.write {
@@ -511,7 +511,7 @@ impl ComponentMemoryManager {
         &self,
         allowed_instances: &[u32],
         instance_id: Option<u32>,
-    ) -> wrt_error::Result<bool> {
+    ) -> kiln_error::Result<bool> {
         match instance_id {
             Some(id) => Ok(allowed_instances.contains(&id)),
             None => Ok(false),
@@ -519,7 +519,7 @@ impl ComponentMemoryManager {
     }
 
     /// Set memory sharing policy
-    pub fn set_sharing_policy(&mut self, policy: MemorySharingPolicy) -> wrt_error::Result<()> {
+    pub fn set_sharing_policy(&mut self, policy: MemorySharingPolicy) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             self.sharing_policies.push(policy);
@@ -528,7 +528,7 @@ impl ComponentMemoryManager {
         #[cfg(not(any(feature = "std", )))]
         {
             self.sharing_policies.push(policy).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Too many sharing policies")
+                kiln_error::Error::resource_exhausted("Too many sharing policies")
             })?;
             })
         }
@@ -547,21 +547,21 @@ impl ComponentMemoryManager {
 
 impl ComponentTableManager {
     /// Create a new table manager
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             tables: Vec::new(),
             #[cfg(not(any(feature = "std", )))]
             tables: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
-                BoundedVec::new().map_err(|_| wrt_error::Error::resource_exhausted("Failed to create table manager"))?
+                BoundedVec::new().map_err(|_| kiln_error::Error::resource_exhausted("Failed to create table manager"))?
             },
             #[cfg(feature = "std")]
             sharing_policies: Vec::new(),
             #[cfg(not(any(feature = "std", )))]
             sharing_policies: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
-                BoundedVec::new().map_err(|_| wrt_error::Error::resource_exhausted("Failed to create sharing policies"))?
+                BoundedVec::new().map_err(|_| kiln_error::Error::resource_exhausted("Failed to create sharing policies"))?
             },
         })
     }
@@ -572,7 +572,7 @@ impl ComponentTableManager {
         element_type: CoreValType,
         limits: TableLimits,
         owner: Option<u32>,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         let table_id = self.tables.len() as u32;
 
         // Create table elements
@@ -586,7 +586,7 @@ impl ComponentTableManager {
         {
             for _ in 0..limits.min {
                 elements.push(TableElement::Null).map_err(|_| {
-                    wrt_error::Error::resource_exhausted("Table allocation failed")
+                    kiln_error::Error::resource_exhausted("Table allocation failed")
                 })?;
                 })?;
             }
@@ -601,7 +601,7 @@ impl ComponentTableManager {
         #[cfg(not(any(feature = "std", )))]
         {
             self.tables.push(table).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Too many tables")
+                kiln_error::Error::resource_exhausted("Too many tables")
             })?;
             })?;
         }
@@ -620,14 +620,14 @@ impl ComponentTableManager {
     }
 
     /// Get table element
-    pub fn get_element(&self, table_id: u32, index: u32) -> wrt_error::Result<&TableElement> {
+    pub fn get_element(&self, table_id: u32, index: u32) -> kiln_error::Result<&TableElement> {
         let table = self
             .get_table(table_id)
-            .ok_or_else(|| wrt_error::Error::validation_invalid_input("Invalid input"))
+            .ok_or_else(|| kiln_error::Error::validation_invalid_input("Invalid input"))
             ))?;
 
         table.elements.get(index as usize).ok_or_else(|| {
-            wrt_error::Error::validation_invalid_input("Invalid input")
+            kiln_error::Error::validation_invalid_input("Invalid input")
             )
         })
     }
@@ -638,14 +638,14 @@ impl ComponentTableManager {
         table_id: u32,
         index: u32,
         element: TableElement,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let table = self
             .get_table_mut(table_id)
-            .ok_or_else(|| wrt_error::Error::validation_invalid_input("Invalid input"))
+            .ok_or_else(|| kiln_error::Error::validation_invalid_input("Invalid input"))
             ))?;
 
         if index as usize >= table.elements.len() {
-            return Err(wrt_error::Error::validation_invalid_input("Invalid input"))
+            return Err(kiln_error::Error::validation_invalid_input("Invalid input"))
             ;
         }
 
@@ -654,10 +654,10 @@ impl ComponentTableManager {
     }
 
     /// Grow table
-    pub fn grow_table(&mut self, table_id: u32, size: u32, init: TableElement) -> wrt_error::Result<u32> {
+    pub fn grow_table(&mut self, table_id: u32, size: u32, init: TableElement) -> kiln_error::Result<u32> {
         let table = self
             .get_table_mut(table_id)
-            .ok_or_else(|| wrt_error::Error::validation_invalid_input("Invalid input"))
+            .ok_or_else(|| kiln_error::Error::validation_invalid_input("Invalid input"))
             ))?;
 
         let current_size = table.elements.len();
@@ -666,7 +666,7 @@ impl ComponentTableManager {
         // Check limits
         if let Some(max) = table.limits.max {
             if new_size > max as usize {
-                return Err(wrt_error::Error::validation_invalid_input("Invalid input"))
+                return Err(kiln_error::Error::validation_invalid_input("Invalid input"))
             ;
             }
         }
@@ -680,7 +680,7 @@ impl ComponentTableManager {
         {
             for _ in 0..size {
                 table.elements.push(init.clone()).map_err(|_| {
-                    wrt_error::Error::resource_exhausted("Table allocation failed")
+                    kiln_error::Error::resource_exhausted("Table allocation failed")
                 })?;
                 })?;
             }
@@ -690,7 +690,7 @@ impl ComponentTableManager {
     }
 
     /// Set table sharing policy
-    pub fn set_sharing_policy(&mut self, policy: TableSharingPolicy) -> wrt_error::Result<()> {
+    pub fn set_sharing_policy(&mut self, policy: TableSharingPolicy) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             self.sharing_policies.push(policy);
@@ -699,7 +699,7 @@ impl ComponentTableManager {
         #[cfg(not(any(feature = "std", )))]
         {
             self.sharing_policies.push(policy).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Too many sharing policies")
+                kiln_error::Error::resource_exhausted("Too many sharing policies")
             })?;
             })
         }

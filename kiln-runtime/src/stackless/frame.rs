@@ -3,8 +3,8 @@
 //! This module implements a basic activation frame structure for the stackless
 //! WebAssembly execution engine.
 
-use wrt_error::Result;
-use wrt_foundation::values::Value;
+use kiln_error::Result;
+use kiln_foundation::values::Value;
 
 /// Simple stackless function frame
 #[derive(Debug, Clone, PartialEq)]
@@ -51,7 +51,7 @@ impl StacklessFrame {
         if index < self.locals_count {
             Ok(self.locals[index].clone())
         } else {
-            Err(wrt_error::Error::runtime_execution_error(
+            Err(kiln_error::Error::runtime_execution_error(
                 "Local index out of bounds",
             ))
         }
@@ -63,7 +63,7 @@ impl StacklessFrame {
             self.locals[index] = value;
             Ok(())
         } else {
-            Err(wrt_error::Error::runtime_execution_error(
+            Err(kiln_error::Error::runtime_execution_error(
                 "Local index out of bounds",
             ))
         }

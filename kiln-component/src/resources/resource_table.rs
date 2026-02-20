@@ -8,14 +8,14 @@ use std::{format, sync::Weak};
 use crate::resources::ResourceInterceptor;
 
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use wrt_foundation::allocator::{WrtHashMap, WrtVec};
-use wrt_foundation::{
+use kiln_foundation::allocator::{KilnHashMap, KilnVec};
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     resource::ResourceOperation as FormatResourceOperation,
     safe_managed_alloc,
 };
-use wrt_intercept::{InterceptionResult, builtins::InterceptContext as InterceptionContext};
+use kiln_intercept::{InterceptionResult, builtins::InterceptContext as InterceptionContext};
 
 use super::{
     buffer_pool::BufferPool,
@@ -168,7 +168,7 @@ struct ResourceEntry {
     resource: Arc<Mutex<Resource>>,
     /// Weak references to borrowed resources (budget-aware)
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    borrows: WrtVec<Weak<Mutex<Resource>>, { CrateId::Component as u8 }, 32>,
+    borrows: KilnVec<Weak<Mutex<Resource>>, { CrateId::Component as u8 }, 32>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     borrows: Vec<Weak<Mutex<Resource>>>,
     #[cfg(not(feature = "std"))]
@@ -284,7 +284,7 @@ impl BufferPoolTrait for SizeClassBufferPool {
 pub struct ResourceTable {
     /// Map of resource handles to resource entries (budget-aware)
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    resources: WrtHashMap<u32, ResourceEntry, { CrateId::Component as u8 }, 1024>,
+    resources: KilnHashMap<u32, ResourceEntry, { CrateId::Component as u8 }, 1024>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     resources: HashMap<u32, ResourceEntry>,
     #[cfg(not(feature = "std"))]
@@ -301,7 +301,7 @@ pub struct ResourceTable {
     buffer_pool: Arc<Mutex<dyn BufferPoolTrait + Send + Sync>>,
     /// Interceptors for resource operations (budget-aware)
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    interceptors: WrtVec<Arc<dyn ResourceInterceptor>, { CrateId::Component as u8 }, 16>,
+    interceptors: KilnVec<Arc<dyn ResourceInterceptor>, { CrateId::Component as u8 }, 16>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     interceptors: Vec<Arc<dyn ResourceInterceptor>>,
     #[cfg(not(feature = "std"))]
@@ -338,13 +338,13 @@ impl ResourceTable {
     /// - Uses bounded collections with compile-time size limits
     /// - Integrates with budget enforcement system
     /// - Prevents runtime allocation failures
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         #[cfg(not(feature = "std"))]
-        let memory_guard = wrt_foundation::safety_aware_alloc!(131072, CrateId::Component)?; // 128KB for resource table
+        let memory_guard = kiln_foundation::safety_aware_alloc!(131072, CrateId::Component)?; // 128KB for resource table
 
         Ok(Self {
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            resources: WrtHashMap::new(),
+            resources: KilnHashMap::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             resources: HashMap::new(),
             #[cfg(not(feature = "std"))]
@@ -356,7 +356,7 @@ impl ResourceTable {
             buffer_pool: Arc::new(Mutex::new(BufferPool::new()))
                 as Arc<Mutex<dyn BufferPoolTrait + Send + Sync>>,
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            interceptors: WrtVec::new(),
+            interceptors: KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             interceptors: Vec::new(),
             #[cfg(not(feature = "std"))]
@@ -375,18 +375,18 @@ impl ResourceTable {
     ///
     /// This function ensures all resource table allocations are tracked
     /// by the budget enforcement system.
-    pub fn new_budget_aware() -> wrt_error::Result<Self> {
+    pub fn new_budget_aware() -> kiln_error::Result<Self> {
         Self::new()
     }
 
     /// Create a new resource table with optimized size-class buffer pool
-    pub fn new_with_optimized_memory() -> wrt_error::Result<Self> {
+    pub fn new_with_optimized_memory() -> kiln_error::Result<Self> {
         #[cfg(not(feature = "std"))]
-        let memory_guard = wrt_foundation::safety_aware_alloc!(131072, CrateId::Component)?; // 128KB for resource table
+        let memory_guard = kiln_foundation::safety_aware_alloc!(131072, CrateId::Component)?; // 128KB for resource table
 
         Ok(Self {
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            resources: WrtHashMap::new(),
+            resources: KilnHashMap::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             resources: HashMap::new(),
             #[cfg(not(feature = "std"))]
@@ -398,7 +398,7 @@ impl ResourceTable {
             buffer_pool: Arc::new(Mutex::new(SizeClassBufferPool::new()))
                 as Arc<Mutex<dyn BufferPoolTrait + Send + Sync>>,
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            interceptors: WrtVec::new(),
+            interceptors: KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             interceptors: Vec::new(),
             #[cfg(not(feature = "std"))]
@@ -416,7 +416,7 @@ impl ResourceTable {
     ) -> Self {
         Self {
             #[cfg(feature = "safety-critical")]
-            resources: WrtHashMap::new(),
+            resources: KilnHashMap::new(),
             #[cfg(not(feature = "safety-critical"))]
             resources: HashMap::new(),
             next_handle: 1,
@@ -426,7 +426,7 @@ impl ResourceTable {
             buffer_pool: Arc::new(Mutex::new(BufferPool::new()))
                 as Arc<Mutex<dyn BufferPoolTrait + Send + Sync>>,
             #[cfg(feature = "safety-critical")]
-            interceptors: WrtVec::new(),
+            interceptors: KilnVec::new(),
             #[cfg(not(feature = "safety-critical"))]
             interceptors: Vec::new(),
         }
@@ -440,7 +440,7 @@ impl ResourceTable {
     ) -> Self {
         Self {
             #[cfg(feature = "safety-critical")]
-            resources: WrtHashMap::new(),
+            resources: KilnHashMap::new(),
             #[cfg(not(feature = "safety-critical"))]
             resources: HashMap::new(),
             next_handle: 1,
@@ -450,7 +450,7 @@ impl ResourceTable {
             buffer_pool: Arc::new(Mutex::new(SizeClassBufferPool::new()))
                 as Arc<Mutex<dyn BufferPoolTrait + Send + Sync>>,
             #[cfg(feature = "safety-critical")]
-            interceptors: WrtVec::new(),
+            interceptors: KilnVec::new(),
             #[cfg(not(feature = "safety-critical"))]
             interceptors: Vec::new(),
         }
@@ -499,7 +499,7 @@ impl ResourceTable {
         let entry = ResourceEntry {
             resource: Arc::new(Mutex::new(resource)),
             #[cfg(feature = "safety-critical")]
-            borrows: WrtVec::new(),
+            borrows: KilnVec::new(),
             #[cfg(not(feature = "safety-critical"))]
             borrows: Vec::new(),
             memory_strategy: self
@@ -566,7 +566,7 @@ impl ResourceTable {
                     borrow_handle,
                     ResourceEntry {
                         resource,
-                        borrows: WrtVec::new(),
+                        borrows: KilnVec::new(),
                         memory_strategy: self.default_memory_strategy,
                         verification_level: self.default_verification_level,
                     },

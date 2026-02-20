@@ -1,9 +1,9 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Prelude module for wrt-foundation
+//! Prelude module for kiln-foundation
 //!
 //! This module provides safety-level-aware imports that automatically select
 //! appropriate types based on enabled safety features. It implements the
@@ -108,9 +108,9 @@ pub use std::{
     vec::Vec,
 };
 
-// Always use wrt_sync for consistent Mutex/RwLock behavior
+// Always use kiln_sync for consistent Mutex/RwLock behavior
 #[cfg(feature = "std-allocation")]
-pub use wrt_sync::{
+pub use kiln_sync::{
     Mutex,
     RwLock,
 };
@@ -124,9 +124,9 @@ pub use hashbrown::HashMap as BHashMap;
 // Dynamic collections (HashSet, Arc) are only available for managed-allocation and
 // std-allocation Higher safety levels use bounded or static alternatives
 
-// Re-export from wrt_error - this is the standard Result type for WRT
-pub use wrt_error::prelude::*;
-pub use wrt_error::{
+// Re-export from kiln_error - this is the standard Result type for WRT
+pub use kiln_error::prelude::*;
+pub use kiln_error::{
     codes,
     kinds,
     Error,
@@ -153,8 +153,8 @@ pub use crate::conversion::{
     ref_type_to_val_type,
     val_type_to_ref_type,
 };
-// Re-export from wrt_sync, only if the feature is active
-// #[cfg(feature = "wrt-sync")] // Or a more specific feature if wrt-sync is always a dep
+// Re-export from kiln_sync, only if the feature is active
+// #[cfg(feature = "kiln-sync")] // Or a more specific feature if kiln-sync is always a dep
 
 // Re-export platform-specific memory builders if the feature is enabled
 // Memory builders removed in clean architecture
@@ -324,7 +324,7 @@ pub use crate::{
     safe_managed_alloc,
     // Memory provider types
     safe_memory::Provider as MemoryProvider,
-    wrt_memory_system::CapabilityWrtFactory,
+    kiln_memory_system::CapabilityKilnFactory,
 };
 
 // Binary std/no_std choice

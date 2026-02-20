@@ -2,16 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# WRT (WebAssembly Runtime) Project Guidelines
+# Kiln (WebAssembly Runtime) Project Guidelines
 
 ## Quick Setup
 
 ```bash
 # Install the unified build tool
-cargo install --path cargo-wrt
+cargo install --path cargo-kiln
 
 # Verify installation
-cargo-wrt --help
+cargo-kiln --help
 ```
 
 ## Important Rules
@@ -43,18 +43,18 @@ cargo-wrt --help
     - If exports are commented out (e.g., `// pub use foo::...`) → **Either implement fully or delete entirely**
     - If entire modules are unused → **Delete the module and its `mod` declaration**
     - Stub methods that return `Ok(0)` or `Ok(())` without doing anything are **BANNED**
-- **USE TRACING FRAMEWORK**: Always use the wrt_foundation::tracing framework for logging and debugging instead of eprintln! or println!. The tracing framework provides:
+- **USE TRACING FRAMEWORK**: Always use the kiln_foundation::tracing framework for logging and debugging instead of eprintln! or println!. The tracing framework provides:
   - Structured logging with spans for context (ModuleTrace, ImportTrace, ExecutionTrace, MemoryTrace, etc.)
   - Proper log levels (trace!, debug!, info!, warn!, error!)
   - Integration with RUST_LOG environment variable for filtering
-  - Import with: `#[cfg(feature = "tracing")] use wrt_foundation::tracing::{debug, error, info, trace, warn, span, Level};`
+  - Import with: `#[cfg(feature = "tracing")] use kiln_foundation::tracing::{debug, error, info, trace, warn, span, Level};`
   - Use spans to provide context: `let span = span!(Level::INFO, "operation_name", field = value);`
   - Never use eprintln! or println! for debugging - always use the tracing framework
 
 ## Memory System Architecture
 
 ### Unified Capability-Based Memory System
-The WRT project uses a **single, unified memory management system** based on capabilities:
+The Kiln project uses a **single, unified memory management system** based on capabilities:
 
 - **Primary API**: `safe_managed_alloc!(size, crate_id)` - ALL memory allocation goes through this macro
 - **Factory System**: `CapabilityWrtFactory` - Capability-based factory for advanced use cases
@@ -63,7 +63,7 @@ The WRT project uses a **single, unified memory management system** based on cap
 
 ### Memory Allocation Pattern
 ```rust
-use wrt_foundation::{safe_managed_alloc, CrateId};
+use kiln_foundation::{safe_managed_alloc, CrateId};
 
 // Standard allocation pattern
 let provider = safe_managed_alloc!(4096, CrateId::Component)?;
@@ -82,11 +82,11 @@ let mut vec = BoundedVec::new(provider)?;
 
 ## Build Commands & Diagnostic System
 
-The WRT project uses a unified build system with `cargo-wrt` as the single entry point for all build operations. All legacy shell scripts have been migrated to this unified system.
+The Kiln project uses a unified build system with `cargo-kiln` as the single entry point for all build operations. All legacy shell scripts have been migrated to this unified system.
 
 **Usage Patterns:**
-- Direct: `cargo-wrt <COMMAND>`
-- Cargo subcommand: `cargo wrt <COMMAND>`
+- Direct: `cargo-kiln <COMMAND>`
+- Cargo subcommand: `cargo kiln <COMMAND>`
 
 Both patterns work identically and use the same binary.
 
@@ -122,15 +122,15 @@ The build system includes a comprehensive diagnostic system with LSP-compatible 
 ```
 
 ### Core Commands
-- Build all: `cargo-wrt build` or `cargo build`
-- Build specific crate: `cargo-wrt build --package wrt|wrtd|example`
-- Clean: `cargo-wrt clean` or `cargo clean`
-- Run tests: `cargo-wrt test` or `cargo test`
-- Run single test: `cargo test -p wrt -- test_name --nocapture`
-- Format code: `cargo-wrt check` or `cargo fmt`
-- Format check: `cargo-wrt check --strict`
-- Main CI checks: `cargo-wrt ci`
-- Full CI suite: `cargo-wrt verify --asil d`
+- Build all: `cargo-kiln build` or `cargo build`
+- Build specific crate: `cargo-kiln build --package kiln|kilnd|example`
+- Clean: `cargo-kiln clean` or `cargo clean`
+- Run tests: `cargo-kiln test` or `cargo test`
+- Run single test: `cargo test -p kiln -- test_name --nocapture`
+- Format code: `cargo-kiln check` or `cargo fmt`
+- Format check: `cargo-kiln check --strict`
+- Main CI checks: `cargo-kiln ci`
+- Full CI suite: `cargo-kiln verify --asil d`
 - Typecheck: `cargo check`
 
 ### Diagnostic Usage Examples
@@ -138,96 +138,96 @@ The build system includes a comprehensive diagnostic system with LSP-compatible 
 **Basic Error Analysis:**
 ```bash
 # Get all errors in JSON format
-cargo-wrt build --output json --filter-severity error
+cargo-kiln build --output json --filter-severity error
 
 # Focus on specific file patterns
-cargo-wrt build --output json --filter-file "wrt-foundation/*"
+cargo-kiln build --output json --filter-file "kiln-foundation/*"
 
 # Get clippy suggestions only
-cargo-wrt check --output json --filter-source clippy
+cargo-kiln check --output json --filter-source clippy
 ```
 
 **Incremental Development Workflow:**
 ```bash
 # Initial baseline (clears cache and establishes new baseline)
-cargo-wrt build --output json --cache --clear-cache
+cargo-kiln build --output json --cache --clear-cache
 
 # Subsequent runs - see only new issues
-cargo-wrt build --output json --cache --diff-only
+cargo-kiln build --output json --cache --diff-only
 
 # Focus on errors only in diff mode
-cargo-wrt build --output json --cache --diff-only --filter-severity error
+cargo-kiln build --output json --cache --diff-only --filter-severity error
 ```
 
 **Code Quality Analysis:**
 ```bash
 # Group warnings by file for focused fixes
-cargo-wrt check --output json --filter-severity warning --group-by file
+cargo-kiln check --output json --filter-severity warning --group-by file
 
 # Limit output for manageable chunks
-cargo-wrt check --output json --limit 10 --filter-severity warning
+cargo-kiln check --output json --limit 10 --filter-severity warning
 
 # Multiple tool analysis
-cargo-wrt verify --output json --filter-source "rustc,clippy,miri"
+cargo-kiln verify --output json --filter-source "rustc,clippy,miri"
 ```
 
 **CI/CD Integration:**
 ```bash
 # Fail-fast on any errors
-cargo-wrt build --output json | jq '.summary.errors > 0' && exit 1
+cargo-kiln build --output json | jq '.summary.errors > 0' && exit 1
 
 # Stream processing for large outputs
-cargo-wrt build --output json-lines | while read diagnostic; do
+cargo-kiln build --output json-lines | while read diagnostic; do
   echo "$diagnostic" | jq '.severity'
 done
 
 # Generate reports for specific tools
-cargo-wrt verify --output json --filter-source kani,miri
+cargo-kiln verify --output json --filter-source kani,miri
 ```
 
 **JSON Processing with jq:**
 ```bash
 # Extract error messages
-cargo-wrt build --output json | jq '.diagnostics[] | select(.severity == "error") | .message'
+cargo-kiln build --output json | jq '.diagnostics[] | select(.severity == "error") | .message'
 
 # Count diagnostics by file
-cargo-wrt build --output json | jq '.diagnostics | group_by(.file) | map({file: .[0].file, count: length})'
+cargo-kiln build --output json | jq '.diagnostics | group_by(.file) | map({file: .[0].file, count: length})'
 
 # Get files with errors
-cargo-wrt build --output json | jq '.diagnostics[] | select(.severity == "error") | .file' | sort -u
+cargo-kiln build --output json | jq '.diagnostics[] | select(.severity == "error") | .file' | sort -u
 ```
 
 ### Advanced Commands
-- Setup and tool management: `cargo-wrt setup --check` or `cargo-wrt setup --all`
-- Fuzzing: `cargo-wrt fuzz --list` to see targets, `cargo-wrt fuzz` to run all
-- Validation: `cargo-wrt validate` for comprehensive validation
-- Platform verification: `cargo-wrt verify --asil <level>` with ASIL compliance
-- Build matrix verification: `cargo-wrt verify-matrix --asil <level> --report`
-- Requirements traceability: `cargo-wrt requirements verify`
-- Requirements management: `cargo-wrt requirements init|score|matrix|missing|demo`
-- No-std validation: `cargo-wrt no-std` 
-- KANI formal verification: `cargo-wrt kani-verify --asil-profile <level>`
-- WebAssembly analysis: `cargo-wrt wasm verify|imports|exports|analyze|create-test`
-- Feature testing: `cargo-wrt test-features --comprehensive`
-- CI simulation: `cargo-wrt simulate-ci --profile <profile>`
-- WebAssembly test suite: `cargo-wrt testsuite --validate`
+- Setup and tool management: `cargo-kiln setup --check` or `cargo-kiln setup --all`
+- Fuzzing: `cargo-kiln fuzz --list` to see targets, `cargo-kiln fuzz` to run all
+- Validation: `cargo-kiln validate` for comprehensive validation
+- Platform verification: `cargo-kiln verify --asil <level>` with ASIL compliance
+- Build matrix verification: `cargo-kiln verify-matrix --asil <level> --report`
+- Requirements traceability: `cargo-kiln requirements verify`
+- Requirements management: `cargo-kiln requirements init|score|matrix|missing|demo`
+- No-std validation: `cargo-kiln no-std` 
+- KANI formal verification: `cargo-kiln kani-verify --asil-profile <level>`
+- WebAssembly analysis: `cargo-kiln wasm verify|imports|exports|analyze|create-test`
+- Feature testing: `cargo-kiln test-features --comprehensive`
+- CI simulation: `cargo-kiln simulate-ci --profile <profile>`
+- WebAssembly test suite: `cargo-kiln testsuite --validate`
 
 ### Tool Management
 The build system includes sophisticated tool version management with configurable requirements:
 
-- Check tool status: `cargo-wrt setup --check`
-- Install optional tools: `cargo-wrt setup --install` 
-- Complete setup: `cargo-wrt setup --all`
+- Check tool status: `cargo-kiln setup --check`
+- Install optional tools: `cargo-kiln setup --install` 
+- Complete setup: `cargo-kiln setup --all`
 
 **Tool Version Management:**
-- Check all tool versions: `cargo-wrt tool-versions check --verbose`
-- Generate tool configuration: `cargo-wrt tool-versions generate`
-- Check specific tool: `cargo-wrt tool-versions check --tool kani`
+- Check all tool versions: `cargo-kiln tool-versions check --verbose`
+- Generate tool configuration: `cargo-kiln tool-versions generate`
+- Check specific tool: `cargo-kiln tool-versions check --tool kani`
 
 Tool versions are managed via `tool-versions.toml` in the workspace root, specifying exact/minimum version requirements and installation commands. This ensures reproducible builds and consistent development environments.
 
 ## Build Matrix Verification
-- **Comprehensive verification**: `cargo-wrt verify-matrix --report`
+- **Comprehensive verification**: `cargo-kiln verify-matrix --report`
   - Tests all ASIL-D, ASIL-C, ASIL-B, development, and server configurations
   - Performs architectural analysis to identify root causes of failures
   - Generates detailed reports on ASIL compliance issues
@@ -287,7 +287,7 @@ Organize imports in the following order:
 2. `extern crate` declarations
 3. Standard library imports (std, core, alloc) - grouped by feature flags
 4. External crates/third-party dependencies
-5. Internal crates (wrt_* imports)
+5. Internal crates (kiln_* imports)
 6. Module imports (crate:: imports)
 7. Each group should be separated by a blank line
 
@@ -304,7 +304,7 @@ use alloc::collections::BTreeMap as HashMap;
 
 use thiserror::Error;
 
-use wrt_foundation::prelude::*;
+use kiln_foundation::prelude::*;
 
 use crate::types::Value;
 ```
@@ -325,10 +325,10 @@ use crate::types::Value;
 ### Error Handling
 
 #### Unified Error System
-WRT uses a unified error handling system based on `wrt_error::Error` with ASIL-compliant categorization:
+Kiln uses a unified error handling system based on `kiln_error::Error` with ASIL-compliant categorization:
 
 **Core Principles:**
-- All runtime crates must use `wrt_error::Error` as the base error type
+- All runtime crates must use `kiln_error::Error` as the base error type
 - Use factory methods instead of direct `Error::new()` construction
 - Maintain ASIL compliance through proper error categorization
 - Ensure no_std compatibility across all error handling
@@ -358,9 +358,9 @@ ErrorCategory::Core             // General WebAssembly errors
 #### Factory Method Usage (Preferred)
 ```rust
 // Use factory methods for common error patterns
-let error = wrt_error::Error::platform_memory_allocation_failed("Buffer allocation failed");
-let error = wrt_error::Error::component_thread_spawn_failed("Thread spawn resource limit exceeded");
-let error = wrt_error::Error::foundation_bounded_capacity_exceeded("BoundedVec capacity exceeded");
+let error = kiln_error::Error::platform_memory_allocation_failed("Buffer allocation failed");
+let error = kiln_error::Error::component_thread_spawn_failed("Thread spawn resource limit exceeded");
+let error = kiln_error::Error::foundation_bounded_capacity_exceeded("BoundedVec capacity exceeded");
 
 // Available factory methods by category:
 
@@ -392,15 +392,15 @@ Error::async_channel_closed(message)
 
 #### Error Construction Guidelines
 1. **Factory Methods First**: Always check if a factory method exists for your error pattern
-2. **From Trait Implementation**: Implement `From<YourError> for wrt_error::Error` for crate-specific errors
-3. **Result Type Aliases**: Use `wrt_error::Result<T>` consistently across crates
+2. **From Trait Implementation**: Implement `From<YourError> for kiln_error::Error` for crate-specific errors
+3. **Result Type Aliases**: Use `kiln_error::Result<T>` consistently across crates
 4. **Direct Construction**: Only use `Error::new()` when no factory method exists
 
 #### From Trait Implementation Pattern
 ```rust
-impl From<YourCrateError> for wrt_error::Error {
+impl From<YourCrateError> for kiln_error::Error {
     fn from(err: YourCrateError) -> Self {
-        use wrt_error::{ErrorCategory, codes};
+        use kiln_error::{ErrorCategory, codes};
         match err.kind {
             YourErrorKind::ResourceLimit => Self::new(
                 ErrorCategory::ComponentRuntime,
@@ -414,16 +414,16 @@ impl From<YourCrateError> for wrt_error::Error {
 ```
 
 #### Crate-Specific Guidelines
-- **wrt-component**: Use ComponentRuntime category for threading, virtualization, resource errors
-- **wrt-foundation**: Use FoundationRuntime category for bounded collection violations
-- **wrt-platform**: Use PlatformRuntime category for hardware, real-time constraint errors
-- **wrt-runtime**: Use appropriate category based on error context (Memory, RuntimeTrap, etc.)
+- **kiln-component**: Use ComponentRuntime category for threading, virtualization, resource errors
+- **kiln-foundation**: Use FoundationRuntime category for bounded collection violations
+- **kiln-platform**: Use PlatformRuntime category for hardware, real-time constraint errors
+- **kiln-runtime**: Use appropriate category based on error context (Memory, RuntimeTrap, etc.)
 
 #### Code Standards
 - NO `.unwrap()` in production code except:
   - Constants/static initialization
   - Documented infallible operations (with safety comment)
-- Use `wrt_error::Result<T>` consistently instead of `Result<T, CrateError>`
+- Use `kiln_error::Result<T>` consistently instead of `Result<T, CrateError>`
 - Implement proper error context through factory method selection
 
 ### Testing Standards
@@ -445,7 +445,7 @@ impl From<YourCrateError> for wrt_error::Error {
 
 ## ASIL Compliance Requirements
 When working on safety-critical components (ASIL-D, ASIL-C, ASIL-B):
-1. **Always run `cargo-wrt verify-matrix --report` before committing**
+1. **Always run `cargo-kiln verify-matrix --report` before committing**
 2. **No unsafe code** in safety-critical configurations
 3. **Deterministic compilation** - all feature combinations must build consistently
 4. **Memory budget compliance** - no dynamic allocation after initialization for ASIL-D
@@ -465,7 +465,7 @@ If architectural issues are detected, they must be resolved before merging, as t
 ## Architecture Notes
 
 ### Memory System Migration (Completed)
-The WRT project has successfully migrated to a unified capability-based memory system:
+The Kiln project has successfully migrated to a unified capability-based memory system:
 
 - **Unified allocation**: All memory goes through `safe_managed_alloc!` macro
 - **Capability verification**: Every allocation is capability-checked
@@ -474,19 +474,19 @@ The WRT project has successfully migrated to a unified capability-based memory s
 - **Zero legacy patterns**: All old patterns have been eliminated
 
 ### Build System Migration (Completed)
-The WRT project has completed its migration to a unified build system:
+The Kiln project has completed its migration to a unified build system:
 
-- **cargo-wrt**: Single CLI entry point for all build operations
-- **wrt-build-core**: Core library containing all build logic and functionality
+- **cargo-kiln**: Single CLI entry point for all build operations
+- **kiln-build-core**: Core library containing all build logic and functionality
 - **Legacy cleanup**: All shell scripts and fragmented build tools have been removed
-- **Integration**: Former wrt-verification-tool functionality integrated into wrt-build-core
+- **Integration**: Former kiln-verification-tool functionality integrated into kiln-build-core
 - **API consistency**: All commands follow consistent patterns and error handling
 
 ### Removed Legacy Components
 - Shell scripts: `verify_build.sh`, `fuzz_all.sh`, `verify_no_std.sh`, `test_features.sh`, `documentation_audit.sh`
 - Kani verification scripts: `test_kani_phase4.sh`, `validate_kani_phase4.sh`
-- justfile and xtask references (functionality ported to wrt-build-core)
-- Legacy memory patterns: `WRT_MEMORY_COORDINATOR`, `WrtProviderFactory`, `unsafe { guard.release() }`
+- justfile and xtask references (functionality ported to kiln-build-core)
+- Legacy memory patterns: `KILN_MEMORY_COORDINATOR`, `KilnProviderFactory`, `unsafe { guard.release() }`
 
 ## Current System Status
 
@@ -499,7 +499,7 @@ The WRT project has completed its migration to a unified build system:
 - **Proper Error Handling**: All allocation failures handled via `Result` types
 
 ### Build System
-- **Unified Tool**: `cargo-wrt` for all operations
+- **Unified Tool**: `cargo-kiln` for all operations
 - **Consistent Commands**: Same patterns across all functionality
 - **Tool Management**: Automated version checking and installation
 - **ASIL Verification**: Built-in safety compliance checking
@@ -512,11 +512,11 @@ The JSON output follows LSP (Language Server Protocol) specification for maximum
 {
   "version": "1.0",
   "timestamp": "2025-06-21T11:39:57.067142+00:00",
-  "workspace_root": "/Users/r/git/wrt2",
+  "workspace_root": "/Users/r/git/kiln",
   "command": "build",
   "diagnostics": [
     {
-      "file": "wrt-foundation/src/capabilities/factory.rs",
+      "file": "kiln-foundation/src/capabilities/factory.rs",
       "range": {
         "start": {"line": 17, "character": 29},
         "end": {"line": 17, "character": 53}
@@ -527,7 +527,7 @@ The JSON output follows LSP (Language Server Protocol) specification for maximum
       "source": "rustc",
       "related_info": [
         {
-          "file": "wrt-foundation/src/lib.rs",
+          "file": "kiln-foundation/src/lib.rs",
           "range": {
             "start": {"line": 29, "character": 4},
             "end": {"line": 29, "character": 16}
@@ -563,7 +563,7 @@ The JSON output follows LSP (Language Server Protocol) specification for maximum
 - Diff-only: Shows only changed diagnostics (filtering ~5-10% of output)
 
 ## Memories
-- Build and test with `cargo-wrt` commands
+- Build and test with `cargo-kiln` commands
 - Memory allocation uses `safe_managed_alloc!` macro EXCLUSIVELY - NO EXCEPTIONS
 - ALL NoStdProvider::<SIZE>::default() patterns ELIMINATED - no fallbacks allowed
 - All legacy patterns removed from code, comments, and documentation
@@ -604,10 +604,10 @@ This is fundamentally different from inline WAT modules which are already parsed
 - [Official WebAssembly Interpreter](https://github.com/WebAssembly/spec/tree/main/interpreter)
 
 ### Excluded Tests
-The following test directories are **permanently excluded** from WRT testing:
+The following test directories are **permanently excluded** from Kiln testing:
 
 #### `external/testsuite/legacy/` - Legacy Exception Handling
-**Reason**: WRT implements only the modern exception handling syntax (`try_table` + `exnref`) from the October 2023 WebAssembly CG decision. The legacy `try/catch/delegate/rethrow` syntax is deprecated and being phased out.
+**Reason**: Kiln implements only the modern exception handling syntax (`try_table` + `exnref`) from the October 2023 WebAssembly CG decision. The legacy `try/catch/delegate/rethrow` syntax is deprecated and being phased out.
 
 - **Legacy syntax** (NOT implemented): `try`, `catch`, `catch_all`, `delegate`, `rethrow`
 - **Modern syntax** (implemented): `try_table`, `throw`, `throw_ref`, `exnref`
@@ -619,10 +619,10 @@ Reference: [Exception Handling Proposal - Legacy](https://github.com/WebAssembly
 When running WAST tests, always exclude the legacy directory:
 ```bash
 # Correct - runs modern exception tests
-cargo-wrt testsuite --run-wast --wast-dir external/testsuite --wast-filter throw.wast
+cargo-kiln testsuite --run-wast --wast-dir external/testsuite --wast-filter throw.wast
 
 # WRONG - legacy tests will fail
-cargo-wrt testsuite --run-wast --wast-dir external/testsuite/legacy
+cargo-kiln testsuite --run-wast --wast-dir external/testsuite/legacy
 ```
 
 ### Test Components

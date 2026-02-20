@@ -12,8 +12,8 @@ use std::{
     string::{String, ToString},
 };
 
-use crate::bounded_wrtd_infra::{
-    BoundedServiceMap, BoundedLogEntryVec, WrtdProvider,
+use crate::bounded_kilnd_infra::{
+    BoundedServiceMap, BoundedLogEntryVec, KilndProvider,
     new_service_map, new_log_entry_vec
 };
 

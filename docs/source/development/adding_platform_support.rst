@@ -1,17 +1,17 @@
 Adding Platform Support
 ======================
 
-This guide explains how to add support for new platforms to WRT, either by contributing to the core ``wrt-platform`` crate or by creating an external platform implementation.
+This guide explains how to add support for new platforms to Kiln, either by contributing to the core ``kiln-platform`` crate or by creating an external platform implementation.
 
 Overview
 --------
 
-WRT's Platform Abstraction Layer (PAL) provides a uniform interface for platform-specific operations through two core traits:
+Kiln's Platform Abstraction Layer (PAL) provides a uniform interface for platform-specific operations through two core traits:
 
 - **PageAllocator**: Memory allocation for WebAssembly pages (64KB aligned)
 - **FutexLike**: Low-level synchronization primitives
 
-All platform implementations must provide these traits to integrate with WRT.
+All platform implementations must provide these traits to integrate with Kiln.
 
 Core Traits
 -----------
@@ -80,22 +80,22 @@ We recommend creating an external platform crate for most use cases. See :doc:`e
 Option 1: External Platform Crate (Recommended)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Create a separate crate that implements WRT platform support. This approach:
+Create a separate crate that implements Kiln platform support. This approach:
 
-- Allows you to support platforms not included in core WRT
+- Allows you to support platforms not included in core Kiln
 - Maintains your own release cycle and dependencies
 - Keeps licensing and distribution under your control
-- Enables experimentation without affecting core WRT
+- Enables experimentation without affecting core Kiln
 
 See :doc:`external_platform_crates` for the complete guide.
 
-Option 2: Contributing to wrt-platform
+Option 2: Contributing to kiln-platform
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Add your platform directly to the ``wrt-platform`` crate. This is appropriate for:
+Add your platform directly to the ``kiln-platform`` crate. This is appropriate for:
 
 - Widely-used open-source platforms
-- Platforms that should be included in WRT's core offering
+- Platforms that should be included in Kiln's core offering
 - Platforms with no special dependencies or licensing concerns
 
 1. **Add platform feature to Cargo.toml**:
@@ -118,7 +118,7 @@ Add your platform directly to the ``wrt-platform`` crate. This is appropriate fo
       // src/myos_memory.rs
       use crate::{PageAllocator, WASM_PAGE_SIZE};
       use core::ptr::NonNull;
-      use wrt_error::{Error, ErrorKind};
+      use kiln_error::{Error, ErrorKind};
 
       pub struct MyOsAllocator {
           max_pages: usize,
@@ -273,12 +273,12 @@ Test each trait method:
 Integration Tests
 ~~~~~~~~~~~~~~~~~
 
-Test with WRT components:
+Test with Kiln components:
 
 .. code-block:: rust
 
    #[test]
-   fn test_with_wrt_memory() {
+   fn test_with_kiln_memory() {
        let allocator = MyOsAllocator::new(100);
        let memory = Memory::new(allocator, 10, Some(50)).unwrap();
        
@@ -380,7 +380,7 @@ Before submitting your platform implementation:
 - [ ] Implements FutexLike trait completely
 - [ ] All tests pass on target platform
 - [ ] Documentation is complete
-- [ ] Code follows WRT style guidelines
+- [ ] Code follows Kiln style guidelines
 - [ ] No use of panic! or unwrap
 - [ ] Proper error handling throughout
 - [ ] Feature flags properly configured
@@ -390,15 +390,15 @@ Before submitting your platform implementation:
 Getting Help
 ------------
 
-- Review existing platform implementations in ``wrt-platform/src/``
-- Check the platform layer tests in ``wrt-platform/tests/``
+- Review existing platform implementations in ``kiln-platform/src/``
+- Check the platform layer tests in ``kiln-platform/tests/``
 - Open an issue on GitHub for guidance
-- Join the WRT community discussions
+- Join the Kiln community discussions
 
 Next Steps
 ----------
 
-1. Choose between contributing to wrt-platform or creating an external crate
+1. Choose between contributing to kiln-platform or creating an external crate
 2. Implement the required traits for your platform
 3. Add comprehensive tests
 4. Document your implementation

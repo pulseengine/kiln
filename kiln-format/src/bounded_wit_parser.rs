@@ -1,8 +1,8 @@
 // Enhanced Bounded WIT Parser with configurable limits
 // This is the enhanced implementation for the component module
 
-use wrt_error::{Error, Result};
-use wrt_foundation::{MemoryProvider, NoStdProvider};
+use kiln_error::{Error, Result};
+use kiln_foundation::{MemoryProvider, NoStdProvider};
 extern crate alloc;
 
 /// Simple bounded string for no_std environments

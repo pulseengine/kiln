@@ -10,13 +10,13 @@ use std::{boxed::Box, collections::BTreeMap, vec::Vec};
 
 use core::fmt;
 
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec, BoundedString,
     bounded::MAX_GENERATIVE_TYPES,
     NoStdProvider,
 };
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 // Include type definitions
 #[path = "wit_parser_types.rs"]
@@ -675,7 +675,7 @@ mod tests {
         assert_eq!(world.name.as_str().unwrap(), "test-world";
         
         // Import BoundedCapacity trait for len() method
-        use wrt_foundation::traits::BoundedCapacity;
+        use kiln_foundation::traits::BoundedCapacity;
         assert_eq!(world.imports.len(), 1);
         assert_eq!(world.exports.len(), 1);
     }

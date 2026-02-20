@@ -7,8 +7,8 @@
 mod example {
     use std::sync::{Arc, RwLock};
 
-    use wrt_foundation::prelude::*;
-    use wrt_runtime::{Instance, Memory, Module};
+    use kiln_foundation::prelude::*;
+    use kiln_runtime::{Instance, Memory, Module};
 
     use crate::{
         canonical::CanonicalABI,

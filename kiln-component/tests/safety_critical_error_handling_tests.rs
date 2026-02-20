@@ -13,7 +13,7 @@
 
 extern crate alloc;
 
-use wrt_component::{
+use kiln_component::{
     bounded_component_infra::*,
     canonical_abi::{CanonicalABI, CanonicalOptions},
     resource_management::ResourceTable,
@@ -21,8 +21,8 @@ use wrt_component::{
         Resource, ResourceLifecycleManager, ResourceMetadata, ResourceType,
     },
 };
-use wrt_foundation::{
-    WrtError,
+use kiln_foundation::{
+    KilnError,
     bounded::{BoundedString, BoundedVec},
 };
 
@@ -48,7 +48,7 @@ mod error_handling_tests {
         for i in 0..100 {
             let result = vec.try_push(i);
             match result {
-                Err(WrtError::CapacityExceeded) => {
+                Err(KilnError::CapacityExceeded) => {
                     // Expected - no panic
                 },
                 Ok(_) => panic!("Push should have failed"),
@@ -79,7 +79,7 @@ mod error_handling_tests {
         let over_limit = "a".repeat(MAX_COMPONENT_NAME_LEN + 1);
         let result = name.try_set(&over_limit);
         match result {
-            Err(WrtError::CapacityExceeded) => {
+            Err(KilnError::CapacityExceeded) => {
                 // Expected
             },
             _ => panic!("Expected CapacityExceeded error"),
@@ -132,7 +132,7 @@ mod error_handling_tests {
         let result = table.deallocate(invalid_handle);
         assert!(result.is_err());
         match result {
-            Err(WrtError::InvalidHandle) => {
+            Err(KilnError::InvalidHandle) => {
                 // Expected
             },
             _ => panic!("Expected InvalidHandle error"),
@@ -302,7 +302,7 @@ mod error_handling_tests {
     /// Test error propagation through layers
     #[test]
     fn test_error_propagation() {
-        fn allocate_nested() -> wrt_error::Result<BoundedComponentVec<BoundedExportVec<u32>>> {
+        fn allocate_nested() -> kiln_error::Result<BoundedComponentVec<BoundedExportVec<u32>>> {
             let mut outer = new_component_vec()?;
 
             // Try to allocate nested vectors
@@ -322,8 +322,8 @@ mod error_handling_tests {
             Err(e) => {
                 // Error propagated correctly
                 match e {
-                    WrtError::OutOfMemory => {},
-                    WrtError::CapacityExceeded => {},
+                    KilnError::OutOfMemory => {},
+                    KilnError::CapacityExceeded => {},
                     _ => panic!("Unexpected error type: {:?}", e),
                 }
             },
@@ -336,16 +336,16 @@ mod error_handling_tests {
         // This test verifies the API design
         // All operations that can fail should return Result<T, E>
 
-        let vec_result: wrt_error::Result<_> = new_component_vec::<u32>();
+        let vec_result: kiln_error::Result<_> = new_component_vec::<u32>();
         assert!(vec_result.is_ok());
 
-        let map_result: wrt_error::Result<_> = new_export_map::<u32>();
+        let map_result: kiln_error::Result<_> = new_export_map::<u32>();
         assert!(map_result.is_ok());
 
-        let string_result: wrt_error::Result<_> = new_component_name();
+        let string_result: kiln_error::Result<_> = new_component_name();
         assert!(string_result.is_ok());
 
-        let bounded_string_result: wrt_error::Result<_> = bounded_component_name_from_str("test");
+        let bounded_string_result: kiln_error::Result<_> = bounded_component_name_from_str("test");
         assert!(bounded_string_result.is_ok());
 
         // All constructors return Result, enabling proper error handling
@@ -385,13 +385,13 @@ mod no_std_error_tests {
     #[test]
     fn test_no_std_error_handling() {
         // Verify error types work without std
-        let error = WrtError::CapacityExceeded;
+        let error = KilnError::CapacityExceeded;
 
         // Error should have a representation
         let _ = format!("{:?}", error);
 
         // Result type should work
-        let result: wrt_error::Result<()> = Err(WrtError::OutOfMemory);
+        let result: kiln_error::Result<()> = Err(KilnError::OutOfMemory);
         assert!(result.is_err());
     }
 }

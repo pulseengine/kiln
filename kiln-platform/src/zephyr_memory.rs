@@ -1,7 +1,7 @@
 #![allow(unsafe_code)]
 #![allow(dead_code)]
 // Allow unsafe FFI calls to Zephyr kernel
-// WRT - wrt-platform
+// WRT - kiln-platform
 // Module: Zephyr Memory Management
 // SW-REQ-ID: REQ_PLATFORM_001, REQ_MEMORY_001
 //
@@ -18,7 +18,7 @@
 
 use core::ptr::NonNull;
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,

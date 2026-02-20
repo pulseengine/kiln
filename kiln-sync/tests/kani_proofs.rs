@@ -1,4 +1,4 @@
-//! Integration tests using Kani verification for wrt-sync.
+//! Integration tests using Kani verification for kiln-sync.
 //!
 //! This file contains integration tests that verify the behavior of the
 //! synchronization primitives using the Kani verification framework. These
@@ -8,14 +8,14 @@
 #![cfg(feature = "kani")]
 
 use kani;
-use wrt_sync::*;
+use kiln_sync::*;
 
-// --- WrtMutex Harnesses ---
+// --- KilnMutex Harnesses ---
 
 #[cfg_attr(feature = "kani", kani::proof)]
 #[cfg_attr(feature = "kani", kani::unwind(3))] // Allow a few loop iterations for spinlock
 fn verify_mutex_new_lock_unlock() {
-    let m = WrtMutex::new(10);
+    let m = KilnMutex::new(10);
     {
         let mut guard = m.lock();
         *guard += 5;
@@ -37,7 +37,7 @@ fn verify_mutex_new_lock_unlock() {
 #[cfg_attr(feature = "kani", kani::proof)]
 #[cfg_attr(feature = "kani", kani::unwind(3))]
 fn verify_mutex_guard_deref() {
-    let m = WrtMutex::new(42);
+    let m = KilnMutex::new(42);
     let guard = m.lock();
     assert_eq!(*guard, 42);
 }
@@ -45,7 +45,7 @@ fn verify_mutex_guard_deref() {
 #[cfg_attr(feature = "kani", kani::proof)]
 #[cfg_attr(feature = "kani", kani::unwind(3))]
 fn verify_mutex_guard_deref_mut() {
-    let m = WrtMutex::new(42);
+    let m = KilnMutex::new(42);
     {
         let mut guard = m.lock();
         assert_eq!(*guard, 42);
@@ -58,12 +58,12 @@ fn verify_mutex_guard_deref_mut() {
     }
 }
 
-// --- WrtRwLock Harnesses ---
+// --- KilnRwLock Harnesses ---
 
 #[cfg_attr(feature = "kani", kani::proof)]
 #[cfg_attr(feature = "kani", kani::unwind(3))]
 fn verify_rwlock_new_write_read() {
-    let lock = WrtRwLock::new(0);
+    let lock = KilnRwLock::new(0);
     {
         let mut writer = lock.write();
         *writer = 100;
@@ -84,7 +84,7 @@ fn verify_rwlock_new_write_read() {
 #[cfg_attr(feature = "kani", kani::proof)]
 #[cfg_attr(feature = "kani", kani::unwind(6))] // More unwinding for multiple locks/spins
 fn verify_rwlock_new_read_read() {
-    let lock = WrtRwLock::new(55);
+    let lock = KilnRwLock::new(55);
     let r1 = lock.read();
     let r2 = lock.read();
     assert_eq!(*r1, 55);
@@ -106,7 +106,7 @@ fn verify_rwlock_new_read_read() {
 #[cfg_attr(feature = "kani", kani::proof)]
 #[cfg_attr(feature = "kani", kani::unwind(3))]
 fn verify_rwlock_read_guard_deref() {
-    let lock = WrtRwLock::new(123);
+    let lock = KilnRwLock::new(123);
     let guard = lock.read();
     assert_eq!(*guard, 123);
 }
@@ -114,7 +114,7 @@ fn verify_rwlock_read_guard_deref() {
 #[cfg_attr(feature = "kani", kani::proof)]
 #[cfg_attr(feature = "kani", kani::unwind(3))]
 fn verify_rwlock_write_guard_derefmut() {
-    let lock = WrtRwLock::new(123);
+    let lock = KilnRwLock::new(123);
     {
         let mut guard = lock.write();
         assert_eq!(*guard, 123);
@@ -130,7 +130,7 @@ fn verify_rwlock_write_guard_derefmut() {
 #[cfg_attr(feature = "kani", kani::proof)]
 #[cfg_attr(feature = "kani", kani::unwind(3))]
 fn verify_rwlock_write_unlocks_for_read() {
-    let lock = WrtRwLock::new(77);
+    let lock = KilnRwLock::new(77);
     {
         let mut w1 = lock.write();
         *w1 = 88;
@@ -144,7 +144,7 @@ fn verify_rwlock_write_unlocks_for_read() {
 #[cfg_attr(feature = "kani", kani::proof)]
 #[cfg_attr(feature = "kani", kani::unwind(6))]
 fn verify_rwlock_read_unlocks_for_write() {
-    let lock = WrtRwLock::new(11);
+    let lock = KilnRwLock::new(11);
     {
         let r1 = lock.read();
         assert_eq!(*r1, 11);

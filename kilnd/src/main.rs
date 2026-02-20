@@ -1,24 +1,24 @@
-//! # WebAssembly Runtime Daemon (wrtd)
+//! # WebAssembly Runtime Daemon (kilnd)
 //!
 //! A minimal daemon process for WebAssembly module execution with support for
-//! both std and no_std environments. Uses only internal WRT capabilities to
+//! both std and no_std environments. Uses only internal Kiln capabilities to
 //! minimize dependencies.
 //!
 //! ## Features
 //!
-//! - **Minimal Dependencies**: Uses only internal WRT crates
+//! - **Minimal Dependencies**: Uses only internal Kiln crates
 //! - **Binary std/no_std**: Single binary that detects runtime capabilities
-//! - **Internal Logging**: Uses wrt-logging for structured output
+//! - **Internal Logging**: Uses kiln-logging for structured output
 //! - **Runtime Detection**: Automatically selects appropriate execution mode
 //!
 //! ## Usage
 //!
 //! ```bash
 //! # Standard mode (with filesystem access)
-//! wrtd --std module.wasm --function start
+//! kilnd --std module.wasm --function start
 //!
 //! # No-std mode (embedded/bare metal)
-//! wrtd --no-std --data <hex-bytes> --function start
+//! kilnd --no-std --data <hex-bytes> --function start
 //! ```
 
 #![deny(unsafe_code)]
@@ -46,46 +46,46 @@ use std::{
     process,
 };
 
-// Internal WRT dependencies (always available)
-use wrt_error::{
+// Internal Kiln dependencies (always available)
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
-// Conditional imports for WRT allocator
+// Conditional imports for Kiln allocator
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use wrt_foundation::allocator::{
+use kiln_foundation::allocator::{
     CrateId,
-    WrtVec,
+    KilnVec,
 };
-use wrt_logging::{
+use kiln_logging::{
     LogLevel,
     MinimalLogHandler,
 };
 
 // Bounded infrastructure for static memory allocation
 #[cfg(feature = "std")]
-pub mod bounded_wrtd_infra;
+pub mod bounded_kilnd_infra;
 
 // Safety-critical memory limits
 #[cfg(feature = "safety-critical")]
 pub mod memory_limits;
 
-// Optional WRT execution capabilities (only in std mode with wrt-execution
-// feature) Engine type moved to wrt::engine module
-// Module type is available through wrt prelude
+// Optional Kiln execution capabilities (only in std mode with kiln-execution
+// feature) Engine type moved to kiln::engine module
+// Module type is available through kiln prelude
 
 // WASI host function support
 // Component model support - temporarily disabled
 // #[cfg(feature = "component-model")]
 #[cfg(feature = "component-model")]
-use wrt_decoder::component::decode_component;
+use kiln_decoder::component::decode_component;
 // Enhanced host function registry
-#[cfg(feature = "wrt-execution")]
-use wrt_host::CallbackRegistry;
+#[cfg(feature = "kiln-execution")]
+use kiln_host::CallbackRegistry;
 #[cfg(feature = "wasi")]
-use wrt_wasi::{
+use kiln_wasi::{
     ComponentModelProvider,
     WasiCapabilities,
     WasiDispatcher,
@@ -95,7 +95,7 @@ use wrt_wasi::{
 
 /// Configuration for the runtime daemon
 #[derive(Debug, Clone)]
-pub struct WrtdConfig {
+pub struct KilndConfig {
     /// Maximum fuel (execution steps) allowed
     pub max_fuel: u64,
     /// Maximum memory usage in bytes
@@ -134,7 +134,7 @@ pub struct WrtdConfig {
     pub wasi_capabilities: Option<WasiCapabilities>,
 }
 
-impl Default for WrtdConfig {
+impl Default for KilndConfig {
     fn default() -> Self {
         Self {
             max_fuel: 1_000_000, // 1M fuel for large components
@@ -236,9 +236,9 @@ pub struct RuntimeStats {
 }
 
 /// Simple log handler that uses minimal output
-pub struct WrtdLogHandler;
+pub struct KilndLogHandler;
 
-impl MinimalLogHandler for WrtdLogHandler {
+impl MinimalLogHandler for KilndLogHandler {
     fn handle_minimal_log(&self, level: LogLevel, message: &'static str) -> Result<()> {
         // In std mode, use println!; in no_std mode, this would need platform-specific
         // output
@@ -267,12 +267,12 @@ impl MinimalLogHandler for WrtdLogHandler {
 }
 
 /// WASM execution engine abstraction
-pub struct WrtdEngine {
-    config:                 WrtdConfig,
+pub struct KilndEngine {
+    config:                 KilndConfig,
     stats:                  RuntimeStats,
-    logger:                 WrtdLogHandler,
+    logger:                 KilndLogHandler,
     /// Host function registry for all host functions
-    #[cfg(feature = "wrt-execution")]
+    #[cfg(feature = "kiln-execution")]
     #[allow(dead_code)]
     host_registry:          CallbackRegistry,
     /// WASI provider for WASI functions
@@ -287,14 +287,14 @@ pub struct WrtdEngine {
     platform_optimizations: bool,
 }
 
-impl WrtdEngine {
+impl KilndEngine {
     /// Create a new engine with the given configuration
-    pub fn new(config: WrtdConfig) -> Result<Self> {
+    pub fn new(config: KilndConfig) -> Result<Self> {
         let mut engine = Self {
             config,
             stats: RuntimeStats::default(),
-            logger: WrtdLogHandler,
-            #[cfg(feature = "wrt-execution")]
+            logger: KilndLogHandler,
+            #[cfg(feature = "kiln-execution")]
             host_registry: CallbackRegistry::new(),
             #[cfg(feature = "wasi")]
             wasi_provider: None,
@@ -308,7 +308,7 @@ impl WrtdEngine {
         engine.init_platform_optimizations()?;
 
         // Initialize memory system (required for WASI and other subsystems)
-        wrt_foundation::memory_init::init_wrt_memory()?;
+        kiln_foundation::memory_init::init_kiln_memory()?;
 
         // Initialize memory profiling if enabled
         if engine.config.enable_memory_profiling {
@@ -338,7 +338,7 @@ impl WrtdEngine {
                 .handle_minimal_log(LogLevel::Info, "Enabling platform optimizations");
 
             // Initialize platform-specific features
-            #[cfg(feature = "wrt-execution")]
+            #[cfg(feature = "kiln-execution")]
             // PlatformMemory::init_optimizations().map_err(|_| { // Disabled
             Ok(()).map_err(|_: ()| {
                 Error::runtime_error("Failed to initialize platform memory optimizations")
@@ -462,7 +462,7 @@ impl WrtdEngine {
         #[cfg(feature = "component-model")]
         {
             // Initialize the memory system before decoding component
-            use wrt_foundation::memory_init::MemoryInitializer;
+            use kiln_foundation::memory_init::MemoryInitializer;
             MemoryInitializer::initialize()
                 .map_err(|_| Error::runtime_error("Failed to initialize memory system"))?;
 
@@ -480,7 +480,7 @@ impl WrtdEngine {
             // Create and initialize component instance (passes by reference to avoid stack overflow)
             // This includes executing start functions and transitioning to Running state
             // Note: WASI functions are already registered in host_registry from init_wasi()
-            use wrt_component::components::component_instantiation::ComponentInstance;
+            use kiln_component::components::component_instantiation::ComponentInstance;
 
             eprintln!("DEBUG: Calling from_parsed...");
             // Wrap host_registry in Arc for passing to component
@@ -497,7 +497,7 @@ impl WrtdEngine {
             // This is CRITICAL - without this, WASI functions won't work
             #[cfg(feature = "wasi")]
             if self.config.enable_wasi {
-                use wrt_wasi::WasiDispatcher;
+                use kiln_wasi::WasiDispatcher;
                 match WasiDispatcher::with_defaults() {
                     Ok(dispatcher) => {
                         instance.set_host_handler(Box::new(dispatcher));
@@ -515,7 +515,7 @@ impl WrtdEngine {
                 }
 
                 // NOTE: WASI args allocation is now done ON-DEMAND when get-arguments
-                // is called (see wrt-runtime engine.rs ON-DEMAND ALLOCATION).
+                // is called (see kiln-runtime engine.rs ON-DEMAND ALLOCATION).
                 // Pre-allocating before _start caused memory collisions where the
                 // component's allocator reused our memory.
             }
@@ -555,9 +555,9 @@ impl WrtdEngine {
                 let args = vec![];
 
                 // Pass the host_registry so component can call WASI functions
-                #[cfg(feature = "wrt-execution")]
+                #[cfg(feature = "kiln-execution")]
                 let result = instance.call_function(&export_name, &args, Some(&self.host_registry));
-                #[cfg(not(feature = "wrt-execution"))]
+                #[cfg(not(feature = "kiln-execution"))]
                 let result = instance.call_function(&export_name, &args);
 
                 match result {
@@ -612,18 +612,18 @@ impl WrtdEngine {
     fn execute_traditional_module(&mut self, data: &[u8]) -> Result<()> {
         let _ = self.logger.handle_minimal_log(LogLevel::Info, "Executing WebAssembly module");
 
-        // Execute with actual WRT engine if available
-        #[cfg(all(feature = "std", feature = "wrt-execution"))]
+        // Execute with actual Kiln engine if available
+        #[cfg(all(feature = "std", feature = "kiln-execution"))]
         {
             let _ = self
                 .logger
-                .handle_minimal_log(LogLevel::Info, "Using real WRT execution engine");
+                .handle_minimal_log(LogLevel::Info, "Using real Kiln execution engine");
 
             // Initialize the memory system before creating engine
-            use wrt_foundation::memory_init::MemoryInitializer;
+            use kiln_foundation::memory_init::MemoryInitializer;
             MemoryInitializer::initialize()
                 .map_err(|_| Error::runtime_error("Failed to initialize memory system"))?;
-            use wrt_runtime::engine::{
+            use kiln_runtime::engine::{
                 CapabilityAwareEngine,
                 CapabilityEngine,
                 EnginePreset,
@@ -683,9 +683,9 @@ impl WrtdEngine {
             // Register example host functions for demonstration
             if matches!(preset, EnginePreset::QM | EnginePreset::AsilA) {
                 // Only in less restrictive modes
-                let _ = engine.register_host_function("env", "host_print", |args: &[wrt_foundation::values::Value]| -> Result<Vec<wrt_foundation::values::Value>> {
+                let _ = engine.register_host_function("env", "host_print", |args: &[kiln_foundation::values::Value]| -> Result<Vec<kiln_foundation::values::Value>> {
                     // Simple host function that "prints" a value (in practice would log it)
-                    if let Some(wrt_foundation::values::Value::I32(_val)) = args.get(0) {
+                    if let Some(kiln_foundation::values::Value::I32(_val)) = args.get(0) {
                         // In a real implementation, this would print to stdout or log
                         // For now, just return success
                     }
@@ -737,7 +737,7 @@ impl WrtdEngine {
         }
 
         // Fallback simulation for demo/no-std modes
-        #[cfg(not(all(feature = "std", feature = "wrt-execution")))]
+        #[cfg(not(all(feature = "std", feature = "kiln-execution")))]
         {
             let _ = self
                 .logger
@@ -778,8 +778,8 @@ impl WrtdEngine {
             // For safety-critical mode, use bounded allocation
             #[cfg(feature = "safety-critical")]
             {
-                let mut module_data: WrtVec<u8, { CrateId::Wrtd as u8 }, MAX_MODULE_SIZE> =
-                    WrtVec::new();
+                let mut module_data: KilnVec<u8, { CrateId::Kilnd as u8 }, MAX_MODULE_SIZE> =
+                    KilnVec::new();
 
                 // Read file in chunks to stay within bounds
                 let mut file = fs::File::open(path)
@@ -974,8 +974,8 @@ impl SimpleArgs {
         while i < args.len() {
             match args[i].as_str() {
                 "--help" | "-h" => {
-                    println!("WebAssembly Runtime Daemon (wrtd)");
-                    println!("Usage: wrtd [OPTIONS] <module.wasm>");
+                    println!("WebAssembly Runtime Daemon (kilnd)");
+                    println!("Usage: kilnd [OPTIONS] <module.wasm>");
                     println!();
                     println!("Options:");
                     println!("  --function <name>     Function to execute (default: start)");
@@ -1127,7 +1127,7 @@ fn main_with_stack() -> Result<()> {
 
         // Set up tracing with environment-based filtering
         // Use RUST_LOG environment variable to control verbosity
-        // e.g., RUST_LOG=debug,wrt_runtime=trace
+        // e.g., RUST_LOG=debug,kiln_runtime=trace
         let filter = EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| EnvFilter::new("info"));
 
@@ -1145,11 +1145,11 @@ fn main_with_stack() -> Result<()> {
     // Parse arguments first to check for --help
     let args = SimpleArgs::parse()?;
 
-    println!("WebAssembly Runtime Daemon (wrtd)");
+    println!("WebAssembly Runtime Daemon (kilnd)");
     println!("===================================");
 
     // Create configuration from arguments
-    let mut config = WrtdConfig::default();
+    let mut config = KilndConfig::default();
     config.module_path = args.module_path;
     config.function_name = args.function_name;
 
@@ -1241,7 +1241,7 @@ fn main_with_stack() -> Result<()> {
     }
 
     // Create and run engine
-    let mut engine = WrtdEngine::new(config.clone())?;
+    let mut engine = KilndEngine::new(config.clone())?;
 
     // Set global WASI args for the dispatcher to use
     // The first arg should be the program name (like argv[0] in C)
@@ -1284,7 +1284,7 @@ fn main_with_stack() -> Result<()> {
 
     // Complete memory system initialization
     #[cfg(feature = "std")]
-    if let Err(e) = wrt_foundation::memory_init::init_wrt_memory() {
+    if let Err(e) = kiln_foundation::memory_init::init_kiln_memory() {
         eprintln!("Warning: Failed to complete memory system: {}", e);
     }
 
@@ -1305,7 +1305,7 @@ fn main() {
 
     // Initialize global memory system for embedded environment
     #[cfg(feature = "std")]
-    if let Err(_) = wrt_foundation::memory_init::init_wrt_memory() {
+    if let Err(_) = kiln_foundation::memory_init::init_kiln_memory() {
         // Initialize with defaults
         // In no_std, we can't easily print errors, so we enter an error loop
         loop {
@@ -1320,13 +1320,13 @@ fn main() {
         0x01, 0x00, 0x00, 0x00, // Version 1
     ];
 
-    let mut config = WrtdConfig::default();
+    let mut config = KilndConfig::default();
     config.module_data = Some(DEMO_MODULE);
     config.function_name = Some("start");
     config.max_fuel = 1000; // Conservative for embedded
     config.max_memory = 4096; // 4KB for embedded
 
-    let mut engine = match WrtdEngine::new(config) {
+    let mut engine = match KilndEngine::new(config) {
         Ok(engine) => engine,
         Err(_) => {
             // Engine creation failed, enter error loop
@@ -1348,7 +1348,7 @@ fn main() {
 
     // Complete memory system initialization
     #[cfg(feature = "std")]
-    let _ = wrt_foundation::memory_init::init_wrt_memory();
+    let _ = kiln_foundation::memory_init::init_kiln_memory();
 }
 
 // Panic handler for no_std builds

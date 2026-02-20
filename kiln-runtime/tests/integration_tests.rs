@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     safe_memory::SafeSlice,
     types::{
         Limits,
@@ -13,7 +13,7 @@ use wrt_foundation::{
     },
     verification::VerificationLevel,
 };
-use wrt_runtime::{
+use kiln_runtime::{
     memory::Memory,
     module::Module,
     table::Table,
@@ -33,7 +33,7 @@ fn test_safe_memory_integration() -> Result<()> {
     memory.set_verification_level(VerificationLevel::Full);
 
     // Create table with full verification level
-    let table_type = wrt_runtime::types::TableType {
+    let table_type = kiln_runtime::types::TableType {
         element_type: ValueType::FuncRef,
         limits:       Limits {
             min: 10,

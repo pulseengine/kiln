@@ -1,15 +1,15 @@
-# WRT Build System Tool Version Requirements
+# Kiln Build System Tool Version Requirements
 # This file specifies exact tool versions required for reproducible builds.
 # 
 # When you change versions here:
-# 1. Run `cargo-wrt setup --check` to verify compatibility
-# 2. Run `cargo-wrt setup --install` to update tools
+# 1. Run `cargo-kiln setup --check` to verify compatibility
+# 2. Run `cargo-kiln setup --install` to update tools
 # 3. Commit this file to track version changes
 
 [metadata]
 config_version = "1.0.0"
 last_updated = "2025-06-19 12:00:00 UTC"
-description = "WRT build system tool version requirements"
+description = "Kiln build system tool version requirements"
 
 # Core tools (always required)
 [tools.cargo]

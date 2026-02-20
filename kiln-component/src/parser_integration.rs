@@ -11,20 +11,20 @@ use std::{fmt, mem};
 #[cfg(feature = "std")]
 use std::{boxed::Box, string::String, vec::Vec};
 
-use wrt_foundation::{
+use kiln_foundation::{
     collections::StaticVec as BoundedVec, component::ComponentType,
     component_value::ComponentValue, prelude::*,
 };
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedString, budget_aware_provider::CrateId, safe_managed_alloc, safe_memory::NoStdProvider,
 };
 
 use crate::{
     adapter::CoreModuleAdapter,
     canonical_abi::canonical::CanonicalABI,
-    components::component::{Component, WrtComponentType},
+    components::component::{Component, KilnComponentType},
     execution_engine::ComponentExecutionEngine,
     instantiation::{ImportValues, InstantiationContext},
     types::{ComponentInstance, ValType, Value},
@@ -59,9 +59,9 @@ pub enum ValidationLevel {
 pub struct ParsedComponent {
     /// Component type definitions
     #[cfg(feature = "std")]
-    pub types: Vec<wrt_foundation::ComponentType<NoStdProvider<1024>>>,
+    pub types: Vec<kiln_foundation::ComponentType<NoStdProvider<1024>>>,
     #[cfg(not(any(feature = "std",)))]
-    pub types: BoundedVec<wrt_foundation::ComponentType<NoStdProvider<1024>>, MAX_PARSED_SECTIONS>,
+    pub types: BoundedVec<kiln_foundation::ComponentType<NoStdProvider<1024>>, MAX_PARSED_SECTIONS>,
 
     /// Component imports
     #[cfg(feature = "std")]
@@ -269,24 +269,24 @@ impl ComponentLoader {
     }
 
     /// Parse component binary data
-    pub fn parse_component(&self, binary_data: &[u8]) -> wrt_error::Result<ParsedComponent> {
+    pub fn parse_component(&self, binary_data: &[u8]) -> kiln_error::Result<ParsedComponent> {
         // Validate size
         if binary_data.len() > self.max_component_size {
-            return Err(wrt_error::Error::validation_invalid_input(
+            return Err(kiln_error::Error::validation_invalid_input(
                 "Component binary data exceeds maximum allowed size",
             ));
         }
 
         // Validate basic structure
         if binary_data.len() < 8 {
-            return Err(wrt_error::Error::validation_invalid_input(
+            return Err(kiln_error::Error::validation_invalid_input(
                 "Component binary data too small, minimum 8 bytes required",
             ));
         }
 
         // Check magic bytes (simplified - would check actual WASM component magic)
         if &binary_data[0..4] != b"\x00asm" {
-            return Err(wrt_error::Error::validation_invalid_input(
+            return Err(kiln_error::Error::validation_invalid_input(
                 "Invalid WebAssembly magic bytes, expected '\\x00asm'",
             ));
         }
@@ -311,7 +311,7 @@ impl ComponentLoader {
         &self,
         _binary_data: &[u8],
         parsed: &mut ParsedComponent,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Simplified section parsing - in reality would parse actual WASM component format
 
         // Add a default type - need to provide a memory provider for ComponentType::Unit
@@ -325,10 +325,10 @@ impl ComponentLoader {
         #[cfg(not(any(feature = "std",)))]
         let import_name = {
             let provider = safe_managed_alloc!(512, CrateId::Component).map_err(|_| {
-                wrt_error::Error::validation_invalid_input("Failed to allocate provider")
+                kiln_error::Error::validation_invalid_input("Failed to allocate provider")
             })?;
             BoundedString::try_from_str("default").map_err(|_| {
-                wrt_error::Error::validation_invalid_input(
+                kiln_error::Error::validation_invalid_input(
                     "Failed to create default import name as bounded string",
                 )
             })?
@@ -345,10 +345,10 @@ impl ComponentLoader {
         #[cfg(not(any(feature = "std",)))]
         let export_name = {
             let provider = safe_managed_alloc!(512, CrateId::Component).map_err(|_| {
-                wrt_error::Error::validation_invalid_input("Failed to allocate provider")
+                kiln_error::Error::validation_invalid_input("Failed to allocate provider")
             })?;
             BoundedString::try_from_str("main").map_err(|_| {
-                wrt_error::Error::validation_invalid_input(
+                kiln_error::Error::validation_invalid_input(
                     "Failed to create default export name as bounded string",
                 )
             })?
@@ -363,11 +363,11 @@ impl ComponentLoader {
     }
 
     /// Validate parsed component
-    fn validate_component(&self, parsed: &ParsedComponent) -> wrt_error::Result<()> {
+    fn validate_component(&self, parsed: &ParsedComponent) -> kiln_error::Result<()> {
         if self.validation_level == ValidationLevel::Basic {
             // Basic validation - check we have at least some content
             if parsed.types.is_empty() {
-                return Err(wrt_error::Error::runtime_execution_error(
+                return Err(kiln_error::Error::runtime_execution_error(
                     "Component validation failed: no types found",
                 ));
             }
@@ -381,7 +381,7 @@ impl ComponentLoader {
     }
 
     /// Validate type consistency
-    fn validate_type_consistency(&self, _parsed: &ParsedComponent) -> wrt_error::Result<()> {
+    fn validate_type_consistency(&self, _parsed: &ParsedComponent) -> kiln_error::Result<()> {
         // In a full implementation, would validate:
         // - All type references are valid
         // - Function signatures are consistent
@@ -393,7 +393,7 @@ impl ComponentLoader {
     fn validate_import_export_consistency(
         &self,
         _parsed: &ParsedComponent,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // In a full implementation, would validate:
         // - All import types are resolvable
         // - Export types match internal definitions
@@ -402,15 +402,15 @@ impl ComponentLoader {
     }
 
     /// Convert parsed component to runtime component
-    pub fn to_runtime_component(&self, parsed: &ParsedComponent) -> wrt_error::Result<Component> {
-        let mut component = Component::new(WrtComponentType::new()?);
+    pub fn to_runtime_component(&self, parsed: &ParsedComponent) -> kiln_error::Result<Component> {
+        let mut component = Component::new(KilnComponentType::new()?);
 
         // NOTE: Type conversion is not implemented because ParsedComponent stores
-        // wrt_foundation::ComponentType<P> but Component::add_type expects
-        // wrt_format::component::ComponentTypeDefinition. These are fundamentally
+        // kiln_foundation::ComponentType<P> but Component::add_type expects
+        // kiln_format::component::ComponentTypeDefinition. These are fundamentally
         // different types that would need a conversion function.
-        // TODO: Implement type conversion from wrt_foundation::ComponentType to
-        // wrt_format::component::ComponentTypeDefinition
+        // TODO: Implement type conversion from kiln_foundation::ComponentType to
+        // kiln_format::component::ComponentTypeDefinition
 
         // Convert imports
         for import in &parsed.imports {
@@ -436,12 +436,12 @@ impl ComponentLoader {
         &self,
         component: &mut Component,
         import: &ParsedImport,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         let name: &str = import.name.as_str();
         #[cfg(not(any(feature = "std",)))]
         let name: &str = import.name.as_str().map_err(|_| {
-            wrt_error::Error::validation_invalid_input("Failed to get import name as string")
+            kiln_error::Error::validation_invalid_input("Failed to get import name as string")
         })?;
 
         match &import.import_type {
@@ -466,12 +466,12 @@ impl ComponentLoader {
         &self,
         component: &mut Component,
         export: &ParsedExport,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         let name: &str = export.name.as_str();
         #[cfg(not(any(feature = "std",)))]
         let name: &str = export.name.as_str().map_err(|_| {
-            wrt_error::Error::validation_invalid_input("Failed to get export name as string")
+            kiln_error::Error::validation_invalid_input("Failed to get export name as string")
         })?;
 
         match &export.export_kind {
@@ -492,17 +492,17 @@ impl ComponentLoader {
     }
 
     /// Create module adapter from parsed module
-    fn create_module_adapter(&self, module: &ParsedModule) -> wrt_error::Result<CoreModuleAdapter> {
+    fn create_module_adapter(&self, module: &ParsedModule) -> kiln_error::Result<CoreModuleAdapter> {
         #[cfg(feature = "std")]
         let adapter = CoreModuleAdapter::new("module".to_string());
 
         #[cfg(not(any(feature = "std",)))]
         let adapter = {
             let _provider = safe_managed_alloc!(512, CrateId::Component).map_err(|_| {
-                wrt_error::Error::validation_invalid_input("Failed to allocate provider")
+                kiln_error::Error::validation_invalid_input("Failed to allocate provider")
             })?;
             let name = BoundedString::try_from_str("module").map_err(|_| {
-                wrt_error::Error::validation_invalid_input(
+                kiln_error::Error::validation_invalid_input(
                     "Failed to create module adapter name as bounded string",
                 )
             })?;
@@ -521,11 +521,11 @@ impl ComponentLoader {
         binary_data: &[u8],
         imports: &ImportValues,
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<ComponentInstance> {
+    ) -> kiln_error::Result<ComponentInstance> {
         // Enter component scope for Vec allocations during parsing
         #[cfg(feature = "std")]
-        let _scope = wrt_foundation::capabilities::MemoryFactory::enter_module_scope(
-            wrt_foundation::budget_aware_provider::CrateId::Component,
+        let _scope = kiln_foundation::capabilities::MemoryFactory::enter_module_scope(
+            kiln_foundation::budget_aware_provider::CrateId::Component,
         )?;
 
         // Parse the component
@@ -542,7 +542,7 @@ impl ComponentLoader {
 
 impl ParsedComponent {
     /// Create a new empty parsed component
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             types: Vec::new(),
@@ -550,7 +550,7 @@ impl ParsedComponent {
             types: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 BoundedVec::new().map_err(|| {
-                    wrt_error::Error::resource_exhausted(
+                    kiln_error::Error::resource_exhausted(
                         "Failed to create bounded vector for component types",
                     )
                 })?
@@ -561,7 +561,7 @@ impl ParsedComponent {
             imports: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 BoundedVec::new().map_err(|| {
-                    wrt_error::Error::resource_exhausted(
+                    kiln_error::Error::resource_exhausted(
                         "Failed to create bounded vector for component imports",
                     )
                 })?
@@ -572,7 +572,7 @@ impl ParsedComponent {
             exports: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 BoundedVec::new().map_err(|| {
-                    wrt_error::Error::resource_exhausted(
+                    kiln_error::Error::resource_exhausted(
                         "Failed to create bounded vector for component exports",
                     )
                 })?
@@ -583,7 +583,7 @@ impl ParsedComponent {
             modules: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 BoundedVec::new().map_err(|| {
-                    wrt_error::Error::resource_exhausted(
+                    kiln_error::Error::resource_exhausted(
                         "Failed to create bounded vector for component modules",
                     )
                 })?
@@ -594,7 +594,7 @@ impl ParsedComponent {
             instances: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 BoundedVec::new().map_err(|| {
-                    wrt_error::Error::resource_exhausted(
+                    kiln_error::Error::resource_exhausted(
                         "Failed to create bounded vector for component instances",
                     )
                 })?
@@ -605,7 +605,7 @@ impl ParsedComponent {
             canonicals: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 BoundedVec::new().map_err(|| {
-                    wrt_error::Error::resource_exhausted(
+                    kiln_error::Error::resource_exhausted(
                         "Failed to create bounded vector for component canonicals",
                     )
                 })?
@@ -616,8 +616,8 @@ impl ParsedComponent {
     /// Add a type to the component
     pub fn add_type(
         &mut self,
-        component_type: wrt_foundation::ComponentType<NoStdProvider<1024>>,
-    ) -> wrt_error::Result<()> {
+        component_type: kiln_foundation::ComponentType<NoStdProvider<1024>>,
+    ) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             self.types.push(component_type);
@@ -626,7 +626,7 @@ impl ParsedComponent {
         #[cfg(not(any(feature = "std",)))]
         {
             self.types.push(component_type).map_err(|_| {
-                wrt_error::Error::resource_exhausted(
+                kiln_error::Error::resource_exhausted(
                     "Failed to add type to component, capacity exceeded",
                 )
             })
@@ -634,7 +634,7 @@ impl ParsedComponent {
     }
 
     /// Add an import to the component
-    pub fn add_import(&mut self, import: ParsedImport) -> wrt_error::Result<()> {
+    pub fn add_import(&mut self, import: ParsedImport) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             self.imports.push(import);
@@ -643,7 +643,7 @@ impl ParsedComponent {
         #[cfg(not(any(feature = "std",)))]
         {
             self.imports.push(import).map_err(|_| {
-                wrt_error::Error::resource_exhausted(
+                kiln_error::Error::resource_exhausted(
                     "Failed to add import to component, capacity exceeded",
                 )
             })
@@ -651,7 +651,7 @@ impl ParsedComponent {
     }
 
     /// Add an export to the component
-    pub fn add_export(&mut self, export: ParsedExport) -> wrt_error::Result<()> {
+    pub fn add_export(&mut self, export: ParsedExport) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             self.exports.push(export);
@@ -660,7 +660,7 @@ impl ParsedComponent {
         #[cfg(not(any(feature = "std",)))]
         {
             self.exports.push(export).map_err(|_| {
-                wrt_error::Error::resource_exhausted(
+                kiln_error::Error::resource_exhausted(
                     "Failed to add export to component, capacity exceeded",
                 )
             })

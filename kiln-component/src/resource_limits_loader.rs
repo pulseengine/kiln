@@ -11,7 +11,7 @@ extern crate alloc;
 use alloc::format;
 
 #[cfg(feature = "decoder")]
-use wrt_decoder::resource_limits_section::{RESOURCE_LIMITS_SECTION_NAME, ResourceLimitsSection};
+use kiln_decoder::resource_limits_section::{RESOURCE_LIMITS_SECTION_NAME, ResourceLimitsSection};
 
 // Placeholder types when decoder is not available
 #[cfg(not(feature = "decoder"))]
@@ -38,8 +38,8 @@ impl ResourceLimitsSection {
 }
 #[cfg(not(feature = "decoder"))]
 pub const RESOURCE_LIMITS_SECTION_NAME: &str = "resource_limits";
-use wrt_error::{Error, ErrorCategory, codes};
-use wrt_foundation::NoStdProvider;
+use kiln_error::{Error, ErrorCategory, codes};
+use kiln_foundation::NoStdProvider;
 
 use crate::{
     async_::fuel_async_executor::{ASILExecutionConfig, ASILExecutionMode, ExecutionLimitsConfig},

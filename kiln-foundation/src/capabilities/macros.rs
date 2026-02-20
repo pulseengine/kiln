@@ -17,12 +17,12 @@
 /// # Examples
 ///
 /// ```rust,no_run
-/// use wrt_foundation::capabilities::{
+/// use kiln_foundation::capabilities::{
 ///     MemoryCapabilityContext, CapabilityFactoryBuilder
 /// };
-/// use wrt_foundation::budget_aware_provider::CrateId;
+/// use kiln_foundation::budget_aware_provider::CrateId;
 ///
-/// # fn example() -> wrt_foundation::Result<()> {
+/// # fn example() -> kiln_foundation::Result<()> {
 /// // Create capability context
 /// let mut factory = CapabilityFactoryBuilder::new()
 ///     .with_dynamic_capability(CrateId::Foundation, 4096)?
@@ -76,12 +76,12 @@ macro_rules! safe_capability_alloc {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use wrt_foundation::{
+/// use kiln_foundation::{
 ///     budget_aware_provider::CrateId,
 ///     verification::VerificationLevel,
 /// };
 ///
-/// # fn example() -> wrt_foundation::Result<()> {
+/// # fn example() -> kiln_foundation::Result<()> {
 /// let provider = safe_verified_alloc!(CrateId::Foundation, 1024, VerificationLevel::Redundant)?;
 /// # Ok(())
 /// # }
@@ -108,14 +108,14 @@ macro_rules! safe_verified_alloc {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use wrt_foundation::{
+/// use kiln_foundation::{
 ///     capabilities::{DynamicMemoryCapability, ProviderCapabilityExt},
 ///     safe_memory::NoStdProvider,
 ///     budget_aware_provider::CrateId,
 ///     verification::VerificationLevel
 /// };
 ///
-/// # fn example() -> wrt_foundation::Result<()> {
+/// # fn example() -> kiln_foundation::Result<()> {
 /// let provider = NoStdProvider::<1024>::new();
 /// let capability = Box::new(DynamicMemoryCapability::new(
 ///     1024,
@@ -156,9 +156,9 @@ macro_rules! capability_wrap_provider {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use wrt_foundation::{budget_aware_provider::CrateId, capabilities::VerificationProofs};
+/// use kiln_foundation::{budget_aware_provider::CrateId, capabilities::VerificationProofs};
 ///
-/// # fn example() -> wrt_foundation::Result<()> {
+/// # fn example() -> kiln_foundation::Result<()> {
 /// // Dynamic capability context
 /// let dynamic_context = capability_context!(dynamic(CrateId::Foundation, 4096))?;
 ///
@@ -256,7 +256,7 @@ macro_rules! capability_context {
 macro_rules! safe_managed_alloc_deprecated {
     ($crate_id:expr, $size:expr) => {{
         // Use the old implementation but warn about deprecation
-        $crate::wrt_memory_system::CapabilityWrtFactory::create_provider::<$size>($crate_id)
+        $crate::kiln_memory_system::CapabilityKilnFactory::create_provider::<$size>($crate_id)
     }};
 }
 
@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn test_capability_context_macro() {
-        let result: Result<_, wrt_error::Error> = capability_context!(dynamic(CrateId::Foundation, 1024));
+        let result: Result<_, kiln_error::Error> = capability_context!(dynamic(CrateId::Foundation, 1024));
         assert!(result.is_ok());
 
         let context = result.unwrap();
@@ -288,7 +288,7 @@ mod tests {
 
     #[test]
     #[cfg(any(feature = "std", feature = "alloc"))]
-    fn test_capability_wrap_provider_macro() -> wrt_error::Result<()> {
+    fn test_capability_wrap_provider_macro() -> kiln_error::Result<()> {
         let provider = safe_managed_alloc!(1024, CrateId::Foundation)?;
         let capability = Box::new(DynamicMemoryCapability::new(
             1024,

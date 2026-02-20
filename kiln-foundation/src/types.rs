@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -56,7 +56,7 @@ use std::{
 };
 
 // Import error types
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
@@ -97,7 +97,7 @@ use crate::{
     NoStdProvider,
 };
 
-// Result is already imported from wrt_error - no need for alias
+// Result is already imported from kiln_error - no need for alias
 
 // Constants for array bounds in serializable types
 pub const MAX_PARAMS_IN_FUNC_TYPE: usize = 128;
@@ -299,7 +299,7 @@ impl ValueType {
             0x6A => Ok(ValueType::ArrayRef(type_index)),  // GC: array reference
             _ => Err(Error::new(
                 ErrorCategory::Parse,
-                wrt_error::codes::PARSE_INVALID_VALTYPE_BYTE,
+                kiln_error::codes::PARSE_INVALID_VALTYPE_BYTE,
                 "Invalid value type byte",
             )),
         }
@@ -389,12 +389,12 @@ impl ToBytes for ValueType {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(self.to_binary())
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -404,13 +404,13 @@ impl FromBytes for ValueType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = reader.read_u8()?;
         ValueType::from_binary(byte)
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -477,7 +477,7 @@ impl HeapType {
             0x71 => Ok(HeapType::None),
             _ => Err(Error::new(
                 ErrorCategory::Parse,
-                wrt_error::codes::PARSE_INVALID_VALTYPE_BYTE,
+                kiln_error::codes::PARSE_INVALID_VALTYPE_BYTE,
                 "Invalid heap type byte",
             )),
         }
@@ -579,13 +579,13 @@ impl ToBytes for RefType {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let val_type: ValueType = (*self).into();
         val_type.to_bytes_with_provider(writer, _provider)
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -595,13 +595,13 @@ impl FromBytes for RefType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let value_type = ValueType::from_bytes_with_provider(reader, _provider)?;
         RefType::try_from(value_type).map_err(Error::from)
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -917,14 +917,14 @@ impl ToBytes for TagType {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(self.attribute)?;
         writer.write_u32_le(self.type_idx)?;
         Ok(())
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -934,14 +934,14 @@ impl FromBytes for TagType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let attribute = reader.read_u8()?;
         let type_idx = reader.read_u32_le()?;
         Ok(Self { attribute, type_idx })
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -1049,7 +1049,7 @@ impl ToBytes for CatchHandler {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::Catch { tag_idx, label } => {
                 writer.write_u8(0x00)?;
@@ -1078,7 +1078,7 @@ impl FromBytes for CatchHandler {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0x00 => {
@@ -1099,14 +1099,14 @@ impl FromBytes for CatchHandler {
                 let label = reader.read_u32_le()?;
                 Ok(Self::CatchAllRef { label })
             }
-            _ => Err(wrt_error::Error::parse_error(
+            _ => Err(kiln_error::Error::parse_error(
                 "Invalid CatchHandler discriminant",
             )),
         }
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -1129,7 +1129,7 @@ impl FuncType {
     pub fn new(
         params_iter: impl IntoIterator<Item = ValueType>,
         results_iter: impl IntoIterator<Item = ValueType>,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut params = StaticVec::new();
         for vt in params_iter {
             params.push(vt).map_err(Error::from)?;
@@ -1143,7 +1143,7 @@ impl FuncType {
 
     /// Verifies the function type.
     /// Placeholder implementation.
-    pub fn verify(&self) -> wrt_error::Result<()> {
+    pub fn verify(&self) -> kiln_error::Result<()> {
         // TODO: Implement actual verification logic for FuncType
         // e.g., check constraints on params/results if any beyond BoundedVec capacity.
         Ok(())
@@ -1179,7 +1179,7 @@ impl ToBytes for FuncType {
         &self,
         writer: &mut WriteStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(0x60)?; // FuncType prefix
         self.params.to_bytes_with_provider(writer, stream_provider)?;
         self.results.to_bytes_with_provider(writer, stream_provider)?;
@@ -1187,7 +1187,7 @@ impl ToBytes for FuncType {
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -1197,7 +1197,7 @@ impl FromBytes for FuncType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let prefix = reader.read_u8()?;
         if prefix != 0x60 {
             return Err(Error::runtime_execution_error(
@@ -1218,7 +1218,7 @@ impl FromBytes for FuncType {
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -1252,14 +1252,14 @@ impl ToBytes for MemArg {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u32_le(self.align_exponent)?;
         writer.write_u32_le(self.offset)?;
         writer.write_u32_le(self.memory_index)
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -1269,7 +1269,7 @@ impl FromBytes for MemArg {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let align_exponent = reader.read_u32_le()?;
         let offset = reader.read_u32_le()?;
         let memory_index = reader.read_u32_le()?;
@@ -1281,7 +1281,7 @@ impl FromBytes for MemArg {
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -2452,7 +2452,7 @@ impl<PInstr: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + E
         &self,
         writer: &mut WriteStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Actual serialization logic for instructions
         // This will be complex and depends on the instruction format.
         // For now, a placeholder.
@@ -2921,7 +2921,7 @@ impl<PInstr: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + E
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -2933,7 +2933,7 @@ impl<PInstr: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + E
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Actual deserialization logic
         // Placeholder
         let opcode = reader.read_u8()?;
@@ -2983,7 +2983,7 @@ impl<PInstr: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + E
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -3014,14 +3014,14 @@ impl ToBytes for LocalEntry {
         &self,
         writer: &mut WriteStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u32_le(self.count)?;
         self.value_type.to_bytes_with_provider(writer, stream_provider)?;
         Ok(())
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &provider)
     }
@@ -3031,14 +3031,14 @@ impl FromBytes for LocalEntry {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let count = reader.read_u32_le()?;
         let value_type = ValueType::from_bytes_with_provider(reader, stream_provider)?;
         Ok(LocalEntry { count, value_type })
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &provider)
     }
@@ -3079,10 +3079,10 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Cu
         // Create BoundedVec for the section data
         let mut data_vec = BoundedVec::<u8, MAX_CUSTOM_SECTION_DATA_SIZE, P>::new(provider.clone()) // Use cloned provider for data_vec
             .map_err(|e| {
-                // Log or convert WrtError from BoundedVec::new to crate::Error
+                // Log or convert KilnError from BoundedVec::new to crate::Error
                 Error::new(
                     ErrorCategory::Memory,
-                    wrt_error::codes::SYSTEM_ERROR, // Was INTERNAL_ERROR
+                    kiln_error::codes::SYSTEM_ERROR, // Was INTERNAL_ERROR
                     "Failed to create bounded vector for custom section data",
                 )
             })?;
@@ -3120,7 +3120,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Cu
             .map_err(|_| {
                 Error::new(
                     ErrorCategory::Memory,
-                    wrt_error::codes::SYSTEM_ERROR, // Was INTERNAL_ERROR
+                    kiln_error::codes::SYSTEM_ERROR, // Was INTERNAL_ERROR
                     "Failed to create bounded vector for custom section data",
                 )
             })?;
@@ -3160,14 +3160,14 @@ impl<PCustom: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + 
         &self,
         writer: &mut WriteStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.name.to_bytes_with_provider(writer, stream_provider)?;
         self.data.to_bytes_with_provider(writer, stream_provider)?;
         Ok(())
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &provider)
     }
@@ -3179,7 +3179,7 @@ impl<PCustom: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + 
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let name = WasmName::<MAX_WASM_NAME_LENGTH>::from_bytes_with_provider(
             reader,
             stream_provider,
@@ -3193,7 +3193,7 @@ impl<PCustom: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + 
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &provider)
     }
@@ -3235,7 +3235,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> To
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.locals.to_bytes_with_provider(writer, provider)?;
         self.body.to_bytes_with_provider(writer, provider)?;
         Ok(())
@@ -3250,7 +3250,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Fr
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let locals =
             BoundedVec::<LocalEntry, MAX_LOCALS_PER_FUNCTION, P>::from_bytes_with_provider(
                 reader, provider,
@@ -3296,7 +3296,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> Import<P> {
                 },
                 _ => Error::new(
                     ErrorCategory::Validation,
-                    wrt_error::codes::INVALID_VALUE,
+                    kiln_error::codes::INVALID_VALUE,
                     "Invalid module name serialization",
                 ),
             })?;
@@ -3306,7 +3306,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> Import<P> {
             },
             _ => Error::new(
                 ErrorCategory::Validation,
-                wrt_error::codes::INVALID_VALUE,
+                kiln_error::codes::INVALID_VALUE,
                 "Invalid export item name serialization",
             ),
         })?;
@@ -3396,7 +3396,7 @@ impl<P: MemoryProvider + PartialEq + Eq> ToBytes for ImportDesc<P> {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             ImportDesc::Function(idx) => {
                 writer.write_u8(0)?; // Tag for Function
@@ -3439,7 +3439,7 @@ impl<P: MemoryProvider + PartialEq + Eq> FromBytes for ImportDesc<P> {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let tag = reader.read_u8()?;
         match tag {
             0 => Ok(ImportDesc::Function(reader.read_u32_le()?)),
@@ -3476,7 +3476,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ToBytes for Import<P>
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.module_name.to_bytes_with_provider(writer, provider)?;
         self.item_name.to_bytes_with_provider(writer, provider)?;
         self.desc.to_bytes_with_provider(writer, provider)?;
@@ -3490,7 +3490,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> FromBytes for Import<
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let module_name =
             WasmName::<MAX_MODULE_NAME_LEN>::from_bytes_with_provider(reader, stream_provider)?;
         let item_name =
@@ -3562,7 +3562,7 @@ impl ToBytes for ExportDesc {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream, // Provider not used for u32 or simple enums over u32
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             ExportDesc::Func(idx) => {
                 writer.write_u8(0)?; // Tag for Func
@@ -3595,7 +3595,7 @@ impl FromBytes for ExportDesc {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream, // Provider not used
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let tag = reader.read_u8()?;
         match tag {
             0 => Ok(ExportDesc::Func(reader.read_u32_le()?)),
@@ -3615,7 +3615,7 @@ impl FromBytes for ExportDesc {
 /// Placeholder for ExternType and ResourceType from component.rs
 /// These will need to be P-generic or use P-generic types.
 /// For now, we define stubs so ImportDesc can compile.
-/// In a real scenario, these would be properly defined in wrt-component
+/// In a real scenario, these would be properly defined in kiln-component
 /// and made P-generic if they contain collections.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -3633,7 +3633,7 @@ impl ToBytes for ExternTypePlaceholder {
         &self,
         _writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         Ok(()) // Writes nothing
     }
     // Default to_bytes method will be used if #cfg(feature = "default-provider") is
@@ -3644,7 +3644,7 @@ impl FromBytes for ExternTypePlaceholder {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         _reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(ExternTypePlaceholder) // Reads nothing
     }
     // Default from_bytes method will be used if #cfg(feature = "default-provider")
@@ -3667,7 +3667,7 @@ impl ToBytes for ResourceTypePlaceholder {
         &self,
         _writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         Ok(()) // Writes nothing
     }
     // Default to_bytes method will be used if #cfg(feature = "default-provider") is
@@ -3678,7 +3678,7 @@ impl FromBytes for ResourceTypePlaceholder {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         _reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(ResourceTypePlaceholder) // Reads nothing
     }
     // Default from_bytes method will be used if #cfg(feature = "default-provider")
@@ -3716,7 +3716,7 @@ impl ToBytes for Limits {
         writer: &mut WriteStream<'a>,
         _provider: &PStream, /* Provider not directly used for simple types like u32 or
                               * Option<u32> that wrap primitives */
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u32_le(self.min)?;
         if let Some(max_val) = self.max {
             writer.write_u8(1)?; // Indicate Some(max_val)
@@ -3734,7 +3734,7 @@ impl FromBytes for Limits {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream, // Provider not directly used here
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let min = reader.read_u32_le()?;
         let has_max_flag = reader.read_u8()?;
         let max = match has_max_flag {
@@ -3792,7 +3792,7 @@ impl ToBytes for TableType {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.element_type.to_bytes_with_provider(writer, provider)?;
         self.limits.to_bytes_with_provider(writer, provider)?;
         Ok(())
@@ -3805,7 +3805,7 @@ impl FromBytes for TableType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let element_type = RefType::from_bytes_with_provider(reader, provider)?;
         let limits = Limits::from_bytes_with_provider(reader, provider)?;
         Ok(TableType {
@@ -3849,7 +3849,7 @@ impl ToBytes for MemoryType {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.limits.to_bytes_with_provider(writer, provider)?;
         writer.write_u8(self.shared as u8)?;
         writer.write_u8(self.memory64 as u8)?;
@@ -3863,7 +3863,7 @@ impl FromBytes for MemoryType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let limits = Limits::from_bytes_with_provider(reader, provider)?;
         let shared_byte = reader.read_u8()?;
         let shared = match shared_byte {
@@ -3918,7 +3918,7 @@ impl ToBytes for GlobalType {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.value_type.to_bytes_with_provider(writer, provider)?;
         writer.write_u8(self.mutable as u8)?;
         Ok(())
@@ -3931,7 +3931,7 @@ impl FromBytes for GlobalType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let value_type = ValueType::from_bytes_with_provider(reader, provider)?;
         let mutable_byte = reader.read_u8()?;
         let mutable = match mutable_byte {
@@ -3974,7 +3974,7 @@ impl ToBytes for Tag {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream, // Provider not used for simple u32
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u32_le(self.type_idx)?;
         Ok(())
     }
@@ -3986,7 +3986,7 @@ impl FromBytes for Tag {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream, // Provider not used for simple u32
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let type_idx = reader.read_u32_le()?;
         Ok(Tag { type_idx })
     }
@@ -4507,14 +4507,14 @@ impl ToBytes for FieldType {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.storage_type.to_bytes_with_provider(writer, provider)?;
         writer.write_u8(self.mutable as u8)?;
         Ok(())
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -4524,7 +4524,7 @@ impl FromBytes for FieldType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let storage_type = StorageType::from_bytes_with_provider(reader, provider)?;
         let mutable_byte = reader.read_u8()?;
         let mutable = match mutable_byte {
@@ -4543,7 +4543,7 @@ impl FromBytes for FieldType {
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -4554,7 +4554,7 @@ impl ToBytes for StorageType {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             StorageType::Value(vt) => {
                 writer.write_u8(0)?;
@@ -4569,7 +4569,7 @@ impl ToBytes for StorageType {
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -4579,7 +4579,7 @@ impl FromBytes for StorageType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let tag = reader.read_u8()?;
         match tag {
             0 => {
@@ -4596,7 +4596,7 @@ impl FromBytes for StorageType {
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -4607,14 +4607,14 @@ impl ToBytes for ArrayType {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.element_type.to_bytes_with_provider(writer, provider)?;
         writer.write_u8(self.final_type as u8)?;
         Ok(())
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -4624,7 +4624,7 @@ impl FromBytes for ArrayType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let element_type = FieldType::from_bytes_with_provider(reader, provider)?;
         let final_byte = reader.read_u8()?;
         let final_type = match final_byte {
@@ -4643,7 +4643,7 @@ impl FromBytes for ArrayType {
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -4656,14 +4656,14 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> To
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.fields.to_bytes_with_provider(writer, provider)?;
         writer.write_u8(self.final_type as u8)?;
         Ok(())
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -4675,7 +4675,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Fr
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let fields = BoundedVec::<FieldType, MAX_STRUCT_FIELDS, P>::from_bytes_with_provider(
             reader, provider,
         )?;
@@ -4693,7 +4693,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Fr
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }

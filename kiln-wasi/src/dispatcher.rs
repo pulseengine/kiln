@@ -10,10 +10,10 @@
 //! - Core WASM values (Value) - raw i32/i64 + memory pointers
 //! - Component Model values (our Value enum) - lifted strings, lists, etc.
 //!
-//! # Usage from wrt-runtime
+//! # Usage from kiln-runtime
 //!
 //! ```ignore
-//! use wrt_wasi::WasiDispatcher;
+//! use kiln_wasi::WasiDispatcher;
 //!
 //! let mut dispatcher = WasiDispatcher::new(capabilities)?;
 //! let result = dispatcher.dispatch("wasi:clocks/wall-clock", "now", args)?;
@@ -21,7 +21,7 @@
 
 // Import tracing utilities for structured logging
 #[cfg(feature = "tracing")]
-use wrt_foundation::tracing::{trace, warn};
+use kiln_foundation::tracing::{trace, warn};
 
 #[cfg(feature = "std")]
 use std::vec::Vec;
@@ -39,10 +39,10 @@ use crate::{
     Value,
 };
 #[cfg(feature = "std")]
-use wrt_foundation::MemoryAccessor;
+use kiln_foundation::MemoryAccessor;
 
 // Global storage for WASI args and env using Mutex for thread-safety
-// This allows passing args from wrtd to the engine without threading through all layers
+// This allows passing args from kilnd to the engine without threading through all layers
 #[cfg(feature = "std")]
 use std::sync::Mutex;
 
@@ -237,7 +237,7 @@ pub struct AllocationRequest {
 #[derive(Debug)]
 pub enum DispatchResult {
     /// Dispatch completed successfully with these return values
-    Complete(Vec<wrt_foundation::values::Value>),
+    Complete(Vec<kiln_foundation::values::Value>),
     /// Dispatch needs memory allocation before it can complete
     /// Returns (allocation request, continuation data)
     NeedsAllocation {
@@ -1164,10 +1164,10 @@ impl WasiDispatcher {
         &mut self,
         interface: &str,
         function: &str,
-        args: &[wrt_foundation::values::Value],
+        args: &[kiln_foundation::values::Value],
         memory: Option<&dyn MemoryAccessor>,
-    ) -> Result<Vec<wrt_foundation::values::Value>> {
-        use wrt_foundation::values::Value as CoreValue;
+    ) -> Result<Vec<kiln_foundation::values::Value>> {
+        use kiln_foundation::values::Value as CoreValue;
 
         let base_interface = Self::strip_version(interface);
 
@@ -1259,7 +1259,7 @@ impl WasiDispatcher {
                         // Per CLAUDE.md: "FAIL LOUD AND EARLY" - no stack-relative hacks
                         #[cfg(feature = "tracing")]
                         warn!("args_alloc not set - cabi_realloc was not called");
-                        return Err(wrt_error::Error::runtime_error(
+                        return Err(kiln_error::Error::runtime_error(
                             "get-arguments requires cabi_realloc - allocation not performed"
                         ));
                     };
@@ -1272,7 +1272,7 @@ impl WasiDispatcher {
                             actual = string_ptrs.len(),
                             "string allocation count mismatch"
                         );
-                        return Err(wrt_error::Error::runtime_error(
+                        return Err(kiln_error::Error::runtime_error(
                             "string allocation count mismatch"
                         ));
                     }
@@ -1434,7 +1434,7 @@ impl WasiDispatcher {
             // Clock functions
             #[cfg(feature = "wasi-clocks")]
             ("wasi:clocks/wall-clock", "now") => {
-                use wrt_platform::time::PlatformTime;
+                use kiln_platform::time::PlatformTime;
 
                 if !self.capabilities.clocks.realtime_access {
                     return Err(Error::wasi_permission_denied("Wall clock access denied"));
@@ -1522,7 +1522,7 @@ impl WasiDispatcher {
 
             #[cfg(feature = "wasi-clocks")]
             ("wasi:clocks/monotonic-clock", "now") => {
-                use wrt_platform::time::PlatformTime;
+                use kiln_platform::time::PlatformTime;
 
                 if !self.capabilities.clocks.monotonic_access {
                     return Err(Error::wasi_permission_denied("Monotonic clock access denied"));
@@ -1855,23 +1855,23 @@ impl WasiDispatcher {
                 // Args: (data_ptr: i32, data_len: i32, encoding: i32, target: i32)
                 let data_ptr = match args.get(0) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_load: missing data_ptr")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_load: missing data_ptr")),
                 };
                 let data_len = match args.get(1) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_load: missing data_len")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_load: missing data_len")),
                 };
                 let encoding = match args.get(2) {
                     Some(CoreValue::I32(v)) => *v as u8,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_load: missing encoding")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_load: missing encoding")),
                 };
                 let target = match args.get(3) {
                     Some(CoreValue::I32(v)) => *v as u8,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_load: missing target")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_load: missing target")),
                 };
 
                 // Read model data from linear memory
-                let mem = memory.ok_or_else(|| wrt_error::Error::runtime_error(
+                let mem = memory.ok_or_else(|| kiln_error::Error::runtime_error(
                     "nn_load requires memory access"
                 ))?;
 
@@ -1891,7 +1891,7 @@ impl WasiDispatcher {
                 // Args: (graph_id: i32)
                 let graph_id = match args.get(0) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_init_execution_context: missing graph_id")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_init_execution_context: missing graph_id")),
                 };
 
                 let context_id = nn_init_execution_context(graph_id)?;
@@ -1906,34 +1906,34 @@ impl WasiDispatcher {
                 // Args: (context_id, index, tensor_ptr, tensor_len, dims_ptr, dims_count, type)
                 let context_id = match args.get(0) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_set_input: missing context_id")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_set_input: missing context_id")),
                 };
                 let index = match args.get(1) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_set_input: missing index")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_set_input: missing index")),
                 };
                 let tensor_ptr = match args.get(2) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_set_input: missing tensor_ptr")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_set_input: missing tensor_ptr")),
                 };
                 let tensor_len = match args.get(3) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_set_input: missing tensor_len")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_set_input: missing tensor_len")),
                 };
                 let dims_ptr = match args.get(4) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_set_input: missing dims_ptr")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_set_input: missing dims_ptr")),
                 };
                 let dims_count = match args.get(5) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_set_input: missing dims_count")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_set_input: missing dims_count")),
                 };
                 let tensor_type = match args.get(6) {
                     Some(CoreValue::I32(v)) => *v as u8,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_set_input: missing tensor_type")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_set_input: missing tensor_type")),
                 };
 
-                let mem = memory.ok_or_else(|| wrt_error::Error::runtime_error(
+                let mem = memory.ok_or_else(|| kiln_error::Error::runtime_error(
                     "nn_set_input requires memory access"
                 ))?;
 
@@ -1961,7 +1961,7 @@ impl WasiDispatcher {
                 // Args: (context_id: i32)
                 let context_id = match args.get(0) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_compute: missing context_id")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_compute: missing context_id")),
                 };
 
                 nn_compute(context_id)?;
@@ -1976,22 +1976,22 @@ impl WasiDispatcher {
                 // Args: (context_id, index, out_ptr, out_capacity)
                 let context_id = match args.get(0) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_get_output: missing context_id")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_get_output: missing context_id")),
                 };
                 let index = match args.get(1) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_get_output: missing index")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_get_output: missing index")),
                 };
                 let out_ptr = match args.get(2) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_get_output: missing out_ptr")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_get_output: missing out_ptr")),
                 };
                 let out_capacity = match args.get(3) {
                     Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(wrt_error::Error::wasi_invalid_argument("nn_get_output: missing out_capacity")),
+                    _ => return Err(kiln_error::Error::wasi_invalid_argument("nn_get_output: missing out_capacity")),
                 };
 
-                let mem = memory.ok_or_else(|| wrt_error::Error::runtime_error(
+                let mem = memory.ok_or_else(|| kiln_error::Error::runtime_error(
                     "nn_get_output requires memory access"
                 ))?;
 
@@ -2011,7 +2011,7 @@ impl WasiDispatcher {
 
             #[cfg(feature = "wasi-random")]
             ("wasi:random/random", "get-random-bytes") => {
-                use wrt_platform::random::PlatformRandom;
+                use kiln_platform::random::PlatformRandom;
 
                 // Check random capability
                 if !self.capabilities.random.secure_random {
@@ -2069,7 +2069,7 @@ impl WasiDispatcher {
 
             #[cfg(feature = "wasi-random")]
             ("wasi:random/random", "get-random-u64") => {
-                use wrt_platform::random::PlatformRandom;
+                use kiln_platform::random::PlatformRandom;
 
                 if !self.capabilities.random.secure_random {
                     return Err(Error::wasi_permission_denied("Secure random access denied"));
@@ -2110,10 +2110,10 @@ impl WasiDispatcher {
         &mut self,
         interface: &str,
         function: &str,
-        args: &[wrt_foundation::values::Value],
+        args: &[kiln_foundation::values::Value],
         _memory: Option<&mut [u8]>,
     ) -> Result<DispatchResult> {
-        use wrt_foundation::values::Value as CoreValue;
+        use kiln_foundation::values::Value as CoreValue;
 
         let base_interface = Self::strip_version(interface);
 
@@ -2385,14 +2385,14 @@ impl WasiDispatcher {
 /// This allows the engine to call WASI functions through the generic trait
 /// without knowing about WASI specifics.
 #[cfg(feature = "std")]
-impl wrt_foundation::HostImportHandler for WasiDispatcher {
+impl kiln_foundation::HostImportHandler for WasiDispatcher {
     fn call_import(
         &mut self,
         module: &str,
         function: &str,
-        args: &[wrt_foundation::Value],
+        args: &[kiln_foundation::Value],
         memory: Option<&dyn MemoryAccessor>,
-    ) -> Result<Vec<wrt_foundation::Value>> {
+    ) -> Result<Vec<kiln_foundation::Value>> {
         // Delegate to dispatch_core with MemoryAccessor
         self.dispatch_core(module, function, args, memory)
     }
@@ -2405,7 +2405,7 @@ impl wrt_foundation::HostImportHandler for WasiDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wrt_foundation::memory_init::MemoryInitializer;
+    use kiln_foundation::memory_init::MemoryInitializer;
 
     #[test]
     fn test_dispatcher_creation() -> Result<()> {

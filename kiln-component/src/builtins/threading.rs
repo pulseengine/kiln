@@ -19,11 +19,11 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 #[cfg(feature = "std")]
-use wrt_foundation::{builtin::BuiltinType, component_value::ComponentValue};
+use kiln_foundation::{builtin::BuiltinType, component_value::ComponentValue};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{collections::StaticVec as BoundedVec, safe_memory::NoStdProvider};
+use kiln_foundation::{collections::StaticVec as BoundedVec, safe_memory::NoStdProvider};
 
 #[cfg(not(feature = "std"))]
 use crate::types::Value as ComponentValue;
@@ -42,20 +42,20 @@ use super::BuiltinHandler;
 /// compliance
 #[cfg(feature = "std")]
 fn safe_read_lock<T>(lock: &RwLock<T>) -> Result<std::sync::RwLockReadGuard<T>> {
-    lock.read().map_err(|_| wrt_error::Error::threading_error("Lock poisoned"))
+    lock.read().map_err(|_| kiln_error::Error::threading_error("Lock poisoned"))
 }
 
 /// Helper function to handle RwLock write operations safely for ASIL-D
 /// compliance
 #[cfg(feature = "std")]
 fn safe_write_lock<T>(lock: &RwLock<T>) -> Result<std::sync::RwLockWriteGuard<T>> {
-    lock.write().map_err(|_| wrt_error::Error::threading_error("Lock poisoned"))
+    lock.write().map_err(|_| kiln_error::Error::threading_error("Lock poisoned"))
 }
 
 /// Helper function to handle Mutex operations safely for ASIL-D compliance
 #[cfg(feature = "std")]
 fn safe_mutex_lock<T>(mutex: &Mutex<T>) -> Result<std::sync::MutexGuard<T>> {
-    mutex.lock().map_err(|_| wrt_error::Error::threading_error("Mutex poisoned"))
+    mutex.lock().map_err(|_| kiln_error::Error::threading_error("Mutex poisoned"))
 }
 
 /// Thread handle identifier

@@ -1,4 +1,4 @@
-//! Formal verification for wrt-foundation using Kani.
+//! Formal verification for kiln-foundation using Kani.
 //!
 //! This module contains comprehensive safety proofs for the foundational
 //! data structures and memory management components. These proofs focus on:

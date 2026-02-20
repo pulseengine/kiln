@@ -2,7 +2,7 @@
 WASM Test Suite (WAST)
 =======================
 
-The WRT project includes a comprehensive WAST (WebAssembly Text) test infrastructure that provides full WebAssembly specification compliance testing. This infrastructure integrates with the existing ``wrt-test-registry`` framework and supports testing across std, no_std+alloc, and no_std environments.
+The Kiln project includes a comprehensive WAST (WebAssembly Text) test infrastructure that provides full WebAssembly specification compliance testing. This infrastructure integrates with the existing ``kiln-test-registry`` framework and supports testing across std, no_std+alloc, and no_std environments.
 
 .. contents:: Table of Contents
    :local:
@@ -145,17 +145,17 @@ Basic Test Execution
 .. code-block:: bash
 
    # Run all WAST tests
-   cargo test -p wrt wast_tests_new
+   cargo test -p kiln wast_tests_new
    
    # Run with external testsuite
    export WASM_TESTSUITE=/path/to/testsuite
-   cargo test -p wrt test_wast_files
+   cargo test -p kiln test_wast_files
 
 **Using the Test Runner Programmatically**
 
 .. code-block:: rust
 
-   use wrt::tests::wast_test_runner::WastTestRunner;
+   use kiln::tests::wast_test_runner::WastTestRunner;
    
    // Create test runner
    let mut runner = WastTestRunner::new();
@@ -182,7 +182,7 @@ Basic Test Execution
 Test Registry Integration
 -------------------------
 
-The WAST infrastructure integrates with ``wrt-test-registry``:
+The WAST infrastructure integrates with ``kiln-test-registry``:
 
 .. code-block:: rust
 
@@ -396,7 +396,7 @@ Common Issues
    RUST_LOG=debug cargo test wast_tests_new -- --nocapture
    
    # Run specific test
-   cargo test -p wrt test_external_testsuite -- --nocapture
+   cargo test -p kiln test_external_testsuite -- --nocapture
 
 Debug Information
 -----------------
@@ -423,7 +423,7 @@ Custom Test Execution
 
 .. code-block:: rust
 
-   use wrt::tests::wast_test_runner::{WastTestRunner, WastTestType};
+   use kiln::tests::wast_test_runner::{WastTestRunner, WastTestType};
    
    fn run_custom_wast_test() -> Result<()> {
        let mut runner = WastTestRunner::new();
@@ -461,7 +461,7 @@ Test Suite Integration
 
 .. code-block:: rust
 
-   use wrt_test_registry::{TestSuite, TestResult};
+   use kiln_test_registry::{TestSuite, TestResult};
    
    fn create_wast_test_suite() -> TestSuite {
        let mut suite = TestSuite::new("WAST Compliance");
@@ -539,7 +539,7 @@ Code Review Checklist
 Conclusion
 ==========
 
-The WRT WAST test infrastructure provides comprehensive WebAssembly specification compliance testing with:
+The Kiln WAST test infrastructure provides comprehensive WebAssembly specification compliance testing with:
 
 - **Complete directive support** for all WAST test types
 - **Multi-environment compatibility** across std, no_std+alloc, and no_std
@@ -549,4 +549,4 @@ The WRT WAST test infrastructure provides comprehensive WebAssembly specificatio
 - **Performance optimization** through parallel execution
 - **Detailed statistics and reporting** for test analysis
 
-This infrastructure ensures that WRT maintains high WebAssembly specification compliance while supporting diverse deployment environments from embedded systems to server applications.
+This infrastructure ensures that Kiln maintains high WebAssembly specification compliance while supporting diverse deployment environments from embedded systems to server applications.

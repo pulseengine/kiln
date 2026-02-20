@@ -14,7 +14,7 @@ use core::{
     ptr::NonNull,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,

@@ -1,7 +1,7 @@
 //! Temporary component model value representation
 //!
 //! This module provides a temporary implementation of component model values
-//! until proper support is added to wrt-foundation.
+//! until proper support is added to kiln-foundation.
 
 
 /// Component model value representation

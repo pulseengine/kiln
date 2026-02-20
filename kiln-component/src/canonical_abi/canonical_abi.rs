@@ -25,7 +25,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use wrt_component::canonical_abi::{
+//! use kiln_component::canonical_abi::{
 //!     CanonicalABI,
 //!     ComponentType,
 //!     ComponentValue,
@@ -50,13 +50,13 @@ use alloc::{collections::BTreeMap as HashMap, string::String, vec, vec::Vec};
 #[cfg(feature = "std")]
 use std::{collections::HashMap, string::String, vec::Vec};
 
-// Note: Using alloc for no_std instead of wrt_foundation bounded types for now
+// Note: Using alloc for no_std instead of kiln_foundation bounded types for now
 // #[cfg(not(any(feature = "std", )))]
-// use wrt_foundation::{BoundedString, BoundedVec, BoundedMap as HashMap};
-use wrt_error::{Error, ErrorCategory, Result, codes};
+// use kiln_foundation::{BoundedString, BoundedVec, BoundedMap as HashMap};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::safe_memory::NoStdProvider;
-use wrt_foundation::{
+use kiln_foundation::safe_memory::NoStdProvider;
+use kiln_foundation::{
     traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
     verification::Checksum,
 };
@@ -173,11 +173,11 @@ pub enum ComponentValue {
 
 // Trait implementations for ComponentType
 impl ToBytes for ComponentType {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write discriminant for the type
         let discriminant: u8 = match self {
             ComponentType::Bool => 0,
@@ -201,10 +201,10 @@ impl ToBytes for ComponentType {
 }
 
 impl FromBytes for ComponentType {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => Ok(ComponentType::Bool),
@@ -1894,7 +1894,7 @@ pub struct LowerResult {
     pub bytes_written: u32,
 }
 
-/// Core WebAssembly value (matches wrt_foundation::values::Value)
+/// Core WebAssembly value (matches kiln_foundation::values::Value)
 #[derive(Debug, Clone, PartialEq)]
 pub enum CoreValue {
     I32(i32),
@@ -2368,12 +2368,12 @@ impl CanonicalABI {
     }
 
     // ========================================================================
-    // CONVERSION BETWEEN CoreValue AND wrt_foundation::values::Value
+    // CONVERSION BETWEEN CoreValue AND kiln_foundation::values::Value
     // ========================================================================
 
-    /// Convert wrt_foundation::values::Value to CoreValue
-    pub fn from_runtime_value(value: &wrt_foundation::values::Value) -> CoreValue {
-        use wrt_foundation::values::Value;
+    /// Convert kiln_foundation::values::Value to CoreValue
+    pub fn from_runtime_value(value: &kiln_foundation::values::Value) -> CoreValue {
+        use kiln_foundation::values::Value;
         match value {
             Value::I32(i) => CoreValue::I32(*i),
             Value::I64(i) => CoreValue::I64(*i),
@@ -2384,10 +2384,10 @@ impl CanonicalABI {
         }
     }
 
-    /// Convert CoreValue to wrt_foundation::values::Value
-    pub fn to_runtime_value(value: &CoreValue) -> wrt_foundation::values::Value {
-        use wrt_foundation::float_repr::{FloatBits32, FloatBits64};
-        use wrt_foundation::values::Value;
+    /// Convert CoreValue to kiln_foundation::values::Value
+    pub fn to_runtime_value(value: &CoreValue) -> kiln_foundation::values::Value {
+        use kiln_foundation::float_repr::{FloatBits32, FloatBits64};
+        use kiln_foundation::values::Value;
         match value {
             CoreValue::I32(i) => Value::I32(*i),
             CoreValue::I64(i) => Value::I64(*i),
@@ -2397,12 +2397,12 @@ impl CanonicalABI {
     }
 
     /// Convert a slice of runtime values to core values
-    pub fn from_runtime_values(values: &[wrt_foundation::values::Value]) -> Vec<CoreValue> {
+    pub fn from_runtime_values(values: &[kiln_foundation::values::Value]) -> Vec<CoreValue> {
         values.iter().map(Self::from_runtime_value).collect()
     }
 
     /// Convert a slice of core values to runtime values
-    pub fn to_runtime_values(values: &[CoreValue]) -> Vec<wrt_foundation::values::Value> {
+    pub fn to_runtime_values(values: &[CoreValue]) -> Vec<kiln_foundation::values::Value> {
         values.iter().map(Self::to_runtime_value).collect()
     }
 }

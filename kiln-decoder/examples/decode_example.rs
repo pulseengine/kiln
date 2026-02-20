@@ -5,7 +5,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wasm_bytes = fs::read("examples/example.wasm")?;
 
     // Decode the module
-    let module = wrt_decoder::wasm::decode(&wasm_bytes)?;
+    let module = kiln_decoder::wasm::decode(&wasm_bytes)?;
 
     // Print some basic information about the module
     // Version is not directly accessible in the Module struct

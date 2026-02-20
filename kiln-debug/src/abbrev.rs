@@ -4,8 +4,8 @@
 
 //! DWARF abbreviation table parsing
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::{
     bounded::{BoundedVec, MAX_DWARF_ABBREV_CACHE},
     budget_aware_provider::CrateId,
     safe_managed_alloc,

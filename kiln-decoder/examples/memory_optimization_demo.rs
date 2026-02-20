@@ -1,12 +1,12 @@
-//! Demonstration of memory optimization features in wrt-decoder
+//! Demonstration of memory optimization features in kiln-decoder
 //!
 //! This example shows how the memory optimizations reduce allocation overhead
 //! and provide bounds checking to prevent malicious over-allocation.
 
 #[cfg(feature = "std")]
 fn main() {
-    use wrt_decoder::memory_optimized::{MemoryPool, check_bounds_u32, safe_usize_conversion};
-    use wrt_foundation::NoStdProvider;
+    use kiln_decoder::memory_optimized::{MemoryPool, check_bounds_u32, safe_usize_conversion};
+    use kiln_foundation::NoStdProvider;
 
     println!("=== WRT-Decoder Memory Optimization Demo ===\n");
 

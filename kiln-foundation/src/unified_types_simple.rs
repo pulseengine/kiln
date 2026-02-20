@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Simplified Unified Type System
 // SW-REQ-ID: REQ_TYPE_UNIFIED_001, REQ_TYPE_PLATFORM_001
 //

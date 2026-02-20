@@ -10,14 +10,14 @@ use std::{boxed::Box, collections::BTreeMap, vec::Vec, string::String};
 
 use core::fmt;
 
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec, BoundedString,
     bounded::MAX_GENERATIVE_TYPES,
     MemoryProvider, NoStdProvider,
 };
 
 // Component ValType import removed - using ValueType from types module
-use wrt_error::{Error, ErrorCategory};
+use kiln_error::{Error, ErrorCategory};
 
 /// Default memory provider for WIT types
 pub type DefaultWitProvider = NoStdProvider<1024>;

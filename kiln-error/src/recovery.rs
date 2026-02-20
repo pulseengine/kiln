@@ -1,7 +1,7 @@
 //! Error recovery and debugging infrastructure
 //!
 //! This module provides comprehensive error recovery mechanisms and detailed
-//! debugging information for the WRT runtime system.
+//! debugging information for the Kiln runtime system.
 
 #[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap as HashMap;

@@ -30,14 +30,14 @@ use alloc::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_sync::{
-    WrtMutex,
-    WrtRwLock,
+use kiln_sync::{
+    KilnMutex,
+    KilnRwLock,
 };
 // Temporarily use standard collections until bounded_platform is available
 // use crate::bounded_platform::{BoundedEntityVec, BoundedConditionVec,
@@ -214,10 +214,10 @@ pub struct EntityId(pub u64);
 
 /// Generic high availability monitor
 pub struct GenericHaMonitor {
-    entities:       WrtRwLock<BoundedEntityVec<MonitoredEntity>>,
+    entities:       KilnRwLock<BoundedEntityVec<MonitoredEntity>>,
     next_id:        AtomicU64,
     #[cfg(feature = "std")]
-    monitor_thread: WrtMutex<Option<std::thread::JoinHandle<()>>>,
+    monitor_thread: KilnMutex<Option<std::thread::JoinHandle<()>>>,
     running:        Arc<AtomicBool>,
 }
 
@@ -225,8 +225,8 @@ struct MonitoredEntity {
     id:             EntityId,
     _name:          String,
     conditions:     BoundedConditionVec<(MonitorCondition, BoundedConditionVec<RecoveryAction>)>,
-    last_heartbeat: WrtMutex<u64>, // Timestamp in milliseconds
-    status:         WrtMutex<HealthStatus>,
+    last_heartbeat: KilnMutex<u64>, // Timestamp in milliseconds
+    status:         KilnMutex<HealthStatus>,
     _restart_count: AtomicU64,
     monitoring:     AtomicBool,
 }
@@ -235,10 +235,10 @@ impl GenericHaMonitor {
     /// Create new HA monitor
     pub fn new() -> Self {
         Self {
-            entities: WrtRwLock::new(new_entity_vec()),
+            entities: KilnRwLock::new(new_entity_vec()),
             next_id: AtomicU64::new(1),
             #[cfg(feature = "std")]
-            monitor_thread: WrtMutex::new(None),
+            monitor_thread: KilnMutex::new(None),
             running: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -284,8 +284,8 @@ impl HighAvailabilityManager for GenericHaMonitor {
             id,
             _name: name.to_string(),
             conditions: new_condition_vec(),
-            last_heartbeat: WrtMutex::new(0), // Timestamp in milliseconds
-            status: WrtMutex::new(HealthStatus::Healthy),
+            last_heartbeat: KilnMutex::new(0), // Timestamp in milliseconds
+            status: KilnMutex::new(HealthStatus::Healthy),
             _restart_count: AtomicU64::new(0),
             monitoring: AtomicBool::new(false),
         };
@@ -313,7 +313,7 @@ impl HighAvailabilityManager for GenericHaMonitor {
                 // MAX_CONDITIONS check
                 return Err(Error::new(
                     ErrorCategory::Memory,
-                    wrt_error::codes::CAPACITY_EXCEEDED,
+                    kiln_error::codes::CAPACITY_EXCEEDED,
                     "Too many actions for entity",
                 ));
             }

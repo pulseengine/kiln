@@ -1,7 +1,7 @@
 //! WebAssembly type definitions.
 //!
 //! This module provides type definitions for WebAssembly types.
-//! Most core types are re-exported from wrt-foundation.
+//! Most core types are re-exported from kiln-foundation.
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -10,9 +10,9 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use wrt_error::Result;
-// Import types from wrt-foundation
-pub use wrt_foundation::{
+use kiln_error::Result;
+// Import types from kiln-foundation
+pub use kiln_foundation::{
     BlockType,
     FuncType,
     RefType,
@@ -67,7 +67,7 @@ pub enum FormatBlockType {
     TypeIndex(u32),
     /// Function type (used for complex block types)
     #[cfg(any(feature = "std", feature = "alloc"))]
-    FuncType(wrt_foundation::CleanFuncType),
+    FuncType(kiln_foundation::CleanFuncType),
 }
 
 impl From<FormatBlockType> for BlockType {
@@ -96,45 +96,45 @@ pub fn value_type_to_byte(value_type: ValueType) -> u8 {
 /// Type for a global variable in the binary format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct FormatGlobalType {
-    pub value_type: ValueType, // This is wrt_foundation::ValueType re-exported in this file
+    pub value_type: ValueType, // This is kiln_foundation::ValueType re-exported in this file
     pub mutable:    bool,
 }
 
-impl wrt_foundation::traits::Checksummable for FormatGlobalType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for FormatGlobalType {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.value_type.update_checksum(checksum);
         checksum.update(if self.mutable { 1 } else { 0 });
     }
 }
 
-impl wrt_foundation::traits::ToBytes for FormatGlobalType {
+impl kiln_foundation::traits::ToBytes for FormatGlobalType {
     fn serialized_size(&self) -> usize {
         self.value_type.serialized_size() + 1
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.value_type.to_bytes_with_provider(stream, provider)?;
         stream.write_u8(if self.mutable { 1 } else { 0 })?;
         Ok(())
     }
 }
 
-impl wrt_foundation::traits::FromBytes for FormatGlobalType {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        stream: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for FormatGlobalType {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        stream: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let value_type = ValueType::from_bytes_with_provider(stream, provider)?;
         let mutable_byte = stream.read_u8()?;
         let mutable = match mutable_byte {
             0 => false,
             1 => true,
             _ => {
-                return Err(wrt_error::Error::runtime_execution_error(
+                return Err(kiln_error::Error::runtime_execution_error(
                     "Invalid mutable byte value: expected 0 or 1",
                 ))
             },
@@ -201,21 +201,21 @@ impl Limits {
         }
         #[cfg(not(any(feature = "std")))]
         {
-            use wrt_foundation::BoundedVec;
-            let mut bytes = BoundedVec::<u8, 32, wrt_foundation::NoStdProvider<256>>::new(
-                wrt_foundation::NoStdProvider::default(),
+            use kiln_foundation::BoundedVec;
+            let mut bytes = BoundedVec::<u8, 32, kiln_foundation::NoStdProvider<256>>::new(
+                kiln_foundation::NoStdProvider::default(),
             )
             .map_err(|_| {
-                wrt_error::Error::runtime_execution_error(
+                kiln_error::Error::runtime_execution_error(
                     "Failed to allocate BoundedVec for limits encoding",
                 )
             })?;
             // Encode min
             for &b in self.min.to_le_bytes().iter() {
                 bytes.push(b).map_err(|_| {
-                    wrt_error::Error::new(
-                        wrt_error::ErrorCategory::Memory,
-                        wrt_error::codes::MEMORY_ERROR,
+                    kiln_error::Error::new(
+                        kiln_error::ErrorCategory::Memory,
+                        kiln_error::codes::MEMORY_ERROR,
                         "Failed to push min limit bytes",
                     )
                 })?;
@@ -223,36 +223,36 @@ impl Limits {
             // Encode max
             if let Some(max) = self.max {
                 bytes.push(1).map_err(|_| {
-                    wrt_error::Error::runtime_execution_error("Failed to push max limit flag")
+                    kiln_error::Error::runtime_execution_error("Failed to push max limit flag")
                 })?;
                 for &b in max.to_le_bytes().iter() {
                     bytes.push(b).map_err(|_| {
-                        wrt_error::Error::new(
-                            wrt_error::ErrorCategory::Memory,
-                            wrt_error::codes::MEMORY_ERROR,
+                        kiln_error::Error::new(
+                            kiln_error::ErrorCategory::Memory,
+                            kiln_error::codes::MEMORY_ERROR,
                             "Failed to push max limit bytes",
                         )
                     })?;
                 }
             } else {
                 bytes.push(0).map_err(|_| {
-                    wrt_error::Error::runtime_execution_error("Failed to push no-max-limit flag")
+                    kiln_error::Error::runtime_execution_error("Failed to push no-max-limit flag")
                 })?;
             }
             // Encode flags
             bytes.push(self.shared as u8).map_err(|_| {
-                wrt_error::Error::new(
-                    wrt_error::ErrorCategory::Memory,
-                    wrt_error::codes::MEMORY_ERROR,
+                kiln_error::Error::new(
+                    kiln_error::ErrorCategory::Memory,
+                    kiln_error::codes::MEMORY_ERROR,
                     "Failed to push limit flag",
                 )
             })?;
             bytes.push(self.memory64 as u8).map_err(|_| {
-                wrt_error::Error::runtime_execution_error("Failed to push memory64 flag")
+                kiln_error::Error::runtime_execution_error("Failed to push memory64 flag")
             })?;
-            Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Runtime,
-                wrt_error::codes::UNSUPPORTED_OPERATION,
+            Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Runtime,
+                kiln_error::codes::UNSUPPORTED_OPERATION,
                 "Limits encoding not supported",
             ))
         }
@@ -262,7 +262,7 @@ impl Limits {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() < 10 {
             // 8 for min + 1 for max flag + 1 for shared
-            return Err(wrt_error::Error::runtime_execution_error(
+            return Err(kiln_error::Error::runtime_execution_error(
                 "Insufficient bytes for limit deserialization: minimum 10 bytes required",
             ));
         }
@@ -275,9 +275,9 @@ impl Limits {
         let max = if bytes[offset] != 0 {
             offset += 1;
             if bytes.len() < offset + 8 {
-                return Err(wrt_error::Error::new(
-                    wrt_error::ErrorCategory::Validation,
-                    wrt_error::codes::PARSE_ERROR,
+                return Err(kiln_error::Error::new(
+                    kiln_error::ErrorCategory::Validation,
+                    kiln_error::codes::PARSE_ERROR,
                     "Insufficient bytes for max limit value deserialization",
                 ));
             }
@@ -299,7 +299,7 @@ impl Limits {
         };
 
         if bytes.len() < offset + 2 {
-            return Err(wrt_error::Error::runtime_execution_error(
+            return Err(kiln_error::Error::runtime_execution_error(
                 "Insufficient bytes for flags",
             ));
         }
@@ -317,8 +317,8 @@ impl Limits {
 }
 
 // Implement Checksummable trait for Limits
-impl wrt_foundation::traits::Checksummable for Limits {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Limits {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.min.to_le_bytes());
         if let Some(max) = self.max {
             checksum.update_slice(&[1]);
@@ -332,11 +332,11 @@ impl wrt_foundation::traits::Checksummable for Limits {
 }
 
 // Implement FromBytes trait for Limits
-impl wrt_foundation::traits::FromBytes for Limits {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for Limits {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read the minimum size (8 bytes)
         let min = reader.read_u64_le()?;
 
@@ -358,18 +358,18 @@ impl wrt_foundation::traits::FromBytes for Limits {
 }
 
 // Implement ToBytes trait for Limits
-impl wrt_foundation::traits::ToBytes for Limits {
+impl kiln_foundation::traits::ToBytes for Limits {
     fn serialized_size(&self) -> usize {
         8 + if self.max.is_some() { 1 + 8 } else { 1 } + 2 // min + max_flag +
                                                            // max + shared +
                                                            // memory64
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write the minimum size (8 bytes)
         writer.write_all(&self.min.to_le_bytes())?;
 

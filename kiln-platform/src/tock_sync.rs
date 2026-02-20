@@ -12,7 +12,7 @@ use core::{
     time::Duration,
 };
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 use crate::sync::FutexLike;
 

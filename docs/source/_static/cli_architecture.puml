@@ -1,6 +1,6 @@
 @startuml
 
-package "WRTD CLI" {
+package "KILND CLI" {
   package "Command Line Interface" {
     [Argument Parser] as ArgParser
     [Command Router] as CmdRouter

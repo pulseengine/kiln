@@ -9,9 +9,9 @@ use alloc::boxed::Box;
 #[cfg(feature = "std")]
 use std::{boxed::Box, collections::HashMap, format, string::String, vec::Vec};
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedString, budget_aware_provider::CrateId, collections::StaticVec as BoundedVec,
     safe_managed_alloc, safe_memory::NoStdProvider,
 };
@@ -20,7 +20,7 @@ use crate::prelude::*;
 
 // Tracing imports for structured logging
 #[cfg(feature = "tracing")]
-use wrt_foundation::tracing::{trace, warn as tracing_warn};
+use kiln_foundation::tracing::{trace, warn as tracing_warn};
 
 // Type aliases for no_std environment with proper generics
 #[cfg(not(feature = "std"))]
@@ -28,7 +28,7 @@ type String = BoundedString<256>;
 #[cfg(not(feature = "std"))]
 type Vec<T> = BoundedVec<T, 256>;
 #[cfg(not(feature = "std"))]
-type HashMap<K, V> = wrt_foundation::collections::StaticMap<K, V, 64>;
+type HashMap<K, V> = kiln_foundation::collections::StaticMap<K, V, 64>;
 
 use crate::{
     components::{
@@ -206,7 +206,7 @@ impl Default for ComponentMetadata {
         }
         #[cfg(not(feature = "std"))]
         {
-            use wrt_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
+            use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
 
             let name_provider = safe_managed_alloc!(1024, CrateId::Component)
                 .unwrap_or_else(|_| panic!("Failed to allocate memory for ComponentMetadata name"));
@@ -267,7 +267,7 @@ impl ComponentLinker {
     #[cfg(feature = "std")]
     pub fn link_imports(
         &mut self,
-        imports: &[wrt_format::component::Import],
+        imports: &[kiln_format::component::Import],
     ) -> Result<Vec<crate::instantiation::ResolvedImport>> {
         let mut resolved = Vec::with_capacity(imports.len());
 
@@ -340,7 +340,7 @@ impl ComponentLinker {
     fn resolve_from_internal(
         &self,
         name: &str,
-        import: &wrt_format::component::Import,
+        import: &kiln_format::component::Import,
     ) -> Result<Option<crate::instantiation::ResolvedImport>> {
         // Check if any registered component exports this interface
         for (component_id, component) in &self.components {
@@ -383,10 +383,10 @@ impl ComponentLinker {
     #[cfg(feature = "std")]
     fn check_import_export_compatibility(
         &self,
-        import: &wrt_format::component::Import,
+        import: &kiln_format::component::Import,
         export: &ComponentExport,
     ) -> bool {
-        use wrt_format::component::ExternType;
+        use kiln_format::component::ExternType;
 
         // Check kind compatibility first using the import's type (ty field)
         match (&import.ty, &export.export_type) {
@@ -423,14 +423,14 @@ impl ComponentLinker {
         export: &ComponentExport,
     ) -> Result<crate::instantiation::ExportValue> {
         use crate::bounded_component_infra::ComponentProvider;
-        use crate::prelude::{WrtComponentType, WrtComponentValue};
+        use crate::prelude::{KilnComponentType, KilnComponentValue};
 
         match &export.export_type {
             ExportType::Function(_signature) => {
                 // Create a FunctionExport from the signature
                 // Use the actual index from the parsed export
                 let func_export = crate::instantiation::FunctionExport {
-                    signature: WrtComponentType::unit(ComponentProvider::default())?,
+                    signature: KilnComponentType::unit(ComponentProvider::default())?,
                     index: export.index, // Use the actual function index from parsed export
                 };
                 Ok(crate::instantiation::ExportValue::Function(func_export))
@@ -438,25 +438,25 @@ impl ComponentLinker {
             ExportType::Memory(_mem_config) => {
                 // Memory exports are handled differently - create a Value placeholder
                 Ok(crate::instantiation::ExportValue::Value(
-                    WrtComponentValue::Unit,
+                    KilnComponentValue::Unit,
                 ))
             },
             ExportType::Table { .. } => {
                 // Table exports - placeholder for now
                 Ok(crate::instantiation::ExportValue::Value(
-                    WrtComponentValue::Unit,
+                    KilnComponentValue::Unit,
                 ))
             },
             ExportType::Global { .. } => {
                 // Global exports - placeholder for now
                 Ok(crate::instantiation::ExportValue::Value(
-                    WrtComponentValue::Unit,
+                    KilnComponentValue::Unit,
                 ))
             },
             ExportType::Type(_) => {
                 // Type exports
                 Ok(crate::instantiation::ExportValue::Type(
-                    WrtComponentType::unit(ComponentProvider::default())?,
+                    KilnComponentType::unit(ComponentProvider::default())?,
                 ))
             },
         }
@@ -594,7 +594,7 @@ impl ComponentLinker {
         self.next_instance_id += 1;
 
         // Create Component from definition (using new constructor)
-        let mut comp = Component::new(crate::components::component::WrtComponentType::default());
+        let mut comp = Component::new(crate::components::component::KilnComponentType::default());
 
         // Set the component ID
         #[cfg(feature = "std")]
@@ -611,9 +611,9 @@ impl ComponentLinker {
 
         // Create ComponentInstance
         let mut instance = ComponentInstance {
-            #[cfg(feature = "wrt-execution")]
+            #[cfg(feature = "kiln-execution")]
             runtime_engine: None,
-            #[cfg(feature = "wrt-execution")]
+            #[cfg(feature = "kiln-execution")]
             main_instance_handle: None,
             id: instance_id,
             component: comp,
@@ -626,13 +626,13 @@ impl ComponentLinker {
             #[cfg(not(feature = "std"))]
             type_index: (),
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            functions: wrt_foundation::allocator::WrtVec::new(),
+            functions: kiln_foundation::allocator::KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             functions: Vec::new(),
             #[cfg(not(feature = "std"))]
             functions: BoundedVec::new(),
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            imports: wrt_foundation::allocator::WrtVec::new(),
+            imports: kiln_foundation::allocator::KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             imports: Vec::new(),
             #[cfg(not(feature = "std"))]
@@ -641,7 +641,7 @@ impl ComponentLinker {
                 BoundedVec::new()
             },
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            exports: wrt_foundation::allocator::WrtVec::new(),
+            exports: kiln_foundation::allocator::KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             exports: Vec::new(),
             #[cfg(not(feature = "std"))]
@@ -650,7 +650,7 @@ impl ComponentLinker {
                 BoundedVec::new()
             },
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            resource_tables: wrt_foundation::allocator::WrtVec::new(),
+            resource_tables: kiln_foundation::allocator::KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             resource_tables: Vec::new(),
             #[cfg(not(feature = "std"))]
@@ -659,7 +659,7 @@ impl ComponentLinker {
                 BoundedVec::new()
             },
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            module_instances: wrt_foundation::allocator::WrtVec::new(),
+            module_instances: kiln_foundation::allocator::KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             module_instances: Vec::new(),
             #[cfg(not(feature = "std"))]
@@ -668,7 +668,7 @@ impl ComponentLinker {
                 BoundedVec::new()
             },
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            nested_component_instances: wrt_foundation::allocator::WrtVec::new(),
+            nested_component_instances: kiln_foundation::allocator::KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             nested_component_instances: Vec::new(),
             #[cfg(not(feature = "std"))]
@@ -679,13 +679,13 @@ impl ComponentLinker {
         #[cfg(feature = "std")]
         for resolved in resolved_imports {
             instance.imports.push(crate::instantiation::ResolvedImport::Value(
-                crate::prelude::WrtComponentValue::Unit,
+                crate::prelude::KilnComponentValue::Unit,
             ));
         }
         #[cfg(not(feature = "std"))]
         for resolved in resolved_imports {
             let _ = instance.imports.push(crate::instantiation::ResolvedImport::Value(
-                crate::prelude::WrtComponentValue::Unit,
+                crate::prelude::KilnComponentValue::Unit,
             ));
         }
 
@@ -736,7 +736,7 @@ impl ComponentLinker {
 
     /// Parse a component binary to extract exports, imports, and metadata.
     ///
-    /// In std mode with the decoder feature, this uses the real wrt-decoder to parse
+    /// In std mode with the decoder feature, this uses the real kiln-decoder to parse
     /// the component binary. In no_std mode, component parsing is not supported.
     fn parse_component_binary(
         &self,
@@ -774,7 +774,7 @@ impl ComponentLinker {
         }
     }
 
-    /// Parse component using the real wrt-decoder
+    /// Parse component using the real kiln-decoder
     #[cfg(all(feature = "std", feature = "decoder"))]
     fn parse_component_with_decoder(
         &self,
@@ -787,10 +787,10 @@ impl ComponentLinker {
         ),
         Error,
     > {
-        use wrt_format::component::{CoreSort, Sort};
+        use kiln_format::component::{CoreSort, Sort};
 
         // Decode the component binary
-        let decoded = wrt_decoder::component::decode_component(binary)?;
+        let decoded = kiln_decoder::component::decode_component(binary)?;
 
         // Convert decoded exports to ComponentExport
         let mut exports = Vec::with_capacity(decoded.exports.len());
@@ -842,10 +842,10 @@ impl ComponentLinker {
     #[cfg(all(feature = "std", feature = "decoder"))]
     fn sort_to_export_type(
         &self,
-        sort: &wrt_format::component::Sort,
-        ty: &Option<wrt_format::component::ExternType>,
+        sort: &kiln_format::component::Sort,
+        ty: &Option<kiln_format::component::ExternType>,
     ) -> ExportType {
-        use wrt_format::component::{CoreSort, ExternType as FormatExternType, Sort};
+        use kiln_format::component::{CoreSort, ExternType as FormatExternType, Sort};
 
         match sort {
             Sort::Function => {
@@ -897,8 +897,8 @@ impl ComponentLinker {
 
     /// Convert ExternType to ImportType
     #[cfg(all(feature = "std", feature = "decoder"))]
-    fn extern_type_to_import_type(&self, ty: &wrt_format::component::ExternType) -> ImportType {
-        use wrt_format::component::ExternType as FormatExternType;
+    fn extern_type_to_import_type(&self, ty: &kiln_format::component::ExternType) -> ImportType {
+        use kiln_format::component::ExternType as FormatExternType;
 
         match ty {
             FormatExternType::Function { params, results } => {
@@ -927,8 +927,8 @@ impl ComponentLinker {
     #[cfg(all(feature = "std", feature = "decoder"))]
     fn convert_function_type(
         &self,
-        params: &[(String, wrt_format::component::FormatValType)],
-        results: &[wrt_format::component::FormatValType],
+        params: &[(String, kiln_format::component::FormatValType)],
+        results: &[kiln_format::component::FormatValType],
     ) -> FunctionSignature {
         let param_types: Vec<crate::canonical_abi::ComponentType> = params
             .iter()
@@ -948,9 +948,9 @@ impl ComponentLinker {
     #[cfg(all(feature = "std", feature = "decoder"))]
     fn format_val_type_to_component_type(
         &self,
-        vt: &wrt_format::component::FormatValType,
+        vt: &kiln_format::component::FormatValType,
     ) -> crate::canonical_abi::ComponentType {
-        use wrt_format::component::FormatValType;
+        use kiln_format::component::FormatValType;
 
         match vt {
             FormatValType::Bool => crate::canonical_abi::ComponentType::Bool,
@@ -1037,7 +1037,7 @@ impl ComponentLinker {
                 if self.is_compatible_import_export(import, export)? {
                     // Return a placeholder resolved import (actual resolution would be more complex)
                     return Ok(crate::instantiation::ResolvedImport::Value(
-                        crate::prelude::WrtComponentValue::Unit,
+                        crate::prelude::KilnComponentValue::Unit,
                     ));
                 }
             }
@@ -1127,7 +1127,7 @@ impl LinkGraph {
         let node_index = self.find_node_index(component_id).ok_or_else(|| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::RESOURCE_NOT_FOUND,
+                kiln_error::codes::RESOURCE_NOT_FOUND,
                 "Component not found in graph",
             )
         })?;

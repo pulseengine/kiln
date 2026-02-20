@@ -196,7 +196,7 @@ fn verify_context_isolation() {
 /// Property: All errors are properly categorized
 #[kani::proof]
 fn verify_error_categorization() {
-    use wrt_error::{
+    use kiln_error::{
         Error,
         ErrorCategory,
     };

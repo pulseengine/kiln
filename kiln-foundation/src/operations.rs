@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Operation Tracking and Fuel Metering
 // SW-REQ-ID: REQ_007
 // SW-REQ-ID: REQ_003
@@ -21,15 +21,15 @@ use core::sync::atomic::{
     Ordering,
 };
 
-use wrt_error::Error as WrtError; // Added for the Result return type
-use wrt_error::Result; // Use WrtOnce from wrt-sync crate
-use wrt_sync::once::WrtOnce;
+use kiln_error::Error as KilnError; // Added for the Result return type
+use kiln_error::Result; // Use KilnOnce from kiln-sync crate
+use kiln_sync::once::KilnOnce;
 
 use crate::traits::importance; // Added this import
 use crate::verification::VerificationLevel;
 
 // Global operation counter for use when a local counter isn't available
-static GLOBAL_COUNTER: WrtOnce<Counter> = WrtOnce::new();
+static GLOBAL_COUNTER: KilnOnce<Counter> = KilnOnce::new();
 
 /// Enum representing different types of operations that can be tracked
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -257,7 +257,7 @@ impl Type {
     pub fn fuel_cost_for_operation(
         op_type: Type,
         verification_level: VerificationLevel,
-    ) -> wrt_error::Result<u64> {
+    ) -> kiln_error::Result<u64> {
         let base_cost = u64::from(op_type.cost());
 
         // Adjust cost based on verification level using scaled integer math

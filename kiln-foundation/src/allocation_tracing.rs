@@ -15,7 +15,7 @@
 //! Enable with `--features allocation-tracing`:
 //!
 //! ```rust,ignore
-//! use wrt_foundation::allocation_tracing::{trace_alloc, Phase};
+//! use kiln_foundation::allocation_tracing::{trace_alloc, Phase};
 //!
 //! // In your allocation site:
 //! trace_alloc!(Phase::Decode, "streaming_decoder:405", "func_params", param_count);

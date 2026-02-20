@@ -1,7 +1,7 @@
 //! Value compatibility layer for WASI components
 //!
 //! This module provides a simplified Value enum that matches the interface
-//! expected by WASI components while being compatible with wrt-foundation's
+//! expected by WASI components while being compatible with kiln-foundation's
 //! component value system.
 
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
@@ -13,11 +13,11 @@ use std::string::String;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use wrt_foundation::prelude::*;
+use kiln_foundation::prelude::*;
 #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 type Box<T> = T; // Simple workaround for no_std without alloc
 #[cfg(not(feature = "std"))]
-type WasiProvider = wrt_foundation::safe_memory::NoStdProvider<1024>;
+type WasiProvider = kiln_foundation::safe_memory::NoStdProvider<1024>;
 #[cfg(not(feature = "std"))]
 type WasiString = BoundedString<256, WasiProvider>;
 #[cfg(not(feature = "std"))]
@@ -26,7 +26,7 @@ type WasiVec<T> = BoundedVec<T, 32, WasiProvider>;
 /// Simplified Value enum for WASI component interface
 ///
 /// This provides the variants that WASI code expects while being
-/// compatible with wrt-foundation's type system.
+/// compatible with kiln-foundation's type system.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     /// Boolean value
@@ -94,8 +94,8 @@ impl Default for Value {
 impl Eq for Value {}
 
 // Implement required traits for BoundedVec compatibility
-impl wrt_foundation::traits::Checksummable for Value {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Value {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         // Simple checksum based on variant
         let discriminant = match self {
             Value::Bool(_) => 0u8,
@@ -120,7 +120,7 @@ impl wrt_foundation::traits::Checksummable for Value {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Value {
+impl kiln_foundation::traits::ToBytes for Value {
     fn serialized_size(&self) -> usize {
         // Simplified size calculation
         1 + match self {
@@ -131,11 +131,11 @@ impl wrt_foundation::traits::ToBytes for Value {
         }
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Simplified serialization
         let discriminant = match self {
             Value::Bool(_) => 0u8,
@@ -161,18 +161,18 @@ impl wrt_foundation::traits::ToBytes for Value {
             Value::Bool(v) => writer.write_u8(u8::from(*v)),
             Value::U8(v) => writer.write_u8(*v),
             // Per CLAUDE.md: fail loud and early for unsupported types
-            _ => Err(wrt_error::Error::not_implemented_error(
+            _ => Err(kiln_error::Error::not_implemented_error(
                 "ToBytes not implemented for this Value variant"
             )),
         }
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Value {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Value {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Simplified deserialization
         let discriminant = reader.read_u8()?;
         match discriminant {
@@ -187,7 +187,7 @@ impl wrt_foundation::traits::FromBytes for Value {
                 Ok(Value::U32(b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)))
             },
             // Per CLAUDE.md: fail loud and early for unknown discriminants
-            _ => Err(wrt_error::Error::parse_error(
+            _ => Err(kiln_error::Error::parse_error(
                 "Unknown Value discriminant in FromBytes deserialization"
             )),
         }

@@ -1,9 +1,9 @@
-//! WRT Memory Initialization Pattern
+//! KilnMemory Initialization Pattern
 //!
 //! This module demonstrates the recommended pattern for initializing 
-//! the WRT runtime with strict memory budget enforcement.
+//! the Kilnruntime with strict memory budget enforcement.
 
-use wrt_foundation::{
+use kiln_foundation::{
     memory_budget::{initialize_global_budget, global_budget}, 
     memory_enforcement::{pre_allocate_component_memory, lock_memory_system},
     safety_system::SafetyLevel,
@@ -11,7 +11,7 @@ use wrt_foundation::{
     Result, Error, ErrorCategory, codes,
 };
 
-use wrt_platform::comprehensive_limits::discover_platform_limits;
+use kiln_platform::comprehensive_limits::discover_platform_limits;
 
 /// Runtime initialization phase
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,7 +26,7 @@ pub enum InitializationPhase {
     Runtime,
 }
 
-/// WRT Runtime Memory Manager
+/// KilnRuntime Memory Manager
 pub struct RuntimeMemoryManager {
     phase: InitializationPhase,
     safety_level: SafetyLevel,
@@ -52,7 +52,7 @@ impl RuntimeMemoryManager {
         let total_budget = platform_limits.max_total_memory;
         initialize_global_budget(total_budget, safety_level)?;
 
-        println!("WRT Memory Manager initialized:");
+        println!("KilnMemory Manager initialized:");
         println!("  Platform: {:?}", platform_limits.platform_id);
         println!("  Total Budget: {} bytes ({} MB)", total_budget, total_budget / (1024 * 1024);
         println!("  Safety Level: {:?}", safety_level);
@@ -186,14 +186,14 @@ impl RuntimeExecutionManager {
     /// Verify system integrity (can be called periodically)
     pub fn verify_system_integrity(&self) -> Result<()> {
         // Verify memory system is still locked
-        if !wrt_foundation::memory_enforcement::is_memory_system_locked() {
+        if !kiln_foundation::memory_enforcement::is_memory_system_locked() {
             return Err(Error::safety_violation("Memory system lock compromised";
         }
 
         // Additional integrity checks based on safety level
         match self.safety_level.asil_level() {
-            wrt_foundation::safety_system::AsildLevel::C | 
-            wrt_foundation::safety_system::AsildLevel::D => {
+            kiln_foundation::safety_system::AsildLevel::C | 
+            kiln_foundation::safety_system::AsildLevel::D => {
                 // Enhanced verification for highest safety levels
                 self.verify_component_integrity()?;
             }

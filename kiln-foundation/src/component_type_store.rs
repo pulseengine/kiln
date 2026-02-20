@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -7,7 +7,7 @@
 //! such as `ComponentType`, `InstanceType`, etc. This helps in managing their
 //! storage in a `no_alloc` environment.
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     Result,
@@ -66,7 +66,7 @@ impl ToBytes for TypeRef {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, _provider) // u32's to_bytes_with_provider
     }
 }
@@ -75,7 +75,7 @@ impl FromBytes for TypeRef {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let val = u32::from_bytes_with_provider(reader, _provider)?; // u32's from_bytes_with_provider
         Ok(TypeRef(val))
     }
@@ -97,7 +97,7 @@ pub struct ComponentTypeStore<P: MemoryProvider + Clone + Default + Eq> {
 
 impl<P: MemoryProvider + Clone + Default + Eq> ComponentTypeStore<P> {
     /// Creates a new, empty `ComponentTypeStore`.
-    pub fn new(provider: P) -> wrt_error::Result<Self>
+    pub fn new(provider: P) -> kiln_error::Result<Self>
     where
         P: Clone, // This is now redundant due to the struct bound, but harmless
     {
@@ -107,7 +107,7 @@ impl<P: MemoryProvider + Clone + Default + Eq> ComponentTypeStore<P> {
             })?,
             instance_types: BoundedVec::new(provider.clone()).map_err(|e| {
                 Error::new(
-                    wrt_error::ErrorCategory::Memory,
+                    kiln_error::ErrorCategory::Memory,
                     codes::MEMORY_ALLOCATION_ERROR,
                     "Failed to allocate memory for instance types",
                 )
@@ -120,11 +120,11 @@ impl<P: MemoryProvider + Clone + Default + Eq> ComponentTypeStore<P> {
     }
 
     /// Adds a `ComponentType` to the store and returns a `TypeRef` to it.
-    pub fn add_component_type(&mut self, ctype: ComponentType<P>) -> wrt_error::Result<TypeRef> {
+    pub fn add_component_type(&mut self, ctype: ComponentType<P>) -> kiln_error::Result<TypeRef> {
         let index = self.component_types.len() as u32;
         self.component_types.push(ctype).map_err(|e| {
             Error::new(
-                wrt_error::ErrorCategory::Resource,
+                kiln_error::ErrorCategory::Resource,
                 codes::RESOURCE_LIMIT_EXCEEDED,
                 "Component type store capacity exceeded",
             )
@@ -142,7 +142,7 @@ impl<P: MemoryProvider + Clone + Default + Eq> ComponentTypeStore<P> {
     }
 
     /// Adds an `InstanceType` to the store and returns a `TypeRef` to it.
-    pub fn add_instance_type(&mut self, itype: InstanceType<P>) -> wrt_error::Result<TypeRef> {
+    pub fn add_instance_type(&mut self, itype: InstanceType<P>) -> kiln_error::Result<TypeRef> {
         let index = self.instance_types.len() as u32;
         self.instance_types
             .push(itype)
@@ -163,11 +163,11 @@ impl<P: MemoryProvider + Clone + Default + Eq> ComponentTypeStore<P> {
     pub fn add_core_module_type(
         &mut self,
         cmtype: CoreModuleType<P>,
-    ) -> wrt_error::Result<TypeRef> {
+    ) -> kiln_error::Result<TypeRef> {
         let index = self.core_module_types.len() as u32;
         self.core_module_types.push(cmtype).map_err(|_e| {
             Error::new(
-                wrt_error::ErrorCategory::Resource,
+                kiln_error::ErrorCategory::Resource,
                 codes::RESOURCE_LIMIT_EXCEEDED,
                 "Core module type store capacity exceeded",
             )
@@ -197,7 +197,7 @@ where
         &self,
         writer: &mut WriteStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.component_types.to_bytes_with_provider(writer, stream_provider)?;
         self.instance_types.to_bytes_with_provider(writer, stream_provider)?;
         self.core_module_types.to_bytes_with_provider(writer, stream_provider)?;
@@ -214,7 +214,7 @@ where
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Create a new store. The provider for the store itself (P) must come from
         // the context where ComponentTypeStore is being deserialized.
         // For FromBytes, we often rely on P::default() if no other provider is

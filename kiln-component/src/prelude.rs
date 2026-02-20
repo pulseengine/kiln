@@ -1,8 +1,8 @@
-//! Prelude module for wrt-component
+//! Prelude module for kiln-component
 //!
 //! This module provides a unified set of imports for both std and no_std
 //! environments. It re-exports commonly used types and traits to ensure
-//! consistency across all crates in the WRT project and simplify imports in
+//! consistency across all crates in the Kiln project and simplify imports in
 //! individual modules.
 
 // Core imports for std environments
@@ -46,17 +46,17 @@ pub use std::{
     vec::Vec,
 };
 
-// Always use wrt_sync for consistent Mutex/RwLock behavior across std/no_std
+// Always use kiln_sync for consistent Mutex/RwLock behavior across std/no_std
 #[cfg(feature = "std")]
-pub use wrt_sync::{Mutex, RwLock};
+pub use kiln_sync::{Mutex, RwLock};
 
 #[cfg(feature = "decoder")]
-pub use wrt_decoder::decode_no_alloc;
+pub use kiln_decoder::decode_no_alloc;
 #[cfg(feature = "decoder")]
-pub use wrt_decoder::decoder_no_alloc;
-// Re-export from wrt-decoder
+pub use kiln_decoder::decoder_no_alloc;
+// Re-export from kiln-decoder
 #[cfg(feature = "decoder")]
-pub use wrt_decoder::{
+pub use kiln_decoder::{
     component::decode::decode_component,
     // Note: component::parse is private, use decode_component() instead
     component::validation,
@@ -68,41 +68,41 @@ pub type DecodedComponent = u32;
 // Placeholder for ResourceHandle - seems to be defined in multiple places
 pub type ResourceHandle = u32;
 // Note: sections moved to decoder_no_alloc or not available
-// Re-export from wrt-error
-pub use wrt_error::{Error, ErrorCategory, Result, codes, kinds};
+// Re-export from kiln-error
+pub use kiln_error::{Error, ErrorCategory, Result, codes, kinds};
 
-// Re-export from wrt-format
-pub use wrt_format::component::ValType as FormatValType;
+// Re-export from kiln-format
+pub use kiln_format::component::ValType as FormatValType;
 // Import component builders and resource builders with proper feature gates
 #[cfg(feature = "std")]
-pub use wrt_foundation::builder::ResourceItemBuilder;
+pub use kiln_foundation::builder::ResourceItemBuilder;
 #[cfg(feature = "std")]
-pub use wrt_foundation::component_builder::{
+pub use kiln_foundation::component_builder::{
     ComponentTypeBuilder, ExportBuilder, ImportBuilder, NamespaceBuilder,
 };
 #[cfg(not(feature = "std"))]
-pub use wrt_foundation::component_value::{ComponentValue, ValType};
+pub use kiln_foundation::component_value::{ComponentValue, ValType};
 // Re-export component_value for both std and no_std
 #[cfg(feature = "std")]
-pub use wrt_foundation::MemoryProvider;
+pub use kiln_foundation::MemoryProvider;
 #[cfg(feature = "std")]
-pub use wrt_foundation::component_value::{ComponentValue, ValType};
+pub use kiln_foundation::component_value::{ComponentValue, ValType};
 // Binary std/no_std choice - remove conflicting type aliases
 #[cfg(not(feature = "std"))]
-pub use wrt_foundation::{
+pub use kiln_foundation::{
     MemoryProvider,
     bounded_collections::{BoundedMap, BoundedSet},
 };
 
 // Unified type aliases for std/no_std compatibility
 #[cfg(not(feature = "std"))]
-pub type ComponentVec<T> = wrt_foundation::collections::StaticVec<T, 64>;
+pub type ComponentVec<T> = kiln_foundation::collections::StaticVec<T, 64>;
 
 #[cfg(feature = "std")]
 pub type ComponentVec<T> = Vec<T>;
 
-// Re-export from wrt-foundation
-pub use wrt_foundation::{
+// Re-export from kiln-foundation
+pub use kiln_foundation::{
     // Common types
     ExternType,
     bounded::{BoundedStack, BoundedString, BoundedVec, MAX_WASM_NAME_LENGTH},
@@ -123,15 +123,15 @@ pub use wrt_foundation::{
     // Verification types
     verification::VerificationLevel,
 };
-// Re-export from wrt-host
-pub use wrt_host::{
+// Re-export from kiln-host
+pub use kiln_host::{
     builder::HostBuilder,
     callback::{CallbackRegistry, CallbackType},
     function::{CloneableFn, HostFunctionHandler},
     host::BuiltinHost,
 };
-// Re-export from wrt-intercept - commented out until available
-// pub use wrt_intercept::{
+// Re-export from kiln-intercept - commented out until available
+// pub use kiln_intercept::{
 //     // Builtin interceptors
 //     builtins::{BeforeBuiltinResult, BuiltinInterceptor, BuiltinSerialization,
 // InterceptContext},     InterceptionResult,
@@ -143,7 +143,7 @@ pub use wrt_host::{
 // };
 // Import synchronization primitives for no_std
 #[cfg(not(feature = "std"))]
-pub use wrt_sync::{Mutex, RwLock};
+pub use kiln_sync::{Mutex, RwLock};
 
 // Include debug logging macro (crate-internal only)
 // pub use crate::debug_println;
@@ -258,22 +258,22 @@ pub use crate::{
 pub use crate::bounded_component_infra::ComponentProvider;
 
 /// Unified ComponentValue type - generic over provider
-pub type WrtComponentValue<P> = ComponentValue<P>;
+pub type KilnComponentValue<P> = ComponentValue<P>;
 
 /// Unified ValType - generic over provider
-pub type WrtValType<P> = wrt_foundation::component_value::ValType<P>;
+pub type KilnValType<P> = kiln_foundation::component_value::ValType<P>;
 
 /// Unified ComponentType - generic over provider
-pub type WrtComponentType<P> = wrt_foundation::component::ComponentType<P>;
+pub type KilnComponentType<P> = kiln_foundation::component::ComponentType<P>;
 
 /// Unified ExternType - generic over provider
-pub type WrtExternType<P> = wrt_foundation::ExternType<P>;
+pub type KilnExternType<P> = kiln_foundation::ExternType<P>;
 
-// Re-export from wrt_runtime for types used in wrt-component
-pub use wrt_runtime::stackless::EngineState;
+// Re-export from kiln_runtime for types used in kiln-component
+pub use kiln_runtime::stackless::EngineState;
 
 // Type aliases for compatibility
-pub type Limits = wrt_foundation::types::Limits;
+pub type Limits = kiln_foundation::types::Limits;
 
 // Re-export ExportKind from parser_integration (component-specific)
 // This is the component model ExportKind with index fields

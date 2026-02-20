@@ -5,7 +5,7 @@
 
 use core::fmt::{self, Display};
 
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId,
     bounded::BoundedString,
     collections::StaticVec as BoundedVec,
@@ -69,18 +69,18 @@ impl PartialEq for ErrorContext {
 impl Eq for ErrorContext {}
 
 impl Checksummable for ErrorContext {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.component_id.update_checksum(checksum);
         self.fuel_consumed.update_checksum(checksum);
     }
 }
 
 impl ToBytes for ErrorContext {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.component_id.to_bytes_with_provider(writer, provider)?;
         self.fuel_consumed.to_bytes_with_provider(writer, provider)?;
         Ok(())
@@ -88,10 +88,10 @@ impl ToBytes for ErrorContext {
 }
 
 impl FromBytes for ErrorContext {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        _reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        _reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -109,11 +109,11 @@ impl ErrorContext {
         let context_provider = safe_managed_alloc!(2048, CrateId::Component)?;
 
         let bounded_location = BoundedString::from_str_truncate(location).map_err(|_| {
-            wrt_error::Error::runtime_execution_error("Failed to create location string")
+            kiln_error::Error::runtime_execution_error("Failed to create location string")
         })?;
 
         let bounded_context = BoundedString::from_str_truncate(context).map_err(|_| {
-            wrt_error::Error::runtime_execution_error("Failed to create context string")
+            kiln_error::Error::runtime_execution_error("Failed to create context string")
         })?;
 
         Ok(Self {

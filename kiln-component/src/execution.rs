@@ -4,7 +4,7 @@
 //! component operations, specifically supporting the start function
 //! requirements.
 
-use wrt_error::kinds::{ExecutionLimitExceeded, ExecutionTimeoutError};
+use kiln_error::kinds::{ExecutionLimitExceeded, ExecutionTimeoutError};
 
 use crate::prelude::*;
 

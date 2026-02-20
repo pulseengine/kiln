@@ -2,13 +2,13 @@
 
 ## Overview
 
-This document describes the Platform Abstraction Interface (PAI) architecture implemented in wrt-runtime to achieve ASIL compliance and proper separation of concerns between platform-dependent and platform-independent code.
+This document describes the Platform Abstraction Interface (PAI) architecture implemented in kiln-runtime to achieve ASIL compliance and proper separation of concerns between platform-dependent and platform-independent code.
 
 ## Problem Statement
 
 The original architecture had several issues:
 
-1. **Direct Platform Dependencies**: Runtime modules directly imported platform-specific types from `wrt_platform::sync`
+1. **Direct Platform Dependencies**: Runtime modules directly imported platform-specific types from `kiln_platform::sync`
 2. **Missing Feature Gates**: Platform-specific code wasn't properly gated behind feature flags
 3. **Circular Dependencies**: Platform abstractions were scattered across multiple crates
 4. **ASIL Compliance Violations**: No clear boundary between safety-critical and platform-specific code
@@ -31,7 +31,7 @@ This module serves as the central abstraction layer:
 ```rust
 // Platform-agnostic atomic types with fallbacks
 #[cfg(feature = "platform-sync")]
-pub use wrt_platform::sync::{AtomicU32, AtomicU64, AtomicUsize};
+pub use kiln_platform::sync::{AtomicU32, AtomicU64, AtomicUsize};
 
 #[cfg(not(feature = "platform-sync"))]
 pub use self::atomic_fallback::{AtomicU32, AtomicU64, AtomicUsize};
@@ -46,11 +46,11 @@ Features:
 
 ```toml
 # Platform features in Cargo.toml
-platform-sync = ["dep:wrt-platform", "wrt-platform?/std"]
-platform-macos = ["platform-sync", "wrt-platform?/platform-macos"]
-platform-linux = ["platform-sync", "wrt-platform?/platform-linux"]
-platform-qnx = ["platform-sync", "wrt-platform?/platform-qnx"]
-platform-embedded = ["dep:wrt-platform"] # Minimal support
+platform-sync = ["dep:kiln-platform", "kiln-platform?/std"]
+platform-macos = ["platform-sync", "kiln-platform?/platform-macos"]
+platform-linux = ["platform-sync", "kiln-platform?/platform-linux"]
+platform-qnx = ["platform-sync", "kiln-platform?/platform-qnx"]
+platform-embedded = ["dep:kiln-platform"] # Minimal support
 ```
 
 Benefits:
@@ -64,7 +64,7 @@ All runtime modules now import platform abstractions through the PAI:
 
 ```rust
 // Instead of:
-use wrt_platform::sync::{AtomicU32, AtomicU64};
+use kiln_platform::sync::{AtomicU32, AtomicU64};
 
 // Use:
 use crate::platform_stubs::{AtomicU32, AtomicU64, PlatformOrdering};
@@ -109,7 +109,7 @@ impl PlatformId {
 
 To adapt existing code to use PAI:
 
-1. Replace direct `wrt_platform` imports with `platform_stubs` imports
+1. Replace direct `kiln_platform` imports with `platform_stubs` imports
 2. Add appropriate feature gates for platform-specific code
 3. Provide fallbacks for pure no_std environments
 4. Test compilation in all ASIL modes
@@ -133,5 +133,5 @@ The following modules have been migrated to use PAI:
 Remaining work:
 - Complete migration of remaining platform-dependent modules
 - Add platform-specific tests
-- Implement full wrt-platform integration
+- Implement full kiln-platform integration
 - Verify ASIL compliance with build matrix

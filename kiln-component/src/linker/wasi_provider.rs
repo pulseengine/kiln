@@ -5,8 +5,8 @@
 
 use crate::bounded_component_infra::ComponentProvider;
 use crate::instantiation::{ExportValue, FunctionExport, InstanceImport};
-use crate::prelude::WrtComponentType;
-use wrt_error::Result;
+use crate::prelude::KilnComponentType;
+use kiln_error::Result;
 
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
@@ -149,7 +149,7 @@ impl WasiInstanceProvider {
         self.next_function_index += 1;
 
         let provider = ComponentProvider::default();
-        let signature = WrtComponentType::Unit(provider)?;
+        let signature = KilnComponentType::Unit(provider)?;
 
         let func_export = FunctionExport {
             signature,
@@ -164,12 +164,12 @@ impl WasiInstanceProvider {
 
         #[cfg(not(feature = "std"))]
         {
-            use wrt_foundation::bounded::BoundedString;
+            use kiln_foundation::bounded::BoundedString;
             let name = BoundedString::try_from_str("get-stdout")?;
             instance
                 .exports
                 .push((name, Box::new(ExportValue::Function(func_export))))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many exports"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many exports"))?;
         }
 
         #[cfg(feature = "std")]
@@ -302,7 +302,7 @@ impl WasiInstanceProvider {
         self.next_function_index += 1;
 
         let provider = ComponentProvider::default();
-        let signature = WrtComponentType::Unit(provider)?;
+        let signature = KilnComponentType::Unit(provider)?;
 
         let func_export = FunctionExport {
             signature,
@@ -317,12 +317,12 @@ impl WasiInstanceProvider {
 
         #[cfg(not(feature = "std"))]
         {
-            use wrt_foundation::bounded::BoundedString;
+            use kiln_foundation::bounded::BoundedString;
             let bounded_name = BoundedString::try_from_str(name)?;
             instance
                 .exports
                 .push((bounded_name, Box::new(ExportValue::Function(func_export))))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many exports"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many exports"))?;
         }
 
         #[cfg(feature = "std")]

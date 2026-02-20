@@ -7,7 +7,7 @@ Safety Requirements
    :align: right
    :alt: Safety Requirements Icon
 
-This document consolidates all safety requirements for PulseEngine (WRT Edition) as a Safety Element out of Context (SEooC). These requirements form the basis for safety mechanisms and verification activities.
+This document consolidates all safety requirements for PulseEngine (Kiln Edition) as a Safety Element out of Context (SEooC). These requirements form the basis for safety mechanisms and verification activities.
 
 .. warning::
    **Integration Note**: These requirements must be verified in the context of the 
@@ -398,15 +398,15 @@ Requirements Allocation
 
    * - Component
      - Allocated Requirements
-   * - wrt-runtime
+   * - kiln-runtime
      - REQ_SAFETY_*, REQ_MEM_SAFETY_*, REQ_TEMPORAL_*
-   * - wrt-foundation
+   * - kiln-foundation
      - REQ_MEM_SAFETY_*, REQ_RESOURCE_*, REQ_ERROR_*
-   * - wrt-decoder
+   * - kiln-decoder
      - REQ_VERIFY_001, REQ_DATAFLOW_*
-   * - wrt-instructions
+   * - kiln-instructions
      - REQ_TEMPORAL_001, REQ_DATAFLOW_001
-   * - wrt-component
+   * - kiln-component
      - REQ_CONFIG_*, REQ_DATAFLOW_002
 
 Standards Traceability

@@ -1,5 +1,5 @@
-// WRT - wrt-error
-// Module: WRT Error Kinds
+// Kiln - kiln-error
+// Module: Kiln Error Kinds
 // SW-REQ-ID: REQ_004
 // SW-REQ-ID: REQ_ERROR_001
 //

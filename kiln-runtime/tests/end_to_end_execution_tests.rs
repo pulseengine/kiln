@@ -8,18 +8,18 @@ use alloc::sync::Arc;
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     values::Value,
     Result,
 };
-use wrt_runtime::engine::{
+use kiln_runtime::engine::{
     CapabilityAwareEngine,
     CapabilityEngine,
     EnginePreset,
@@ -213,7 +213,7 @@ fn test_error_handling() -> Result<()> {
     assert!(result.is_err());
 
     // Test function call on non-existent instance
-    let fake_handle = wrt_runtime::engine::InstanceHandle::new();
+    let fake_handle = kiln_runtime::engine::InstanceHandle::new();
     let result = engine.execute(fake_handle, "test", &[]);
     assert!(result.is_err());
 

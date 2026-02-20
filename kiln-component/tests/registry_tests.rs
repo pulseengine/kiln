@@ -3,7 +3,7 @@
 /// These tests verify that the TypeConversionRegistry implementation
 /// works correctly both with simple types and with more complex
 /// domain-specific conversions.
-use wrt_component::type_conversion::{
+use kiln_component::type_conversion::{
     ConversionError, ConversionErrorKind, TypeConversionRegistry,
 };
 

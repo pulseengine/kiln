@@ -3,8 +3,8 @@
 //! This module provides the Export type for component exports.
 
 use crate::bounded_component_infra::ComponentProvider;
-use wrt_format::component::ExternType;
-use wrt_foundation::{
+use kiln_format::component::ExternType;
+use kiln_foundation::{
     ExternType as RuntimeExternType, ToString,
     traits::{Checksummable, FromBytes, ToBytes},
 };
@@ -57,22 +57,22 @@ impl Default for Export {
 
         #[cfg(feature = "std")]
         let func_value = FunctionValue {
-            ty: wrt_foundation::types::FuncType::new([], []).unwrap_or_default(),
+            ty: kiln_foundation::types::FuncType::new([], []).unwrap_or_default(),
             export_name: String::new(),
         };
 
         #[cfg(not(feature = "std"))]
         let func_value = {
-            use wrt_foundation::bounded::MAX_WASM_NAME_LENGTH;
-            use wrt_foundation::safe_memory::NoStdProvider;
+            use kiln_foundation::bounded::MAX_WASM_NAME_LENGTH;
+            use kiln_foundation::safe_memory::NoStdProvider;
 
             // Create function type using Default
-            let func_type = wrt_foundation::types::FuncType::default();
+            let func_type = kiln_foundation::types::FuncType::default();
 
             // Create export name using BoundedString
             let export_name_provider = NoStdProvider::<512>::default();
             let export_name =
-                wrt_foundation::BoundedString::<MAX_WASM_NAME_LENGTH>::from_str_truncate("")
+                kiln_foundation::BoundedString::<MAX_WASM_NAME_LENGTH>::from_str_truncate("")
                     .unwrap_or_else(|_| panic!("Failed to create default export name"));
 
             FunctionValue {
@@ -96,27 +96,27 @@ impl Default for Export {
 }
 
 impl Checksummable for Export {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.name.as_bytes().update_checksum(checksum);
     }
 }
 
 impl ToBytes for Export {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.name.len().to_bytes_with_provider(writer, _provider)?;
         Ok(())
     }
 }
 
 impl FromBytes for Export {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        _reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        _reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }

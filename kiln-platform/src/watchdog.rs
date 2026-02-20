@@ -30,14 +30,14 @@ use core::{
     time::Duration,
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_sync::{
-    WrtMutex,
-    WrtRwLock,
+use kiln_sync::{
+    KilnMutex,
+    KilnRwLock,
 };
 
 /// Watchdog configuration
@@ -93,7 +93,7 @@ struct WatchedTask {
     name:           String,
     _start_time:    u64, // Timestamp in milliseconds
     timeout:        Duration,
-    last_heartbeat: WrtMutex<u64>, // Timestamp in milliseconds
+    last_heartbeat: KilnMutex<u64>, // Timestamp in milliseconds
     action:         WatchdogAction,
     active:         AtomicBool,
 }
@@ -103,12 +103,12 @@ pub struct SoftwareWatchdog {
     /// Configuration
     config:          WatchdogConfig,
     /// Watched tasks
-    tasks:           Arc<WrtRwLock<BTreeMap<WatchedTaskId, Arc<WatchedTask>>>>,
+    tasks:           Arc<KilnRwLock<BTreeMap<WatchedTaskId, Arc<WatchedTask>>>>,
     /// Next task ID
     next_task_id:    AtomicU64,
     /// Watchdog thread handle
     #[cfg(feature = "std")]
-    watchdog_thread: WrtMutex<Option<std::thread::JoinHandle<()>>>,
+    watchdog_thread: KilnMutex<Option<std::thread::JoinHandle<()>>>,
     /// Running flag
     running:         Arc<AtomicBool>,
 }
@@ -118,10 +118,10 @@ impl SoftwareWatchdog {
     pub fn new(config: WatchdogConfig) -> Self {
         Self {
             config,
-            tasks: Arc::new(WrtRwLock::new(BTreeMap::new())),
+            tasks: Arc::new(KilnRwLock::new(BTreeMap::new())),
             next_task_id: AtomicU64::new(1),
             #[cfg(feature = "std")]
-            watchdog_thread: WrtMutex::new(None),
+            watchdog_thread: KilnMutex::new(None),
             running: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -222,7 +222,7 @@ impl SoftwareWatchdog {
             name: name.into(),
             _start_time: now,
             timeout: timeout.unwrap_or(self.config.default_timeout),
-            last_heartbeat: WrtMutex::new(now),
+            last_heartbeat: KilnMutex::new(now),
             action,
             active: AtomicBool::new(true),
         });

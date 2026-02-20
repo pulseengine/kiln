@@ -1,8 +1,8 @@
 [package]
-name = "wrt-panic"
+name = "kiln-panic"
 version.workspace = true
 edition.workspace = true
-description = "Panic handler for WRT - provides ASIL-B/D compliant panic handling"
+description = "Panic handler for Kiln - provides ASIL-B/D compliant panic handling"
 license.workspace = true
 repository.workspace = true
 keywords = ["panic", "no_std", "embedded", "safety-asil-b", "asil"]
@@ -16,7 +16,7 @@ categories = ["no-std", "embedded"]
 # std is built into Rust and doesn't need to be listed as a dependency
 
 [features]
-# Default features - pure no_std by default following WRT pattern
+# Default features - pure no_std by default following Kiln pattern
 default = []
 
 # Binary choice: std OR no_std (standalone panic handler)
@@ -48,7 +48,7 @@ safety-asil-d = ["safety-asil-c"]
 
 
 [lib]
-name = "wrt_panic"
+name = "kiln_panic"
 path = "src/lib.rs"
 
 [package.metadata.docs.rs]

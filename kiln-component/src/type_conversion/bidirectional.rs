@@ -1,18 +1,18 @@
 //! Bidirectional type conversion between format and runtime types
 //!
 //! This module provides comprehensive bidirectional conversion between
-//! `wrt_format::component` types and `wrt_foundation` types, ensuring type
+//! `kiln_format::component` types and `kiln_foundation` types, ensuring type
 //! compatibility across the system boundary.
 //!
 //! # Examples
 //!
 //! ```
-//! use wrt_component::type_conversion::bidirectional::{
+//! use kiln_component::type_conversion::bidirectional::{
 //!     format_to_runtime_extern_type, runtime_to_format_extern_type
 //! };
-//! use wrt_format::component::FormatValType;
-//! use wrt_format::component::WrtExternType as FormatExternType;
-//! use wrt_foundation::WrtExternType as RuntimeWrtExternType;
+//! use kiln_format::component::FormatValType;
+//! use kiln_format::component::KilnExternType as FormatExternType;
+//! use kiln_foundation::KilnExternType as RuntimeKilnExternType;
 //!
 //! // Convert a format function type to a runtime function type
 //! let format_func = FormatExternType::Function {
@@ -27,15 +27,15 @@
 //! ```
 
 // Explicitly import the types we need to avoid confusion
-use wrt_error::{
+use kiln_error::{
     Error, ErrorCategory, codes,
     kinds::{InvalidArgumentError, NotImplementedError},
 };
-use wrt_format::component::{
+use kiln_format::component::{
     ComponentTypeDefinition, ConstValue as FormatConstValue, ExternType as FormatExternType,
     FormatResourceOperation, FormatValType, ResourceRepresentation,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     ExternType as TypesExternType,
     component::{ComponentType, InstanceType},
     component_value::ValType as TypesValType,
@@ -46,15 +46,15 @@ use wrt_foundation::{
 
 // For no_std, override prelude's bounded::BoundedVec with StaticVec
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticVec as BoundedVec;
+use kiln_foundation::collections::StaticVec as BoundedVec;
 
 use crate::prelude::*;
 
 // Type aliases to ensure consistent generic parameters
-type WrtTypesValType<P> = WrtValType<P>; // Use prelude's ValType
-type TypesWrtExternType<P> = TypesExternType<P>;
-type WrtExternType<P> = TypesExternType<P>;
-// WrtComponentValue is already available from prelude
+type KilnTypesValType<P> = KilnValType<P>; // Use prelude's ValType
+type TypesKilnExternType<P> = TypesExternType<P>;
+type KilnExternType<P> = TypesExternType<P>;
+// KilnComponentValue is already available from prelude
 
 // Helper functions to handle type conversions with correct parameters
 
@@ -69,80 +69,80 @@ pub fn convert_format_valtype_to_valuetype(format_val_type: &FormatValType) -> R
     }
 }
 
-// Variant that accepts ValType (WrtTypesValType) for use at call sites
-pub fn convert_types_valtype_to_valuetype<P: wrt_foundation::MemoryProvider>(
-    val_type: &WrtTypesValType<P>,
+// Variant that accepts ValType (KilnTypesValType) for use at call sites
+pub fn convert_types_valtype_to_valuetype<P: kiln_foundation::MemoryProvider>(
+    val_type: &KilnTypesValType<P>,
 ) -> Result<ValueType> {
     match val_type {
-        WrtTypesValType::S32 => Ok(ValueType::I32),
-        WrtTypesValType::S64 => Ok(ValueType::I64),
-        WrtTypesValType::F32 => Ok(ValueType::F32),
-        WrtTypesValType::F64 => Ok(ValueType::F64),
+        KilnTypesValType::S32 => Ok(ValueType::I32),
+        KilnTypesValType::S64 => Ok(ValueType::I64),
+        KilnTypesValType::F32 => Ok(ValueType::F32),
+        KilnTypesValType::F64 => Ok(ValueType::F64),
         _ => Err(Error::unimplemented("Error occurred")),
     }
 }
 
-// Special helper function for FormatValType to WrtTypesValType conversion
-pub fn convert_format_to_types_valtype<P: wrt_foundation::MemoryProvider>(
+// Special helper function for FormatValType to KilnTypesValType conversion
+pub fn convert_format_to_types_valtype<P: kiln_foundation::MemoryProvider>(
     format_val_type: &FormatValType,
-) -> WrtTypesValType<P> {
+) -> KilnTypesValType<P> {
     match format_val_type {
-        FormatValType::Bool => WrtTypesValType::Bool,
-        FormatValType::S8 => WrtTypesValType::S8,
-        FormatValType::U8 => WrtTypesValType::U8,
-        FormatValType::S16 => WrtTypesValType::S16,
-        FormatValType::U16 => WrtTypesValType::U16,
-        FormatValType::S32 => WrtTypesValType::S32,
-        FormatValType::U32 => WrtTypesValType::U32,
-        FormatValType::S64 => WrtTypesValType::S64,
-        FormatValType::U64 => WrtTypesValType::U64,
-        FormatValType::F32 => WrtTypesValType::F32,
-        FormatValType::F64 => WrtTypesValType::F64,
-        FormatValType::Char => WrtTypesValType::Char,
-        FormatValType::String => WrtTypesValType::String,
-        FormatValType::Ref(idx) => WrtTypesValType::Ref(*idx),
-        FormatValType::Own(idx) => WrtTypesValType::Own(*idx),
-        FormatValType::Borrow(idx) => WrtTypesValType::Borrow(*idx),
-        _ => WrtTypesValType::Void, // Default fallback
+        FormatValType::Bool => KilnTypesValType::Bool,
+        FormatValType::S8 => KilnTypesValType::S8,
+        FormatValType::U8 => KilnTypesValType::U8,
+        FormatValType::S16 => KilnTypesValType::S16,
+        FormatValType::U16 => KilnTypesValType::U16,
+        FormatValType::S32 => KilnTypesValType::S32,
+        FormatValType::U32 => KilnTypesValType::U32,
+        FormatValType::S64 => KilnTypesValType::S64,
+        FormatValType::U64 => KilnTypesValType::U64,
+        FormatValType::F32 => KilnTypesValType::F32,
+        FormatValType::F64 => KilnTypesValType::F64,
+        FormatValType::Char => KilnTypesValType::Char,
+        FormatValType::String => KilnTypesValType::String,
+        FormatValType::Ref(idx) => KilnTypesValType::Ref(*idx),
+        FormatValType::Own(idx) => KilnTypesValType::Own(*idx),
+        FormatValType::Borrow(idx) => KilnTypesValType::Borrow(*idx),
+        _ => KilnTypesValType::Void, // Default fallback
     }
 }
 
 // Variant that takes a ValType directly for use at call sites
-pub fn convert_types_valtype_identity<P: wrt_foundation::MemoryProvider>(
-    val_type: &WrtTypesValType<P>,
-) -> WrtTypesValType<P> {
+pub fn convert_types_valtype_identity<P: kiln_foundation::MemoryProvider>(
+    val_type: &KilnTypesValType<P>,
+) -> KilnTypesValType<P> {
     val_type.clone()
 }
 
-// Special helper function for WrtTypesValType to FormatValType conversion
-pub fn convert_types_to_format_valtype<P: wrt_foundation::MemoryProvider>(
-    types_val_type: &WrtTypesValType<P>,
+// Special helper function for KilnTypesValType to FormatValType conversion
+pub fn convert_types_to_format_valtype<P: kiln_foundation::MemoryProvider>(
+    types_val_type: &KilnTypesValType<P>,
 ) -> FormatValType {
     match types_val_type {
-        WrtTypesValType::Bool => FormatValType::Bool,
-        WrtTypesValType::S8 => FormatValType::S8,
-        WrtTypesValType::U8 => FormatValType::U8,
-        WrtTypesValType::S16 => FormatValType::S16,
-        WrtTypesValType::U16 => FormatValType::U16,
-        WrtTypesValType::S32 => FormatValType::S32,
-        WrtTypesValType::U32 => FormatValType::U32,
-        WrtTypesValType::S64 => FormatValType::S64,
-        WrtTypesValType::U64 => FormatValType::U64,
-        WrtTypesValType::F32 => FormatValType::F32,
-        WrtTypesValType::F64 => FormatValType::F64,
-        WrtTypesValType::Char => FormatValType::Char,
-        WrtTypesValType::String => FormatValType::String,
-        WrtTypesValType::Ref(idx) => FormatValType::Ref(*idx),
-        WrtTypesValType::Own(idx) => FormatValType::Own(*idx),
-        WrtTypesValType::Borrow(idx) => FormatValType::Borrow(*idx),
+        KilnTypesValType::Bool => FormatValType::Bool,
+        KilnTypesValType::S8 => FormatValType::S8,
+        KilnTypesValType::U8 => FormatValType::U8,
+        KilnTypesValType::S16 => FormatValType::S16,
+        KilnTypesValType::U16 => FormatValType::U16,
+        KilnTypesValType::S32 => FormatValType::S32,
+        KilnTypesValType::U32 => FormatValType::U32,
+        KilnTypesValType::S64 => FormatValType::S64,
+        KilnTypesValType::U64 => FormatValType::U64,
+        KilnTypesValType::F32 => FormatValType::F32,
+        KilnTypesValType::F64 => FormatValType::F64,
+        KilnTypesValType::Char => FormatValType::Char,
+        KilnTypesValType::String => FormatValType::String,
+        KilnTypesValType::Ref(idx) => FormatValType::Ref(*idx),
+        KilnTypesValType::Own(idx) => FormatValType::Own(*idx),
+        KilnTypesValType::Borrow(idx) => FormatValType::Borrow(*idx),
         _ => FormatValType::Bool, // Default fallback
     }
 }
 
 /// Convert a ValueType to a FormatValType
 ///
-/// This function converts from wrt_foundation::types::ValueType to
-/// wrt_format::component::ValType directly.
+/// This function converts from kiln_foundation::types::ValueType to
+/// kiln_format::component::ValType directly.
 ///
 /// # Arguments
 ///
@@ -156,12 +156,12 @@ pub fn convert_types_to_format_valtype<P: wrt_foundation::MemoryProvider>(
 /// # Examples
 ///
 /// ```
-/// use wrt_component::type_conversion::bidirectional::value_type_to_format_val_type;
-/// use wrt_foundation::types::ValueType;
+/// use kiln_component::type_conversion::bidirectional::value_type_to_format_val_type;
+/// use kiln_foundation::types::ValueType;
 ///
 /// let i32_type = ValueType::I32;
 /// let format_type = value_type_to_format_val_type(&i32_type).unwrap();
-/// assert!(matches!(format_type, wrt_format::component::ValType::S32);
+/// assert!(matches!(format_type, kiln_format::component::ValType::S32);
 /// ```
 pub fn value_type_to_format_val_type(value_type: &ValueType) -> Result<FormatValType> {
     match value_type {
@@ -218,18 +218,18 @@ pub fn value_type_to_format_val_type(value_type: &ValueType) -> Result<FormatVal
 /// # Examples
 ///
 /// ```
-/// use wrt_component::type_conversion::bidirectional::format_val_type_to_value_type;
-/// use wrt_format::component::ValType;
+/// use kiln_component::type_conversion::bidirectional::format_val_type_to_value_type;
+/// use kiln_format::component::ValType;
 ///
 /// let s32_type = ValType::S32;
 /// let core_type = format_val_type_to_value_type(&s32_type).unwrap();
-/// assert!(matches!(core_type, wrt_foundation::types::ValueType::I32);
+/// assert!(matches!(core_type, kiln_foundation::types::ValueType::I32);
 /// ```
 pub fn format_val_type_to_value_type(format_val_type: &FormatValType) -> Result<ValueType> {
     convert_format_valtype_to_valuetype(format_val_type)
 }
 
-/// Convert WrtTypesValType to ValueType
+/// Convert KilnTypesValType to ValueType
 ///
 /// Converts a runtime component value type to a core WebAssembly value type.
 ///
@@ -245,15 +245,15 @@ pub fn format_val_type_to_value_type(format_val_type: &FormatValType) -> Result<
 /// # Examples
 ///
 /// ```
-/// use wrt_component::type_conversion::bidirectional::types_valtype_to_valuetype;
-/// use wrt_foundation::component_value::ValType;
+/// use kiln_component::type_conversion::bidirectional::types_valtype_to_valuetype;
+/// use kiln_foundation::component_value::ValType;
 ///
 /// let s32_type = ValType::S32;
 /// let core_type = types_valtype_to_valuetype(&s32_type).unwrap();
-/// assert!(matches!(core_type, wrt_foundation::types::ValueType::I32);
+/// assert!(matches!(core_type, kiln_foundation::types::ValueType::I32);
 /// ```
-pub fn types_valtype_to_valuetype<P: wrt_foundation::MemoryProvider>(
-    types_val_type: &WrtTypesValType<P>,
+pub fn types_valtype_to_valuetype<P: kiln_foundation::MemoryProvider>(
+    types_val_type: &KilnTypesValType<P>,
 ) -> Result<ValueType> {
     convert_types_valtype_to_valuetype(types_val_type)
 }
@@ -273,33 +273,33 @@ pub fn types_valtype_to_valuetype<P: wrt_foundation::MemoryProvider>(
 /// # Examples
 ///
 /// ```
-/// use wrt_component::type_conversion::bidirectional::value_type_to_types_valtype;
-/// use wrt_foundation::types::ValueType;
+/// use kiln_component::type_conversion::bidirectional::value_type_to_types_valtype;
+/// use kiln_foundation::types::ValueType;
 ///
 /// let i32_type = ValueType::I32;
 /// let runtime_type = value_type_to_types_valtype(&i32_type;
-/// assert!(matches!(runtime_type, wrt_foundation::component_value::ValType::S32);
+/// assert!(matches!(runtime_type, kiln_foundation::component_value::ValType::S32);
 /// ```
-pub fn value_type_to_types_valtype<P: wrt_foundation::MemoryProvider>(
+pub fn value_type_to_types_valtype<P: kiln_foundation::MemoryProvider>(
     value_type: &ValueType,
-) -> WrtTypesValType<P> {
+) -> KilnTypesValType<P> {
     match value_type {
-        ValueType::I32 => WrtTypesValType::S32,
-        ValueType::I64 => WrtTypesValType::S64,
-        ValueType::F32 => WrtTypesValType::F32,
-        ValueType::F64 => WrtTypesValType::F64,
-        ValueType::FuncRef => WrtTypesValType::Own(0), // Default to resource type 0
-        ValueType::NullFuncRef => WrtTypesValType::Own(0), // Bottom funcref type
-        ValueType::ExternRef => WrtTypesValType::Ref(0), // Default to type index 0
-        ValueType::V128 => WrtTypesValType::Void,      // V128 not supported in component model
-        ValueType::I16x8 => WrtTypesValType::Void,     // I16x8 not supported in component model
-        ValueType::StructRef(_) => WrtTypesValType::Ref(0), // Map to Ref with default index
-        ValueType::ArrayRef(_) => WrtTypesValType::Ref(0), // Map to Ref with default index
-        ValueType::ExnRef => WrtTypesValType::Ref(0),  // Map ExnRef to Ref with default index
-        ValueType::I31Ref => WrtTypesValType::S32,     // i31 fits in s32
-        ValueType::AnyRef => WrtTypesValType::Ref(0),  // Map to Ref with default index
-        ValueType::EqRef => WrtTypesValType::Ref(0),   // Map to Ref with default index
-        ValueType::TypedFuncRef(_, _) => WrtTypesValType::Own(0), // Map to resource type
+        ValueType::I32 => KilnTypesValType::S32,
+        ValueType::I64 => KilnTypesValType::S64,
+        ValueType::F32 => KilnTypesValType::F32,
+        ValueType::F64 => KilnTypesValType::F64,
+        ValueType::FuncRef => KilnTypesValType::Own(0), // Default to resource type 0
+        ValueType::NullFuncRef => KilnTypesValType::Own(0), // Bottom funcref type
+        ValueType::ExternRef => KilnTypesValType::Ref(0), // Default to type index 0
+        ValueType::V128 => KilnTypesValType::Void,      // V128 not supported in component model
+        ValueType::I16x8 => KilnTypesValType::Void,     // I16x8 not supported in component model
+        ValueType::StructRef(_) => KilnTypesValType::Ref(0), // Map to Ref with default index
+        ValueType::ArrayRef(_) => KilnTypesValType::Ref(0), // Map to Ref with default index
+        ValueType::ExnRef => KilnTypesValType::Ref(0),  // Map ExnRef to Ref with default index
+        ValueType::I31Ref => KilnTypesValType::S32,     // i31 fits in s32
+        ValueType::AnyRef => KilnTypesValType::Ref(0),  // Map to Ref with default index
+        ValueType::EqRef => KilnTypesValType::Ref(0),   // Map to Ref with default index
+        ValueType::TypedFuncRef(_, _) => KilnTypesValType::Own(0), // Map to resource type
     }
 }
 
@@ -319,16 +319,16 @@ pub fn value_type_to_types_valtype<P: wrt_foundation::MemoryProvider>(
 /// # Examples
 ///
 /// ```
-/// use wrt_component::type_conversion::bidirectional::format_valtype_to_types_valtype;
-/// use wrt_format::component::ValType;
+/// use kiln_component::type_conversion::bidirectional::format_valtype_to_types_valtype;
+/// use kiln_format::component::ValType;
 ///
 /// let string_type = ValType::String;
 /// let runtime_type = format_valtype_to_types_valtype(&string_type;
-/// assert!(matches!(runtime_type, wrt_foundation::component_value::ValType::String);
+/// assert!(matches!(runtime_type, kiln_foundation::component_value::ValType::String);
 /// ```
-pub fn format_valtype_to_types_valtype<P: wrt_foundation::MemoryProvider>(
+pub fn format_valtype_to_types_valtype<P: kiln_foundation::MemoryProvider>(
     format_val_type: &FormatValType,
-) -> WrtTypesValType<P> {
+) -> KilnTypesValType<P> {
     convert_format_to_types_valtype::<P>(format_val_type)
 }
 
@@ -344,13 +344,13 @@ pub fn format_valtype_to_types_valtype<P: wrt_foundation::MemoryProvider>(
 /// # Returns
 ///
 /// The corresponding TypesValType
-pub fn format_to_types_valtype<P: wrt_foundation::MemoryProvider>(
-    val_type: &WrtTypesValType<P>,
-) -> WrtTypesValType<P> {
+pub fn format_to_types_valtype<P: kiln_foundation::MemoryProvider>(
+    val_type: &KilnTypesValType<P>,
+) -> KilnTypesValType<P> {
     convert_types_valtype_identity(val_type)
 }
 
-/// Convert WrtTypesValType to FormatValType
+/// Convert KilnTypesValType to FormatValType
 ///
 /// Comprehensive conversion from runtime component value type to format value
 /// type.
@@ -366,57 +366,57 @@ pub fn format_to_types_valtype<P: wrt_foundation::MemoryProvider>(
 /// # Examples
 ///
 /// ```
-/// use wrt_component::type_conversion::bidirectional::types_valtype_to_format_valtype;
-/// use wrt_foundation::component_value::ValType;
+/// use kiln_component::type_conversion::bidirectional::types_valtype_to_format_valtype;
+/// use kiln_foundation::component_value::ValType;
 ///
 /// let string_type = ValType::String;
 /// let format_type = types_valtype_to_format_valtype(&string_type;
-/// assert!(matches!(format_type, wrt_format::component::ValType::String);
+/// assert!(matches!(format_type, kiln_format::component::ValType::String);
 /// ```
-pub fn types_valtype_to_format_valtype<P: wrt_foundation::MemoryProvider>(
-    types_val_type: &WrtTypesValType<P>,
+pub fn types_valtype_to_format_valtype<P: kiln_foundation::MemoryProvider>(
+    types_val_type: &KilnTypesValType<P>,
 ) -> FormatValType {
     match types_val_type {
-        WrtTypesValType::Bool => FormatValType::Bool,
-        WrtTypesValType::S8 => FormatValType::S8,
-        WrtTypesValType::U8 => FormatValType::U8,
-        WrtTypesValType::S16 => FormatValType::S16,
-        WrtTypesValType::U16 => FormatValType::U16,
-        WrtTypesValType::S32 => FormatValType::S32,
-        WrtTypesValType::U32 => FormatValType::U32,
-        WrtTypesValType::S64 => FormatValType::S64,
-        WrtTypesValType::U64 => FormatValType::U64,
-        WrtTypesValType::F32 => FormatValType::F32,
-        WrtTypesValType::F64 => FormatValType::F64,
-        WrtTypesValType::Char => FormatValType::Char,
-        WrtTypesValType::String => FormatValType::String,
-        WrtTypesValType::Ref(idx) => FormatValType::Ref(*idx),
-        WrtTypesValType::Record(_fields) => {
+        KilnTypesValType::Bool => FormatValType::Bool,
+        KilnTypesValType::S8 => FormatValType::S8,
+        KilnTypesValType::U8 => FormatValType::U8,
+        KilnTypesValType::S16 => FormatValType::S16,
+        KilnTypesValType::U16 => FormatValType::U16,
+        KilnTypesValType::S32 => FormatValType::S32,
+        KilnTypesValType::U32 => FormatValType::U32,
+        KilnTypesValType::S64 => FormatValType::S64,
+        KilnTypesValType::U64 => FormatValType::U64,
+        KilnTypesValType::F32 => FormatValType::F32,
+        KilnTypesValType::F64 => FormatValType::F64,
+        KilnTypesValType::Char => FormatValType::Char,
+        KilnTypesValType::String => FormatValType::String,
+        KilnTypesValType::Ref(idx) => FormatValType::Ref(*idx),
+        KilnTypesValType::Record(_fields) => {
             // Record fields contain ValTypeRef (u32 indices), not actual types
             // Return empty record as placeholder - proper conversion requires type table
             FormatValType::Record(Vec::new())
         },
-        WrtTypesValType::Variant(_cases) => {
+        KilnTypesValType::Variant(_cases) => {
             // Variant cases contain ValTypeRef (u32 indices), not actual types
             // Return empty variant as placeholder - proper conversion requires type table
             FormatValType::Variant(Vec::new())
         },
-        WrtTypesValType::List(_elem_type_ref) => {
+        KilnTypesValType::List(_elem_type_ref) => {
             // List contains ValTypeRef (u32 index), not actual type
             // Return placeholder - proper conversion requires type table
             FormatValType::List(Box::new(FormatValType::Void))
         },
-        WrtTypesValType::FixedList(_elem_type_ref, size) => {
+        KilnTypesValType::FixedList(_elem_type_ref, size) => {
             // FixedList contains ValTypeRef (u32 index), not actual type
             // Return placeholder - proper conversion requires type table
             FormatValType::FixedList(Box::new(FormatValType::Void), *size)
         },
-        WrtTypesValType::Tuple(_types_refs) => {
+        KilnTypesValType::Tuple(_types_refs) => {
             // Tuple contains ValTypeRef (u32 indices), not actual types
             // Return empty tuple as placeholder - proper conversion requires type table
             FormatValType::Tuple(Vec::new())
         },
-        WrtTypesValType::Flags(names) => {
+        KilnTypesValType::Flags(names) => {
             // Convert BoundedVec<WasmName> to Vec<String>
             let string_names: Vec<String> = names
                 .iter()
@@ -424,7 +424,7 @@ pub fn types_valtype_to_format_valtype<P: wrt_foundation::MemoryProvider>(
                 .collect();
             FormatValType::Flags(string_names)
         },
-        WrtTypesValType::Enum(variants) => {
+        KilnTypesValType::Enum(variants) => {
             // Convert BoundedVec<WasmName> to Vec<String>
             let string_variants: Vec<String> = variants
                 .iter()
@@ -432,26 +432,26 @@ pub fn types_valtype_to_format_valtype<P: wrt_foundation::MemoryProvider>(
                 .collect();
             FormatValType::Enum(string_variants)
         },
-        WrtTypesValType::Option(_inner_type_ref) => {
+        KilnTypesValType::Option(_inner_type_ref) => {
             // Option contains ValTypeRef (u32 index), not actual type
             // Return placeholder - proper conversion requires type table
             FormatValType::Option(Box::new(FormatValType::Void))
         },
-        WrtTypesValType::Own(idx) => FormatValType::Own(*idx),
-        WrtTypesValType::Borrow(idx) => FormatValType::Borrow(*idx),
-        WrtTypesValType::Void => {
+        KilnTypesValType::Own(idx) => FormatValType::Own(*idx),
+        KilnTypesValType::Borrow(idx) => FormatValType::Borrow(*idx),
+        KilnTypesValType::Void => {
             // Map void to a default type (this is a simplification)
             FormatValType::Bool
         },
-        WrtTypesValType::ErrorContext => FormatValType::ErrorContext,
-        WrtTypesValType::Result { ok: _, err: _ } => {
+        KilnTypesValType::ErrorContext => FormatValType::ErrorContext,
+        KilnTypesValType::Result { ok: _, err: _ } => {
             // Map to FormatValType::Result with a placeholder type
             FormatValType::Result(Box::new(FormatValType::Void))
         }, // All enums handled above
     }
 }
 
-/// Convert FormatExternType to TypesWrtExternType
+/// Convert FormatExternType to TypesKilnExternType
 ///
 /// Comprehensive conversion from format external type to runtime external type.
 ///
@@ -467,9 +467,9 @@ pub fn types_valtype_to_format_valtype<P: wrt_foundation::MemoryProvider>(
 /// # Examples
 ///
 /// ```
-/// use wrt_component::type_conversion::bidirectional::format_to_runtime_extern_type;
-/// use wrt_format::component::WrtExternType as FormatExternType;
-/// use wrt_format::component::ValType as FormatValType;
+/// use kiln_component::type_conversion::bidirectional::format_to_runtime_extern_type;
+/// use kiln_format::component::KilnExternType as FormatExternType;
+/// use kiln_format::component::ValType as FormatValType;
 ///
 /// let format_func = FormatExternType::Function {
 ///     params: vec![("param".to_owned(), FormatValType::S32)],
@@ -478,9 +478,9 @@ pub fn types_valtype_to_format_valtype<P: wrt_foundation::MemoryProvider>(
 ///
 /// let runtime_func = format_to_runtime_extern_type(&format_func).unwrap();
 /// ```
-pub fn format_to_runtime_extern_type<P: wrt_foundation::MemoryProvider>(
+pub fn format_to_runtime_extern_type<P: kiln_foundation::MemoryProvider>(
     format_extern_type: &FormatExternType,
-) -> Result<TypesWrtExternType<P>> {
+) -> Result<TypesKilnExternType<P>> {
     match format_extern_type {
         FormatExternType::Module { type_idx } => {
             // Core module type - not yet implemented
@@ -500,17 +500,17 @@ pub fn format_to_runtime_extern_type<P: wrt_foundation::MemoryProvider>(
                 results.iter().map(format_val_type_to_value_type).collect::<Result<Vec<_>>>()?;
 
             let _provider = P::default();
-            Ok(TypesWrtExternType::Func(TypesFuncType::new(
+            Ok(TypesKilnExternType::Func(TypesFuncType::new(
                 converted_params,
                 converted_results,
             )?))
         },
         FormatExternType::Value(val_type) => {
-            // Convert to most appropriate TypesWrtExternType - likely Function with no
+            // Convert to most appropriate TypesKilnExternType - likely Function with no
             // params/results Could be mapped as constant global in the future
             let value_type = format_val_type_to_value_type(val_type).unwrap_or(ValueType::I32);
-            Ok(TypesWrtExternType::Global(
-                wrt_foundation::types::GlobalType {
+            Ok(TypesKilnExternType::Global(
+                kiln_foundation::types::GlobalType {
                     value_type,
                     mutable: false,
                 },
@@ -520,23 +520,23 @@ pub fn format_to_runtime_extern_type<P: wrt_foundation::MemoryProvider>(
             // Type reference - this would need context from the component
             // For now, provide a sensible default
             let _provider = P::default();
-            Ok(TypesWrtExternType::Func(TypesFuncType::new(
+            Ok(TypesKilnExternType::Func(TypesFuncType::new(
                 vec![],
                 vec![],
             )?))
         },
         FormatExternType::Instance { exports } => {
             // Convert each export to Export<P> with WasmName
-            use wrt_foundation::WasmName;
+            use kiln_foundation::WasmName;
 
             let provider = P::default();
-            let mut export_vec = wrt_foundation::BoundedVec::new(provider.clone())?;
+            let mut export_vec = kiln_foundation::BoundedVec::new(provider.clone())?;
 
             for (name, ext_type) in exports.iter() {
                 let wasm_name = WasmName::from_str_truncate(name.as_str())
                     .map_err(|_| Error::runtime_execution_error("Failed to create WasmName"))?;
                 let extern_ty = format_to_runtime_extern_type(ext_type)?;
-                let export = wrt_foundation::component::Export {
+                let export = kiln_foundation::component::Export {
                     name: wasm_name,
                     ty: extern_ty,
                     desc: None,
@@ -544,7 +544,7 @@ pub fn format_to_runtime_extern_type<P: wrt_foundation::MemoryProvider>(
                 export_vec.push(export)?;
             }
 
-            Ok(TypesWrtExternType::Instance(InstanceType {
+            Ok(TypesKilnExternType::Instance(InstanceType {
                 exports: export_vec,
             }))
         },
@@ -554,20 +554,20 @@ pub fn format_to_runtime_extern_type<P: wrt_foundation::MemoryProvider>(
             let provider = P::default();
 
             // Create empty component type as placeholder
-            Ok(TypesWrtExternType::Component(ComponentType {
-                imports: wrt_foundation::BoundedVec::new(provider.clone())?,
-                exports: wrt_foundation::BoundedVec::new(provider.clone())?,
-                aliases: wrt_foundation::BoundedVec::new(provider.clone())?,
-                instances: wrt_foundation::BoundedVec::new(provider.clone())?,
-                core_instances: wrt_foundation::BoundedVec::new(provider.clone())?,
-                component_types: wrt_foundation::BoundedVec::new(provider.clone())?,
-                core_types: wrt_foundation::BoundedVec::new(provider)?,
+            Ok(TypesKilnExternType::Component(ComponentType {
+                imports: kiln_foundation::BoundedVec::new(provider.clone())?,
+                exports: kiln_foundation::BoundedVec::new(provider.clone())?,
+                aliases: kiln_foundation::BoundedVec::new(provider.clone())?,
+                instances: kiln_foundation::BoundedVec::new(provider.clone())?,
+                core_instances: kiln_foundation::BoundedVec::new(provider.clone())?,
+                component_types: kiln_foundation::BoundedVec::new(provider.clone())?,
+                core_types: kiln_foundation::BoundedVec::new(provider)?,
             }))
         },
     }
 }
 
-/// Convert TypesWrtExternType to FormatExternType
+/// Convert TypesKilnExternType to FormatExternType
 ///
 /// Comprehensive conversion from runtime external type to format external type.
 ///
@@ -583,23 +583,23 @@ pub fn format_to_runtime_extern_type<P: wrt_foundation::MemoryProvider>(
 /// # Examples
 ///
 /// ```
-/// use wrt_component::type_conversion::bidirectional::runtime_to_format_extern_type;
-/// use wrt_foundation::{WrtExternType, component::FuncType};
-/// use wrt_foundation::types::ValueType;
+/// use kiln_component::type_conversion::bidirectional::runtime_to_format_extern_type;
+/// use kiln_foundation::{KilnExternType, component::FuncType};
+/// use kiln_foundation::types::ValueType;
 ///
 /// let func_type = FuncType {
 ///     params: vec![ValueType::I32],
 ///     results: vec![ValueType::I32],
 /// };
 ///
-/// let runtime_func = WrtExternType::Func(func_type;
+/// let runtime_func = KilnExternType::Func(func_type;
 /// let format_func = runtime_to_format_extern_type(&runtime_func).unwrap();
 /// ```
-pub fn runtime_to_format_extern_type<P: wrt_foundation::MemoryProvider>(
-    types_extern_type: &TypesWrtExternType<P>,
+pub fn runtime_to_format_extern_type<P: kiln_foundation::MemoryProvider>(
+    types_extern_type: &TypesKilnExternType<P>,
 ) -> Result<FormatExternType> {
     match types_extern_type {
-        WrtExternType::Func(func_type) => {
+        KilnExternType::Func(func_type) => {
             // Convert parameter types
             let param_names: Vec<String> =
                 (0..func_type.params.len()).map(|i| format!("param{}", i)).collect();
@@ -629,16 +629,16 @@ pub fn runtime_to_format_extern_type<P: wrt_foundation::MemoryProvider>(
                 results: result_types,
             })
         },
-        WrtExternType::Table(table_type) => {
+        KilnExternType::Table(table_type) => {
             Err(Error::runtime_execution_error("Table types not supported"))
         },
-        WrtExternType::Memory(memory_type) => {
+        KilnExternType::Memory(memory_type) => {
             Err(Error::runtime_execution_error("Memory types not supported"))
         },
-        WrtExternType::Global(global_type) => {
+        KilnExternType::Global(global_type) => {
             Err(Error::runtime_execution_error("Global types not supported"))
         },
-        WrtExternType::Instance(instance_type) => {
+        KilnExternType::Instance(instance_type) => {
             // Convert exports to FormatExternType
             // Note: instance_type.exports is BoundedVec<Export<P>>, not tuples
             let exports_format: Result<Vec<(String, FormatExternType)>> = instance_type
@@ -661,7 +661,7 @@ pub fn runtime_to_format_extern_type<P: wrt_foundation::MemoryProvider>(
                 exports: exports_format?,
             })
         },
-        WrtExternType::Component(component_type) => {
+        KilnExternType::Component(component_type) => {
             // Convert imports to FormatExternType
             // Note: component_type.imports is BoundedVec<Import<P>>, not tuples
             let imports_format: Result<Vec<(String, String, FormatExternType)>> = component_type
@@ -712,23 +712,23 @@ pub fn runtime_to_format_extern_type<P: wrt_foundation::MemoryProvider>(
                 type_idx: 0, // Placeholder type index
             })
         },
-        WrtExternType::Resource(resource_type) => {
+        KilnExternType::Resource(resource_type) => {
             // Note: Since FormatExternType doesn't have a direct Resource variant,
             // we map it to a Type reference with the resource type index
             // ResourceType is a tuple struct: ResourceType(u32, PhantomData<P>)
             Ok(FormatExternType::Type(resource_type.0))
         },
-        WrtExternType::Tag(_tag_type) => {
+        KilnExternType::Tag(_tag_type) => {
             // Tag types (exception handling) - not supported yet
             Err(Error::runtime_execution_error("Tag types not supported"))
         },
-        WrtExternType::CoreModule(_module_type) => {
+        KilnExternType::CoreModule(_module_type) => {
             // Core module types - not supported yet
             Err(Error::runtime_execution_error(
                 "CoreModule types not supported",
             ))
         },
-        WrtExternType::TypeDef(_type_def) => {
+        KilnExternType::TypeDef(_type_def) => {
             // Type definitions - not supported yet
             Err(Error::runtime_execution_error(
                 "TypeDef types not supported",
@@ -781,7 +781,7 @@ pub fn common_to_format_val_type(value_type: &ValueType) -> Result<FormatValType
     }
 }
 
-/// Convert an WrtExternType to a FuncType if it represents a function
+/// Convert an KilnExternType to a FuncType if it represents a function
 ///
 /// # Arguments
 ///
@@ -790,11 +790,11 @@ pub fn common_to_format_val_type(value_type: &ValueType) -> Result<FormatValType
 /// # Returns
 ///
 /// The function type if the extern type is a function, or an error otherwise
-pub fn extern_type_to_func_type<P: wrt_foundation::MemoryProvider>(
-    extern_type: &WrtExternType<P>,
+pub fn extern_type_to_func_type<P: kiln_foundation::MemoryProvider>(
+    extern_type: &KilnExternType<P>,
 ) -> Result<TypesFuncType> {
     match extern_type {
-        WrtExternType::Func(func_type) => Ok(func_type.clone()),
+        KilnExternType::Func(func_type) => Ok(func_type.clone()),
         _ => Err(Error::runtime_type_mismatch(
             "Cannot convert format value type to common value type",
         )),
@@ -813,33 +813,33 @@ pub trait IntoFormatType<T> {
     fn into_format_type(self) -> Result<T>;
 }
 
-impl<P: wrt_foundation::MemoryProvider> IntoRuntimeType<TypesWrtExternType<P>>
+impl<P: kiln_foundation::MemoryProvider> IntoRuntimeType<TypesKilnExternType<P>>
     for FormatExternType
 {
-    fn into_runtime_type(self) -> Result<TypesWrtExternType<P>> {
+    fn into_runtime_type(self) -> Result<TypesKilnExternType<P>> {
         format_to_runtime_extern_type::<P>(&self)
     }
 }
 
-impl<P: wrt_foundation::MemoryProvider> IntoFormatType<FormatExternType> for TypesWrtExternType<P> {
+impl<P: kiln_foundation::MemoryProvider> IntoFormatType<FormatExternType> for TypesKilnExternType<P> {
     fn into_format_type(self) -> Result<FormatExternType> {
         runtime_to_format_extern_type(&self)
     }
 }
 
-impl<P: wrt_foundation::MemoryProvider> IntoRuntimeType<WrtTypesValType<P>> for FormatValType {
-    fn into_runtime_type(self) -> Result<WrtTypesValType<P>> {
+impl<P: kiln_foundation::MemoryProvider> IntoRuntimeType<KilnTypesValType<P>> for FormatValType {
+    fn into_runtime_type(self) -> Result<KilnTypesValType<P>> {
         Ok(format_valtype_to_types_valtype::<P>(&self))
     }
 }
 
-impl<P: wrt_foundation::MemoryProvider> IntoFormatType<FormatValType> for WrtTypesValType<P> {
+impl<P: kiln_foundation::MemoryProvider> IntoFormatType<FormatValType> for KilnTypesValType<P> {
     fn into_format_type(self) -> Result<FormatValType> {
         Ok(types_valtype_to_format_valtype(&self))
     }
 }
 
-/// Convert FormatConstValue to TypesWrtComponentValue
+/// Convert FormatConstValue to TypesKilnComponentValue
 ///
 /// Comprehensive conversion from format constant value to runtime component
 /// value.
@@ -855,39 +855,39 @@ impl<P: wrt_foundation::MemoryProvider> IntoFormatType<FormatValType> for WrtTyp
 /// # Examples
 ///
 /// ```
-/// use wrt_component::type_conversion::bidirectional::format_constvalue_to_types_componentvalue;
-/// use wrt_format::component::ConstValue;
+/// use kiln_component::type_conversion::bidirectional::format_constvalue_to_types_componentvalue;
+/// use kiln_format::component::ConstValue;
 ///
 /// let s32_val = ConstValue::S32(42;
 /// let runtime_val = format_constvalue_to_types_componentvalue(&s32_val).unwrap();
-/// assert!(matches!(runtime_val, wrt_foundation::component_value::WrtComponentValue::S32(42);
+/// assert!(matches!(runtime_val, kiln_foundation::component_value::KilnComponentValue::S32(42);
 /// ```
 pub fn format_constvalue_to_types_componentvalue(
     format_const_value: &FormatConstValue,
-) -> Result<WrtComponentValue<ComponentProvider>> {
+) -> Result<KilnComponentValue<ComponentProvider>> {
     match format_const_value {
-        FormatConstValue::Bool(v) => Ok(WrtComponentValue::Bool(*v)),
-        FormatConstValue::S8(v) => Ok(WrtComponentValue::S8(*v)),
-        FormatConstValue::U8(v) => Ok(WrtComponentValue::U8(*v)),
-        FormatConstValue::S16(v) => Ok(WrtComponentValue::S16(*v)),
-        FormatConstValue::U16(v) => Ok(WrtComponentValue::U16(*v)),
-        FormatConstValue::S32(v) => Ok(WrtComponentValue::S32(*v)),
-        FormatConstValue::U32(v) => Ok(WrtComponentValue::U32(*v)),
-        FormatConstValue::S64(v) => Ok(WrtComponentValue::S64(*v)),
-        FormatConstValue::U64(v) => Ok(WrtComponentValue::U64(*v)),
-        FormatConstValue::F32(v) => Ok(WrtComponentValue::F32(
-            wrt_foundation::FloatBits32::from_f32(*v),
+        FormatConstValue::Bool(v) => Ok(KilnComponentValue::Bool(*v)),
+        FormatConstValue::S8(v) => Ok(KilnComponentValue::S8(*v)),
+        FormatConstValue::U8(v) => Ok(KilnComponentValue::U8(*v)),
+        FormatConstValue::S16(v) => Ok(KilnComponentValue::S16(*v)),
+        FormatConstValue::U16(v) => Ok(KilnComponentValue::U16(*v)),
+        FormatConstValue::S32(v) => Ok(KilnComponentValue::S32(*v)),
+        FormatConstValue::U32(v) => Ok(KilnComponentValue::U32(*v)),
+        FormatConstValue::S64(v) => Ok(KilnComponentValue::S64(*v)),
+        FormatConstValue::U64(v) => Ok(KilnComponentValue::U64(*v)),
+        FormatConstValue::F32(v) => Ok(KilnComponentValue::F32(
+            kiln_foundation::FloatBits32::from_f32(*v),
         )),
-        FormatConstValue::F64(v) => Ok(WrtComponentValue::F64(
-            wrt_foundation::FloatBits64::from_f64(*v),
+        FormatConstValue::F64(v) => Ok(KilnComponentValue::F64(
+            kiln_foundation::FloatBits64::from_f64(*v),
         )),
-        FormatConstValue::Char(v) => Ok(WrtComponentValue::Char(*v)),
-        FormatConstValue::String(v) => Ok(WrtComponentValue::String(v.clone())),
-        FormatConstValue::Null => Ok(WrtComponentValue::Void),
+        FormatConstValue::Char(v) => Ok(KilnComponentValue::Char(*v)),
+        FormatConstValue::String(v) => Ok(KilnComponentValue::String(v.clone())),
+        FormatConstValue::Null => Ok(KilnComponentValue::Void),
     }
 }
 
-/// Convert TypesWrtComponentValue to FormatConstValue
+/// Convert TypesKilnComponentValue to FormatConstValue
 ///
 /// Comprehensive conversion from runtime component value to format constant
 /// value.
@@ -904,31 +904,31 @@ pub fn format_constvalue_to_types_componentvalue(
 /// # Examples
 ///
 /// ```
-/// use wrt_component::type_conversion::bidirectional::types_componentvalue_to_format_constvalue;
-/// use wrt_foundation::component_value::WrtComponentValue;
+/// use kiln_component::type_conversion::bidirectional::types_componentvalue_to_format_constvalue;
+/// use kiln_foundation::component_value::KilnComponentValue;
 ///
-/// let s32_val = WrtComponentValue::S32(42;
+/// let s32_val = KilnComponentValue::S32(42;
 /// let format_val = types_componentvalue_to_format_constvalue(&s32_val).unwrap();
-/// assert!(matches!(format_val, wrt_format::component::ConstValue::S32(42);
+/// assert!(matches!(format_val, kiln_format::component::ConstValue::S32(42);
 /// ```
 pub fn types_componentvalue_to_format_constvalue(
-    types_component_value: &WrtComponentValue<ComponentProvider>,
+    types_component_value: &KilnComponentValue<ComponentProvider>,
 ) -> Result<FormatConstValue> {
     match types_component_value {
-        WrtComponentValue::Bool(v) => Ok(FormatConstValue::Bool(*v)),
-        WrtComponentValue::S8(v) => Ok(FormatConstValue::S8(*v)),
-        WrtComponentValue::U8(v) => Ok(FormatConstValue::U8(*v)),
-        WrtComponentValue::S16(v) => Ok(FormatConstValue::S16(*v)),
-        WrtComponentValue::U16(v) => Ok(FormatConstValue::U16(*v)),
-        WrtComponentValue::S32(v) => Ok(FormatConstValue::S32(*v)),
-        WrtComponentValue::U32(v) => Ok(FormatConstValue::U32(*v)),
-        WrtComponentValue::S64(v) => Ok(FormatConstValue::S64(*v)),
-        WrtComponentValue::U64(v) => Ok(FormatConstValue::U64(*v)),
-        WrtComponentValue::F32(v) => Ok(FormatConstValue::F32(v.to_f32())),
-        WrtComponentValue::F64(v) => Ok(FormatConstValue::F64(v.to_f64())),
-        WrtComponentValue::Char(v) => Ok(FormatConstValue::Char(*v)),
-        WrtComponentValue::String(v) => Ok(FormatConstValue::String(v.clone())),
-        WrtComponentValue::Void => Ok(FormatConstValue::Null),
+        KilnComponentValue::Bool(v) => Ok(FormatConstValue::Bool(*v)),
+        KilnComponentValue::S8(v) => Ok(FormatConstValue::S8(*v)),
+        KilnComponentValue::U8(v) => Ok(FormatConstValue::U8(*v)),
+        KilnComponentValue::S16(v) => Ok(FormatConstValue::S16(*v)),
+        KilnComponentValue::U16(v) => Ok(FormatConstValue::U16(*v)),
+        KilnComponentValue::S32(v) => Ok(FormatConstValue::S32(*v)),
+        KilnComponentValue::U32(v) => Ok(FormatConstValue::U32(*v)),
+        KilnComponentValue::S64(v) => Ok(FormatConstValue::S64(*v)),
+        KilnComponentValue::U64(v) => Ok(FormatConstValue::U64(*v)),
+        KilnComponentValue::F32(v) => Ok(FormatConstValue::F32(v.to_f32())),
+        KilnComponentValue::F64(v) => Ok(FormatConstValue::F64(v.to_f64())),
+        KilnComponentValue::Char(v) => Ok(FormatConstValue::Char(*v)),
+        KilnComponentValue::String(v) => Ok(FormatConstValue::String(v.clone())),
+        KilnComponentValue::Void => Ok(FormatConstValue::Null),
         _ => Err(Error::runtime_type_mismatch(
             "Cannot convert component value to constant value",
         )),
@@ -938,7 +938,7 @@ pub fn types_componentvalue_to_format_constvalue(
 /// Convert a core WebAssembly value to a runtime component value
 ///
 /// This replaces the existing functionality in
-/// wrt-foundation/src/component_value.rs to consolidate value conversions in
+/// kiln-foundation/src/component_value.rs to consolidate value conversions in
 /// the same crate as type conversions.
 ///
 /// # Arguments
@@ -950,18 +950,18 @@ pub fn types_componentvalue_to_format_constvalue(
 /// Result containing the converted component value, or an error if
 /// conversion is not possible
 pub fn core_value_to_types_componentvalue(
-    value: &wrt_foundation::values::Value,
-) -> Result<WrtComponentValue<ComponentProvider>> {
+    value: &kiln_foundation::values::Value,
+) -> Result<KilnComponentValue<ComponentProvider>> {
     match value {
-        wrt_foundation::values::Value::I32(v) => Ok(WrtComponentValue::S32(*v)),
-        wrt_foundation::values::Value::I64(v) => Ok(WrtComponentValue::S64(*v)),
-        wrt_foundation::values::Value::F32(v) => Ok(WrtComponentValue::F32(
-            wrt_foundation::FloatBits32::from_f32(v.value()),
+        kiln_foundation::values::Value::I32(v) => Ok(KilnComponentValue::S32(*v)),
+        kiln_foundation::values::Value::I64(v) => Ok(KilnComponentValue::S64(*v)),
+        kiln_foundation::values::Value::F32(v) => Ok(KilnComponentValue::F32(
+            kiln_foundation::FloatBits32::from_f32(v.value()),
         )),
-        wrt_foundation::values::Value::F64(v) => Ok(WrtComponentValue::F64(
-            wrt_foundation::FloatBits64::from_f64(v.value()),
+        kiln_foundation::values::Value::F64(v) => Ok(KilnComponentValue::F64(
+            kiln_foundation::FloatBits64::from_f64(v.value()),
         )),
-        wrt_foundation::values::Value::Ref(v) => Ok(WrtComponentValue::U32(*v)), // Map reference
+        kiln_foundation::values::Value::Ref(v) => Ok(KilnComponentValue::U32(*v)), // Map reference
         // to U32
         _ => Err(Error::runtime_type_mismatch(
             "Cannot convert component value to core WebAssembly value",
@@ -972,7 +972,7 @@ pub fn core_value_to_types_componentvalue(
 /// Convert a runtime component value to a core WebAssembly value
 ///
 /// This replaces the existing functionality in
-/// wrt-foundation/src/component_value.rs to consolidate value conversions in
+/// kiln-foundation/src/component_value.rs to consolidate value conversions in
 /// the same crate as type conversions.
 ///
 /// # Arguments
@@ -984,35 +984,35 @@ pub fn core_value_to_types_componentvalue(
 /// Result containing the converted core value, or an error if
 /// conversion is not possible
 pub fn types_componentvalue_to_core_value(
-    component_value: &WrtComponentValue<ComponentProvider>,
-) -> Result<wrt_foundation::values::Value> {
+    component_value: &KilnComponentValue<ComponentProvider>,
+) -> Result<kiln_foundation::values::Value> {
     match component_value {
-        WrtComponentValue::Bool(v) => {
-            Ok(wrt_foundation::values::Value::I32(if *v { 1 } else { 0 }))
+        KilnComponentValue::Bool(v) => {
+            Ok(kiln_foundation::values::Value::I32(if *v { 1 } else { 0 }))
         },
-        WrtComponentValue::S8(v) => Ok(wrt_foundation::values::Value::I32(*v as i32)),
-        WrtComponentValue::U8(v) => Ok(wrt_foundation::values::Value::I32(*v as i32)),
-        WrtComponentValue::S16(v) => Ok(wrt_foundation::values::Value::I32(*v as i32)),
-        WrtComponentValue::U16(v) => Ok(wrt_foundation::values::Value::I32(*v as i32)),
-        WrtComponentValue::S32(v) => Ok(wrt_foundation::values::Value::I32(*v)),
-        WrtComponentValue::U32(v) => {
+        KilnComponentValue::S8(v) => Ok(kiln_foundation::values::Value::I32(*v as i32)),
+        KilnComponentValue::U8(v) => Ok(kiln_foundation::values::Value::I32(*v as i32)),
+        KilnComponentValue::S16(v) => Ok(kiln_foundation::values::Value::I32(*v as i32)),
+        KilnComponentValue::U16(v) => Ok(kiln_foundation::values::Value::I32(*v as i32)),
+        KilnComponentValue::S32(v) => Ok(kiln_foundation::values::Value::I32(*v)),
+        KilnComponentValue::U32(v) => {
             // For U32, check if it represents a reference value (e.g., resource handle)
             // For now, we'll treat all U32 as potential references to maintain
             // compatibility A more sophisticated approach might involve
             // checking the context
             if let Some(resource_index) = is_resource_reference(*v) {
-                Ok(wrt_foundation::values::Value::Ref(resource_index))
+                Ok(kiln_foundation::values::Value::Ref(resource_index))
             } else {
-                Ok(wrt_foundation::values::Value::I32(*v as i32))
+                Ok(kiln_foundation::values::Value::I32(*v as i32))
             }
         },
-        WrtComponentValue::S64(v) => Ok(wrt_foundation::values::Value::I64(*v)),
-        WrtComponentValue::U64(v) => Ok(wrt_foundation::values::Value::I64(*v as i64)),
-        WrtComponentValue::F32(v) => Ok(wrt_foundation::values::Value::F32(
-            wrt_foundation::FloatBits32::from_bits(v.to_bits()),
+        KilnComponentValue::S64(v) => Ok(kiln_foundation::values::Value::I64(*v)),
+        KilnComponentValue::U64(v) => Ok(kiln_foundation::values::Value::I64(*v as i64)),
+        KilnComponentValue::F32(v) => Ok(kiln_foundation::values::Value::F32(
+            kiln_foundation::FloatBits32::from_bits(v.to_bits()),
         )),
-        WrtComponentValue::F64(v) => Ok(wrt_foundation::values::Value::F64(
-            wrt_foundation::FloatBits64::from_bits(v.to_bits()),
+        KilnComponentValue::F64(v) => Ok(kiln_foundation::values::Value::F64(
+            kiln_foundation::FloatBits64::from_bits(v.to_bits()),
         )),
         _ => Err(Error::runtime_type_mismatch(
             "Cannot convert component value to core WebAssembly value",
@@ -1034,24 +1034,24 @@ fn is_resource_reference(value: u32) -> Option<u32> {
 pub use format_to_runtime_extern_type as format_to_types_extern_type;
 pub use runtime_to_format_extern_type as types_to_format_extern_type;
 
-/// Complete bidirectional conversion between wrt_foundation::WrtExternType and
-/// wrt_format::component::WrtExternType
+/// Complete bidirectional conversion between kiln_foundation::KilnExternType and
+/// kiln_format::component::KilnExternType
 ///
-/// This function handles all WrtExternType variants comprehensively, fixing
+/// This function handles all KilnExternType variants comprehensively, fixing
 /// previous compatibility issues.
 ///
 /// # Arguments
 ///
-/// * `types_extern_type` - The wrt_foundation::WrtExternType to convert
+/// * `types_extern_type` - The kiln_foundation::KilnExternType to convert
 ///
 /// # Returns
 ///
 /// * Result containing the converted FormatExternType or an error
-pub fn complete_types_to_format_extern_type<P: wrt_foundation::MemoryProvider>(
-    types_extern_type: &wrt_foundation::ExternType<P>,
+pub fn complete_types_to_format_extern_type<P: kiln_foundation::MemoryProvider>(
+    types_extern_type: &kiln_foundation::ExternType<P>,
 ) -> Result<FormatExternType> {
     match types_extern_type {
-        wrt_foundation::ExternType::Func(func_type) => {
+        kiln_foundation::ExternType::Func(func_type) => {
             // Convert parameter types
             let param_names: Vec<String> =
                 (0..func_type.params.len()).map(|i| format!("param{}", i)).collect();
@@ -1081,21 +1081,21 @@ pub fn complete_types_to_format_extern_type<P: wrt_foundation::MemoryProvider>(
                 results: result_types,
             })
         },
-        wrt_foundation::ExternType::Table(table_type) => {
+        kiln_foundation::ExternType::Table(table_type) => {
             Err(Error::runtime_execution_error("Table types not supported"))
         },
-        wrt_foundation::ExternType::Memory(memory_type) => {
+        kiln_foundation::ExternType::Memory(memory_type) => {
             Err(Error::runtime_execution_error("Memory types not supported"))
         },
-        wrt_foundation::ExternType::Global(global_type) => {
+        kiln_foundation::ExternType::Global(global_type) => {
             Err(Error::runtime_execution_error("Global types not supported"))
         },
-        wrt_foundation::ExternType::Resource(resource_type) => {
+        kiln_foundation::ExternType::Resource(resource_type) => {
             // For resources, we convert to a Type reference for now
             // In the future, this could be expanded to include full resource types
             Ok(FormatExternType::Type(0))
         },
-        wrt_foundation::ExternType::Instance(instance_type) => {
+        kiln_foundation::ExternType::Instance(instance_type) => {
             // Convert instance exports
             // Note: instance_type.exports is BoundedVec<Export<P>>, not tuples
             let exports_result: Result<Vec<(String, FormatExternType)>> = instance_type
@@ -1118,7 +1118,7 @@ pub fn complete_types_to_format_extern_type<P: wrt_foundation::MemoryProvider>(
                 exports: exports_result?,
             })
         },
-        wrt_foundation::ExternType::Component(component_type) => {
+        kiln_foundation::ExternType::Component(component_type) => {
             // Convert component imports
             // Note: component_type.imports is BoundedVec<Import<P>>, not tuples
             let imports_result: Result<Vec<(String, String, FormatExternType)>> = component_type
@@ -1169,17 +1169,17 @@ pub fn complete_types_to_format_extern_type<P: wrt_foundation::MemoryProvider>(
                 type_idx: 0, // Placeholder type index
             })
         },
-        wrt_foundation::ExternType::Tag(_tag_type) => {
+        kiln_foundation::ExternType::Tag(_tag_type) => {
             // Tag types (exception handling) - not supported yet
             Err(Error::runtime_execution_error("Tag types not supported"))
         },
-        wrt_foundation::ExternType::CoreModule(_module_type) => {
+        kiln_foundation::ExternType::CoreModule(_module_type) => {
             // Core module types - not supported yet
             Err(Error::runtime_execution_error(
                 "CoreModule types not supported",
             ))
         },
-        wrt_foundation::ExternType::TypeDef(_type_def) => {
+        kiln_foundation::ExternType::TypeDef(_type_def) => {
             // Type definitions - not supported yet
             Err(Error::runtime_execution_error(
                 "TypeDef types not supported",
@@ -1188,22 +1188,22 @@ pub fn complete_types_to_format_extern_type<P: wrt_foundation::MemoryProvider>(
     }
 }
 
-/// Complete bidirectional conversion from wrt_format::component::WrtExternType
-/// to wrt_foundation::ExternType
+/// Complete bidirectional conversion from kiln_format::component::KilnExternType
+/// to kiln_foundation::ExternType
 ///
-/// This function handles all WrtExternType variants comprehensively, fixing
+/// This function handles all KilnExternType variants comprehensively, fixing
 /// previous compatibility issues.
 ///
 /// # Arguments
 ///
-/// * `format_extern_type` - The wrt_format::component::WrtExternType to convert
+/// * `format_extern_type` - The kiln_format::component::KilnExternType to convert
 ///
 /// # Returns
 ///
-/// * Result containing the converted wrt_foundation::ExternType or an error
-pub fn complete_format_to_types_extern_type<P: wrt_foundation::MemoryProvider>(
+/// * Result containing the converted kiln_foundation::ExternType or an error
+pub fn complete_format_to_types_extern_type<P: kiln_foundation::MemoryProvider>(
     format_extern_type: &FormatExternType,
-) -> Result<wrt_foundation::ExternType<P>> {
+) -> Result<kiln_foundation::ExternType<P>> {
     match format_extern_type {
         FormatExternType::Module { type_idx } => {
             // Core module type - not yet implemented
@@ -1216,8 +1216,8 @@ pub fn complete_format_to_types_extern_type<P: wrt_foundation::MemoryProvider>(
             // each parameter
             let mut param_types = Vec::new();
             for (_, format_val_type) in params {
-                // First convert to WrtTypesValType, then to ValueType if needed
-                let _types_val_type: wrt_foundation::ValType<P> =
+                // First convert to KilnTypesValType, then to ValueType if needed
+                let _types_val_type: kiln_foundation::ValType<P> =
                     convert_format_to_types_valtype(format_val_type);
                 match convert_format_valtype_to_valuetype(format_val_type) {
                     Ok(value_type) => param_types.push(value_type),
@@ -1235,8 +1235,8 @@ pub fn complete_format_to_types_extern_type<P: wrt_foundation::MemoryProvider>(
             // result
             let mut result_types = Vec::new();
             for format_val_type in results {
-                // First convert to WrtTypesValType, then to ValueType if needed
-                let _types_val_type: wrt_foundation::ValType<P> =
+                // First convert to KilnTypesValType, then to ValueType if needed
+                let _types_val_type: kiln_foundation::ValType<P> =
                     convert_format_to_types_valtype(format_val_type);
                 match convert_format_valtype_to_valuetype(format_val_type) {
                     Ok(value_type) => result_types.push(value_type),
@@ -1250,14 +1250,14 @@ pub fn complete_format_to_types_extern_type<P: wrt_foundation::MemoryProvider>(
 
             // Create a new FuncType properly
             let provider = P::default();
-            Ok(wrt_foundation::ExternType::Func(
-                wrt_foundation::FuncType::new(param_types, result_types)?,
+            Ok(kiln_foundation::ExternType::Func(
+                kiln_foundation::FuncType::new(param_types, result_types)?,
             ))
         },
         FormatExternType::Value(format_val_type) => {
             // Value types typically map to globals in the runtime
-            // First convert to WrtTypesValType, then to ValueType if needed
-            let _types_val_type: wrt_foundation::ValType<P> =
+            // First convert to KilnTypesValType, then to ValueType if needed
+            let _types_val_type: kiln_foundation::ValType<P> =
                 convert_format_to_types_valtype(format_val_type);
             let value_type = match convert_format_valtype_to_valuetype(format_val_type) {
                 Ok(vt) => vt,
@@ -1269,8 +1269,8 @@ pub fn complete_format_to_types_extern_type<P: wrt_foundation::MemoryProvider>(
                     ));
                 },
             };
-            Ok(wrt_foundation::ExternType::Global(
-                wrt_foundation::GlobalType {
+            Ok(kiln_foundation::ExternType::Global(
+                kiln_foundation::GlobalType {
                     value_type,
                     mutable: false, // Values are typically immutable
                 },
@@ -1279,8 +1279,8 @@ pub fn complete_format_to_types_extern_type<P: wrt_foundation::MemoryProvider>(
         FormatExternType::Type(type_idx) => {
             // Type references typically map to resources for now
             // ResourceType is a tuple struct: ResourceType(u32, PhantomData<P>)
-            Ok(wrt_foundation::ExternType::Resource(
-                wrt_foundation::ResourceType(*type_idx, core::marker::PhantomData),
+            Ok(kiln_foundation::ExternType::Resource(
+                kiln_foundation::ResourceType(*type_idx, core::marker::PhantomData),
             ))
         },
         FormatExternType::Instance { exports } => {
@@ -1288,14 +1288,14 @@ pub fn complete_format_to_types_extern_type<P: wrt_foundation::MemoryProvider>(
             let provider = P::default();
 
             // Convert instance exports to Export<P> structs
-            let mut export_vec: wrt_foundation::BoundedVec<wrt_foundation::Export<P>, 128, P> =
-                wrt_foundation::BoundedVec::new(provider.clone())?;
+            let mut export_vec: kiln_foundation::BoundedVec<kiln_foundation::Export<P>, 128, P> =
+                kiln_foundation::BoundedVec::new(provider.clone())?;
 
             for (name, extern_type) in exports {
                 let types_extern = complete_format_to_types_extern_type::<P>(extern_type)?;
-                let name_wasm = wrt_foundation::WasmName::try_from_str(name)
+                let name_wasm = kiln_foundation::WasmName::try_from_str(name)
                     .map_err(|_| Error::runtime_execution_error("Invalid export name"))?;
-                let export = wrt_foundation::Export {
+                let export = kiln_foundation::Export {
                     name: name_wasm,
                     ty: types_extern,
                     desc: None,
@@ -1305,8 +1305,8 @@ pub fn complete_format_to_types_extern_type<P: wrt_foundation::MemoryProvider>(
                     .map_err(|_| Error::capacity_exceeded("Too many exports"))?;
             }
 
-            Ok(wrt_foundation::ExternType::Instance(
-                wrt_foundation::InstanceType {
+            Ok(kiln_foundation::ExternType::Instance(
+                kiln_foundation::InstanceType {
                     exports: export_vec,
                 },
             ))
@@ -1316,26 +1316,26 @@ pub fn complete_format_to_types_extern_type<P: wrt_foundation::MemoryProvider>(
             let provider = P::default();
 
             // Convert component imports to Import<P> structs
-            let mut import_vec: wrt_foundation::BoundedVec<wrt_foundation::Import<P>, 128, P> =
-                wrt_foundation::BoundedVec::new(provider.clone())?;
+            let mut import_vec: kiln_foundation::BoundedVec<kiln_foundation::Import<P>, 128, P> =
+                kiln_foundation::BoundedVec::new(provider.clone())?;
 
             // No imports/exports to iterate - type_idx is just a reference
             // Create empty bounded vecs
-            let export_vec: wrt_foundation::BoundedVec<wrt_foundation::Export<P>, 128, P> =
-                wrt_foundation::BoundedVec::new(provider.clone())?;
+            let export_vec: kiln_foundation::BoundedVec<kiln_foundation::Export<P>, 128, P> =
+                kiln_foundation::BoundedVec::new(provider.clone())?;
 
             // Create empty instances BoundedVec
-            let instances = wrt_foundation::BoundedVec::new(provider.clone())?;
+            let instances = kiln_foundation::BoundedVec::new(provider.clone())?;
 
-            Ok(wrt_foundation::ExternType::Component(
-                wrt_foundation::ComponentType {
+            Ok(kiln_foundation::ExternType::Component(
+                kiln_foundation::ComponentType {
                     imports: import_vec,
                     exports: export_vec,
-                    aliases: wrt_foundation::BoundedVec::new(provider.clone())?,
+                    aliases: kiln_foundation::BoundedVec::new(provider.clone())?,
                     instances,
-                    core_instances: wrt_foundation::BoundedVec::new(provider.clone())?,
-                    component_types: wrt_foundation::BoundedVec::new(provider.clone())?,
-                    core_types: wrt_foundation::BoundedVec::new(provider.clone())?,
+                    core_instances: kiln_foundation::BoundedVec::new(provider.clone())?,
+                    component_types: kiln_foundation::BoundedVec::new(provider.clone())?,
+                    core_types: kiln_foundation::BoundedVec::new(provider.clone())?,
                 },
             ))
         },

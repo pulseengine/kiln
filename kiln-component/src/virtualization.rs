@@ -16,7 +16,7 @@ use core::{
     sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     collections::StaticMap as BoundedMap,
     collections::StaticVec as BoundedVec,
@@ -26,7 +26,7 @@ use wrt_foundation::{
 };
 
 use crate::bounded_component_infra::ComponentProvider;
-use crate::prelude::WrtComponentValue;
+use crate::prelude::KilnComponentValue;
 
 const MAX_VIRTUAL_COMPONENTS: usize = 256;
 const MAX_VIRTUAL_IMPORTS: usize = 1024;
@@ -60,10 +60,10 @@ impl fmt::Display for VirtualizationError {
 #[cfg(feature = "std")]
 impl std::error::Error for VirtualizationError {}
 
-// Conversion to wrt_error::Error for unified error handling
-impl From<VirtualizationError> for wrt_error::Error {
+// Conversion to kiln_error::Error for unified error handling
+impl From<VirtualizationError> for kiln_error::Error {
     fn from(err: VirtualizationError) -> Self {
-        use wrt_error::{ErrorCategory, codes};
+        use kiln_error::{ErrorCategory, codes};
         match err.kind {
             VirtualizationErrorKind::CapabilityDenied => Self::new(
                 ErrorCategory::ComponentRuntime,
@@ -104,7 +104,7 @@ impl From<VirtualizationError> for wrt_error::Error {
     }
 }
 
-pub type VirtualizationResult<T> = wrt_error::Result<T>;
+pub type VirtualizationResult<T> = kiln_error::Result<T>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Capability {
@@ -141,7 +141,7 @@ impl Default for Capability {
 }
 
 impl Checksummable for Capability {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::Memory { max_size } => {
                 0u8.update_checksum(checksum);
@@ -175,11 +175,11 @@ impl Checksummable for Capability {
 }
 
 impl ToBytes for Capability {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::Random => 0u8.to_bytes_with_provider(writer, provider),
             _ => 1u8.to_bytes_with_provider(writer, provider),
@@ -188,10 +188,10 @@ impl ToBytes for Capability {
 }
 
 impl FromBytes for Capability {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        _reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        _reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -215,7 +215,7 @@ pub struct CapabilityGrant {
 }
 
 impl Checksummable for CapabilityGrant {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.capability.update_checksum(checksum);
         self.granted_to.update_checksum(checksum);
         self.granted_at.update_checksum(checksum);
@@ -230,11 +230,11 @@ impl Checksummable for CapabilityGrant {
 }
 
 impl ToBytes for CapabilityGrant {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.capability.to_bytes_with_provider(writer, provider)?;
         self.granted_to.to_bytes_with_provider(writer, provider)?;
         self.granted_at.to_bytes_with_provider(writer, provider)?;
@@ -253,10 +253,10 @@ impl ToBytes for CapabilityGrant {
 }
 
 impl FromBytes for CapabilityGrant {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let capability = Capability::from_bytes_with_provider(reader, provider)?;
         let granted_to = ComponentInstanceId::from_bytes_with_provider(reader, provider)?;
         let granted_at = u64::from_bytes_with_provider(reader, provider)?;
@@ -345,7 +345,7 @@ pub struct VirtualMemoryRegion {
 }
 
 impl Checksummable for VirtualMemoryRegion {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.start_addr.update_checksum(checksum);
         self.size.update_checksum(checksum);
         self.permissions.update_checksum(checksum);
@@ -367,11 +367,11 @@ impl ToBytes for VirtualMemoryRegion {
         }
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_usize_le(self.start_addr)?;
         writer.write_usize_le(self.size)?;
         self.permissions.to_bytes_with_provider(writer, provider)?;
@@ -385,10 +385,10 @@ impl ToBytes for VirtualMemoryRegion {
 }
 
 impl FromBytes for VirtualMemoryRegion {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let start_addr = reader.read_usize_le()?;
         let size = reader.read_usize_le()?;
         let permissions = MemoryPermissions::from_bytes_with_provider(reader, provider)?;
@@ -420,7 +420,7 @@ pub struct MemoryPermissions {
 }
 
 impl Checksummable for MemoryPermissions {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.read.update_checksum(checksum);
         self.write.update_checksum(checksum);
         self.execute.update_checksum(checksum);
@@ -432,11 +432,11 @@ impl ToBytes for MemoryPermissions {
         4 // 4 bytes for flags
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let flags = (self.read as u32) | ((self.write as u32) << 1) | ((self.execute as u32) << 2);
         writer.write_u32_le(flags)?;
         Ok(())
@@ -444,10 +444,10 @@ impl ToBytes for MemoryPermissions {
 }
 
 impl FromBytes for MemoryPermissions {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let flags = reader.read_u32_le()?;
         Ok(Self {
             read: (flags & 1) != 0,
@@ -467,7 +467,7 @@ pub enum IsolationLevel {
 }
 
 impl Checksummable for IsolationLevel {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::None => 0u8.update_checksum(checksum),
             Self::Basic => 1u8.update_checksum(checksum),
@@ -478,11 +478,11 @@ impl Checksummable for IsolationLevel {
 }
 
 impl ToBytes for IsolationLevel {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let val = match self {
             Self::None => 0u8,
             Self::Basic => 1u8,
@@ -494,10 +494,10 @@ impl ToBytes for IsolationLevel {
 }
 
 impl FromBytes for IsolationLevel {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let val = u8::from_bytes_with_provider(reader, provider)?;
         Ok(match val {
             0 => Self::None,
@@ -533,7 +533,7 @@ impl Default for ResourceLimits {
 }
 
 impl Checksummable for ResourceLimits {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.max_memory.update_checksum(checksum);
         self.max_cpu_time_ms.update_checksum(checksum);
         self.max_file_handles.update_checksum(checksum);
@@ -544,11 +544,11 @@ impl Checksummable for ResourceLimits {
 }
 
 impl ToBytes for ResourceLimits {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.max_memory.to_bytes_with_provider(writer, provider)?;
         self.max_cpu_time_ms.to_bytes_with_provider(writer, provider)?;
         self.max_file_handles.to_bytes_with_provider(writer, provider)?;
@@ -560,10 +560,10 @@ impl ToBytes for ResourceLimits {
 }
 
 impl FromBytes for ResourceLimits {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             max_memory: usize::from_bytes_with_provider(reader, provider)?,
             max_cpu_time_ms: u64::from_bytes_with_provider(reader, provider)?,
@@ -624,7 +624,7 @@ pub struct ResourceUsage {
 }
 
 impl Checksummable for ResourceUsage {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.memory_used.update_checksum(checksum);
         self.cpu_time_used_ms.update_checksum(checksum);
         self.file_handles_used.update_checksum(checksum);
@@ -635,11 +635,11 @@ impl Checksummable for ResourceUsage {
 }
 
 impl ToBytes for ResourceUsage {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.memory_used.to_bytes_with_provider(writer, provider)?;
         self.cpu_time_used_ms.to_bytes_with_provider(writer, provider)?;
         self.file_handles_used.to_bytes_with_provider(writer, provider)?;
@@ -651,10 +651,10 @@ impl ToBytes for ResourceUsage {
 }
 
 impl FromBytes for ResourceUsage {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             memory_used: usize::from_bytes_with_provider(reader, provider)?,
             cpu_time_used_ms: u64::from_bytes_with_provider(reader, provider)?,
@@ -949,7 +949,7 @@ impl VirtualizationManager {
         &self,
         instance_id: ComponentInstanceId,
         import_name: &str,
-    ) -> VirtualizationResult<Option<WrtComponentValue<ComponentProvider>>> {
+    ) -> VirtualizationResult<Option<KilnComponentValue<ComponentProvider>>> {
         let component =
             self.virtual_components.get(&instance_id).ok_or_else(|| VirtualizationError {
                 kind: VirtualizationErrorKind::InvalidVirtualComponent,
@@ -958,7 +958,7 @@ impl VirtualizationManager {
 
         let import_name_string = String::from(import_name);
         let import = component.virtual_imports.get(&import_name_string).ok_or_else(|| {
-            wrt_error::Error::from(VirtualizationError {
+            kiln_error::Error::from(VirtualizationError {
                 kind: VirtualizationErrorKind::ImportNotFound,
                 message: String::from("Component not found"),
             })
@@ -1056,18 +1056,18 @@ impl VirtualizationManager {
     fn resolve_host_function(
         &self,
         name: &str,
-    ) -> VirtualizationResult<Option<WrtComponentValue<ComponentProvider>>> {
+    ) -> VirtualizationResult<Option<KilnComponentValue<ComponentProvider>>> {
         let name_string = String::from(name);
         if let Some(export) = self.host_exports.get(&name_string) {
             match &export.handler {
                 HostExportHandler::Memory { .. } => {
-                    Ok(Some(WrtComponentValue::<ComponentProvider>::U32(0)))
+                    Ok(Some(KilnComponentValue::<ComponentProvider>::U32(0)))
                 },
-                HostExportHandler::Time => Ok(Some(WrtComponentValue::<ComponentProvider>::U64(
+                HostExportHandler::Time => Ok(Some(KilnComponentValue::<ComponentProvider>::U64(
                     self.get_current_time(),
                 ))),
                 HostExportHandler::Random => {
-                    Ok(Some(WrtComponentValue::<ComponentProvider>::U32(42)))
+                    Ok(Some(KilnComponentValue::<ComponentProvider>::U32(42)))
                 },
                 _ => Ok(None),
             }
@@ -1080,7 +1080,7 @@ impl VirtualizationManager {
         &self,
         parent_id: ComponentInstanceId,
         export_name: &str,
-    ) -> VirtualizationResult<Option<WrtComponentValue<ComponentProvider>>> {
+    ) -> VirtualizationResult<Option<KilnComponentValue<ComponentProvider>>> {
         if let Some(parent) = self.virtual_components.get(&parent_id) {
             let export_name_string = String::from(export_name);
             if let Some(export) = parent.virtual_exports.get(&export_name_string) {
@@ -1104,7 +1104,7 @@ impl VirtualizationManager {
         &self,
         sibling_id: ComponentInstanceId,
         export_name: &str,
-    ) -> VirtualizationResult<Option<WrtComponentValue<ComponentProvider>>> {
+    ) -> VirtualizationResult<Option<KilnComponentValue<ComponentProvider>>> {
         if let Some(sibling) = self.virtual_components.get(&sibling_id) {
             let export_name_string = String::from(export_name);
             if let Some(export) = sibling.virtual_exports.get(&export_name_string) {
@@ -1127,7 +1127,7 @@ impl VirtualizationManager {
     fn resolve_virtual_provider(
         &self,
         provider_id: &str,
-    ) -> VirtualizationResult<Option<WrtComponentValue<ComponentProvider>>> {
+    ) -> VirtualizationResult<Option<KilnComponentValue<ComponentProvider>>> {
         Ok(None)
     }
 

@@ -22,9 +22,9 @@ wrt-error = "0.1"
 ```
 
 ```rust
-use wrt_error::{Error, WrtResult, ResultExt};
+use wrt_error::{Error, KilnResult, ResultExt};
 
-fn parse_module(bytes: &[u8]) -> WrtResult<Module> {
+fn parse_module(bytes: &[u8]) -> KilnResult<Module> {
     validate_magic(bytes)
         .context("Invalid WebAssembly module")?;
     

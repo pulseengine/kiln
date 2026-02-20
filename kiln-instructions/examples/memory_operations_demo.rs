@@ -2,8 +2,8 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Demonstration of memory operations bridging between wrt-instructions and
-//! wrt-runtime
+//! Demonstration of memory operations bridging between kiln-instructions and
+//! kiln-runtime
 //!
 //! This example shows how the MemoryOperations trait implementation allows
 //! WebAssembly memory instructions to work directly with the runtime Memory
@@ -13,8 +13,8 @@
 
 #![cfg(any(feature = "std"))]
 
-use wrt_error::Result;
-use wrt_instructions::{
+use kiln_error::Result;
+use kiln_instructions::{
     memory_ops::{
         MemoryCopy,
         MemoryFill,
@@ -44,7 +44,7 @@ impl MemoryOperations for MockMemory {
         let start = offset as usize;
         let end = start + len as usize;
         if end > self.data.len() {
-            return Err(wrt_error::Error::memory_error("Read out of bounds"));
+            return Err(kiln_error::Error::memory_error("Read out of bounds"));
         }
         Ok(self.data[start..end].to_vec())
     }
@@ -122,7 +122,7 @@ impl MemoryOperations for MockMemory {
 
 fn main() -> Result<()> {
     // Initialize global memory system first
-    wrt_foundation::memory_init::MemoryInitializer::initialize()
+    kiln_foundation::memory_init::MemoryInitializer::initialize()
         .expect("Failed to initialize memory system");
 
     println!("WebAssembly Memory Operations Demo");
@@ -188,7 +188,7 @@ fn main() -> Result<()> {
     f32_store.execute(
         &mut memory,
         &Value::I32(0),
-        &Value::F32(wrt_foundation::FloatBits32::from_float(3.14159)),
+        &Value::F32(kiln_foundation::FloatBits32::from_float(3.14159)),
     )?;
 
     let f32_load = MemoryLoad::f32(300, 4);
@@ -213,7 +213,7 @@ fn main() -> Result<()> {
     println!("  New size after growth: {} bytes", new_size);
 
     println!("\n✓ All memory operations completed successfully!");
-    println!("✓ The MemoryOperations trait successfully bridges wrt-instructions and wrt-runtime!");
+    println!("✓ The MemoryOperations trait successfully bridges kiln-instructions and kiln-runtime!");
 
     // Memory cleanup happens automatically via RAII
     println!("\nMemory operations demo completed successfully!");
@@ -274,7 +274,7 @@ mod tests {
         f64_store.execute(
             &mut memory,
             &Value::I32(0),
-            &Value::F64(wrt_foundation::FloatBits64::from_float(2.71828)),
+            &Value::F64(kiln_foundation::FloatBits64::from_float(2.71828)),
         )?;
 
         let f64_load = MemoryLoad::f64(0, 8);

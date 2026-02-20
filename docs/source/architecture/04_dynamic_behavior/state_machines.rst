@@ -4,7 +4,7 @@ State Machines and Lifecycle Management
 ========================================
 
 This section documents the state machines that govern component lifecycle and runtime behavior
-in Pulseengine (WRT Edition), showing how state transitions work across different environments.
+in Pulseengine (Kiln Edition), showing how state transitions work across different environments.
 
 .. arch_component:: ARCH_COMP_STATE_001
    :title: Component Lifecycle State Machine
@@ -21,7 +21,7 @@ Component Lifecycle State Machine
 State Definitions
 ~~~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/component.rs:89-156``:
+From ``kiln-component/src/component.rs:89-156``:
 
 .. code-block:: rust
 
@@ -83,7 +83,7 @@ From ``wrt-component/src/component.rs:89-156``:
 State Transition Implementation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Type-safe state transitions (``wrt-component/src/component.rs:178-245``):
+Type-safe state transitions (``kiln-component/src/component.rs:178-245``):
 
 .. code-block:: rust
 
@@ -158,7 +158,7 @@ Runtime Execution State Machine
 Execution Engine States
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-runtime/src/execution.rs:123-189``:
+From ``kiln-runtime/src/execution.rs:123-189``:
 
 .. code-block:: rust
 
@@ -227,7 +227,7 @@ From ``wrt-runtime/src/execution.rs:123-189``:
 State Transition Guards and Actions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-runtime/src/execution.rs:234-289``:
+From ``kiln-runtime/src/execution.rs:234-289``:
 
 .. code-block:: rust
 
@@ -301,7 +301,7 @@ Memory Management State Machine
 Memory Region States
 ~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-foundation/src/safe_memory.rs:189-256``:
+From ``kiln-foundation/src/safe_memory.rs:189-256``:
 
 .. code-block:: rust
 
@@ -366,7 +366,7 @@ Resource Lifecycle State Machine
 Resource States
 ~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/resources/resource_manager.rs:145-234``:
+From ``kiln-component/src/resources/resource_manager.rs:145-234``:
 
 .. code-block:: rust
 

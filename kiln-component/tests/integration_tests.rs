@@ -1,5 +1,5 @@
-use wrt_component::{Error, parser};
-use wrt_decoder::{Error as DecoderError, Parser};
+use kiln_component::{Error, parser};
+use kiln_decoder::{Error as DecoderError, Parser};
 
 /// Helper to create a complex test module with multiple section types
 fn create_complex_test_module() -> Vec<u8> {
@@ -196,7 +196,7 @@ fn test_section_access_api() {
     let module = create_complex_test_module();
 
     // Test that we can find import sections directly
-    let import_section = wrt_decoder::find_import_section(&module);
+    let import_section = kiln_decoder::find_import_section(&module);
     assert!(import_section.is_ok());
 
     let import_section = import_section.unwrap();

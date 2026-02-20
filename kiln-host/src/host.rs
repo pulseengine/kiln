@@ -45,7 +45,7 @@ fn create_host_provider() -> Result<HostProvider> {
 }
 
 #[cfg(not(feature = "std"))]
-type HostString = wrt_foundation::bounded::BoundedString<256>;
+type HostString = kiln_foundation::bounded::BoundedString<256>;
 
 #[cfg(feature = "std")]
 type HostString = String;
@@ -55,7 +55,7 @@ type HostString = String;
 type ValueVec = Vec<Value>;
 
 #[cfg(not(feature = "std"))]
-type ValueVec = wrt_foundation::BoundedVec<Value, 16, HostProvider>;
+type ValueVec = kiln_foundation::BoundedVec<Value, 16, HostProvider>;
 
 // Handler function type alias
 #[cfg(feature = "std")]
@@ -70,47 +70,47 @@ pub struct HandlerData {
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::Checksummable for HandlerData {
-    fn update_checksum(&self, _checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for HandlerData {
+    fn update_checksum(&self, _checksum: &mut kiln_foundation::verification::Checksum) {
         // HandlerData has no content to checksum
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::ToBytes for HandlerData {
+impl kiln_foundation::traits::ToBytes for HandlerData {
     fn serialized_size(&self) -> usize {
         0
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        _writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        _writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         Ok(())
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::FromBytes for HandlerData {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        _reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for HandlerData {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        _reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(HandlerData::default())
     }
 }
 
-// Conditional imports for WRT allocator
+// Conditional imports for Kiln allocator
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use wrt_foundation::allocator::{
+use kiln_foundation::allocator::{
     CrateId,
-    WrtHashMap,
+    KilnHashMap,
 };
 
 // Handler map type for different configurations
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-type HandlerMap = WrtHashMap<String, HandlerFn, { CrateId::Host as u8 }, 128>;
+type HandlerMap = KilnHashMap<String, HandlerFn, { CrateId::Host as u8 }, 128>;
 
 #[cfg(all(feature = "std", not(feature = "safety-critical")))]
 type HandlerMap = HashMap<String, HandlerFn>;
@@ -120,7 +120,7 @@ type HandlerMap = HashMap<HostString, HandlerData, 32, HostProvider>;
 
 // Critical builtins map type for different configurations
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-type CriticalBuiltinsMap = WrtHashMap<BuiltinType, HandlerFn, { CrateId::Host as u8 }, 32>;
+type CriticalBuiltinsMap = KilnHashMap<BuiltinType, HandlerFn, { CrateId::Host as u8 }, 32>;
 
 #[cfg(all(feature = "std", not(feature = "safety-critical")))]
 type CriticalBuiltinsMap = HashMap<BuiltinType, HandlerFn>;
@@ -128,8 +128,8 @@ type CriticalBuiltinsMap = HashMap<BuiltinType, HandlerFn>;
 #[cfg(not(feature = "std"))]
 type CriticalBuiltinsMap = HashMap<BuiltinType, HandlerData, 32, HostProvider>;
 
-/// Converts wrt_foundation::values::Value to
-/// wrt_foundation::component_value::ComponentValue
+/// Converts kiln_foundation::values::Value to
+/// kiln_foundation::component_value::ComponentValue
 ///
 /// This function converts WebAssembly core values to Component Model values
 /// with support for both std and no_std environments.
@@ -137,15 +137,15 @@ type CriticalBuiltinsMap = HashMap<BuiltinType, HandlerData, 32, HostProvider>;
 fn convert_to_component_values(
     values: &[Value],
 ) -> Vec<
-    wrt_foundation::component_value::ComponentValue<wrt_foundation::safe_memory::NoStdProvider<64>>,
+    kiln_foundation::component_value::ComponentValue<kiln_foundation::safe_memory::NoStdProvider<64>>,
 > {
     values
         .iter()
         .map(|v| match v {
             Value::I32(i) => ComponentValue::S32(*i),
             Value::I64(i) => ComponentValue::S64(*i),
-            Value::F32(f) => ComponentValue::F32(wrt_foundation::FloatBits32(f.to_bits())),
-            Value::F64(f) => ComponentValue::F64(wrt_foundation::FloatBits64(f.to_bits())),
+            Value::F32(f) => ComponentValue::F32(kiln_foundation::FloatBits32(f.to_bits())),
+            Value::F64(f) => ComponentValue::F64(kiln_foundation::FloatBits64(f.to_bits())),
             Value::V128(v) => {
                 // Convert V128 to i64 pair for component model (use lower 64 bits)
                 let low = i64::from_le_bytes(v.bytes[..8].try_into().unwrap());
@@ -160,15 +160,15 @@ fn convert_to_component_values(
         .collect()
 }
 
-/// Converts wrt_foundation::component_value::ComponentValue to
-/// wrt_foundation::values::Value
+/// Converts kiln_foundation::component_value::ComponentValue to
+/// kiln_foundation::values::Value
 ///
 /// This function converts Component Model values to WebAssembly core values
 /// with support for both std and no_std environments.
 #[cfg(feature = "std")]
 fn convert_from_component_values(
-    values: &[wrt_foundation::component_value::ComponentValue<
-        wrt_foundation::safe_memory::NoStdProvider<64>,
+    values: &[kiln_foundation::component_value::ComponentValue<
+        kiln_foundation::safe_memory::NoStdProvider<64>,
     >],
 ) -> ValueVec {
     values
@@ -492,7 +492,7 @@ impl Clone for BuiltinHost {
 
 #[cfg(test)]
 mod tests {
-    use wrt_foundation::values::Value;
+    use kiln_foundation::values::Value;
 
     use super::*;
 

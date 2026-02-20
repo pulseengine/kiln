@@ -8,7 +8,7 @@ Sync Primitives: Coordination Made Simple
    
    -- Rob Pike
 
-Sometimes you need more than just atomic operations. When coordination gets complex, you need the big guns: mutexes, read-write locks, and once cells. WRT's sync primitives give you the power of coordination without the pain of platform-specific details.
+Sometimes you need more than just atomic operations. When coordination gets complex, you need the big guns: mutexes, read-write locks, and once cells. Kiln's sync primitives give you the power of coordination without the pain of platform-specific details.
 
 .. admonition:: What You'll Learn
    :class: note
@@ -16,19 +16,19 @@ Sometimes you need more than just atomic operations. When coordination gets comp
    - Using ``WrtMutex`` for mutual exclusion in std and no_std
    - ``WrtRwLock`` for reader-writer scenarios  
    - ``WrtParkingRwLock`` for advanced performance (std only)
-   - ``WrtOnce`` for lazy, one-time initialization
+   - ``KilnOnce`` for lazy, one-time initialization
    - Real patterns for concurrent systems
 
 WrtMutex: Universal Mutual Exclusion 🔐
 ---------------------------------------
 
-WRT's mutex adapts to your environment - parking_lot in std, spin locks in no_std:
+Kiln's mutex adapts to your environment - parking_lot in std, spin locks in no_std:
 
 .. code-block:: rust
    :caption: Basic WrtMutex usage
    :linenos:
 
-   use wrt_sync::mutex::{WrtMutex, WrtMutexGuard};
+   use kiln_sync::mutex::{WrtMutex, WrtMutexGuard};
    use core::sync::atomic::{AtomicU32, Ordering};
    
    // Works in both std and no_std!
@@ -94,9 +94,9 @@ In no_std environments, WrtMutex uses a spin lock implementation:
 
    #![no_std]
    
-   use wrt_sync::mutex::WrtMutex;
-   use wrt_foundation::bounded::{BoundedVec, CapacityError};
-   use wrt_foundation::safe_memory::NoStdProvider;
+   use kiln_sync::mutex::WrtMutex;
+   use kiln_foundation::bounded::{BoundedVec, CapacityError};
+   use kiln_foundation::safe_memory::NoStdProvider;
    
    type EventProvider = NoStdProvider<2048>;
    const MAX_EVENTS: usize = 32;
@@ -148,9 +148,9 @@ When reads dominate, use ``WrtRwLock`` for better concurrency:
    :caption: Read-write lock for configuration
    :linenos:
 
-   use wrt_sync::rwlock::{WrtRwLock, WrtRwLockReadGuard, WrtRwLockWriteGuard};
-   use wrt_foundation::bounded::{BoundedString, CapacityError};
-   use wrt_foundation::safe_memory::NoStdProvider;
+   use kiln_sync::rwlock::{WrtRwLock, WrtRwLockReadGuard, WrtRwLockWriteGuard};
+   use kiln_foundation::bounded::{BoundedString, CapacityError};
+   use kiln_foundation::safe_memory::NoStdProvider;
    
    type ConfigProvider = NoStdProvider<4096>;
    
@@ -226,7 +226,7 @@ When you have std and need maximum performance:
    :linenos:
 
    #[cfg(feature = "std")]
-   use wrt_sync::rwlock::parking_impl::{
+   use kiln_sync::rwlock::parking_impl::{
        WrtParkingRwLock, 
        WrtParkingRwLockReadGuard,
        WrtParkingRwLockWriteGuard
@@ -290,17 +290,17 @@ When you have std and need maximum performance:
        }
    }
 
-WrtOnce: Initialize Once, Use Forever 🎯
+KilnOnce: Initialize Once, Use Forever 🎯
 ----------------------------------------
 
 Perfect for expensive one-time initialization:
 
 .. code-block:: rust
-   :caption: Lazy initialization with WrtOnce
+   :caption: Lazy initialization with KilnOnce
    :linenos:
 
-   use wrt_sync::once::WrtOnce;
-   use wrt_foundation::{
+   use kiln_sync::once::KilnOnce;
+   use kiln_foundation::{
        bounded::{BoundedVec, CapacityError},
        safe_memory::NoStdProvider,
    };
@@ -308,7 +308,7 @@ Perfect for expensive one-time initialization:
    type LookupProvider = NoStdProvider<8192>;
    
    // Global lookup table initialized on first use
-   static LOOKUP_TABLE: WrtOnce<BoundedVec<u16, 256, LookupProvider>> = WrtOnce::new();
+   static LOOKUP_TABLE: KilnOnce<BoundedVec<u16, 256, LookupProvider>> = KilnOnce::new();
    
    fn get_lookup_table() -> &'static BoundedVec<u16, 256, LookupProvider> {
        LOOKUP_TABLE.get_or_init(|| {
@@ -333,7 +333,7 @@ Perfect for expensive one-time initialization:
        features_enabled: u32,
    }
    
-   static SYSTEM_CONFIG: WrtOnce<SystemConfig> = WrtOnce::new();
+   static SYSTEM_CONFIG: KilnOnce<SystemConfig> = KilnOnce::new();
    
    fn initialize_system(device_id: u32) {
        SYSTEM_CONFIG.get_or_init(|| {
@@ -366,8 +366,8 @@ Combining sync primitives for a robust queue:
    :caption: Thread-safe producer-consumer queue
    :linenos:
 
-   use wrt_sync::{mutex::WrtMutex, once::WrtOnce};
-   use wrt_foundation::{
+   use kiln_sync::{mutex::WrtMutex, once::KilnOnce};
+   use kiln_foundation::{
        bounded_collections::{BoundedQueue, CapacityError},
        safe_memory::NoStdProvider,
    };
@@ -437,7 +437,7 @@ Combining sync primitives for a robust queue:
    }
    
    // Global message queue instance
-   static MESSAGE_QUEUE: WrtOnce<MessageQueue> = WrtOnce::new();
+   static MESSAGE_QUEUE: KilnOnce<MessageQueue> = KilnOnce::new();
    
    fn get_message_queue() -> &'static MessageQueue {
        MESSAGE_QUEUE.get_or_init(MessageQueue::new)
@@ -472,7 +472,7 @@ Understanding the cost of each primitive:
      - ~3ns (read)
      - N/A
      - Maximum performance
-   * - WrtOnce (after init)
+   * - KilnOnce (after init)
      - ~1ns
      - ~1ns
      - One-time setup
@@ -524,13 +524,13 @@ Common Pitfalls 🕳️
 Integration Patterns 🧩
 -----------------------
 
-WRT sync primitives work seamlessly with other components:
+Kiln sync primitives work seamlessly with other components:
 
 .. code-block:: rust
    :caption: Complete system example
 
-   use wrt_sync::{mutex::WrtMutex, rwlock::WrtRwLock, once::WrtOnce};
-   use wrt_foundation::{
+   use kiln_sync::{mutex::WrtMutex, rwlock::WrtRwLock, once::KilnOnce};
+   use kiln_foundation::{
        atomic_memory::AtomicMemoryOps,
        bounded::{BoundedVec, BoundedString},
        safe_memory::{SafeMemoryHandler, NoStdProvider},
@@ -555,7 +555,7 @@ Your Turn! 🎮
 
 Try these challenges:
 
-1. **Build a Thread Pool**: Use WrtMutex for work queue, WrtOnce for config
+1. **Build a Thread Pool**: Use WrtMutex for work queue, KilnOnce for config
 2. **Create a Stats Collector**: RwLock for metrics, atomic counters
 3. **Implement Async Executor**: Combine all primitives for task scheduling
 

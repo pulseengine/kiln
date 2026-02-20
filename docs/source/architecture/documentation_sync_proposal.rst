@@ -3,7 +3,7 @@
 Documentation Synchronization Proposal
 ======================================
 
-This document proposes comprehensive strategies for keeping the Pulseengine (WRT Edition) architecture
+This document proposes comprehensive strategies for keeping the Pulseengine (Kiln Edition) architecture
 documentation synchronized with the actual implementation, focusing on automated validation and
 architectural diagram generation.
 
@@ -32,7 +32,7 @@ Create a custom derive macro and attribute system for architectural components:
 
 .. code-block:: rust
 
-   // In code: wrt-component/src/component.rs
+   // In code: kiln-component/src/component.rs
    #[derive(ArchitecturalComponent)]
    #[arch_component(
        name = "ComponentLifecycle",
@@ -63,11 +63,11 @@ Create a custom derive macro and attribute system for architectural components:
 
 **Documentation Generation**:
 
-Create a cargo-wrt command that extracts these annotations and generates PlantUML:
+Create a cargo-kiln command that extracts these annotations and generates PlantUML:
 
 .. code-block:: bash
 
-   cargo-wrt generate-architecture-docs  # (planned command)
+   cargo-kiln generate-architecture-docs  # (planned command)
 
 This would produce:
 
@@ -97,7 +97,7 @@ This would produce:
 
 .. code-block:: rust
 
-   // In code: wrt-foundation/src/safe_memory.rs
+   // In code: kiln-foundation/src/safe_memory.rs
    #[interface_contract(
        name = "MemoryProvider",
        category = "Foundation",
@@ -126,7 +126,7 @@ This would produce:
    // In tests/architecture_validation.rs
    #[test]
    fn validate_memory_provider_contract() {
-       let contracts = extract_interface_contracts!("wrt-foundation");
+       let contracts = extract_interface_contracts!("kiln-foundation");
        let docs = parse_rst_documentation!("docs/source/architecture/03_interfaces/api_contracts.rst");
        
        for contract in contracts {
@@ -196,7 +196,7 @@ This would produce:
 
 .. code-block:: rust
 
-   // In code: wrt-foundation/src/bounded_collections.rs
+   // In code: kiln-foundation/src/bounded_collections.rs
    #[environment_behavior(
        feature = "std",
        behavior = "Dynamic heap allocation via Vec<T>",
@@ -217,7 +217,7 @@ This would produce:
 
    #[test]
    fn validate_environment_documentation() {
-       let behaviors = extract_environment_behaviors!("wrt-foundation");
+       let behaviors = extract_environment_behaviors!("kiln-foundation");
        let docs = parse_rst_documentation!("docs/source/architecture/03_interfaces/data_types.rst");
        
        for behavior in behaviors {
@@ -240,7 +240,7 @@ This would produce:
 
 .. code-block:: rust
 
-   // In code: wrt-foundation/src/bounded_collections.rs
+   // In code: kiln-foundation/src/bounded_collections.rs
    #[architecture_decision(
        id = "ADR-001",
        title = "Three-Tier Memory Allocation Strategy",
@@ -262,7 +262,7 @@ This would produce:
 
    #[test]
    fn validate_architecture_decisions() {
-       let adrs_in_code = extract_adrs!("wrt-foundation", "wrt-component");
+       let adrs_in_code = extract_adrs!("kiln-foundation", "kiln-component");
        let adrs_in_docs = parse_adr_directory!("docs/source/architecture/06_design_decisions/adr/");
        
        // Verify all code ADRs are documented
@@ -298,7 +298,7 @@ This would produce:
        - uses: actions/checkout@v4
        
        - name: Generate Architecture Diagrams
-         run: cargo-wrt generate-architecture-docs  # TODO: implement command
+         run: cargo-kiln generate-architecture-docs  # TODO: implement command
          
        - name: Validate Interface Contracts
          run: cargo test --test architecture_validation
@@ -310,7 +310,7 @@ This would produce:
          run: cargo test --test adr_validation
          
        - name: Check Documentation Coverage
-         run: cargo-wrt check-doc-coverage  # TODO: implement command
+         run: cargo-kiln check-doc-coverage  # TODO: implement command
          
        - name: Upload Generated Diagrams
          uses: actions/upload-artifact@v4
@@ -431,7 +431,7 @@ Benefits
 Example Output
 --------------
 
-Running `cargo-wrt validate-architecture-docs` (planned command) would produce:
+Running `cargo-kiln validate-architecture-docs` (planned command) would produce:
 
 .. code-block:: text
 

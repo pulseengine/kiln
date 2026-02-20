@@ -13,7 +13,7 @@ use core::{
     },
 };
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 use crate::memory::{
     PageAllocator,

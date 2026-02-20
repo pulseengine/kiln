@@ -1,7 +1,7 @@
 // #![allow(unsafe_code)] // Allow unsafe for UnsafeCell, raw pointers, and
 // Send/Sync impls
 
-// WRT - wrt-sync
+// Kiln - kiln-sync
 // Module: OnceCell - A one-time initialization primitive
 // SW-REQ-ID: REQ_CONCURRENCY_001
 //
@@ -11,7 +11,7 @@
 
 //! A cell that can be initialized at most once.
 //!
-//! This module provides a `WrtOnce<T>` type that allows for safe, one-time
+//! This module provides a `KilnOnce<T>` type that allows for safe, one-time
 //! initialization of a value, typically used for global statics.
 
 use core::{
@@ -20,7 +20,7 @@ use core::{
     mem::MaybeUninit,
 };
 
-use crate::mutex::WrtMutex; // Using the WrtMutex from this crate. Removed WrtMutexGuard as
+use crate::mutex::KilnMutex; // Using the KilnMutex from this crate. Removed KilnMutexGuard as
                             // it's not used directly here.
 
 /// A synchronization primitive which can be written to only once.
@@ -30,43 +30,43 @@ use crate::mutex::WrtMutex; // Using the WrtMutex from this crate. Removed WrtMu
 ///
 /// # Safety
 /// This implementation uses `UnsafeCell` to store the actual data `T` once
-/// initialized. The `WrtMutex<bool>` (`initialized_lock`) is used to ensure
+/// initialized. The `KilnMutex<bool>` (`initialized_lock`) is used to ensure
 /// that the initialization logic runs at most once. After initialization, the
 /// data is considered immutable and references can be safely given out.
-pub struct WrtOnce<T> {
-    mutex:       WrtMutex<()>, // Used as a traditional lock for the initialization check
+pub struct KilnOnce<T> {
+    mutex:       KilnMutex<()>, // Used as a traditional lock for the initialization check
     data:        UnsafeCell<MaybeUninit<T>>,
     initialized: AtomicBool, // Tracks if `data` is initialized
 }
 
 /// # Safety
-/// This implementation of `Send` for `WrtOnce<T>` is safe if `T` is `Send`,
+/// This implementation of `Send` for `KilnOnce<T>` is safe if `T` is `Send`,
 /// because access to the inner `UnsafeCell<MaybeUninit<T>>` data is
 /// synchronized. During initialization, the `mutex` ensures exclusive access.
 /// After initialization (`initialized` is true), the data is treated as
 /// immutable and accessed via shared references (`&T`), which is safe. The
 /// `AtomicBool` (`initialized`) is also `Send`.
-unsafe impl<T: Send> Send for WrtOnce<T> {}
+unsafe impl<T: Send> Send for KilnOnce<T> {}
 
 /// # Safety
-/// This implementation of `Sync` for `WrtOnce<T>` is safe if `T` is `Send +
+/// This implementation of `Sync` for `KilnOnce<T>` is safe if `T` is `Send +
 /// Sync`. `Send` is required because `T` is stored and potentially moved across
 /// threads during initialization. `Sync` is required because after
 /// initialization, `&T` can be shared across threads. Access to the inner
 /// `UnsafeCell<MaybeUninit<T>>` data is synchronized: during initialization,
 /// the `mutex` ensures exclusive access. After initialization (`initialized` is
 /// true), the data is accessed via `&T`. If `T` is `Sync`, then `&T` is `Send`,
-/// allowing `&WrtOnce<T>` to be `Sync`. The `AtomicBool` (`initialized`) is
+/// allowing `&KilnOnce<T>` to be `Sync`. The `AtomicBool` (`initialized`) is
 /// also `Sync`.
-unsafe impl<T: Send + Sync> Sync for WrtOnce<T> {}
+unsafe impl<T: Send + Sync> Sync for KilnOnce<T> {}
 
-impl<T> WrtOnce<T> {
-    /// Creates a new, empty `WrtOnce`.
+impl<T> KilnOnce<T> {
+    /// Creates a new, empty `KilnOnce`.
     #[inline]
     #[must_use]
     pub const fn new() -> Self {
         Self {
-            mutex:       WrtMutex::new(()),
+            mutex:       KilnMutex::new(()),
             data:        UnsafeCell::new(MaybeUninit::uninit()),
             initialized: AtomicBool::new(false),
         }
@@ -75,10 +75,10 @@ impl<T> WrtOnce<T> {
     /// Gets the reference to the underlying value, initializing it if
     /// necessary.
     ///
-    /// If `WrtOnce` is already initialized, this method returns immediately.
+    /// If `KilnOnce` is already initialized, this method returns immediately.
     /// Otherwise, it calls `f` to initialize the value, and then returns a
     /// reference. If multiple threads attempt to initialize the same
-    /// `WrtOnce` concurrently, only one thread will execute `f()`, and
+    /// `KilnOnce` concurrently, only one thread will execute `f()`, and
     /// others will block until initialization is complete.
     pub fn get_or_init<F>(&self, f: F) -> &T
     where
@@ -145,7 +145,7 @@ impl<T> WrtOnce<T> {
 
     /// Gets a reference to the underlying value if it is initialized.
     ///
-    /// Returns `None` if the `WrtOnce` has not been initialized yet.
+    /// Returns `None` if the `KilnOnce` has not been initialized yet.
     pub fn get(&self) -> Option<&T> {
         if self.initialized.load(Ordering::Acquire) {
             // Safety: `initialized` is true, so `data` has been initialized.
@@ -161,7 +161,7 @@ impl<T> WrtOnce<T> {
 
     /// # Safety
     ///
-    /// Caller must ensure that the `WrtOnce<T>` has been initialized prior to
+    /// Caller must ensure that the `KilnOnce<T>` has been initialized prior to
     /// calling this. This is typically ensured by checking
     /// `initialized.load(Ordering::Acquire)` first, or by virtue of program
     /// logic (e.g., after `get_or_init` has completed).
@@ -180,25 +180,25 @@ impl<T> WrtOnce<T> {
     }
 }
 
-impl<T> Default for WrtOnce<T> {
+impl<T> Default for KilnOnce<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for WrtOnce<T> {
+impl<T: fmt::Debug> fmt::Debug for KilnOnce<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.get() {
-            Some(v) => f.debug_struct("WrtOnce").field("data", v).finish(),
-            None => f.debug_struct("WrtOnce").field("data", &"<uninitialized>").finish(),
+            Some(v) => f.debug_struct("KilnOnce").field("data", v).finish(),
+            None => f.debug_struct("KilnOnce").field("data", &"<uninitialized>").finish(),
         }
     }
 }
 
 // It's good practice to ensure Drop is handled, though for `MaybeUninit<T>`
-// where T might need dropping, if WrtOnce itself is dropped, the T inside
+// where T might need dropping, if KilnOnce itself is dropped, the T inside
 // MaybeUninit should be dropped if it was initialized.
-impl<T> Drop for WrtOnce<T> {
+impl<T> Drop for KilnOnce<T> {
     fn drop(&mut self) {
         // If initialized, take the value and drop it.
         // Relaxed ordering is fine for the load, as `drop` has exclusive access.

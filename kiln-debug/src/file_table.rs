@@ -1,5 +1,5 @@
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     bounded::{BoundedVec, MAX_DWARF_FILE_TABLE},
     budget_aware_provider::CrateId,
     safe_managed_alloc,
@@ -36,8 +36,8 @@ impl<'a> PartialEq for FileEntry<'a> {
 
 impl<'a> Eq for FileEntry<'a> {}
 
-impl<'a> wrt_foundation::traits::Checksummable for FileEntry<'a> {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl<'a> kiln_foundation::traits::Checksummable for FileEntry<'a> {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.path.update_checksum(checksum);
         checksum.update_slice(&self.dir_index.to_le_bytes());
         checksum.update_slice(&self.mod_time.to_le_bytes());
@@ -45,12 +45,12 @@ impl<'a> wrt_foundation::traits::Checksummable for FileEntry<'a> {
     }
 }
 
-impl<'a> wrt_foundation::traits::ToBytes for FileEntry<'a> {
-    fn to_bytes_with_provider<'b, P: wrt_foundation::MemoryProvider>(
+impl<'a> kiln_foundation::traits::ToBytes for FileEntry<'a> {
+    fn to_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'b>,
+        writer: &mut kiln_foundation::traits::WriteStream<'b>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.path.to_bytes_with_provider(writer, provider)?;
         writer.write_u32_le(self.dir_index)?;
         writer.write_u64_le(self.mod_time)?;
@@ -59,11 +59,11 @@ impl<'a> wrt_foundation::traits::ToBytes for FileEntry<'a> {
     }
 }
 
-impl<'a> wrt_foundation::traits::FromBytes for FileEntry<'a> {
-    fn from_bytes_with_provider<'b, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'b>,
+impl<'a> kiln_foundation::traits::FromBytes for FileEntry<'a> {
+    fn from_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'b>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             path: DebugString::from_bytes_with_provider(reader, provider)?,
             dir_index: reader.read_u32_le()?,
@@ -121,7 +121,7 @@ impl<'a> FileTable<'a> {
         let index = self.directories.len() as u32;
         self.directories
             .push(dir)
-            .map_err(|_| wrt_error::Error::memory_error("Failed to add directory"))?;
+            .map_err(|_| kiln_error::Error::memory_error("Failed to add directory"))?;
         Ok(index)
     }
 
@@ -130,7 +130,7 @@ impl<'a> FileTable<'a> {
         let index = self.files.len() as u32;
         self.files
             .push(file)
-            .map_err(|_| wrt_error::Error::memory_error("Failed to add file"))?;
+            .map_err(|_| kiln_error::Error::memory_error("Failed to add file"))?;
         Ok(index)
     }
 

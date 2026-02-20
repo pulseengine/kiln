@@ -1,4 +1,4 @@
-//! Integration tests for wrtd with new WASI, component model, and platform
+//! Integration tests for kilnd with new WASI, component model, and platform
 //! features
 //!
 //! These tests validate the complete integration of:
@@ -11,27 +11,27 @@
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use wrt_error::Result;
+    use kiln_error::Result;
 
     use super::super::{
         MemoryProfiler,
         RuntimeStats,
         WasiVersion,
-        WrtdConfig,
-        WrtdEngine,
+        KilndConfig,
+        KilndEngine,
     };
 
     /// Test basic WASI integration with Preview 1
     #[test]
     #[cfg(feature = "wasi")]
     fn test_wasi_preview1_integration() {
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
         config.enable_wasi = true;
         config.wasi_version = WasiVersion::Preview1;
         config.enable_memory_profiling = true;
 
         // Add some WASI capabilities
-        use wrt_wasi::WasiCapabilities;
+        use kiln_wasi::WasiCapabilities;
         let mut capabilities = WasiCapabilities::minimal();
         capabilities.environment.args_access = true;
         capabilities.environment.environ_access = true;
@@ -42,10 +42,10 @@ mod tests {
         config.wasi_args = vec!["test_program".to_string(), "--flag".to_string()];
         config.wasi_env_vars = vec!["PATH".to_string()];
 
-        let result = WrtdEngine::new(config);
+        let result = KilndEngine::new(config);
         assert!(
             result.is_ok(),
-            "Failed to create WrtdEngine with WASI Preview 1"
+            "Failed to create KilndEngine with WASI Preview 1"
         );
 
         let engine = result.unwrap();
@@ -66,16 +66,16 @@ mod tests {
     #[test]
     #[cfg(all(feature = "wasi", feature = "component-model"))]
     fn test_wasi_preview2_component_model() {
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
         config.enable_wasi = true;
         config.wasi_version = WasiVersion::Preview2;
         config.enable_component_model = true;
         config.component_interfaces = vec!["wasi:filesystem".to_string(), "wasi:cli".to_string()];
 
-        let result = WrtdEngine::new(config);
+        let result = KilndEngine::new(config);
         assert!(
             result.is_ok(),
-            "Failed to create WrtdEngine with WASI Preview 2 and component model"
+            "Failed to create KilndEngine with WASI Preview 2 and component model"
         );
 
         let engine = result.unwrap();
@@ -108,13 +108,13 @@ mod tests {
         assert_eq!(profiler.peak_usage(), 1536); // Peak should remain
 
         // Test with engine configuration
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
         config.enable_memory_profiling = true;
 
-        let result = WrtdEngine::new(config);
+        let result = KilndEngine::new(config);
         assert!(
             result.is_ok(),
-            "Failed to create WrtdEngine with memory profiling"
+            "Failed to create KilndEngine with memory profiling"
         );
 
         let engine = result.unwrap();
@@ -128,23 +128,23 @@ mod tests {
     #[test]
     fn test_platform_optimizations() {
         // Test with optimizations enabled (default)
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
         config.enable_platform_optimizations = true;
 
-        let result = WrtdEngine::new(config);
+        let result = KilndEngine::new(config);
         assert!(
             result.is_ok(),
-            "Failed to create WrtdEngine with platform optimizations"
+            "Failed to create KilndEngine with platform optimizations"
         );
 
         // Test with optimizations disabled
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
         config.enable_platform_optimizations = false;
 
-        let result = WrtdEngine::new(config);
+        let result = KilndEngine::new(config);
         assert!(
             result.is_ok(),
-            "Failed to create WrtdEngine without platform optimizations"
+            "Failed to create KilndEngine without platform optimizations"
         );
     }
 
@@ -152,12 +152,12 @@ mod tests {
     #[test]
     #[cfg(feature = "wasi")]
     fn test_host_function_registry() {
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
         config.enable_wasi = true;
 
         // Create engine and check that host functions are registered
-        let result = WrtdEngine::new(config);
-        assert!(result.is_ok(), "Failed to create WrtdEngine");
+        let result = KilndEngine::new(config);
+        assert!(result.is_ok(), "Failed to create KilndEngine");
 
         let engine = result.unwrap();
         let stats = engine.stats();
@@ -179,12 +179,12 @@ mod tests {
             0x01, 0x00, 0x00, 0x00, // Version 1
         ];
 
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
         config.module_data = Some(&wasm_module);
         config.max_fuel = 1000;
         config.max_memory = 4096;
 
-        let mut engine = WrtdEngine::new(config).unwrap();
+        let mut engine = KilndEngine::new(config).unwrap();
         let result = engine.execute_module();
 
         assert!(result.is_ok(), "Module execution failed: {:?}", result);
@@ -200,9 +200,9 @@ mod tests {
     /// Test component detection
     #[test]
     fn test_component_detection() {
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
 
-        let engine = WrtdEngine::new(config).unwrap();
+        let engine = KilndEngine::new(config).unwrap();
 
         // Test traditional WASM module detection
         let wasm_module = vec![
@@ -235,7 +235,7 @@ mod tests {
     #[test]
     #[cfg(all(feature = "wasi", feature = "component-model"))]
     fn test_comprehensive_configuration() {
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
 
         // Enable all features
         config.enable_wasi = true;
@@ -248,7 +248,7 @@ mod tests {
         config.wasi_args = vec!["test".to_string(), "arg1".to_string(), "arg2".to_string()];
         config.wasi_env_vars = vec!["HOME".to_string(), "PATH".to_string()];
 
-        use wrt_wasi::WasiCapabilities;
+        use kiln_wasi::WasiCapabilities;
         let mut capabilities = WasiCapabilities::minimal();
         capabilities.environment.args_access = true;
         capabilities.environment.environ_access = true;
@@ -270,10 +270,10 @@ mod tests {
         config.max_fuel = 100_000;
         config.max_memory = 1024 * 1024; // 1MB
 
-        let result = WrtdEngine::new(config);
+        let result = KilndEngine::new(config);
         assert!(
             result.is_ok(),
-            "Failed to create comprehensive WrtdEngine configuration"
+            "Failed to create comprehensive KilndEngine configuration"
         );
 
         let engine = result.unwrap();
@@ -311,11 +311,11 @@ mod tests {
         // Test invalid WASI configuration
         #[cfg(feature = "wasi")]
         {
-            let mut config = WrtdConfig::default();
+            let mut config = KilndConfig::default();
             config.enable_wasi = true;
             // Leave wasi_capabilities as None - should use minimal
 
-            let result = WrtdEngine::new(config);
+            let result = KilndEngine::new(config);
             assert!(
                 result.is_ok(),
                 "Engine creation should succeed with minimal WASI capabilities"
@@ -323,10 +323,10 @@ mod tests {
         }
 
         // Test invalid module data
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
         config.module_data = Some(&[0x00, 0x00]); // Too small
 
-        let mut engine = WrtdEngine::new(config).unwrap();
+        let mut engine = KilndEngine::new(config).unwrap();
         let result = engine.execute_module();
         assert!(result.is_err(), "Should fail with too-small module data");
     }
@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn test_no_std_compatibility() {
         // Test that our types can be used in no_std context
-        let config = WrtdConfig {
+        let config = KilndConfig {
             max_fuel: 1000,
             max_memory: 4096,
             function_name: Some("_start"),
@@ -373,17 +373,17 @@ mod benchmarks {
     use std::time::Instant;
 
     use super::super::{
-        WrtdConfig,
-        WrtdEngine,
+        KilndConfig,
+        KilndEngine,
     };
 
     /// Benchmark engine creation time
     #[test]
     fn benchmark_engine_creation() {
-        let config = WrtdConfig::default();
+        let config = KilndConfig::default();
 
         let start = Instant::now();
-        let _engine = WrtdEngine::new(config).unwrap();
+        let _engine = KilndEngine::new(config).unwrap();
         let duration = start.elapsed();
 
         // Engine creation should be fast (< 100ms)
@@ -398,11 +398,11 @@ mod benchmarks {
     #[test]
     #[cfg(feature = "wasi")]
     fn benchmark_wasi_initialization() {
-        let mut config = WrtdConfig::default();
+        let mut config = KilndConfig::default();
         config.enable_wasi = true;
 
         let start = Instant::now();
-        let _engine = WrtdEngine::new(config).unwrap();
+        let _engine = KilndEngine::new(config).unwrap();
         let duration = start.elapsed();
 
         // WASI initialization should be reasonable (< 500ms)

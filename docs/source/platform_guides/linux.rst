@@ -2,7 +2,7 @@
 Linux Installation Guide
 =========================
 
-WRT is a pure Rust WebAssembly runtime that supports both core WebAssembly and the Component Model. This guide covers building and using WRT on Linux systems.
+Kiln is a pure Rust WebAssembly runtime that supports both core WebAssembly and the Component Model. This guide covers building and using Kiln on Linux systems.
 
 .. contents:: On this page
    :local:
@@ -90,7 +90,7 @@ Install Build Tools
 
 .. code-block:: bash
 
-   # Install cargo-wrt (unified build tool)
+   # Install cargo-kiln (unified build tool)
    # This will be installed from the cloned repository
 
    # Install Dagger (required for CI/testing tasks)
@@ -119,24 +119,24 @@ Install Build Tools
    cargo install cargo-llvm-cov  # Code coverage
    cargo install cargo-deny      # Dependency auditing
 
-Clone and Build WRT
+Clone and Build Kiln
 -------------------
 
 .. code-block:: bash
 
    # Clone the repository
-   git clone https://github.com/pulseengine/wrt.git
-   cd wrt
+   git clone https://github.com/pulseengine/kiln.git
+   cd kiln
 
    # Install the unified build tool
-   cargo install --path cargo-wrt
+   cargo install --path cargo-kiln
 
    # Build all components
-   cargo-wrt build
+   cargo-kiln build
 
    # Or build specific targets:
-   cargo-wrt wrtd      # Runtime daemon
-   cargo build -p wrt  # Core library only
+   cargo-kiln kilnd      # Runtime daemon
+   cargo build -p kiln  # Core library only
 
 Running Tests
 -------------
@@ -144,13 +144,13 @@ Running Tests
 .. code-block:: bash
 
    # Run comprehensive test suite
-   cargo-wrt test
+   cargo-kiln test
 
    # Run full CI pipeline
-   cargo-wrt ci
+   cargo-kiln ci
 
    # Run specific test (direct cargo)
-   cargo test -p wrt -- test_name
+   cargo test -p kiln -- test_name
 
    # Run tests without Dagger
    cargo test --workspace
@@ -160,65 +160,65 @@ Running Tests
 .. code-block:: bash
 
    # Quality assurance checks:
-   cargo-wrt check          # Format, lint, and static analysis
-   cargo-wrt verify --asil d  # Safety verification
-   cargo-wrt coverage --html  # Test coverage analysis
-   cargo-wrt kani-verify    # Formal verification
+   cargo-kiln check          # Format, lint, and static analysis
+   cargo-kiln verify --asil d  # Safety verification
+   cargo-kiln coverage --html  # Test coverage analysis
+   cargo-kiln kani-verify    # Formal verification
    
    # To see available commands:
-   cargo-wrt --help
+   cargo-kiln --help
 
-Using WRT
+Using Kiln
 =========
 
-Command Line Usage (wrtd)
+Command Line Usage (kilnd)
 -------------------------
 
-The `wrtd` daemon provides a command-line interface for running WebAssembly modules:
+The `kilnd` daemon provides a command-line interface for running WebAssembly modules:
 
 .. code-block:: bash
 
    # Show help
-   ./target/debug/wrtd --help
+   ./target/debug/kilnd --help
 
    # Run a WebAssembly module
-   ./target/debug/wrtd module.wasm
+   ./target/debug/kilnd module.wasm
 
    # Run a WebAssembly component with function call
-   ./target/debug/wrtd --call namespace:package/interface#function component.wasm
+   ./target/debug/kilnd --call namespace:package/interface#function component.wasm
 
    # Run with fuel limit (execution steps)
-   ./target/debug/wrtd --fuel 10000 module.wasm
+   ./target/debug/kilnd --fuel 10000 module.wasm
 
    # Show execution statistics
-   ./target/debug/wrtd --stats module.wasm
+   ./target/debug/kilnd --stats module.wasm
 
 Example:
 
 .. code-block:: bash
 
    # Build the example component first
-   cargo-wrt wrtd
+   cargo-kiln kilnd
    
    # Run example with the runtime
-   ./target/debug/wrtd --call example:hello/example#hello ./target/wasm32-wasip2/release/example.wasm
+   ./target/debug/kilnd --call example:hello/example#hello ./target/wasm32-wasip2/release/example.wasm
 
 Library Usage
 -------------
 
-Add WRT to your Rust project:
+Add Kiln to your Rust project:
 
 .. code-block:: toml
 
    # Cargo.toml
    [dependencies]
-   wrt = "0.2.0"
+   kiln = "0.2.0"
 
 Basic usage example:
 
 .. code-block:: rust
 
-   use wrt::prelude::*;
+   use kiln::prelude::*;
 
    fn main() -> Result<(), Box<dyn std::error::Error>> {
        // Load WebAssembly bytes
@@ -265,7 +265,7 @@ Development Commands
 .. code-block:: bash
 
    # Format code and run checks
-   cargo-wrt check
+   cargo-kiln check
 
    # Check formatting only
    cargo fmt --check
@@ -276,17 +276,17 @@ Development Commands
    # Generate API documentation
    cargo doc --workspace --open
 
-   # Generate documentation with cargo-wrt
-   cargo-wrt docs --open
+   # Generate documentation with cargo-kiln
+   cargo-kiln docs --open
 
    # Run benchmarks
    cargo bench
 
    # Generate code coverage
-   cargo-wrt coverage --html
+   cargo-kiln coverage --html
 
    # Clean build artifacts
-   cargo-wrt clean
+   cargo-kiln clean
 
 Debugging and Profiling
 =======================
@@ -300,10 +300,10 @@ Debug Builds
    cargo build
 
    # Run with debug logging
-   RUST_LOG=debug ./target/debug/wrtd module.wasm
+   RUST_LOG=debug ./target/debug/kilnd module.wasm
 
    # Run with GDB
-   gdb ./target/debug/wrtd
+   gdb ./target/debug/kilnd
    (gdb) run module.wasm
 
 Performance Profiling
@@ -312,14 +312,14 @@ Performance Profiling
 .. code-block:: bash
 
    # Profile with perf
-   perf record -g ./target/release/wrtd module.wasm
+   perf record -g ./target/release/kilnd module.wasm
    perf report
 
    # Profile with Valgrind
-   valgrind --tool=callgrind ./target/release/wrtd module.wasm
+   valgrind --tool=callgrind ./target/release/kilnd module.wasm
 
    # Analyze cache performance
-   valgrind --tool=cachegrind ./target/release/wrtd module.wasm
+   valgrind --tool=cachegrind ./target/release/kilnd module.wasm
 
 Advanced Features
 =================
@@ -327,18 +327,18 @@ Advanced Features
 no_std Support
 --------------
 
-WRT supports `no_std` environments for embedded Linux:
+Kiln supports `no_std` environments for embedded Linux:
 
 .. code-block:: toml
 
    # Cargo.toml
    [dependencies]
-   wrt = { version = "0.2.0", default-features = false }
+   kiln = { version = "0.2.0", default-features = false }
 
 .. code-block:: rust
 
    #![no_std]
-   use wrt::prelude::*;
+   use kiln::prelude::*;
 
 Cross Compilation
 -----------------
@@ -363,7 +363,7 @@ Build for different targets:
 Platform-Specific Optimizations
 -------------------------------
 
-WRT includes platform-specific optimizations for Linux:
+Kiln includes platform-specific optimizations for Linux:
 
 .. code-block:: bash
 
@@ -428,7 +428,7 @@ Build Issues
    rm -rf ~/.cache/dagger
    
    # Run with debug logging
-   RUST_LOG=debug cargo-wrt test
+   RUST_LOG=debug cargo-kiln test
 
 Runtime Issues
 --------------
@@ -451,8 +451,8 @@ Runtime Issues
    # Check available memory
    free -h
    
-   # Limit WRT memory usage
-   ./target/debug/wrtd --memory-limit 100M module.wasm
+   # Limit Kiln memory usage
+   ./target/debug/kilnd --memory-limit 100M module.wasm
 
 **Performance issues:**
 
@@ -476,13 +476,13 @@ Resources
 * **Documentation**: Full API docs at `cargo doc --open`
 * **Examples**: See the `example/` directory in the repository
 * **Tests**: Browse `tests/` for usage examples
-* **Issues**: Report bugs at https://github.com/pulseengine/wrt/issues
+* **Issues**: Report bugs at https://github.com/pulseengine/kiln/issues
 
 Community
 ---------
 
-* GitHub Discussions: https://github.com/pulseengine/wrt/discussions
-* Issue Tracker: https://github.com/pulseengine/wrt/issues
+* GitHub Discussions: https://github.com/pulseengine/kiln/discussions
+* Issue Tracker: https://github.com/pulseengine/kiln/issues
 
 Next Steps
 ==========

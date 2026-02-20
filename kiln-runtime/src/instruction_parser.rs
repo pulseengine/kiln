@@ -4,12 +4,12 @@
 //! This module bridges the gap between raw bytecode from the parser and
 //! the parsed instruction format expected by the runtime execution engine.
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedVec,
     budget_aware_provider::CrateId,
     safe_managed_alloc,
@@ -31,7 +31,7 @@ use crate::bounded_runtime_infra::{
 };
 type InstructionProvider = RuntimeProvider;
 
-// Match WrtExpr type: Vec in std mode, BoundedVec in no_std mode
+// Match KilnExpr type: Vec in std mode, BoundedVec in no_std mode
 #[cfg(feature = "std")]
 type InstructionVec = Vec<Instruction<InstructionProvider>>;
 #[cfg(not(feature = "std"))]
@@ -71,7 +71,7 @@ pub fn parse_instructions_with_provider(
 
     #[cfg(feature = "tracing")]
     if func_id == 34 || func_id == 44 {
-        wrt_foundation::tracing::trace!(func_id = func_id, bytecode_len = bytecode.len(), "Starting parse");
+        kiln_foundation::tracing::trace!(func_id = func_id, bytecode_len = bytecode.len(), "Starting parse");
     }
 
     // WebAssembly function bodies should end with 0x0B (End)
@@ -81,10 +81,10 @@ pub fn parse_instructions_with_provider(
         {
             instruction_count += 1;
             if instruction_count % 1000 == 0 {
-                wrt_foundation::tracing::trace!(func_id = func_id, instruction_count = instruction_count, offset = offset, "Parsing progress");
+                kiln_foundation::tracing::trace!(func_id = func_id, instruction_count = instruction_count, offset = offset, "Parsing progress");
             }
             if instruction_count > 50000 {
-                wrt_foundation::tracing::error!(func_id = func_id, instruction_count = instruction_count, "Function appears stuck in infinite loop");
+                kiln_foundation::tracing::error!(func_id = func_id, instruction_count = instruction_count, "Function appears stuck in infinite loop");
                 return Err(Error::parse_error("Function parsing appears stuck in infinite loop"));
             }
         }
@@ -93,7 +93,7 @@ pub fn parse_instructions_with_provider(
 
         #[cfg(feature = "tracing")]
         if consumed == 0 {
-            wrt_foundation::tracing::error!(offset = offset, opcode = format!("0x{:02X}", bytecode[offset]), "Instruction consumed 0 bytes");
+            kiln_foundation::tracing::error!(offset = offset, opcode = format!("0x{:02X}", bytecode[offset]), "Instruction consumed 0 bytes");
             return Err(Error::parse_error("Instruction consumed 0 bytes"));
         }
 
@@ -111,7 +111,7 @@ pub fn parse_instructions_with_provider(
         if matches!(instruction, Instruction::End) && offset >= bytecode.len() {
             #[cfg(feature = "tracing")]
             if func_id == 34 || func_id == 44 {
-                wrt_foundation::tracing::trace!(func_id = func_id, offset = offset, "Hit final End, done parsing");
+                kiln_foundation::tracing::trace!(func_id = func_id, offset = offset, "Hit final End, done parsing");
             }
             break;
         }
@@ -221,7 +221,7 @@ fn parse_instruction_with_provider(
         0x0E => {
             // BrTable
             #[cfg(feature = "tracing")]
-            wrt_foundation::tracing::trace!(offset = offset, "Parsing BrTable instruction");
+            kiln_foundation::tracing::trace!(offset = offset, "Parsing BrTable instruction");
             let mut targets = BoundedVec::new(provider.clone())
                 .map_err(|_| Error::parse_error("Failed to create BrTable targets vector"))?;
 
@@ -229,7 +229,7 @@ fn parse_instruction_with_provider(
             consumed += bytes_consumed;
 
             #[cfg(feature = "tracing")]
-            wrt_foundation::tracing::trace!(count = count, "BrTable target count");
+            kiln_foundation::tracing::trace!(count = count, "BrTable target count");
 
             // Sanity check - if count is suspiciously large, there's likely an issue
             // Note: WebAssembly spec conformance tests include br_table with 16,000+ targets
@@ -243,7 +243,7 @@ fn parse_instruction_with_provider(
                 consumed += bytes;
                 #[cfg(feature = "tracing")]
                 if i < 3 || i == count - 1 {
-                    wrt_foundation::tracing::trace!(index = i, target = target, "BrTable target");
+                    kiln_foundation::tracing::trace!(index = i, target = target, "BrTable target");
                 }
                 targets
                     .push(target)
@@ -372,7 +372,7 @@ fn parse_instruction_with_provider(
             consumed += bytes;
 
             // Create a BoundedVec to hold the types (typically 1 for select)
-            let mut types = wrt_foundation::bounded::BoundedVec::new(provider.clone())?;
+            let mut types = kiln_foundation::bounded::BoundedVec::new(provider.clone())?;
 
             for _ in 0..type_count {
                 if offset + consumed >= bytecode.len() {
@@ -872,7 +872,7 @@ fn parse_instruction_with_provider(
             let (heap_type_s33, bytes) = read_leb128_i64(bytecode, offset + 1)?;
             consumed += bytes;
 
-            use wrt_foundation::types::ValueType;
+            use kiln_foundation::types::ValueType;
             let value_type = if heap_type_s33 >= 0 {
                 // Concrete type index - null reference to a specific function type
                 ValueType::FuncRef
@@ -1010,7 +1010,7 @@ fn parse_instruction_with_provider(
                 }
                 _ => {
                     #[cfg(feature = "tracing")]
-                    wrt_foundation::tracing::warn!(subopcode = format!("0xFC 0x{:02X}", subopcode), offset = offset, "Unknown FC subopcode");
+                    kiln_foundation::tracing::warn!(subopcode = format!("0xFC 0x{:02X}", subopcode), offset = offset, "Unknown FC subopcode");
                     return Err(Error::parse_error("Unknown multi-byte instruction"));
                 }
             }
@@ -1259,7 +1259,7 @@ fn parse_instruction_with_provider(
 
                 _ => {
                     #[cfg(feature = "tracing")]
-                    wrt_foundation::tracing::warn!(gc_opcode = format!("0xFB 0x{:02X}", gc_opcode), offset = offset, "Unknown GC opcode");
+                    kiln_foundation::tracing::warn!(gc_opcode = format!("0xFB 0x{:02X}", gc_opcode), offset = offset, "Unknown GC opcode");
                     return Err(Error::parse_error("Unknown GC instruction opcode"));
                 }
             }
@@ -1272,8 +1272,8 @@ fn parse_instruction_with_provider(
                 let context_start = offset.saturating_sub(5);
                 let context_end = (offset + 10).min(bytecode.len());
                 let context = &bytecode[context_start..context_end];
-                wrt_foundation::tracing::warn!(opcode = format!("0x{:02X}", opcode), offset = offset, "Unknown opcode");
-                wrt_foundation::tracing::trace!(context = ?context, "Bytecode context");
+                kiln_foundation::tracing::warn!(opcode = format!("0x{:02X}", opcode), offset = offset, "Unknown opcode");
+                kiln_foundation::tracing::trace!(context = ?context, "Bytecode context");
             }
             return Err(Error::parse_error("Unknown instruction opcode"));
         },
@@ -1293,8 +1293,8 @@ fn parse_instruction_with_provider(
 /// - 0x70: funcref
 /// - 0x6F: externref
 /// - 0x69: exnref
-fn decode_value_type(b: u8) -> Result<wrt_foundation::types::ValueType> {
-    use wrt_foundation::types::ValueType;
+fn decode_value_type(b: u8) -> Result<kiln_foundation::types::ValueType> {
+    use kiln_foundation::types::ValueType;
     match b {
         0x7F => Ok(ValueType::I32),
         0x7E => Ok(ValueType::I64),
@@ -1332,14 +1332,14 @@ fn parse_block_type(bytecode: &[u8], offset: usize) -> Result<BlockType> {
     // Check for specific value type encodings first
     match b {
         0x40 => Ok(BlockType::Value(None)), // Empty type
-        0x7F => Ok(BlockType::Value(Some(wrt_foundation::types::ValueType::I32))),
-        0x7E => Ok(BlockType::Value(Some(wrt_foundation::types::ValueType::I64))),
-        0x7D => Ok(BlockType::Value(Some(wrt_foundation::types::ValueType::F32))),
-        0x7C => Ok(BlockType::Value(Some(wrt_foundation::types::ValueType::F64))),
-        0x7B => Ok(BlockType::Value(Some(wrt_foundation::types::ValueType::V128))),
-        0x70 => Ok(BlockType::Value(Some(wrt_foundation::types::ValueType::FuncRef))),
-        0x6F => Ok(BlockType::Value(Some(wrt_foundation::types::ValueType::ExternRef))),
-        0x69 => Ok(BlockType::Value(Some(wrt_foundation::types::ValueType::ExnRef))),
+        0x7F => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::I32))),
+        0x7E => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::I64))),
+        0x7D => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::F32))),
+        0x7C => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::F64))),
+        0x7B => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::V128))),
+        0x70 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::FuncRef))),
+        0x6F => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ExternRef))),
+        0x69 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ExnRef))),
         _ => {
             // Type index: parse as s33 (for small positive values, it's just the byte)
             // For now, handle single-byte type indices (0-63)
@@ -1457,15 +1457,15 @@ pub(crate) fn read_leb128_i64(data: &[u8], offset: usize) -> Result<(i64, usize)
 fn block_type_to_index(block_type: &BlockType) -> u32 {
     match block_type {
         BlockType::Value(None) => 0x40, // Empty type
-        BlockType::Value(Some(wrt_foundation::types::ValueType::I32)) => 0x7F,
-        BlockType::Value(Some(wrt_foundation::types::ValueType::I64)) => 0x7E,
-        BlockType::Value(Some(wrt_foundation::types::ValueType::F32)) => 0x7D,
-        BlockType::Value(Some(wrt_foundation::types::ValueType::F64)) => 0x7C,
-        BlockType::Value(Some(wrt_foundation::types::ValueType::V128)) => 0x7B,
-        BlockType::Value(Some(wrt_foundation::types::ValueType::I16x8)) => 0x7A,
-        BlockType::Value(Some(wrt_foundation::types::ValueType::FuncRef)) => 0x70,
-        BlockType::Value(Some(wrt_foundation::types::ValueType::ExternRef)) => 0x6F,
-        BlockType::Value(Some(wrt_foundation::types::ValueType::ExnRef)) => 0x69,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::I32)) => 0x7F,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::I64)) => 0x7E,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::F32)) => 0x7D,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::F64)) => 0x7C,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::V128)) => 0x7B,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::I16x8)) => 0x7A,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::FuncRef)) => 0x70,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::ExternRef)) => 0x6F,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::ExnRef)) => 0x69,
         BlockType::FuncType(idx) => *idx,
         // Handle any other value types with a default
         BlockType::Value(Some(_)) => 0x40, // Default to empty type for unknown types

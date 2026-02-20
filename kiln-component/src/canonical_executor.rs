@@ -7,15 +7,15 @@ extern crate alloc;
 
 // Tracing imports for structured logging
 #[cfg(feature = "tracing")]
-use wrt_foundation::tracing::{trace, warn as tracing_warn};
+use kiln_foundation::tracing::{trace, warn as tracing_warn};
 
 use crate::bounded_component_infra::ComponentProvider;
 use crate::canonical_abi::ComponentValue;
 use alloc::string::String;
 use alloc::vec::Vec;
-use wrt_error::{Error, Result};
-use wrt_foundation::float_repr::{FloatBits32, FloatBits64};
-use wrt_runtime::wasip2_host::Wasip2Host;
+use kiln_error::{Error, Result};
+use kiln_foundation::float_repr::{FloatBits32, FloatBits64};
+use kiln_runtime::wasip2_host::Wasip2Host;
 
 /// Canonical function types
 #[derive(Debug, Clone)]
@@ -128,8 +128,8 @@ impl CanonicalExecutor {
     fn convert_to_wasip2_values(
         &self,
         values: Vec<ComponentValue>,
-    ) -> Result<Vec<wrt_foundation::values::Value>> {
-        use wrt_foundation::values::Value;
+    ) -> Result<Vec<kiln_foundation::values::Value>> {
+        use kiln_foundation::values::Value;
 
         let mut result = Vec::new();
         for val in values {
@@ -159,9 +159,9 @@ impl CanonicalExecutor {
     /// Convert wasip2 Value to ComponentValue
     fn convert_from_wasip2_values(
         &self,
-        values: Vec<wrt_foundation::values::Value>,
+        values: Vec<kiln_foundation::values::Value>,
     ) -> Result<Vec<ComponentValue>> {
-        use wrt_foundation::values::Value;
+        use kiln_foundation::values::Value;
 
         let mut result = Vec::new();
         for val in values {

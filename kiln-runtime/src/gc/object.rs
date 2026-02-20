@@ -3,8 +3,8 @@
 //! Defines the in-memory representation of garbage-collected objects
 //! including structs and arrays.
 
-use wrt_error::{Error, Result};
-use wrt_foundation::types::{FieldType, ValueType};
+use kiln_error::{Error, Result};
+use kiln_foundation::types::{FieldType, ValueType};
 
 /// Size of object header in bytes
 pub const HEADER_SIZE: usize = 8;

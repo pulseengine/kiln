@@ -3,7 +3,7 @@
 //! This module provides platform-specific time functionality including
 //! wall clock time, monotonic time, and high-resolution timing.
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,

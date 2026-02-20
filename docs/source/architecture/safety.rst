@@ -7,7 +7,7 @@ Safety Architecture
    :align: left
    :alt: Safety Features Icon
 
-The safety architecture implements cross-cutting safety features that span all WRT subsystems.
+The safety architecture implements cross-cutting safety features that span all Kiln subsystems.
 
 .. spec:: Safety Architecture
    :id: SPEC_009
@@ -121,7 +121,7 @@ The safety architecture implements cross-cutting safety features that span all W
 Safety Verification Tools
 ==========================
 
-WRT includes comprehensive SCORE-inspired safety verification tools for tracking requirements compliance:
+Kiln includes comprehensive SCORE-inspired safety verification tools for tracking requirements compliance:
 
 * **Requirements Traceability**: Automated tracking of requirement-to-implementation links
 * **ASIL Compliance Monitoring**: Real-time monitoring of safety level compliance  

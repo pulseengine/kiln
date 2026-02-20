@@ -3,7 +3,7 @@
 Resource Management Overview
 ============================
 
-This section provides a comprehensive overview of resource management in Pulseengine (WRT Edition),
+This section provides a comprehensive overview of resource management in Pulseengine (Kiln Edition),
 focusing on how resources are allocated, tracked, and managed across different runtime environments.
 
 .. arch_component:: ARCH_COMP_RES_001
@@ -21,7 +21,7 @@ Resource Management Architecture
 Core Resource Types
 ~~~~~~~~~~~~~~~~~~~
 
-Pulseengine manages several categories of resources (``wrt-component/src/resources/mod.rs:45-89``):
+Pulseengine manages several categories of resources (``kiln-component/src/resources/mod.rs:45-89``):
 
 .. code-block:: rust
 
@@ -111,7 +111,7 @@ Different environments use different allocation strategies based on available ca
      - Vec<T> (dynamic)
      - heapless::Vec<T, N>
 
-**Implementation Example** (``wrt-component/src/resources/resource_manager.rs:67-134``):
+**Implementation Example** (``kiln-component/src/resources/resource_manager.rs:67-134``):
 
 .. code-block:: rust
 
@@ -170,7 +170,7 @@ WebAssembly linear memory is managed differently across environments:
 
 .. code-block:: rust
 
-   /// Linear memory management (wrt-foundation/src/safe_memory.rs:178-245)
+   /// Linear memory management (kiln-foundation/src/safe_memory.rs:178-245)
    pub struct LinearMemoryManager {
        #[cfg(feature = "std")]
        regions: Vec<MemoryRegion>,

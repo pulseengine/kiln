@@ -32,8 +32,8 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use alloc::vec::Vec;
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_format::{
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_format::{
     binary::{WASM_MAGIC, WASM_VERSION, read_leb128_u32},
     module::Module,
 };
@@ -42,8 +42,8 @@ use wrt_format::{
 type CoreModule = Module;
 
 #[cfg(feature = "std")]
-use wrt_format::component::Component;
-use wrt_foundation::{
+use kiln_format::component::Component;
+use kiln_foundation::{
     BoundedVec, VerificationLevel, budget_aware_provider::CrateId, safe_memory::NoStdProvider,
 };
 

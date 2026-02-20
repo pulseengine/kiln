@@ -9,14 +9,14 @@ use core::{
     time::Duration,
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     operations::{Type as OperationType, record_global_operation},
     safe_managed_alloc,
     verification::VerificationLevel,
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::{TaskId, TaskState};

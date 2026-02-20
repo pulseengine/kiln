@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use std::collections::HashMap;
 
 #[cfg(feature = "std")]
-use wrt_format::component::{
+use kiln_format::component::{
     Alias, AliasTarget, Canon, CanonOperation, Component, ComponentType, ComponentTypeDefinition,
     Export, ExternType, Import, Instance, Sort,
 };
@@ -27,7 +27,7 @@ use wrt_format::component::{
 // recursive types
 #[cfg(feature = "std")]
 mod component_validation {
-    use wrt_error::{Error, ErrorCategory, codes};
+    use kiln_error::{Error, ErrorCategory, codes};
 
     use super::*;
 
@@ -525,7 +525,7 @@ pub use component_validation::{
 // No-std stub implementations
 #[cfg(not(feature = "std"))]
 pub mod no_std_stubs {
-    use wrt_error::{Error, ErrorCategory, Result, codes};
+    use kiln_error::{Error, ErrorCategory, Result, codes};
 
     /// Validation configuration stub for no_std environments
     #[derive(Debug, Clone)]

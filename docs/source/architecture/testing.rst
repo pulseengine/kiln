@@ -2,7 +2,7 @@
 Testing and Safety Verification
 =================================
 
-WRT includes specialized tools for testing, validation, and safety verification.
+Kiln includes specialized tools for testing, validation, and safety verification.
 
 For detailed test coverage information and quality assurance processes, see :doc:`test_coverage`.
 
@@ -34,7 +34,7 @@ For detailed test coverage information and quality assurance processes, see :doc
    1. **Complete Directive Support**: All WAST directive types (assert_return, assert_trap, assert_invalid, etc.)
    2. **Multi-Environment Compatibility**: Support for std, no_std+alloc, and no_std environments
    3. **Intelligent Test Categorization**: Automatic grouping by test type for optimal execution
-   4. **Integration with Test Registry**: Built on wrt-test-registry framework
+   4. **Integration with Test Registry**: Built on kiln-test-registry framework
    5. **Performance Optimization**: Parallel execution for independent tests
    6. **Comprehensive Error Handling**: Intelligent error classification and reporting
    7. **Resource Limit Testing**: Support for assert_exhaustion and resource constraints

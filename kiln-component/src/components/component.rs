@@ -11,34 +11,34 @@ use std::collections::HashMap;
 
 #[cfg(feature = "std")]
 use log::{debug, error, info, trace, warn};
-// Import wrt_decoder types for decode and parse
-// use wrt_decoder::component::decode::Component as DecodedComponent;
+// Import kiln_decoder types for decode and parse
+// use kiln_decoder::component::decode::Component as DecodedComponent;
 // Additional imports that aren't in the prelude
-use wrt_format::component::{ExternType as FormatExternType, FormatValType};
-use wrt_foundation::{
+use kiln_format::component::{ExternType as FormatExternType, FormatValType};
+use kiln_foundation::{
     budget_aware_provider::CrateId, collections::StaticVec, collections::StaticVec as BoundedVec,
     resource::ResourceOperation as FormatResourceOperation, safe_managed_alloc,
     safe_memory::NoStdProvider,
 };
-use wrt_intercept::LinkInterceptor;
+use kiln_intercept::LinkInterceptor;
 
 use crate::{
     bounded_component_infra::ComponentProvider, export::Export, import::Import, prelude::*,
     resources::ResourceTable,
 };
-use wrt_foundation::builtin::BuiltinType;
+use kiln_foundation::builtin::BuiltinType;
 
 // Simple HashMap substitute for no_std using BoundedVec
 #[cfg(not(feature = "std"))]
 pub struct SimpleMap<K, V> {
-    entries: wrt_foundation::collections::StaticVec<(K, V), 64>,
+    entries: kiln_foundation::collections::StaticVec<(K, V), 64>,
 }
 
 #[cfg(not(feature = "std"))]
 impl<K: PartialEq + Clone, V: Clone> SimpleMap<K, V> {
     pub fn new() -> Result<Self> {
         Ok(Self {
-            entries: wrt_foundation::collections::StaticVec::new(),
+            entries: kiln_foundation::collections::StaticVec::new(),
         })
     }
 
@@ -66,22 +66,22 @@ impl<K: PartialEq + Clone, V: Clone> SimpleMap<K, V> {
 type ComponentMap<K, V> = SimpleMap<K, V>;
 
 // Runtime types with explicit namespacing
-use wrt_runtime::{
+use kiln_runtime::{
     // func::FuncType as RuntimeFuncType, // Not available at this path
     global::Global,
     memory::Memory,
     table::Table,
 };
 
-// Import types from wrt-foundation instead of wrt-runtime
-use wrt_foundation::types::{GlobalType, MemoryType, TableType};
+// Import types from kiln-foundation instead of kiln-runtime
+use kiln_foundation::types::{GlobalType, MemoryType, TableType};
 
 // Placeholder types for missing imports
 pub type RuntimeFuncType = ();
 
 // Import RwLock from prelude (it will be std::sync::RwLock or a no_std
 // equivalent from the prelude)
-// use wrt_runtime::execution::{run_with_time_bounds, TimeBoundedConfig,
+// use kiln_runtime::execution::{run_with_time_bounds, TimeBoundedConfig,
 // TimeBoundedOutcome}; Binary std/no_std choice
 
 // core::str is already imported via prelude
@@ -94,34 +94,34 @@ use crate::type_conversion::bidirectional::{
 };
 
 // Define type aliases for missing types
-type ComponentDecoder = fn(&[u8]) -> wrt_error::Result<wrt_format::component::Component>;
-pub type ExportType = wrt_format::component::Export;
-pub type ImportType = wrt_format::component::Import;
-type TypeDef = wrt_format::component::ComponentType;
+type ComponentDecoder = fn(&[u8]) -> kiln_error::Result<kiln_format::component::Component>;
+pub type ExportType = kiln_format::component::Export;
+pub type ImportType = kiln_format::component::Import;
+type TypeDef = kiln_format::component::ComponentType;
 // Producers section might be moved or renamed
 // ProducersSection,
 
 /// Represents a component type
 #[derive(Debug, Clone)]
-pub struct WrtComponentType {
+pub struct KilnComponentType {
     /// Component imports
     pub imports: Vec<(String, String, ExternType<ComponentProvider>)>,
     /// Component exports
     pub exports: Vec<(String, ExternType<ComponentProvider>)>,
     /// Component instances
-    pub instances: Vec<wrt_format::component::ComponentTypeDefinition>,
+    pub instances: Vec<kiln_format::component::ComponentTypeDefinition>,
     /// Verification level for this component type
-    pub verification_level: wrt_foundation::verification::VerificationLevel,
+    pub verification_level: kiln_foundation::verification::VerificationLevel,
 }
 
-impl WrtComponentType {
+impl KilnComponentType {
     /// Creates a new empty component type
     pub fn new() -> Result<Self> {
         Ok(Self {
             imports: Vec::new(),
             exports: Vec::new(),
             instances: Vec::new(),
-            verification_level: wrt_foundation::verification::VerificationLevel::Standard,
+            verification_level: kiln_foundation::verification::VerificationLevel::Standard,
         })
     }
 
@@ -131,31 +131,31 @@ impl WrtComponentType {
             imports: Vec::new(),
             exports: Vec::new(),
             instances: Vec::new(),
-            verification_level: wrt_foundation::verification::VerificationLevel::Standard,
+            verification_level: kiln_foundation::verification::VerificationLevel::Standard,
         })
     }
 
     /// Set the verification level for memory operations
     pub fn set_verification_level(
         &mut self,
-        level: wrt_foundation::verification::VerificationLevel,
+        level: kiln_foundation::verification::VerificationLevel,
     ) {
         self.verification_level = level;
     }
 
     /// Get the current verification level
-    pub fn verification_level(&self) -> wrt_foundation::verification::VerificationLevel {
+    pub fn verification_level(&self) -> kiln_foundation::verification::VerificationLevel {
         self.verification_level
     }
 }
 
-impl Default for WrtComponentType {
+impl Default for KilnComponentType {
     fn default() -> Self {
         Self::new().unwrap_or_else(|_| Self {
             imports: Vec::new(),
             exports: Vec::new(),
             instances: Vec::new(),
-            verification_level: wrt_foundation::verification::VerificationLevel::Standard,
+            verification_level: kiln_foundation::verification::VerificationLevel::Standard,
         })
     }
 }
@@ -163,15 +163,15 @@ impl Default for WrtComponentType {
 /// Represents a component instance
 // Type aliases for compatibility
 pub type ComponentInstance = RuntimeInstance;
-pub type ComponentType = WrtComponentType;
+pub type ComponentType = KilnComponentType;
 
 pub struct Component {
     /// Component unique identifier (optional)
     pub(crate) id: Option<String>,
     /// Component type
-    pub(crate) component_type: WrtComponentType,
+    pub(crate) component_type: KilnComponentType,
     /// Component types (type definitions)
-    pub(crate) types: Vec<wrt_format::component::ComponentTypeDefinition>,
+    pub(crate) types: Vec<kiln_format::component::ComponentTypeDefinition>,
     /// Embedded core modules
     pub(crate) modules: Vec<Vec<u8>>,
     /// Component exports
@@ -195,7 +195,7 @@ pub struct Component {
     /// Original binary
     pub(crate) original_binary: Option<Vec<u8>>,
     /// Verification level for all operations
-    pub(crate) verification_level: wrt_foundation::verification::VerificationLevel,
+    pub(crate) verification_level: kiln_foundation::verification::VerificationLevel,
 }
 
 impl Clone for Component {
@@ -259,7 +259,7 @@ impl Debug for Component {
 #[derive(Debug, Clone)]
 pub struct InstanceValue {
     /// Instance type
-    pub ty: wrt_format::component::ComponentTypeDefinition,
+    pub ty: kiln_format::component::ComponentTypeDefinition,
     /// Instance exports
     pub exports: Vec<Export>,
 }
@@ -279,9 +279,9 @@ pub struct RuntimeInstance {
     pub memory: Option<crate::components::component_instantiation::ComponentMemory>,
     /// Resolved imports for this instance
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub imports: wrt_foundation::allocator::WrtVec<
+    pub imports: kiln_foundation::allocator::KilnVec<
         crate::instantiation::ResolvedImport,
-        { wrt_foundation::allocator::CrateId::Component as u8 },
+        { kiln_foundation::allocator::CrateId::Component as u8 },
         256,
     >,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
@@ -290,9 +290,9 @@ pub struct RuntimeInstance {
     pub imports: StaticVec<crate::instantiation::ResolvedImport, 256>,
     /// Resolved exports from this instance
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub exports: wrt_foundation::allocator::WrtVec<
+    pub exports: kiln_foundation::allocator::KilnVec<
         crate::instantiation::ResolvedExport,
-        { wrt_foundation::allocator::CrateId::Component as u8 },
+        { kiln_foundation::allocator::CrateId::Component as u8 },
         256,
     >,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
@@ -301,9 +301,9 @@ pub struct RuntimeInstance {
     pub exports: StaticVec<crate::instantiation::ResolvedExport, 256>,
     /// Resource tables for this instance
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub resource_tables: wrt_foundation::allocator::WrtVec<
+    pub resource_tables: kiln_foundation::allocator::KilnVec<
         crate::instantiation::ResourceTable,
-        { wrt_foundation::allocator::CrateId::Component as u8 },
+        { kiln_foundation::allocator::CrateId::Component as u8 },
         16,
     >,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
@@ -312,9 +312,9 @@ pub struct RuntimeInstance {
     pub resource_tables: StaticVec<crate::instantiation::ResourceTable, 16>,
     /// Module instances embedded in this component
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub module_instances: wrt_foundation::allocator::WrtVec<
+    pub module_instances: kiln_foundation::allocator::KilnVec<
         crate::instantiation::ModuleInstance,
-        { wrt_foundation::allocator::CrateId::Component as u8 },
+        { kiln_foundation::allocator::CrateId::Component as u8 },
         64,
     >,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
@@ -346,30 +346,30 @@ impl RuntimeInstance {
     pub fn new() -> Self {
         Self {
             id: 0,
-            component: Component::new(WrtComponentType::default()),
+            component: Component::new(KilnComponentType::default()),
             state: crate::types::ComponentInstanceState::Initialized,
             resource_manager: None,
             memory: None,
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            imports: wrt_foundation::allocator::WrtVec::new(),
+            imports: kiln_foundation::allocator::KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             imports: Vec::new(),
             #[cfg(not(feature = "std"))]
             imports: StaticVec::new(),
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            exports: wrt_foundation::allocator::WrtVec::new(),
+            exports: kiln_foundation::allocator::KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             exports: Vec::new(),
             #[cfg(not(feature = "std"))]
             exports: StaticVec::new(),
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            resource_tables: wrt_foundation::allocator::WrtVec::new(),
+            resource_tables: kiln_foundation::allocator::KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             resource_tables: Vec::new(),
             #[cfg(not(feature = "std"))]
             resource_tables: StaticVec::new(),
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            module_instances: wrt_foundation::allocator::WrtVec::new(),
+            module_instances: kiln_foundation::allocator::KilnVec::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             module_instances: Vec::new(),
             #[cfg(not(feature = "std"))]
@@ -590,7 +590,7 @@ pub enum ExternValue {
 #[derive(Debug, Clone, PartialEq)]
 pub struct FunctionValue {
     /// Function type
-    pub ty: wrt_foundation::types::FuncType,
+    pub ty: kiln_foundation::types::FuncType,
     /// Export name that this function refers to
     pub export_name: String,
 }
@@ -637,7 +637,7 @@ impl MemoryValue {
     /// Returns an error if the memory cannot be created
     pub fn new(ty: MemoryType) -> Result<Self> {
         // Convert MemoryType to CoreMemoryType for Memory::new
-        let core_ty = wrt_runtime::CoreMemoryType {
+        let core_ty = kiln_runtime::CoreMemoryType {
             limits: ty.limits,
             shared: ty.shared,
         };
@@ -664,7 +664,7 @@ impl MemoryValue {
     /// Returns an error if the memory cannot be created
     pub fn new_with_name(ty: MemoryType, name: &str) -> Result<Self> {
         // Convert MemoryType to CoreMemoryType for Memory::new_with_name
-        let core_ty = wrt_runtime::CoreMemoryType {
+        let core_ty = kiln_runtime::CoreMemoryType {
             limits: ty.limits,
             shared: ty.shared,
         };
@@ -889,7 +889,7 @@ impl Host {
 
 impl Component {
     /// Creates a new component with the given type
-    pub fn new(component_type: WrtComponentType) -> Self {
+    pub fn new(component_type: KilnComponentType) -> Self {
         Self {
             id: None,
             component_type,
@@ -905,7 +905,7 @@ impl Component {
             resource_table: ResourceTable::new().expect("Failed to create resource table"),
             built_in_requirements: None,
             original_binary: None,
-            verification_level: wrt_foundation::verification::VerificationLevel::Standard,
+            verification_level: kiln_foundation::verification::VerificationLevel::Standard,
         }
     }
 
@@ -936,7 +936,7 @@ impl Component {
     /// Set the verification level for memory operations
     pub fn set_verification_level(
         &mut self,
-        level: wrt_foundation::verification::VerificationLevel,
+        level: kiln_foundation::verification::VerificationLevel,
     ) {
         self.verification_level = level;
         // Propagate to resource table
@@ -945,7 +945,7 @@ impl Component {
     }
 
     /// Get the current verification level
-    pub fn verification_level(&self) -> wrt_foundation::verification::VerificationLevel {
+    pub fn verification_level(&self) -> kiln_foundation::verification::VerificationLevel {
         self.verification_level
     }
 
@@ -964,7 +964,7 @@ impl Component {
     /// Returns an error if the type cannot be added
     pub fn add_type(
         &mut self,
-        component_type: wrt_format::component::ComponentTypeDefinition,
+        component_type: kiln_format::component::ComponentTypeDefinition,
     ) -> Result<()> {
         self.types.push(component_type);
         Ok(())
@@ -1227,7 +1227,7 @@ pub fn scan_builtins(bytes: &[u8]) -> Result<BuiltinRequirements> {
     // Try to decode as component or module
     #[cfg(feature = "std")]
     {
-        match wrt_decoder::component::decode_component(bytes) {
+        match kiln_decoder::component::decode_component(bytes) {
             Ok(component) => {
                 scan_functions_for_builtins(&(), &mut requirements)?;
                 Ok(requirements)
@@ -1276,7 +1276,7 @@ fn map_import_to_builtin(import_name: &str) -> Option<BuiltinType> {
 ///
 /// A result indicating success or an error
 fn scan_functions_for_builtins(
-    _component: &(), // TODO: Re-enable with &wrt_decoder::component::Component when available
+    _component: &(), // TODO: Re-enable with &kiln_decoder::component::Component when available
     requirements: &mut BuiltinRequirements,
 ) -> Result<()> {
     // Check for resource types which indicate built-in usage
@@ -1310,7 +1310,7 @@ fn extract_embedded_modules(bytes: &[u8]) -> Result<Vec<Vec<u8>>> {
     // Try to decode as component
     #[cfg(feature = "decoder")]
     {
-        match wrt_decoder::component::decode_component(bytes) {
+        match kiln_decoder::component::decode_component(bytes) {
             Ok(component) => {
                 // Extract modules from component
                 // Let's create a simple mock implementation since component doesn't have
@@ -1350,9 +1350,9 @@ fn extract_embedded_modules(bytes: &[u8]) -> Result<Vec<Vec<u8>>> {
 
 /// Convert a component value to a runtime value
 pub fn component_value_to_value(
-    component_value: &crate::prelude::WrtComponentValue<ComponentProvider>,
-) -> wrt_intercept::Value {
-    use wrt_intercept::Value;
+    component_value: &crate::prelude::KilnComponentValue<ComponentProvider>,
+) -> kiln_intercept::Value {
+    use kiln_intercept::Value;
 
     use crate::type_conversion::types_componentvalue_to_core_value;
 
@@ -1363,37 +1363,37 @@ pub fn component_value_to_value(
 
 /// Convert a runtime value to a component value
 pub fn value_to_component_value(
-    value: &wrt_intercept::Value,
-) -> crate::prelude::WrtComponentValue<ComponentProvider> {
-    // WrtComponentValue is already imported from prelude
+    value: &kiln_intercept::Value,
+) -> crate::prelude::KilnComponentValue<ComponentProvider> {
+    // KilnComponentValue is already imported from prelude
 
     use crate::type_conversion::core_value_to_types_componentvalue;
 
     // Use the new conversion function
-    core_value_to_types_componentvalue(value).unwrap_or(WrtComponentValue::Void)
+    core_value_to_types_componentvalue(value).unwrap_or(KilnComponentValue::Void)
     // Provide a sensible default on error
 }
 
 /// Convert parameter to value type
-pub fn convert_param_to_value_type(param: &FormatValType) -> wrt_foundation::types::ValueType {
+pub fn convert_param_to_value_type(param: &FormatValType) -> kiln_foundation::types::ValueType {
     crate::type_conversion::format_val_type_to_value_type(param)
-        .unwrap_or(wrt_foundation::types::ValueType::I32)
+        .unwrap_or(kiln_foundation::types::ValueType::I32)
 }
 
 /// Convert verification level
 pub fn convert_verification_level(
-    level: wrt_foundation::VerificationLevel,
+    level: kiln_foundation::VerificationLevel,
 ) -> crate::resources::VerificationLevel {
     match level {
-        wrt_foundation::VerificationLevel::Off => crate::resources::VerificationLevel::None,
-        wrt_foundation::VerificationLevel::Basic => crate::resources::VerificationLevel::None,
-        wrt_foundation::VerificationLevel::Sampling => {
+        kiln_foundation::VerificationLevel::Off => crate::resources::VerificationLevel::None,
+        kiln_foundation::VerificationLevel::Basic => crate::resources::VerificationLevel::None,
+        kiln_foundation::VerificationLevel::Sampling => {
             crate::resources::VerificationLevel::Critical
         },
-        wrt_foundation::VerificationLevel::Standard => {
+        kiln_foundation::VerificationLevel::Standard => {
             crate::resources::VerificationLevel::Critical
         },
-        wrt_foundation::VerificationLevel::Full => crate::resources::VerificationLevel::Full,
-        wrt_foundation::VerificationLevel::Redundant => crate::resources::VerificationLevel::Full,
+        kiln_foundation::VerificationLevel::Full => crate::resources::VerificationLevel::Full,
+        kiln_foundation::VerificationLevel::Redundant => crate::resources::VerificationLevel::Full,
     }
 }

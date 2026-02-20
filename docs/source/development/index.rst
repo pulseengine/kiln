@@ -39,7 +39,7 @@ To contribute to the WebAssembly Runtime, please follow these steps:
 5. Update documentation as needed
 6. Submit a pull request
 
-See the [CONTRIBUTING.md](https://github.com/pulseengine/wrt/blob/main/CONTRIBUTING.md) file for more details.
+See the [CONTRIBUTING.md](https://github.com/pulseengine/kiln/blob/main/CONTRIBUTING.md) file for more details.
 
 Topics
 ------

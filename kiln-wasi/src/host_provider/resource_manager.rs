@@ -1,17 +1,17 @@
-//! WASI resource manager using WRT foundation patterns
+//! WASI resource manager using Kiln foundation patterns
 //!
 //! This module provides resource management for WASI handles using the proven
-//! Resource<P> patterns from wrt-foundation.
+//! Resource<P> patterns from kiln-foundation.
 
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use wrt_error::Result;
+use kiln_error::Result;
 #[cfg(feature = "std")]
-use wrt_foundation::capabilities::CapabilityAwareProvider;
+use kiln_foundation::capabilities::CapabilityAwareProvider;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::budget_aware_provider::CrateId as BudgetCrateId;
-use wrt_foundation::{
+use kiln_foundation::budget_aware_provider::CrateId as BudgetCrateId;
+use kiln_foundation::{
     resource::{
         Resource,
         ResourceOperation,
@@ -28,7 +28,7 @@ use wrt_foundation::{
     BoundedString,
 };
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{safe_managed_alloc, BoundedMap};
+use kiln_foundation::{safe_managed_alloc, BoundedMap};
 
 use crate::prelude::*;
 
@@ -127,7 +127,7 @@ pub enum WasiClockType {
 
 /// WASI resource manager
 ///
-/// Manages WASI resource handles using WRT's proven resource management
+/// Manages WASI resource handles using Kiln's proven resource management
 /// patterns
 #[derive(Debug)]
 pub struct WasiResourceManager {
@@ -144,10 +144,10 @@ pub struct WasiResourceManager {
     _provider: WasiProvider,
 }
 
-/// WASI resource wrapper using WRT Resource<P> pattern
+/// WASI resource wrapper using Kiln Resource<P> pattern
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WasiResource {
-    /// Base WRT resource
+    /// Base Kiln resource
     #[cfg(feature = "std")]
     base:          Resource<CapabilityAwareProvider<NoStdProvider<8192>>>,
     #[cfg(not(feature = "std"))]
@@ -163,9 +163,9 @@ impl Default for WasiResource {
         Self {
             base:          Resource::new(
                 0, // default ID
-                wrt_foundation::resource::ResourceRepr::Opaque,
+                kiln_foundation::resource::ResourceRepr::Opaque,
                 None,
-                wrt_foundation::verification::VerificationLevel::Standard,
+                kiln_foundation::verification::VerificationLevel::Standard,
             ),
             resource_type: WasiResourceType::Null,
             capabilities:  WasiResourceCapabilities::default(),
@@ -229,12 +229,12 @@ impl WasiResourceManager {
         resource_type: WasiResourceType,
         capabilities: WasiResourceCapabilities,
     ) -> Result<WasiHandle> {
-        // Create base WRT resource
+        // Create base Kiln resource
         let base = Resource::new(
             self.next_handle,
-            wrt_foundation::resource::ResourceRepr::Opaque,
+            kiln_foundation::resource::ResourceRepr::Opaque,
             None,
-            wrt_foundation::verification::VerificationLevel::Standard,
+            kiln_foundation::verification::VerificationLevel::Standard,
         );
 
         // Create WASI resource wrapper
@@ -552,7 +552,7 @@ impl WasiResource {
     /// This function is currently infallible and always returns `Ok`.
     /// Future implementations may return errors for unauthorized operations.
     pub fn verify_operation(&self, _operation: ResourceOperation) -> Result<()> {
-        // TODO: Implement operation verification when available in wrt-foundation
+        // TODO: Implement operation verification when available in kiln-foundation
         Ok(())
     }
 
@@ -640,7 +640,7 @@ impl ToBytes for WasiResource {
         270
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'_>,
         provider: &P,
@@ -688,7 +688,7 @@ impl ToBytes for WasiResource {
 }
 
 impl FromBytes for WasiResource {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'_>,
         provider: &P,
     ) -> Result<Self> {
@@ -745,9 +745,9 @@ impl FromBytes for WasiResource {
         Ok(WasiResource {
             base: Resource::new(
                 0, // placeholder ID
-                wrt_foundation::resource::ResourceRepr::Opaque,
+                kiln_foundation::resource::ResourceRepr::Opaque,
                 None,
-                wrt_foundation::verification::VerificationLevel::Standard,
+                kiln_foundation::verification::VerificationLevel::Standard,
             ),
             resource_type,
             capabilities,
@@ -758,7 +758,7 @@ impl FromBytes for WasiResource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wrt_foundation::memory_init::MemoryInitializer;
+    use kiln_foundation::memory_init::MemoryInitializer;
 
     #[test]
     fn test_resource_manager_creation() -> Result<()> {

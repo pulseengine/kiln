@@ -7,7 +7,7 @@ Build-Time Memory Validation
    :align: center
    :alt: Memory Validation Icon
 
-WRT includes comprehensive build-time validation for memory budgets to ensure proper memory allocation planning before runtime.
+Kiln includes comprehensive build-time validation for memory budgets to ensure proper memory allocation planning before runtime.
 
 .. contents:: On this page
    :local:
@@ -30,7 +30,7 @@ Configuration
 Default Budgets
 ~~~~~~~~~~~~~~~
 
-The system includes sensible defaults for all WRT crates:
+The system includes sensible defaults for all Kiln crates:
 
 .. list-table:: Default Memory Budgets
    :header-rows: 1
@@ -39,49 +39,49 @@ The system includes sensible defaults for all WRT crates:
    * - Crate
      - Default Budget
      - Purpose
-   * - wrt-foundation
+   * - kiln-foundation
      - 8MB
      - Core memory management
-   * - wrt-runtime
+   * - kiln-runtime
      - 16MB
      - Execution engine
-   * - wrt-component
+   * - kiln-component
      - 12MB
      - Component Model support
-   * - wrt-decoder
+   * - kiln-decoder
      - 4MB
      - WebAssembly decoding
-   * - wrt-format
+   * - kiln-format
      - 2MB
      - Format handling
-   * - wrt-host
+   * - kiln-host
      - 4MB
      - Host integration
-   * - wrt-debug
+   * - kiln-debug
      - 2MB
      - Debug tools
-   * - wrt-platform
+   * - kiln-platform
      - 8MB
      - Platform abstraction
-   * - wrt-instructions
+   * - kiln-instructions
      - 4MB
      - Instruction execution
-   * - wrt-logging
+   * - kiln-logging
      - 1MB
      - Logging infrastructure
-   * - wrt-intercept
+   * - kiln-intercept
      - 1MB
      - Interception/monitoring
-   * - wrt-panic
+   * - kiln-panic
      - 512KB
      - Panic handling
-   * - wrt-sync
+   * - kiln-sync
      - 1MB
      - Synchronization
-   * - wrt-math
+   * - kiln-math
      - 512KB
      - Mathematical operations
-   * - wrt-error
+   * - kiln-error
      - 256KB
      - Error handling
      - 256KB
@@ -100,9 +100,9 @@ Create ``memory_budget.toml`` in the workspace root:
 .. code-block:: toml
 
    # Custom memory budgets
-   "wrt-runtime" = "32MB"
-   "wrt-component" = "24MB"
-   "wrt-foundation" = "16MB"
+   "kiln-runtime" = "32MB"
+   "kiln-component" = "24MB"
+   "kiln-foundation" = "16MB"
    
    # Global settings
    total_budget = "128MB"
@@ -115,9 +115,9 @@ Override specific budgets using environment variables:
 
 .. code-block:: bash
 
-   export WRT_RUNTIME_BUDGET=32MB
-   export WRT_COMPONENT_BUDGET=24MB
-   export WRT_TOTAL_BUDGET=128MB
+   export KILN_RUNTIME_BUDGET=32MB
+   export KILN_COMPONENT_BUDGET=24MB
+   export KILN_TOTAL_BUDGET=128MB
 
 Budget Format
 ~~~~~~~~~~~~~
@@ -133,9 +133,9 @@ Examples:
 
 .. code-block:: toml
 
-   "wrt-runtime" = "16MB"      # 16,777,216 bytes
-   "wrt-decoder" = "4096KB"    # 4,194,304 bytes
-   "wrt-math" = 524288         # 524,288 bytes
+   "kiln-runtime" = "16MB"      # 16,777,216 bytes
+   "kiln-decoder" = "4096KB"    # 4,194,304 bytes
+   "kiln-math" = 524288         # 524,288 bytes
 
 Validation Process
 ------------------
@@ -188,7 +188,7 @@ Add to ``Cargo.toml``:
    strict_mode = true
    
    [build-dependencies]
-   wrt-memory-validator = "0.2"
+   kiln-memory-validator = "0.2"
 
 Build Script Integration
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -197,7 +197,7 @@ Create ``build.rs``:
 
 .. code-block:: rust
 
-   use wrt_memory_validator::{validate_budgets, BudgetConfig};
+   use kiln_memory_validator::{validate_budgets, BudgetConfig};
    
    fn main() {
        let config = BudgetConfig::from_file("memory_budget.toml")
@@ -207,7 +207,7 @@ Create ``build.rs``:
            .expect("Memory budget validation failed");
            
        // Generate budget constants
-       println!("cargo:rustc-env=WRT_TOTAL_BUDGET={}", config.total_budget);
+       println!("cargo:rustc-env=KILN_TOTAL_BUDGET={}", config.total_budget);
    }
 
 Runtime Integration
@@ -217,7 +217,7 @@ Access validated budgets at runtime:
 
 .. code-block:: rust
 
-   use wrt_foundation::{CRATE_BUDGETS, TOTAL_MEMORY_BUDGET};
+   use kiln_foundation::{CRATE_BUDGETS, TOTAL_MEMORY_BUDGET};
    
    fn initialize_memory_system() -> Result<(), Error> {
        // Budgets are compile-time validated constants
@@ -249,9 +249,9 @@ Common validation errors and solutions:
 
 .. code-block:: text
 
-   error: wrt-runtime budget (2MB) below minimum requirement (4MB)
+   error: kiln-runtime budget (2MB) below minimum requirement (4MB)
    
-   Solution: Increase wrt-runtime budget to at least 4MB
+   Solution: Increase kiln-runtime budget to at least 4MB
 
 **Platform Constraint Violation**:
 
@@ -292,7 +292,7 @@ Enable budget monitoring:
 
    #[cfg(feature = "memory-monitoring")]
    fn report_budget_usage() {
-       let usage = wrt_foundation::memory_monitor::get_usage_report();
+       let usage = kiln_foundation::memory_monitor::get_usage_report();
        
        for (crate_id, info) in usage.iter() {
            println!("Crate {}: {}/{} bytes ({}%)", 

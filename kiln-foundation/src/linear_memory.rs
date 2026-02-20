@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Linear Memory using Platform Abstraction Layer
 // SW-REQ-ID: REQ_MEMORY_001 REQ_PLATFORM_001
 //
@@ -9,7 +9,7 @@
 #![allow(unsafe_code)] // This module needs unsafe for memory operations
 
 //! Provides a Wasm linear memory implementation backed by a `PageAllocator`
-//! from the `wrt-platform` crate.
+//! from the `kiln-platform` crate.
 
 // Test comment to try and force recompile / cache clear
 use core::{
@@ -21,8 +21,8 @@ use core::{
     },
 };
 
-use wrt_error::Result;
-use wrt_platform::memory::{
+use kiln_error::Result;
+use kiln_platform::memory::{
     PageAllocator,
     WASM_PAGE_SIZE,
 };
@@ -151,7 +151,7 @@ impl<A: PageAllocator + Send + Sync> PageAllocatorAdapter<A> {
 }
 
 impl<A: PageAllocator + Send + Sync + Clone + 'static> Allocator for PageAllocatorAdapter<A> {
-    fn allocate(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8> {
+    fn allocate(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
         // Convert the layout to pages (rounded up)
         let size_pages = (layout.size() + WASM_PAGE_SIZE - 1) / WASM_PAGE_SIZE;
         let mut allocator = self.allocator.clone();
@@ -161,7 +161,7 @@ impl<A: PageAllocator + Send + Sync + Clone + 'static> Allocator for PageAllocat
         Ok(ptr.as_ptr())
     }
 
-    fn deallocate(&self, ptr: *mut u8, _layout: core::alloc::Layout) -> wrt_error::Result<()> {
+    fn deallocate(&self, ptr: *mut u8, _layout: core::alloc::Layout) -> kiln_error::Result<()> {
         // Binary std/no_std choice
         // as they typically manage entire memory regions
         Ok(())
@@ -518,11 +518,11 @@ impl<A: PageAllocator + Send + Sync + Clone + 'static + Default> Provider for Pa
         Ok(())
     }
 
-    fn acquire_memory(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8> {
+    fn acquire_memory(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
         self.get_allocator().allocate(layout)
     }
 
-    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> wrt_error::Result<()> {
+    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> kiln_error::Result<()> {
         self.get_allocator().deallocate(ptr, layout)
     }
 

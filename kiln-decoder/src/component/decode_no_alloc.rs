@@ -1,4 +1,4 @@
-// WRT - wrt-decoder
+// WRT - kiln-decoder
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -7,7 +7,7 @@
 //!
 //! This module provides decoding capabilities for WebAssembly Component Model
 //! in environments without heap allocation. It uses bounded collections from
-//! wrt-foundation for all operations.
+//! kiln-foundation for all operations.
 //!
 //! # Safety requirements
 //!
@@ -22,8 +22,8 @@
 //! # Usage example
 //!
 //! ```ignore
-//! use wrt_decoder::component::decode_no_alloc;
-//! use wrt_foundation::verification::VerificationLevel;
+//! use kiln_decoder::component::decode_no_alloc;
+//! use kiln_foundation::verification::VerificationLevel;
 //!
 //! // Verify a WebAssembly Component Model header
 //! let component_binary = [0x00, 0x61, 0x73, 0x6D, 0x0A, 0x00, 0x01, 0x00]; // Magic + version
@@ -34,9 +34,9 @@
 //! }
 //! ```
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_format::binary;
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_format::binary;
+use kiln_foundation::{
     CrateId, NoStdProvider, capabilities::CapabilityAwareProvider, capability_context,
     safe_capability_alloc, traits::BoundedCapacity,
 };
@@ -70,7 +70,7 @@ fn read_name(data: &[u8], offset: usize) -> Result<(&[u8], usize)> {
 }
 // BoundedCapacity trait is private, using alternative approaches for length
 // operations
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{BoundedString, BoundedVec, MAX_COMPONENT_TYPES},
     component::{MAX_COMPONENT_EXPORTS, MAX_COMPONENT_IMPORTS},
     verification::VerificationLevel,

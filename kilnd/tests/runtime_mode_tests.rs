@@ -1,6 +1,6 @@
-//! Comprehensive tests for different runtime modes in wrtd
+//! Comprehensive tests for different runtime modes in kilnd
 //!
-//! This test suite validates that wrtd correctly handles different runtime
+//! This test suite validates that kilnd correctly handles different runtime
 //! modes (std, alloc, no_std) and their respective capabilities and
 //! limitations.
 
@@ -12,8 +12,8 @@ mod tests {
         process::Command,
     };
 
-    /// Helper function to run wrtd with specified arguments
-    fn run_wrtd_with_mode(
+    /// Helper function to run kilnd with specified arguments
+    fn run_kilnd_with_mode(
         wasm_file: &str,
         runtime_mode: &str,
         call: Option<&str>,
@@ -25,9 +25,9 @@ mod tests {
             .unwrap()
             .to_path_buf();
 
-        let wrtd_path = project_root.join("target/debug/wrtd");
+        let kilnd_path = project_root.join("target/debug/kilnd");
 
-        let mut cmd = Command::new(wrtd_path);
+        let mut cmd = Command::new(kilnd_path);
         cmd.arg(wasm_file).arg("--runtime-mode").arg(runtime_mode);
 
         if let Some(function_name) = call {
@@ -43,7 +43,7 @@ mod tests {
             cmd.arg(arg);
         }
 
-        let output = cmd.output().expect("Failed to execute wrtd");
+        let output = cmd.output().expect("Failed to execute kilnd");
         let success = output.status.success();
         let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -53,7 +53,7 @@ mod tests {
 
     /// Test std runtime mode capabilities
     #[test]
-    #[ignore = "Requires compilation fixes in core WRT crates"]
+    #[ignore = "Requires compilation fixes in core Kiln crates"]
     fn test_std_runtime_mode() {
         let test_wasm = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("tests/fixtures/std-mode-example.wasm")
@@ -62,7 +62,7 @@ mod tests {
             .to_string();
 
         // Test basic std functionality
-        let (success, stdout, stderr) = run_wrtd_with_mode(
+        let (success, stdout, stderr) = run_kilnd_with_mode(
             &test_wasm,
             "std",
             Some("hello"),
@@ -79,7 +79,7 @@ mod tests {
 
     /// Binary std/no_std choice
     #[test]
-    #[ignore = "Requires compilation fixes in core WRT crates"]
+    #[ignore = "Requires compilation fixes in core Kiln crates"]
     fn test_alloc_runtime_mode() {
         let test_wasm = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("tests/fixtures/alloc-mode-example.wasm")
@@ -88,7 +88,7 @@ mod tests {
             .to_string();
 
         // Binary std/no_std choice
-        let (success, stdout, stderr) = run_wrtd_with_mode(
+        let (success, stdout, stderr) = run_kilnd_with_mode(
             &test_wasm,
             "alloc",
             Some("dynamic_array"),
@@ -106,7 +106,7 @@ mod tests {
 
     /// Test no_std runtime mode with minimal functionality
     #[test]
-    #[ignore = "Requires compilation fixes in core WRT crates"]
+    #[ignore = "Requires compilation fixes in core Kiln crates"]
     fn test_nostd_runtime_mode() {
         let test_wasm = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("tests/fixtures/nostd-mode-example.wasm")
@@ -115,7 +115,7 @@ mod tests {
             .to_string();
 
         // Test basic arithmetic
-        let (success, stdout, stderr) = run_wrtd_with_mode(
+        let (success, stdout, stderr) = run_kilnd_with_mode(
             &test_wasm,
             "no-std",
             Some("add"),
@@ -133,7 +133,7 @@ mod tests {
 
     /// Test fibonacci calculation in no_std mode
     #[test]
-    #[ignore = "Requires compilation fixes in core WRT crates"]
+    #[ignore = "Requires compilation fixes in core Kiln crates"]
     fn test_nostd_fibonacci() {
         let test_wasm = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("tests/fixtures/nostd-mode-example.wasm")
@@ -141,7 +141,7 @@ mod tests {
             .unwrap()
             .to_string();
 
-        let (success, stdout, stderr) = run_wrtd_with_mode(
+        let (success, stdout, stderr) = run_kilnd_with_mode(
             &test_wasm,
             "no-std",
             Some("fibonacci"),
@@ -160,7 +160,7 @@ mod tests {
 
     /// Test runtime mode validation catches incompatible configurations
     #[test]
-    #[ignore = "Requires compilation fixes in core WRT crates"]
+    #[ignore = "Requires compilation fixes in core Kiln crates"]
     fn test_mode_validation_limits() {
         let test_wasm = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("tests/fixtures/nostd-mode-example.wasm")
@@ -169,7 +169,7 @@ mod tests {
             .to_string();
 
         // Try to use excessive fuel with no_std mode (should fail validation)
-        let (success, stdout, stderr) = run_wrtd_with_mode(
+        let (success, stdout, stderr) = run_kilnd_with_mode(
             &test_wasm,
             "no-std",
             Some("add"),
@@ -190,7 +190,7 @@ mod tests {
 
     /// Test buffer size validation for different modes
     #[test]
-    #[ignore = "Requires compilation fixes in core WRT crates"]
+    #[ignore = "Requires compilation fixes in core Kiln crates"]
     fn test_buffer_size_validation() {
         let test_wasm = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("tests/fixtures/nostd-mode-example.wasm")
@@ -199,7 +199,7 @@ mod tests {
             .to_string();
 
         // Try to use large buffer with no_std mode (should fail validation)
-        let (success, stdout, stderr) = run_wrtd_with_mode(
+        let (success, stdout, stderr) = run_kilnd_with_mode(
             &test_wasm,
             "no-std",
             Some("add"),
@@ -220,7 +220,7 @@ mod tests {
 
     /// Test capability display for different modes
     #[test]
-    #[ignore = "Requires compilation fixes in core WRT crates"]
+    #[ignore = "Requires compilation fixes in core Kiln crates"]
     fn test_show_capabilities() {
         let test_wasm = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("tests/fixtures/std-mode-example.wasm")
@@ -230,7 +230,7 @@ mod tests {
 
         // Test std mode capabilities
         let (success, stdout, stderr) =
-            run_wrtd_with_mode(&test_wasm, "std", None, None, &["--show-capabilities"]);
+            run_kilnd_with_mode(&test_wasm, "std", None, None, &["--show-capabilities"]);
 
         println!("STD Capabilities STDOUT: {}", stdout);
         println!("STD Capabilities STDERR: {}", stderr);
@@ -243,7 +243,7 @@ mod tests {
 
         // Test no_std mode capabilities
         let (success, stdout, stderr) =
-            run_wrtd_with_mode(&test_wasm, "no-std", None, None, &["--show-capabilities"]);
+            run_kilnd_with_mode(&test_wasm, "no-std", None, None, &["--show-capabilities"]);
 
         println!("NoStd Capabilities STDOUT: {}", stdout);
         println!("NoStd Capabilities STDERR: {}", stderr);
@@ -258,7 +258,7 @@ mod tests {
 
     /// Test performance comparison between modes
     #[test]
-    #[ignore = "Requires compilation fixes in core WRT crates"]
+    #[ignore = "Requires compilation fixes in core Kiln crates"]
     fn test_performance_comparison() {
         // Test the same computation in different modes to compare performance
         let test_wasm = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
@@ -268,7 +268,7 @@ mod tests {
             .to_string();
 
         // Test std mode
-        let (success_std, stdout_std, _) = run_wrtd_with_mode(
+        let (success_std, stdout_std, _) = run_kilnd_with_mode(
             &test_wasm,
             "std",
             Some("fibonacci"),
@@ -277,7 +277,7 @@ mod tests {
         );
 
         // Test no_std mode
-        let (success_nostd, stdout_nostd, _) = run_wrtd_with_mode(
+        let (success_nostd, stdout_nostd, _) = run_kilnd_with_mode(
             &test_wasm,
             "no-std",
             Some("fibonacci"),
@@ -295,7 +295,7 @@ mod tests {
 
     /// Test memory strategy compatibility with different runtime modes
     #[test]
-    #[ignore = "Requires compilation fixes in core WRT crates"]
+    #[ignore = "Requires compilation fixes in core Kiln crates"]
     fn test_memory_strategy_compatibility() {
         let test_wasm = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("tests/fixtures/alloc-mode-example.wasm")
@@ -307,7 +307,7 @@ mod tests {
         let strategies = ["zero-copy", "bounded-copy", "full-isolation"];
 
         for strategy in &strategies {
-            let (success, stdout, stderr) = run_wrtd_with_mode(
+            let (success, stdout, stderr) = run_kilnd_with_mode(
                 &test_wasm,
                 "alloc",
                 Some("memory_test"),

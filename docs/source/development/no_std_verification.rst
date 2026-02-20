@@ -2,7 +2,7 @@
 no_std Verification
 ====================
 
-This comprehensive verification plan ensures that all crates in the WRT ecosystem can be built and tested in three configurations.
+This comprehensive verification plan ensures that all crates in the Kiln ecosystem can be built and tested in three configurations.
 
 .. contents:: Table of Contents
    :local:
@@ -56,98 +56,98 @@ For each crate, run the following commands to verify compatibility:
 Crate-Specific Verification
 ---------------------------
 
-wrt-math
+kiln-math
 ~~~~~~~~
 
 This crate should work in all configurations including the most restrictive no_std without alloc::
 
     # Standard
-    cargo build -p wrt-math --features std
-    cargo test -p wrt-math --features std
+    cargo build -p kiln-math --features std
+    cargo test -p kiln-math --features std
 
     # No_std with alloc
-    cargo build -p wrt-math --no-default-features --features "no_std,alloc"
-    cargo test -p wrt-math --no-default-features --features "no_std,alloc"
+    cargo build -p kiln-math --no-default-features --features "no_std,alloc"
+    cargo test -p kiln-math --no-default-features --features "no_std,alloc"
 
     # No_std without alloc
-    cargo build -p wrt-math --no-default-features --features "no_std"
-    cargo test -p wrt-math --no-default-features --features "no_std"
+    cargo build -p kiln-math --no-default-features --features "no_std"
+    cargo test -p kiln-math --no-default-features --features "no_std"
 
-wrt-sync
+kiln-sync
 ~~~~~~~~
 
 Verify synchronization primitives work in all environments::
 
     # Standard
-    cargo build -p wrt-sync --features std
-    cargo test -p wrt-sync --features std
+    cargo build -p kiln-sync --features std
+    cargo test -p kiln-sync --features std
 
     # No_std with alloc
-    cargo build -p wrt-sync --no-default-features --features "no_std,alloc"
-    cargo test -p wrt-sync --no-default-features --features "no_std,alloc"
+    cargo build -p kiln-sync --no-default-features --features "no_std,alloc"
+    cargo test -p kiln-sync --no-default-features --features "no_std,alloc"
 
     # No_std without alloc
-    cargo build -p wrt-sync --no-default-features --features "no_std"
-    cargo test -p wrt-sync --no-default-features --features "no_std"
+    cargo build -p kiln-sync --no-default-features --features "no_std"
+    cargo test -p kiln-sync --no-default-features --features "no_std"
 
-wrt-error
+kiln-error
 ~~~~~~~~~
 
 ::
 
     # Standard
-    cargo build -p wrt-error --features std
-    cargo test -p wrt-error --features std
-    cargo test -p wrt-error --features std -- integration_test
+    cargo build -p kiln-error --features std
+    cargo test -p kiln-error --features std
+    cargo test -p kiln-error --features std -- integration_test
 
     # No_std with alloc
-    cargo build -p wrt-error --no-default-features --features "no_std,alloc"
-    cargo test -p wrt-error --no-default-features --features "no_std,alloc"
-    cargo test -p wrt-error --no-default-features --features "no_std,alloc" -- integration_test
+    cargo build -p kiln-error --no-default-features --features "no_std,alloc"
+    cargo test -p kiln-error --no-default-features --features "no_std,alloc"
+    cargo test -p kiln-error --no-default-features --features "no_std,alloc" -- integration_test
 
     # No_std without alloc 
-    cargo build -p wrt-error --no-default-features --features "no_std"
-    cargo test -p wrt-error --no-default-features --features "no_std"
-    cargo test -p wrt-error --no-default-features --features "no_std" -- no_std_compatibility_test
+    cargo build -p kiln-error --no-default-features --features "no_std"
+    cargo test -p kiln-error --no-default-features --features "no_std"
+    cargo test -p kiln-error --no-default-features --features "no_std" -- no_std_compatibility_test
 
-wrt-foundation
+kiln-foundation
 ~~~~~~~~~~~~~~
 
 ::
 
     # Standard
-    cargo build -p wrt-foundation --features std
-    cargo test -p wrt-foundation --features std
-    cargo test -p wrt-foundation --features std -- bounded_collections_test
-    cargo test -p wrt-foundation --features std -- safe_memory_test
-    cargo test -p wrt-foundation --features std -- safe_stack_test
+    cargo build -p kiln-foundation --features std
+    cargo test -p kiln-foundation --features std
+    cargo test -p kiln-foundation --features std -- bounded_collections_test
+    cargo test -p kiln-foundation --features std -- safe_memory_test
+    cargo test -p kiln-foundation --features std -- safe_stack_test
 
     # No_std with alloc
-    cargo build -p wrt-foundation --no-default-features --features "no_std,alloc"
-    cargo test -p wrt-foundation --no-default-features --features "no_std,alloc"
-    cargo test -p wrt-foundation --no-default-features --features "no_std,alloc" -- bounded_collections_test
-    cargo test -p wrt-foundation --no-default-features --features "no_std,alloc" -- safe_memory_test
+    cargo build -p kiln-foundation --no-default-features --features "no_std,alloc"
+    cargo test -p kiln-foundation --no-default-features --features "no_std,alloc"
+    cargo test -p kiln-foundation --no-default-features --features "no_std,alloc" -- bounded_collections_test
+    cargo test -p kiln-foundation --no-default-features --features "no_std,alloc" -- safe_memory_test
 
     # No_std without alloc
-    cargo build -p wrt-foundation --no-default-features --features "no_std"
-    cargo test -p wrt-foundation --no-default-features --features "no_std"
-    cargo test -p wrt-foundation --no-default-features --features "no_std" -- safe_stack_test
+    cargo build -p kiln-foundation --no-default-features --features "no_std"
+    cargo test -p kiln-foundation --no-default-features --features "no_std"
+    cargo test -p kiln-foundation --no-default-features --features "no_std" -- safe_stack_test
 
 Additional Crates
 ~~~~~~~~~~~~~~~~~
 
 Similar verification procedures apply to:
 
-- wrt-format
-- wrt-decoder
-- wrt-instructions
-- wrt-runtime
-- wrt-host
-- wrt-intercept
-- wrt-component
-- wrt-platform
-- wrt-logging
-- wrt (main crate)
+- kiln-format
+- kiln-decoder
+- kiln-instructions
+- kiln-runtime
+- kiln-host
+- kiln-intercept
+- kiln-component
+- kiln-platform
+- kiln-logging
+- kiln (main crate)
 
 Integration Testing
 -------------------
@@ -156,7 +156,7 @@ After verifying individual crates, run integration tests that use multiple crate
 
     # Standard
     cargo test --workspace --features std
-    cargo test --features std -- integration_with_wrt
+    cargo test --features std -- integration_with_kiln
 
     # No_std with alloc
     cargo test --workspace --no-default-features --features "no_std,alloc"
@@ -175,20 +175,20 @@ Create a shell script to automate the verification process::
     # Define configurations
     CONFIGS=("std" "no_std,alloc" "no_std")
     CRATES=(
-      "wrt-math"
-      "wrt-sync"
-      "wrt-error"
-      "wrt-foundation"
-      "wrt-format"
-      "wrt-decoder"
-      "wrt-instructions"
-      "wrt-runtime"
-      "wrt-host"
-      "wrt-intercept"
-      "wrt-component"
-      "wrt-platform"
-      "wrt-logging"
-      "wrt"
+      "kiln-math"
+      "kiln-sync"
+      "kiln-error"
+      "kiln-foundation"
+      "kiln-format"
+      "kiln-decoder"
+      "kiln-instructions"
+      "kiln-runtime"
+      "kiln-host"
+      "kiln-intercept"
+      "kiln-component"
+      "kiln-platform"
+      "kiln-logging"
+      "kiln"
     )
 
     # Run verification for each crate in each configuration

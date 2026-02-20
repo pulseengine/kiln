@@ -2,7 +2,7 @@
 Test Coverage and Quality Assurance
 ==================================
 
-This section documents the test coverage strategy, implementation status, and quality assurance processes for the WRT project.
+This section documents the test coverage strategy, implementation status, and quality assurance processes for the Kiln project.
 
 .. contents:: Table of Contents
    :local:
@@ -14,7 +14,7 @@ Coverage Overview
 Current Status
 ~~~~~~~~~~~~~~
 
-The WRT project is implementing comprehensive test coverage to meet safety-critical requirements:
+The Kiln project is implementing comprehensive test coverage to meet safety-critical requirements:
 
 .. list-table:: Current Coverage Metrics
    :header-rows: 1
@@ -471,10 +471,10 @@ Coverage testing across feature combinations::
             name: coverage-${{ strategy.job-index }}
             path: coverage-*.lcov
 
-Parallel Testing with cargo-wrt
+Parallel Testing with cargo-kiln
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The cargo-wrt coverage command supports parallel testing of feature combinations for faster feedback.
+The cargo-kiln coverage command supports parallel testing of feature combinations for faster feedback.
 
 Priority Implementation Plan
 ----------------------------
@@ -495,7 +495,7 @@ For Full CFI Integration
 
 Once base crates are fixed:
 
-1. **Integration Testing**: Run CFI tests within complete WRT build
+1. **Integration Testing**: Run CFI tests within complete Kiln build
 2. **End-to-End Validation**: Test CFI with actual WebAssembly execution
 3. **Benchmark Suite**: Measure real-world performance impact
 4. **Hardware Validation**: Test on actual ARM64 hardware with BTI support
@@ -513,19 +513,19 @@ Viewing Coverage Reports
 
 1. **Local Viewer**: Open ``view_coverage_report.html`` in a browser
 2. **Direct HTML**: Open ``target/coverage/html/html/index.html``
-3. **Documentation**: Build docs with ``cargo-wrt docs``
+3. **Documentation**: Build docs with ``cargo-kiln docs``
 
 Test Locations
 --------------
 
 - **CFI Standalone Test Suite**: ``/Users/r/git/wrt2/cfi_standalone_test.rs``
 - **Execution Command**: ``rustc cfi_standalone_test.rs -o cfi_test && ./cfi_test``
-- **Hardware Simulation**: ``WRT_TEST_BTI_AVAILABLE=1 ./cfi_test``
+- **Hardware Simulation**: ``KILN_TEST_BTI_AVAILABLE=1 ./cfi_test``
 
 Conclusion
 ----------
 
-The WRT test coverage strategy provides:
+The Kiln test coverage strategy provides:
 
 - ✅ **Validated Complete Functionality**: All CFI components work correctly
 - ✅ **Cross-Platform Compatibility**: Proper behavior on all targets

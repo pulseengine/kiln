@@ -3,7 +3,7 @@
 
 #[cfg(test)]
 mod tests {
-    use wrt_error::kinds::*;
+    use kiln_error::kinds::*;
 
     #[test]
     fn test_all_error_type_display_implementations() {

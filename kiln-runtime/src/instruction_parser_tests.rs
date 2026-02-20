@@ -5,7 +5,7 @@
 
 #[cfg(test)]
 mod tests {
-    use wrt_foundation::types::Instruction;
+    use kiln_foundation::types::Instruction;
 
     use crate::instruction_parser::parse_instructions;
 

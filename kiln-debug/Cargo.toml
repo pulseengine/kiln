@@ -1,26 +1,26 @@
 [package]
-name = "wrt-debug"
+name = "kiln-debug"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "DWARF debug information support for WebAssembly Runtime (WRT)"
+description = "DWARF debug information support for WebAssembly Runtime (Kiln)"
 license.workspace = true
 repository.workspace = true
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false }
-wrt-format = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false }
+kiln-error = { workspace = true, default-features = false }
+kiln-format = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false }
 
 [features]
 default = ["line-info"]
 # Binary choice: std OR no_std (no alloc middle ground)
-std = ["wrt-error/std", "wrt-format/std", "wrt-foundation/std"]
+std = ["kiln-error/std", "kiln-format/std", "kiln-foundation/std"]
 # This crate is no_std by default, this feature is a no-op for compatibility
 no_std = []
 
 # Allocation support for no_std environments
-alloc = ["wrt-foundation/alloc", "wrt-format/alloc"]
+alloc = ["kiln-foundation/alloc", "kiln-format/alloc"]
 
 # Static debug features (no runtime needed)
 line-info = []              # Line number information support (.debug_line)
@@ -50,11 +50,11 @@ production = ["static-debug"]  # Error reporting only
 full-debug = ["static-debug", "runtime-debug", "wit-integration"]  # Everything
 
 # Safety level presets using capability-based features
-qm = ["wrt-foundation/dynamic-allocation", "wrt-format/qm"]
-asil-a = ["wrt-foundation/bounded-collections", "wrt-format/asil-a"]
-asil-b = ["wrt-foundation/bounded-collections", "wrt-format/asil-b"]
-asil-c = ["wrt-foundation/static-memory-safety", "wrt-format/asil-c"]
-asil-d = ["wrt-foundation/asil-d", "wrt-format/asil-d"]
+qm = ["kiln-foundation/dynamic-allocation", "kiln-format/qm"]
+asil-a = ["kiln-foundation/bounded-collections", "kiln-format/asil-a"]
+asil-b = ["kiln-foundation/bounded-collections", "kiln-format/asil-b"]
+asil-c = ["kiln-foundation/static-memory-safety", "kiln-format/asil-c"]
+asil-d = ["kiln-foundation/asil-d", "kiln-format/asil-d"]
 
 # Legacy compatibility features
 safe-memory = ["asil-b"]
@@ -70,5 +70,5 @@ kani = []
 workspace = true
 
 [lib]
-name = "wrt_debug"
+name = "kiln_debug"
 path = "src/lib.rs"

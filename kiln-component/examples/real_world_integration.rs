@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use wrt_component::{
+use kiln_component::{
     AgentConfiguration, AgentId, AgentRegistry, ExecutionMode, HybridModeFlags,
     RuntimeBridgeConfig, UnifiedExecutionAgent, UnifiedExecutionState, Value,
 };

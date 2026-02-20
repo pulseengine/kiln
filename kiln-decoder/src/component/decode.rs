@@ -6,8 +6,8 @@
 // recursive types
 #[cfg(feature = "std")]
 mod component_decode {
-    use wrt_error::{Error, ErrorCategory, Result, codes};
-    use wrt_format::{binary, component::Component};
+    use kiln_error::{Error, ErrorCategory, Result, codes};
+    use kiln_format::{binary, component::Component};
 
     use crate::{
         component::parse::{
@@ -294,7 +294,7 @@ pub use component_decode::{
 // No-std stub implementations
 #[cfg(not(feature = "std"))]
 pub mod no_std_stubs {
-    use wrt_error::{Error, ErrorCategory, Result, codes};
+    use kiln_error::{Error, ErrorCategory, Result, codes};
 
     /// Stub component type for no_std decoding
     #[derive(Debug, Clone)]

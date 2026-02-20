@@ -7,7 +7,7 @@ PulseEngine Safety Manual
    :align: right
    :alt: Safety Manual Icon
 
-This Safety Manual provides comprehensive safety documentation for PulseEngine (WRT Edition) as a Safety Element out of Context (SEooC) according to ISO 26262, IEC 61508, and IEC 62304 standards.
+This Safety Manual provides comprehensive safety documentation for PulseEngine (Kiln Edition) as a Safety Element out of Context (SEooC) according to ISO 26262, IEC 61508, and IEC 62304 standards.
 
 .. warning::
    **Certification Status**: PulseEngine is currently NOT certified to any safety standard.
@@ -119,7 +119,7 @@ ASIL-A Certification Ready
 ==========================
 
 .. note::
-   **WRT Foundation components are now ready for ASIL-A certification** with comprehensive
+   **Kiln Foundation components are now ready for ASIL-A certification** with comprehensive
    safety mechanisms, formal verification, and production monitoring systems.
 
 Quick Start for ASIL-A

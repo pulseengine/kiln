@@ -2,7 +2,7 @@
 VxWorks Support
 ===============
 
-VxWorks is a real-time operating system widely used in industrial automation, aerospace, defense, and telecommunications. WRT provides comprehensive support for VxWorks with optimizations for both kernel and user space execution.
+VxWorks is a real-time operating system widely used in industrial automation, aerospace, defense, and telecommunications. Kiln provides comprehensive support for VxWorks with optimizations for both kernel and user space execution.
 
 .. contents:: On this page
    :local:
@@ -11,7 +11,7 @@ VxWorks is a real-time operating system widely used in industrial automation, ae
 Overview
 --------
 
-VxWorks support in WRT includes:
+VxWorks support in Kiln includes:
 
 - **Dual Execution Contexts**: Support for both LKM (Loadable Kernel Module) and RTP (Real-Time Process) contexts
 - **Memory Partitioning**: Advanced memory management with partition support
@@ -33,7 +33,7 @@ LKM execution runs in kernel space, providing:
 
 .. code-block:: rust
 
-   use wrt_platform::vxworks_memory::{VxWorksAllocator, VxWorksContext};
+   use kiln_platform::vxworks_memory::{VxWorksAllocator, VxWorksContext};
 
    let allocator = VxWorksAllocatorBuilder::new()
        .with_context(VxWorksContext::Lkm)
@@ -52,7 +52,7 @@ RTP execution runs in user space, providing:
 
 .. code-block:: rust
 
-   use wrt_platform::vxworks_memory::{VxWorksAllocator, VxWorksContext};
+   use kiln_platform::vxworks_memory::{VxWorksAllocator, VxWorksContext};
 
    let allocator = VxWorksAllocatorBuilder::new()
        .with_context(VxWorksContext::Rtp)
@@ -67,7 +67,7 @@ VxWorks memory management leverages Wind River's memory partitioning:
 
 .. code-block:: rust
 
-   use wrt_platform::vxworks_memory::VxWorksMemoryPartition;
+   use kiln_platform::vxworks_memory::VxWorksMemoryPartition;
 
    // Create dedicated memory partition for WebAssembly
    let partition = VxWorksMemoryPartition::create(
@@ -88,7 +88,7 @@ VxWorks synchronization uses native semaphores and message queues:
 
 .. code-block:: rust
 
-   use wrt_platform::vxworks_sync::VxWorksFutex;
+   use kiln_platform::vxworks_sync::VxWorksFutex;
 
    let futex = VxWorksFutexBuilder::new()
        .with_priority_inheritance(true)
@@ -102,7 +102,7 @@ VxWorks threading leverages Wind River's priority-based scheduler:
 
 .. code-block:: rust
 
-   use wrt_platform::vxworks_threading::{VxWorksThread, VxWorksThreadConfig};
+   use kiln_platform::vxworks_threading::{VxWorksThread, VxWorksThreadConfig};
 
    let config = VxWorksThreadConfig {
        priority: 100,
@@ -207,4 +207,4 @@ Further Reading
 
 - `VxWorks Programmer's Guide <https://docs.windriver.com/>`_
 - `Real-Time Programming Best Practices <https://www.windriver.com/resource-library>`_
-- `WRT Performance Optimization Guide <../examples/platform/performance_optimizations.html>`_
+- `Kiln Performance Optimization Guide <../examples/platform/performance_optimizations.html>`_

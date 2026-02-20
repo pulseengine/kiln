@@ -11,9 +11,9 @@ Async Executor Integration
 
    "Asynchronous programming is like juggling - it looks impossible until you understand the pattern."
    
-   -- WRT Development Team
+   -- Kiln Development Team
 
-The WRT provides a pluggable async executor system that allows you to integrate your preferred async runtime while maintaining compatibility across std, no_std+alloc, and pure no_std environments.
+The Kiln provides a pluggable async executor system that allows you to integrate your preferred async runtime while maintaining compatibility across std, no_std+alloc, and pure no_std environments.
 
 .. contents:: On this page
    :local:
@@ -113,7 +113,7 @@ The async API works automatically with either the fallback or a registered execu
 
 .. code-block:: rust
 
-   use wrt_foundation::{current_executor, with_async};
+   use kiln_foundation::{current_executor, with_async};
    
    // Simple async function
    async fn hello_async() -> &'static str {
@@ -134,7 +134,7 @@ The ``AsyncRuntime`` provides a convenient wrapper for async operations:
 
 .. code-block:: rust
 
-   use wrt_foundation::AsyncRuntime;
+   use kiln_foundation::AsyncRuntime;
    
    let runtime = AsyncRuntime::new();
    
@@ -151,7 +151,7 @@ When both ``async-api`` and ``component-model-async`` features are enabled, you 
 
 .. code-block:: rust
 
-   use wrt_foundation::{ComponentFuture, ComponentFutureBridge, ComponentAsyncExt};
+   use kiln_foundation::{ComponentFuture, ComponentFutureBridge, ComponentAsyncExt};
    
    // Convert Component Model future to Rust future
    let component_future = ComponentFuture::new(handle, value_type);
@@ -169,7 +169,7 @@ For embedded systems, integrate with the Embassy executor:
 .. code-block:: rust
 
    use embassy_executor::Executor;
-   use wrt_foundation::{WrtExecutor, ExecutorError, TaskHandle, BoxedFuture};
+   use kiln_foundation::{WrtExecutor, ExecutorError, TaskHandle, BoxedFuture};
    
    struct EmbassyAdapter {
        executor: &'static Executor,
@@ -270,10 +270,10 @@ Enable async support through Cargo features:
 .. code-block:: toml
 
    [dependencies]
-   wrt-foundation = { version = "0.1", features = ["async-api"] }
+   kiln-foundation = { version = "0.1", features = ["async-api"] }
    
    # For Component Model async integration
-   wrt-foundation = { version = "0.1", features = ["async-api", "component-model-async"] }
+   kiln-foundation = { version = "0.1", features = ["async-api", "component-model-async"] }
 
 Environment-Specific Configuration
 ----------------------------------
@@ -454,8 +454,8 @@ If migrating from the ``futures`` crate:
    use futures::executor::block_on;
    let result = block_on(my_async_fn());
    
-   // After: Using WRT async API
-   use wrt_foundation::with_async;
+   // After: Using Kiln async API
+   use kiln_foundation::with_async;
    let result = with_async(my_async_fn())?;
 
 From Custom Async

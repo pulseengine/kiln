@@ -1,4 +1,4 @@
-// WRT - wrt-platform
+// WRT - kiln-platform
 // Module: Side-Channel Resistance Analysis and Implementation
 // SW-REQ-ID: REQ_PLATFORM_SIDECHANNEL_001
 //
@@ -105,7 +105,7 @@ pub mod integration_analysis {
         ///
         /// Mitigation: Oblivious memory access and data-independent patterns
         pub fn analyze_access_patterns() -> &'static str {
-            "Memory access pattern obfuscation integrates with wrt-runtime memory adapter to \
+            "Memory access pattern obfuscation integrates with kiln-runtime memory adapter to \
              provide data-independent access sequences. Uses dummy reads and cache-line fetching \
              to normalize timing."
         }
@@ -268,9 +268,9 @@ pub mod constant_time {
     ///
     /// Copies memory while minimizing cache-based side channels.
     /// Uses cache line alignment and prefetching for timing consistency.
-    pub fn constant_time_copy(dst: &mut [u8], src: &[u8]) -> Result<(), wrt_error::Error> {
+    pub fn constant_time_copy(dst: &mut [u8], src: &[u8]) -> Result<(), kiln_error::Error> {
         if dst.len() != src.len() {
-            return Err(wrt_error::Error::runtime_execution_error(
+            return Err(kiln_error::Error::runtime_execution_error(
                 "Source and destination lengths must match",
             ));
         }

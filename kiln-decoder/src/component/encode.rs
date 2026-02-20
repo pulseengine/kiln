@@ -5,8 +5,8 @@
 // Component encoding requires std for Box and Vec - entire module is std-only
 #[cfg(feature = "std")]
 mod std_encoding {
-    use wrt_error::Result;
-    use wrt_format::{binary, component::Component};
+    use kiln_error::Result;
+    use kiln_format::{binary, component::Component};
 
     use crate::prelude::*;
 
@@ -96,7 +96,7 @@ mod std_encoding {
         Ok(())
     }
 
-    fn encode_core_module_section(modules: &[wrt_format::module::Module]) -> Result<Vec<u8>> {
+    fn encode_core_module_section(modules: &[kiln_format::module::Module]) -> Result<Vec<u8>> {
         let mut data = Vec::new();
 
         // Write count of modules
@@ -106,7 +106,7 @@ mod std_encoding {
         for module in modules {
             // Encode module binary
             let module_binary = module.binary.as_ref().ok_or_else(|| {
-                wrt_error::Error::parse_error("Module binary not available for encoding")
+                kiln_error::Error::parse_error("Module binary not available for encoding")
             })?;
 
             // Write module size
@@ -120,7 +120,7 @@ mod std_encoding {
 
     #[cfg(feature = "std")]
     fn encode_core_instance_section(
-        instances: &[wrt_format::component::CoreInstance],
+        instances: &[kiln_format::component::CoreInstance],
     ) -> Result<Vec<u8>> {
         let mut data = Vec::new();
 
@@ -130,7 +130,7 @@ mod std_encoding {
         // Encode each instance
         for instance in instances {
             match &instance.instance_expr {
-                wrt_format::component::CoreInstanceExpr::ModuleReference {
+                kiln_format::component::CoreInstanceExpr::ModuleReference {
                     module_idx,
                     arg_refs,
                 } => {
@@ -153,7 +153,7 @@ mod std_encoding {
                         data.extend_from_slice(&write_leb128_u32(arg.idx));
                     }
                 },
-                wrt_format::component::CoreInstanceExpr::InlineExports(exports) => {
+                kiln_format::component::CoreInstanceExpr::InlineExports(exports) => {
                     // Write inline exports tag
                     data.push(binary::CORE_INSTANCE_INLINE_EXPORTS_TAG);
 
@@ -176,7 +176,7 @@ mod std_encoding {
         Ok(data)
     }
 
-    fn encode_import_section(imports: &[wrt_format::component::Import]) -> Result<Vec<u8>> {
+    fn encode_import_section(imports: &[kiln_format::component::Import]) -> Result<Vec<u8>> {
         let mut data = Vec::new();
 
         // Write count of imports
@@ -239,11 +239,11 @@ mod std_encoding {
     }
 
     fn encode_extern_type(
-        ty: &wrt_format::component::ExternType,
+        ty: &kiln_format::component::ExternType,
         data: &mut Vec<u8>,
     ) -> Result<()> {
         match ty {
-            wrt_format::component::ExternType::Function { params, results } => {
+            kiln_format::component::ExternType::Function { params, results } => {
                 // Write function tag
                 data.push(binary::EXTERN_TYPE_FUNCTION_TAG);
 
@@ -266,19 +266,19 @@ mod std_encoding {
                     encode_val_type(&format_val_type_to_val_type(result_ty), data)?;
                 }
             },
-            wrt_format::component::ExternType::Value(val_ty) => {
+            kiln_format::component::ExternType::Value(val_ty) => {
                 // Write value tag
                 data.push(binary::EXTERN_TYPE_VALUE_TAG);
                 // Write value type
                 encode_val_type(&format_val_type_to_val_type(val_ty), data)?;
             },
-            wrt_format::component::ExternType::Type(type_idx) => {
+            kiln_format::component::ExternType::Type(type_idx) => {
                 // Write type tag
                 data.push(binary::EXTERN_TYPE_TYPE_TAG);
                 // Write type index
                 data.extend_from_slice(&write_leb128_u32(*type_idx));
             },
-            wrt_format::component::ExternType::Instance { exports } => {
+            kiln_format::component::ExternType::Instance { exports } => {
                 // Write instance tag
                 data.push(binary::EXTERN_TYPE_INSTANCE_TAG);
 
@@ -293,13 +293,13 @@ mod std_encoding {
                     encode_extern_type(export_ty, data)?;
                 }
             },
-            wrt_format::component::ExternType::Module { type_idx } => {
+            kiln_format::component::ExternType::Module { type_idx } => {
                 // Core module: 0x00 0x11 type_idx
                 data.push(0x00);
                 data.push(0x11);
                 data.extend_from_slice(&write_leb128_u32(*type_idx));
             },
-            wrt_format::component::ExternType::Component { type_idx } => {
+            kiln_format::component::ExternType::Component { type_idx } => {
                 // Component: 0x04 type_idx
                 data.push(0x04);
                 data.extend_from_slice(&write_leb128_u32(*type_idx));
@@ -310,54 +310,54 @@ mod std_encoding {
     }
 
     fn encode_val_type(
-        ty: &wrt_format::component::FormatValType,
+        ty: &kiln_format::component::FormatValType,
         data: &mut Vec<u8>,
     ) -> Result<()> {
         match ty {
-            wrt_format::component::FormatValType::Bool => {
+            kiln_format::component::FormatValType::Bool => {
                 data.push(binary::VAL_TYPE_BOOL_TAG);
             },
-            wrt_format::component::FormatValType::S8 => {
+            kiln_format::component::FormatValType::S8 => {
                 data.push(binary::VAL_TYPE_S8_TAG);
             },
-            wrt_format::component::FormatValType::U8 => {
+            kiln_format::component::FormatValType::U8 => {
                 data.push(binary::VAL_TYPE_U8_TAG);
             },
-            wrt_format::component::FormatValType::S16 => {
+            kiln_format::component::FormatValType::S16 => {
                 data.push(binary::VAL_TYPE_S16_TAG);
             },
-            wrt_format::component::FormatValType::U16 => {
+            kiln_format::component::FormatValType::U16 => {
                 data.push(binary::VAL_TYPE_U16_TAG);
             },
-            wrt_format::component::FormatValType::S32 => {
+            kiln_format::component::FormatValType::S32 => {
                 data.push(binary::VAL_TYPE_S32_TAG);
             },
-            wrt_format::component::FormatValType::U32 => {
+            kiln_format::component::FormatValType::U32 => {
                 data.push(binary::VAL_TYPE_U32_TAG);
             },
-            wrt_format::component::FormatValType::S64 => {
+            kiln_format::component::FormatValType::S64 => {
                 data.push(binary::VAL_TYPE_S64_TAG);
             },
-            wrt_format::component::FormatValType::U64 => {
+            kiln_format::component::FormatValType::U64 => {
                 data.push(binary::VAL_TYPE_U64_TAG);
             },
-            wrt_format::component::FormatValType::F32 => {
+            kiln_format::component::FormatValType::F32 => {
                 data.push(binary::VAL_TYPE_F32_TAG);
             },
-            wrt_format::component::FormatValType::F64 => {
+            kiln_format::component::FormatValType::F64 => {
                 data.push(binary::VAL_TYPE_F64_TAG);
             },
-            wrt_format::component::FormatValType::Char => {
+            kiln_format::component::FormatValType::Char => {
                 data.push(binary::VAL_TYPE_CHAR_TAG);
             },
-            wrt_format::component::FormatValType::String => {
+            kiln_format::component::FormatValType::String => {
                 data.push(binary::VAL_TYPE_STRING_TAG);
             },
-            wrt_format::component::FormatValType::Ref(type_idx) => {
+            kiln_format::component::FormatValType::Ref(type_idx) => {
                 data.push(binary::VAL_TYPE_REF_TAG);
                 data.extend_from_slice(&write_leb128_u32(*type_idx));
             },
-            wrt_format::component::FormatValType::Record(fields) => {
+            kiln_format::component::FormatValType::Record(fields) => {
                 data.push(binary::VAL_TYPE_RECORD_TAG);
                 data.extend_from_slice(&write_leb128_u32(fields.len() as u32));
                 for (name, field_ty) in fields {
@@ -365,7 +365,7 @@ mod std_encoding {
                     encode_val_type(field_ty, data)?;
                 }
             },
-            wrt_format::component::FormatValType::Variant(cases) => {
+            kiln_format::component::FormatValType::Variant(cases) => {
                 data.push(binary::VAL_TYPE_VARIANT_TAG);
                 data.extend_from_slice(&write_leb128_u32(cases.len() as u32));
                 for (name, case_ty) in cases {
@@ -381,70 +381,70 @@ mod std_encoding {
                     }
                 }
             },
-            wrt_format::component::FormatValType::List(element_ty) => {
+            kiln_format::component::FormatValType::List(element_ty) => {
                 data.push(binary::VAL_TYPE_LIST_TAG);
                 encode_val_type(element_ty, data)?;
             },
-            wrt_format::component::FormatValType::FixedList(element_ty, length) => {
+            kiln_format::component::FormatValType::FixedList(element_ty, length) => {
                 data.push(binary::VAL_TYPE_FIXED_LIST_TAG);
                 encode_val_type(element_ty, data)?;
                 data.extend_from_slice(&write_leb128_u32(*length));
             },
-            wrt_format::component::FormatValType::Tuple(types) => {
+            kiln_format::component::FormatValType::Tuple(types) => {
                 data.push(binary::VAL_TYPE_TUPLE_TAG);
                 data.extend_from_slice(&write_leb128_u32(types.len() as u32));
                 for ty in types {
                     encode_val_type(ty, data)?;
                 }
             },
-            wrt_format::component::FormatValType::Flags(names) => {
+            kiln_format::component::FormatValType::Flags(names) => {
                 data.push(binary::VAL_TYPE_FLAGS_TAG);
                 data.extend_from_slice(&write_leb128_u32(names.len() as u32));
                 for name in names {
                     data.extend_from_slice(&write_string(name));
                 }
             },
-            wrt_format::component::FormatValType::Enum(names) => {
+            kiln_format::component::FormatValType::Enum(names) => {
                 data.push(binary::VAL_TYPE_ENUM_TAG);
                 data.extend_from_slice(&write_leb128_u32(names.len() as u32));
                 for name in names {
                     data.extend_from_slice(&write_string(name));
                 }
             },
-            wrt_format::component::FormatValType::Option(element_ty) => {
+            kiln_format::component::FormatValType::Option(element_ty) => {
                 data.push(binary::VAL_TYPE_OPTION_TAG);
                 encode_val_type(element_ty, data)?;
             },
-            wrt_format::component::FormatValType::Result(ok_ty) => {
+            kiln_format::component::FormatValType::Result(ok_ty) => {
                 data.push(binary::VAL_TYPE_RESULT_TAG);
                 encode_val_type(ok_ty, data)?;
             },
             // TODO: Fix FormatValType enum to support ResultErr and ResultBoth variants
-            // wrt_format::component::FormatValType::ResultErr(err_ty) => {
+            // kiln_format::component::FormatValType::ResultErr(err_ty) => {
             //     data.push(binary::VAL_TYPE_RESULT_ERR_TAG);
             //     encode_val_type(err_ty, data)?;
             // }
-            // wrt_format::component::FormatValType::ResultBoth(ok_ty, err_ty) => {
+            // kiln_format::component::FormatValType::ResultBoth(ok_ty, err_ty) => {
             //     data.push(binary::VAL_TYPE_RESULT_BOTH_TAG);
             //     encode_val_type(ok_ty, data)?;
             //     encode_val_type(err_ty, data)?;
             // }
-            wrt_format::component::FormatValType::Own(type_idx) => {
+            kiln_format::component::FormatValType::Own(type_idx) => {
                 data.push(binary::VAL_TYPE_OWN_TAG);
                 data.extend_from_slice(&write_leb128_u32(*type_idx));
             },
-            wrt_format::component::FormatValType::Borrow(type_idx) => {
+            kiln_format::component::FormatValType::Borrow(type_idx) => {
                 data.push(binary::VAL_TYPE_BORROW_TAG);
                 data.extend_from_slice(&write_leb128_u32(*type_idx));
             },
-            wrt_format::component::FormatValType::Void => {
+            kiln_format::component::FormatValType::Void => {
                 // There doesn't seem to be a Void tag in the binary constants
                 // We'll need to add this or map it to the appropriate value
                 return Err(Error::validation_error(
                     "Void type encoding not yet implemented",
                 ));
             },
-            wrt_format::component::FormatValType::ErrorContext => {
+            kiln_format::component::FormatValType::ErrorContext => {
                 data.push(binary::VAL_TYPE_ERROR_CONTEXT_TAG);
             },
         }
@@ -452,26 +452,26 @@ mod std_encoding {
         Ok(())
     }
 
-    fn sort_to_u8(sort: &wrt_format::component::Sort) -> u8 {
+    fn sort_to_u8(sort: &kiln_format::component::Sort) -> u8 {
         match sort {
-            wrt_format::component::Sort::Core(core_sort) => match core_sort {
-                wrt_format::component::CoreSort::Function => binary::COMPONENT_CORE_SORT_FUNC,
-                wrt_format::component::CoreSort::Table => binary::COMPONENT_CORE_SORT_TABLE,
-                wrt_format::component::CoreSort::Memory => binary::COMPONENT_CORE_SORT_MEMORY,
-                wrt_format::component::CoreSort::Global => binary::COMPONENT_CORE_SORT_GLOBAL,
-                wrt_format::component::CoreSort::Type => binary::COMPONENT_CORE_SORT_TYPE,
-                wrt_format::component::CoreSort::Module => binary::COMPONENT_CORE_SORT_MODULE,
-                wrt_format::component::CoreSort::Instance => binary::COMPONENT_CORE_SORT_INSTANCE,
+            kiln_format::component::Sort::Core(core_sort) => match core_sort {
+                kiln_format::component::CoreSort::Function => binary::COMPONENT_CORE_SORT_FUNC,
+                kiln_format::component::CoreSort::Table => binary::COMPONENT_CORE_SORT_TABLE,
+                kiln_format::component::CoreSort::Memory => binary::COMPONENT_CORE_SORT_MEMORY,
+                kiln_format::component::CoreSort::Global => binary::COMPONENT_CORE_SORT_GLOBAL,
+                kiln_format::component::CoreSort::Type => binary::COMPONENT_CORE_SORT_TYPE,
+                kiln_format::component::CoreSort::Module => binary::COMPONENT_CORE_SORT_MODULE,
+                kiln_format::component::CoreSort::Instance => binary::COMPONENT_CORE_SORT_INSTANCE,
             },
-            wrt_format::component::Sort::Function => binary::COMPONENT_SORT_FUNC,
-            wrt_format::component::Sort::Value => binary::COMPONENT_SORT_VALUE,
-            wrt_format::component::Sort::Type => binary::COMPONENT_SORT_TYPE,
-            wrt_format::component::Sort::Component => binary::COMPONENT_SORT_COMPONENT,
-            wrt_format::component::Sort::Instance => binary::COMPONENT_SORT_INSTANCE,
+            kiln_format::component::Sort::Function => binary::COMPONENT_SORT_FUNC,
+            kiln_format::component::Sort::Value => binary::COMPONENT_SORT_VALUE,
+            kiln_format::component::Sort::Type => binary::COMPONENT_SORT_TYPE,
+            kiln_format::component::Sort::Component => binary::COMPONENT_SORT_COMPONENT,
+            kiln_format::component::Sort::Instance => binary::COMPONENT_SORT_INSTANCE,
         }
     }
 
-    fn encode_export_section(exports: &[wrt_format::component::Export]) -> Result<Vec<u8>> {
+    fn encode_export_section(exports: &[kiln_format::component::Export]) -> Result<Vec<u8>> {
         let mut data = Vec::new();
 
         // Write count of exports
@@ -544,45 +544,45 @@ mod std_encoding {
     /// This function properly handles the conversion between different ValType
     /// representations without creating references to temporary values.
     fn format_val_type_to_val_type(
-        val_type: &wrt_format::component::FormatValType,
-    ) -> wrt_format::component::FormatValType {
+        val_type: &kiln_format::component::FormatValType,
+    ) -> kiln_format::component::FormatValType {
         match val_type {
-            wrt_format::component::FormatValType::Bool => {
-                wrt_format::component::FormatValType::Bool
+            kiln_format::component::FormatValType::Bool => {
+                kiln_format::component::FormatValType::Bool
             },
-            wrt_format::component::FormatValType::S8 => wrt_format::component::FormatValType::S8,
-            wrt_format::component::FormatValType::U8 => wrt_format::component::FormatValType::U8,
-            wrt_format::component::FormatValType::S16 => wrt_format::component::FormatValType::S16,
-            wrt_format::component::FormatValType::U16 => wrt_format::component::FormatValType::U16,
-            wrt_format::component::FormatValType::S32 => wrt_format::component::FormatValType::S32,
-            wrt_format::component::FormatValType::U32 => wrt_format::component::FormatValType::U32,
-            wrt_format::component::FormatValType::S64 => wrt_format::component::FormatValType::S64,
-            wrt_format::component::FormatValType::U64 => wrt_format::component::FormatValType::U64,
-            wrt_format::component::FormatValType::F32 => wrt_format::component::FormatValType::F32,
-            wrt_format::component::FormatValType::F64 => wrt_format::component::FormatValType::F64,
-            wrt_format::component::FormatValType::Char => {
-                wrt_format::component::FormatValType::Char
+            kiln_format::component::FormatValType::S8 => kiln_format::component::FormatValType::S8,
+            kiln_format::component::FormatValType::U8 => kiln_format::component::FormatValType::U8,
+            kiln_format::component::FormatValType::S16 => kiln_format::component::FormatValType::S16,
+            kiln_format::component::FormatValType::U16 => kiln_format::component::FormatValType::U16,
+            kiln_format::component::FormatValType::S32 => kiln_format::component::FormatValType::S32,
+            kiln_format::component::FormatValType::U32 => kiln_format::component::FormatValType::U32,
+            kiln_format::component::FormatValType::S64 => kiln_format::component::FormatValType::S64,
+            kiln_format::component::FormatValType::U64 => kiln_format::component::FormatValType::U64,
+            kiln_format::component::FormatValType::F32 => kiln_format::component::FormatValType::F32,
+            kiln_format::component::FormatValType::F64 => kiln_format::component::FormatValType::F64,
+            kiln_format::component::FormatValType::Char => {
+                kiln_format::component::FormatValType::Char
             },
-            wrt_format::component::FormatValType::String => {
-                wrt_format::component::FormatValType::String
+            kiln_format::component::FormatValType::String => {
+                kiln_format::component::FormatValType::String
             },
-            wrt_format::component::FormatValType::Ref(idx) => {
+            kiln_format::component::FormatValType::Ref(idx) => {
                 // Clone the value to avoid reference to temporary
                 let idx_value = *idx;
-                wrt_format::component::FormatValType::Ref(idx_value)
+                kiln_format::component::FormatValType::Ref(idx_value)
             },
-            wrt_format::component::FormatValType::List(inner) => {
+            kiln_format::component::FormatValType::List(inner) => {
                 // Create a new boxed value instead of referencing the inner value
                 let inner_val_type = format_val_type_to_val_type(inner);
-                wrt_format::component::FormatValType::List(Box::new(inner_val_type))
+                kiln_format::component::FormatValType::List(Box::new(inner_val_type))
             },
-            wrt_format::component::FormatValType::FixedList(inner, len) => {
+            kiln_format::component::FormatValType::FixedList(inner, len) => {
                 // Clone the values to avoid references to temporaries
                 let inner_val_type = format_val_type_to_val_type(inner);
                 let len_value = *len;
-                wrt_format::component::FormatValType::FixedList(Box::new(inner_val_type), len_value)
+                kiln_format::component::FormatValType::FixedList(Box::new(inner_val_type), len_value)
             },
-            wrt_format::component::FormatValType::Record(fields) => {
+            kiln_format::component::FormatValType::Record(fields) => {
                 // Create new vectors of fields to avoid references to temporaries
                 let mut new_fields = Vec::with_capacity(fields.len());
                 for (name, field_type) in fields {
@@ -590,9 +590,9 @@ mod std_encoding {
                     let new_field_type = format_val_type_to_val_type(field_type);
                     new_fields.push((new_name, new_field_type));
                 }
-                wrt_format::component::FormatValType::Record(new_fields)
+                kiln_format::component::FormatValType::Record(new_fields)
             },
-            wrt_format::component::FormatValType::Variant(cases) => {
+            kiln_format::component::FormatValType::Variant(cases) => {
                 // Create new vectors of cases to avoid references to temporaries
                 let mut new_cases = Vec::with_capacity(cases.len());
                 for (name, case_type) in cases {
@@ -600,57 +600,57 @@ mod std_encoding {
                     let new_case_type = case_type.as_ref().map(format_val_type_to_val_type);
                     new_cases.push((new_name, new_case_type));
                 }
-                wrt_format::component::FormatValType::Variant(new_cases)
+                kiln_format::component::FormatValType::Variant(new_cases)
             },
-            wrt_format::component::FormatValType::Tuple(types) => {
+            kiln_format::component::FormatValType::Tuple(types) => {
                 // Create new vectors of types to avoid references to temporaries
                 let new_types = types.iter().map(format_val_type_to_val_type).collect();
-                wrt_format::component::FormatValType::Tuple(new_types)
+                kiln_format::component::FormatValType::Tuple(new_types)
             },
-            wrt_format::component::FormatValType::Flags(names) => {
+            kiln_format::component::FormatValType::Flags(names) => {
                 // Clone the names to avoid references to temporaries
                 let new_names = names.clone();
-                wrt_format::component::FormatValType::Flags(new_names)
+                kiln_format::component::FormatValType::Flags(new_names)
             },
-            wrt_format::component::FormatValType::Enum(names) => {
+            kiln_format::component::FormatValType::Enum(names) => {
                 // Clone the names to avoid references to temporaries
                 let new_names = names.clone();
-                wrt_format::component::FormatValType::Enum(new_names)
+                kiln_format::component::FormatValType::Enum(new_names)
             },
-            wrt_format::component::FormatValType::Option(inner) => {
+            kiln_format::component::FormatValType::Option(inner) => {
                 // Create a new boxed value instead of referencing the inner value
                 let inner_val_type = format_val_type_to_val_type(inner);
-                wrt_format::component::FormatValType::Option(Box::new(inner_val_type))
+                kiln_format::component::FormatValType::Option(Box::new(inner_val_type))
             },
-            wrt_format::component::FormatValType::Result(inner) => {
+            kiln_format::component::FormatValType::Result(inner) => {
                 // Handle Result with either Ok or Err value
                 // We assume inner is not None for this implementation
                 // since we're dealing with boxed values
                 let inner_val_type = format_val_type_to_val_type(inner);
-                wrt_format::component::FormatValType::Result(Box::new(inner_val_type))
+                kiln_format::component::FormatValType::Result(Box::new(inner_val_type))
             },
-            wrt_format::component::FormatValType::Own(resource_idx) => {
+            kiln_format::component::FormatValType::Own(resource_idx) => {
                 // Clone the resource index to avoid reference to temporary
                 let idx_value = *resource_idx;
-                wrt_format::component::FormatValType::Own(idx_value)
+                kiln_format::component::FormatValType::Own(idx_value)
             },
-            wrt_format::component::FormatValType::Borrow(resource_idx) => {
+            kiln_format::component::FormatValType::Borrow(resource_idx) => {
                 // Clone the resource index to avoid reference to temporary
                 let idx_value = *resource_idx;
-                wrt_format::component::FormatValType::Borrow(idx_value)
+                kiln_format::component::FormatValType::Borrow(idx_value)
             },
-            wrt_format::component::FormatValType::Void => {
-                wrt_format::component::FormatValType::Void
+            kiln_format::component::FormatValType::Void => {
+                kiln_format::component::FormatValType::Void
             },
-            wrt_format::component::FormatValType::ErrorContext => {
-                wrt_format::component::FormatValType::ErrorContext
+            kiln_format::component::FormatValType::ErrorContext => {
+                kiln_format::component::FormatValType::ErrorContext
             },
         }
     }
 
     #[cfg(test)]
     mod tests {
-        use wrt_format::component::{
+        use kiln_format::component::{
             Component, CoreInlineExport, CoreInstance, CoreInstanceExpr, CoreSort, Export,
             ExportName, Import, ImportName, Sort,
         };
@@ -716,8 +716,8 @@ mod std_encoding {
             // Add an import
             let import = Import {
                 name: ImportName::new("test_namespace".to_string(), "test_import".to_string()),
-                ty: wrt_format::component::ExternType::Value(
-                    wrt_format::component::FormatValType::String,
+                ty: kiln_format::component::ExternType::Value(
+                    kiln_format::component::FormatValType::String,
                 ),
             };
             component.imports.push(import);
@@ -764,8 +764,8 @@ pub use std_encoding::*;
 // No_std implementation following functional safety guidelines
 #[cfg(not(feature = "std"))]
 mod no_std_encoding {
-    use wrt_error::{Error, ErrorCategory, Result, codes};
-    use wrt_foundation::{BoundedVec, safe_memory::NoStdProvider};
+    use kiln_error::{Error, ErrorCategory, Result, codes};
+    use kiln_foundation::{BoundedVec, safe_memory::NoStdProvider};
 
     // No_std stub types for components that can't be fully encoded without heap
     // allocation
@@ -785,7 +785,7 @@ mod no_std_encoding {
     pub fn encode_component(
         component: &Component,
     ) -> Result<BoundedVec<u8, 1024, NoStdProvider<2048>>> {
-        let provider = wrt_foundation::safe_managed_alloc!(2048, wrt_foundation::CrateId::Decoder)?;
+        let provider = kiln_foundation::safe_managed_alloc!(2048, kiln_foundation::CrateId::Decoder)?;
         let mut binary = BoundedVec::new(provider)
             .map_err(|_| Error::memory_error("Failed to create encoding buffer"))?;
 

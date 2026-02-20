@@ -5,7 +5,7 @@
 
 #[cfg(all(feature = "std", feature = "wasi-nn", feature = "tract"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use wrt_wasi::nn::{
+    use kiln_wasi::nn::{
         backend::{
             initialize_backends,
             BackendRegistry,
@@ -42,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Example: Load an ONNX model (would need real model data)
     // let model_data = std::fs::read("model.onnx")?;
-    // let graph_id = wrt_wasi::nn::sync_bridge::nn_load(
+    // let graph_id = kiln_wasi::nn::sync_bridge::nn_load(
     // model_data,
     // GraphEncoding::ONNX as u8,
     // ExecutionTarget::CPU as u8,
@@ -52,7 +52,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     //
     // Create execution context
     // let context_id =
-    // wrt_wasi::nn::sync_bridge::nn_init_execution_context(graph_id)?;
+    // kiln_wasi::nn::sync_bridge::nn_init_execution_context(graph_id)?;
     //
     // println!("Execution context created with ID: {}", context_id);
     //

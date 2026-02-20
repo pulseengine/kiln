@@ -1,7 +1,7 @@
-//! Memory budget limits for wrt-decoder safety-critical operations
+//! Memory budget limits for kiln-decoder safety-critical operations
 //!
 //! This module defines compile-time memory limits for all bounded collections
-//! used in the wrt-decoder crate when the safety-critical feature is enabled.
+//! used in the kiln-decoder crate when the safety-critical feature is enabled.
 
 #![cfg(feature = "safety-critical")]
 

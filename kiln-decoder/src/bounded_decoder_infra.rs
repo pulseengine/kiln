@@ -5,18 +5,18 @@
 //!
 //! Migrated from Provider-based BoundedVec to heapless-inspired StaticVec.
 
-use wrt_foundation::collections::{StaticMap, StaticVec};
+use kiln_foundation::collections::{StaticMap, StaticVec};
 
-pub use wrt_foundation::bounded::WasmName;
-pub use wrt_foundation::safe_memory::NoStdProvider;
+pub use kiln_foundation::bounded::WasmName;
+pub use kiln_foundation::safe_memory::NoStdProvider;
 /// New static collections eliminate Provider abstraction
 /// All memory is inline with compile-time capacity enforcement
 // Re-export foundation types for simplified migration
-// These will be fully migrated later when wrt-foundation types are updated
-pub use wrt_foundation::types::{FuncType, GlobalType, Import, ImportDesc, MemoryType, TableType};
+// These will be fully migrated later when kiln-foundation types are updated
+pub use kiln_foundation::types::{FuncType, GlobalType, Import, ImportDesc, MemoryType, TableType};
 
 // Temporary: Keep DecoderProvider alias for gradual migration
-// TODO: Remove once all wrt-foundation types are migrated to StaticVec
+// TODO: Remove once all kiln-foundation types are migrated to StaticVec
 pub type DecoderProvider = NoStdProvider<65536>;
 
 /// Maximum number of sections in a module
@@ -120,7 +120,7 @@ pub fn new_section_vec<T>() -> BoundedSectionVec<T> {
 
 /// Create a new type vector with inline storage
 /// Note: FuncType still needs Provider parameter until fully migrated
-pub fn new_type_vec() -> BoundedTypeVec<wrt_foundation::types::FuncType> {
+pub fn new_type_vec() -> BoundedTypeVec<kiln_foundation::types::FuncType> {
     StaticVec::new()
 }
 
@@ -131,7 +131,7 @@ pub fn new_type_vec_generic<T>() -> BoundedTypeVec<T> {
 
 /// Create a new import vector with inline storage
 /// Note: Import still needs Provider parameter until fully migrated
-pub fn new_import_vec() -> BoundedImportVec<wrt_foundation::types::Import<DecoderProvider>> {
+pub fn new_import_vec() -> BoundedImportVec<kiln_foundation::types::Import<DecoderProvider>> {
     StaticVec::new()
 }
 
@@ -141,7 +141,7 @@ pub fn new_import_vec_generic<T>() -> BoundedImportVec<T> {
 }
 
 /// Create a new export vector with inline storage
-pub fn new_export_vec() -> BoundedExportVec<wrt_format::module::Export> {
+pub fn new_export_vec() -> BoundedExportVec<kiln_format::module::Export> {
     StaticVec::new()
 }
 
@@ -166,7 +166,7 @@ pub fn new_name_string() -> BoundedNameString {
 }
 
 /// Create a name string from a str with inline storage
-pub fn bounded_name_from_str(s: &str) -> wrt_error::Result<BoundedNameString> {
+pub fn bounded_name_from_str(s: &str) -> kiln_error::Result<BoundedNameString> {
     let mut name = StaticVec::new();
     for byte in s.bytes() {
         name.push(byte)?;
@@ -182,37 +182,37 @@ pub fn new_name_map<V>() -> BoundedNameMap<V> {
 // Additional concrete vector factory functions
 
 /// Create a new params vector (for function parameters) with inline storage
-pub fn new_params_vec() -> StaticVec<wrt_format::types::ValueType, MAX_FUNCTION_PARAMS> {
+pub fn new_params_vec() -> StaticVec<kiln_format::types::ValueType, MAX_FUNCTION_PARAMS> {
     StaticVec::new()
 }
 
 /// Create a new results vector (for function results) with inline storage
-pub fn new_results_vec() -> StaticVec<wrt_format::types::ValueType, MAX_FUNCTION_RESULTS> {
+pub fn new_results_vec() -> StaticVec<kiln_format::types::ValueType, MAX_FUNCTION_RESULTS> {
     StaticVec::new()
 }
 
 /// Create a new table vector with inline storage
-pub fn new_table_vec() -> BoundedTableVec<wrt_foundation::types::TableType> {
+pub fn new_table_vec() -> BoundedTableVec<kiln_foundation::types::TableType> {
     StaticVec::new()
 }
 
 /// Create a new memory vector with inline storage
-pub fn new_memory_vec() -> BoundedMemoryVec<wrt_foundation::types::MemoryType> {
+pub fn new_memory_vec() -> BoundedMemoryVec<kiln_foundation::types::MemoryType> {
     StaticVec::new()
 }
 
 /// Create a new global vector with inline storage
-pub fn new_global_vec() -> BoundedGlobalVec<wrt_foundation::types::GlobalType> {
+pub fn new_global_vec() -> BoundedGlobalVec<kiln_foundation::types::GlobalType> {
     StaticVec::new()
 }
 
 /// Create a new element vector with inline storage
-pub fn new_element_vec() -> BoundedElementVec<wrt_format::module::Element> {
+pub fn new_element_vec() -> BoundedElementVec<kiln_format::module::Element> {
     StaticVec::new()
 }
 
 /// Create a new data vector with inline storage
-pub fn new_data_vec() -> BoundedDataVec<wrt_format::pure_format_types::PureDataSegment> {
+pub fn new_data_vec() -> BoundedDataVec<kiln_format::pure_format_types::PureDataSegment> {
     StaticVec::new()
 }
 
@@ -237,7 +237,7 @@ pub const MAX_ALIASES_PER_COMPONENT: usize = 256;
 
 /// Create a decoder provider (temporary - for gradual migration)
 /// TODO: Remove once all code uses StaticVec instead of Provider-based collections
-pub fn create_decoder_provider<const N: usize>() -> wrt_error::Result<NoStdProvider<N>> {
-    use wrt_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
+pub fn create_decoder_provider<const N: usize>() -> kiln_error::Result<NoStdProvider<N>> {
+    use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
     safe_managed_alloc!(N, CrateId::Decoder)
 }

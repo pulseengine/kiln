@@ -26,14 +26,14 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::format;
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::values::Value;
-use wrt_instructions::memory_ops::{
+use kiln_foundation::values::Value;
+use kiln_instructions::memory_ops::{
     DataDrop,
     DataSegmentOperations,
     MemoryCopy,
@@ -479,7 +479,7 @@ impl MemoryOperations for EmptyMemory {
         _offset: u64,
         _len: u64,
     ) -> Result<
-        wrt_foundation::BoundedVec<u8, 65_536, wrt_foundation::safe_memory::NoStdProvider<65_536>>,
+        kiln_foundation::BoundedVec<u8, 65_536, kiln_foundation::safe_memory::NoStdProvider<65_536>>,
     > {
         Err(Error::runtime_unsupported_operation(
             "EmptyMemory read not supported",

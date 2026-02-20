@@ -1,11 +1,11 @@
-//! Minimal library for testing safety enforcement without wrt-component dependency
+//! Minimal library for testing safety enforcement without kiln-component dependency
 
-use wrt_foundation::{
+use kiln_foundation::{
     safety_aware_alloc, capability_context, safe_capability_alloc, CrateId,
     runtime::{current_safety_level, max_allocation_size},
 };
 
-pub const TEST_CRATE_ID: CrateId = CrateId::new("wrt-wasi-test";
+pub const TEST_CRATE_ID: CrateId = CrateId::new("kiln-wasi-test";
 
 pub fn test_safety_level() -> &'static str {
     current_safety_level()
@@ -15,7 +15,7 @@ pub fn test_max_allocation() -> usize {
     max_allocation_size()
 }
 
-pub fn test_allocation(size: usize) -> Result<(), wrt_foundation::Error> {
+pub fn test_allocation(size: usize) -> Result<(), kiln_foundation::Error> {
     let context = capability_context!(dynamic(TEST_CRATE_ID, size))?;
     let _provider = safe_capability_alloc!(context, TEST_CRATE_ID, size)?;
     Ok(())

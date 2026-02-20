@@ -17,11 +17,11 @@ use std::{
 };
 
 #[cfg(feature = "component-model-async")]
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 #[cfg(all(feature = "component-model-async", feature = "std"))]
-use wrt_foundation::{builtin::BuiltinType, component_value::ComponentValue};
+use kiln_foundation::{builtin::BuiltinType, component_value::ComponentValue};
 #[cfg(all(feature = "component-model-async", not(feature = "std")))]
-use wrt_foundation::{collections::StaticVec as BoundedVec, safe_memory::NoStdProvider};
+use kiln_foundation::{collections::StaticVec as BoundedVec, safe_memory::NoStdProvider};
 
 #[cfg(all(feature = "component-model-async", not(feature = "std")))]
 use crate::types::Value as ComponentValue;

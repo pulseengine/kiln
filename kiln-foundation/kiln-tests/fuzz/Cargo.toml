@@ -1,11 +1,11 @@
 [package]
-name = "wrt-foundation-fuzz"
+name = "kiln-foundation-fuzz"
 version = "0.2.0"
 publish = false
 edition = "2021"
-authors = ["The WRT Project Developers"]
+authors = ["The Kiln Project Developers"]
 license = "MIT"
-description = "Fuzz testing for WRT Foundation components"
+description = "Fuzz testing for Kiln Foundation components"
 
 [package.metadata]
 cargo-fuzz = true
@@ -14,7 +14,7 @@ cargo-fuzz = true
 # This is a standalone fuzz testing package
 
 [lib]
-name = "wrt_foundation_fuzz"
+name = "kiln_foundation_fuzz"
 path = "mod.rs"
 
 [dependencies]
@@ -22,10 +22,9 @@ path = "mod.rs"
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 
-# WRT dependencies  
-wrt-foundation = { path = "../..", features = ["std"] }
-wrt-runtime = { path = "../../../wrt-runtime", features = ["std"] }
-wrt = { path = "../../../wrt", features = ["std"] }
+# Kiln dependencies
+kiln-foundation = { path = "../..", features = ["std"] }
+kiln-runtime = { path = "../../../kiln-runtime", features = ["std"] }
 
 # Standard library for std-compatible tests
 [features]

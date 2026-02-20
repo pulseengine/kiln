@@ -14,7 +14,7 @@ use crate::{
     safe_memory::MemoryProvider,
     safe_managed_alloc,
     validate_allocation,
-    wrt_error::Result,
+    kiln_error::Result,
 };
 
 /// Validated BoundedVec with compile-time bounds checking
@@ -30,7 +30,7 @@ impl<T, const CAPACITY: usize, P: MemoryProvider> ValidatedBoundedVec<T, CAPACIT
     /// Create a new validated bounded vector
     /// 
     /// This function performs compile-time validation of the collection bounds.
-    pub fn new(provider: P) -> wrt_error::Result<Self>
+    pub fn new(provider: P) -> kiln_error::Result<Self>
     where
         T: Default + Clone + PartialEq + Eq,
         T: crate::traits::Checksummable + crate::traits::ToBytes + crate::traits::FromBytes,
@@ -48,7 +48,7 @@ impl<T, const CAPACITY: usize, P: MemoryProvider> ValidatedBoundedVec<T, CAPACIT
     }
     
     /// Create a new validated bounded vector with budget allocation
-    pub fn new_with_budget(crate_id: CrateId) -> wrt_error::Result<Self>
+    pub fn new_with_budget(crate_id: CrateId) -> kiln_error::Result<Self>
     where
         T: Default + Clone + PartialEq + Eq,
         T: crate::traits::Checksummable + crate::traits::ToBytes + crate::traits::FromBytes,
@@ -134,7 +134,7 @@ pub struct ValidatedBoundedMap<K, V, const CAPACITY: usize, P: MemoryProvider> {
 
 impl<K, V, const CAPACITY: usize, P: MemoryProvider> ValidatedBoundedMap<K, V, CAPACITY, P> {
     /// Create a new validated bounded map
-    pub fn new(provider: P) -> wrt_error::Result<Self>
+    pub fn new(provider: P) -> kiln_error::Result<Self>
     where
         K: Default + Clone + PartialEq + Eq,
         V: Default + Clone + PartialEq + Eq,
@@ -154,7 +154,7 @@ impl<K, V, const CAPACITY: usize, P: MemoryProvider> ValidatedBoundedMap<K, V, C
     }
     
     /// Create a new validated bounded map with budget allocation
-    pub fn new_with_budget(crate_id: CrateId) -> wrt_error::Result<Self>
+    pub fn new_with_budget(crate_id: CrateId) -> kiln_error::Result<Self>
     where
         K: Default + Clone + PartialEq + Eq,
         V: Default + Clone + PartialEq + Eq,
@@ -207,7 +207,7 @@ impl<const CAPACITY: usize, P: MemoryProvider> ValidatedBoundedString<CAPACITY, 
     }
     
     /// Create a new validated bounded string with budget allocation
-    pub fn new_with_budget(crate_id: CrateId) -> wrt_error::Result<Self>
+    pub fn new_with_budget(crate_id: CrateId) -> kiln_error::Result<Self>
     where
         P: Default,
     {
@@ -223,7 +223,7 @@ impl<const CAPACITY: usize, P: MemoryProvider> ValidatedBoundedString<CAPACITY, 
     }
     
     /// Create from string slice with validation
-    pub fn from_str(s: &str, provider: P) -> wrt_error::Result<Self> {
+    pub fn from_str(s: &str, provider: P) -> kiln_error::Result<Self> {
         // Compile-time validation
         let validator = CollectionBoundsValidator::<CAPACITY, 1>::validate);
         

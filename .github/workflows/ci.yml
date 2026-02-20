@@ -49,15 +49,15 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable # Or match your rust-toolchain.toml for building cargo-wrt
+          toolchain: stable # Or match your rust-toolchain.toml for building cargo-kiln
           override: true
-      - name: Install and setup cargo-wrt with all tools
+      - name: Install and setup cargo-kiln with all tools
         run: |
-          cargo build --package cargo-wrt # Ensures cargo-wrt and its direct deps are built/cached
-          cargo install --path cargo-wrt --force # Install cargo-wrt for use in subsequent steps
-          cargo-wrt setup --all # Setup all development tools automatically
+          cargo build --package cargo-kiln # Ensures cargo-kiln and its direct deps are built/cached
+          cargo install --path cargo-kiln --force # Install cargo-kiln for use in subsequent steps
+          cargo-kiln setup --all # Setup all development tools automatically
       - name: Run CI Integrity Checks (lint, fmt, deny, spell, headers, etc.)
-        run: cargo-wrt verify --detailed
+        run: cargo-kiln verify --detailed
       - name: Setup Java for PlantUML (if CheckDocsStrict Dagger pipeline needs it from host - unlikely)
         uses: actions/setup-java@v5
         if: false # Assuming Dagger pipeline for docs is self-contained
@@ -70,13 +70,13 @@ jobs:
           sudo apt-get update && sudo apt-get install -y python3-pip plantuml
           pip3 install -r docs/source/requirements.txt
       - name: Run Strict Documentation Check
-        run: cargo-wrt docs --private
+        run: cargo-kiln docs --private
       - name: Initialize Requirements File (if missing)
-        run: cargo-wrt verify --asil c # Requirements initialization is handled automatically
+        run: cargo-kiln verify --asil c # Requirements initialization is handled automatically
       - name: Run Requirements Verification
-        run: cargo-wrt verify --asil c --detailed
+        run: cargo-kiln verify --asil c --detailed
       - name: Generate Safety Summary for Documentation
-        run: cargo-wrt verify --asil c --detailed # Safety summary is generated automatically
+        run: cargo-kiln verify --asil c --detailed # Safety summary is generated automatically
 
   code_quality:
     name: Code Quality Checks
@@ -89,15 +89,15 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt, clippy
-      - name: Install and setup cargo-wrt
+      - name: Install and setup cargo-kiln
         run: |
-          cargo build --package cargo-wrt
-          cargo install --path cargo-wrt --force
-          cargo-wrt setup --check # Verify tools are available
+          cargo build --package cargo-kiln
+          cargo install --path cargo-kiln --force
+          cargo-kiln setup --check # Verify tools are available
       - name: Check for test files in src/
-        run: cargo-wrt validate --check-test-files
+        run: cargo-kiln validate --check-test-files
       - name: Check module documentation coverage
-        run: cargo-wrt validate --check-docs
+        run: cargo-kiln validate --check-docs
       - name: Check code formatting
         run: cargo fmt --all -- --check
         continue-on-error: true  # Temporarily allow failures due to rustfmt crash bug
@@ -109,11 +109,11 @@ jobs:
       - name: Check for WASI stub implementations in engine (architectural invariant)
         run: |
           # Engine must NOT contain hardcoded WASI function implementations
-          # Per CLAUDE.md: Engine has ZERO WASI-specific stub code - all dispatch goes through wrt-wasi
+          # Per CLAUDE.md: Engine has ZERO WASI-specific stub code - all dispatch goes through kiln-wasi
           # Pattern matches: match arms like ("wasi:cli/stdout", "get-stdout") => { ... }
-          if grep -nE '^\s*\("wasi:' wrt-runtime/src/stackless/engine.rs; then
+          if grep -nE '^\s*\("wasi:' kiln-runtime/src/stackless/engine.rs; then
             echo "ERROR: Hardcoded WASI function implementations found in engine.rs"
-            echo "All WASI dispatch must go through wrt-wasi/src/dispatcher.rs"
+            echo "All WASI dispatch must go through kiln-wasi/src/dispatcher.rs"
             echo "Engine should only use WasiDispatcher, not implement WASI functions directly"
             exit 1
           fi
@@ -143,28 +143,28 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable # For cargo-wrt. Nightly for UDeps should be handled internally.
+          toolchain: stable # For cargo-kiln. Nightly for UDeps should be handled internally.
           override: true
           components: llvm-tools-preview # For coverage
-      - name: Install and setup cargo-wrt with tools
+      - name: Install and setup cargo-kiln with tools
         run: |
-          cargo build --package cargo-wrt
-          cargo install --path cargo-wrt --force
-          cargo-wrt setup --all # Setup all required tools for testing and analysis
+          cargo build --package cargo-kiln
+          cargo install --path cargo-kiln --force
+          cargo-kiln setup --all # Setup all required tools for testing and analysis
       - name: Run Tests
-        run: cargo-wrt test
+        run: cargo-kiln test
       - name: Run Code Validation Checks
-        run: cargo-wrt validate --all
+        run: cargo-kiln validate --all
       - name: Check Unused Dependencies
-        run: cargo-wrt check --strict
+        run: cargo-kiln check --strict
       - name: Run Security Audit
-        run: cargo-wrt verify --asil c
+        run: cargo-kiln verify --asil c
       - name: Run Coverage Tests
-        run: cargo-wrt coverage --html # This should produce lcov.info and junit.xml
+        run: cargo-kiln coverage --html # This should produce lcov.info and junit.xml
       - name: Run Basic Safety Checks
         run: |
-          cargo test -p wrt-foundation asil_testing -- --nocapture || true
-          cargo-wrt verify --asil c || true
+          cargo test -p kiln-foundation asil_testing -- --nocapture || true
+          cargo-kiln verify --asil c || true
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
@@ -201,26 +201,26 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - name: Install and setup cargo-wrt for safety verification
+      - name: Install and setup cargo-kiln for safety verification
         run: |
-          cargo build --package cargo-wrt
-          cargo install --path cargo-wrt --force
-          cargo-wrt setup --check # Verify required tools for safety verification
+          cargo build --package cargo-kiln
+          cargo install --path cargo-kiln --force
+          cargo-kiln setup --check # Verify required tools for safety verification
       - name: Check Requirements File
-        run: cargo-wrt verify --asil c
+        run: cargo-kiln verify --asil c
         continue-on-error: true
       - name: Initialize Requirements if Missing
-        run: cargo-wrt verify --asil c # Requirements are initialized automatically
+        run: cargo-kiln verify --asil c # Requirements are initialized automatically
         if: failure() # Only run if check-requirements failed
       - name: Run ASIL Test Suite
-        run: cargo test -p wrt-foundation asil_testing -- --nocapture
+        run: cargo test -p kiln-foundation asil_testing -- --nocapture
         continue-on-error: true
       - name: Generate Comprehensive Safety Report (JSON)
-        run: cargo-wrt verify --asil d --detailed > safety-verification-full.json
+        run: cargo-kiln verify --asil d --detailed > safety-verification-full.json
       - name: Generate Comprehensive Safety Report (HTML)
-        run: cargo-wrt verify --asil d --detailed # HTML report generated automatically
+        run: cargo-kiln verify --asil d --detailed # HTML report generated automatically
       - name: Generate Safety Dashboard
-        run: cargo-wrt verify --asil d --detailed # Dashboard included in detailed verification
+        run: cargo-kiln verify --asil d --detailed # Dashboard included in detailed verification
       - name: Upload Safety Artifacts
         uses: actions/upload-artifact@v6
         with:
@@ -231,7 +231,7 @@ jobs:
             docs/source/_generated_safety_summary.rst
           retention-days: 90
       - name: Safety Verification Gate
-        run: cargo-wrt verify --asil d
+        run: cargo-kiln verify --asil d
 
   extended_static_analysis:
     name: Extended Static Analysis (Miri, Kani)
@@ -260,21 +260,21 @@ jobs:
         with:
           profile: minimal
           # Kani/Miri might need nightly or specific stable. Adjust as needed.
-          # The cargo-wrt should ideally manage this internally.
-          toolchain: stable # Or nightly if Kani/Miri need it directly for cargo-wrt compilation
+          # The cargo-kiln should ideally manage this internally.
+          toolchain: stable # Or nightly if Kani/Miri need it directly for cargo-kiln compilation
           override: true
-          # Add components if they can be installed via rustup and cargo-wrt doesn't handle it
+          # Add components if they can be installed via rustup and cargo-kiln doesn't handle it
           # components: miri, kani # (kani might need manual install steps)
-      - name: Install and setup cargo-wrt for extended analysis
+      - name: Install and setup cargo-kiln for extended analysis
         run: |
-          cargo build --package cargo-wrt
-          cargo install --path cargo-wrt --force
-          cargo-wrt setup --all # Setup all tools including Kani and Miri
+          cargo build --package cargo-kiln
+          cargo install --path cargo-kiln --force
+          cargo-kiln setup --all # Setup all tools including Kani and Miri
       # Run advanced static analysis
       - name: Run Miri Checks
-        run: cargo-wrt verify --asil d --no-kani
+        run: cargo-kiln verify --asil d --no-kani
       - name: Run Kani Checks
-        run: cargo-wrt kani-verify --asil-profile d --verbose
+        run: cargo-kiln kani-verify --asil-profile d --verbose
 
 # Coverage job is still Linux-only as tarpaulin only supports Linux
   coverage:
@@ -296,10 +296,10 @@ jobs:
           components: llvm-tools-preview
       - name: Setup Rust targets
         run: rustup target add wasm32-unknown-unknown wasm32-wasip1 wasm32-wasip2 || true
-      - name: Install cargo-wrt
-        run: cargo install --path cargo-wrt --force
+      - name: Install cargo-kiln
+        run: cargo install --path cargo-kiln --force
       - name: Run coverage tests
-        run: cargo-wrt coverage --html
+        run: cargo-kiln coverage --html
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:

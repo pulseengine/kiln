@@ -1,12 +1,12 @@
 Document List
 =============
 
-This document provides a comprehensive list of documents used in the qualification process for the WRT project.
+This document provides a comprehensive list of documents used in the qualification process for the Kiln project.
 
 Project Documentation
 ---------------------
 
-.. list-table:: WRT Project Documentation
+.. list-table:: Kiln Project Documentation
    :widths: 30 15 55
    :header-rows: 1
 
@@ -15,7 +15,7 @@ Project Documentation
      - Description
    * - requirements.rst
      - Requirements
-     - Core requirements for the WRT project
+     - Core requirements for the Kiln project
    * - architecture.rst
      - Architecture
      - System architecture and design specification

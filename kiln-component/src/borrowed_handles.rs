@@ -11,7 +11,7 @@ use std::{fmt, mem, marker::PhantomData, sync::atomic::{AtomicU32, AtomicU64, Or
 #[cfg(feature = "std")]
 use std::{boxed::Box, vec::Vec, sync::Arc};
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{ BoundedString},
     prelude::*,
     budget_aware_provider::CrateId,
@@ -24,7 +24,7 @@ use crate::{
     types::Value,
 };
 
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 
 /// Maximum number of borrowed handles in no_std
 const MAX_BORROWED_HANDLES: usize = 512;

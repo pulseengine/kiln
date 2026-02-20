@@ -1,4 +1,4 @@
-//! Log level definitions for the WebAssembly Runtime.
+//! Log level definitions for the Kiln WebAssembly Runtime.
 //!
 //! This module provides types for representing log levels in component logging.
 

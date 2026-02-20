@@ -1,20 +1,20 @@
-//! Example demonstrating WASI-NN integration with wrtd
+//! Example demonstrating WASI-NN integration with kilnd
 //!
 //! This example shows how to:
-//! 1. Configure wrtd with WASI-NN support
+//! 1. Configure kilnd with WASI-NN support
 //! 2. Initialize WASI-NN with appropriate capability level
 //! 3. Load and execute a WebAssembly module that uses WASI-NN
 
 #[cfg(all(feature = "std", feature = "wasi", feature = "wasi-nn"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use wrtd::{WrtdConfig, WrtdEngine, EngineMode};
-    use wrt_wasi::{
+    use kilnd::{WrtdConfig, WrtdEngine, EngineMode};
+    use kiln_wasi::{
         WasiCapabilities, WasiNeuralNetworkCapabilities,
         nn::{initialize_nn, capabilities::create_nn_capability},
     };
-    use wrt_foundation::verification::VerificationLevel;
+    use kiln_foundation::verification::VerificationLevel;
     
-    // Create wrtd configuration
+    // Create kilnd configuration
     let mut config = WrtdConfig::default());
     config.enable_wasi = true;
     config.engine_mode = EngineMode::Interpreter;
@@ -57,11 +57,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         initialize_nn(nn_capability)?;
         
         // Initialize backend registry
-        use wrt_wasi::nn::backend::initialize_backends;
+        use kiln_wasi::nn::backend::initialize_backends;
         initialize_backends()?;
         
         // Initialize stores
-        use wrt_wasi::nn::{
+        use kiln_wasi::nn::{
             graph::initialize_graph_store,
             execution::initialize_context_store,
         };
@@ -111,8 +111,8 @@ mod tests {
     #[test]
     #[cfg(all(feature = "std", feature = "wasi", feature = "wasi-nn"))]
     fn test_nn_capability_levels() {
-        use wrt_foundation::verification::VerificationLevel;
-        use wrt_wasi::nn::capabilities::create_nn_capability;
+        use kiln_foundation::verification::VerificationLevel;
+        use kiln_wasi::nn::capabilities::create_nn_capability;
         
         // Test QM level
         let qm_cap = create_nn_capability(VerificationLevel::Standard).unwrap();

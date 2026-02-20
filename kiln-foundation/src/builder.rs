@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Binary std/no_std choice
 //
 // Copyright (c) 2025 Ralf Anton Beier
@@ -28,7 +28,7 @@ use std::fmt;
 use std::vec::Vec;
 
 // Result type alias
-type Result<T> = wrt_error::Result<T>;
+type Result<T> = kiln_error::Result<T>;
 
 // Import error codes
 use crate::codes;
@@ -123,7 +123,7 @@ where
     }
 
     /// Builds a `BoundedVec` with the configured settings.
-    pub fn build_vec(self) -> wrt_error::Result<BoundedVec<T, N, P>>
+    pub fn build_vec(self) -> kiln_error::Result<BoundedVec<T, N, P>>
     where
         T: Clone + PartialEq + Eq,
         P: PartialEq + Eq,
@@ -134,7 +134,7 @@ where
     }
 
     /// Builds a BoundedStack with the configured settings.
-    pub fn build_stack(self) -> wrt_error::Result<BoundedStack<T, N, P>> {
+    pub fn build_stack(self) -> kiln_error::Result<BoundedStack<T, N, P>> {
         BoundedStack::with_verification_level(self.provider, self.verification_level)
     }
 }
@@ -181,7 +181,7 @@ impl<const N: usize, P: MemoryProvider + Default + Clone + PartialEq + Eq> Strin
     }
 
     /// Builds a `BoundedString` with the configured settings.
-    pub fn build_string(self) -> wrt_error::Result<BoundedString<N>> {
+    pub fn build_string(self) -> kiln_error::Result<BoundedString<N>> {
         match (self.initial_content, self.truncate_if_needed) {
             (Some(content), true) => {
                 BoundedString::from_str_truncate(content).map_err(Error::from)
@@ -194,7 +194,7 @@ impl<const N: usize, P: MemoryProvider + Default + Clone + PartialEq + Eq> Strin
     }
 
     /// Builds a WasmName with the configured settings.
-    pub fn build_wasm_name(self) -> wrt_error::Result<WasmName<N>> {
+    pub fn build_wasm_name(self) -> kiln_error::Result<WasmName<N>> {
         match (self.initial_content, self.truncate_if_needed) {
             (Some(content), true) => {
                 WasmName::from_str_truncate(content).map_err(Error::from)
@@ -260,7 +260,7 @@ impl<P: MemoryProvider + Default + Clone + Eq + fmt::Debug> ResourceBuilder<P> {
     }
 
     /// Builds a Resource with the configured settings.
-    pub fn build(self) -> wrt_error::Result<Resource<P>> {
+    pub fn build(self) -> kiln_error::Result<Resource<P>> {
         let id = self.id.ok_or_else(|| {
             Error::new_static(
                 ErrorCategory::Validation,
@@ -562,7 +562,7 @@ impl<P: MemoryProvider + Default + Clone> MemoryBuilder<P> {
     }
 
     /// Builds a SafeMemoryHandler with the configured settings.
-    pub fn build_safe_memory_handler(self) -> wrt_error::Result<SafeMemoryHandler<P>> {
+    pub fn build_safe_memory_handler(self) -> kiln_error::Result<SafeMemoryHandler<P>> {
         // First, configure the provider with the required verification level
         let mut provider = self.provider;
         provider.set_verification_level(self.verification_level);

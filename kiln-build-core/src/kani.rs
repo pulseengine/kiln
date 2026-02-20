@@ -321,10 +321,10 @@ impl KaniVerifier {
         if packages.is_empty() {
             // Fallback: find packages with "kani" feature
             packages = vec![
-                "wrt-foundation".to_string(),
-                "wrt-component".to_string(),
-                "wrt-runtime".to_string(),
-                "wrt-host".to_string(),
+                "kiln-foundation".to_string(),
+                "kiln-component".to_string(),
+                "kiln-runtime".to_string(),
+                "kiln-host".to_string(),
             ];
         }
 

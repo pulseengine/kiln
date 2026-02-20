@@ -1,17 +1,17 @@
 Safety Analysis Report
 ======================
 
-This document contains the safety analysis for the WebAssembly Runtime (WRT) project.
+This document contains the safety analysis for the WebAssembly Runtime (Kiln) project.
 
 Introduction
 ------------
 
-This safety analysis identifies potential hazards that could arise from the use of the WRT runtime in safety-critical applications and evaluates their potential impact. It also identifies mitigation strategies to address these hazards.
+This safety analysis identifies potential hazards that could arise from the use of the Kiln runtime in safety-critical applications and evaluates their potential impact. It also identifies mitigation strategies to address these hazards.
 
 Hazard Identification
 ---------------------
 
-This section identifies potential hazards in the WRT system and their mitigations.
+This section identifies potential hazards in the Kiln system and their mitigations.
 
 Safety-Critical Requirements
 -------------------------------
@@ -26,7 +26,7 @@ Safety-Critical Requirements
    :id: SAFETY_001
    :status: mitigated
    :links: REQ_003, REQ_007
-   :mitigation: The WRT implements bounded execution using the fuel mechanism (REQ_003, REQ_007), ensuring that execution will always yield back control flow after a configurable number of operations.
+   :mitigation: The Kiln implements bounded execution using the fuel mechanism (REQ_003, REQ_007), ensuring that execution will always yield back control flow after a configurable number of operations.
 
    A WebAssembly module could enter an infinite loop, causing the host system to become unresponsive or consume excessive resources.
 
@@ -34,7 +34,7 @@ Safety-Critical Requirements
    :id: SAFETY_002
    :status: mitigated
    :links: REQ_018
-   :mitigation: The WRT implements strict memory bounds checking as part of the WebAssembly specification compliance. All memory accesses are validated before execution.
+   :mitigation: The Kiln implements strict memory bounds checking as part of the WebAssembly specification compliance. All memory accesses are validated before execution.
 
    Improper memory access could lead to data corruption or system crashes.
 
@@ -42,7 +42,7 @@ Safety-Critical Requirements
    :id: SAFETY_003
    :status: mitigated
    :links: REQ_014, REQ_024
-   :mitigation: The WRT implements resource limits and tracking, ensuring that memory allocation is bounded and monitored. The efficient operand stack implementation (REQ_024) minimizes memory overhead.
+   :mitigation: The Kiln implements resource limits and tracking, ensuring that memory allocation is bounded and monitored. The efficient operand stack implementation (REQ_024) minimizes memory overhead.
 
    A WebAssembly module could exhaust system resources such as memory.
 
@@ -50,7 +50,7 @@ Safety-Critical Requirements
    :id: SAFETY_004
    :status: mitigated
    :links: REQ_014, REQ_019
-   :mitigation: The WRT strictly validates type compatibility as part of the Component Model implementation. Interface types are checked during component instantiation.
+   :mitigation: The Kiln strictly validates type compatibility as part of the Component Model implementation. Interface types are checked during component instantiation.
 
    Type mismatches at component interfaces could lead to incorrect data interpretation and potentially unsafe operations.
 

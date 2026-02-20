@@ -1,20 +1,20 @@
-//! Integration tests for wrtd with the capability-based engine
+//! Integration tests for kilnd with the capability-based engine
 //!
-//! These tests validate that wrtd properly integrates with the new
+//! These tests validate that kilnd properly integrates with the new
 //! capability-based execution engine and handles different ASIL configurations.
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
 #[cfg(feature = "wasi")]
-use wrtd::WasiVersion;
-use wrtd::{
+use kilnd::WasiVersion;
+use kilnd::{
     LogLevel,
-    WrtDaemon,
-    WrtdConfig,
+    KilnDaemon,
+    KilndConfig,
 };
 
 /// Simple WebAssembly module for testing
@@ -29,8 +29,8 @@ const TEST_WASM: &[u8] = &[
     0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b,
 ];
 
-fn create_test_config() -> WrtdConfig {
-    WrtdConfig {
+fn create_test_config() -> KilndConfig {
+    KilndConfig {
         max_fuel: 1000000,
         max_memory: 16 * 1024 * 1024, // 16MB
         function_name: Some("start"),
@@ -60,9 +60,9 @@ fn create_test_config() -> WrtdConfig {
 }
 
 #[test]
-fn test_wrtd_creation() -> Result<()> {
+fn test_kilnd_creation() -> Result<()> {
     let config = create_test_config();
-    let daemon = WrtDaemon::new(config)?;
+    let daemon = KilnDaemon::new(config)?;
 
     // Daemon should be created successfully
     assert!(daemon.stats().modules_loaded == 0);
@@ -71,9 +71,9 @@ fn test_wrtd_creation() -> Result<()> {
 }
 
 #[test]
-fn test_wrtd_module_execution() -> Result<()> {
+fn test_kilnd_module_execution() -> Result<()> {
     let config = create_test_config();
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     // Execute the test module
     daemon.run()?;
@@ -86,11 +86,11 @@ fn test_wrtd_module_execution() -> Result<()> {
 
 #[test]
 #[cfg(feature = "wasi")]
-fn test_wrtd_with_wasi_enabled() -> Result<()> {
+fn test_kilnd_with_wasi_enabled() -> Result<()> {
     let mut config = create_test_config();
     config.enable_wasi = true;
 
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     // Should execute successfully even with WASI enabled
     // (though our test module doesn't use WASI functions)
@@ -102,13 +102,13 @@ fn test_wrtd_with_wasi_enabled() -> Result<()> {
 }
 
 #[test]
-fn test_wrtd_error_handling() -> Result<()> {
+fn test_kilnd_error_handling() -> Result<()> {
     let mut config = create_test_config();
 
     // Test with invalid WebAssembly binary
     config.module_data = Some(&[0x00, 0x01, 0x02, 0x03]);
 
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     // Should handle invalid module gracefully
     let result = daemon.run();
@@ -118,11 +118,11 @@ fn test_wrtd_error_handling() -> Result<()> {
 }
 
 #[test]
-fn test_wrtd_function_not_found() -> Result<()> {
+fn test_kilnd_function_not_found() -> Result<()> {
     let mut config = create_test_config();
     config.function_name = Some("nonexistent_function");
 
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     // Should handle missing function gracefully
     let result = daemon.run();
@@ -132,11 +132,11 @@ fn test_wrtd_function_not_found() -> Result<()> {
 }
 
 #[test]
-fn test_wrtd_memory_limits() -> Result<()> {
+fn test_kilnd_memory_limits() -> Result<()> {
     let mut config = create_test_config();
     config.max_memory = 1024; // Very small memory limit
 
-    let daemon = WrtDaemon::new(config)?;
+    let daemon = KilnDaemon::new(config)?;
 
     // Should create successfully but may fail during execution
     // if the module requires more memory
@@ -146,11 +146,11 @@ fn test_wrtd_memory_limits() -> Result<()> {
 }
 
 #[test]
-fn test_wrtd_fuel_limits() -> Result<()> {
+fn test_kilnd_fuel_limits() -> Result<()> {
     let mut config = create_test_config();
     config.max_fuel = 10; // Very small fuel limit
 
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     // Should handle fuel exhaustion gracefully
     let result = daemon.run();
@@ -161,9 +161,9 @@ fn test_wrtd_fuel_limits() -> Result<()> {
 }
 
 #[test]
-fn test_wrtd_logging() -> Result<()> {
+fn test_kilnd_logging() -> Result<()> {
     let config = create_test_config();
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     // Test that logging doesn't crash
     daemon.run()?;
@@ -175,9 +175,9 @@ fn test_wrtd_logging() -> Result<()> {
 }
 
 #[test]
-fn test_wrtd_statistics_collection() -> Result<()> {
+fn test_kilnd_statistics_collection() -> Result<()> {
     let config = create_test_config();
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     let initial_stats = daemon.stats().clone();
 
@@ -193,9 +193,9 @@ fn test_wrtd_statistics_collection() -> Result<()> {
 }
 
 #[test]
-fn test_wrtd_multiple_executions() -> Result<()> {
+fn test_kilnd_multiple_executions() -> Result<()> {
     let config = create_test_config();
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     // Execute multiple times
     daemon.run()?;
@@ -212,13 +212,13 @@ fn test_wrtd_multiple_executions() -> Result<()> {
 
 /// Test different ASIL configurations
 #[test]
-#[cfg(feature = "wrt-execution")]
+#[cfg(feature = "kiln-execution")]
 fn test_asil_configurations() -> Result<()> {
     let config = create_test_config();
 
     // All ASIL levels should be able to execute simple modules
     // (The specific ASIL level is determined by compile-time features)
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
     daemon.run()?;
 
     assert!(daemon.stats().modules_executed > 0);
@@ -228,10 +228,10 @@ fn test_asil_configurations() -> Result<()> {
 
 /// Test capability-based execution
 #[test]
-#[cfg(feature = "wrt-execution")]
+#[cfg(feature = "kiln-execution")]
 fn test_capability_based_execution() -> Result<()> {
     let config = create_test_config();
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     // The capability-based engine should handle execution properly
     daemon.run()?;
@@ -245,10 +245,10 @@ fn test_capability_based_execution() -> Result<()> {
 
 /// Test host function integration awareness
 #[test]
-#[cfg(feature = "wrt-execution")]
+#[cfg(feature = "kiln-execution")]
 fn test_host_function_integration() -> Result<()> {
     let config = create_test_config();
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     // Even though our test module doesn't call host functions,
     // the engine should be configured with host function support
@@ -261,9 +261,9 @@ fn test_host_function_integration() -> Result<()> {
 
 /// Comprehensive integration test
 #[test]
-fn test_full_wrtd_integration() -> Result<()> {
+fn test_full_kilnd_integration() -> Result<()> {
     let config = create_test_config();
-    let mut daemon = WrtDaemon::new(config)?;
+    let mut daemon = KilnDaemon::new(config)?;
 
     // Test complete workflow
     let initial_stats = daemon.stats().clone();

@@ -7,17 +7,17 @@
 //! This module provides utilities for encoding and decoding custom name
 //! sections in WebAssembly Component Model binaries.
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 #[cfg(feature = "std")]
-use wrt_format::binary::with_alloc::{read_leb128_u32, read_string};
+use kiln_format::binary::with_alloc::{read_leb128_u32, read_string};
 #[cfg(feature = "std")]
-use wrt_format::component::Sort;
+use kiln_format::component::Sort;
 #[cfg(feature = "std")]
-use wrt_format::{write_leb128_u32, write_string};
+use kiln_format::{write_leb128_u32, write_string};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::bounded::BoundedVec;
+use kiln_foundation::bounded::BoundedVec;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::safe_memory::NoStdProvider;
+use kiln_foundation::safe_memory::NoStdProvider;
 
 use crate::prelude::*;
 
@@ -179,18 +179,18 @@ pub fn generate_component_name_section(section: &ComponentNameSection) -> Result
 pub fn generate_component_name_section(
     section: &ComponentNameSection,
 ) -> Result<BoundedVec<u8, 1024, NoStdProvider<2048>>> {
-    let provider = wrt_foundation::safe_managed_alloc!(
+    let provider = kiln_foundation::safe_managed_alloc!(
         2048,
-        wrt_foundation::budget_aware_provider::CrateId::Decoder
+        kiln_foundation::budget_aware_provider::CrateId::Decoder
     )?;
     let mut result = BoundedVec::new(provider).map_err(|_| {
-        wrt_error::Error::platform_memory_allocation_failed("Failed to create result buffer")
+        kiln_error::Error::platform_memory_allocation_failed("Failed to create result buffer")
     })?;
 
     // Write component name if present (simplified for no_std)
     if let Some(name) = &section.component_name {
         result.push(subsection::COMPONENT_NAME).map_err(|_| {
-            wrt_error::Error::platform_memory_allocation_failed("Name section buffer overflow")
+            kiln_error::Error::platform_memory_allocation_failed("Name section buffer overflow")
         })?;
 
         // In no_std mode, use simplified string writing
@@ -212,14 +212,14 @@ pub fn generate_component_name_section(
         // Write length data
         for i in 0..len_bytes_count {
             result.push(length_data[i]).map_err(|_| {
-                wrt_error::Error::platform_memory_allocation_failed("Name section buffer overflow")
+                kiln_error::Error::platform_memory_allocation_failed("Name section buffer overflow")
             })?;
         }
 
         // Write name data
         for byte in name_bytes.iter() {
             result.push(*byte).map_err(|_| {
-                wrt_error::Error::platform_memory_allocation_failed("Name section buffer overflow")
+                kiln_error::Error::platform_memory_allocation_failed("Name section buffer overflow")
             })?;
         }
     }

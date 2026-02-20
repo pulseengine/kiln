@@ -3,7 +3,7 @@
 
 #[cfg(all(test, feature = "runtime-debug"))]
 mod runtime_debug_tests {
-    use wrt_debug::*;
+    use kiln_debug::*;
 
     /// Mock runtime state for testing
     struct MockRuntimeState {

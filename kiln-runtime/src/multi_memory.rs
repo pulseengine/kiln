@@ -40,13 +40,13 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     traits::BoundedCapacity,
     types::{
         MemoryType,
@@ -56,7 +56,7 @@ use wrt_foundation::{
 };
 
 use crate::prelude::CoreMemoryType;
-use wrt_instructions::{
+use kiln_instructions::{
     memory_ops::{
         DataSegmentOperations,
         MemoryOperations,
@@ -71,13 +71,13 @@ use wrt_instructions::{
         MAX_MEMORIES,
     },
 };
-use wrt_sync::{
+use kiln_sync::{
     unified_sync::{
         AsilLevel,
         SafeAtomicCounter,
         SafetyContext,
     },
-    WrtMutex,
+    KilnMutex,
 };
 
 use crate::memory::Memory;
@@ -192,9 +192,9 @@ pub struct MultiMemoryInstance {
     /// Memory type specification.
     pub memory_type:  MemoryType,
     /// Underlying memory implementation.
-    memory:           Arc<WrtMutex<Memory>>,
+    memory:           Arc<KilnMutex<Memory>>,
     /// Access statistics.
-    pub stats:        Arc<WrtMutex<MultiMemoryStats>>,
+    pub stats:        Arc<KilnMutex<MultiMemoryStats>>,
 }
 
 impl MultiMemoryInstance {
@@ -211,8 +211,8 @@ impl MultiMemoryInstance {
         Ok(Self {
             memory_index,
             memory_type,
-            memory: Arc::new(WrtMutex::new(*memory)),  // Dereference Box<Memory>
-            stats: Arc::new(WrtMutex::new(MultiMemoryStats::new())),
+            memory: Arc::new(KilnMutex::new(*memory)),  // Dereference Box<Memory>
+            stats: Arc::new(KilnMutex::new(MultiMemoryStats::new())),
         })
     }
 
@@ -331,7 +331,7 @@ pub struct MultiMemoryContext {
     memory_counter: SafeAtomicCounter,
 
     /// Global multi-memory statistics.
-    pub global_stats: Arc<WrtMutex<MultiMemoryStats>>,
+    pub global_stats: Arc<KilnMutex<MultiMemoryStats>>,
 
     /// Dummy data segments for operations.
     data_segments: DummyDataSegments,
@@ -349,7 +349,7 @@ impl MultiMemoryContext {
                 usize::MAX,
                 SafetyContext::new(AsilLevel::QM),
             ),
-            global_stats: Arc::new(WrtMutex::new(MultiMemoryStats::new())),
+            global_stats: Arc::new(KilnMutex::new(MultiMemoryStats::new())),
             data_segments: DummyDataSegments,
         }
     }
@@ -517,18 +517,18 @@ impl MultiMemoryContext {
     pub fn get_memory_indices(
         &self,
     ) -> Result<
-        wrt_foundation::bounded::BoundedVec<
+        kiln_foundation::bounded::BoundedVec<
             u32,
             MAX_MEMORIES,
-            wrt_foundation::safe_memory::NoStdProvider<1024>,
+            kiln_foundation::safe_memory::NoStdProvider<1024>,
         >,
     > {
-        use wrt_foundation::{
+        use kiln_foundation::{
             budget_aware_provider::CrateId,
             safe_managed_alloc,
         };
         let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
-        let mut indices = wrt_foundation::bounded::BoundedVec::new(provider).map_err(|_| {
+        let mut indices = kiln_foundation::bounded::BoundedVec::new(provider).map_err(|_| {
             Error::runtime_execution_error("Failed to create memory indices vector")
         })?;
         for (idx, mem) in &self.memories {
@@ -691,7 +691,7 @@ impl DataSegmentOperations for DummyDataSegments {
     fn get_data_segment(
         &self,
         _index: u32,
-    ) -> Result<Option<wrt_foundation::BoundedVec<u8, 65_536, wrt_foundation::NoStdProvider<65_536>>>> {
+    ) -> Result<Option<kiln_foundation::BoundedVec<u8, 65_536, kiln_foundation::NoStdProvider<65_536>>>> {
         Ok(None)
     }
 

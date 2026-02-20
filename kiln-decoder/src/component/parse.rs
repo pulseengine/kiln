@@ -6,10 +6,10 @@
 #[cfg(feature = "std")]
 mod std_parsing {
     #[cfg(feature = "tracing")]
-    use wrt_foundation::tracing::trace;
+    use kiln_foundation::tracing::trace;
 
-    use wrt_error::{Error, Result, kinds};
-    use wrt_format::{
+    use kiln_error::{Error, Result, kinds};
+    use kiln_format::{
         binary,
         component::{
             Alias, Canon, Component, ComponentType, CoreInstance, CoreType, Export, Import,
@@ -17,7 +17,7 @@ mod std_parsing {
         },
         module::Module,
     };
-    use wrt_foundation::resource;
+    use kiln_foundation::resource;
 
     use crate::prelude::*;
 
@@ -154,7 +154,7 @@ mod std_parsing {
     /// Parse a core instance expression
     fn parse_core_instance_expr(
         bytes: &[u8],
-    ) -> Result<(wrt_format::component::CoreInstanceExpr, usize)> {
+    ) -> Result<(kiln_format::component::CoreInstanceExpr, usize)> {
         if bytes.is_empty() {
             return Err(Error::parse_error(
                 "Unexpected end of input while parsing core instance expression",
@@ -185,7 +185,7 @@ mod std_parsing {
                 let mut args = Vec::with_capacity(args_count as usize);
                 for _ in 0..args_count {
                     // Read name
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
 
@@ -207,7 +207,7 @@ mod std_parsing {
                     #[cfg(feature = "tracing")]
                     trace!(arg_name = %name, kind = kind_byte, idx = idx, "core instance arg");
 
-                    args.push(wrt_format::component::CoreArgReference {
+                    args.push(kiln_format::component::CoreArgReference {
                         name,
                         kind: kind_byte,
                         idx,
@@ -215,7 +215,7 @@ mod std_parsing {
                 }
 
                 Ok((
-                    wrt_format::component::CoreInstanceExpr::ModuleReference {
+                    kiln_format::component::CoreInstanceExpr::ModuleReference {
                         module_idx,
                         arg_refs: args,
                     },
@@ -230,7 +230,7 @@ mod std_parsing {
                 let mut exports = Vec::with_capacity(exports_count as usize);
                 for _ in 0..exports_count {
                     // Read name
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
 
@@ -246,21 +246,21 @@ mod std_parsing {
                     // Convert to CoreSort
                     let sort = match kind_byte {
                         binary::COMPONENT_CORE_SORT_FUNC => {
-                            wrt_format::component::CoreSort::Function
+                            kiln_format::component::CoreSort::Function
                         },
-                        binary::COMPONENT_CORE_SORT_TABLE => wrt_format::component::CoreSort::Table,
+                        binary::COMPONENT_CORE_SORT_TABLE => kiln_format::component::CoreSort::Table,
                         binary::COMPONENT_CORE_SORT_MEMORY => {
-                            wrt_format::component::CoreSort::Memory
+                            kiln_format::component::CoreSort::Memory
                         },
                         binary::COMPONENT_CORE_SORT_GLOBAL => {
-                            wrt_format::component::CoreSort::Global
+                            kiln_format::component::CoreSort::Global
                         },
-                        binary::COMPONENT_CORE_SORT_TYPE => wrt_format::component::CoreSort::Type,
+                        binary::COMPONENT_CORE_SORT_TYPE => kiln_format::component::CoreSort::Type,
                         binary::COMPONENT_CORE_SORT_MODULE => {
-                            wrt_format::component::CoreSort::Module
+                            kiln_format::component::CoreSort::Module
                         },
                         binary::COMPONENT_CORE_SORT_INSTANCE => {
-                            wrt_format::component::CoreSort::Instance
+                            kiln_format::component::CoreSort::Instance
                         },
                         _ => {
                             return Err(Error::from(kinds::ParseError("Invalid core sort kind")));
@@ -271,11 +271,11 @@ mod std_parsing {
                     let (idx, bytes_read) = binary::read_leb128_u32(bytes, offset)?;
                     offset += bytes_read;
 
-                    exports.push(wrt_format::component::CoreInlineExport { name, sort, idx });
+                    exports.push(kiln_format::component::CoreInlineExport { name, sort, idx });
                 }
 
                 Ok((
-                    wrt_format::component::CoreInstanceExpr::InlineExports(exports),
+                    kiln_format::component::CoreInstanceExpr::InlineExports(exports),
                     offset,
                 ))
             },
@@ -304,7 +304,7 @@ mod std_parsing {
     /// Parse a core type definition
     fn parse_core_type_definition(
         bytes: &[u8],
-    ) -> Result<(wrt_format::component::CoreTypeDefinition, usize)> {
+    ) -> Result<(kiln_format::component::CoreTypeDefinition, usize)> {
         if bytes.is_empty() {
             return Err(Error::from(kinds::ParseError(
                 "Unexpected end of input while parsing core type definition",
@@ -333,13 +333,13 @@ mod std_parsing {
                     }
 
                     let vtype = match bytes[offset] {
-                        binary::I32_TYPE => wrt_format::types::ValueType::I32,
-                        binary::I64_TYPE => wrt_format::types::ValueType::I64,
-                        binary::F32_TYPE => wrt_format::types::ValueType::F32,
-                        binary::F64_TYPE => wrt_format::types::ValueType::F64,
-                        binary::V128_TYPE => wrt_format::types::ValueType::ExternRef,
-                        binary::FUNCREF_TYPE => wrt_format::types::ValueType::FuncRef,
-                        binary::EXTERNREF_TYPE => wrt_format::types::ValueType::ExternRef,
+                        binary::I32_TYPE => kiln_format::types::ValueType::I32,
+                        binary::I64_TYPE => kiln_format::types::ValueType::I64,
+                        binary::F32_TYPE => kiln_format::types::ValueType::F32,
+                        binary::F64_TYPE => kiln_format::types::ValueType::F64,
+                        binary::V128_TYPE => kiln_format::types::ValueType::ExternRef,
+                        binary::FUNCREF_TYPE => kiln_format::types::ValueType::FuncRef,
+                        binary::EXTERNREF_TYPE => kiln_format::types::ValueType::ExternRef,
                         _ => {
                             return Err(Error::from(kinds::ParseError("Invalid value type")));
                         },
@@ -363,13 +363,13 @@ mod std_parsing {
                     }
 
                     let vtype = match bytes[offset] {
-                        binary::I32_TYPE => wrt_format::types::ValueType::I32,
-                        binary::I64_TYPE => wrt_format::types::ValueType::I64,
-                        binary::F32_TYPE => wrt_format::types::ValueType::F32,
-                        binary::F64_TYPE => wrt_format::types::ValueType::F64,
-                        binary::V128_TYPE => wrt_format::types::ValueType::ExternRef,
-                        binary::FUNCREF_TYPE => wrt_format::types::ValueType::FuncRef,
-                        binary::EXTERNREF_TYPE => wrt_format::types::ValueType::ExternRef,
+                        binary::I32_TYPE => kiln_format::types::ValueType::I32,
+                        binary::I64_TYPE => kiln_format::types::ValueType::I64,
+                        binary::F32_TYPE => kiln_format::types::ValueType::F32,
+                        binary::F64_TYPE => kiln_format::types::ValueType::F64,
+                        binary::V128_TYPE => kiln_format::types::ValueType::ExternRef,
+                        binary::FUNCREF_TYPE => kiln_format::types::ValueType::FuncRef,
+                        binary::EXTERNREF_TYPE => kiln_format::types::ValueType::ExternRef,
                         _ => {
                             return Err(Error::from(kinds::ParseError("Invalid value type")));
                         },
@@ -380,7 +380,7 @@ mod std_parsing {
                 }
 
                 Ok((
-                    wrt_format::component::CoreTypeDefinition::Function { params, results },
+                    kiln_format::component::CoreTypeDefinition::Function { params, results },
                     offset,
                 ))
             },
@@ -395,13 +395,13 @@ mod std_parsing {
                 for _ in 0..import_count {
                     // Read module name
                     let (module_name_bytes, bytes_read) =
-                        wrt_format::binary::read_string(bytes, offset)?;
+                        kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let module_name = bytes_to_string(module_name_bytes);
 
                     // Read field name
                     let (field_name_bytes, bytes_read) =
-                        wrt_format::binary::read_string(bytes, offset)?;
+                        kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let field_name = bytes_to_string(field_name_bytes);
 
@@ -419,7 +419,7 @@ mod std_parsing {
                 let mut exports = Vec::with_capacity(export_count as usize);
                 for _ in 0..export_count {
                     // Read export name
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
 
@@ -431,7 +431,7 @@ mod std_parsing {
                 }
 
                 Ok((
-                    wrt_format::component::CoreTypeDefinition::Module { imports, exports },
+                    kiln_format::component::CoreTypeDefinition::Module { imports, exports },
                     offset,
                 ))
             },
@@ -442,7 +442,7 @@ mod std_parsing {
     /// Parse a core external type
     fn parse_core_extern_type(
         bytes: &[u8],
-    ) -> Result<(wrt_format::component::CoreExternType, usize)> {
+    ) -> Result<(kiln_format::component::CoreExternType, usize)> {
         if bytes.is_empty() {
             return Err(Error::from(kinds::ParseError(
                 "Unexpected end of input while parsing core external type",
@@ -484,7 +484,7 @@ mod std_parsing {
                         crate::prelude::DecoderVec::new(provider)?
                     };
                     Ok((
-                        wrt_format::component::CoreExternType::Function {
+                        kiln_format::component::CoreExternType::Function {
                             params: empty_params.to_vec(),
                             results: empty_results.to_vec(),
                         },
@@ -503,8 +503,8 @@ mod std_parsing {
                 }
 
                 let element_type = match bytes[offset] {
-                    binary::FUNCREF_TYPE => wrt_format::types::ValueType::FuncRef,
-                    binary::EXTERNREF_TYPE => wrt_format::types::ValueType::ExternRef,
+                    binary::FUNCREF_TYPE => kiln_format::types::ValueType::FuncRef,
+                    binary::EXTERNREF_TYPE => kiln_format::types::ValueType::ExternRef,
                     _ => {
                         return Err(Error::from(kinds::ParseError("Invalid table element type")));
                     },
@@ -535,7 +535,7 @@ mod std_parsing {
                 };
 
                 Ok((
-                    wrt_format::component::CoreExternType::Table {
+                    kiln_format::component::CoreExternType::Table {
                         element_type,
                         min,
                         max,
@@ -573,7 +573,7 @@ mod std_parsing {
                 };
 
                 Ok((
-                    wrt_format::component::CoreExternType::Memory { min, max, shared },
+                    kiln_format::component::CoreExternType::Memory { min, max, shared },
                     offset,
                 ))
             },
@@ -588,13 +588,13 @@ mod std_parsing {
                 }
 
                 let value_type = match bytes[offset] {
-                    binary::I32_TYPE => wrt_format::types::ValueType::I32,
-                    binary::I64_TYPE => wrt_format::types::ValueType::I64,
-                    binary::F32_TYPE => wrt_format::types::ValueType::F32,
-                    binary::F64_TYPE => wrt_format::types::ValueType::F64,
-                    binary::V128_TYPE => wrt_format::types::ValueType::ExternRef,
-                    binary::FUNCREF_TYPE => wrt_format::types::ValueType::FuncRef,
-                    binary::EXTERNREF_TYPE => wrt_format::types::ValueType::ExternRef,
+                    binary::I32_TYPE => kiln_format::types::ValueType::I32,
+                    binary::I64_TYPE => kiln_format::types::ValueType::I64,
+                    binary::F32_TYPE => kiln_format::types::ValueType::F32,
+                    binary::F64_TYPE => kiln_format::types::ValueType::F64,
+                    binary::V128_TYPE => kiln_format::types::ValueType::ExternRef,
+                    binary::FUNCREF_TYPE => kiln_format::types::ValueType::FuncRef,
+                    binary::EXTERNREF_TYPE => kiln_format::types::ValueType::ExternRef,
                     _ => {
                         return Err(Error::from(kinds::ParseError(
                             "Invalid global value type (component import)",
@@ -614,7 +614,7 @@ mod std_parsing {
                 offset += 1;
 
                 Ok((
-                    wrt_format::component::CoreExternType::Global {
+                    kiln_format::component::CoreExternType::Global {
                         value_type,
                         mutable,
                     },
@@ -680,7 +680,7 @@ mod std_parsing {
     }
 
     /// Parse an instance expression
-    fn parse_instance_expr(bytes: &[u8]) -> Result<(wrt_format::component::InstanceExpr, usize)> {
+    fn parse_instance_expr(bytes: &[u8]) -> Result<(kiln_format::component::InstanceExpr, usize)> {
         if bytes.is_empty() {
             return Err(Error::from(kinds::ParseError(
                 "Unexpected end of input while parsing instance expression",
@@ -704,7 +704,7 @@ mod std_parsing {
                 let mut args = Vec::with_capacity(args_count as usize);
                 for _ in 0..args_count {
                     // Read name
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
 
@@ -724,11 +724,11 @@ mod std_parsing {
                     let (idx, bytes_read) = binary::read_leb128_u32(bytes, offset)?;
                     offset += bytes_read;
 
-                    args.push(wrt_format::component::InstantiateArgReference { name, sort, idx });
+                    args.push(kiln_format::component::InstantiateArgReference { name, sort, idx });
                 }
 
                 Ok((
-                    wrt_format::component::InstanceExpr::ComponentReference {
+                    kiln_format::component::InstanceExpr::ComponentReference {
                         component_idx,
                         arg_refs: args,
                     },
@@ -743,7 +743,7 @@ mod std_parsing {
                 let mut exports = Vec::with_capacity(exports_count as usize);
                 for _ in 0..exports_count {
                     // Read name
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
 
@@ -763,11 +763,11 @@ mod std_parsing {
                     let (idx, bytes_read) = binary::read_leb128_u32(bytes, offset)?;
                     offset += bytes_read;
 
-                    exports.push(wrt_format::component::InlineExport { name, sort, idx });
+                    exports.push(kiln_format::component::InlineExport { name, sort, idx });
                 }
 
                 Ok((
-                    wrt_format::component::InstanceExpr::InlineExports(exports),
+                    kiln_format::component::InstanceExpr::InlineExports(exports),
                     offset,
                 ))
             },
@@ -778,17 +778,17 @@ mod std_parsing {
     }
 
     /// Parse a sort byte
-    fn parse_sort(sort_byte: u8) -> Result<wrt_format::component::Sort> {
+    fn parse_sort(sort_byte: u8) -> Result<kiln_format::component::Sort> {
         match sort_byte {
-            binary::COMPONENT_SORT_CORE => Ok(wrt_format::component::Sort::Core(
-                wrt_format::component::CoreSort::Function,
+            binary::COMPONENT_SORT_CORE => Ok(kiln_format::component::Sort::Core(
+                kiln_format::component::CoreSort::Function,
             )),
-            binary::COMPONENT_SORT_FUNC => Ok(wrt_format::component::Sort::Function),
-            binary::COMPONENT_SORT_MODULE => Ok(wrt_format::component::Sort::Component),
-            binary::COMPONENT_SORT_INSTANCE => Ok(wrt_format::component::Sort::Instance),
-            binary::COMPONENT_SORT_COMPONENT => Ok(wrt_format::component::Sort::Component),
-            binary::COMPONENT_SORT_VALUE => Ok(wrt_format::component::Sort::Value),
-            binary::COMPONENT_SORT_TYPE => Ok(wrt_format::component::Sort::Type),
+            binary::COMPONENT_SORT_FUNC => Ok(kiln_format::component::Sort::Function),
+            binary::COMPONENT_SORT_MODULE => Ok(kiln_format::component::Sort::Component),
+            binary::COMPONENT_SORT_INSTANCE => Ok(kiln_format::component::Sort::Instance),
+            binary::COMPONENT_SORT_COMPONENT => Ok(kiln_format::component::Sort::Component),
+            binary::COMPONENT_SORT_VALUE => Ok(kiln_format::component::Sort::Value),
+            binary::COMPONENT_SORT_TYPE => Ok(kiln_format::component::Sort::Type),
             _ => Err(Error::from(kinds::ParseError("Invalid sort byte"))),
         }
     }
@@ -814,7 +814,7 @@ mod std_parsing {
     /// Parse a canon operation
     fn parse_canon_operation(
         bytes: &[u8],
-    ) -> Result<(wrt_format::component::CanonOperation, usize)> {
+    ) -> Result<(kiln_format::component::CanonOperation, usize)> {
         if bytes.is_empty() {
             return Err(Error::from(kinds::ParseError(
                 "Unexpected end of input while parsing canon operation",
@@ -849,7 +849,7 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::CanonOperation::Lift {
+                    kiln_format::component::CanonOperation::Lift {
                         func_idx,
                         type_idx,
                         options,
@@ -876,7 +876,7 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::CanonOperation::Lower { func_idx, options },
+                    kiln_format::component::CanonOperation::Lower { func_idx, options },
                     offset,
                 ))
             },
@@ -886,8 +886,8 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::CanonOperation::Resource(
-                        wrt_format::component::FormatResourceOperation::New(
+                    kiln_format::component::CanonOperation::Resource(
+                        kiln_format::component::FormatResourceOperation::New(
                             resource::ResourceNew { type_idx },
                         ),
                     ),
@@ -900,8 +900,8 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::CanonOperation::Resource(
-                        wrt_format::component::FormatResourceOperation::Drop(
+                    kiln_format::component::CanonOperation::Resource(
+                        kiln_format::component::FormatResourceOperation::Drop(
                             resource::ResourceDrop { type_idx },
                         ),
                     ),
@@ -914,8 +914,8 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::CanonOperation::Resource(
-                        wrt_format::component::FormatResourceOperation::Rep(
+                    kiln_format::component::CanonOperation::Resource(
+                        kiln_format::component::FormatResourceOperation::Rep(
                             resource::ResourceRep { type_idx },
                         ),
                     ),
@@ -929,7 +929,7 @@ mod std_parsing {
     }
 
     /// Parse lift options
-    fn parse_lift_options(bytes: &[u8]) -> Result<(wrt_format::component::LiftOptions, usize)> {
+    fn parse_lift_options(bytes: &[u8]) -> Result<(kiln_format::component::LiftOptions, usize)> {
         let mut offset = 0;
 
         // Read options count (vector length)
@@ -937,7 +937,7 @@ mod std_parsing {
         offset += bytes_read;
 
         let mut memory_idx = None;
-        let mut string_encoding = wrt_format::component::StringEncoding::UTF8;
+        let mut string_encoding = kiln_format::component::StringEncoding::UTF8;
         let mut realloc_func_idx = None;
         let mut post_return_func_idx = None;
         let mut is_async = false;
@@ -956,15 +956,15 @@ mod std_parsing {
             match opt_tag {
                 0x00 => {
                     // UTF8 string encoding
-                    string_encoding = wrt_format::component::StringEncoding::UTF8;
+                    string_encoding = kiln_format::component::StringEncoding::UTF8;
                 },
                 0x01 => {
                     // UTF16 string encoding
-                    string_encoding = wrt_format::component::StringEncoding::UTF16;
+                    string_encoding = kiln_format::component::StringEncoding::UTF16;
                 },
                 0x02 => {
                     // Latin1+UTF16 string encoding
-                    string_encoding = wrt_format::component::StringEncoding::Latin1;
+                    string_encoding = kiln_format::component::StringEncoding::Latin1;
                 },
                 0x03 => {
                     // (memory m)
@@ -1000,7 +1000,7 @@ mod std_parsing {
         }
 
         Ok((
-            wrt_format::component::LiftOptions {
+            kiln_format::component::LiftOptions {
                 memory_idx,
                 string_encoding: Some(string_encoding),
                 realloc_func_idx,
@@ -1012,7 +1012,7 @@ mod std_parsing {
     }
 
     /// Parse lower options
-    fn parse_lower_options(bytes: &[u8]) -> Result<(wrt_format::component::LowerOptions, usize)> {
+    fn parse_lower_options(bytes: &[u8]) -> Result<(kiln_format::component::LowerOptions, usize)> {
         let mut offset = 0;
 
         // Read options count (vector length)
@@ -1020,7 +1020,7 @@ mod std_parsing {
         offset += bytes_read;
 
         let mut memory_idx = None;
-        let mut string_encoding = wrt_format::component::StringEncoding::UTF8;
+        let mut string_encoding = kiln_format::component::StringEncoding::UTF8;
         let mut realloc_func_idx = None;
         let mut is_async = false;
 
@@ -1038,15 +1038,15 @@ mod std_parsing {
             match opt_tag {
                 0x00 => {
                     // UTF8 string encoding
-                    string_encoding = wrt_format::component::StringEncoding::UTF8;
+                    string_encoding = kiln_format::component::StringEncoding::UTF8;
                 },
                 0x01 => {
                     // UTF16 string encoding
-                    string_encoding = wrt_format::component::StringEncoding::UTF16;
+                    string_encoding = kiln_format::component::StringEncoding::UTF16;
                 },
                 0x02 => {
                     // Latin1+UTF16 string encoding
-                    string_encoding = wrt_format::component::StringEncoding::Latin1;
+                    string_encoding = kiln_format::component::StringEncoding::Latin1;
                 },
                 0x03 => {
                     // (memory m)
@@ -1081,7 +1081,7 @@ mod std_parsing {
         }
 
         Ok((
-            wrt_format::component::LowerOptions {
+            kiln_format::component::LowerOptions {
                 memory_idx,
                 string_encoding: Some(string_encoding),
                 realloc_func_idx,
@@ -1164,7 +1164,7 @@ mod std_parsing {
     /// Parse a component type definition
     fn parse_component_type_definition(
         bytes: &[u8],
-    ) -> Result<(wrt_format::component::ComponentTypeDefinition, usize)> {
+    ) -> Result<(kiln_format::component::ComponentTypeDefinition, usize)> {
         if bytes.is_empty() {
             return Err(Error::from(kinds::ParseError(
                 "Unexpected end of input while parsing component type definition",
@@ -1191,12 +1191,12 @@ mod std_parsing {
                 for _ in 0..import_count {
                     // Read namespace
                     let (namespace_bytes, bytes_read) =
-                        wrt_format::binary::read_string(bytes, offset)?;
+                        kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let namespace = bytes_to_string(namespace_bytes);
 
                     // Read name
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
 
@@ -1214,7 +1214,7 @@ mod std_parsing {
                 let mut exports = Vec::with_capacity(export_count as usize);
                 for _ in 0..export_count {
                     // Read name
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
 
@@ -1226,7 +1226,7 @@ mod std_parsing {
                 }
 
                 Ok((
-                    wrt_format::component::ComponentTypeDefinition::Component { imports, exports },
+                    kiln_format::component::ComponentTypeDefinition::Component { imports, exports },
                     offset,
                 ))
             },
@@ -1293,7 +1293,7 @@ mod std_parsing {
                         0x04 => {
                             // Export declaration: name + externdesc
                             let (name_bytes, bytes_read) =
-                                wrt_format::binary::read_string(bytes, offset)?;
+                                kiln_format::binary::read_string(bytes, offset)?;
                             offset += bytes_read;
                             let name = bytes_to_string(name_bytes);
 
@@ -1309,7 +1309,7 @@ mod std_parsing {
                 }
 
                 Ok((
-                    wrt_format::component::ComponentTypeDefinition::Instance { exports },
+                    kiln_format::component::ComponentTypeDefinition::Instance { exports },
                     offset,
                 ))
             },
@@ -1323,7 +1323,7 @@ mod std_parsing {
                 let mut params = Vec::with_capacity(param_count as usize);
                 for _ in 0..param_count {
                     // Read parameter name
-                    let (name, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
 
                     // Read parameter type
@@ -1347,7 +1347,7 @@ mod std_parsing {
                 }
 
                 Ok((
-                    wrt_format::component::ComponentTypeDefinition::Function {
+                    kiln_format::component::ComponentTypeDefinition::Function {
                         params: params
                             .into_iter()
                             .map(|(name, ty)| {
@@ -1370,7 +1370,7 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::ComponentTypeDefinition::Value(
+                    kiln_format::component::ComponentTypeDefinition::Value(
                         val_type_to_format_val_type(val_type),
                     ),
                     offset,
@@ -1393,7 +1393,7 @@ mod std_parsing {
                 offset += 1;
 
                 Ok((
-                    wrt_format::component::ComponentTypeDefinition::Resource {
+                    kiln_format::component::ComponentTypeDefinition::Resource {
                         representation,
                         nullable,
                     },
@@ -1415,7 +1415,7 @@ mod std_parsing {
                 let (val_type, bytes_read) = parse_val_type(bytes)?;
 
                 Ok((
-                    wrt_format::component::ComponentTypeDefinition::Value(val_type),
+                    kiln_format::component::ComponentTypeDefinition::Value(val_type),
                     bytes_read,
                 ))
             },
@@ -1463,7 +1463,7 @@ mod std_parsing {
                 for _i in 0..field_count {
                     // Read field name
                     let (name_bytes, bytes_read) =
-                        match wrt_format::binary::read_string(bytes, offset) {
+                        match kiln_format::binary::read_string(bytes, offset) {
                             Ok(result) => result,
                             Err(_e) => {
                                 return Err(Error::from(kinds::ParseError(
@@ -1480,13 +1480,13 @@ mod std_parsing {
                 // Convert Vec to BoundedVec for ResourceRepresentation
                 #[cfg(feature = "std")]
                 let bounded_fields = {
-                    use wrt_foundation::{
+                    use kiln_foundation::{
                         BoundedString, BoundedVec, NoStdProvider,
                         resource::MAX_RESOURCE_FIELD_NAME_LEN,
                     };
-                    let provider = wrt_foundation::safe_managed_alloc!(
+                    let provider = kiln_foundation::safe_managed_alloc!(
                         4096,
-                        wrt_foundation::budget_aware_provider::CrateId::Decoder
+                        kiln_foundation::budget_aware_provider::CrateId::Decoder
                     )?;
                     let mut bounded = BoundedVec::new(provider.clone())?;
                     for field in fields {
@@ -1499,8 +1499,8 @@ mod std_parsing {
                                 })?;
                         if bounded.push(bounded_string).is_err() {
                             return Err(Error::new(
-                                wrt_error::ErrorCategory::Memory,
-                                wrt_error::codes::MEMORY_ALLOCATION_FAILED,
+                                kiln_error::ErrorCategory::Memory,
+                                kiln_error::codes::MEMORY_ALLOCATION_FAILED,
                                 "Failed to allocate memory for string",
                             ));
                         }
@@ -1509,9 +1509,9 @@ mod std_parsing {
                         BoundedVec<
                             BoundedString<64>,
                             16,
-                            wrt_foundation::safe_memory::NoStdProvider<4096>,
+                            kiln_foundation::safe_memory::NoStdProvider<4096>,
                         >,
-                        wrt_error::Error,
+                        kiln_error::Error,
                     >(bounded)
                 }?;
 
@@ -1555,10 +1555,10 @@ mod std_parsing {
 
                 #[cfg(feature = "std")]
                 let repr = {
-                    use wrt_foundation::{BoundedVec, NoStdProvider};
-                    let provider = wrt_foundation::safe_managed_alloc!(
+                    use kiln_foundation::{BoundedVec, NoStdProvider};
+                    let provider = kiln_foundation::safe_managed_alloc!(
                         4096,
-                        wrt_foundation::budget_aware_provider::CrateId::Decoder
+                        kiln_foundation::budget_aware_provider::CrateId::Decoder
                     )?;
                     let mut bounded_indices = BoundedVec::new(provider)?;
                     for idx in indices {
@@ -1587,7 +1587,7 @@ mod std_parsing {
     ///              | 0x03 b:<typebound>           => (type b)
     ///              | 0x04 i:<typeidx>             => (component (type i))
     ///              | 0x05 i:<typeidx>             => (instance (type i))
-    fn parse_extern_type(bytes: &[u8]) -> Result<(wrt_format::component::ExternType, usize)> {
+    fn parse_extern_type(bytes: &[u8]) -> Result<(kiln_format::component::ExternType, usize)> {
         if bytes.is_empty() {
             return Err(Error::parse_error(
                 "Unexpected end of input while parsing external type",
@@ -1619,7 +1619,7 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::ExternType::Module { type_idx },
+                    kiln_format::component::ExternType::Module { type_idx },
                     offset,
                 ))
             },
@@ -1629,7 +1629,7 @@ mod std_parsing {
                 let (type_idx, bytes_read) = binary::read_leb128_u32(bytes, offset)?;
                 offset += bytes_read;
 
-                Ok((wrt_format::component::ExternType::Type(type_idx), offset))
+                Ok((kiln_format::component::ExternType::Type(type_idx), offset))
             },
             0x02 => {
                 // Value bound: 0x02 b:<valuebound>
@@ -1649,8 +1649,8 @@ mod std_parsing {
                         offset += bytes_read;
                         // Use a simple type as placeholder for value reference
                         Ok((
-                            wrt_format::component::ExternType::Value(
-                                wrt_format::component::FormatValType::Bool,
+                            kiln_format::component::ExternType::Value(
+                                kiln_format::component::FormatValType::Bool,
                             ),
                             offset,
                         ))
@@ -1660,7 +1660,7 @@ mod std_parsing {
                         let (val_type, bytes_read) = parse_val_type(&bytes[offset..])?;
                         offset += bytes_read;
                         Ok((
-                            wrt_format::component::ExternType::Value(val_type_to_format_val_type(
+                            kiln_format::component::ExternType::Value(val_type_to_format_val_type(
                                 val_type,
                             )),
                             offset,
@@ -1685,11 +1685,11 @@ mod std_parsing {
                         // Eq bound - type index
                         let (type_idx, bytes_read) = binary::read_leb128_u32(bytes, offset)?;
                         offset += bytes_read;
-                        Ok((wrt_format::component::ExternType::Type(type_idx), offset))
+                        Ok((kiln_format::component::ExternType::Type(type_idx), offset))
                     },
                     0x01 => {
                         // Sub resource bound
-                        Ok((wrt_format::component::ExternType::Type(0xFFFFFFFF), offset))
+                        Ok((kiln_format::component::ExternType::Type(0xFFFFFFFF), offset))
                     },
                     _ => Err(Error::parse_error("Invalid type bound tag")),
                 }
@@ -1700,7 +1700,7 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::ExternType::Component { type_idx },
+                    kiln_format::component::ExternType::Component { type_idx },
                     offset,
                 ))
             },
@@ -1710,7 +1710,7 @@ mod std_parsing {
                 let (type_idx, bytes_read) = binary::read_leb128_u32(bytes, offset)?;
                 offset += bytes_read;
 
-                Ok((wrt_format::component::ExternType::Type(type_idx), offset))
+                Ok((kiln_format::component::ExternType::Type(type_idx), offset))
             },
             _ => Err(Error::parse_error("Invalid external type tag")),
         }
@@ -1723,7 +1723,7 @@ mod std_parsing {
     ///           | pvt:<primvaltype> => pvt
     ///
     /// This can be either a type index (non-negative) or a primvaltype (negative SLEB128)
-    fn parse_val_type(bytes: &[u8]) -> Result<(wrt_format::component::FormatValType, usize)> {
+    fn parse_val_type(bytes: &[u8]) -> Result<(kiln_format::component::FormatValType, usize)> {
         if bytes.is_empty() {
             return Err(Error::parse_error(
                 "Unexpected end of input while parsing value type",
@@ -1738,20 +1738,20 @@ mod std_parsing {
 
         match tag {
             // primvaltype opcodes (0x64-0x7f)
-            0x7F => Ok((wrt_format::component::FormatValType::Bool, offset)),
-            0x7E => Ok((wrt_format::component::FormatValType::S8, offset)),
-            0x7D => Ok((wrt_format::component::FormatValType::U8, offset)),
-            0x7C => Ok((wrt_format::component::FormatValType::S16, offset)),
-            0x7B => Ok((wrt_format::component::FormatValType::U16, offset)),
-            0x7A => Ok((wrt_format::component::FormatValType::S32, offset)),
-            0x79 => Ok((wrt_format::component::FormatValType::U32, offset)),
-            0x78 => Ok((wrt_format::component::FormatValType::S64, offset)),
-            0x77 => Ok((wrt_format::component::FormatValType::U64, offset)),
-            0x76 => Ok((wrt_format::component::FormatValType::F32, offset)),
-            0x75 => Ok((wrt_format::component::FormatValType::F64, offset)),
-            0x74 => Ok((wrt_format::component::FormatValType::Char, offset)),
-            0x73 => Ok((wrt_format::component::FormatValType::String, offset)),
-            0x64 => Ok((wrt_format::component::FormatValType::ErrorContext, offset)),
+            0x7F => Ok((kiln_format::component::FormatValType::Bool, offset)),
+            0x7E => Ok((kiln_format::component::FormatValType::S8, offset)),
+            0x7D => Ok((kiln_format::component::FormatValType::U8, offset)),
+            0x7C => Ok((kiln_format::component::FormatValType::S16, offset)),
+            0x7B => Ok((kiln_format::component::FormatValType::U16, offset)),
+            0x7A => Ok((kiln_format::component::FormatValType::S32, offset)),
+            0x79 => Ok((kiln_format::component::FormatValType::U32, offset)),
+            0x78 => Ok((kiln_format::component::FormatValType::S64, offset)),
+            0x77 => Ok((kiln_format::component::FormatValType::U64, offset)),
+            0x76 => Ok((kiln_format::component::FormatValType::F32, offset)),
+            0x75 => Ok((kiln_format::component::FormatValType::F64, offset)),
+            0x74 => Ok((kiln_format::component::FormatValType::Char, offset)),
+            0x73 => Ok((kiln_format::component::FormatValType::String, offset)),
+            0x64 => Ok((kiln_format::component::FormatValType::ErrorContext, offset)),
 
             // defvaltype opcodes (0x65-0x72)
             0x72 => {
@@ -1763,7 +1763,7 @@ mod std_parsing {
                 let mut fields = Vec::with_capacity(field_count as usize);
                 for _ in 0..field_count {
                     // Read field label (name)
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
 
@@ -1774,7 +1774,7 @@ mod std_parsing {
                     fields.push((name, field_type));
                 }
 
-                Ok((wrt_format::component::FormatValType::Record(fields), offset))
+                Ok((kiln_format::component::FormatValType::Record(fields), offset))
             },
             0x71 => {
                 // Variant type: 0x71 case*:vec(<case>) => (variant case+)
@@ -1785,7 +1785,7 @@ mod std_parsing {
                 let mut cases = Vec::with_capacity(case_count as usize);
                 for _ in 0..case_count {
                     // Read case label (name)
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
 
@@ -1818,14 +1818,14 @@ mod std_parsing {
                     cases.push((name, case_type));
                 }
 
-                Ok((wrt_format::component::FormatValType::Variant(cases), offset))
+                Ok((kiln_format::component::FormatValType::Variant(cases), offset))
             },
             0x70 => {
                 // List type: 0x70 t:<valtype> => (list t)
                 let (element_type, bytes_read) = parse_val_type(&bytes[offset..])?;
                 offset += bytes_read;
                 Ok((
-                    wrt_format::component::FormatValType::List(Box::new(element_type)),
+                    kiln_format::component::FormatValType::List(Box::new(element_type)),
                     offset,
                 ))
             },
@@ -1862,7 +1862,7 @@ mod std_parsing {
                 trace!(offset = offset, "parse_val_type: tuple complete");
 
                 Ok((
-                    wrt_format::component::FormatValType::Tuple(elements),
+                    kiln_format::component::FormatValType::Tuple(elements),
                     offset,
                 ))
             },
@@ -1873,13 +1873,13 @@ mod std_parsing {
 
                 let mut flags = Vec::with_capacity(flag_count as usize);
                 for _ in 0..flag_count {
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
                     flags.push(name);
                 }
 
-                Ok((wrt_format::component::FormatValType::Flags(flags), offset))
+                Ok((kiln_format::component::FormatValType::Flags(flags), offset))
             },
             0x6D => {
                 // Enum type: 0x6d l*:vec(<label'>) => (enum l+)
@@ -1888,20 +1888,20 @@ mod std_parsing {
 
                 let mut cases = Vec::with_capacity(case_count as usize);
                 for _ in 0..case_count {
-                    let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                    let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);
                     cases.push(name);
                 }
 
-                Ok((wrt_format::component::FormatValType::Enum(cases), offset))
+                Ok((kiln_format::component::FormatValType::Enum(cases), offset))
             },
             0x6B => {
                 // Option type: 0x6b t:<valtype> => (option t)
                 let (inner_type, bytes_read) = parse_val_type(&bytes[offset..])?;
                 offset += bytes_read;
                 Ok((
-                    wrt_format::component::FormatValType::Option(Box::new(inner_type)),
+                    kiln_format::component::FormatValType::Option(Box::new(inner_type)),
                     offset,
                 ))
             },
@@ -1947,10 +1947,10 @@ mod std_parsing {
                 // We'll use a tuple or variant to represent both ok/error
                 // For now, simplify to just the ok type
                 let result_type =
-                    ok_type.unwrap_or_else(|| Box::new(wrt_format::component::FormatValType::Void));
+                    ok_type.unwrap_or_else(|| Box::new(kiln_format::component::FormatValType::Void));
 
                 Ok((
-                    wrt_format::component::FormatValType::Result(result_type),
+                    kiln_format::component::FormatValType::Result(result_type),
                     offset,
                 ))
             },
@@ -1958,13 +1958,13 @@ mod std_parsing {
                 // Own type: 0x69 i:<typeidx> => (own i)
                 let (idx, bytes_read) = binary::read_leb128_u32(bytes, offset)?;
                 offset += bytes_read;
-                Ok((wrt_format::component::FormatValType::Own(idx), offset))
+                Ok((kiln_format::component::FormatValType::Own(idx), offset))
             },
             0x68 => {
                 // Borrow type: 0x68 i:<typeidx> => (borrow i)
                 let (idx, bytes_read) = binary::read_leb128_u32(bytes, offset)?;
                 offset += bytes_read;
-                Ok((wrt_format::component::FormatValType::Borrow(idx), offset))
+                Ok((kiln_format::component::FormatValType::Borrow(idx), offset))
             },
             0x67 => {
                 // Fixed-length list type: 0x67 t:<valtype> len:<u32> => (list t len) 🔧
@@ -1976,7 +1976,7 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::FormatValType::FixedList(Box::new(element_type), length),
+                    kiln_format::component::FormatValType::FixedList(Box::new(element_type), length),
                     offset,
                 ))
             },
@@ -1990,7 +1990,7 @@ mod std_parsing {
                     "val_type: skipping async type (stream/future not yet implemented)"
                 );
                 // For now, treat as Void
-                Ok((wrt_format::component::FormatValType::Void, offset))
+                Ok((kiln_format::component::FormatValType::Void, offset))
             },
 
             _ => {
@@ -2002,7 +2002,7 @@ mod std_parsing {
                 );
 
                 let (idx, bytes_read) = binary::read_leb128_u32(bytes, 0)?;
-                Ok((wrt_format::component::FormatValType::Ref(idx), bytes_read))
+                Ok((kiln_format::component::FormatValType::Ref(idx), bytes_read))
             },
         }
     }
@@ -2050,12 +2050,12 @@ mod std_parsing {
         for _ in 0..count {
             // Read importname which consists of TWO strings: namespace and name
             // Namespace string (can be empty)
-            let (namespace_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+            let (namespace_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
             offset += bytes_read;
             let namespace = bytes_to_string(namespace_bytes);
 
             // Name string (the interface name like "wasi:cli/environment@0.2.0")
-            let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+            let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
             offset += bytes_read;
             let name = bytes_to_string(name_bytes);
 
@@ -2065,7 +2065,7 @@ mod std_parsing {
 
             // Create the import
             imports.push(Import {
-                name: wrt_format::component::ImportName {
+                name: kiln_format::component::ImportName {
                     namespace,
                     name,
                     nested: Vec::new(),
@@ -2091,12 +2091,12 @@ mod std_parsing {
         for _ in 0..count {
             // Read export name - appears to use same two-string format as imports
             // Namespace string (can be empty)
-            let (namespace_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+            let (namespace_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
             offset += bytes_read;
             let _namespace = bytes_to_string(namespace_bytes);
 
             // Name string (the export name like "wasi:cli/run@0.2.0")
-            let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+            let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
             offset += bytes_read;
             let name = bytes_to_string(name_bytes);
 
@@ -2117,7 +2117,7 @@ mod std_parsing {
             offset += bytes_read;
 
             // Create export with simplified name structure
-            let export_name = wrt_format::component::ExportName {
+            let export_name = kiln_format::component::ExportName {
                 name,
                 is_resource: false,
                 semver: None,
@@ -2183,7 +2183,7 @@ mod std_parsing {
 
                 if has_name {
                     let (value_name_bytes, bytes_read) =
-                        wrt_format::binary::read_string(bytes, offset)?;
+                        kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let value_name = bytes_to_string(value_name_bytes);
                     name = Some(value_name);
@@ -2205,7 +2205,7 @@ mod std_parsing {
     /// Parse a value expression
     fn parse_value_expression(
         bytes: &[u8],
-    ) -> Result<(wrt_format::component::ValueExpression, usize)> {
+    ) -> Result<(kiln_format::component::ValueExpression, usize)> {
         if bytes.is_empty() {
             return Err(Error::from(kinds::ParseError(
                 "Unexpected end of input while parsing value expression",
@@ -2230,7 +2230,7 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::ValueExpression::ItemRef { sort, idx },
+                    kiln_format::component::ValueExpression::ItemRef { sort, idx },
                     offset,
                 ))
             },
@@ -2240,7 +2240,7 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::ValueExpression::GlobalInit { global_idx },
+                    kiln_format::component::ValueExpression::GlobalInit { global_idx },
                     offset,
                 ))
             },
@@ -2261,7 +2261,7 @@ mod std_parsing {
                 }
 
                 Ok((
-                    wrt_format::component::ValueExpression::FunctionCall { func_idx, args },
+                    kiln_format::component::ValueExpression::FunctionCall { func_idx, args },
                     offset,
                 ))
             },
@@ -2271,7 +2271,7 @@ mod std_parsing {
                 offset += bytes_read;
 
                 Ok((
-                    wrt_format::component::ValueExpression::Const(const_value),
+                    kiln_format::component::ValueExpression::Const(const_value),
                     offset,
                 ))
             },
@@ -2282,7 +2282,7 @@ mod std_parsing {
     }
 
     /// Parse a constant value
-    fn parse_const_value(bytes: &[u8]) -> Result<(wrt_format::component::ConstValue, usize)> {
+    fn parse_const_value(bytes: &[u8]) -> Result<(kiln_format::component::ConstValue, usize)> {
         if bytes.is_empty() {
             return Err(Error::from(kinds::ParseError(
                 "Unexpected end of input while parsing constant value",
@@ -2298,31 +2298,31 @@ mod std_parsing {
                 // Boolean value
                 let value = bytes[offset] != 0;
                 offset += 1;
-                Ok((wrt_format::component::ConstValue::Bool(value), offset))
+                Ok((kiln_format::component::ConstValue::Bool(value), offset))
             },
             0x01 => {
                 // S8 value
                 let value = bytes[offset] as i8;
                 offset += 1;
-                Ok((wrt_format::component::ConstValue::S8(value), offset))
+                Ok((kiln_format::component::ConstValue::S8(value), offset))
             },
             0x02 => {
                 // U8 value
                 let value = bytes[offset];
                 offset += 1;
-                Ok((wrt_format::component::ConstValue::U8(value), offset))
+                Ok((kiln_format::component::ConstValue::U8(value), offset))
             },
             0x03 => {
                 // S16 value
                 let value = i16::from_le_bytes([bytes[offset], bytes[offset + 1]]);
                 offset += 2;
-                Ok((wrt_format::component::ConstValue::S16(value), offset))
+                Ok((kiln_format::component::ConstValue::S16(value), offset))
             },
             0x04 => {
                 // U16 value
                 let value = u16::from_le_bytes([bytes[offset], bytes[offset + 1]]);
                 offset += 2;
-                Ok((wrt_format::component::ConstValue::U16(value), offset))
+                Ok((kiln_format::component::ConstValue::U16(value), offset))
             },
             0x05 => {
                 // S32 value
@@ -2333,7 +2333,7 @@ mod std_parsing {
                     bytes[offset + 3],
                 ]);
                 offset += 4;
-                Ok((wrt_format::component::ConstValue::S32(value), offset))
+                Ok((kiln_format::component::ConstValue::S32(value), offset))
             },
             0x06 => {
                 // U32 value
@@ -2344,7 +2344,7 @@ mod std_parsing {
                     bytes[offset + 3],
                 ]);
                 offset += 4;
-                Ok((wrt_format::component::ConstValue::U32(value), offset))
+                Ok((kiln_format::component::ConstValue::U32(value), offset))
             },
             0x07 => {
                 // S64 value
@@ -2359,7 +2359,7 @@ mod std_parsing {
                     bytes[offset + 7],
                 ]);
                 offset += 8;
-                Ok((wrt_format::component::ConstValue::S64(value), offset))
+                Ok((kiln_format::component::ConstValue::S64(value), offset))
             },
             0x08 => {
                 // U64 value
@@ -2374,7 +2374,7 @@ mod std_parsing {
                     bytes[offset + 7],
                 ]);
                 offset += 8;
-                Ok((wrt_format::component::ConstValue::U64(value), offset))
+                Ok((kiln_format::component::ConstValue::U64(value), offset))
             },
             0x09 => {
                 // F32 value
@@ -2386,7 +2386,7 @@ mod std_parsing {
                 ]);
                 let value = f32::from_bits(value_bits);
                 offset += 4;
-                Ok((wrt_format::component::ConstValue::F32(value), offset))
+                Ok((kiln_format::component::ConstValue::F32(value), offset))
             },
             0x0A => {
                 // F64 value
@@ -2402,11 +2402,11 @@ mod std_parsing {
                 ]);
                 let value = f64::from_bits(value_bits);
                 offset += 8;
-                Ok((wrt_format::component::ConstValue::F64(value), offset))
+                Ok((kiln_format::component::ConstValue::F64(value), offset))
             },
             0x0B => {
                 // Char value
-                let (value_str, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                let (value_str, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                 offset += bytes_read;
 
                 // Convert bytes to string and validate that it's a single Unicode scalar value
@@ -2424,18 +2424,18 @@ mod std_parsing {
                     )));
                 }
 
-                Ok((wrt_format::component::ConstValue::Char(first_char), offset))
+                Ok((kiln_format::component::ConstValue::Char(first_char), offset))
             },
             0x0C => {
                 // String value
-                let (value_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                let (value_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                 offset += bytes_read;
                 let value = bytes_to_string(value_bytes);
-                Ok((wrt_format::component::ConstValue::String(value), offset))
+                Ok((kiln_format::component::ConstValue::String(value), offset))
             },
             0x0D => {
                 // Null value
-                Ok((wrt_format::component::ConstValue::Null, offset))
+                Ok((kiln_format::component::ConstValue::Null, offset))
             },
             _ => Err(Error::from(kinds::ParseError("Invalid constant value tag"))),
         }
@@ -2492,7 +2492,7 @@ mod std_parsing {
     ///   * For COMPONENT_SORT_CORE (0x00), this is followed by a CoreSort byte
     ///   * For other values, this is the complete Sort
     /// - t is the aliastarget discriminant (0x00=export, 0x01=core export, 0x02=outer)
-    fn parse_alias_target(bytes: &[u8]) -> Result<(wrt_format::component::AliasTarget, usize)> {
+    fn parse_alias_target(bytes: &[u8]) -> Result<(kiln_format::component::AliasTarget, usize)> {
         if bytes.is_empty() {
             return Err(Error::from(kinds::ParseError(
                 "Unexpected end of input while parsing alias target",
@@ -2504,13 +2504,13 @@ mod std_parsing {
         let mut offset = 1;
 
         #[cfg(feature = "tracing")]
-        wrt_foundation::tracing::trace!(
+        kiln_foundation::tracing::trace!(
             sort_byte = format!("0x{:02x}", sort_byte),
             "Parsing alias"
         );
 
         // Parse the sort - this may be a CoreSort (if sort_byte == 0x00) or a full Sort
-        let parsed_sort: wrt_format::component::Sort;
+        let parsed_sort: kiln_format::component::Sort;
 
         if sort_byte == binary::COMPONENT_SORT_CORE {
             // This is a core item - read the CoreSort byte
@@ -2523,41 +2523,41 @@ mod std_parsing {
             offset += 1;
 
             #[cfg(feature = "tracing")]
-            wrt_foundation::tracing::trace!(
+            kiln_foundation::tracing::trace!(
                 core_sort_byte = format!("0x{:02x}", core_sort_byte),
                 "Core sort byte"
             );
 
             let core_sort = match core_sort_byte {
-                binary::COMPONENT_CORE_SORT_FUNC => wrt_format::component::CoreSort::Function,
-                binary::COMPONENT_CORE_SORT_TABLE => wrt_format::component::CoreSort::Table,
-                binary::COMPONENT_CORE_SORT_MEMORY => wrt_format::component::CoreSort::Memory,
-                binary::COMPONENT_CORE_SORT_GLOBAL => wrt_format::component::CoreSort::Global,
-                binary::COMPONENT_CORE_SORT_TYPE => wrt_format::component::CoreSort::Type,
-                binary::COMPONENT_CORE_SORT_MODULE => wrt_format::component::CoreSort::Module,
-                binary::COMPONENT_CORE_SORT_INSTANCE => wrt_format::component::CoreSort::Instance,
+                binary::COMPONENT_CORE_SORT_FUNC => kiln_format::component::CoreSort::Function,
+                binary::COMPONENT_CORE_SORT_TABLE => kiln_format::component::CoreSort::Table,
+                binary::COMPONENT_CORE_SORT_MEMORY => kiln_format::component::CoreSort::Memory,
+                binary::COMPONENT_CORE_SORT_GLOBAL => kiln_format::component::CoreSort::Global,
+                binary::COMPONENT_CORE_SORT_TYPE => kiln_format::component::CoreSort::Type,
+                binary::COMPONENT_CORE_SORT_MODULE => kiln_format::component::CoreSort::Module,
+                binary::COMPONENT_CORE_SORT_INSTANCE => kiln_format::component::CoreSort::Instance,
                 _ => {
                     #[cfg(feature = "tracing")]
-                    wrt_foundation::tracing::warn!(
+                    kiln_foundation::tracing::warn!(
                         core_sort_byte = format!("0x{:02x}", core_sort_byte),
                         "Invalid core sort byte"
                     );
                     return Err(Error::from(kinds::ParseError("Invalid core sort byte")));
                 },
             };
-            parsed_sort = wrt_format::component::Sort::Core(core_sort);
+            parsed_sort = kiln_format::component::Sort::Core(core_sort);
         } else {
             // This is a component-level sort
             parsed_sort = match sort_byte {
-                binary::COMPONENT_SORT_FUNC => wrt_format::component::Sort::Function,
-                binary::COMPONENT_SORT_VALUE => wrt_format::component::Sort::Value,
-                binary::COMPONENT_SORT_TYPE => wrt_format::component::Sort::Type,
-                binary::COMPONENT_SORT_COMPONENT => wrt_format::component::Sort::Component,
-                binary::COMPONENT_SORT_INSTANCE => wrt_format::component::Sort::Instance,
-                binary::COMPONENT_SORT_MODULE => wrt_format::component::Sort::Component,
+                binary::COMPONENT_SORT_FUNC => kiln_format::component::Sort::Function,
+                binary::COMPONENT_SORT_VALUE => kiln_format::component::Sort::Value,
+                binary::COMPONENT_SORT_TYPE => kiln_format::component::Sort::Type,
+                binary::COMPONENT_SORT_COMPONENT => kiln_format::component::Sort::Component,
+                binary::COMPONENT_SORT_INSTANCE => kiln_format::component::Sort::Instance,
+                binary::COMPONENT_SORT_MODULE => kiln_format::component::Sort::Component,
                 _ => {
                     #[cfg(feature = "tracing")]
-                    wrt_foundation::tracing::warn!(
+                    kiln_foundation::tracing::warn!(
                         sort_byte = format!("0x{:02x}", sort_byte),
                         "Invalid sort byte"
                     );
@@ -2576,7 +2576,7 @@ mod std_parsing {
         offset += 1;
 
         #[cfg(feature = "tracing")]
-        wrt_foundation::tracing::trace!(tag = format!("0x{:02x}", tag), "Alias target tag");
+        kiln_foundation::tracing::trace!(tag = format!("0x{:02x}", tag), "Alias target tag");
 
         match tag {
             0x00 => {
@@ -2587,15 +2587,15 @@ mod std_parsing {
                 offset += bytes_read;
 
                 // Read export name
-                let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                 offset += bytes_read;
                 let name = bytes_to_string(name_bytes);
 
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::trace!(instance_idx = instance_idx, name = %name, sort = ?parsed_sort, "Component export alias");
+                kiln_foundation::tracing::trace!(instance_idx = instance_idx, name = %name, sort = ?parsed_sort, "Component export alias");
 
                 Ok((
-                    wrt_format::component::AliasTarget::InstanceExport {
+                    kiln_format::component::AliasTarget::InstanceExport {
                         instance_idx,
                         name,
                         kind: parsed_sort,
@@ -2608,10 +2608,10 @@ mod std_parsing {
 
                 // For core exports, the sort must be Sort::Core(CoreSort)
                 let core_sort = match parsed_sort {
-                    wrt_format::component::Sort::Core(cs) => cs,
+                    kiln_format::component::Sort::Core(cs) => cs,
                     _ => {
                         #[cfg(feature = "tracing")]
-                        wrt_foundation::tracing::warn!(parsed_sort = ?parsed_sort, "Core export must have CoreSort");
+                        kiln_foundation::tracing::warn!(parsed_sort = ?parsed_sort, "Core export must have CoreSort");
                         return Err(Error::from(kinds::ParseError(
                             "Core export must have CoreSort",
                         )));
@@ -2623,15 +2623,15 @@ mod std_parsing {
                 offset += bytes_read;
 
                 // Read export name
-                let (name_bytes, bytes_read) = wrt_format::binary::read_string(bytes, offset)?;
+                let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                 offset += bytes_read;
                 let name = bytes_to_string(name_bytes);
 
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::trace!(instance_idx = instance_idx, name = %name, core_sort = ?core_sort, "Core export alias");
+                kiln_foundation::tracing::trace!(instance_idx = instance_idx, name = %name, core_sort = ?core_sort, "Core export alias");
 
                 Ok((
-                    wrt_format::component::AliasTarget::CoreInstanceExport {
+                    kiln_format::component::AliasTarget::CoreInstanceExport {
                         instance_idx,
                         name,
                         kind: core_sort,
@@ -2651,10 +2651,10 @@ mod std_parsing {
                 offset += bytes_read;
 
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::trace!(count = count, idx = idx, sort = ?parsed_sort, "Outer alias");
+                kiln_foundation::tracing::trace!(count = count, idx = idx, sort = ?parsed_sort, "Outer alias");
 
                 Ok((
-                    wrt_format::component::AliasTarget::Outer {
+                    kiln_format::component::AliasTarget::Outer {
                         count,
                         kind: parsed_sort,
                         idx,
@@ -2664,7 +2664,7 @@ mod std_parsing {
             },
             _ => {
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::warn!(
+                kiln_foundation::tracing::warn!(
                     tag = format!("0x{:02x}", tag),
                     "Unsupported alias target tag"
                 );
@@ -2679,7 +2679,7 @@ mod std_parsing {
     /// various WebAssembly and Component Model sections.
     #[allow(dead_code)]
     pub fn parse_name(bytes: &[u8]) -> Result<(String, usize)> {
-        let (name_bytes, length) = wrt_format::binary::read_string(bytes, 0)?;
+        let (name_bytes, length) = kiln_format::binary::read_string(bytes, 0)?;
         let name_str = core::str::from_utf8(name_bytes)
             .map_err(|_| Error::runtime_execution_error("Invalid UTF-8 in name"))?;
         Ok((name_str.to_string(), length))
@@ -2687,99 +2687,99 @@ mod std_parsing {
 
     /// Convert ValType to FormatValType for type compatibility
     fn val_type_to_format_val_type(
-        val_type: wrt_format::component::FormatValType,
-    ) -> wrt_format::component::FormatValType {
+        val_type: kiln_format::component::FormatValType,
+    ) -> kiln_format::component::FormatValType {
         match val_type {
-            wrt_format::component::FormatValType::Bool => {
-                wrt_format::component::FormatValType::Bool
+            kiln_format::component::FormatValType::Bool => {
+                kiln_format::component::FormatValType::Bool
             },
-            wrt_format::component::FormatValType::S8 => wrt_format::component::FormatValType::S8,
-            wrt_format::component::FormatValType::U8 => wrt_format::component::FormatValType::U8,
-            wrt_format::component::FormatValType::S16 => wrt_format::component::FormatValType::S16,
-            wrt_format::component::FormatValType::U16 => wrt_format::component::FormatValType::U16,
-            wrt_format::component::FormatValType::S32 => wrt_format::component::FormatValType::S32,
-            wrt_format::component::FormatValType::U32 => wrt_format::component::FormatValType::U32,
-            wrt_format::component::FormatValType::S64 => wrt_format::component::FormatValType::S64,
-            wrt_format::component::FormatValType::U64 => wrt_format::component::FormatValType::U64,
-            wrt_format::component::FormatValType::F32 => wrt_format::component::FormatValType::F32,
-            wrt_format::component::FormatValType::F64 => wrt_format::component::FormatValType::F64,
-            wrt_format::component::FormatValType::Char => {
-                wrt_format::component::FormatValType::Char
+            kiln_format::component::FormatValType::S8 => kiln_format::component::FormatValType::S8,
+            kiln_format::component::FormatValType::U8 => kiln_format::component::FormatValType::U8,
+            kiln_format::component::FormatValType::S16 => kiln_format::component::FormatValType::S16,
+            kiln_format::component::FormatValType::U16 => kiln_format::component::FormatValType::U16,
+            kiln_format::component::FormatValType::S32 => kiln_format::component::FormatValType::S32,
+            kiln_format::component::FormatValType::U32 => kiln_format::component::FormatValType::U32,
+            kiln_format::component::FormatValType::S64 => kiln_format::component::FormatValType::S64,
+            kiln_format::component::FormatValType::U64 => kiln_format::component::FormatValType::U64,
+            kiln_format::component::FormatValType::F32 => kiln_format::component::FormatValType::F32,
+            kiln_format::component::FormatValType::F64 => kiln_format::component::FormatValType::F64,
+            kiln_format::component::FormatValType::Char => {
+                kiln_format::component::FormatValType::Char
             },
-            wrt_format::component::FormatValType::String => {
-                wrt_format::component::FormatValType::String
+            kiln_format::component::FormatValType::String => {
+                kiln_format::component::FormatValType::String
             },
-            wrt_format::component::FormatValType::Ref(idx) => {
-                wrt_format::component::FormatValType::Ref(idx)
+            kiln_format::component::FormatValType::Ref(idx) => {
+                kiln_format::component::FormatValType::Ref(idx)
             },
-            wrt_format::component::FormatValType::List(inner) => {
-                wrt_format::component::FormatValType::List(Box::new(val_type_to_format_val_type(
+            kiln_format::component::FormatValType::List(inner) => {
+                kiln_format::component::FormatValType::List(Box::new(val_type_to_format_val_type(
                     *inner,
                 )))
             },
-            wrt_format::component::FormatValType::FixedList(inner, len) => {
-                wrt_format::component::FormatValType::FixedList(
+            kiln_format::component::FormatValType::FixedList(inner, len) => {
+                kiln_format::component::FormatValType::FixedList(
                     Box::new(val_type_to_format_val_type(*inner)),
                     len,
                 )
             },
-            wrt_format::component::FormatValType::Tuple(items) => {
-                wrt_format::component::FormatValType::Tuple(
+            kiln_format::component::FormatValType::Tuple(items) => {
+                kiln_format::component::FormatValType::Tuple(
                     items.into_iter().map(val_type_to_format_val_type).collect(),
                 )
             },
-            wrt_format::component::FormatValType::Option(inner) => {
-                wrt_format::component::FormatValType::Option(Box::new(val_type_to_format_val_type(
+            kiln_format::component::FormatValType::Option(inner) => {
+                kiln_format::component::FormatValType::Option(Box::new(val_type_to_format_val_type(
                     *inner,
                 )))
             },
-            wrt_format::component::FormatValType::Result(ok) => {
-                wrt_format::component::FormatValType::Result(Box::new(val_type_to_format_val_type(
+            kiln_format::component::FormatValType::Result(ok) => {
+                kiln_format::component::FormatValType::Result(Box::new(val_type_to_format_val_type(
                     *ok,
                 )))
             },
             // TODO: Fix FormatValType enum to support ResultErr and ResultBoth variants
-            // wrt_format::component::FormatValType::ResultErr(err) => {
-            //     wrt_format::component::FormatValType::Result(Box::new(val_type_to_format_val_type(
+            // kiln_format::component::FormatValType::ResultErr(err) => {
+            //     kiln_format::component::FormatValType::Result(Box::new(val_type_to_format_val_type(
             //         *err,
             //     )))
             // }
-            // wrt_format::component::FormatValType::ResultBoth(ok, _err) => {
-            //     wrt_format::component::FormatValType::Result(Box::new(val_type_to_format_val_type(*ok)))
+            // kiln_format::component::FormatValType::ResultBoth(ok, _err) => {
+            //     kiln_format::component::FormatValType::Result(Box::new(val_type_to_format_val_type(*ok)))
             // }
-            wrt_format::component::FormatValType::Record(fields) => {
-                wrt_format::component::FormatValType::Record(
+            kiln_format::component::FormatValType::Record(fields) => {
+                kiln_format::component::FormatValType::Record(
                     fields
                         .into_iter()
                         .map(|(name, ty)| (name, val_type_to_format_val_type(ty)))
                         .collect(),
                 )
             },
-            wrt_format::component::FormatValType::Variant(cases) => {
-                wrt_format::component::FormatValType::Variant(
+            kiln_format::component::FormatValType::Variant(cases) => {
+                kiln_format::component::FormatValType::Variant(
                     cases
                         .into_iter()
                         .map(|(name, ty)| (name, ty.map(val_type_to_format_val_type)))
                         .collect(),
                 )
             },
-            wrt_format::component::FormatValType::Flags(names) => {
-                wrt_format::component::FormatValType::Flags(names)
+            kiln_format::component::FormatValType::Flags(names) => {
+                kiln_format::component::FormatValType::Flags(names)
             },
-            wrt_format::component::FormatValType::Enum(names) => {
-                wrt_format::component::FormatValType::Enum(names)
+            kiln_format::component::FormatValType::Enum(names) => {
+                kiln_format::component::FormatValType::Enum(names)
             },
-            wrt_format::component::FormatValType::Own(idx) => {
-                wrt_format::component::FormatValType::Own(idx)
+            kiln_format::component::FormatValType::Own(idx) => {
+                kiln_format::component::FormatValType::Own(idx)
             },
-            wrt_format::component::FormatValType::Borrow(idx) => {
-                wrt_format::component::FormatValType::Borrow(idx)
+            kiln_format::component::FormatValType::Borrow(idx) => {
+                kiln_format::component::FormatValType::Borrow(idx)
             },
-            wrt_format::component::FormatValType::Void => {
-                wrt_format::component::FormatValType::Void
+            kiln_format::component::FormatValType::Void => {
+                kiln_format::component::FormatValType::Void
             },
-            wrt_format::component::FormatValType::ErrorContext => {
-                wrt_format::component::FormatValType::ErrorContext
+            kiln_format::component::FormatValType::ErrorContext => {
+                kiln_format::component::FormatValType::ErrorContext
             },
         }
     }
@@ -2790,8 +2790,8 @@ mod std_parsing {
 // No_std implementation with bounded alternatives following functional safety guidelines
 #[cfg(not(feature = "std"))]
 mod no_std_parsing {
-    use wrt_error::{Error, ErrorCategory, Result, codes};
-    use wrt_foundation::{BoundedVec, NoStdProvider};
+    use kiln_error::{Error, ErrorCategory, Result, codes};
+    use kiln_foundation::{BoundedVec, NoStdProvider};
     // Define local stub types for no_std parsing
     #[derive(Debug, Clone, Default, PartialEq, Eq)]
     pub struct Component;
@@ -2833,24 +2833,24 @@ mod no_std_parsing {
     macro_rules! impl_stub_traits {
         ($($type:ty),*) => {
             $(
-                impl wrt_foundation::traits::ToBytes for $type {
+                impl kiln_foundation::traits::ToBytes for $type {
                     fn serialized_size(&self) -> usize { 0 }
-                    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+                    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                         &self,
-                        _writer: &mut wrt_foundation::traits::WriteStream<'a>,
+                        _writer: &mut kiln_foundation::traits::WriteStream<'a>,
                         _provider: &PStream,
-                    ) -> wrt_error::Result<()> { Ok(()) }
+                    ) -> kiln_error::Result<()> { Ok(()) }
                 }
 
-                impl wrt_foundation::traits::FromBytes for $type {
-                    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-                        _reader: &mut wrt_foundation::traits::ReadStream<'a>,
+                impl kiln_foundation::traits::FromBytes for $type {
+                    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+                        _reader: &mut kiln_foundation::traits::ReadStream<'a>,
                         _provider: &PStream,
-                    ) -> wrt_error::Result<Self> { Ok(Self::default()) }
+                    ) -> kiln_error::Result<Self> { Ok(Self::default()) }
                 }
 
-                impl wrt_foundation::traits::Checksummable for $type {
-                    fn update_checksum(&self, _checksum: &mut wrt_foundation::verification::Checksum) {}
+                impl kiln_foundation::traits::Checksummable for $type {
+                    fn update_checksum(&self, _checksum: &mut kiln_foundation::verification::Checksum) {}
                 }
             )*
         };
@@ -2883,9 +2883,9 @@ mod no_std_parsing {
     // Helper function to create an empty ParseVec
     fn create_empty_parse_vec<T>() -> Result<ParseVec<T>>
     where
-        T: wrt_foundation::traits::Checksummable
-            + wrt_foundation::traits::ToBytes
-            + wrt_foundation::traits::FromBytes
+        T: kiln_foundation::traits::Checksummable
+            + kiln_foundation::traits::ToBytes
+            + kiln_foundation::traits::FromBytes
             + Default
             + Clone
             + PartialEq

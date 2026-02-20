@@ -2,7 +2,7 @@
 Contributing Guide
 ==================
 
-Thank you for your interest in contributing to WRT! This guide covers the process for making contributions.
+Thank you for your interest in contributing to Kiln! This guide covers the process for making contributions.
 
 .. toctree::
    :maxdepth: 2
@@ -32,8 +32,8 @@ Development Process
    .. code-block:: bash
 
       # Fork on GitHub, then clone your fork
-      git clone https://github.com/pulseengine/wrt.git
-      cd wrt
+      git clone https://github.com/pulseengine/kiln.git
+      cd kiln
 
 2. **Create Feature Branch**
 
@@ -54,13 +54,13 @@ Development Process
    .. code-block:: bash
 
       # Format code and run checks
-      cargo-wrt check
+      cargo-kiln check
 
       # Run tests
-      cargo-wrt test
+      cargo-kiln test
 
       # Run full CI checks
-      cargo-wrt ci
+      cargo-kiln ci
 
 5. **Submit Pull Request**
 

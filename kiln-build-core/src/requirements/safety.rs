@@ -592,8 +592,8 @@ impl SafetyVerificationFramework {
                     AsilLevel::D,
                 );
                 req.verification_method = VerificationMethod::FormalProof;
-                req.add_implementation("wrt-foundation/src/safe_allocation.rs".to_string());
-                req.add_test("wrt-foundation/tests/memory_budget_validation.rs".to_string());
+                req.add_implementation("kiln-foundation/src/safe_allocation.rs".to_string());
+                req.add_test("kiln-foundation/tests/memory_budget_validation.rs".to_string());
                 req
             },
             {
@@ -606,9 +606,9 @@ impl SafetyVerificationFramework {
                     AsilLevel::D,
                 );
                 req.verification_method = VerificationMethod::Test;
-                req.add_implementation("wrt-runtime/src/execution.rs".to_string());
+                req.add_implementation("kiln-runtime/src/execution.rs".to_string());
                 req.add_test(
-                    "wrt-tests/integration/safety_critical_integration_tests.rs".to_string(),
+                    "kiln-tests/integration/safety_critical_integration_tests.rs".to_string(),
                 );
                 req
             },
@@ -623,10 +623,10 @@ impl SafetyVerificationFramework {
                 );
                 req.verification_method = VerificationMethod::Test;
                 req.add_implementation(
-                    "wrt-component/src/bounded_resource_management.rs".to_string(),
+                    "kiln-component/src/bounded_resource_management.rs".to_string(),
                 );
                 req.add_test(
-                    "wrt-component/tests/safety_critical_memory_budget_tests.rs".to_string(),
+                    "kiln-component/tests/safety_critical_memory_budget_tests.rs".to_string(),
                 );
                 req
             },
@@ -641,8 +641,8 @@ impl SafetyVerificationFramework {
                     AsilLevel::B,
                 );
                 req.verification_method = VerificationMethod::Analysis;
-                req.add_implementation("wrt-platform/src/memory.rs".to_string());
-                req.add_test("wrt-platform/tests/linux_integration_test.rs".to_string());
+                req.add_implementation("kiln-platform/src/memory.rs".to_string());
+                req.add_test("kiln-platform/tests/linux_integration_test.rs".to_string());
                 req
             },
         ]

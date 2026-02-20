@@ -1,7 +1,7 @@
-//! Memory budget limits for wrt-host safety-critical operations
+//! Memory budget limits for kiln-host safety-critical operations
 //!
 //! This module defines compile-time memory limits for all bounded collections
-//! used in the wrt-host crate when the safety-critical feature is enabled.
+//! used in the kiln-host crate when the safety-critical feature is enabled.
 
 #![cfg(feature = "safety-critical")]
 

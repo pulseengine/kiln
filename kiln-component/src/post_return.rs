@@ -12,14 +12,14 @@ use std::{fmt, mem};
 #[cfg(feature = "std")]
 use std::{boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::Vec};
 
-use wrt_foundation::{
+use kiln_foundation::{
     ToString, bounded::BoundedString, budget_aware_provider::CrateId, prelude::*,
     safe_managed_alloc, safe_memory::NoStdProvider,
 };
 
 // For no_std, override prelude's bounded::BoundedVec with StaticVec
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticVec as BoundedVec;
+use kiln_foundation::collections::StaticVec as BoundedVec;
 
 use crate::{
     async_::async_types::{ErrorContextHandle, FutureHandle, StreamHandle},
@@ -48,9 +48,9 @@ use crate::async_::{
 };
 
 // Import ComponentValue from foundation
-use wrt_foundation::component_value::ComponentValue;
+use kiln_foundation::component_value::ComponentValue;
 
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 
 // Stub types when threading is not enabled
 #[cfg(not(feature = "component-model-threading"))]
@@ -104,7 +104,7 @@ pub type PostReturnFn = fn();
 /// Returns: Ok(result) on success, where result is the optional i32 return value
 #[cfg(feature = "std")]
 pub type CleanupCallback =
-    Box<dyn FnMut(u32, u32, &[i32]) -> wrt_error::Result<Option<i32>> + Send>;
+    Box<dyn FnMut(u32, u32, &[i32]) -> kiln_error::Result<Option<i32>> + Send>;
 
 /// Callback for invoking cabi_realloc for memory deallocation
 ///
@@ -118,7 +118,7 @@ pub type CleanupCallback =
 /// Returns: Ok(new_ptr) on success
 #[cfg(feature = "std")]
 pub type ReallocCleanupCallback =
-    Box<dyn FnMut(u32, i32, i32, i32, i32) -> wrt_error::Result<i32> + Send>;
+    Box<dyn FnMut(u32, i32, i32, i32, i32) -> kiln_error::Result<i32> + Send>;
 
 /// Maximum number of cleanup tasks per instance in no_std
 const MAX_CLEANUP_TASKS_NO_STD: usize = 256;
@@ -241,35 +241,35 @@ impl PartialEq for PostReturnFunction {
 
 impl Eq for PostReturnFunction {}
 
-impl wrt_foundation::traits::Checksummable for PostReturnFunction {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for PostReturnFunction {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.func_index.update_checksum(checksum);
         self.executing.update_checksum(checksum);
         // Note: func_ref is not checksummed as it's a function pointer
     }
 }
 
-impl wrt_foundation::traits::ToBytes for PostReturnFunction {
+impl kiln_foundation::traits::ToBytes for PostReturnFunction {
     fn serialized_size(&self) -> usize {
         5 // 4 bytes for func_index + 1 byte for executing
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u32_le(self.func_index)?;
         writer.write_u8(self.executing as u8)?;
         Ok(())
     }
 }
 
-impl wrt_foundation::traits::FromBytes for PostReturnFunction {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for PostReturnFunction {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let func_index = reader.read_u32_le()?;
         let executing = reader.read_u8()? != 0;
         Ok(Self {
@@ -294,8 +294,8 @@ pub struct CleanupTask {
     pub data: CleanupData,
 }
 
-impl wrt_foundation::traits::Checksummable for CleanupTask {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CleanupTask {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.task_type.update_checksum(checksum);
         self.source_instance.0.update_checksum(checksum);
         self.priority.update_checksum(checksum);
@@ -303,12 +303,12 @@ impl wrt_foundation::traits::Checksummable for CleanupTask {
     }
 }
 
-impl wrt_runtime::ToBytes for CleanupTask {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for CleanupTask {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.task_type.to_bytes_with_provider(writer, provider)?;
         self.source_instance.0.to_bytes_with_provider(writer, provider)?;
         self.priority.to_bytes_with_provider(writer, provider)?;
@@ -316,11 +316,11 @@ impl wrt_runtime::ToBytes for CleanupTask {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for CleanupTask {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for CleanupTask {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -350,8 +350,8 @@ pub enum CleanupTaskType {
     FinalizeSubtask,
 }
 
-impl wrt_foundation::traits::Checksummable for CleanupTaskType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CleanupTaskType {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::DeallocateMemory => 0u8.update_checksum(checksum),
             Self::CloseResource => 1u8.update_checksum(checksum),
@@ -367,12 +367,12 @@ impl wrt_foundation::traits::Checksummable for CleanupTaskType {
     }
 }
 
-impl wrt_runtime::ToBytes for CleanupTaskType {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for CleanupTaskType {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::DeallocateMemory => 0u8.to_bytes_with_provider(writer, provider),
             Self::CloseResource => 1u8.to_bytes_with_provider(writer, provider),
@@ -388,11 +388,11 @@ impl wrt_runtime::ToBytes for CleanupTaskType {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for CleanupTaskType {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for CleanupTaskType {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let tag = u8::from_bytes_with_provider(reader, provider)?;
         Ok(match tag {
             0 => Self::DeallocateMemory,
@@ -480,8 +480,8 @@ impl Default for CleanupData {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for CleanupData {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CleanupData {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::Memory { ptr, size, align } => {
                 0u8.update_checksum(checksum);
@@ -587,12 +587,12 @@ impl wrt_foundation::traits::Checksummable for CleanupData {
     }
 }
 
-impl wrt_runtime::ToBytes for CleanupData {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for CleanupData {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::Memory { ptr, size, align } => {
                 0u8.to_bytes_with_provider(writer, provider)?;
@@ -637,11 +637,11 @@ impl wrt_runtime::ToBytes for CleanupData {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for CleanupData {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for CleanupData {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -686,7 +686,7 @@ pub struct PostReturnContext {
     pub custom_handlers: BoundedVec<
         (
             BoundedString<64>,
-            fn(&CleanupData) -> core::result::Result<(), wrt_error::Error>,
+            fn(&CleanupData) -> core::result::Result<(), kiln_error::Error>,
         ),
         MAX_CLEANUP_HANDLERS,
     >,
@@ -1603,7 +1603,7 @@ pub mod helpers {
         parameters: BoundedVec<ComponentValue<ComponentProvider>, 16>,
         priority: u8,
     ) -> Result<CleanupTask> {
-        use wrt_foundation::safe_memory::NoStdProvider;
+        use kiln_foundation::safe_memory::NoStdProvider;
 
         let provider = safe_managed_alloc!(512, CrateId::Component)?;
         let cleanup_id = BoundedString::try_from_str(cleanup_id).map_err(|_| {

@@ -1,11 +1,11 @@
-//! Test validation command for cargo-wrt
+//! Test validation command for cargo-kiln
 //!
-//! Provides comprehensive testing and validation of all cargo-wrt
+//! Provides comprehensive testing and validation of all cargo-kiln
 //! functionality to ensure reliability and correctness.
 
 use anyhow::Result;
 use colored::Colorize;
-use wrt_build_core::BuildSystem;
+use kiln_build_core::BuildSystem;
 
 use crate::helpers::{ErrorContext, GlobalArgs};
 #[cfg(test)]
@@ -80,7 +80,7 @@ async fn run_comprehensive_validation(
     {
         output.info("Comprehensive validation requires test configuration.");
         output.info("This would validate:");
-        output.indent("• All workspace types (WRT, Rust, single crate, empty)");
+        output.indent("• All workspace types (Kiln, Rust, single crate, empty)");
         output.indent("• Helper module functionality");
         output.indent("• Command integration");
         output.indent("• Performance characteristics");
@@ -361,7 +361,7 @@ async fn validate_error_handling(_args: &TestValidateArgs, global: &mut GlobalAr
 
 /// Validate output system
 async fn validate_output_system(_args: &TestValidateArgs, global: &mut GlobalArgs) -> Result<()> {
-    use wrt_build_core::formatters::OutputFormat;
+    use kiln_build_core::formatters::OutputFormat;
 
     use crate::helpers::{OutputManager, SimpleResponse};
 
@@ -403,12 +403,12 @@ async fn run_all_workspace_type_tests(
     output.info("Testing all workspace types...");
 
     let workspace_types = vec![
-        (WorkspaceType::WrtWorkspace, "WRT Workspace"),
+        (WorkspaceType::KilnWorkspace, "Kiln Workspace"),
         (
-            WorkspaceType::WrtCrate {
+            WorkspaceType::KilnCrate {
                 name: "test-crate".to_string(),
             },
-            "WRT Crate",
+            "Kiln Crate",
         ),
         (WorkspaceType::RustWorkspace, "Rust Workspace"),
         (WorkspaceType::RustCrate, "Rust Crate"),

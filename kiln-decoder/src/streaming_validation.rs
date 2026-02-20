@@ -25,7 +25,7 @@ use alloc::{
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
 /// Validation severity levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

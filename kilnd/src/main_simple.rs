@@ -1,7 +1,7 @@
-//! # WebAssembly Runtime Daemon (wrtd) - Simple Demo
+//! # WebAssembly Runtime Daemon (kilnd) - Simple Demo
 //!
-//! A demonstration of how wrtd works with different runtime modes.
-//! This is a simplified version showing the concepts without full wrt integration.
+//! A demonstration of how kilnd works with different runtime modes.
+//! This is a simplified version showing the concepts without full kiln integration.
 
 #![cfg_attr(not(feature = "std-runtime"), no_std)]
 #![forbid(unsafe_code)]
@@ -18,8 +18,8 @@ use std::{
 };
 
 #[cfg(feature = "std-runtime")]
-use crate::bounded_wrtd_infra::{
-    BoundedServiceMap, BoundedLogEntryVec, WrtdProvider,
+use crate::bounded_kilnd_infra::{
+    BoundedServiceMap, BoundedLogEntryVec, KilndProvider,
     new_service_map, new_log_entry_vec
 };
 
@@ -32,8 +32,8 @@ use std::{
 };
 
 #[cfg(feature = "alloc-runtime")]
-use crate::bounded_wrtd_infra::{
-    BoundedServiceMap, BoundedLogEntryVec, WrtdProvider,
+use crate::bounded_kilnd_infra::{
+    BoundedServiceMap, BoundedLogEntryVec, KilndProvider,
     new_service_map, new_log_entry_vec
 };
 
@@ -44,13 +44,13 @@ use heapless::{
 };
 
 #[cfg(feature = "nostd-runtime")]
-use crate::bounded_wrtd_infra::{
-    BoundedLogEntryVec, WrtdProvider, new_log_entry_vec
+use crate::bounded_kilnd_infra::{
+    BoundedLogEntryVec, KilndProvider, new_log_entry_vec
 };
 
 /// Configuration for the runtime daemon
 #[derive(Debug, Clone)]
-pub struct WrtdConfig {
+pub struct KilndConfig {
     /// Maximum fuel (execution steps) allowed
     pub max_fuel: u64,
     /// Maximum memory usage in bytes
@@ -59,7 +59,7 @@ pub struct WrtdConfig {
     pub verbose: bool,
 }
 
-impl Default for WrtdConfig {
+impl Default for KilndConfig {
     fn default() -> Self {
         Self {
             max_fuel: 10_000,
@@ -89,14 +89,14 @@ pub mod std_runtime {
     
     /// Standard runtime with full std support
     pub struct StdRuntime {
-        config: WrtdConfig,
+        config: KilndConfig,
         stats: Mutex<RuntimeStats>,
         module_cache: Mutex<BoundedServiceMap<BoundedLogEntryVec<u8>>>,
     }
     
     impl StdRuntime {
         /// Create a new standard runtime
-        pub fn new(config: WrtdConfig) -> Self {
+        pub fn new(config: KilndConfig) -> Self {
             Self {
                 config,
                 stats: Mutex::new(RuntimeStats::default()),
@@ -162,7 +162,7 @@ pub mod std_runtime {
     
     /// Main function for std runtime
     pub fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-        println!("WRT Daemon - Standard Runtime Mode");
+        println!("Kiln Daemon - Standard Runtime Mode");
         println!("=================================");
         
         let args: Vec<String> = env::args().collect();
@@ -174,7 +174,7 @@ pub mod std_runtime {
         let module_path = &args[1];
         let function = &args[2];
         
-        let config = WrtdConfig {
+        let config = KilndConfig {
             max_fuel: 1_000_000,
             max_memory: 64 * 1024 * 1024, // 64MB
             verbose: args.contains(&"--verbose".to_string()),
@@ -206,14 +206,14 @@ pub mod alloc_runtime {
     
     /// Binary std/no_std choice
     pub struct AllocRuntime {
-        config: WrtdConfig,
+        config: KilndConfig,
         stats: RuntimeStats,
         module_cache: BoundedServiceMap<BoundedLogEntryVec<u8>>,
     }
     
     impl AllocRuntime {
         /// Binary std/no_std choice
-        pub fn new(config: WrtdConfig) -> Self {
+        pub fn new(config: KilndConfig) -> Self {
             Self {
                 config,
                 stats: RuntimeStats::default(),
@@ -258,7 +258,7 @@ pub mod alloc_runtime {
         // Binary std/no_std choice
         // This would typically be called with pre-loaded module data
         
-        let config = WrtdConfig {
+        let config = KilndConfig {
             max_fuel: 100_000,
             max_memory: 1024 * 1024, // 1MB
             verbose: false,
@@ -287,7 +287,7 @@ pub mod nostd_runtime {
     
     /// No-std runtime for bare metal systems
     pub struct NoStdRuntime {
-        config: WrtdConfig,
+        config: KilndConfig,
         stats: RuntimeStats,
         // Using bounded collections with fixed capacity
         execution_log: BoundedLogEntryVec<u8>, // Log execution events
@@ -295,7 +295,7 @@ pub mod nostd_runtime {
     
     impl NoStdRuntime {
         /// Create a new no-std runtime
-        pub fn new(config: WrtdConfig) -> Self {
+        pub fn new(config: KilndConfig) -> Self {
             Self {
                 config,
                 stats: RuntimeStats::default(),
@@ -336,7 +336,7 @@ pub mod nostd_runtime {
     
     /// Main function for no-std runtime
     pub fn main() -> Result<(), u8> {
-        let config = WrtdConfig {
+        let config = KilndConfig {
             max_fuel: 10_000,
             max_memory: 64 * 1024, // 64KB
             verbose: false,

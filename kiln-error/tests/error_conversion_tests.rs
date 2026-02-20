@@ -1,6 +1,6 @@
 //! Tests for error conversion and `FromError` implementations
 
-use wrt_error::{
+use kiln_error::{
     Error, ErrorCategory, codes,
     kinds::{ComponentError, ParseError, ResourceError, RuntimeError, ValidationError},
 };

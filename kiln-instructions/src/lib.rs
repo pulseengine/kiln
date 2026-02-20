@@ -1,4 +1,4 @@
-//! WebAssembly instruction implementations for the WRT runtime.
+//! WebAssembly instruction implementations for the Kiln runtime.
 //!
 //! This crate provides implementations of WebAssembly instructions
 //! that can be used by various execution engines. It offers pure, stateless
@@ -20,7 +20,7 @@
 //! Each module provides pure implementations that can be used with the
 //! traits defined in `instruction_traits`.
 
-// WRT - wrt-instructions
+// Kiln - kiln-instructions
 // Module: WebAssembly Instruction Implementations
 // SW-REQ-ID: REQ_001
 //
@@ -37,7 +37,7 @@
 extern crate alloc;
 
 // Binary std/no_std choice
-// from wrt-foundation
+// from kiln-foundation
 
 // Import prelude for common type access
 pub mod prelude;
@@ -87,11 +87,11 @@ pub use control_ops::BranchTarget;
 // Re-exports for convenience
 // Re-export prelude for convenience
 pub use prelude::*;
-pub use wrt_error::{
+pub use kiln_error::{
     Error,
     Result,
 };
-pub use wrt_foundation::{
+pub use kiln_foundation::{
     types::ValueType,
     values::Value,
     BlockType,
@@ -213,7 +213,7 @@ pub use crate::{
 // Control(ControlOp), ... }
 
 // Panic handler disabled to avoid conflicts with other crates
-// // Provide a panic handler only when wrt-instructions is being tested in
+// // Provide a panic handler only when kiln-instructions is being tested in
 // isolation #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {

@@ -10,8 +10,8 @@ use core::{
     default::Default,
 };
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     bounded::{BoundedString, BoundedVec},
     bounded_collections::BoundedMap as BoundedHashMap,
     budget_aware_provider::CrateId,
@@ -60,7 +60,7 @@ pub type DebugProvider = NoStdProvider<DEBUG_PROVIDER_SIZE>;
 pub fn create_debug_string(s: &str) -> Result<BoundedString<MAX_FILE_PATH_LEN>> {
     let _guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     BoundedString::try_from_str(s)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create debug string"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create debug string"))
 }
 
 /// Create a debug-specific vector
@@ -70,7 +70,7 @@ where
 {
     let guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     BoundedVec::new(guard.clone())
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create debug vector"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create debug vector"))
 }
 
 /// Macro to simplify debug vector creation
@@ -139,9 +139,9 @@ pub type BoundedDebugString = BoundedString<MAX_DEBUG_STRING_LEN>;
 /// Create a new bounded stack trace vector
 pub fn new_stack_trace_vec<T>() -> Result<BoundedStackTraceVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -150,15 +150,15 @@ where
     let guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let provider = guard.clone();
     BoundedVec::new(provider)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create stack trace vector"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create stack trace vector"))
 }
 
 /// Create a new bounded source file vector
 pub fn new_source_file_vec<T>() -> Result<BoundedSourceFileVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -167,7 +167,7 @@ where
     let guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let provider = guard.clone();
     BoundedVec::new(provider)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create source file vector"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create source file vector"))
 }
 
 /// Create a new bounded file path
@@ -175,7 +175,7 @@ pub fn new_file_path() -> Result<BoundedFilePath> {
     let _guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let _provider = _guard.clone();
     BoundedString::try_from_str("")
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create file path"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create file path"))
 }
 
 /// Create a bounded file path from str
@@ -183,7 +183,7 @@ pub fn bounded_file_path_from_str(s: &str) -> Result<BoundedFilePath> {
     let _guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let _provider = _guard.clone();
     BoundedString::try_from_str(s)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create file path from str"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create file path from str"))
 }
 
 /// Create a new bounded function name
@@ -191,7 +191,7 @@ pub fn new_function_name() -> Result<BoundedFunctionName> {
     let _guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let _provider = _guard.clone();
     BoundedString::try_from_str("")
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create function name"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create function name"))
 }
 
 /// Create a bounded function name from str
@@ -199,15 +199,15 @@ pub fn bounded_function_name_from_str(s: &str) -> Result<BoundedFunctionName> {
     let _guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let _provider = _guard.clone();
     BoundedString::try_from_str(s)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create function name from str"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create function name from str"))
 }
 
 /// Create a new bounded breakpoint vector
 pub fn new_breakpoint_vec<T>() -> Result<BoundedBreakpointVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -216,15 +216,15 @@ where
     let guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let provider = guard.clone();
     BoundedVec::new(provider)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create breakpoint vector"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create breakpoint vector"))
 }
 
 /// Create a new bounded watch vector
 pub fn new_watch_vec<T>() -> Result<BoundedWatchVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -233,15 +233,15 @@ where
     let guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let provider = guard.clone();
     BoundedVec::new(provider)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create watch vector"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create watch vector"))
 }
 
 /// Create a new bounded locals debug vector
 pub fn new_locals_debug_vec<T>() -> Result<BoundedLocalsDebugVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -250,7 +250,7 @@ where
     let guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let provider = guard.clone();
     BoundedVec::new(provider)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create locals debug vector"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create locals debug vector"))
 }
 
 /// Create a new bounded debug type map
@@ -261,7 +261,7 @@ where
     let guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let provider = guard.clone();
     BoundedHashMap::new(provider)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create debug type map"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create debug type map"))
 }
 
 /// Create a new bounded source map
@@ -272,15 +272,15 @@ where
     let guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let provider = guard.clone();
     BoundedHashMap::new(provider)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create source map"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create source map"))
 }
 
 /// Create a new bounded diagnostic vector
 pub fn new_diagnostic_vec<T>() -> Result<BoundedDiagnosticVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -289,7 +289,7 @@ where
     let guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let provider = guard.clone();
     BoundedVec::new(provider)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create diagnostic vector"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create diagnostic vector"))
 }
 
 /// Create a new bounded diagnostic message
@@ -297,7 +297,7 @@ pub fn new_diagnostic_message() -> Result<BoundedDiagnosticMessage> {
     let _guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let _provider = _guard.clone();
     BoundedString::try_from_str("")
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create diagnostic message"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create diagnostic message"))
 }
 
 /// Create a bounded diagnostic message from str
@@ -305,7 +305,7 @@ pub fn bounded_diagnostic_from_str(s: &str) -> Result<BoundedDiagnosticMessage> 
     let _guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let _provider = _guard.clone();
     BoundedString::try_from_str(s).map_err(|_e| {
-        wrt_error::Error::memory_error("Failed to create diagnostic message from str")
+        kiln_error::Error::memory_error("Failed to create diagnostic message from str")
     })
 }
 
@@ -324,7 +324,7 @@ where
     let guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let provider = guard.clone();
     BoundedHashMap::new(provider)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create symbol map"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create symbol map"))
 }
 
 /// Create a new bounded debug string
@@ -332,7 +332,7 @@ pub fn new_debug_string() -> Result<BoundedString<MAX_DEBUG_STRING_LEN>> {
     let _guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let _provider = _guard.clone();
     BoundedString::try_from_str("")
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create debug string"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create debug string"))
 }
 
 /// Create a bounded debug string from str
@@ -340,5 +340,5 @@ pub fn bounded_debug_string_from_str(s: &str) -> Result<BoundedString<MAX_DEBUG_
     let _guard = safe_managed_alloc!(DEBUG_PROVIDER_SIZE, CrateId::Debug)?;
     let _provider = _guard.clone();
     BoundedString::try_from_str(s)
-        .map_err(|_| wrt_error::Error::memory_error("Failed to create debug string from str"))
+        .map_err(|_| kiln_error::Error::memory_error("Failed to create debug string from str"))
 }

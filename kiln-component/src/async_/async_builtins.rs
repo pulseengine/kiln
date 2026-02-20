@@ -16,12 +16,12 @@ use std::fmt;
 #[cfg(feature = "std")]
 use std::string::String;
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-type String = wrt_foundation::bounded::BoundedString<256>;
+type String = kiln_foundation::bounded::BoundedString<256>;
 
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 #[cfg(feature = "std")]
-use wrt_foundation::component_value::ComponentValue;
-use wrt_foundation::{
+use kiln_foundation::component_value::ComponentValue;
+use kiln_foundation::{
     MemoryProvider,
     bounded::BoundedString,
     budget_aware_provider::CrateId,
@@ -57,7 +57,7 @@ impl ToBytes for TaskHandle {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
@@ -66,7 +66,7 @@ impl FromBytes for TaskHandle {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u32::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -86,7 +86,7 @@ impl ToBytes for SubtaskHandle {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
@@ -95,7 +95,7 @@ impl FromBytes for SubtaskHandle {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u32::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -209,7 +209,7 @@ impl ToBytes for TaskInfo {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.handle.to_bytes_with_provider(writer, provider)?;
         // Add other fields as needed
         Ok(())
@@ -220,7 +220,7 @@ impl FromBytes for TaskInfo {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let handle = TaskHandle::from_bytes_with_provider(reader, provider)?;
         Ok(Self {
             handle,
@@ -265,7 +265,7 @@ impl ToBytes for SubtaskInfo {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.handle.to_bytes_with_provider(writer, provider)?;
         self.parent_task.to_bytes_with_provider(writer, provider)?;
         Ok(())
@@ -276,7 +276,7 @@ impl FromBytes for SubtaskInfo {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let handle = SubtaskHandle::from_bytes_with_provider(reader, provider)?;
         let parent_task = TaskHandle::from_bytes_with_provider(reader, provider)?;
         Ok(Self {
@@ -581,7 +581,7 @@ impl TaskRegistry {
                 task_info.context.push((key_bounded, value)).map_err(|_| {
                     Error::new(
                         ErrorCategory::Resource,
-                        wrt_error::codes::RESOURCE_EXHAUSTED,
+                        kiln_error::codes::RESOURCE_EXHAUSTED,
                         "Failed to add task context entry",
                     )
                 })?;
@@ -713,7 +713,7 @@ pub mod builtins {
         let mut registry = registry_mutex.lock().map_err(|_| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::CONCURRENCY_ERROR,
+                kiln_error::codes::CONCURRENCY_ERROR,
                 "Failed to acquire task registry lock",
             )
         })?;
@@ -762,7 +762,7 @@ pub mod builtins {
             Ok(handle) => Ok(ComponentValue::U32(handle.0)),
             Err(_) => Err(Error::new(
                 ErrorCategory::Resource,
-                wrt_error::codes::RESOURCE_EXHAUSTED,
+                kiln_error::codes::RESOURCE_EXHAUSTED,
                 "Failed to spawn task",
             )),
         }
@@ -782,7 +782,7 @@ pub mod builtins {
             Ok(handle) => Ok(ComponentValue::U32(handle.0)),
             Err(_) => Err(Error::new(
                 ErrorCategory::Resource,
-                wrt_error::codes::RESOURCE_EXHAUSTED,
+                kiln_error::codes::RESOURCE_EXHAUSTED,
                 "Failed to spawn task",
             )),
         }
@@ -809,7 +809,7 @@ pub mod builtins {
             Ok(handle) => Ok(ComponentValue::U32(handle.0)),
             Err(_) => Err(Error::new(
                 ErrorCategory::Resource,
-                wrt_error::codes::RESOURCE_EXHAUSTED,
+                kiln_error::codes::RESOURCE_EXHAUSTED,
                 "Failed to spawn subtask",
             )),
         }
@@ -831,7 +831,7 @@ pub mod builtins {
             Ok(handle) => Ok(ComponentValue::U32(handle.0)),
             Err(_) => Err(Error::new(
                 ErrorCategory::Resource,
-                wrt_error::codes::RESOURCE_EXHAUSTED,
+                kiln_error::codes::RESOURCE_EXHAUSTED,
                 "Failed to spawn subtask",
             )),
         }
@@ -978,7 +978,7 @@ pub mod builtins {
         } else {
             Err(Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::INVALID_OPERATION,
+                kiln_error::codes::INVALID_OPERATION,
                 "No current task context",
             ))
         }
@@ -994,7 +994,7 @@ pub mod builtins {
         } else {
             Err(Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::INVALID_OPERATION,
+                kiln_error::codes::INVALID_OPERATION,
                 "No current task context",
             ))
         }

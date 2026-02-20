@@ -1,7 +1,7 @@
 //! Runtime connector
 //!
 //! This module demonstrates how to use the clean interface between
-//! wrt-format and wrt-runtime, showing the complete flow from format
+//! kiln-format and kiln-runtime, showing the complete flow from format
 //! parsing to runtime initialization.
 
 use crate::prelude::*;
@@ -11,7 +11,7 @@ use crate::module::Module;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::safe_memory::NoStdProvider;
+use kiln_foundation::safe_memory::NoStdProvider;
 
 // Type aliases for no_std mode
 #[cfg(not(feature = "std"))]
@@ -19,7 +19,7 @@ type DefaultProvider = NoStdProvider<4096>;
 #[cfg(not(feature = "std"))]
 type Vec<T> = crate::WasmVec<T, DefaultProvider>;
 
-use wrt_foundation::traits::BoundedCapacity;
+use kiln_foundation::traits::BoundedCapacity;
 
 /// Connector that bridges format and runtime layers
 pub struct FormatRuntimeConnector;
@@ -344,7 +344,7 @@ pub fn example_usage() -> Result<RuntimePreparationSummary> {
     // Prepare for runtime
     let preparation_result = FormatRuntimeConnector::prepare_module_for_runtime(&module)?;
     
-    // The preparation_result can now be passed to wrt-runtime
+    // The preparation_result can now be passed to kiln-runtime
     // for actual initialization using the format_bridge module
     
     Ok(RuntimePreparationSummary {

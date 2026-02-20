@@ -1,17 +1,17 @@
-//! Test that safety features are properly enforced in wrt-wasi
+//! Test that safety features are properly enforced in kiln-wasi
 //!
 //! This test demonstrates that the safety-aware allocation macros
 //! properly enforce allocation limits based on configured safety level.
 
-use wrt_foundation::{
+use kiln_foundation::{
     memory_init::{
         init_crate_memory,
-        init_wrt_memory,
+        init_kiln_memory,
     },
     safe_managed_alloc,
     CrateId,
 };
-use wrt_wasi::{
+use kiln_wasi::{
     wasi_max_allocation_size,
     wasi_safety_level,
     WasiHostProvider,
@@ -50,7 +50,7 @@ fn test_allocation_size_limits() {
 #[test]
 fn test_safety_aware_allocation_enforcement() {
     // Initialize memory system first
-    init_wrt_memory().unwrap();
+    init_kiln_memory().unwrap();
     init_crate_memory(CrateId::Wasi).unwrap();
 
     // Try to allocate within limits
@@ -139,7 +139,7 @@ fn test_safety_level_override() {
 
 #[test]
 fn test_bounded_collections_in_capabilities() {
-    use wrt_wasi::WasiFileSystemCapabilities;
+    use kiln_wasi::WasiFileSystemCapabilities;
 
     // Test that bounded collections properly limit capacity
     let mut fs_caps = WasiFileSystemCapabilities::minimal().unwrap();

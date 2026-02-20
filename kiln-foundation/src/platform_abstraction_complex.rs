@@ -14,8 +14,8 @@
 #![forbid(unsafe_code)] // Platform abstractions must be safe
 
 use core::marker::PhantomData;
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_error::Result;use crate::safety_system::{SafetyContext, AsilLevel};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::Result;use crate::safety_system::{SafetyContext, AsilLevel};
 
 // Box for trait objects when allocation is available
 #[cfg(feature = "std")]

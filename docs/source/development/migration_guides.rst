@@ -2,7 +2,7 @@
 Migration Guides
 =================
 
-This section contains migration guides for various refactoring and improvement efforts in the WRT codebase.
+This section contains migration guides for various refactoring and improvement efforts in the Kiln codebase.
 
 .. contents:: Table of Contents
    :local:
@@ -14,7 +14,7 @@ Atomic Memory Operations Migration
 Background
 ~~~~~~~~~~
 
-A critical vulnerability was identified in the WRT memory safety implementation: bit flips can occur in the time window between writing data to memory and calculating/updating its checksum. This vulnerability can lead to undetected memory corruption, as the checksum doesn't accurately reflect the actual data state.
+A critical vulnerability was identified in the Kiln memory safety implementation: bit flips can occur in the time window between writing data to memory and calculating/updating its checksum. This vulnerability can lead to undetected memory corruption, as the checksum doesn't accurately reflect the actual data state.
 
 To address this issue, a new ``AtomicMemoryOps`` component has been implemented that ensures atomic operations for memory writes and checksum calculations using mutex-based synchronization.
 
@@ -40,7 +40,7 @@ Migration Steps
 
 Add the following import to your module::
 
-    use wrt_foundation::prelude::{AtomicMemoryOps, AtomicMemoryExt};
+    use kiln_foundation::prelude::{AtomicMemoryOps, AtomicMemoryExt};
 
 **2. For Existing SafeMemoryHandler Users**
 
@@ -119,7 +119,7 @@ No_std Compatibility
 
 The ``AtomicMemoryOps`` implementation is fully compatible with no_std environments:
 
-- Uses ``core::sync::atomic`` and ``wrt_sync::mutex`` for synchronization
+- Uses ``core::sync::atomic`` and ``kiln_sync::mutex`` for synchronization
 - Does not require heap allocations
 - Maintains compact memory footprint
 
@@ -138,7 +138,7 @@ Example Implementation
 
 ::
 
-    use wrt_foundation::prelude::{AtomicMemoryOps, AtomicMemoryExt, NoStdProvider};
+    use kiln_foundation::prelude::{AtomicMemoryOps, AtomicMemoryExt, NoStdProvider};
 
     // Create a provider
     let provider = NoStdProvider::<1024>::new();
@@ -156,13 +156,13 @@ Example Implementation
 
     assert_eq!(read_data, &data);
 
-Package Rename Migration (wrt-foundation)
+Package Rename Migration (kiln-foundation)
 -----------------------------------------
 
 Background
 ~~~~~~~~~~
 
-The ``wrt-foundation`` package needs to be renamed to ``wrt-foundation`` for consistency with the broader ecosystem naming conventions. Due to the complexity of the codebase and number of cross-dependencies, an incremental migration approach is required.
+The ``kiln-foundation`` package needs to be renamed to ``kiln-foundation`` for consistency with the broader ecosystem naming conventions. Due to the complexity of the codebase and number of cross-dependencies, an incremental migration approach is required.
 
 Migration Phases
 ~~~~~~~~~~~~~~~~
@@ -170,13 +170,13 @@ Migration Phases
 **Phase 1: Transition Package Setup** (Completed)
 
 - ✅ Create migration documentation
-- ✅ Create ``wrt-foundation`` with updated package metadata
-- ✅ Create ``wrt-foundation-transition`` package for backwards compatibility
+- ✅ Create ``kiln-foundation`` with updated package metadata
+- ✅ Create ``kiln-foundation-transition`` package for backwards compatibility
 - ✅ Update workspace configuration in root ``Cargo.toml``
 
 **Phase 2: Prepare Source Migration**
 
-1. Copy one module at a time from ``wrt-foundation`` to ``wrt-foundation`` and fix any errors
+1. Copy one module at a time from ``kiln-foundation`` to ``kiln-foundation`` and fix any errors
 
    Start with core modules that have minimal dependencies:
    
@@ -203,16 +203,16 @@ Migration Phases
 
 Update references in dependent crates one at a time:
 
-- wrt-error
-- wrt-sync
-- wrt-format
-- wrt-decoder
-- wrt-runtime
-- wrt-component
-- wrt-host
-- wrt-intercept
+- kiln-error
+- kiln-sync
+- kiln-format
+- kiln-decoder
+- kiln-runtime
+- kiln-component
+- kiln-host
+- kiln-intercept
 
-Fix import statements from ``wrt_foundation`` to ``wrt_foundation``.
+Fix import statements from ``kiln_foundation`` to ``kiln_foundation``.
 
 **Phase 4: Testing and Verification**
 
@@ -223,8 +223,8 @@ Fix import statements from ``wrt_foundation`` to ``wrt_foundation``.
 
 **Phase 5: Final Implementation**
 
-- Remove ``wrt-foundation`` crate completely
-- Keep only ``wrt-foundation`` and ``wrt-foundation-transition`` (for backward compatibility)
+- Remove ``kiln-foundation`` crate completely
+- Keep only ``kiln-foundation`` and ``kiln-foundation-transition`` (for backward compatibility)
 - Update documentation
 
 Recommendations
@@ -243,10 +243,10 @@ Recommendations
 Immediate Action Items
 ~~~~~~~~~~~~~~~~~~~~~~
 
-1. Fix the ``prelude.rs`` in ``wrt-foundation`` to ensure it correctly handles imports for both std and no_std environments
+1. Fix the ``prelude.rs`` in ``kiln-foundation`` to ensure it correctly handles imports for both std and no_std environments
 2. Address the cfg-gated constants like ``MAX_WASM_NAME_LENGTH``
 3. Fix duplicate imports and references
-4. Update dependent crates to use ``wrt-foundation`` instead of ``wrt-foundation``
+4. Update dependent crates to use ``kiln-foundation`` instead of ``kiln-foundation``
 
 This incremental approach will help manage the complexity of the migration and ensure a stable transition to the new naming.
 

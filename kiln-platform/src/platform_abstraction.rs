@@ -11,7 +11,7 @@
 
 use core::marker::PhantomData;
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 /// Platform paradigm marker types for compile-time dispatch
 pub mod paradigm {

@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Module: Enhanced Resource Management with Bounded Collections
 // SW-REQ-ID: REQ_RESOURCE_BOUNDED_001, REQ_RESOURCE_LIMITS_001, REQ_COMPONENT_RESOURCE_001
 //
@@ -42,7 +42,7 @@
 //! # Usage
 //!
 //! ```rust,no_run
-//! use wrt_component::bounded_resource_management::*;
+//! use kiln_component::bounded_resource_management::*;
 //!
 //! // Configure resource limits for embedded system
 //! let limits = BoundedResourceLimits::embedded();
@@ -54,14 +54,14 @@
 //!     component_id,
 //!     AsilLevel::AsilC
 //! )?;
-//! # Ok::<(), wrt_error::Error>(())
+//! # Ok::<(), kiln_error::Error>(())
 //! ```
 //!
 //! # Cross-References
 //! 
-//! - [`wrt_foundation::safety_system`]: ASIL safety level definitions
-//! - [`wrt_foundation::memory_system`]: Underlying memory provider hierarchy
-//! - [`wrt_host::bounded_host_integration`]: Host function resource limits
+//! - [`kiln_foundation::safety_system`]: ASIL safety level definitions
+//! - [`kiln_foundation::memory_system`]: Underlying memory provider hierarchy
+//! - [`kiln_host::bounded_host_integration`]: Host function resource limits
 //!
 //! # REQ Traceability
 //! 
@@ -76,7 +76,7 @@
 use crate::foundation_stubs::{SmallVec, MediumVec, SafetyContext, AsilLevel};
 use crate::platform_stubs::ComprehensivePlatformLimits;
 use crate::runtime_stubs::{ComponentId, InstanceId};
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 use alloc::boxed::Box;
 
 /// Resource limits configuration

@@ -1,7 +1,7 @@
 Creating External Platform Crates
 =================================
 
-This guide explains how to create your own external crate that implements WRT platform support. This approach allows you to support platforms that aren't included in the core WRT project, maintain your own release cycle, and keep platform-specific dependencies separate.
+This guide explains how to create your own external crate that implements Kiln platform support. This approach allows you to support platforms that aren't included in the core Kiln project, maintain your own release cycle, and keep platform-specific dependencies separate.
 
 .. contents:: Table of Contents
    :local:
@@ -13,11 +13,11 @@ Why Create an External Platform Crate?
 Creating an external platform crate is ideal when:
 
 - You need support for a proprietary or specialized platform
-- The platform has licensing incompatible with WRT's MIT license
+- The platform has licensing incompatible with Kiln's MIT license
 - You want to maintain your own release schedule
-- The platform requires heavy dependencies WRT doesn't want to include
+- The platform requires heavy dependencies Kiln doesn't want to include
 - You're experimenting with new platform support
-- You need platform-specific features beyond WRT's scope
+- You need platform-specific features beyond Kiln's scope
 
 Creating Your Platform Crate
 ----------------------------
@@ -27,8 +27,8 @@ Step 1: Create the Crate Structure
 
 .. code-block:: bash
 
-   cargo new wrt-platform-myos --lib
-   cd wrt-platform-myos
+   cargo new kiln-platform-myos --lib
+   cd kiln-platform-myos
 
 Step 2: Set Up Dependencies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -38,24 +38,24 @@ Edit ``Cargo.toml``:
 .. code-block:: toml
 
    [package]
-   name = "wrt-platform-myos"
+   name = "kiln-platform-myos"
    version = "0.1.0"
    edition = "2021"
    license = "MIT OR Apache-2.0"  # Choose your license
-   description = "MyOS platform support for WRT"
+   description = "MyOS platform support for Kiln"
    
    [dependencies]
-   # Core WRT dependencies - use minimal features
-   wrt-platform = { version = "0.2", default-features = false }
-   wrt-error = { version = "0.2", default-features = false }
+   # Core Kiln dependencies - use minimal features
+   kiln-platform = { version = "0.2", default-features = false }
+   kiln-error = { version = "0.2", default-features = false }
    
    # Your platform-specific dependencies
    # myos-sdk = "1.0"  # Example
    
    [features]
    default = ["std"]
-   std = ["wrt-platform/std", "wrt-error/std"]
-   alloc = ["wrt-platform/alloc", "wrt-error/alloc"]
+   std = ["kiln-platform/std", "kiln-error/std"]
+   alloc = ["kiln-platform/alloc", "kiln-error/alloc"]
    no_std = []
    
    # Your platform-specific features
@@ -72,9 +72,9 @@ Create ``src/lib.rs``:
 
 .. code-block:: rust
 
-   //! MyOS Platform Support for WRT
+   //! MyOS Platform Support for Kiln
    //! 
-   //! This crate provides MyOS-specific implementations of WRT's
+   //! This crate provides MyOS-specific implementations of Kiln's
    //! platform abstraction traits.
    
    #![cfg_attr(not(feature = "std"), no_std)]
@@ -82,8 +82,8 @@ Create ``src/lib.rs``:
    #[cfg(feature = "alloc")]
    extern crate alloc;
    
-   // Re-export core WRT traits for convenience
-   pub use wrt_platform::{PageAllocator, FutexLike, WASM_PAGE_SIZE};
+   // Re-export core Kiln traits for convenience
+   pub use kiln_platform::{PageAllocator, FutexLike, WASM_PAGE_SIZE};
    
    mod allocator;
    mod sync;
@@ -94,7 +94,7 @@ Create ``src/lib.rs``:
    pub use platform::{MyOsPlatform, MyOsConfig};
    
    /// Platform detection and initialization
-   pub fn detect_platform() -> Result<MyOsPlatform, wrt_error::Error> {
+   pub fn detect_platform() -> Result<MyOsPlatform, kiln_error::Error> {
        platform::MyOsPlatform::detect()
    }
 
@@ -106,8 +106,8 @@ Create ``src/allocator.rs``:
 .. code-block:: rust
 
    use core::ptr::NonNull;
-   use wrt_platform::{PageAllocator, WASM_PAGE_SIZE};
-   use wrt_error::{Error, ErrorKind};
+   use kiln_platform::{PageAllocator, WASM_PAGE_SIZE};
+   use kiln_error::{Error, ErrorKind};
    
    /// MyOS memory allocator
    pub struct MyOsAllocator {
@@ -330,8 +330,8 @@ Create ``src/sync.rs``:
 
    use core::sync::atomic::{AtomicU32, Ordering};
    use core::time::Duration;
-   use wrt_platform::FutexLike;
-   use wrt_error::{Error, ErrorKind};
+   use kiln_platform::FutexLike;
+   use kiln_error::{Error, ErrorKind};
    
    /// MyOS futex implementation
    pub struct MyOsFutex {
@@ -471,8 +471,8 @@ Create ``src/platform.rs``:
 .. code-block:: rust
 
    use crate::{MyOsAllocator, MyOsAllocatorBuilder, MyOsFutex, MyOsFutexBuilder};
-   use wrt_platform::{PageAllocator, FutexLike};
-   use wrt_error::Error;
+   use kiln_platform::{PageAllocator, FutexLike};
+   use kiln_error::Error;
    
    /// MyOS platform configuration
    #[derive(Clone, Debug)]
@@ -599,7 +599,7 @@ Create ``src/platform.rs``:
        pub fn recommended_memory_pages(&self) -> usize {
            // Use 25% of available memory for WASM
            let wasm_memory = self.capabilities.total_memory / 4;
-           wasm_memory / wrt_platform::WASM_PAGE_SIZE
+           wasm_memory / kiln_platform::WASM_PAGE_SIZE
        }
        
        pub fn supports_large_pages(&self) -> bool {
@@ -616,27 +616,27 @@ In Application Cargo.toml
 .. code-block:: toml
 
    [dependencies]
-   wrt = "0.2"
-   wrt-platform-myos = "0.1"
+   kiln = "0.2"
+   kiln-platform-myos = "0.1"
 
 Basic Usage Example
 ~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: rust
 
-   use wrt_platform_myos::{MyOsPlatform, MyOsConfig};
+   use kiln_platform_myos::{MyOsPlatform, MyOsConfig};
    
    fn main() -> Result<(), Box<dyn std::error::Error>> {
        // Detect and configure platform
        let platform = MyOsPlatform::detect()?;
        println!("Running on: {:?}", platform.capabilities());
        
-       // Create WRT components with MyOS platform
+       // Create Kiln components with MyOS platform
        let allocator = platform.create_allocator_boxed()?;
        let futex = platform.create_futex_boxed()?;
        
-       // Use with WRT runtime
-       let runtime = wrt::Runtime::builder()
+       // Use with Kiln runtime
+       let runtime = kiln::Runtime::builder()
            .with_allocator(allocator)
            .with_futex(futex)
            .build()?;
@@ -649,8 +649,8 @@ Advanced Integration Example
 
 .. code-block:: rust
 
-   use wrt_platform_myos::MyOsPlatform;
-   use wrt_platform::{PageAllocator, FutexLike};
+   use kiln_platform_myos::MyOsPlatform;
+   use kiln_platform::{PageAllocator, FutexLike};
    
    /// Generic function that works with any platform
    fn create_wasm_runtime<A, F>(
@@ -688,7 +688,7 @@ Unit Tests
    #[cfg(test)]
    mod tests {
        use super::*;
-       use wrt_platform::{PageAllocator, FutexLike};
+       use kiln_platform::{PageAllocator, FutexLike};
        
        #[test]
        fn test_allocator_basic() {
@@ -721,16 +721,16 @@ Create ``tests/integration.rs``:
 
 .. code-block:: rust
 
-   use wrt_platform_myos::MyOsPlatform;
-   use wrt_platform::{PageAllocator, FutexLike};
+   use kiln_platform_myos::MyOsPlatform;
+   use kiln_platform::{PageAllocator, FutexLike};
    
    #[test]
-   fn test_with_wrt_traits() {
+   fn test_with_kiln_traits() {
        fn generic_test<A: PageAllocator, F: FutexLike>(
            mut allocator: A,
            futex: F,
        ) {
-           // This ensures our types work with WRT's trait bounds
+           // This ensures our types work with Kiln's trait bounds
            let pages = allocator.allocate_pages(5).unwrap();
            futex.store(100, core::sync::atomic::Ordering::Relaxed);
            allocator.deallocate_pages(pages, 5).unwrap();
@@ -761,7 +761,7 @@ Design Considerations
 
 1. **Fallback Implementations**: Provide fallbacks for development on other platforms
 2. **Feature Flags**: Use features for optional functionality
-3. **Error Handling**: Use ``wrt_error::Error`` for consistency
+3. **Error Handling**: Use ``kiln_error::Error`` for consistency
 4. **Zero-Cost Abstractions**: Minimize runtime overhead
 5. **No Unwrap**: Never panic in production code
 
@@ -814,7 +814,7 @@ Configuration Pattern
            // Auto-detect optimal settings
            let caps = MyOsPlatform::detect_capabilities();
            self.config.max_memory_pages = 
-               caps.total_memory / wrt_platform::WASM_PAGE_SIZE / 4;
+               caps.total_memory / kiln_platform::WASM_PAGE_SIZE / 4;
            self
        }
        
@@ -884,10 +884,10 @@ Your crate can support multiple related platforms:
 Getting Help
 ------------
 
-- Review ``wrt-platform`` source for trait definitions
-- Look at existing platforms in ``wrt-platform/src/`` for patterns
-- Check the ``wrt-platform/examples/`` directory
-- Open issues on the WRT repository for questions
+- Review ``kiln-platform`` source for trait definitions
+- Look at existing platforms in ``kiln-platform/src/`` for patterns
+- Check the ``kiln-platform/examples/`` directory
+- Open issues on the Kiln repository for questions
 - Join community discussions about platform support
 
-Your external platform crate can provide first-class support for any platform while maintaining complete independence from the core WRT project!
+Your external platform crate can provide first-class support for any platform while maintaining complete independence from the core Kiln project!

@@ -2,7 +2,7 @@
 Formal Verification Guide
 =============================
 
-This guide explains how to work with KANI formal verification in WRT development, write verification properties, and integrate with the CI/CD pipeline.
+This guide explains how to work with KANI formal verification in Kiln development, write verification properties, and integrate with the CI/CD pipeline.
 
 .. contents:: On this page
    :local:
@@ -11,7 +11,7 @@ This guide explains how to work with KANI formal verification in WRT development
 Overview
 ========
 
-WRT uses KANI (Rust Model Checker) to mathematically prove safety properties. This provides the highest level of assurance for safety-critical code by exhaustively exploring all possible execution paths within specified bounds.
+Kiln uses KANI (Rust Model Checker) to mathematically prove safety properties. This provides the highest level of assurance for safety-critical code by exhaustively exploring all possible execution paths within specified bounds.
 
 Quick Start
 ===========
@@ -41,7 +41,7 @@ Running Verification
    ./scripts/kani-verify.sh
 
    # Run specific package
-   ./scripts/kani-verify.sh --package wrt-integration-tests
+   ./scripts/kani-verify.sh --package kiln-integration-tests
 
    # Run with ASIL-D (maximum verification)
    ./scripts/kani-verify.sh --profile asil-d
@@ -63,7 +63,7 @@ Every verification module follows this pattern:
    #![warn(missing_docs)]
    #![forbid(unsafe_code)]
    
-   use wrt_test_registry::prelude::*;
+   use kiln_test_registry::prelude::*;
    
    #[cfg(kani)]
    use kani;
@@ -485,7 +485,7 @@ If verification fails or times out:
 Conclusion
 ==========
 
-Formal verification with KANI provides mathematical proof of safety properties, giving the highest level of confidence in critical code. By following these guidelines, you can effectively write, maintain, and debug verification properties as part of the WRT development process.
+Formal verification with KANI provides mathematical proof of safety properties, giving the highest level of confidence in critical code. By following these guidelines, you can effectively write, maintain, and debug verification properties as part of the Kiln development process.
 
 **Key Takeaways:**
 

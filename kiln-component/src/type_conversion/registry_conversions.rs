@@ -3,11 +3,11 @@
 /// This module implements conversions between format and runtime types using
 /// the TypeConversionRegistry, providing a consistent and extensible approach
 /// to type conversion.
-use wrt_format::component::{ComponentTypeDefinition, ExternType as FormatExternType};
-// Note: wrt_format::component::ValType is actually wrt_foundation::component_value::ValType in std mode
+use kiln_format::component::{ComponentTypeDefinition, ExternType as FormatExternType};
+// Note: kiln_format::component::ValType is actually kiln_foundation::component_value::ValType in std mode
 // So we can't use it as an alias - we need to use the foundation type directly
-type FormatValType<P> = wrt_foundation::component_value::ValType<P>;
-use wrt_foundation::{
+type FormatValType<P> = kiln_foundation::component_value::ValType<P>;
+use kiln_foundation::{
     ExternType as TypesExternType,
     component::{ComponentType, InstanceType},
     component_value::ValType as TypesValType,
@@ -21,7 +21,7 @@ use std::string::String;
 
 // For no_std, override prelude's bounded::BoundedVec with StaticVec
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticVec as BoundedVec;
+use kiln_foundation::collections::StaticVec as BoundedVec;
 
 use super::{
     registry::{ConversionError, ConversionErrorKind, TypeConversionRegistry},

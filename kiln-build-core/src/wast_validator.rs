@@ -12,10 +12,10 @@
 
 use anyhow::{Context, Result, anyhow};
 use std::collections::HashSet;
-use wrt_format::module::{Function, Global, ImportDesc, Module};
-use wrt_format::pure_format_types::{PureElementInit, PureElementMode, PureElementSegment};
-use wrt_format::types::RefType;
-use wrt_foundation::ValueType;
+use kiln_format::module::{Function, Global, ImportDesc, Module};
+use kiln_format::pure_format_types::{PureElementInit, PureElementMode, PureElementSegment};
+use kiln_format::types::RefType;
+use kiln_foundation::ValueType;
 
 /// Type of a value on the stack
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,10 +123,10 @@ impl StackType {
     }
 
     /// Convert from RefType to StackType
-    fn from_ref_type(rt: wrt_foundation::RefType) -> Self {
+    fn from_ref_type(rt: kiln_foundation::RefType) -> Self {
         match rt {
-            wrt_foundation::RefType::Funcref => StackType::FuncRef,
-            wrt_foundation::RefType::Externref => StackType::ExternRef,
+            kiln_foundation::RefType::Funcref => StackType::FuncRef,
+            kiln_foundation::RefType::Externref => StackType::ExternRef,
         }
     }
 }
@@ -313,7 +313,7 @@ impl WastModuleValidator {
     fn get_function_type(
         module: &Module,
         func_idx: u32,
-    ) -> Result<&wrt_foundation::CleanCoreFuncType> {
+    ) -> Result<&kiln_foundation::CleanCoreFuncType> {
         let num_func_imports = Self::count_function_imports(module);
 
         if (func_idx as usize) < num_func_imports {
@@ -447,7 +447,7 @@ impl WastModuleValidator {
     /// Validate a function body bytecode
     fn validate_function_body(
         code: &[u8],
-        func_type: &wrt_foundation::CleanCoreFuncType,
+        func_type: &kiln_foundation::CleanCoreFuncType,
         locals: &[ValueType],
         module: &Module,
         declared_functions: &HashSet<u32>,
@@ -1123,7 +1123,7 @@ impl WastModuleValidator {
 
                     // Validate table element type is funcref (not externref)
                     if let Some(elem_type) = Self::get_table_element_type(module, table_idx) {
-                        if elem_type != wrt_foundation::RefType::Funcref {
+                        if elem_type != kiln_foundation::RefType::Funcref {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
@@ -1226,7 +1226,7 @@ impl WastModuleValidator {
 
                     // Validate table element type is funcref (not externref)
                     if let Some(elem_type) = Self::get_table_element_type(module, table_idx) {
-                        if elem_type != wrt_foundation::RefType::Funcref {
+                        if elem_type != kiln_foundation::RefType::Funcref {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
@@ -3500,7 +3500,7 @@ impl WastModuleValidator {
 
     /// Count the number of global imports in a module
     fn count_global_imports(module: &Module) -> usize {
-        // wrt_format::Module has imports as a Vec, so iteration works correctly
+        // kiln_format::Module has imports as a Vec, so iteration works correctly
         module
             .imports
             .iter()
@@ -3577,7 +3577,7 @@ impl WastModuleValidator {
     /// Table indices include both imported and defined tables:
     /// - Indices 0..N-1 are imported tables
     /// - Indices N+ are defined tables
-    fn get_table_element_type(module: &Module, table_idx: u32) -> Option<wrt_foundation::RefType> {
+    fn get_table_element_type(module: &Module, table_idx: u32) -> Option<kiln_foundation::RefType> {
         let num_table_imports = Self::count_table_imports(module);
 
         if (table_idx as usize) < num_table_imports {
@@ -3786,7 +3786,7 @@ impl WastModuleValidator {
 
         // Collect function indices from exports
         for export in &module.exports {
-            if export.kind == wrt_format::module::ExportKind::Function {
+            if export.kind == kiln_format::module::ExportKind::Function {
                 declared.insert(export.index);
             }
         }

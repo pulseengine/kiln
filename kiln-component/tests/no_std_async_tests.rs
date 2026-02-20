@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // No-std tests for async Component Model features
 // SW-REQ-ID: REQ_ASYNC_NO_STD_TESTS_001
 //
@@ -14,11 +14,11 @@
 #![cfg(all(test, not(feature = "std")))]
 #![no_std]
 
-extern crate wrt_component;
-extern crate wrt_foundation;
+extern crate kiln_component;
+extern crate kiln_foundation;
 
-use wrt_component::*;
-use wrt_foundation::{component_value::ComponentValue, types::ValueType};
+use kiln_component::*;
+use kiln_foundation::{component_value::ComponentValue, types::ValueType};
 
 #[test]
 fn test_async_context_no_std() {

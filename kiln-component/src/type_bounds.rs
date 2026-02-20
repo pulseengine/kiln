@@ -2,7 +2,7 @@
 use std::{collections::BTreeMap, vec::Vec};
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticMap as BTreeMap;
+use kiln_foundation::collections::StaticMap as BTreeMap;
 
 // Type aliases for no_std compatibility
 #[cfg(not(feature = "std"))]
@@ -11,8 +11,8 @@ type TypeBoundsMap<K, V> = BTreeMap<K, V, 64>;
 use core::fmt;
 
 #[cfg(feature = "std")]
-use wrt_foundation::component_value::ComponentValue;
-use wrt_foundation::{
+use kiln_foundation::component_value::ComponentValue;
+use kiln_foundation::{
     bounded::MAX_GENERATIVE_TYPES,
     budget_aware_provider::CrateId,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
@@ -81,9 +81,9 @@ pub enum RelationResult {
 }
 
 // Serialization trait implementations for TypeRelation
-use wrt_foundation::traits::{ReadStream, WriteStream};
-use wrt_foundation::{Checksum, MemoryProvider};
-use wrt_runtime::{Checksummable, FromBytes, ToBytes};
+use kiln_foundation::traits::{ReadStream, WriteStream};
+use kiln_foundation::{Checksum, MemoryProvider};
+use kiln_runtime::{Checksummable, FromBytes, ToBytes};
 
 impl Checksummable for TypeRelation {
     fn update_checksum(&self, checksum: &mut Checksum) {
@@ -107,7 +107,7 @@ impl ToBytes for TypeRelation {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.sub_type.to_bytes_with_provider(writer, provider)?;
         self.super_type.to_bytes_with_provider(writer, provider)?;
         let kind_byte = match self.relation_kind {
@@ -129,7 +129,7 @@ impl FromBytes for TypeRelation {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let sub_type = TypeId::from_bytes_with_provider(reader, provider)?;
         let super_type = TypeId::from_bytes_with_provider(reader, provider)?;
         let kind_byte = u8::from_bytes_with_provider(reader, provider)?;
@@ -169,7 +169,7 @@ impl ToBytes for RelationResult {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let byte = match self {
             RelationResult::Satisfied => 0u8,
             RelationResult::Violated => 1u8,
@@ -183,7 +183,7 @@ impl FromBytes for RelationResult {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = u8::from_bytes_with_provider(reader, provider)?;
         Ok(match byte {
             0 => RelationResult::Satisfied,

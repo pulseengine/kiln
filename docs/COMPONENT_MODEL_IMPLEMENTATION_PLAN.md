@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document provides a comprehensive implementation plan for proper Component Model support in WRT. The current implementation is **Flickschusterei** (patchwork) - infrastructure exists but execution paths are hollow. Hello World works only because it uses primitives that bypass the Component Model entirely.
+This document provides a comprehensive implementation plan for proper Component Model support in Kiln. The current implementation is **Flickschusterei** (patchwork) - infrastructure exists but execution paths are hollow. Hello World works only because it uses primitives that bypass the Component Model entirely.
 
 ### Current State Assessment
 
@@ -32,7 +32,7 @@ The hello-world component prints successfully because:
 
 ### 1.1 Current Problem
 
-In `wrt-runtime/src/stackless/engine.rs`, WASI calls are dispatched directly:
+In `kiln-runtime/src/stackless/engine.rs`, WASI calls are dispatched directly:
 ```rust
 // Line ~3397
 wasip2_host.dispatch(module_name, field_name, args, Some(&mut mem_buffer))
@@ -44,7 +44,7 @@ This bypasses `CanonicalExecutor::execute_canon_lower()` entirely. The `args` he
 
 #### Step 1: Create Canonical Call Context
 ```rust
-// New file: wrt-runtime/src/canonical_call.rs
+// New file: kiln-runtime/src/canonical_call.rs
 pub struct CanonicalCallContext<'a> {
     pub memory: &'a mut [u8],
     pub realloc: Option<u32>,  // realloc function index
@@ -105,7 +105,7 @@ fn execute_import(&mut self, ...) {
 
 #### Step 3: Implement lift_values/lower_values
 
-The `CanonicalABI` struct in `wrt-component/src/canonical_abi/canonical_abi.rs` has individual `lift_*` and `lower_*` methods, but needs batch operations:
+The `CanonicalABI` struct in `kiln-component/src/canonical_abi/canonical_abi.rs` has individual `lift_*` and `lower_*` methods, but needs batch operations:
 
 ```rust
 impl CanonicalABI {
@@ -140,10 +140,10 @@ impl CanonicalABI {
 
 | File | Changes |
 |------|---------|
-| `wrt-runtime/src/stackless/engine.rs` | Add canonical call integration at import dispatch |
-| `wrt-component/src/canonical_abi/canonical_abi.rs` | Add `lift_values`, `lower_values` batch methods |
-| `wrt-component/src/canonical_executor.rs` | Implement `execute_canon_lift` properly |
-| `wrt-runtime/src/wasip2_host.rs` | Accept `ComponentValue` instead of `Value` |
+| `kiln-runtime/src/stackless/engine.rs` | Add canonical call integration at import dispatch |
+| `kiln-component/src/canonical_abi/canonical_abi.rs` | Add `lift_values`, `lower_values` batch methods |
+| `kiln-component/src/canonical_executor.rs` | Implement `execute_canon_lift` properly |
+| `kiln-runtime/src/wasip2_host.rs` | Accept `ComponentValue` instead of `Value` |
 
 ### 1.4 Test Cases
 
@@ -159,7 +159,7 @@ impl CanonicalABI {
 
 ### 2.1 Current Problem
 
-The `ComponentLinker` in `wrt-component/src/components/component_instantiation.rs` defines structures but:
+The `ComponentLinker` in `kiln-component/src/components/component_instantiation.rs` defines structures but:
 - `instantiate()` creates standalone instances
 - No instance-to-instance linking
 - All imports resolve to host or fail
@@ -264,9 +264,9 @@ impl ComponentRegistry {
 
 | File | Changes |
 |------|---------|
-| `wrt-component/src/components/component_instantiation.rs` | Implement `ComponentRegistry` |
-| `wrt-component/src/components/component_linker.rs` | Add dependency resolution |
-| `wrt-runtime/src/stackless/engine.rs` | Add cross-instance dispatch |
+| `kiln-component/src/components/component_instantiation.rs` | Implement `ComponentRegistry` |
+| `kiln-component/src/components/component_linker.rs` | Add dependency resolution |
+| `kiln-runtime/src/stackless/engine.rs` | Add cross-instance dispatch |
 
 ---
 
@@ -278,7 +278,7 @@ impl ComponentRegistry {
 
 Resources are just u32 handles with no ownership tracking:
 ```rust
-// Current implementation in wrt-component/src/resource_management.rs
+// Current implementation in kiln-component/src/resource_management.rs
 pub struct ResourceHandle(pub u32);
 ```
 
@@ -435,9 +435,9 @@ impl CanonicalABI {
 
 | File | Changes |
 |------|---------|
-| `wrt-component/src/resource_management.rs` | Implement `ResourceTable` with ownership |
-| `wrt-component/src/canonical_abi/canonical_abi.rs` | Add `lift_own`, `lift_borrow`, `lower_own`, `lower_borrow` |
-| `wrt-runtime/src/wasip2_host.rs` | Use resource table for WASI handles |
+| `kiln-component/src/resource_management.rs` | Implement `ResourceTable` with ownership |
+| `kiln-component/src/canonical_abi/canonical_abi.rs` | Add `lift_own`, `lift_borrow`, `lower_own`, `lower_borrow` |
+| `kiln-runtime/src/wasip2_host.rs` | Use resource table for WASI handles |
 
 ---
 
@@ -534,10 +534,10 @@ impl CompositionBuilder {
 
 | File | Changes |
 |------|---------|
-| `wrt-component/src/wit/type_registry.rs` | NEW: Type registry |
-| `wrt-component/src/wit/compatibility.rs` | NEW: Type compatibility checking |
-| `wrt-component/src/composition.rs` | NEW: Composition builder |
-| `wrt-component/src/components/component_linker.rs` | Integrate type checking |
+| `kiln-component/src/wit/type_registry.rs` | NEW: Type registry |
+| `kiln-component/src/wit/compatibility.rs` | NEW: Type compatibility checking |
+| `kiln-component/src/composition.rs` | NEW: Composition builder |
+| `kiln-component/src/components/component_linker.rs` | Integrate type checking |
 
 ---
 
@@ -622,7 +622,7 @@ Phase 4 (Multi-Component Composition)
 
 ## Conclusion
 
-The current WRT Component Model implementation is a facade. Making it real requires:
+The current Kiln Component Model implementation is a facade. Making it real requires:
 
 1. **Route all calls through Canonical ABI** - not just documentation, actual execution
 2. **Implement component linking** - instances resolving imports from other instances

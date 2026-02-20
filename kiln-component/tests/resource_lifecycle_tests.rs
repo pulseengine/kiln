@@ -1,6 +1,6 @@
 //! Comprehensive tests for the resource lifecycle implementation
 
-use wrt_component::{
+use kiln_component::{
     borrowed_handles::{BorrowHandle, HandleLifetimeTracker, OwnHandle, with_lifetime_scope},
     resource_lifecycle_management::{
         ComponentId, DropHandlerFunction, LifecyclePolicies, ResourceCreateRequest, ResourceId,
@@ -69,7 +69,7 @@ fn test_handle_lifetime_tracking() {
         let validation = tracker.validate_borrow(&borrowed);
         assert!(matches!(
             validation,
-            wrt_component::borrowed_handles::BorrowValidation::Valid
+            kiln_component::borrowed_handles::BorrowValidation::Valid
         ));
 
         // Return borrowed handle for testing
@@ -82,7 +82,7 @@ fn test_handle_lifetime_tracking() {
     let validation = tracker.validate_borrow(&borrowed);
     assert!(matches!(
         validation,
-        wrt_component::borrowed_handles::BorrowValidation::ScopeEnded
+        kiln_component::borrowed_handles::BorrowValidation::ScopeEnded
     ));
 
     // Cleanup tracker
@@ -145,7 +145,7 @@ fn test_subtask_management() {
     // Spawn subtask
     let subtask_token = manager
         .spawn_subtask(
-            wrt_component::async_execution_engine::ExecutionId(1),
+            kiln_component::async_execution_engine::ExecutionId(1),
             TaskId(2),
             &parent_token,
         )
@@ -157,24 +157,24 @@ fn test_subtask_management() {
     assert_eq!(stats.active, 1);
 
     // Update subtask state
-    use wrt_component::task_cancellation::SubtaskState;
+    use kiln_component::task_cancellation::SubtaskState;
     manager
         .update_subtask_state(
-            wrt_component::async_execution_engine::ExecutionId(1),
+            kiln_component::async_execution_engine::ExecutionId(1),
             SubtaskState::Running,
         )
         .unwrap();
 
     // Cancel subtask
     manager
-        .cancel_subtask(wrt_component::async_execution_engine::ExecutionId(1))
+        .cancel_subtask(kiln_component::async_execution_engine::ExecutionId(1))
         .unwrap();
     assert!(subtask_token.is_cancelled());
 
     // Complete subtask
     manager
         .update_subtask_state(
-            wrt_component::async_execution_engine::ExecutionId(1),
+            kiln_component::async_execution_engine::ExecutionId(1),
             SubtaskState::Cancelled,
         )
         .unwrap();

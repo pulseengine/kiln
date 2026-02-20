@@ -12,13 +12,13 @@ Architecture Layers
    @startuml
    !define LAYER(name,desc) rectangle name as desc
    
-   LAYER(APP, "Application Layer\n(wrtd, user apps)")
-   LAYER(LIB, "Library Facade\n(wrt)")
-   LAYER(COMP, "Component Model\n(wrt-component)")
-   LAYER(RUNTIME, "Runtime Layer\n(wrt-runtime, wrt-instructions)")
-   LAYER(DECODE, "Decoding Layer\n(wrt-decoder)")
-   LAYER(FOUND, "Foundation Layer\n(wrt-foundation, wrt-error)")
-   LAYER(PLATFORM, "Platform Layer\n(wrt-platform, wrt-sync)")
+   LAYER(APP, "Application Layer\n(kilnd, user apps)")
+   LAYER(LIB, "Library Facade\n(kiln)")
+   LAYER(COMP, "Component Model\n(kiln-component)")
+   LAYER(RUNTIME, "Runtime Layer\n(kiln-runtime, kiln-instructions)")
+   LAYER(DECODE, "Decoding Layer\n(kiln-decoder)")
+   LAYER(FOUND, "Foundation Layer\n(kiln-foundation, kiln-error)")
+   LAYER(PLATFORM, "Platform Layer\n(kiln-platform, kiln-sync)")
    
    APP --> LIB
    LIB --> COMP
@@ -37,7 +37,7 @@ Layer Responsibilities
 Platform Layer (Bottom)
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-**Crates**: ``wrt-platform``, ``wrt-sync``
+**Crates**: ``kiln-platform``, ``kiln-sync``
 
 **Purpose**: Abstracts OS and hardware differences
 
@@ -65,7 +65,7 @@ Platform Layer (Bottom)
 Foundation Layer
 ~~~~~~~~~~~~~~~~
 
-**Crates**: ``wrt-foundation``, ``wrt-error``, ``wrt-math``
+**Crates**: ``kiln-foundation``, ``kiln-error``, ``kiln-math``
 
 **Purpose**: Core types and utilities used throughout the system
 
@@ -90,7 +90,7 @@ Foundation Layer
 Decoding Layer
 ~~~~~~~~~~~~~~
 
-**Crates**: ``wrt-decoder``, ``wrt-format``
+**Crates**: ``kiln-decoder``, ``kiln-format``
 
 **Purpose**: Parse and validate WebAssembly binaries
 
@@ -112,7 +112,7 @@ Decoding Layer
 Runtime Layer
 ~~~~~~~~~~~~~
 
-**Crates**: ``wrt-runtime``, ``wrt-instructions``
+**Crates**: ``kiln-runtime``, ``kiln-instructions``
 
 **Purpose**: Execute WebAssembly code
 
@@ -126,7 +126,7 @@ Runtime Layer
 Component Model Layer
 ~~~~~~~~~~~~~~~~~~~~~
 
-**Crates**: ``wrt-component``
+**Crates**: ``kiln-component``
 
 **Purpose**: Implement WebAssembly Component Model
 
@@ -139,7 +139,7 @@ Component Model Layer
 Library Facade Layer
 ~~~~~~~~~~~~~~~~~~~~
 
-**Crates**: ``wrt``
+**Crates**: ``kiln``
 
 **Purpose**: Unified API for users
 
@@ -152,10 +152,10 @@ Library Facade Layer
 Application Layer (Top)
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-**Crates**: ``wrtd``, user applications
+**Crates**: ``kilnd``, user applications
 
 **Examples**:
-- CLI daemon (wrtd)
+- CLI daemon (kilnd)
 - Embedded applications
 - Cloud services
 - Test harnesses
@@ -168,13 +168,13 @@ Cross-Layer Communication
 .. code-block:: rust
 
    // Lower layer provides trait
-   // wrt-platform/src/lib.rs
+   // kiln-platform/src/lib.rs
    pub trait PageAllocator {
        fn allocate(&mut self, pages: usize) -> Result<*mut u8>;
    }
    
    // Higher layer uses trait
-   // wrt-runtime/src/memory.rs
+   // kiln-runtime/src/memory.rs
    pub struct Memory<A: PageAllocator> {
        allocator: A,
        pages: Vec<Page>,

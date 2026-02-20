@@ -1,7 +1,7 @@
 //! Configuration management utilities
 //!
 //! Provides functions for loading configuration files, merging global
-//! arguments, and handling default values consistently across cargo-wrt
+//! arguments, and handling default values consistently across cargo-kiln
 //! commands.
 
 use std::path::{Path, PathBuf};
@@ -12,9 +12,9 @@ use serde::{Deserialize, Serialize};
 use super::validation::validate_file_path;
 use crate::Cli;
 
-/// Standard configuration structure for cargo-wrt
+/// Standard configuration structure for cargo-kiln
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CargoWrtConfig {
+pub struct CargoKilnConfig {
     /// Default output format preference
     pub output_format: Option<String>,
 
@@ -44,7 +44,7 @@ pub struct DiagnosticFilters {
     pub default_file_patterns: Option<Vec<String>>,
 }
 
-impl Default for CargoWrtConfig {
+impl Default for CargoKilnConfig {
     fn default() -> Self {
         Self {
             output_format: Some("human".to_string()),
@@ -59,11 +59,11 @@ impl Default for CargoWrtConfig {
 }
 
 /// Load configuration from file if it exists
-pub fn load_config_file(workspace_root: &Path) -> Result<CargoWrtConfig> {
+pub fn load_config_file(workspace_root: &Path) -> Result<CargoKilnConfig> {
     let config_paths = [
-        workspace_root.join(".cargo-wrt.toml"),
-        workspace_root.join("cargo-wrt.toml"),
-        workspace_root.join(".config").join("cargo-wrt.toml"),
+        workspace_root.join(".cargo-kiln.toml"),
+        workspace_root.join("cargo-kiln.toml"),
+        workspace_root.join(".config").join("cargo-kiln.toml"),
     ];
 
     for config_path in &config_paths {
@@ -72,7 +72,7 @@ pub fn load_config_file(workspace_root: &Path) -> Result<CargoWrtConfig> {
                 format!("Failed to read config file: {}", config_path.display())
             })?;
 
-            let config: CargoWrtConfig = toml::from_str(&content).with_context(|| {
+            let config: CargoKilnConfig = toml::from_str(&content).with_context(|| {
                 format!("Failed to parse config file: {}", config_path.display())
             })?;
 
@@ -81,11 +81,11 @@ pub fn load_config_file(workspace_root: &Path) -> Result<CargoWrtConfig> {
     }
 
     // Return default configuration if no file found
-    Ok(CargoWrtConfig::default())
+    Ok(CargoKilnConfig::default())
 }
 
 /// Merge global CLI arguments with configuration file settings
-pub fn merge_global_args(cli: &Cli, config: &CargoWrtConfig) -> MergedConfig {
+pub fn merge_global_args(cli: &Cli, config: &CargoKilnConfig) -> MergedConfig {
     MergedConfig {
         cache_enabled: cli.cache || config.enable_cache.unwrap_or(false),
         clear_cache: cli.clear_cache,
@@ -119,7 +119,7 @@ pub struct MergedConfig {
     pub filter_severity: Option<Vec<String>>,
     pub filter_source: Option<Vec<String>>,
     pub filter_file: Option<Vec<String>>,
-    pub group_by: Option<wrt_build_core::filtering::GroupBy>,
+    pub group_by: Option<kiln_build_core::filtering::GroupBy>,
     pub limit: Option<usize>,
     pub verbose: bool,
     pub dry_run: bool,
@@ -157,7 +157,7 @@ where
 
 /// Initialize a sample configuration file
 pub fn init_config_file(workspace_root: &Path, force: bool) -> Result<PathBuf> {
-    let config_path = workspace_root.join(".cargo-wrt.toml");
+    let config_path = workspace_root.join(".cargo-kiln.toml");
 
     if config_path.exists() && !force {
         return Err(anyhow::anyhow!(
@@ -166,7 +166,7 @@ pub fn init_config_file(workspace_root: &Path, force: bool) -> Result<PathBuf> {
         ));
     }
 
-    let default_config = CargoWrtConfig::default();
+    let default_config = CargoKilnConfig::default();
     let content = toml::to_string_pretty(&default_config)
         .context("Failed to serialize default configuration")?;
 
@@ -177,7 +177,7 @@ pub fn init_config_file(workspace_root: &Path, force: bool) -> Result<PathBuf> {
 }
 
 /// Get the browser command from config or system default
-pub fn get_browser_command(config: &CargoWrtConfig) -> Option<String> {
+pub fn get_browser_command(config: &CargoKilnConfig) -> Option<String> {
     if let Some(ref browser) = config.browser_command {
         return Some(browser.clone());
     }
@@ -211,7 +211,7 @@ pub fn get_browser_command(config: &CargoWrtConfig) -> Option<String> {
 }
 
 /// Open a file or URL in the system browser
-pub fn open_in_browser(path_or_url: &str, config: &CargoWrtConfig) -> Result<()> {
+pub fn open_in_browser(path_or_url: &str, config: &CargoKilnConfig) -> Result<()> {
     let browser_cmd = get_browser_command(config)
         .ok_or_else(|| anyhow::anyhow!("No browser command available"))?;
 
@@ -227,12 +227,12 @@ pub fn open_in_browser(path_or_url: &str, config: &CargoWrtConfig) -> Result<()>
 pub fn create_and_open_html_report(
     report_content: &str,
     report_name: &str,
-    config: &CargoWrtConfig,
+    config: &CargoKilnConfig,
     auto_open: bool,
     output: &super::OutputManager,
 ) -> Result<PathBuf> {
     // Create temp directory if it doesn't exist
-    let temp_dir = std::env::temp_dir().join("cargo-wrt-reports");
+    let temp_dir = std::env::temp_dir().join("cargo-kiln-reports");
     std::fs::create_dir_all(&temp_dir)
         .context("Failed to create temp directory for HTML reports")?;
 

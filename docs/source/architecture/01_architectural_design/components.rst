@@ -62,7 +62,7 @@ Runtime Core
 
 .. arch_component:: Runtime Core
    :id: ARCH_COMP_001
-   :crate: wrt-runtime
+   :crate: kiln-runtime
    :implements: REQ_001, REQ_002, REQ_CORE_001, ARCH_REQ_001, ARCH_REQ_002
    :provides: ARCH_IF_001, ARCH_IF_002
    :requires: ARCH_IF_010, ARCH_IF_011
@@ -77,7 +77,7 @@ Runtime Core
 
 .. code-block:: rust
 
-   // From wrt-runtime/src/lib.rs
+   // From kiln-runtime/src/lib.rs
    pub trait EngineBehavior {
        fn execute_instruction(&mut self, instr: Instruction) -> Result<()>;
        fn get_module_instance(&self, idx: usize) -> Option<&ModuleInstance>;
@@ -93,7 +93,7 @@ Runtime Core
 **Environment Support**:
 
 - **std**: Full threading with `Arc<Mutex<T>>`
-- **no_std + alloc**: Uses `wrt_sync::Mutex` 
+- **no_std + alloc**: Uses `kiln_sync::Mutex` 
 - **no_std + no_alloc**: Static instance pools with bounded capacity
 
 Memory Manager
@@ -101,7 +101,7 @@ Memory Manager
 
 .. arch_component:: Memory Manager
    :id: ARCH_COMP_002
-   :crate: wrt-foundation
+   :crate: kiln-foundation
    :implements: REQ_MEM_001, REQ_MEM_SAFETY_001, ARCH_REQ_004, ARCH_REQ_005
    :provides: ARCH_IF_020, ARCH_IF_021
    :status: implemented
@@ -113,7 +113,7 @@ Memory Manager
 
 .. code-block:: rust
 
-   // From wrt-foundation/src/safe_memory.rs
+   // From kiln-foundation/src/safe_memory.rs
    pub trait MemoryProvider: Clone + PartialEq + Eq {
        fn len(&self) -> usize;
        fn read_bytes(&self, offset: usize, length: usize) -> Result<&[u8]>;
@@ -134,7 +134,7 @@ Component Model Runtime
 
 .. arch_component:: Component Runtime
    :id: ARCH_COMP_003
-   :crate: wrt-component
+   :crate: kiln-component
    :implements: REQ_COMP_001, REQ_COMP_002
    :provides: ARCH_IF_030
    :requires: ARCH_IF_001, ARCH_IF_020
@@ -146,7 +146,7 @@ Component Model Runtime
 
 .. code-block:: rust
 
-   // From wrt-component/src/lib.rs
+   // From kiln-component/src/lib.rs
    pub trait ComponentInstance {
        fn instantiate(component: &Component, imports: Imports) -> Result<Self>;
        fn export(&self, name: &str) -> Option<Export>;
@@ -158,7 +158,7 @@ Decoder Component
 
 .. arch_component:: Binary Decoder
    :id: ARCH_COMP_004
-   :crate: wrt-decoder
+   :crate: kiln-decoder
    :implements: REQ_DECODE_001
    :provides: ARCH_IF_040
    :status: implemented
@@ -169,7 +169,7 @@ Decoder Component
 
 .. code-block:: rust
 
-   // From wrt-decoder/src/decoder_no_alloc.rs
+   // From kiln-decoder/src/decoder_no_alloc.rs
    pub const MAX_MODULE_SIZE: usize = 65536; // 64KB
    
    pub struct NoAllocDecoder<const N: usize> {
@@ -182,7 +182,7 @@ Platform Abstraction Layer
 
 .. arch_component:: Platform Layer
    :id: ARCH_COMP_005
-   :crate: wrt-platform
+   :crate: kiln-platform
    :implements: REQ_PLATFORM_001
    :provides: ARCH_IF_050, ARCH_IF_051
    :status: implemented
@@ -193,7 +193,7 @@ Platform Abstraction Layer
 
 .. code-block:: rust
 
-   // From wrt-platform/src/lib.rs
+   // From kiln-platform/src/lib.rs
    pub trait PageAllocator {
        fn allocate(&mut self, pages: usize) -> Result<*mut u8>;
        fn deallocate(&mut self, ptr: *mut u8, pages: usize) -> Result<()>;
@@ -213,7 +213,7 @@ Error Management
 
 .. arch_component:: Error System
    :id: ARCH_COMP_010
-   :crate: wrt-error
+   :crate: kiln-error
    :implements: REQ_ERROR_001
    :provides: ARCH_IF_100
    :status: implemented
@@ -222,7 +222,7 @@ Error Management
 
 .. code-block:: rust
 
-   // From wrt-error/src/kinds.rs
+   // From kiln-error/src/kinds.rs
    pub enum ErrorCategory {
        Validation,
        Runtime,
@@ -238,7 +238,7 @@ Instruction Execution
 
 .. arch_component:: Instruction Set
    :id: ARCH_COMP_011
-   :crate: wrt-instructions
+   :crate: kiln-instructions
    :implements: REQ_EXEC_001
    :requires: ARCH_IF_001
    :status: implemented
@@ -257,7 +257,7 @@ Bounded Collections
 
 .. arch_component:: Bounded Collections
    :id: ARCH_COMP_012
-   :crate: wrt-foundation
+   :crate: kiln-foundation
    :feature: no_alloc
    :implements: REQ_BOUNDED_001
    :status: implemented
@@ -266,7 +266,7 @@ Bounded Collections
 
 .. code-block:: rust
 
-   // Actual constants from wrt-foundation/src/bounded.rs
+   // Actual constants from kiln-foundation/src/bounded.rs
    pub const MAX_WASM_NAME_LENGTH: usize = 255;
    pub const MAX_BUFFER_SIZE: usize = 65536;
    

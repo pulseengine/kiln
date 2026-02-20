@@ -4,7 +4,7 @@
 use crate::foundation_stubs::{AsilLevel, MediumVec, SafetyContext, SmallVec};
 use crate::platform_stubs::{ComprehensivePlatformLimits, PlatformId};
 use crate::runtime_stubs::{ComponentId, ExecutionContext, InstanceId, WasmConfiguration};
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 
 use crate::prelude::*;
 
@@ -401,7 +401,7 @@ pub trait ComponentResultExt<T> {
 impl<T> ComponentResultExt<T> for Result<T> {
     fn with_component_context(self, component_id: ComponentId) -> Result<T> {
         self.map_err(|e| {
-            wrt_error::Error::component_error("Component instantiation error occurred")
+            kiln_error::Error::component_error("Component instantiation error occurred")
         })
     }
 }

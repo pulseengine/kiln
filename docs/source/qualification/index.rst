@@ -6,7 +6,7 @@ Qualification Documents
    :align: right
    :alt: Metrics & Instrumentation Icon
 
-This section contains all qualification-related documents for the WebAssembly Runtime (WRT) project.
+This section contains all qualification-related documents for the WebAssembly Runtime (Kiln) project.
 
 .. toctree::
    :maxdepth: 2
@@ -27,7 +27,7 @@ This section contains all qualification-related documents for the WebAssembly Ru
 Overview
 --------
 
-The qualification documentation is organized to support certification efforts for the WebAssembly Runtime (WRT) in safety-critical applications.
+The qualification documentation is organized to support certification efforts for the WebAssembly Runtime (Kiln) in safety-critical applications.
 The documentation structure provides evidence for certification according to:
 
 - ISO-26262 (Automotive Safety)

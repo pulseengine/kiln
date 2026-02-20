@@ -1,4 +1,4 @@
-/// Fuzz testing module for WRT Foundation components
+/// Fuzz testing module for Kiln Foundation components
 /// 
 /// This module contains both actual fuzz targets (in fuzz_targets/) and 
 /// property-based tests that can run deterministically in CI.
@@ -9,7 +9,7 @@ pub mod memory_adapter_fuzz;
 pub mod safe_memory_fuzz;
 
 // Re-export commonly used verification types for tests
-pub use wrt_foundation::verification::VerificationLevel;
+pub use kiln_foundation::verification::VerificationLevel;
 
 /// Common test utilities for fuzz testing
 pub mod test_utils {

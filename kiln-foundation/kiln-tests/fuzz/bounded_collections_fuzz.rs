@@ -4,7 +4,7 @@
 /// by covering the same operation patterns but with fixed test cases.
 
 use std::panic;
-use wrt_foundation::{
+use kiln_foundation::{
     bounded_collections::{BoundedVec, BoundedStack},
     verification::VerificationLevel,
 };

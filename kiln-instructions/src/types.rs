@@ -1,9 +1,9 @@
 //! Type aliases for `no_std` compatibility
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::safe_memory::NoStdProvider;
+use kiln_foundation::safe_memory::NoStdProvider;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedStack,
     BoundedVec,
 };
@@ -146,8 +146,8 @@ pub enum RefValue {
     ExternRef(u32),
 }
 
-impl wrt_foundation::traits::Checksummable for RefValue {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for RefValue {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::Null => checksum.update_slice(&[0u8]),
             Self::FuncRef(id) => {
@@ -162,12 +162,12 @@ impl wrt_foundation::traits::Checksummable for RefValue {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for RefValue {
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for RefValue {
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::Null => writer.write_u8(0u8),
             Self::FuncRef(id) => {
@@ -182,11 +182,11 @@ impl wrt_foundation::traits::ToBytes for RefValue {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for RefValue {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+impl kiln_foundation::traits::FromBytes for RefValue {
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => Ok(Self::Null),
@@ -219,12 +219,12 @@ macro_rules! make_vec {
 #[macro_export]
 macro_rules! make_vec {
     () => {{
-        use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+        use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
         let provider = safe_managed_alloc!(65536, CrateId::Instructions).unwrap();
         BoundedVec::new(provider).unwrap()
     }};
     ($($elem:expr),*) => {{
-        use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+        use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
         let provider = safe_managed_alloc!(65536, CrateId::Instructions).unwrap();
         let mut v = BoundedVec::new(provider).unwrap();
         $(v.push($elem).unwrap();)*

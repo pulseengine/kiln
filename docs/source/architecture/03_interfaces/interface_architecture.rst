@@ -3,7 +3,7 @@
 Interface Architecture with Visual Models
 =========================================
 
-This section presents the interface architecture of Pulseengine (WRT Edition) using visual models
+This section presents the interface architecture of Pulseengine (Kiln Edition) using visual models
 and PlantUML diagrams, focusing on the architectural design rather than implementation details.
 
 Interface Layer Overview

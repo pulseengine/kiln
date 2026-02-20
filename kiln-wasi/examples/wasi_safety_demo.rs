@@ -1,4 +1,4 @@
-//! Demonstration of safety feature enforcement in wrt-wasi
+//! Demonstration of safety feature enforcement in kiln-wasi
 
 
 fn main() {
@@ -19,24 +19,24 @@ fn main() {
 
     // Show which features are active
     println!("\nActive safety features:");
-    #[cfg(feature = "wrt-foundation/dynamic-allocation")]
+    #[cfg(feature = "kiln-foundation/dynamic-allocation")]
     println!("  ✓ dynamic-allocation");
-    #[cfg(feature = "wrt-foundation/bounded-collections")]
+    #[cfg(feature = "kiln-foundation/bounded-collections")]
     println!("  ✓ bounded-collections");
-    #[cfg(feature = "wrt-foundation/static-memory-safety")]
+    #[cfg(feature = "kiln-foundation/static-memory-safety")]
     println!("  ✓ static-memory-safety");
-    #[cfg(feature = "wrt-foundation/maximum-safety")]
+    #[cfg(feature = "kiln-foundation/maximum-safety")]
     println!("  ✓ maximum-safety");
 
     // Show capability features
     println!("\nActive capability features:");
-    #[cfg(feature = "wrt-foundation/compile-time-capacity-limits")]
+    #[cfg(feature = "kiln-foundation/compile-time-capacity-limits")]
     println!("  ✓ compile-time-capacity-limits");
-    #[cfg(feature = "wrt-foundation/runtime-bounds-checking")]
+    #[cfg(feature = "kiln-foundation/runtime-bounds-checking")]
     println!("  ✓ runtime-bounds-checking");
-    #[cfg(feature = "wrt-foundation/memory-budget-enforcement")]
+    #[cfg(feature = "kiln-foundation/memory-budget-enforcement")]
     println!("  ✓ memory-budget-enforcement");
-    #[cfg(feature = "wrt-foundation/verified-static-allocation")]
+    #[cfg(feature = "kiln-foundation/verified-static-allocation")]
     println!("  ✓ verified-static-allocation");
 
     println!("\nSafety features are enforced through:");

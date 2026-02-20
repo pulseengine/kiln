@@ -1,8 +1,8 @@
-# WRT Capability-Based Safety Feature System
+# Kiln Capability-Based Safety Feature System
 
 ## Overview
 
-WRT now uses a **capability-based safety feature system** that defines features based on **what they enforce** rather than which safety standard they target. This makes the system:
+Kiln now uses a **capability-based safety feature system** that defines features based on **what they enforce** rather than which safety standard they target. This makes the system:
 
 - **Standard-Agnostic**: Works with ISO 26262, DO-178C, IEC 61508, EN 50128, etc.
 - **Self-Documenting**: Feature names describe exactly what they do
@@ -119,7 +119,7 @@ cargo build --features "static-allocation,hardware-isolation"
 ### Automatic Allocation Strategy Selection
 
 ```rust
-use wrt_foundation::safety_aware_alloc;
+use kiln_foundation::safety_aware_alloc;
 
 // Automatically selects allocation strategy based on enabled features:
 // - QM: Dynamic allocation allowed
@@ -177,7 +177,7 @@ safe-memory = ["bounded-collections"]
 ## Runtime Capability Detection
 
 ```rust
-use wrt_foundation::safety_features::runtime;
+use kiln_foundation::safety_features::runtime;
 
 // Check what capabilities are enabled
 if runtime::has_capability("verified-static-allocation") {
@@ -234,7 +234,7 @@ cargo build --features "verified-static-allocation"
 ## Implementation Status
 
 ✅ **Completed**:
-- Core capability feature definitions in `wrt-foundation`
+- Core capability feature definitions in `kiln-foundation`
 - Safety-aware allocation macros (`safety_aware_alloc!`)
 - Memory strategy auto-selection based on safety level
 - Verification level auto-selection based on safety level
@@ -244,9 +244,9 @@ cargo build --features "verified-static-allocation"
 - Integration with resource management system
 
 ✅ **Tested**:
-- All safety levels build successfully with `wrt-foundation`
+- All safety levels build successfully with `kiln-foundation`
 - Feature validation prevents invalid combinations
 - Memory strategies correctly selected based on features
 - Custom capability combinations work as expected
 
-This capability-based system elevates WRT from "Safety-Aware" to "Safety-Enforced" with clear, composable, and verifiable safety guarantees.
+This capability-based system elevates Kiln from "Safety-Aware" to "Safety-Enforced" with clear, composable, and verifiable safety guarantees.

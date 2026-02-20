@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: No-std HashMap Implementation
 //
 // Copyright (c) 2025 Ralf Anton Beier
@@ -18,7 +18,7 @@
 //! This module provides a basic hash map implementation that is suitable for
 //! no_std/no_alloc environments. It has limited functionality compared to
 //! the standard HashMap or external crates like hashbrown, but it provides
-//! the core functionality needed for the WRT ecosystem.
+//! the core functionality needed for the Kiln ecosystem.
 
 use core::{
     borrow::Borrow,
@@ -107,7 +107,7 @@ where
         &self,
         writer: &mut crate::traits::WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.key.to_bytes_with_provider(writer, provider)?;
         self.value.to_bytes_with_provider(writer, provider)?;
         self.hash.to_bytes_with_provider(writer, provider)?;
@@ -123,7 +123,7 @@ where
     fn from_bytes_with_provider<'a, PStream: MemoryProvider>(
         reader: &mut crate::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let key = K::from_bytes_with_provider(reader, provider)?;
         let value = V::from_bytes_with_provider(reader, provider)?;
         let hash = u64::from_bytes_with_provider(reader, provider)?;
@@ -138,7 +138,7 @@ where
     V: Clone + Default + PartialEq + Eq + Checksummable + ToBytes + FromBytes,
 {
     /// Creates a new empty `SimpleHashMap` with the given memory provider.
-    pub fn new(provider: P) -> wrt_error::Result<Self> {
+    pub fn new(provider: P) -> kiln_error::Result<Self> {
         let mut entries = BoundedVec::new(provider)?;
 
         // Pre-populate with None values to indicate empty slots
@@ -198,7 +198,7 @@ where
     ///
     /// If the key already exists, the old value is replaced and returned.
     /// If the map is full and the key doesn't exist, returns an error.
-    pub fn insert(&mut self, key: K, value: V) -> wrt_error::Result<Option<V>>
+    pub fn insert(&mut self, key: K, value: V) -> kiln_error::Result<Option<V>>
     where
         K: Hash,
     {
@@ -263,7 +263,7 @@ where
     }
 
     /// Gets a copy of the value associated with the key.
-    pub fn get<Q: ?Sized>(&self, key: &Q) -> wrt_error::Result<Option<V>>
+    pub fn get<Q: ?Sized>(&self, key: &Q) -> kiln_error::Result<Option<V>>
     where
         K: Borrow<Q>,
         Q: Hash + Eq,
@@ -294,7 +294,7 @@ where
     }
 
     /// Removes a key from the map, returning the value if it was present.
-    pub fn remove<Q: ?Sized>(&mut self, key: &Q) -> wrt_error::Result<Option<V>>
+    pub fn remove<Q: ?Sized>(&mut self, key: &Q) -> kiln_error::Result<Option<V>>
     where
         K: Borrow<Q>,
         Q: Hash + Eq,
@@ -328,7 +328,7 @@ where
     }
 
     /// Clears the map, removing all key-value pairs.
-    pub fn clear(&mut self) -> wrt_error::Result<()> {
+    pub fn clear(&mut self) -> kiln_error::Result<()> {
         for i in 0..N {
             self.entries.set(i, None)?;
         }
@@ -341,8 +341,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::no_std_hashmap::SimpleHashMap;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId, safe_memory::NoStdProvider};
+    /// # use kiln_foundation::no_std_hashmap::SimpleHashMap;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId, safe_memory::NoStdProvider};
     /// #
     /// # let provider = safe_managed_alloc!(512, CrateId::Foundation).unwrap();
     /// # let mut map = SimpleHashMap::<u32, i32, 8, NoStdProvider<512>>::new(provider).unwrap();
@@ -364,8 +364,8 @@ where
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::no_std_hashmap::SimpleHashMap;
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId, safe_memory::NoStdProvider};
+    /// # use kiln_foundation::no_std_hashmap::SimpleHashMap;
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId, safe_memory::NoStdProvider};
     /// #
     /// # let provider = safe_managed_alloc!(512, CrateId::Foundation).unwrap();
     /// # let mut map = SimpleHashMap::<u32, i32, 8, NoStdProvider<512>>::new(provider).unwrap();
@@ -460,7 +460,7 @@ where
     ///
     /// This returns an accessor that allows reading and writing values.
     /// Since the underlying storage is serialized, we can't return direct mutable references.
-    pub fn next_mut(&mut self) -> wrt_error::Result<Option<SimpleHashMapMutEntry<'_, K, V, N, P>>> {
+    pub fn next_mut(&mut self) -> kiln_error::Result<Option<SimpleHashMapMutEntry<'_, K, V, N, P>>> {
         while self.index < N {
             let current_index = self.index;
             self.index += 1;
@@ -502,7 +502,7 @@ where
     }
 
     /// Get the current value
-    pub fn get(&self) -> wrt_error::Result<V> {
+    pub fn get(&self) -> kiln_error::Result<V> {
         if let Some(entry) = self.map.entries.get(self.index)? {
             Ok(entry.value)
         } else {
@@ -511,7 +511,7 @@ where
     }
 
     /// Set a new value
-    pub fn set(&mut self, value: V) -> wrt_error::Result<()> {
+    pub fn set(&mut self, value: V) -> kiln_error::Result<()> {
         if let Some(mut entry) = self.map.entries.get(self.index)? {
             entry.value = value;
             self.map.entries.set(self.index, Some(entry))?;
@@ -522,7 +522,7 @@ where
     }
 
     /// Modify the value using a function
-    pub fn modify<F>(&mut self, f: F) -> wrt_error::Result<()>
+    pub fn modify<F>(&mut self, f: F) -> kiln_error::Result<()>
     where
         F: FnOnce(V) -> V,
     {
@@ -542,7 +542,7 @@ mod tests {
     };
 
     #[test]
-    fn test_simple_hashmap() -> wrt_error::Result<()> {
+    fn test_simple_hashmap() -> kiln_error::Result<()> {
         let provider = safe_managed_alloc!(512, CrateId::Foundation)?;
         let mut map = SimpleHashMap::<u32, i32, 8, NoStdProvider<512>>::new(provider)?;
 
@@ -578,7 +578,7 @@ mod tests {
     }
 
     #[test]
-    fn test_full_map() -> wrt_error::Result<()> {
+    fn test_full_map() -> kiln_error::Result<()> {
         let provider = safe_managed_alloc!(256, CrateId::Foundation)?;
         let mut map = SimpleHashMap::<i32, i32, 4, NoStdProvider<256>>::new(provider)?;
 

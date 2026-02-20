@@ -3,7 +3,7 @@ use alloc::{collections::BTreeMap, vec::Vec};
 #[cfg(feature = "std")]
 use std::collections::BTreeMap;
 
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec,
     bounded_collections::{BoundedString, MAX_GENERATIVE_TYPES},
     prelude::*,
@@ -17,7 +17,7 @@ use crate::{
     types::{ComponentError, ComponentInstanceId, TypeId, ValType},
 };
 
-use wrt_format::wit_parser::{
+use kiln_format::wit_parser::{
     WitFunction, WitInterface, WitParseError, WitParser, WitType, WitWorld,
 };
 
@@ -129,7 +129,7 @@ impl WitComponentBuilder {
     ) -> core::result::Result<GenerativeResourceType, ComponentError> {
         let val_type = self.parser.convert_to_valtype(wit_type)?;
 
-        let base_resource_type = wrt_foundation::resource::ResourceType::Handle(
+        let base_resource_type = kiln_foundation::resource::ResourceType::Handle(
             ResourceHandle(0),
         ;
 

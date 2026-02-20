@@ -17,7 +17,7 @@ use core::{
 #[cfg(feature = "std")]
 use std::sync::Weak;
 
-use wrt_foundation::{
+use kiln_foundation::{
     Arc,
     CrateId,
     Mutex,
@@ -29,7 +29,7 @@ use wrt_foundation::{
     // sync::Mutex, // Import from local instead
     traits::{Checksummable, FromBytes, ToBytes},
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::TaskId;
@@ -85,26 +85,26 @@ pub struct TimerIntegration {
 pub struct TimerId(u64);
 
 impl Checksummable for TimerId {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
 impl ToBytes for TimerId {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
 impl FromBytes for TimerId {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u64::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -152,7 +152,7 @@ impl Default for TimerType {
 }
 
 impl Checksummable for TimerType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             TimerType::Oneshot => 0u8.update_checksum(checksum),
             TimerType::Interval(dur) => {
@@ -184,11 +184,11 @@ impl Checksummable for TimerType {
 }
 
 impl ToBytes for TimerType {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             TimerType::Oneshot => 0u8.to_bytes_with_provider(writer, provider),
             TimerType::Interval(dur) => {
@@ -220,10 +220,10 @@ impl ToBytes for TimerType {
 }
 
 impl FromBytes for TimerType {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = u8::from_bytes_with_provider(reader, provider)?;
         match discriminant {
             0 => Ok(TimerType::Oneshot),
@@ -251,7 +251,7 @@ impl FromBytes for TimerType {
                     period_ms,
                 })
             },
-            _ => Err(wrt_error::Error::runtime_error(
+            _ => Err(kiln_error::Error::runtime_error(
                 "Invalid TimerType discriminant",
             )),
         }
@@ -291,7 +291,7 @@ impl PartialEq for TimerEntry {
 impl Eq for TimerEntry {}
 
 impl Checksummable for TimerEntry {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.timer_id.update_checksum(checksum);
         self.expiration_time.update_checksum(checksum);
         self.sequence.update_checksum(checksum);
@@ -299,11 +299,11 @@ impl Checksummable for TimerEntry {
 }
 
 impl ToBytes for TimerEntry {
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream,
+        writer: &mut kiln_foundation::traits::WriteStream,
         provider: &P,
-    ) -> core::result::Result<(), wrt_error::Error> {
+    ) -> core::result::Result<(), kiln_error::Error> {
         self.timer_id.to_bytes_with_provider(writer, provider)?;
         self.expiration_time.to_bytes_with_provider(writer, provider)?;
         self.sequence.to_bytes_with_provider(writer, provider)?;
@@ -312,10 +312,10 @@ impl ToBytes for TimerEntry {
 }
 
 impl FromBytes for TimerEntry {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         provider: &P,
-    ) -> core::result::Result<Self, wrt_error::Error> {
+    ) -> core::result::Result<Self, kiln_error::Error> {
         Ok(Self {
             timer_id: TimerId::from_bytes_with_provider(reader, provider)?,
             expiration_time: u64::from_bytes_with_provider(reader, provider)?,
@@ -338,9 +338,9 @@ struct ComponentTimerContext {
     rate_limit_state: RateLimitState,
 }
 
-impl wrt_foundation::traits::Checksummable for ComponentTimerContext {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-        use wrt_runtime::Checksummable;
+impl kiln_foundation::traits::Checksummable for ComponentTimerContext {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+        use kiln_runtime::Checksummable;
         self.component_id.update_checksum(checksum);
         self.owned_timers.update_checksum(checksum);
         self.active_timeouts.update_checksum(checksum);
@@ -349,13 +349,13 @@ impl wrt_foundation::traits::Checksummable for ComponentTimerContext {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ComponentTimerContext {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for ComponentTimerContext {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
-        use wrt_runtime::ToBytes;
+    ) -> kiln_error::Result<()> {
+        use kiln_runtime::ToBytes;
         self.component_id.to_bytes_with_provider(writer, provider)?;
         self.owned_timers.to_bytes_with_provider(writer, provider)?;
         self.active_timeouts.to_bytes_with_provider(writer, provider)?;
@@ -365,12 +365,12 @@ impl wrt_foundation::traits::ToBytes for ComponentTimerContext {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ComponentTimerContext {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for ComponentTimerContext {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_runtime::FromBytes;
+    ) -> kiln_error::Result<Self> {
+        use kiln_runtime::FromBytes;
         Ok(Self {
             component_id: ComponentInstanceId::new(u32::from_bytes_with_provider(
                 reader, provider,
@@ -392,9 +392,9 @@ pub struct TimerLimits {
     fuel_budget: u64,
 }
 
-impl wrt_foundation::traits::Checksummable for TimerLimits {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-        use wrt_runtime::Checksummable;
+impl kiln_foundation::traits::Checksummable for TimerLimits {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+        use kiln_runtime::Checksummable;
         self.max_timers.update_checksum(checksum);
         self.max_timeout_duration_ms.update_checksum(checksum);
         self.max_interval_duration_ms.update_checksum(checksum);
@@ -402,13 +402,13 @@ impl wrt_foundation::traits::Checksummable for TimerLimits {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for TimerLimits {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for TimerLimits {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
-        use wrt_runtime::ToBytes;
+    ) -> kiln_error::Result<()> {
+        use kiln_runtime::ToBytes;
         self.max_timers.to_bytes_with_provider(writer, provider)?;
         self.max_timeout_duration_ms.to_bytes_with_provider(writer, provider)?;
         self.max_interval_duration_ms.to_bytes_with_provider(writer, provider)?;
@@ -417,12 +417,12 @@ impl wrt_foundation::traits::ToBytes for TimerLimits {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for TimerLimits {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for TimerLimits {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_runtime::FromBytes;
+    ) -> kiln_error::Result<Self> {
+        use kiln_runtime::FromBytes;
         Ok(Self {
             max_timers: usize::from_bytes_with_provider(reader, provider)?,
             max_timeout_duration_ms: u64::from_bytes_with_provider(reader, provider)?,
@@ -480,9 +480,9 @@ impl Default for RateLimitState {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for RateLimitState {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-        use wrt_runtime::Checksummable;
+impl kiln_foundation::traits::Checksummable for RateLimitState {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+        use kiln_runtime::Checksummable;
         self.fires_this_period.load(Ordering::Relaxed).update_checksum(checksum);
         self.period_start.load(Ordering::Relaxed).update_checksum(checksum);
         self.max_fires_per_period.update_checksum(checksum);
@@ -490,13 +490,13 @@ impl wrt_foundation::traits::Checksummable for RateLimitState {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for RateLimitState {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for RateLimitState {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
-        use wrt_runtime::ToBytes;
+    ) -> kiln_error::Result<()> {
+        use kiln_runtime::ToBytes;
         self.fires_this_period
             .load(Ordering::Relaxed)
             .to_bytes_with_provider(writer, provider)?;
@@ -509,12 +509,12 @@ impl wrt_foundation::traits::ToBytes for RateLimitState {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for RateLimitState {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for RateLimitState {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_runtime::FromBytes;
+    ) -> kiln_error::Result<Self> {
+        use kiln_runtime::FromBytes;
         Ok(Self {
             fires_this_period: AtomicU32::new(u32::from_bytes_with_provider(reader, provider)?),
             period_start: AtomicU64::new(u64::from_bytes_with_provider(reader, provider)?),

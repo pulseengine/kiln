@@ -2,7 +2,7 @@
 
 #![cfg(all(feature = "wasi-nn", feature = "tract"))]
 
-use wrt_wasi::nn::{
+use kiln_wasi::nn::{
     backend::{
         ComputeCapable,
         ModelCapability,
@@ -36,7 +36,7 @@ fn test_tract_model_downcast() {
     if let Ok(model) = result {
         // Test that as_any works
         let any_ref = model.as_any();
-        assert!(any_ref.downcast_ref::<wrt_wasi::nn::tract_backend::TractModel>().is_some());
+        assert!(any_ref.downcast_ref::<kiln_wasi::nn::tract_backend::TractModel>().is_some());
     }
 }
 
@@ -86,5 +86,5 @@ fn test_compute_capable_implementation() {
     fn assert_compute_capable<T: ComputeCapable>() {}
 
     // This will only compile if TractContext implements ComputeCapable
-    assert_compute_capable::<wrt_wasi::nn::tract_backend::TractContext>();
+    assert_compute_capable::<kiln_wasi::nn::tract_backend::TractContext>();
 }

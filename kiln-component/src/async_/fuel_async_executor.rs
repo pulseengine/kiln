@@ -103,14 +103,14 @@ use core::{
 #[cfg(feature = "std")]
 use std::sync::Weak;
 
-use wrt_foundation::{
+use kiln_foundation::{
     Arc, CrateId, Mutex,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     operations::{Type as OperationType, global_fuel_consumed, record_global_operation},
     safe_managed_alloc,
     verification::VerificationLevel,
 };
-use wrt_platform::{
+use kiln_platform::{
     advanced_sync::{Priority, PriorityInheritanceMutex},
     sync::{FutexLike, SpinFutex},
 };
@@ -299,7 +299,7 @@ pub struct ExecutionContext {
     /// Current function index being executed
     pub current_function_index: u32,
     /// Function parameters for execution
-    pub function_params: Vec<wrt_foundation::Value>,
+    pub function_params: Vec<kiln_foundation::Value>,
 }
 
 /// Trait for execution state that can be suspended and resumed
@@ -312,11 +312,11 @@ pub trait ExecutionState: core::fmt::Debug + Send + Sync {
     fn current_function_index(&self) -> Option<u32>;
     /// Get local variables state
     fn get_locals(&self)
-    -> &[wrt_foundation::component_value::ComponentValue<NoStdProvider<4096>>];
+    -> &[kiln_foundation::component_value::ComponentValue<NoStdProvider<4096>>];
     /// Set local variables state
     fn set_locals(
         &mut self,
-        locals: Vec<wrt_foundation::component_value::ComponentValue<NoStdProvider<4096>>>,
+        locals: Vec<kiln_foundation::component_value::ComponentValue<NoStdProvider<4096>>>,
     ) -> Result<()>;
 }
 
@@ -355,9 +355,9 @@ pub struct YieldPoint {
     /// Instruction pointer or yield location
     pub instruction_pointer: u32,
     /// Operand stack at yield point
-    pub stack: Vec<wrt_foundation::Value>,
+    pub stack: Vec<kiln_foundation::Value>,
     /// Local variables at yield point
-    pub locals: Vec<wrt_foundation::Value>,
+    pub locals: Vec<kiln_foundation::Value>,
     /// Call stack at yield point
     pub call_stack: Vec<u32>,
     /// Fuel consumed up to this yield point
@@ -399,7 +399,7 @@ pub struct YieldContext {
     /// Memory state snapshot (for ASIL-D)
     pub memory_snapshot: Option<Vec<u8>>,
     /// Global variables state
-    pub globals: Vec<wrt_foundation::Value>,
+    pub globals: Vec<kiln_foundation::Value>,
     /// Table state if modified
     pub tables: Vec<TableState>,
     /// Linear memory bounds at yield
@@ -427,7 +427,7 @@ pub struct ExecutionFrame {
     /// Function index
     pub function_index: u32,
     /// Local variables for this frame
-    pub locals: Vec<wrt_foundation::Value>,
+    pub locals: Vec<kiln_foundation::Value>,
     /// Return address (instruction pointer in caller)
     pub return_address: u32,
     /// Stack pointer in caller frame
@@ -464,7 +464,7 @@ pub enum ControlType {
 #[derive(Debug, Clone)]
 pub enum BlockType {
     Empty,
-    Value(wrt_foundation::types::ValueType),
+    Value(kiln_foundation::types::ValueType),
     Function(u32), // Type index
 }
 
@@ -474,7 +474,7 @@ pub struct ExceptionState {
     /// Exception tag
     pub tag: u32,
     /// Exception values
-    pub values: Vec<wrt_foundation::Value>,
+    pub values: Vec<kiln_foundation::Value>,
     /// Handler instruction pointer
     pub handler_ip: Option<u32>,
 }
@@ -485,7 +485,7 @@ pub struct TableState {
     /// Table index
     pub table_index: u32,
     /// Table elements
-    pub elements: Vec<Option<wrt_foundation::Value>>,
+    pub elements: Vec<Option<kiln_foundation::Value>>,
     /// Table size
     pub size: u32,
 }
@@ -505,9 +505,9 @@ pub struct FunctionExecutionContext {
 #[derive(Debug, Clone)]
 pub struct FunctionSignature {
     /// Parameter types
-    pub params: Vec<wrt_foundation::types::ValueType>,
+    pub params: Vec<kiln_foundation::types::ValueType>,
     /// Return types
-    pub returns: Vec<wrt_foundation::types::ValueType>,
+    pub returns: Vec<kiln_foundation::types::ValueType>,
 }
 
 /// Function kind (import/export/local)
@@ -739,8 +739,8 @@ impl ExecutionLimitsConfig {
     pub fn from_binary_metadata(binary_hash: [u8; 32], custom_section_data: &[u8]) -> Result<Self> {
         #[cfg(feature = "decoder")]
         {
-            use wrt_decoder::resource_limits_section::ResourceLimitsSection;
-            use wrt_foundation::safe_memory::NoStdProvider;
+            use kiln_decoder::resource_limits_section::ResourceLimitsSection;
+            use kiln_foundation::safe_memory::NoStdProvider;
 
             // Parse the resource limits custom section
             let resource_limits: ResourceLimitsSection<NoStdProvider<4096>> =
@@ -1034,7 +1034,7 @@ impl ExecutionContext {
         stack_frame: Vec<ComponentValue>,
         locals: Vec<ComponentValue>,
     ) -> Result<()> {
-        // Convert ComponentValue to wrt_foundation::Value for storage
+        // Convert ComponentValue to kiln_foundation::Value for storage
         let stack = stack_frame
             .into_iter()
             .map(|cv| self.convert_component_value_to_value(cv))
@@ -1120,7 +1120,7 @@ impl ExecutionContext {
     /// Capture current execution state for yielding
     fn capture_execution_state(
         &self,
-    ) -> Result<(Vec<wrt_foundation::Value>, Vec<wrt_foundation::Value>)> {
+    ) -> Result<(Vec<kiln_foundation::Value>, Vec<kiln_foundation::Value>)> {
         // Capture real execution state from the engine if available
         if let Some(component_instance) = &self.component_instance {
             // In a production implementation, we would get this from the active engine
@@ -1139,25 +1139,25 @@ impl ExecutionContext {
         }
     }
 
-    /// Convert ComponentValue to wrt_foundation::Value
+    /// Convert ComponentValue to kiln_foundation::Value
     fn convert_component_value_to_value(
         &self,
         cv: ComponentValue,
-    ) -> Result<wrt_foundation::Value> {
+    ) -> Result<kiln_foundation::Value> {
         // Simple conversion - in real implementation would handle all ComponentValue
         // types
         match cv {
-            ComponentValue::S32(val) => Ok(wrt_foundation::Value::I32(val)),
-            ComponentValue::U32(val) => Ok(wrt_foundation::Value::I32(val as i32)),
-            ComponentValue::S64(val) => Ok(wrt_foundation::Value::I64(val)),
-            ComponentValue::U64(val) => Ok(wrt_foundation::Value::I64(val as i64)),
-            ComponentValue::F32(val) => Ok(wrt_foundation::Value::F32(
-                wrt_foundation::FloatBits32::from_float(val),
+            ComponentValue::S32(val) => Ok(kiln_foundation::Value::I32(val)),
+            ComponentValue::U32(val) => Ok(kiln_foundation::Value::I32(val as i32)),
+            ComponentValue::S64(val) => Ok(kiln_foundation::Value::I64(val)),
+            ComponentValue::U64(val) => Ok(kiln_foundation::Value::I64(val as i64)),
+            ComponentValue::F32(val) => Ok(kiln_foundation::Value::F32(
+                kiln_foundation::FloatBits32::from_float(val),
             )),
-            ComponentValue::F64(val) => Ok(wrt_foundation::Value::F64(
-                wrt_foundation::FloatBits64::from_float(val),
+            ComponentValue::F64(val) => Ok(kiln_foundation::Value::F64(
+                kiln_foundation::FloatBits64::from_float(val),
             )),
-            _ => Ok(wrt_foundation::Value::I32(0)), // Placeholder for complex types
+            _ => Ok(kiln_foundation::Value::I32(0)), // Placeholder for complex types
         }
     }
 
@@ -1373,12 +1373,12 @@ impl ExecutionContext {
 #[derive(Debug)]
 pub struct YieldInfo {
     pub instruction_pointer: u32,
-    pub stack: Vec<wrt_foundation::Value>,
-    pub locals: Vec<wrt_foundation::Value>,
+    pub stack: Vec<kiln_foundation::Value>,
+    pub locals: Vec<kiln_foundation::Value>,
     pub call_stack: Vec<u32>,
     pub yield_type: YieldType,
     pub module_state: Option<ModuleExecutionState>,
-    pub globals: Vec<wrt_foundation::Value>,
+    pub globals: Vec<kiln_foundation::Value>,
     pub tables: Vec<TableState>,
     pub memory_bounds: Option<(u32, u32)>,
     pub function_context: FunctionExecutionContext,
@@ -2319,7 +2319,7 @@ impl FuelAsyncExecutor {
                 self.tasks
                     .get(&task_id)
                     .map(|t| t.verification_level)
-                    .unwrap_or(wrt_foundation::verification::VerificationLevel::Standard)
+                    .unwrap_or(kiln_foundation::verification::VerificationLevel::Standard)
             };
             record_global_operation(OperationType::FunctionCall, verification_level);
 
@@ -2883,8 +2883,8 @@ impl FuelAsyncExecutor {
         }
 
         // Execute real WebAssembly with ASIL-D constraints from configuration
-        // Note: wrt-runtime defaults to std feature, so StacklessEngine::new() returns Self
-        let mut engine = wrt_runtime::stackless::engine::StacklessEngine::new();
+        // Note: kiln-runtime defaults to std feature, so StacklessEngine::new() returns Self
+        let mut engine = kiln_runtime::stackless::engine::StacklessEngine::new();
 
         // Note: StacklessEngine is a simple engine without fuel/constraint management
         // Fuel tracking is done at the task level via task.fuel_consumed
@@ -2921,8 +2921,8 @@ impl FuelAsyncExecutor {
         }
 
         // Execute real WebAssembly with isolation constraints from configuration
-        // Note: wrt-runtime defaults to std feature, so StacklessEngine::new() returns Self
-        let mut engine = wrt_runtime::stackless::engine::StacklessEngine::new();
+        // Note: kiln-runtime defaults to std feature, so StacklessEngine::new() returns Self
+        let mut engine = kiln_runtime::stackless::engine::StacklessEngine::new();
 
         // Note: StacklessEngine is a simple engine without fuel/constraint management
         // Set fuel limit from configuration
@@ -2970,8 +2970,8 @@ impl FuelAsyncExecutor {
         }
 
         // Execute real WebAssembly with resource limits
-        // Note: wrt-runtime defaults to std feature, so StacklessEngine::new() returns Self
-        let mut engine = wrt_runtime::stackless::engine::StacklessEngine::new();
+        // Note: kiln-runtime defaults to std feature, so StacklessEngine::new() returns Self
+        let mut engine = kiln_runtime::stackless::engine::StacklessEngine::new();
         // Note: StacklessEngine is a simple engine without fuel/constraint management
         // engine.set_fuel(Some(400)); // Bounded fuel for ASIL-B - Not supported
 
@@ -2996,8 +2996,8 @@ impl FuelAsyncExecutor {
         }
 
         // Execute real WebAssembly with relaxed constraints
-        // Note: wrt-runtime defaults to std feature, so StacklessEngine::new() returns Self
-        let mut engine = wrt_runtime::stackless::engine::StacklessEngine::new();
+        // Note: kiln-runtime defaults to std feature, so StacklessEngine::new() returns Self
+        let mut engine = kiln_runtime::stackless::engine::StacklessEngine::new();
         // Note: StacklessEngine is a simple engine without fuel/constraint management
         // engine.set_fuel(Some(1000)); // More fuel for ASIL-A - Not supported
 
@@ -3011,7 +3011,7 @@ impl FuelAsyncExecutor {
     /// This is a stub implementation - real implementation would execute WebAssembly
     fn execute_single_instruction_step(
         &mut self,
-        _engine: &mut wrt_runtime::stackless::engine::StacklessEngine,
+        _engine: &mut kiln_runtime::stackless::engine::StacklessEngine,
         task: &mut FuelAsyncTask,
         _component_instance: &Arc<ComponentInstance>,
         fuel_limit: u64,
@@ -3203,20 +3203,20 @@ impl FuelAsyncExecutor {
         // 3. Restore local variables
         // Restore local variable state from yield point
         if let Some(execution_state) = &mut task.execution_context.execution_state {
-            // Convert from yield point locals (wrt_foundation::Value) to ComponentValue
-            let mut locals_vec = wrt_foundation::Vec::new();
+            // Convert from yield point locals (kiln_foundation::Value) to ComponentValue
+            let mut locals_vec = kiln_foundation::Vec::new();
             for local in yield_point.locals.iter() {
                 // Convert Value to ComponentValue
                 let component_val = match local {
-                    wrt_foundation::Value::I32(v) => WrtComponentValue::U32(*v as u32),
-                    wrt_foundation::Value::I64(v) => WrtComponentValue::U64(*v as u64),
-                    wrt_foundation::Value::F32(v) => {
-                        WrtComponentValue::F32(wrt_foundation::FloatBits32::from_bits(v.to_bits()))
+                    kiln_foundation::Value::I32(v) => KilnComponentValue::U32(*v as u32),
+                    kiln_foundation::Value::I64(v) => KilnComponentValue::U64(*v as u64),
+                    kiln_foundation::Value::F32(v) => {
+                        KilnComponentValue::F32(kiln_foundation::FloatBits32::from_bits(v.to_bits()))
                     },
-                    wrt_foundation::Value::F64(v) => {
-                        WrtComponentValue::F64(wrt_foundation::FloatBits64::from_bits(v.to_bits()))
+                    kiln_foundation::Value::F64(v) => {
+                        KilnComponentValue::F64(kiln_foundation::FloatBits64::from_bits(v.to_bits()))
                     },
-                    _ => WrtComponentValue::Unit,
+                    _ => KilnComponentValue::Unit,
                 };
                 locals_vec.push(component_val);
             }
@@ -3279,8 +3279,8 @@ impl FuelAsyncExecutor {
         _waker_context: &mut Context<'_>,
     ) -> Result<ExecutionStepResult> {
         // Create a StacklessEngine for WebAssembly execution
-        // Note: wrt-runtime defaults to std feature, so StacklessEngine::new() returns Self
-        let mut engine = wrt_runtime::stackless::engine::StacklessEngine::new();
+        // Note: kiln-runtime defaults to std feature, so StacklessEngine::new() returns Self
+        let mut engine = kiln_runtime::stackless::engine::StacklessEngine::new();
 
         // Set fuel limit based on task's remaining fuel budget
         let consumed = task.fuel_consumed.load(Ordering::Acquire);
@@ -3300,18 +3300,18 @@ impl FuelAsyncExecutor {
         // Set verification level to match task's ASIL mode
         let verification_level = match task.execution_context.asil_config.mode {
             ASILExecutionMode::D { .. } | ASILExecutionMode::AsilD => {
-                wrt_foundation::verification::VerificationLevel::Full
+                kiln_foundation::verification::VerificationLevel::Full
             },
             ASILExecutionMode::C { .. } | ASILExecutionMode::AsilC => {
-                wrt_foundation::verification::VerificationLevel::Standard
+                kiln_foundation::verification::VerificationLevel::Standard
             },
             ASILExecutionMode::B { .. } | ASILExecutionMode::AsilB => {
-                wrt_foundation::verification::VerificationLevel::Basic
+                kiln_foundation::verification::VerificationLevel::Basic
             },
             ASILExecutionMode::A { .. } | ASILExecutionMode::AsilA => {
-                wrt_foundation::verification::VerificationLevel::Off
+                kiln_foundation::verification::VerificationLevel::Off
             },
-            ASILExecutionMode::QM => wrt_foundation::verification::VerificationLevel::Off,
+            ASILExecutionMode::QM => kiln_foundation::verification::VerificationLevel::Off,
         };
 
         // Execute a limited number of WebAssembly instructions based on configuration
@@ -3353,7 +3353,7 @@ impl FuelAsyncExecutor {
     /// Execute fresh function from the beginning
     fn execute_fresh_function(
         &mut self,
-        engine: &mut wrt_runtime::stackless::engine::StacklessEngine,
+        engine: &mut kiln_runtime::stackless::engine::StacklessEngine,
         task: &mut FuelAsyncTask,
         component_instance: &Arc<ComponentInstance>,
         max_instructions: u32,
@@ -3363,7 +3363,7 @@ impl FuelAsyncExecutor {
 
         // TODO: Fix module instance type mismatch
         // The component layer stores simplified ModuleInstance (with just module_index)
-        // but the runtime engine needs wrt_runtime::ModuleInstance (full runtime instance).
+        // but the runtime engine needs kiln_runtime::ModuleInstance (full runtime instance).
         // This requires architectural changes to properly expose runtime instances through
         // the component layer.
 
@@ -3383,14 +3383,14 @@ impl FuelAsyncExecutor {
         // };
         //
         // let params = &task.execution_context.function_params;
-        // let mut engine_params = wrt_foundation::Vec::new();
+        // let mut engine_params = kiln_foundation::Vec::new();
         // for param in params.iter() {
         //     let val = match param {
-        //         &wrt_foundation::Value::I32(v) => wrt_foundation::Value::I32(v),
-        //         &wrt_foundation::Value::I64(v) => wrt_foundation::Value::I64(v),
-        //         &wrt_foundation::Value::F32(v) => wrt_foundation::Value::F32(v),
-        //         &wrt_foundation::Value::F64(v) => wrt_foundation::Value::F64(v),
-        //         _ => wrt_foundation::Value::I32(0),
+        //         &kiln_foundation::Value::I32(v) => kiln_foundation::Value::I32(v),
+        //         &kiln_foundation::Value::I64(v) => kiln_foundation::Value::I64(v),
+        //         &kiln_foundation::Value::F32(v) => kiln_foundation::Value::F32(v),
+        //         &kiln_foundation::Value::F64(v) => kiln_foundation::Value::F64(v),
+        //         _ => kiln_foundation::Value::I32(0),
         //     };
         //     engine_params.push(val);
         // }
@@ -3401,15 +3401,15 @@ impl FuelAsyncExecutor {
         //     &engine_params,
         //     max_instructions,
         // ) {
-        //     Ok(wrt_runtime::stackless::ExecutionResult::Completed(values)) => {
+        //     Ok(kiln_runtime::stackless::ExecutionResult::Completed(values)) => {
         //         let result_bytes = self.serialize_values(values.as_slice()?)?;
         //         Ok(ExecutionStepResult::Completed(result_bytes))
         //     },
-        //     Ok(wrt_runtime::stackless::ExecutionResult::Yielded(yield_info)) => {
+        //     Ok(kiln_runtime::stackless::ExecutionResult::Yielded(yield_info)) => {
         //         #[cfg(feature = "std")]
-        //         let stack_vec: Vec<wrt_foundation::Value> = yield_info.operand_stack.iter().cloned().collect();
+        //         let stack_vec: Vec<kiln_foundation::Value> = yield_info.operand_stack.iter().cloned().collect();
         //         #[cfg(not(feature = "std"))]
-        //         let stack_vec: Vec<wrt_foundation::Value> = {
+        //         let stack_vec: Vec<kiln_foundation::Value> = {
         //             let mut v = Vec::new();
         //             for item in yield_info.operand_stack.iter() {
         //                 v.push(item.clone());
@@ -3418,9 +3418,9 @@ impl FuelAsyncExecutor {
         //         };
         //
         //         #[cfg(feature = "std")]
-        //         let locals_vec: Vec<wrt_foundation::Value> = yield_info.locals.iter().cloned().collect();
+        //         let locals_vec: Vec<kiln_foundation::Value> = yield_info.locals.iter().cloned().collect();
         //         #[cfg(not(feature = "std"))]
-        //         let locals_vec: Vec<wrt_foundation::Value> = {
+        //         let locals_vec: Vec<kiln_foundation::Value> = {
         //             let mut v = Vec::new();
         //             for item in yield_info.locals.iter() {
         //                 v.push(item.clone());
@@ -3461,7 +3461,7 @@ impl FuelAsyncExecutor {
         //         })?;
         //         Ok(ExecutionStepResult::Yielded)
         //     },
-        //     Ok(wrt_runtime::stackless::ExecutionResult::Waiting(resource_id)) => {
+        //     Ok(kiln_runtime::stackless::ExecutionResult::Waiting(resource_id)) => {
         //         let waitable_handle = self
         //             .waitable_registry
         //             .register_waitable(task.component_id, Some(resource_id as u64))?;
@@ -3471,7 +3471,7 @@ impl FuelAsyncExecutor {
         //             .create_async_yield_point(engine.get_instruction_pointer()?, resource_id as u64)?;
         //         Ok(ExecutionStepResult::Waiting)
         //     },
-        //     Ok(wrt_runtime::stackless::ExecutionResult::FuelExhausted) => {
+        //     Ok(kiln_runtime::stackless::ExecutionResult::FuelExhausted) => {
         //         Ok(ExecutionStepResult::Yielded)
         //     },
         //     Err(e) => {
@@ -3483,17 +3483,17 @@ impl FuelAsyncExecutor {
     /// Resume execution from a yield point
     fn resume_from_yield_point(
         &mut self,
-        engine: &mut wrt_runtime::stackless::engine::StacklessEngine,
+        engine: &mut kiln_runtime::stackless::engine::StacklessEngine,
         task: &mut FuelAsyncTask,
         yield_point: &YieldPoint,
         max_instructions: u32,
     ) -> Result<ExecutionStepResult> {
         // Restore engine state from yield point
-        use wrt_foundation::safe_memory::NoStdProvider;
+        use kiln_foundation::safe_memory::NoStdProvider;
 
         // Create BoundedVecs with the exact provider types expected by EngineState
-        let mut operand_stack = wrt_foundation::bounded::BoundedVec::<
-            wrt_foundation::Value,
+        let mut operand_stack = kiln_foundation::bounded::BoundedVec::<
+            kiln_foundation::Value,
             256,
             NoStdProvider<4096>,
         >::new(NoStdProvider::default())?;
@@ -3501,8 +3501,8 @@ impl FuelAsyncExecutor {
             operand_stack.push(val.clone())?;
         }
 
-        let mut locals_vec = wrt_foundation::bounded::BoundedVec::<
-            wrt_foundation::Value,
+        let mut locals_vec = kiln_foundation::bounded::BoundedVec::<
+            kiln_foundation::Value,
             128,
             NoStdProvider<2048>,
         >::new(NoStdProvider::default())?;
@@ -3511,14 +3511,14 @@ impl FuelAsyncExecutor {
         }
 
         let mut call_stack_vec =
-            wrt_foundation::bounded::BoundedVec::<u32, 64, NoStdProvider<512>>::new(
+            kiln_foundation::bounded::BoundedVec::<u32, 64, NoStdProvider<512>>::new(
                 NoStdProvider::default(),
             )?;
         for val in &yield_point.call_stack {
             call_stack_vec.push(*val)?;
         }
 
-        engine.restore_state(wrt_runtime::stackless::EngineState {
+        engine.restore_state(kiln_runtime::stackless::EngineState {
             instruction_pointer: yield_point.instruction_pointer,
             operand_stack,
             locals: locals_vec,
@@ -3527,20 +3527,20 @@ impl FuelAsyncExecutor {
 
         // Continue execution from where we left off
         match engine.continue_execution(max_instructions) {
-            Ok(wrt_runtime::stackless::ExecutionResult::Completed(values)) => {
+            Ok(kiln_runtime::stackless::ExecutionResult::Completed(values)) => {
                 // Function completed - clear yield point
                 task.execution_context.last_yield_point = None;
                 let result_bytes = self.serialize_values(values.as_slice()?)?;
                 Ok(ExecutionStepResult::Completed(result_bytes))
             },
-            Ok(wrt_runtime::stackless::ExecutionResult::Yielded(yield_info)) => {
+            Ok(kiln_runtime::stackless::ExecutionResult::Yielded(yield_info)) => {
                 // Yielded again - update yield point
-                // Convert wrt_runtime::stackless::YieldInfo to fuel_async_executor::YieldInfo
+                // Convert kiln_runtime::stackless::YieldInfo to fuel_async_executor::YieldInfo
                 #[cfg(feature = "std")]
-                let stack_vec2: Vec<wrt_foundation::Value> =
+                let stack_vec2: Vec<kiln_foundation::Value> =
                     yield_info.operand_stack.iter().collect();
                 #[cfg(not(feature = "std"))]
-                let stack_vec2: Vec<wrt_foundation::Value> = {
+                let stack_vec2: Vec<kiln_foundation::Value> = {
                     let mut v = Vec::new();
                     for item in yield_info.operand_stack.iter() {
                         v.push(item.clone());
@@ -3549,9 +3549,9 @@ impl FuelAsyncExecutor {
                 };
 
                 #[cfg(feature = "std")]
-                let locals_vec2: Vec<wrt_foundation::Value> = yield_info.locals.iter().collect();
+                let locals_vec2: Vec<kiln_foundation::Value> = yield_info.locals.iter().collect();
                 #[cfg(not(feature = "std"))]
-                let locals_vec2: Vec<wrt_foundation::Value> = {
+                let locals_vec2: Vec<kiln_foundation::Value> = {
                     let mut v = Vec::new();
                     for item in yield_info.locals.iter() {
                         v.push(item.clone());
@@ -3592,7 +3592,7 @@ impl FuelAsyncExecutor {
                 })?;
                 Ok(ExecutionStepResult::Yielded)
             },
-            Ok(wrt_runtime::stackless::ExecutionResult::Waiting(resource_id)) => {
+            Ok(kiln_runtime::stackless::ExecutionResult::Waiting(resource_id)) => {
                 // Still waiting for resource
                 // Create or update waitable for this resource
                 let waitable_handle = self
@@ -3613,7 +3613,7 @@ impl FuelAsyncExecutor {
 
                 Ok(ExecutionStepResult::Waiting)
             },
-            Ok(wrt_runtime::stackless::ExecutionResult::FuelExhausted) => {
+            Ok(kiln_runtime::stackless::ExecutionResult::FuelExhausted) => {
                 // Fuel exhausted - yield
                 Ok(ExecutionStepResult::Yielded)
             },
@@ -3625,27 +3625,27 @@ impl FuelAsyncExecutor {
     }
 
     /// Serialize WebAssembly values to bytes
-    fn serialize_values(&self, values: &[wrt_foundation::Value]) -> Result<Vec<u8>> {
+    fn serialize_values(&self, values: &[kiln_foundation::Value]) -> Result<Vec<u8>> {
         let mut result = Vec::new();
 
         for value in values {
             match value {
-                &wrt_foundation::Value::I32(v) => {
+                &kiln_foundation::Value::I32(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                &wrt_foundation::Value::I64(v) => {
+                &kiln_foundation::Value::I64(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                &wrt_foundation::Value::F32(v) => {
+                &kiln_foundation::Value::F32(v) => {
                     result.extend_from_slice(&v.to_bits().to_le_bytes());
                 },
-                &wrt_foundation::Value::F64(v) => {
+                &kiln_foundation::Value::F64(v) => {
                     result.extend_from_slice(&v.to_bits().to_le_bytes());
                 },
-                wrt_foundation::Value::V128(v) => {
+                kiln_foundation::Value::V128(v) => {
                     result.extend_from_slice(&v.bytes);
                 },
-                wrt_foundation::Value::FuncRef(opt_ref) => {
+                kiln_foundation::Value::FuncRef(opt_ref) => {
                     match opt_ref {
                         Some(func_ref) => {
                             result.extend_from_slice(&[1u8]); // Non-null marker
@@ -3656,7 +3656,7 @@ impl FuelAsyncExecutor {
                         },
                     }
                 },
-                wrt_foundation::Value::ExternRef(opt_ref) => {
+                kiln_foundation::Value::ExternRef(opt_ref) => {
                     match opt_ref {
                         Some(extern_ref) => {
                             result.extend_from_slice(&[1u8]); // Non-null marker
@@ -3667,92 +3667,92 @@ impl FuelAsyncExecutor {
                         },
                     }
                 },
-                &wrt_foundation::Value::Ref(v) => {
+                &kiln_foundation::Value::Ref(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                wrt_foundation::Value::I16x8(v) => {
+                kiln_foundation::Value::I16x8(v) => {
                     result.extend_from_slice(&v.bytes);
                 },
-                wrt_foundation::Value::Own(v) => {
+                kiln_foundation::Value::Own(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                wrt_foundation::Value::Borrow(v) => {
+                kiln_foundation::Value::Borrow(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                wrt_foundation::Value::Stream(v) => {
+                kiln_foundation::Value::Stream(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                wrt_foundation::Value::Future(v) => {
+                kiln_foundation::Value::Future(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                wrt_foundation::Value::Void => {
+                kiln_foundation::Value::Void => {
                     // Void has no data representation
                 },
-                wrt_foundation::Value::StructRef(opt_ref) => match opt_ref {
+                kiln_foundation::Value::StructRef(opt_ref) => match opt_ref {
                     Some(_) => result.extend_from_slice(&[1u8]),
                     None => result.extend_from_slice(&[0u8]),
                 },
-                wrt_foundation::Value::ArrayRef(opt_ref) => match opt_ref {
+                kiln_foundation::Value::ArrayRef(opt_ref) => match opt_ref {
                     Some(_) => result.extend_from_slice(&[1u8]),
                     None => result.extend_from_slice(&[0u8]),
                 },
-                wrt_foundation::Value::ExnRef(opt_ref) => match opt_ref {
+                kiln_foundation::Value::ExnRef(opt_ref) => match opt_ref {
                     Some(v) => {
                         result.extend_from_slice(&[1u8]);
                         result.extend_from_slice(&v.to_le_bytes());
                     },
                     None => result.extend_from_slice(&[0u8]),
                 },
-                &wrt_foundation::Value::Bool(v) => {
+                &kiln_foundation::Value::Bool(v) => {
                     result.extend_from_slice(&[if v { 1u8 } else { 0u8 }]);
                 },
-                &wrt_foundation::Value::S8(v) => {
+                &kiln_foundation::Value::S8(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                &wrt_foundation::Value::U8(v) => {
+                &kiln_foundation::Value::U8(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                &wrt_foundation::Value::S16(v) => {
+                &kiln_foundation::Value::S16(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                &wrt_foundation::Value::U16(v) => {
+                &kiln_foundation::Value::U16(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                &wrt_foundation::Value::S32(v) => {
+                &kiln_foundation::Value::S32(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                &wrt_foundation::Value::U32(v) => {
+                &kiln_foundation::Value::U32(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                &wrt_foundation::Value::S64(v) => {
+                &kiln_foundation::Value::S64(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                &wrt_foundation::Value::U64(v) => {
+                &kiln_foundation::Value::U64(v) => {
                     result.extend_from_slice(&v.to_le_bytes());
                 },
-                &wrt_foundation::Value::Char(v) => {
+                &kiln_foundation::Value::Char(v) => {
                     result.extend_from_slice(&(v as u32).to_le_bytes());
                 },
-                wrt_foundation::Value::String(s) => {
+                kiln_foundation::Value::String(s) => {
                     let bytes = s.as_bytes();
                     result.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
                     result.extend_from_slice(bytes);
                 },
-                wrt_foundation::Value::I31Ref(opt_ref) => match opt_ref {
+                kiln_foundation::Value::I31Ref(opt_ref) => match opt_ref {
                     Some(v) => {
                         result.extend_from_slice(&[1u8]);
                         result.extend_from_slice(&v.to_le_bytes());
                     },
                     None => result.extend_from_slice(&[0u8]),
                 },
-                wrt_foundation::Value::List(_)
-                | wrt_foundation::Value::Tuple(_)
-                | wrt_foundation::Value::Record(_)
-                | wrt_foundation::Value::Variant(_, _)
-                | wrt_foundation::Value::Option(_)
-                | wrt_foundation::Value::Result(_)
-                | wrt_foundation::Value::Flags(_)
-                | wrt_foundation::Value::Enum(_) => {
+                kiln_foundation::Value::List(_)
+                | kiln_foundation::Value::Tuple(_)
+                | kiln_foundation::Value::Record(_)
+                | kiln_foundation::Value::Variant(_, _)
+                | kiln_foundation::Value::Option(_)
+                | kiln_foundation::Value::Result(_)
+                | kiln_foundation::Value::Flags(_)
+                | kiln_foundation::Value::Enum(_) => {
                     // Complex type - serialize length as 0 for now
                     result.extend_from_slice(&0u32.to_le_bytes());
                 },

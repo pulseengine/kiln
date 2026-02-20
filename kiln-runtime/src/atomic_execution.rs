@@ -23,7 +23,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-// Import platform abstractions from wrt-foundation PAI layer
+// Import platform abstractions from kiln-foundation PAI layer
 use core::sync::atomic::{
     AtomicU32,
     AtomicU64,
@@ -38,18 +38,18 @@ use alloc::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
 #[cfg(all(not(feature = "std"), not(feature = "std")))]
-use wrt_foundation::bounded::BoundedVec;
-use wrt_foundation::{
+use kiln_foundation::bounded::BoundedVec;
+use kiln_foundation::{
     traits::BoundedCapacity,
     MemArg,
 };
-use wrt_instructions::atomic_ops::{
+use kiln_instructions::atomic_ops::{
     AtomicCmpxchgInstr,
     AtomicFence,
     AtomicLoadOp,
@@ -78,13 +78,13 @@ pub type ResultVec = Vec<u32>;
 /// Result vector type for `no_std` environments with bounded capacity
 #[cfg(all(not(feature = "std"), not(feature = "std")))]
 pub type ResultVec =
-    wrt_foundation::bounded::BoundedVec<u32, 256, wrt_foundation::safe_memory::NoStdProvider<8192>>;
+    kiln_foundation::bounded::BoundedVec<u32, 256, kiln_foundation::safe_memory::NoStdProvider<8192>>;
 
 // Type alias for thread ID vectors - use bounded collections consistently
-type ThreadIdVec = wrt_foundation::bounded::BoundedVec<
+type ThreadIdVec = kiln_foundation::bounded::BoundedVec<
     ThreadId,
     64,
-    wrt_foundation::safe_memory::NoStdProvider<8192>,
+    kiln_foundation::safe_memory::NoStdProvider<8192>,
 >;
 
 // Helper macro for creating Vec compatible with no_std
@@ -97,8 +97,8 @@ macro_rules! result_vec {
             }
             #[cfg(all(not(feature = "std"), not(feature = "std")))]
             {
-                let provider = wrt_foundation::safe_managed_alloc!(8192, wrt_foundation::budget_aware_provider::CrateId::Runtime)?;
-                wrt_foundation::bounded::BoundedVec::new(provider)?
+                let provider = kiln_foundation::safe_managed_alloc!(8192, kiln_foundation::budget_aware_provider::CrateId::Runtime)?;
+                kiln_foundation::bounded::BoundedVec::new(provider)?
             }
         }
     };
@@ -110,8 +110,8 @@ macro_rules! result_vec {
             }
             #[cfg(all(not(feature = "std"), not(feature = "std")))]
             {
-                let provider = wrt_foundation::safe_managed_alloc!(8192, wrt_foundation::budget_aware_provider::CrateId::Runtime)?;
-                let mut v = wrt_foundation::bounded::BoundedVec::new(provider)?;
+                let provider = kiln_foundation::safe_managed_alloc!(8192, kiln_foundation::budget_aware_provider::CrateId::Runtime)?;
+                let mut v = kiln_foundation::bounded::BoundedVec::new(provider)?;
                 for _ in 0..$count {
                     v.push($item)?;
                 }
@@ -127,8 +127,8 @@ macro_rules! result_vec {
             }
             #[cfg(all(not(feature = "std"), not(feature = "std")))]
             {
-                let provider = wrt_foundation::safe_managed_alloc!(8192, wrt_foundation::budget_aware_provider::CrateId::Runtime)?;
-                let mut v = wrt_foundation::bounded::BoundedVec::new(provider)?;
+                let provider = kiln_foundation::safe_managed_alloc!(8192, kiln_foundation::budget_aware_provider::CrateId::Runtime)?;
+                let mut v = kiln_foundation::bounded::BoundedVec::new(provider)?;
                 $(v.push($item)?;)+
                 v
             }
@@ -1026,11 +1026,11 @@ impl AtomicMemoryContext {
         #[cfg(feature = "std")]
         {
             // BoundedMap API is different from HashMap - handle explicitly
-            let provider = wrt_foundation::safe_managed_alloc!(
+            let provider = kiln_foundation::safe_managed_alloc!(
                 8192,
-                wrt_foundation::budget_aware_provider::CrateId::Runtime
+                kiln_foundation::budget_aware_provider::CrateId::Runtime
             )?;
-            let default_vec = wrt_foundation::bounded::BoundedVec::new(provider)
+            let default_vec = kiln_foundation::bounded::BoundedVec::new(provider)
                 .map_err(|_| Error::runtime_error("Failed to create thread wait queue"))?;
 
             match self.wait_queues.get(&(addr as u64))? {

@@ -9,7 +9,7 @@ use std::{collections::HashMap as StdHashMap, vec::Vec as StdVec};
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 #[cfg(feature = "safety-critical")]
-use wrt_foundation::allocator::{CrateId, WrtHashMap, WrtVec};
+use kiln_foundation::allocator::{CrateId, KilnHashMap, KilnVec};
 
 /// Test that basic operations compile to identical code
 fn bench_zero_cost_push(c: &mut Criterion) {
@@ -26,10 +26,10 @@ fn bench_zero_cost_push(c: &mut Criterion) {
     });
 
     #[cfg(feature = "safety-critical")]
-    group.bench_function("wrt_single_push", |b| {
+    group.bench_function("kiln_single_push", |b| {
         b.iter(|| {
-            let mut vec: WrtVec<i32, { CrateId::Component as u8 }, 1> =
-                WrtVec::with_capacity(1).unwrap();
+            let mut vec: KilnVec<i32, { CrateId::Component as u8 }, 1> =
+                KilnVec::with_capacity(1).unwrap();
             let _ = vec.push(black_box(42));
             black_box(vec)
         })
@@ -46,13 +46,13 @@ fn bench_zero_cost_access(c: &mut Criterion) {
     // Setup test data
     let mut std_vec = StdVec::with_capacity(100);
     #[cfg(feature = "safety-critical")]
-    let mut wrt_vec: WrtVec<i32, { CrateId::Component as u8 }, 100> =
-        WrtVec::with_capacity(100).unwrap();
+    let mut kiln_vec: KilnVec<i32, { CrateId::Component as u8 }, 100> =
+        KilnVec::with_capacity(100).unwrap();
 
     for i in 0..100 {
         std_vec.push(i);
         #[cfg(feature = "safety-critical")]
-        let _ = wrt_vec.push(i);
+        let _ = kiln_vec.push(i);
     }
 
     // Test direct indexing
@@ -67,11 +67,11 @@ fn bench_zero_cost_access(c: &mut Criterion) {
     });
 
     #[cfg(feature = "safety-critical")]
-    group.bench_function("wrt_index_access", |b| {
+    group.bench_function("kiln_index_access", |b| {
         b.iter(|| {
             let mut sum = 0;
             for i in 0..100 {
-                sum += black_box(wrt_vec[i]);
+                sum += black_box(kiln_vec[i]);
             }
             black_box(sum)
         })
@@ -90,10 +90,10 @@ fn bench_zero_cost_iteration(c: &mut Criterion) {
     let std_vec = StdVec::from(data.clone());
 
     #[cfg(feature = "safety-critical")]
-    let mut wrt_vec: WrtVec<i32, { CrateId::Component as u8 }, 100> = WrtVec::new();
+    let mut kiln_vec: KilnVec<i32, { CrateId::Component as u8 }, 100> = KilnVec::new();
     #[cfg(feature = "safety-critical")]
     for &val in &data {
-        let _ = wrt_vec.push(val);
+        let _ = kiln_vec.push(val);
     }
 
     // Test iterator summing
@@ -102,8 +102,8 @@ fn bench_zero_cost_iteration(c: &mut Criterion) {
     });
 
     #[cfg(feature = "safety-critical")]
-    group.bench_function("wrt_iter_sum", |b| {
-        b.iter(|| black_box(wrt_vec.iter().sum::<i32>()))
+    group.bench_function("kiln_iter_sum", |b| {
+        b.iter(|| black_box(kiln_vec.iter().sum::<i32>()))
     });
 
     group.finish();
@@ -126,9 +126,9 @@ fn bench_capacity_overhead(c: &mut Criterion) {
     });
 
     #[cfg(feature = "safety-critical")]
-    group.bench_function("wrt_push_within_capacity", |b| {
+    group.bench_function("kiln_push_within_capacity", |b| {
         b.iter(|| {
-            let mut vec: WrtVec<i32, { CrateId::Component as u8 }, 10> = WrtVec::new();
+            let mut vec: KilnVec<i32, { CrateId::Component as u8 }, 10> = KilnVec::new();
             for i in 0..5 {
                 let _ = vec.push(black_box(i));
             }
@@ -148,21 +148,21 @@ fn test_memory_layout() {
     // Vec layout comparison
     assert_eq!(
         size_of::<StdVec<u32>>(),
-        size_of::<WrtVec<u32, { CrateId::Component as u8 }, 100>>(),
-        "WrtVec should have same size as Vec"
+        size_of::<KilnVec<u32, { CrateId::Component as u8 }, 100>>(),
+        "KilnVec should have same size as Vec"
     );
 
     assert_eq!(
         align_of::<StdVec<u32>>(),
-        align_of::<WrtVec<u32, { CrateId::Component as u8 }, 100>>(),
-        "WrtVec should have same alignment as Vec"
+        align_of::<KilnVec<u32, { CrateId::Component as u8 }, 100>>(),
+        "KilnVec should have same alignment as Vec"
     );
 
     // HashMap layout comparison
     assert_eq!(
         size_of::<StdHashMap<u32, u32>>(),
-        size_of::<WrtHashMap<u32, u32, { CrateId::Component as u8 }, 100>>(),
-        "WrtHashMap should have same size as HashMap"
+        size_of::<KilnHashMap<u32, u32, { CrateId::Component as u8 }, 100>>(),
+        "KilnHashMap should have same size as HashMap"
     );
 }
 

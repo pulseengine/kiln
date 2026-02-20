@@ -1,8 +1,8 @@
 [package]
-name = "wrt-decoder"
+name = "kiln-decoder"
 version.workspace = true
 edition.workspace = true
-description = "WebAssembly module decoder for wrt runtime"
+description = "WebAssembly module decoder for Kiln runtime"
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
@@ -14,11 +14,11 @@ workspace = true
 
 [dependencies]
 # Error handling
-wrt-error = { workspace = true, default-features = false }
+kiln-error = { workspace = true, default-features = false }
 # Format handling
-wrt-format = { workspace = true, default-features = false }
+kiln-format = { workspace = true, default-features = false }
 # Foundation library 
-wrt-foundation = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false }
 
 # Core dependencies
 log = { version = "0.4", optional = true }
@@ -38,31 +38,31 @@ wat = "1.232.0"
 [features]
 default = []
 # Binary choice: std OR no_std (no alloc middle ground)
-std = ["wrt-format/std", "wrt-foundation/std", "wrt-foundation/wrt-allocator", "dep:toml", "dep:serde"]
+std = ["kiln-format/std", "kiln-foundation/std", "kiln-foundation/kiln-allocator", "dep:toml", "dep:serde"]
 # For compatibility with verification script
 # This is a no-op since the crate is no_std by default
 no_std = []
 
-# Platform profile features (propagate to wrt-foundation)
-embedded-small = ["wrt-foundation/embedded-small"]
-embedded-medium = ["wrt-foundation/embedded-medium"]
+# Platform profile features (propagate to kiln-foundation)
+embedded-small = ["kiln-foundation/embedded-small"]
+embedded-medium = ["kiln-foundation/embedded-medium"]
 
 # Allocation tracing for debugging
-allocation-tracing = ["wrt-foundation/allocation-tracing"]
+allocation-tracing = ["kiln-foundation/allocation-tracing"]
 
 # Tracing support
-tracing = ["wrt-foundation/tracing"]
+tracing = ["kiln-foundation/tracing"]
 
 # Allocation support for no_std environments
-alloc = ["wrt-foundation/alloc", "wrt-format/alloc"]
+alloc = ["kiln-foundation/alloc", "kiln-format/alloc"]
 optimize = []
 
 # Safety level presets using capability-based features
-qm = ["wrt-foundation/dynamic-allocation", "wrt-format/qm"]
-asil-a = ["wrt-foundation/bounded-collections", "wrt-format/asil-a"]
-asil-b = ["wrt-foundation/bounded-collections", "wrt-format/asil-b"]
-asil-c = ["wrt-foundation/static-memory-safety", "wrt-format/asil-c"]
-asil-d = ["wrt-foundation/asil-d", "wrt-format/asil-d"]
+qm = ["kiln-foundation/dynamic-allocation", "kiln-format/qm"]
+asil-a = ["kiln-foundation/bounded-collections", "kiln-format/asil-a"]
+asil-b = ["kiln-foundation/bounded-collections", "kiln-format/asil-b"]
+asil-c = ["kiln-foundation/static-memory-safety", "kiln-format/asil-c"]
+asil-d = ["kiln-foundation/asil-d", "kiln-format/asil-d"]
 
 # Legacy compatibility features
 safe-memory = ["asil-b"]
@@ -73,11 +73,11 @@ safety-asil-d = ["asil-d"]
 wat = ["dep:wat", "std"]
 
 # Component Model features
-component-model-core = ["wrt-format/component-model-core"]
-component-model-values = ["wrt-format/component-model-values"]
-component-model-resources = ["wrt-format/component-model-resources"]
-component-model-fixed-lists = ["wrt-format/component-model-fixed-lists"]
-component-model-namespaces = ["wrt-format/component-model-namespaces"]
+component-model-core = ["kiln-format/component-model-core"]
+component-model-values = ["kiln-format/component-model-values"]
+component-model-resources = ["kiln-format/component-model-resources"]
+component-model-fixed-lists = ["kiln-format/component-model-fixed-lists"]
+component-model-namespaces = ["kiln-format/component-model-namespaces"]
 component-model-all = [
     "component-model-core",
     "component-model-values",
@@ -87,7 +87,7 @@ component-model-all = [
 ]
 
 # Type conversion feature
-conversion = ["wrt-format/conversion"]
+conversion = ["kiln-format/conversion"]
 
 # Disable panic handler for library builds to avoid conflicts
 kani = []

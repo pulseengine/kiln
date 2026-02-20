@@ -1,7 +1,7 @@
-//! Testing utilities and framework for cargo-wrt
+//! Testing utilities and framework for cargo-kiln
 //!
 //! Provides comprehensive testing infrastructure including mocks,
-//! test helpers, and validation frameworks for all cargo-wrt functionality.
+//! test helpers, and validation frameworks for all cargo-kiln functionality.
 
 use std::{
     collections::HashMap,
@@ -10,14 +10,14 @@ use std::{
 
 use anyhow::Result;
 use tempfile::TempDir;
-use wrt_build_core::{BuildConfig, BuildSystem, formatters::OutputFormat};
+use kiln_build_core::{BuildConfig, BuildSystem, formatters::OutputFormat};
 
 use crate::helpers::{
     CommandSuggestionEngine, GlobalArgs, OutputManager, PerformanceOptimizer, ProgressIndicator,
     ProjectContext, ProjectType,
 };
 
-/// Test context for cargo-wrt operations
+/// Test context for cargo-kiln operations
 pub struct TestContext {
     /// Temporary directory for test workspace
     pub temp_dir: TempDir,
@@ -43,10 +43,10 @@ pub struct TestConfig {
 /// Types of test workspaces
 #[derive(Debug, Clone)]
 pub enum WorkspaceType {
-    /// Full WRT workspace
-    WrtWorkspace,
-    /// Single WRT crate
-    WrtCrate { name: String },
+    /// Full Kiln workspace
+    KilnWorkspace,
+    /// Single Kiln crate
+    KilnCrate { name: String },
     /// Generic Rust workspace
     RustWorkspace,
     /// Single Rust crate
@@ -72,7 +72,7 @@ pub enum ProjectFeature {
 impl Default for TestConfig {
     fn default() -> Self {
         Self {
-            workspace_type: WorkspaceType::WrtWorkspace,
+            workspace_type: WorkspaceType::KilnWorkspace,
             enable_git: false,
             enable_ci: false,
             project_features: vec![],
@@ -106,7 +106,7 @@ impl TestContext {
             verbose: false,
             dry_run: false,
             trace_commands: false,
-            profile: wrt_build_core::config::BuildProfile::Dev,
+            profile: kiln_build_core::config::BuildProfile::Dev,
             features: vec![],
             workspace: Some(workspace_root.to_string_lossy().to_string()),
             output_format: config.output_format.clone(),
@@ -135,20 +135,20 @@ impl TestContext {
         use std::fs;
 
         match &config.workspace_type {
-            WorkspaceType::WrtWorkspace => {
-                // Create WRT workspace structure
-                fs::create_dir_all(workspace_root.join("wrt-foundation"))?;
-                fs::create_dir_all(workspace_root.join("wrt-build-core"))?;
-                fs::create_dir_all(workspace_root.join("cargo-wrt"))?;
+            WorkspaceType::KilnWorkspace => {
+                // Create Kiln workspace structure
+                fs::create_dir_all(workspace_root.join("kiln-foundation"))?;
+                fs::create_dir_all(workspace_root.join("kiln-build-core"))?;
+                fs::create_dir_all(workspace_root.join("cargo-kiln"))?;
 
                 // Create workspace Cargo.toml
                 fs::write(
                     workspace_root.join("Cargo.toml"),
                     r#"[workspace]
 members = [
-    "wrt-foundation",
-    "wrt-build-core", 
-    "cargo-wrt",
+    "kiln-foundation",
+    "kiln-build-core", 
+    "cargo-kiln",
 ]
 
 [workspace.package]
@@ -163,7 +163,7 @@ unsafe_code = "forbid"
                 )?;
 
                 // Create individual crate manifests
-                for crate_name in &["wrt-foundation", "wrt-build-core", "cargo-wrt"] {
+                for crate_name in &["kiln-foundation", "kiln-build-core", "cargo-kiln"] {
                     fs::write(
                         workspace_root.join(crate_name).join("Cargo.toml"),
                         format!(
@@ -187,7 +187,7 @@ repository.workspace = true
                     )?;
                 }
             },
-            WorkspaceType::WrtCrate { name } => {
+            WorkspaceType::KilnCrate { name } => {
                 fs::write(
                     workspace_root.join("Cargo.toml"),
                     format!(
@@ -205,7 +205,7 @@ edition = "2021"
                 fs::create_dir_all(workspace_root.join("src"))?;
                 fs::write(
                     workspace_root.join("src").join("lib.rs"),
-                    "//! Test WRT crate\n",
+                    "//! Test Kiln crate\n",
                 )?;
             },
             WorkspaceType::RustWorkspace => {

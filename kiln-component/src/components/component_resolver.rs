@@ -8,7 +8,7 @@ use alloc::{collections::BTreeMap, vec::Vec};
 #[cfg(feature = "std")]
 use std::{collections::BTreeMap, vec::Vec};
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{BoundedString, BoundedVec, MAX_GENERATIVE_TYPES},
     budget_aware_provider::CrateId,
     prelude::*,
@@ -19,7 +19,7 @@ use wrt_foundation::{
 use crate::{
     bounded_component_infra::ComponentProvider,
     generative_types::GenerativeTypeRegistry,
-    prelude::WrtComponentValue,
+    prelude::KilnComponentValue,
     type_bounds::{RelationKind, TypeBoundsChecker},
     types::{ComponentError, ComponentInstanceId, TypeId, ValType},
 };
@@ -68,7 +68,7 @@ pub enum ImportValue {
     /// Value import
     Value {
         val_type: ValType,
-        value: WrtComponentValue<ComponentProvider>,
+        value: KilnComponentValue<ComponentProvider>,
     },
 }
 
@@ -97,7 +97,7 @@ pub enum ExportValue {
     /// Value export
     Value {
         val_type: ValType,
-        value: WrtComponentValue<ComponentProvider>,
+        value: KilnComponentValue<ComponentProvider>,
     },
 }
 
@@ -107,8 +107,8 @@ impl Default for ExportValue {
     }
 }
 
-// ComponentValue is imported from wrt_foundation via prelude
-// Use WrtComponentValue<ComponentProvider> for all component values
+// ComponentValue is imported from kiln_foundation via prelude
+// Use KilnComponentValue<ComponentProvider> for all component values
 
 /// Component resolver for import/export resolution
 #[derive(Debug)]
@@ -364,7 +364,7 @@ pub struct ImportResolution {
     /// Instance ID
     pub instance_id: ComponentInstanceId,
     /// Resolved value
-    pub resolved_value: WrtComponentValue<ComponentProvider>,
+    pub resolved_value: KilnComponentValue<ComponentProvider>,
 }
 
 /// Export resolution helper
@@ -375,5 +375,5 @@ pub struct ExportResolution {
     /// Instance ID
     pub instance_id: ComponentInstanceId,
     /// Exported value
-    pub exported_value: WrtComponentValue<ComponentProvider>,
+    pub exported_value: KilnComponentValue<ComponentProvider>,
 }

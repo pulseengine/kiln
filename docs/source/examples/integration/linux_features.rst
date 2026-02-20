@@ -8,7 +8,7 @@ Linux Platform Features
    
    -- Jamie Zawinski (but we're here to save your time!)
 
-Linux is the Swiss Army knife of operating systems - it runs on everything from tiny Raspberry Pis to massive supercomputers. WRT leverages Linux's rich feature set while abstracting away the complexity. Let's dive into the penguin-powered goodness!
+Linux is the Swiss Army knife of operating systems - it runs on everything from tiny Raspberry Pis to massive supercomputers. Kiln leverages Linux's rich feature set while abstracting away the complexity. Let's dive into the penguin-powered goodness!
 
 .. admonition:: What You'll Learn
    :class: note
@@ -32,7 +32,7 @@ Linux's virtual memory system is incredibly flexible:
    :caption: Advanced mmap usage
    :linenos:
 
-   use wrt_platform::{LinuxAllocator, LinuxAllocatorBuilder};
+   use kiln_platform::{LinuxAllocator, LinuxAllocatorBuilder};
    
    fn create_advanced_allocator() -> Result<LinuxAllocator, Error> {
        LinuxAllocatorBuilder::new()
@@ -47,7 +47,7 @@ Linux's virtual memory system is incredibly flexible:
    
    // Custom mmap flags for special cases
    fn create_shared_memory_allocator() -> Result<LinuxAllocator, Error> {
-       use wrt_platform::linux_memory::MmapFlags;
+       use kiln_platform::linux_memory::MmapFlags;
        
        LinuxAllocatorBuilder::new()
            .with_custom_flags(
@@ -69,7 +69,7 @@ Optimize TLB usage without explicit huge page allocation:
    :caption: THP configuration
    :linenos:
 
-   use wrt_platform::linux_memory::{ThpMode, MadviseFlags};
+   use kiln_platform::linux_memory::{ThpMode, MadviseFlags};
    
    fn optimize_with_thp(allocator: &mut LinuxAllocator) -> Result<(), Error> {
        // Enable THP for the allocation
@@ -102,7 +102,7 @@ Optimize for multi-socket systems:
    :caption: NUMA-aware allocation
    :linenos:
 
-   use wrt_platform::linux_memory::{NumaPolicy, NumaNode};
+   use kiln_platform::linux_memory::{NumaPolicy, NumaNode};
    
    fn setup_numa_memory() -> Result<(), Error> {
        // Detect NUMA topology
@@ -143,7 +143,7 @@ Hardware memory safety on ARM64:
    :linenos:
 
    #[cfg(all(target_arch = "aarch64", feature = "linux-mte"))]
-   use wrt_platform::{
+   use kiln_platform::{
        LinuxArm64MteAllocator, 
        LinuxArm64MteAllocatorBuilder,
        MteMode
@@ -187,7 +187,7 @@ Linux's futex is the foundation of all synchronization:
    :caption: Advanced futex usage
    :linenos:
 
-   use wrt_platform::{LinuxFutex, LinuxFutexBuilder};
+   use kiln_platform::{LinuxFutex, LinuxFutexBuilder};
    use std::time::Duration;
    
    fn advanced_futex_patterns() -> Result<(), Error> {
@@ -254,7 +254,7 @@ Isolate and limit WebAssembly execution:
    :caption: cgroups v2 integration
    :linenos:
 
-   use wrt_platform::linux_cgroups::{
+   use kiln_platform::linux_cgroups::{
        Cgroup,
        CgroupBuilder,
        ResourceLimits
@@ -307,7 +307,7 @@ High-performance I/O for WebAssembly:
    :caption: io_uring integration
    :linenos:
 
-   use wrt_platform::linux_io_uring::{IoUring, IoUringBuilder};
+   use kiln_platform::linux_io_uring::{IoUring, IoUringBuilder};
    
    fn setup_async_io() -> Result<IoUring, Error> {
        // Check if io_uring is available
@@ -352,7 +352,7 @@ Linux security features for WebAssembly isolation:
    :caption: Security sandboxing
    :linenos:
 
-   use wrt_platform::linux_security::{
+   use kiln_platform::linux_security::{
        Seccomp,
        SeccompBuilder,
        Capabilities,
@@ -405,7 +405,7 @@ Linux perf integration:
    :caption: Performance monitoring
    :linenos:
 
-   use wrt_platform::linux_perf::{
+   use kiln_platform::linux_perf::{
        PerfEvent,
        PerfEventBuilder,
        PerfCounter
@@ -458,13 +458,13 @@ Linux perf integration:
 Container Integration 🐳
 -----------------------
 
-Running WRT in containers:
+Running Kiln in containers:
 
 .. code-block:: rust
    :caption: Container-aware configuration
    :linenos:
 
-   use wrt_platform::linux_container;
+   use kiln_platform::linux_container;
    
    fn detect_container_environment() -> Result<(), Error> {
        let env = linux_container::detect_environment()?;

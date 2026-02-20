@@ -7,7 +7,7 @@ Features and Capabilities
    :align: right
    :alt: Features Icon
 
-This page details the features and capabilities of PulseEngine (WRT Edition).
+This page details the features and capabilities of PulseEngine (Kiln Edition).
 
 .. contents:: On this page
    :local:

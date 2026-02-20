@@ -3,7 +3,7 @@
 //! This module provides essential platform services that can be injected
 //! into the runtime, keeping the core runtime platform-agnostic.
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,

@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Verification Utilities
 // SW-REQ-ID: REQ_VERIFY_001
 // SW-REQ-ID: REQ_VERIFY_003
@@ -124,7 +124,7 @@ impl ToBytes for VerificationLevel {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(self.to_byte())
     }
 }
@@ -133,7 +133,7 @@ impl FromBytes for VerificationLevel {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = reader.read_u8()?;
         match byte {
             0 => Ok(VerificationLevel::Off),
@@ -235,7 +235,7 @@ impl ToBytes for Checksum {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream, // Provider not directly used for u32
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u32_le(self.value())
     }
 }
@@ -244,7 +244,7 @@ impl FromBytes for Checksum {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream, // Provider not directly used for u32
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let value = reader.read_u32_le()?;
         Ok(Checksum::from_value(value))
     }

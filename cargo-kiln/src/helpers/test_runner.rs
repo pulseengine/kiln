@@ -1,7 +1,7 @@
-//! Simplified test framework integrated with cargo-wrt
+//! Simplified test framework integrated with cargo-kiln
 //!
 //! This module provides a lightweight test runner that integrates directly
-//! with cargo-wrt, replacing the complex wrt-test-registry system with
+//! with cargo-kiln, replacing the complex kiln-test-registry system with
 //! a simpler approach that focuses on ASIL compliance testing.
 
 use std::{
@@ -13,7 +13,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use colored::Colorize;
-use wrt_build_core::{
+use kiln_build_core::{
     config::{AsilLevel, BuildProfile},
     formatters::OutputFormat,
 };
@@ -124,7 +124,7 @@ impl TestRunner {
     /// Get test packages for current ASIL level
     fn get_test_packages(&self) -> Result<Vec<String>> {
         // Core packages always tested
-        let mut packages = vec!["wrt-error".to_string(), "wrt-foundation".to_string()];
+        let mut packages = vec!["kiln-error".to_string(), "kiln-foundation".to_string()];
 
         // Add ASIL-specific packages
         match self.config.asil_level {
@@ -132,11 +132,11 @@ impl TestRunner {
                 // QM includes all packages
                 packages.extend(
                     [
-                        "wrt-decoder",
-                        "wrt-runtime",
-                        "wrt-component",
-                        "wrt-wasi",
-                        "wrtd",
+                        "kiln-decoder",
+                        "kiln-runtime",
+                        "kiln-component",
+                        "kiln-wasi",
+                        "kilnd",
                     ]
                     .iter()
                     .map(|s| s.to_string()),
@@ -145,12 +145,12 @@ impl TestRunner {
             AsilLevel::B => {
                 // ASIL-B excludes experimental features
                 packages.extend(
-                    ["wrt-decoder", "wrt-runtime", "wrt-platform"].iter().map(|s| s.to_string()),
+                    ["kiln-decoder", "kiln-runtime", "kiln-platform"].iter().map(|s| s.to_string()),
                 );
             },
             AsilLevel::D => {
                 // ASIL-D only core safety-critical packages
-                packages.extend(["wrt-platform", "wrt-sync"].iter().map(|s| s.to_string()));
+                packages.extend(["kiln-platform", "kiln-sync"].iter().map(|s| s.to_string()));
             },
             _ => {}, // Other ASIL levels not used in simplified system
         }
@@ -229,7 +229,7 @@ impl TestRunner {
 
     /// Check if package requires std
     fn requires_std(&self, package: &str) -> bool {
-        matches!(package, "wrtd" | "wrt-wasi" | "cargo-wrt")
+        matches!(package, "kilnd" | "kiln-wasi" | "cargo-kiln")
     }
 
     /// Get ASIL-specific features

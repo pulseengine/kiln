@@ -9,7 +9,7 @@ use std::sync::{
     OnceLock,
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     safe_memory::NoStdProvider,
@@ -530,7 +530,7 @@ fn get_time_us() -> u64 {
     {
         // Use platform-specific monotonic time for no_std environments
         // This ensures consistent timing even if system clock changes
-        wrt_platform::time::PlatformTime::get_monotonic_time_us()
+        kiln_platform::time::PlatformTime::get_monotonic_time_us()
     }
 }
 

@@ -10,14 +10,14 @@ use core::{
     task::{Context, Poll},
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId,
     clean_types::{ComponentType, FuncType, ValType},
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     // resource::ResourceHandle, // Not available - using local placeholder
     safe_managed_alloc,
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 // Placeholder ResourceHandle type until proper resource system is implemented
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -35,31 +35,31 @@ impl ResourceHandle {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for ResourceHandle {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ResourceHandle {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ResourceHandle {
+impl kiln_foundation::traits::ToBytes for ResourceHandle {
     fn serialized_size(&self) -> usize {
         core::mem::size_of::<u32>()
     }
 
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ResourceHandle {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for ResourceHandle {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u32::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -108,27 +108,27 @@ pub struct AsyncCanonicalAbiSupport {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct AsyncAbiOperationId(u64);
 
-impl wrt_foundation::traits::Checksummable for AsyncAbiOperationId {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for AsyncAbiOperationId {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for AsyncAbiOperationId {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for AsyncAbiOperationId {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_foundation::traits::FromBytes for AsyncAbiOperationId {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for AsyncAbiOperationId {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u64::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -157,12 +157,12 @@ pub enum AsyncAbiOperationType {
     /// Async function call
     AsyncCall {
         function_name: String,
-        args: Vec<WrtComponentValue<ComponentProvider>>,
+        args: Vec<KilnComponentValue<ComponentProvider>>,
     },
     /// Async resource method call
     ResourceAsync {
         method_name: String,
-        args: Vec<WrtComponentValue<ComponentProvider>>,
+        args: Vec<KilnComponentValue<ComponentProvider>>,
     },
     /// Async value lifting
     AsyncLift {
@@ -171,7 +171,7 @@ pub enum AsyncAbiOperationType {
     },
     /// Async value lowering
     AsyncLower {
-        source_values: Vec<WrtComponentValue<ComponentProvider>>,
+        source_values: Vec<KilnComponentValue<ComponentProvider>>,
         target_type: ValType,
     },
     /// Future handling
@@ -203,7 +203,7 @@ pub enum StreamOp {
     /// Read next value
     ReadNext,
     /// Write value
-    Write(WrtComponentValue<ComponentProvider>),
+    Write(KilnComponentValue<ComponentProvider>),
     /// Close stream
     Close,
     /// Check available
@@ -486,7 +486,7 @@ impl AsyncCanonicalAbiSupport {
     pub fn async_lower(
         &mut self,
         component_id: ComponentInstanceId,
-        source_values: Vec<WrtComponentValue<ComponentProvider>>,
+        source_values: Vec<KilnComponentValue<ComponentProvider>>,
         target_type: ValType,
         options: Option<CanonicalOptions>,
     ) -> Result<AsyncAbiOperationId> {

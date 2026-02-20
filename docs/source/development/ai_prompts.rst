@@ -1,10 +1,10 @@
-AI Agent Task Plan: WRT Runtime
+AI Agent Task Plan: Kiln Runtime
 ===================================
 
 Goal
 ----
 
-Refactor all crates in the ``wrt`` project for strict ``no_std`` support (excluding ``alloc``) and compliance with functional safety guidelines. Each crate must be self-contained, pass its success and safety checks, and maintain the dependency isolation rules outlined below.
+Refactor all crates in the ``kiln`` project for strict ``no_std`` support (excluding ``alloc``) and compliance with functional safety guidelines. Each crate must be self-contained, pass its success and safety checks, and maintain the dependency isolation rules outlined below.
 
 Implementation Pattern Guidelines
 ---------------------------------
@@ -19,14 +19,14 @@ Implementation Pattern Guidelines
 
 2. **External Dependencies**:
 
-   - No external crates for wrt core crates (stick to std/core/alloc only)
-   - Only use workspace dependencies (wrt-* crates)
+   - No external crates for kiln core crates (stick to std/core/alloc only)
+   - Only use workspace dependencies (kiln-* crates)
    - Any third-party dependencies must be feature-gated and optional
    - libc dependency for platform-specific code must be behind "use-libc" feature
 
 3. **Error Handling**:
 
-   - All public APIs should return ``Result<T, wrt_error::Error>``
+   - All public APIs should return ``Result<T, kiln_error::Error>``
    - Use specific error constructors (e.g., ``memory_error``, ``system_error``)
    - Avoid unwrap/expect/panic at all costs
    - No default/panic error handling, propagate errors to caller
@@ -43,21 +43,21 @@ Implementation Sequence
 
 Follow this exact order, as it respects the internal crate dependency tree. Complete all steps for each crate before proceeding to the next.
 
-1. ``wrt-error`` - Error handling: done
-2. ``wrt-foundation`` - Core type definitions
-3. ``wrt-sync`` - Synchronization primitives
-4. ``wrt-logging`` - Logging utilities
-5. ``wrt-math`` - Mathematical operations
-6. ``wrt-format`` - Binary format handling
-7. ``wrt-decoder`` - WebAssembly binary decoder
-8. ``wrt-intercept`` - System call interception
-9. ``wrt-instructions`` - WebAssembly instruction set
-10. ``wrt-component`` - WebAssembly component model support
-11. ``wrt-host`` - Host environment integration
-12. ``wrt-runtime`` - Core runtime implementation
-13. ``wrt-test-registry`` - Testing utilities
-14. ``wrt-verification-tool`` - Verification utilities
-15. ``wrt`` - The main WebAssembly runtime crate
+1. ``kiln-error`` - Error handling: done
+2. ``kiln-foundation`` - Core type definitions
+3. ``kiln-sync`` - Synchronization primitives
+4. ``kiln-logging`` - Logging utilities
+5. ``kiln-math`` - Mathematical operations
+6. ``kiln-format`` - Binary format handling
+7. ``kiln-decoder`` - WebAssembly binary decoder
+8. ``kiln-intercept`` - System call interception
+9. ``kiln-instructions`` - WebAssembly instruction set
+10. ``kiln-component`` - WebAssembly component model support
+11. ``kiln-host`` - Host environment integration
+12. ``kiln-runtime`` - Core runtime implementation
+13. ``kiln-test-registry`` - Testing utilities
+14. ``kiln-verification-tool`` - Verification utilities
+15. ``kiln`` - The main WebAssembly runtime crate
 
 Agent Execution Flow (per crate)
 --------------------------------
@@ -82,9 +82,9 @@ Success Metrics
 - [ ] ``cargo doc`` builds without warnings
 - [ ] No duplicate types or logic
 - [ ] Type and error handling is unified across crates
-- [ ] All ``wrt-runtime`` math goes through ``wrt-math``
+- [ ] All ``kiln-runtime`` math goes through ``kiln-math``
 - [ ] WASM 2.0 instructions implemented (`WASM 2.0 Spec <https://www.w3.org/TR/wasm-core-2>`_)
-- [ ] Only ``wrt-decoder`` uses ``wrt-format``; other crates interact via ``wrt-foundation``
+- [ ] Only ``kiln-decoder`` uses ``kiln-format``; other crates interact via ``kiln-foundation``
 
 Functional Safety Checklist (per crate)
 ---------------------------------------
@@ -129,7 +129,7 @@ Functional Safety Checklist (per crate)
 5. Memory & Concurrency
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-- [ ] use types from wrt-foundation and wrt-platform.
+- [ ] use types from kiln-foundation and kiln-platform.
 - [ ] No ``alloc``, ``Vec``, ``Arc``
 - [ ] No ``static mut``
 - [ ] Use ``Atomic*``, priority-safe mutexes

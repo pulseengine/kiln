@@ -191,8 +191,8 @@ Basic usage with safe memory:
 
 .. code-block:: rust
 
-   use wrt_foundation::safe_memory::{StdProvider, Provider, Slice};
-   use wrt_foundation::verification::VerificationLevel;
+   use kiln_foundation::safe_memory::{StdProvider, Provider, Slice};
+   use kiln_foundation::verification::VerificationLevel;
    
    // Create a provider
    let mut provider = StdProvider::with_capacity(1024);
@@ -214,7 +214,7 @@ No-std usage:
 
 .. code-block:: rust
 
-   use wrt_foundation::safe_memory::{NoStdProvider, Provider};
+   use kiln_foundation::safe_memory::{NoStdProvider, Provider};
    
    // Create fixed-size provider
    let mut provider = NoStdProvider::<512>::new();

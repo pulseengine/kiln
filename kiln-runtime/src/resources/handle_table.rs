@@ -8,12 +8,12 @@
 //! - Borrowed handles (borrow<T>) represent temporary access
 //! - Handles are 32-bit integers indexing into type-specific tables
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedVec,
     traits::BoundedCapacity,
     MemoryProvider,
@@ -36,8 +36,8 @@ pub enum ResourceOwnership {
     Borrowed,
 }
 
-impl wrt_foundation::traits::Checksummable for ResourceOwnership {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ResourceOwnership {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             ResourceOwnership::Owned => 0u8.update_checksum(checksum),
             ResourceOwnership::Borrowed => 1u8.update_checksum(checksum),
@@ -45,14 +45,14 @@ impl wrt_foundation::traits::Checksummable for ResourceOwnership {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ResourceOwnership {
+impl kiln_foundation::traits::ToBytes for ResourceOwnership {
     fn serialized_size(&self) -> usize {
         1 // single byte for discriminant
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         _provider: &PStream,
     ) -> Result<()> {
         match self {
@@ -62,9 +62,9 @@ impl wrt_foundation::traits::ToBytes for ResourceOwnership {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ResourceOwnership {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for ResourceOwnership {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
     ) -> Result<Self> {
         match reader.read_u8()? {
@@ -91,20 +91,20 @@ where
     pub ref_count: u32,
 }
 
-impl<T> wrt_foundation::traits::Checksummable for ResourceEntry<T>
+impl<T> kiln_foundation::traits::Checksummable for ResourceEntry<T>
 where
-    T: Clone + PartialEq + Eq + wrt_foundation::traits::Checksummable,
+    T: Clone + PartialEq + Eq + kiln_foundation::traits::Checksummable,
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.resource.update_checksum(checksum);
         self.ownership.update_checksum(checksum);
         self.ref_count.update_checksum(checksum);
     }
 }
 
-impl<T> wrt_foundation::traits::ToBytes for ResourceEntry<T>
+impl<T> kiln_foundation::traits::ToBytes for ResourceEntry<T>
 where
-    T: Clone + PartialEq + Eq + wrt_foundation::traits::ToBytes,
+    T: Clone + PartialEq + Eq + kiln_foundation::traits::ToBytes,
 {
     fn serialized_size(&self) -> usize {
         self.resource.serialized_size()
@@ -112,9 +112,9 @@ where
             + self.ref_count.serialized_size()
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &PStream,
     ) -> Result<()> {
         self.resource.to_bytes_with_provider(writer, provider)?;
@@ -124,12 +124,12 @@ where
     }
 }
 
-impl<T> wrt_foundation::traits::FromBytes for ResourceEntry<T>
+impl<T> kiln_foundation::traits::FromBytes for ResourceEntry<T>
 where
-    T: Clone + PartialEq + Eq + wrt_foundation::traits::FromBytes,
+    T: Clone + PartialEq + Eq + kiln_foundation::traits::FromBytes,
 {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &PStream,
     ) -> Result<Self> {
         let resource = T::from_bytes_with_provider(reader, provider)?;
@@ -149,9 +149,9 @@ where
     T: Clone
         + PartialEq
         + Eq
-        + wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes,
+        + kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes,
 {
     /// Table entries indexed by handle
     #[cfg(feature = "std")]
@@ -169,9 +169,9 @@ where
     T: Clone
         + PartialEq
         + Eq
-        + wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes,
+        + kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes,
 {
     /// Create a new resource table
     pub fn new(provider: P) -> Result<Self> {
@@ -404,7 +404,7 @@ mod tests {
     #[cfg(feature = "std")]
     use std::string::String as StdString;
 
-    use wrt_foundation::traits::DefaultMemoryProvider;
+    use kiln_foundation::traits::DefaultMemoryProvider;
 
     use super::*;
     #[cfg(not(feature = "std"))]
@@ -418,7 +418,7 @@ mod tests {
         // Use a provider with sufficient capacity for the test
         // BoundedVec needs space for metadata, serialization buffers, and items
         // Allocate generous capacity for the test
-        use wrt_foundation::safe_memory::NoStdProvider;
+        use kiln_foundation::safe_memory::NoStdProvider;
         let provider = NoStdProvider::<8192>::default();
         let mut table = ResourceTable::<u32, _>::new(provider).unwrap();
 

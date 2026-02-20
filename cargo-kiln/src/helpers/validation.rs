@@ -1,12 +1,12 @@
 //! Input validation utilities
 //!
 //! Provides standardized validation functions for common input types
-//! used across cargo-wrt commands with consistent error handling.
+//! used across cargo-kiln commands with consistent error handling.
 
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use wrt_build_core::config::AsilLevel;
+use kiln_build_core::config::AsilLevel;
 
 /// Standard error type for validation failures
 #[derive(Debug, thiserror::Error)]

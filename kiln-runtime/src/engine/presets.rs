@@ -4,8 +4,8 @@
 //! ASIL-B safety levels. Each preset configures memory capabilities
 //! appropriately.
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     capabilities::{
         verified::VerificationProofs,

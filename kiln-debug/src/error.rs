@@ -1,5 +1,5 @@
 /// Error types for DWARF debug information parsing
-use wrt_error::Error;
+use kiln_error::Error;
 
 /// Debug-specific error type
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,15 +20,15 @@ pub enum DebugError {
 #[allow(dead_code)]
 pub type DebugResult<T> = Result<T, DebugError>;
 
-impl From<wrt_error::Error> for DebugError {
-    fn from(_err: wrt_error::Error) -> Self {
-        // For simplicity, map all WRT errors to InvalidData
+impl From<kiln_error::Error> for DebugError {
+    fn from(_err: kiln_error::Error) -> Self {
+        // For simplicity, map all Kiln errors to InvalidData
         // A more sophisticated implementation could map specific error categories
         DebugError::InvalidData
     }
 }
 
-impl From<DebugError> for wrt_error::Error {
+impl From<DebugError> for kiln_error::Error {
     fn from(err: DebugError) -> Self {
         match err {
             DebugError::InvalidData => Error::parse_error("Invalid DWARF data"),

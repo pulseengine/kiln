@@ -1,6 +1,6 @@
-//! WRTD Alloc Runtime Main Entry Point
+//! Kilnd Alloc Runtime Main Entry Point
 //! 
-//! This is the main entry point for the wrtd-alloc binary.
+//! This is the main entry point for the kilnd-alloc binary.
 //! SW-REQ-ID: REQ_FUNC_033
 
 #![no_std]

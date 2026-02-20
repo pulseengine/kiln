@@ -1,4 +1,4 @@
-//! HTML templates and assets for cargo-wrt reports
+//! HTML templates and assets for cargo-kiln reports
 
 pub mod scripts;
 pub mod styles;

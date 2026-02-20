@@ -10,8 +10,8 @@ use std::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use std::{fmt, mem};
 
-use wrt_error::{Error, ErrorCategory, Result};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_foundation::{
     bounded::BoundedString, budget_aware_provider::CrateId, collections::StaticVec as BoundedVec,
     prelude::*, safe_managed_alloc,
 };
@@ -498,7 +498,7 @@ impl<'a> AsyncCanonicalDecoder<'a> {
         char::from_u32(code).ok_or_else(|| {
             Error::new(
                 ErrorCategory::Parse,
-                wrt_error::codes::PARSE_ERROR,
+                kiln_error::codes::PARSE_ERROR,
                 "Invalid Unicode code point",
             )
         })
@@ -510,7 +510,7 @@ impl<'a> AsyncCanonicalDecoder<'a> {
         // In real implementation, would read from linear memory
         let provider = safe_managed_alloc!(2048, CrateId::Component)?;
         BoundedString::try_from_str("decoded_string")
-            .map_err(|e| wrt_error::Error::runtime_error("Failed to create BoundedString"))
+            .map_err(|e| kiln_error::Error::runtime_error("Failed to create BoundedString"))
     }
 
     fn decode_list(
@@ -584,7 +584,7 @@ impl<'a> AsyncCanonicalDecoder<'a> {
             1 => Ok(Some(Box::new(self.decode_value(inner, options)?))),
             _ => Err(Error::new(
                 ErrorCategory::Parse,
-                wrt_error::codes::PARSE_ERROR,
+                kiln_error::codes::PARSE_ERROR,
                 "Invalid option discriminant",
             )),
         }
@@ -644,7 +644,7 @@ impl<'a> AsyncCanonicalDecoder<'a> {
         if self.position >= self.buffer.len() {
             return Err(Error::new(
                 ErrorCategory::Parse,
-                wrt_error::codes::PARSE_ERROR,
+                kiln_error::codes::PARSE_ERROR,
                 "Unexpected end of buffer",
             ));
         }

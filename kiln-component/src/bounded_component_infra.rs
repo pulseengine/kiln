@@ -5,8 +5,8 @@
 //!
 //! Migrated to StaticVec - no Provider abstraction needed.
 
-use wrt_foundation::collections::{StaticMap, StaticVec};
-use wrt_foundation::safe_memory::NoStdProvider;
+use kiln_foundation::collections::{StaticMap, StaticVec};
+use kiln_foundation::safe_memory::NoStdProvider;
 
 use crate::prelude::*;
 
@@ -168,7 +168,7 @@ pub fn new_component_name() -> BoundedComponentName {
 }
 
 /// Create a bounded component name from str
-pub fn bounded_component_name_from_str(s: &str) -> wrt_error::Result<BoundedComponentName> {
+pub fn bounded_component_name_from_str(s: &str) -> kiln_error::Result<BoundedComponentName> {
     let mut name = StaticVec::new();
     for byte in s.bytes() {
         name.push(byte)?;
@@ -182,7 +182,7 @@ pub fn new_export_name() -> BoundedExportName {
 }
 
 /// Create a bounded export name from str
-pub fn bounded_export_name_from_str(s: &str) -> wrt_error::Result<BoundedExportName> {
+pub fn bounded_export_name_from_str(s: &str) -> kiln_error::Result<BoundedExportName> {
     let mut name = StaticVec::new();
     for byte in s.bytes() {
         name.push(byte)?;

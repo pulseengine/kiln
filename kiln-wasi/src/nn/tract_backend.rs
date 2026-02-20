@@ -1,7 +1,7 @@
 //! Tract backend implementation for WASI-NN
 //!
 //! This module provides a Tract-based neural network backend that integrates
-//! with WRT's capability system for safety-aware inference.
+//! with Kiln's capability system for safety-aware inference.
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 #[cfg(feature = "tract")]
 use tract_onnx::prelude::*;
-use wrt_foundation::verification::VerificationLevel;
+use kiln_foundation::verification::VerificationLevel;
 
 use super::{
     BackendProvider,
@@ -730,7 +730,7 @@ impl<B: NeuralNetworkBackend + 'static> DynBackend for TractDynBackend<B> {
                 let context = TractContext {
                     model_id:         tract_model.id(),
                     encoding:         GraphEncoding::ONNX,
-                    capability_level: wrt_foundation::verification::VerificationLevel::Standard,
+                    capability_level: kiln_foundation::verification::VerificationLevel::Standard,
                     inputs:           vec![None; num_inputs],
                     outputs:          None,
                     runnable:         tract_model.runnable.clone(),
@@ -749,7 +749,7 @@ impl<B: NeuralNetworkBackend + 'static> DynBackend for TractDynBackend<B> {
             let context = TractContext {
                 model_id:         model.id(),
                 encoding:         GraphEncoding::ONNX,
-                capability_level: wrt_foundation::verification::VerificationLevel::Standard,
+                capability_level: kiln_foundation::verification::VerificationLevel::Standard,
             };
             Ok(Box::new(context))
         }

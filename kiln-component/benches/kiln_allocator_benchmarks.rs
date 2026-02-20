@@ -12,7 +12,7 @@ use std::{collections::HashMap as StdHashMap, vec::Vec as StdVec};
 
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 #[cfg(feature = "safety-critical")]
-use wrt_foundation::allocator::{CrateId, WrtHashMap, WrtVec};
+use kiln_foundation::allocator::{CrateId, KilnHashMap, KilnVec};
 
 // Benchmark sizes
 const SMALL_SIZE: usize = 10;
@@ -41,9 +41,9 @@ fn bench_vec_push(c: &mut Criterion) {
 
         // WRT Vec benchmark
         #[cfg(feature = "safety-critical")]
-        group.bench_with_input(BenchmarkId::new("wrt_vec", size), size, |b, &size| {
+        group.bench_with_input(BenchmarkId::new("kiln_vec", size), size, |b, &size| {
             b.iter(|| {
-                let mut vec: WrtVec<usize, { CrateId::Component as u8 }, VEC_LIMIT> = WrtVec::new();
+                let mut vec: KilnVec<usize, { CrateId::Component as u8 }, VEC_LIMIT> = KilnVec::new();
                 for i in 0..size {
                     let _ = vec.push(black_box(i));
                 }
@@ -63,12 +63,12 @@ fn bench_vec_iteration(c: &mut Criterion) {
         // Setup data
         let mut std_vec = StdVec::with_capacity(*size);
         #[cfg(feature = "safety-critical")]
-        let mut wrt_vec: WrtVec<usize, { CrateId::Component as u8 }, VEC_LIMIT> = WrtVec::new();
+        let mut kiln_vec: KilnVec<usize, { CrateId::Component as u8 }, VEC_LIMIT> = KilnVec::new();
 
         for i in 0..*size {
             std_vec.push(i);
             #[cfg(feature = "safety-critical")]
-            let _ = wrt_vec.push(i);
+            let _ = kiln_vec.push(i);
         }
 
         // Standard Vec iteration
@@ -84,7 +84,7 @@ fn bench_vec_iteration(c: &mut Criterion) {
 
         // WRT Vec iteration
         #[cfg(feature = "safety-critical")]
-        group.bench_with_input(BenchmarkId::new("wrt_vec", size), &wrt_vec, |b, vec| {
+        group.bench_with_input(BenchmarkId::new("kiln_vec", size), &kiln_vec, |b, vec| {
             b.iter(|| {
                 let mut sum = 0;
                 for &val in vec.iter() {
@@ -116,10 +116,10 @@ fn bench_map_insert(c: &mut Criterion) {
 
         // WRT HashMap benchmark
         #[cfg(feature = "safety-critical")]
-        group.bench_with_input(BenchmarkId::new("wrt_hashmap", size), size, |b, &size| {
+        group.bench_with_input(BenchmarkId::new("kiln_hashmap", size), size, |b, &size| {
             b.iter(|| {
-                let mut map: WrtHashMap<u32, usize, { CrateId::Component as u8 }, MAP_LIMIT> =
-                    WrtHashMap::new();
+                let mut map: KilnHashMap<u32, usize, { CrateId::Component as u8 }, MAP_LIMIT> =
+                    KilnHashMap::new();
                 for i in 0..size {
                     let _ = map.insert(black_box(i as u32), black_box(i * 2));
                 }
@@ -139,13 +139,13 @@ fn bench_map_lookup(c: &mut Criterion) {
         // Setup data
         let mut std_map = StdHashMap::with_capacity(*size);
         #[cfg(feature = "safety-critical")]
-        let mut wrt_map: WrtHashMap<u32, usize, { CrateId::Component as u8 }, MAP_LIMIT> =
-            WrtHashMap::new();
+        let mut kiln_map: KilnHashMap<u32, usize, { CrateId::Component as u8 }, MAP_LIMIT> =
+            KilnHashMap::new();
 
         for i in 0..*size {
             std_map.insert(i as u32, i * 2);
             #[cfg(feature = "safety-critical")]
-            let _ = wrt_map.insert(i as u32, i * 2);
+            let _ = kiln_map.insert(i as u32, i * 2);
         }
 
         // Standard HashMap lookup
@@ -163,7 +163,7 @@ fn bench_map_lookup(c: &mut Criterion) {
 
         // WRT HashMap lookup
         #[cfg(feature = "safety-critical")]
-        group.bench_with_input(BenchmarkId::new("wrt_hashmap", size), &wrt_map, |b, map| {
+        group.bench_with_input(BenchmarkId::new("kiln_hashmap", size), &kiln_map, |b, map| {
             b.iter(|| {
                 let mut sum = 0;
                 for i in 0..*size {
@@ -224,13 +224,13 @@ fn bench_component_workload(c: &mut Criterion) {
     });
 
     #[cfg(feature = "safety-critical")]
-    group.bench_function("wrt_component_ops", |b| {
+    group.bench_function("kiln_component_ops", |b| {
         b.iter(|| {
-            let mut exports: WrtHashMap<String, usize, { CrateId::Component as u8 }, 256> =
-                WrtHashMap::new();
-            let mut imports: WrtVec<String, { CrateId::Component as u8 }, 256> = WrtVec::new();
-            let mut resources: WrtHashMap<u32, String, { CrateId::Component as u8 }, 1024> =
-                WrtHashMap::new();
+            let mut exports: KilnHashMap<String, usize, { CrateId::Component as u8 }, 256> =
+                KilnHashMap::new();
+            let mut imports: KilnVec<String, { CrateId::Component as u8 }, 256> = KilnVec::new();
+            let mut resources: KilnHashMap<u32, String, { CrateId::Component as u8 }, 1024> =
+                KilnHashMap::new();
 
             // Simulate component initialization
             for i in 0..50 {
@@ -276,10 +276,10 @@ fn bench_capacity_handling(c: &mut Criterion) {
     // Small capacity for testing overflow
     const SMALL_CAPACITY: usize = 32;
 
-    group.bench_function("wrt_vec_capacity_check", |b| {
+    group.bench_function("kiln_vec_capacity_check", |b| {
         b.iter(|| {
-            let mut vec: WrtVec<usize, { CrateId::Component as u8 }, SMALL_CAPACITY> =
-                WrtVec::new();
+            let mut vec: KilnVec<usize, { CrateId::Component as u8 }, SMALL_CAPACITY> =
+                KilnVec::new();
             let mut errors = 0;
 
             for i in 0..50 {
@@ -292,10 +292,10 @@ fn bench_capacity_handling(c: &mut Criterion) {
         })
     });
 
-    group.bench_function("wrt_map_capacity_check", |b| {
+    group.bench_function("kiln_map_capacity_check", |b| {
         b.iter(|| {
-            let mut map: WrtHashMap<u32, usize, { CrateId::Component as u8 }, SMALL_CAPACITY> =
-                WrtHashMap::new();
+            let mut map: KilnHashMap<u32, usize, { CrateId::Component as u8 }, SMALL_CAPACITY> =
+                KilnHashMap::new();
             let mut errors = 0;
 
             for i in 0..50 {

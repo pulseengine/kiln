@@ -12,7 +12,7 @@ use std::fmt;
 #[cfg(feature = "std")]
 use std::{boxed::Box, collections::BTreeMap, string::String, sync::Arc, vec::Vec};
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedString, budget_aware_provider::CrateId, collections::StaticVec as BoundedVec,
     prelude::*, safe_managed_alloc,
 };
@@ -25,7 +25,7 @@ use crate::{
 };
 pub type TypeId = u32;
 
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 
 /// Maximum number of cleanup entries in no_std
 const MAX_CLEANUP_ENTRIES: usize = 512;
@@ -98,8 +98,8 @@ impl PartialEq for AsyncCleanupEntry {
 
 impl Eq for AsyncCleanupEntry {}
 
-impl wrt_foundation::traits::Checksummable for AsyncCleanupEntry {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for AsyncCleanupEntry {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.cleanup_id.update_checksum(checksum);
         self.priority.update_checksum(checksum);
         self.critical.update_checksum(checksum);
@@ -107,12 +107,12 @@ impl wrt_foundation::traits::Checksummable for AsyncCleanupEntry {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for AsyncCleanupEntry {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for AsyncCleanupEntry {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.cleanup_id.to_bytes_with_provider(writer, provider)?;
         self.priority.to_bytes_with_provider(writer, provider)?;
         self.critical.to_bytes_with_provider(writer, provider)?;
@@ -120,11 +120,11 @@ impl wrt_foundation::traits::ToBytes for AsyncCleanupEntry {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for AsyncCleanupEntry {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for AsyncCleanupEntry {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             cleanup_id: u32::from_bytes_with_provider(reader, provider)?,
             resource_type: AsyncResourceType::Custom,
@@ -511,7 +511,7 @@ impl AsyncResourceCleanupManager {
                 new_entries.push(entry).map_err(|_| {
                     Error::new(
                         ErrorCategory::Resource,
-                        wrt_error::codes::RESOURCE_EXHAUSTED,
+                        kiln_error::codes::RESOURCE_EXHAUSTED,
                         "Failed to create bounded vector for cleanup entries",
                     )
                 })?;

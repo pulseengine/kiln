@@ -2,12 +2,12 @@
 Software Architecture
 ================================
 
-.. image:: ../_static/icons/wrt_architecture.svg
+.. image:: ../_static/icons/kiln_architecture.svg
    :width: 64px
    :align: right
    :alt: Architecture Icon
 
-This section provides a comprehensive view of the PulseEngine (WRT Edition) software architecture following ASPICE SWE.2 guidelines. The architecture is designed to be teachable, traceable, and suitable for safety-critical systems.
+This section provides a comprehensive view of the PulseEngine (Kiln Edition) software architecture following ASPICE SWE.2 guidelines. The architecture is designed to be teachable, traceable, and suitable for safety-critical systems.
 
 .. warning::
    **Implementation Status**: This section describes both implemented infrastructure and 

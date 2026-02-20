@@ -10,7 +10,7 @@ use core::{
     task::{Context, Poll},
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     component_value::ComponentValue,
@@ -22,7 +22,7 @@ use wrt_foundation::{
     safe_managed_alloc,
     traits::{Checksummable, FromBytes, ToBytes},
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 use crate::{
     // resource_lifecycle::ResourceLifecycleManager, // Module not available
@@ -71,26 +71,26 @@ pub struct ResourceAsyncOperations {
 pub struct ResourceOperationId(u64);
 
 impl Checksummable for ResourceOperationId {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
 impl ToBytes for ResourceOperationId {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
 impl FromBytes for ResourceOperationId {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u64::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -167,7 +167,7 @@ impl Default for ResourceBorrowType {
 }
 
 impl Checksummable for ResourceBorrowType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
             ResourceBorrowType::Shared => 0u8,
             ResourceBorrowType::Exclusive => 1u8,
@@ -178,11 +178,11 @@ impl Checksummable for ResourceBorrowType {
 }
 
 impl ToBytes for ResourceBorrowType {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let discriminant = match self {
             ResourceBorrowType::Shared => 0u8,
             ResourceBorrowType::Exclusive => 1u8,
@@ -193,16 +193,16 @@ impl ToBytes for ResourceBorrowType {
 }
 
 impl FromBytes for ResourceBorrowType {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = u8::from_bytes_with_provider(reader, provider)?;
         match discriminant {
             0 => Ok(ResourceBorrowType::Shared),
             1 => Ok(ResourceBorrowType::Exclusive),
             2 => Ok(ResourceBorrowType::Async),
-            _ => Err(wrt_error::Error::runtime_error(
+            _ => Err(kiln_error::Error::runtime_error(
                 "Invalid ResourceBorrowType discriminant",
             )),
         }
@@ -233,7 +233,7 @@ impl Default for ResourceState {
 }
 
 impl Checksummable for ResourceState {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
             ResourceState::Creating => 0u8,
             ResourceState::Active => 1u8,
@@ -247,11 +247,11 @@ impl Checksummable for ResourceState {
 }
 
 impl ToBytes for ResourceState {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let discriminant = match self {
             ResourceState::Creating => 0u8,
             ResourceState::Active => 1u8,
@@ -265,10 +265,10 @@ impl ToBytes for ResourceState {
 }
 
 impl FromBytes for ResourceState {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = u8::from_bytes_with_provider(reader, provider)?;
         match discriminant {
             0 => Ok(ResourceState::Creating),
@@ -277,7 +277,7 @@ impl FromBytes for ResourceState {
             3 => Ok(ResourceState::Finalizing),
             4 => Ok(ResourceState::Dropped),
             5 => Ok(ResourceState::Error),
-            _ => Err(wrt_error::Error::runtime_error(
+            _ => Err(kiln_error::Error::runtime_error(
                 "Invalid ResourceState discriminant",
             )),
         }
@@ -300,9 +300,9 @@ struct ComponentResourceContext {
     async_config: AsyncResourceConfig,
 }
 
-impl wrt_foundation::traits::Checksummable for ComponentResourceContext {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-        use wrt_runtime::Checksummable;
+impl kiln_foundation::traits::Checksummable for ComponentResourceContext {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+        use kiln_runtime::Checksummable;
         self.component_id.update_checksum(checksum);
         self.owned_resources.update_checksum(checksum);
         self.borrowed_resources.update_checksum(checksum);
@@ -312,13 +312,13 @@ impl wrt_foundation::traits::Checksummable for ComponentResourceContext {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ComponentResourceContext {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for ComponentResourceContext {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
-        use wrt_runtime::ToBytes;
+    ) -> kiln_error::Result<()> {
+        use kiln_runtime::ToBytes;
         self.component_id.to_bytes_with_provider(writer, provider)?;
         self.owned_resources.to_bytes_with_provider(writer, provider)?;
         self.borrowed_resources.to_bytes_with_provider(writer, provider)?;
@@ -329,12 +329,12 @@ impl wrt_foundation::traits::ToBytes for ComponentResourceContext {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ComponentResourceContext {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for ComponentResourceContext {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_runtime::FromBytes;
+    ) -> kiln_error::Result<Self> {
+        use kiln_runtime::FromBytes;
         Ok(Self {
             component_id: ComponentInstanceId::from_bytes_with_provider(reader, provider)?,
             owned_resources: BoundedMap::from_bytes_with_provider(reader, provider)?,
@@ -403,9 +403,9 @@ impl Default for ResourceInfo {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for ResourceInfo {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-        use wrt_runtime::Checksummable;
+impl kiln_foundation::traits::Checksummable for ResourceInfo {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+        use kiln_runtime::Checksummable;
         self.handle.update_checksum(checksum);
         self.resource_type.update_checksum(checksum);
         self.state.update_checksum(checksum);
@@ -416,13 +416,13 @@ impl wrt_foundation::traits::Checksummable for ResourceInfo {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ResourceInfo {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for ResourceInfo {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
-        use wrt_runtime::ToBytes;
+    ) -> kiln_error::Result<()> {
+        use kiln_runtime::ToBytes;
         self.handle.to_bytes_with_provider(writer, provider)?;
         self.resource_type.to_bytes_with_provider(writer, provider)?;
         self.state.to_bytes_with_provider(writer, provider)?;
@@ -440,12 +440,12 @@ impl wrt_foundation::traits::ToBytes for ResourceInfo {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ResourceInfo {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for ResourceInfo {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_runtime::FromBytes;
+    ) -> kiln_error::Result<Self> {
+        use kiln_runtime::FromBytes;
         Ok(Self {
             handle: ResourceHandle::from_bytes_with_provider(reader, provider)?,
             resource_type: ResourceType::from_bytes_with_provider(reader, provider)?,
@@ -487,18 +487,18 @@ impl PartialEq for BorrowInfo {
 impl Eq for BorrowInfo {}
 
 impl Checksummable for BorrowInfo {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.handle.update_checksum(checksum);
         self.borrowed_at.update_checksum(checksum);
     }
 }
 
 impl ToBytes for BorrowInfo {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.handle.to_bytes_with_provider(writer, provider)?;
         self.borrowed_at.to_bytes_with_provider(writer, provider)?;
         Ok(())
@@ -506,10 +506,10 @@ impl ToBytes for BorrowInfo {
 }
 
 impl FromBytes for BorrowInfo {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -524,7 +524,7 @@ pub struct ResourceLimits {
 }
 
 impl Checksummable for ResourceLimits {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.max_owned_resources.update_checksum(checksum);
         self.max_borrowed_resources.update_checksum(checksum);
         self.max_concurrent_operations.update_checksum(checksum);
@@ -533,11 +533,11 @@ impl Checksummable for ResourceLimits {
 }
 
 impl ToBytes for ResourceLimits {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.max_owned_resources.to_bytes_with_provider(writer, provider)?;
         self.max_borrowed_resources.to_bytes_with_provider(writer, provider)?;
         self.max_concurrent_operations.to_bytes_with_provider(writer, provider)?;
@@ -547,10 +547,10 @@ impl ToBytes for ResourceLimits {
 }
 
 impl FromBytes for ResourceLimits {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             max_owned_resources: usize::from_bytes_with_provider(reader, provider)?,
             max_borrowed_resources: usize::from_bytes_with_provider(reader, provider)?,
@@ -571,7 +571,7 @@ pub struct AsyncResourceConfig {
 }
 
 impl Checksummable for AsyncResourceConfig {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.enable_async_creation.update_checksum(checksum);
         self.enable_async_methods.update_checksum(checksum);
         self.enable_async_drop.update_checksum(checksum);
@@ -581,11 +581,11 @@ impl Checksummable for AsyncResourceConfig {
 }
 
 impl ToBytes for AsyncResourceConfig {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.enable_async_creation.to_bytes_with_provider(writer, provider)?;
         self.enable_async_methods.to_bytes_with_provider(writer, provider)?;
         self.enable_async_drop.to_bytes_with_provider(writer, provider)?;
@@ -596,10 +596,10 @@ impl ToBytes for AsyncResourceConfig {
 }
 
 impl FromBytes for AsyncResourceConfig {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             enable_async_creation: bool::from_bytes_with_provider(reader, provider)?,
             enable_async_methods: bool::from_bytes_with_provider(reader, provider)?,

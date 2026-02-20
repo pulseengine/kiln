@@ -3,7 +3,7 @@
 Coverage Analysis
 =================
 
-This section provides comprehensive analysis of requirement coverage across the Pulseengine (WRT Edition)
+This section provides comprehensive analysis of requirement coverage across the Pulseengine (Kiln Edition)
 architecture, with specific focus on the multi-environment support requirements.
 
 .. arch_component:: ARCH_COMP_COV_001
@@ -34,27 +34,27 @@ Core Runtime Coverage
      - WebAssembly module loading
      - ✅ Complete
      - 100%
-     - ``wrt-decoder/src/module.rs`` + tests
+     - ``kiln-decoder/src/module.rs`` + tests
    * - FR-002
      - Component model support
      - ✅ Complete
      - 100%
-     - ``wrt-component/src/component.rs`` + integration tests
+     - ``kiln-component/src/component.rs`` + integration tests
    * - FR-003
      - Memory management
      - ✅ Complete
      - 100%
-     - ``wrt-foundation/src/safe_memory.rs`` + safety tests
+     - ``kiln-foundation/src/safe_memory.rs`` + safety tests
    * - FR-004
      - Instruction execution
      - ✅ Complete
      - 100%
-     - ``wrt-runtime/src/execution.rs`` + WAST tests
+     - ``kiln-runtime/src/execution.rs`` + WAST tests
    * - FR-005
      - Error handling
      - ✅ Complete
      - 100%
-     - ``wrt-error/src/errors.rs`` + error tests
+     - ``kiln-error/src/errors.rs`` + error tests
 
 **Core Runtime Coverage: 100% (5/5 requirements satisfied)**
 
@@ -107,7 +107,7 @@ The multi-environment requirement is the most critical architectural decision po
 
 **Decision Point Implementation Analysis:**
 
-1. **Collection Types** (``wrt-foundation/src/bounded_collections.rs:15-30``):
+1. **Collection Types** (``kiln-foundation/src/bounded_collections.rs:15-30``):
 
    .. code-block:: rust
 
@@ -127,7 +127,7 @@ The multi-environment requirement is the most critical architectural decision po
    - no_std+no_alloc: Fixed-size stack allocation ✅
    - **Result**: Feature parity maintained across environments
 
-2. **Memory Management** (``wrt-foundation/src/safe_memory.rs:89-156``):
+2. **Memory Management** (``kiln-foundation/src/safe_memory.rs:89-156``):
 
    .. code-block:: rust
 
@@ -149,7 +149,7 @@ The multi-environment requirement is the most critical architectural decision po
    - Memory safety guarantees maintained ✅
    - Performance characteristics documented ✅
 
-3. **Component Storage** (``wrt-component/src/component_registry.rs:89-145``):
+3. **Component Storage** (``kiln-component/src/component_registry.rs:89-145``):
 
    .. code-block:: rust
 
@@ -350,12 +350,12 @@ Code Coverage Metrics
    ┌─────────────────────┬─────────┬─────────┬─────────┬─────────┐
    │ Component           │ Lines   │ Covered │ Percent │ Status  │
    ├─────────────────────┼─────────┼─────────┼─────────┼─────────┤
-   │ wrt-foundation      │ 2,847   │ 2,756   │ 96.8%   │ ✅      │
-   │ wrt-component       │ 3,421   │ 3,289   │ 96.1%   │ ✅      │
-   │ wrt-runtime         │ 2,134   │ 2,056   │ 96.3%   │ ✅      │
-   │ wrt-decoder         │ 1,678   │ 1,623   │ 96.7%   │ ✅      │
-   │ wrt-error           │ 456     │ 445     │ 97.6%   │ ✅      │
-   │ wrt-platform        │ 1,923   │ 1,845   │ 95.9%   │ ✅      │
+   │ kiln-foundation      │ 2,847   │ 2,756   │ 96.8%   │ ✅      │
+   │ kiln-component       │ 3,421   │ 3,289   │ 96.1%   │ ✅      │
+   │ kiln-runtime         │ 2,134   │ 2,056   │ 96.3%   │ ✅      │
+   │ kiln-decoder         │ 1,678   │ 1,623   │ 96.7%   │ ✅      │
+   │ kiln-error           │ 456     │ 445     │ 97.6%   │ ✅      │
+   │ kiln-platform        │ 1,923   │ 1,845   │ 95.9%   │ ✅      │
    ├─────────────────────┼─────────┼─────────┼─────────┼─────────┤
    │ TOTAL               │ 12,459  │ 12,014  │ 96.4%   │ ✅      │
    └─────────────────────┴─────────┴─────────┴─────────┴─────────┘

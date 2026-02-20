@@ -5,19 +5,19 @@ QNX Platform Features (Implemented)
 .. note::
 
    This document describes the QNX features that are **actually implemented** 
-   in WRT. For a vision of potential future features, see the original 
+   in Kiln. For a vision of potential future features, see the original 
    qnx_features.rst document.
 
 QNX Memory Management 🎯
 -----------------------
 
-WRT leverages QNX's memory management for WebAssembly isolation:
+Kiln leverages QNX's memory management for WebAssembly isolation:
 
 .. code-block:: rust
    :caption: QNX memory allocation with mmap
    :linenos:
 
-   use wrt_platform::{QnxAllocator, QnxAllocatorBuilder};
+   use kiln_platform::{QnxAllocator, QnxAllocatorBuilder};
    
    // Create allocator with guard pages
    let allocator = QnxAllocatorBuilder::new()
@@ -37,7 +37,7 @@ Implemented for resource isolation:
    :caption: QNX memory partitions
    :linenos:
 
-   use wrt_platform::{QnxMemoryPartition, QnxMemoryPartitionBuilder};
+   use kiln_platform::{QnxMemoryPartition, QnxMemoryPartitionBuilder};
    
    // Create isolated partition for WASM execution
    let partition = QnxMemoryPartitionBuilder::new()
@@ -61,8 +61,8 @@ Platform-aware thread pool with QNX scheduling:
    :caption: QNX real-time thread execution
    :linenos:
 
-   use wrt_platform::threading::{ThreadPoolConfig, ThreadPriority};
-   use wrt_platform::qnx_threading::QnxThreadPool;
+   use kiln_platform::threading::{ThreadPoolConfig, ThreadPriority};
+   use kiln_platform::qnx_threading::QnxThreadPool;
    
    // Configure thread pool with RT priorities
    let config = ThreadPoolConfig {
@@ -96,7 +96,7 @@ QNX pulse-based synchronization:
    :caption: QNX futex implementation
    :linenos:
 
-   use wrt_platform::{QnxFutex, QnxFutexBuilder};
+   use kiln_platform::{QnxFutex, QnxFutexBuilder};
    
    // Create QNX futex with priority inheritance
    let futex = QnxFutexBuilder::new()
@@ -116,7 +116,7 @@ Lightweight monitoring for WASM execution:
    :caption: Software watchdog for hang detection
    :linenos:
 
-   use wrt_platform::watchdog::{SoftwareWatchdog, WatchdogConfig};
+   use kiln_platform::watchdog::{SoftwareWatchdog, WatchdogConfig};
    
    // Configure watchdog
    let watchdog = SoftwareWatchdog::new(WatchdogConfig {
@@ -149,7 +149,7 @@ Built into the safe threading system:
    :caption: Thread health monitoring
    :linenos:
 
-   use wrt_component::builtins::safe_threading;
+   use kiln_component::builtins::safe_threading;
    
    // Health check all threads
    let health_results = thread_manager.health_check()?;
@@ -182,7 +182,7 @@ QNX arena allocator for efficient memory use:
    :caption: QNX arena allocation
    :linenos:
 
-   use wrt_platform::{QnxArenaAllocator, QnxArenaAllocatorBuilder};
+   use kiln_platform::{QnxArenaAllocator, QnxArenaAllocatorBuilder};
    
    // Configure arena allocator
    let allocator = QnxArenaAllocatorBuilder::new()
@@ -203,8 +203,8 @@ Complete example using implemented features:
    :caption: Production QNX configuration
    :linenos:
 
-   use wrt_platform::*;
-   use wrt_component::builtins::safe_threading::*;
+   use kiln_platform::*;
+   use kiln_component::builtins::safe_threading::*;
    
    fn setup_qnx_wasm_runtime() -> Result<WasmRuntime> {
        // 1. Create memory partition
@@ -268,7 +268,7 @@ What's NOT Implemented ❌
 ------------------------
 
 The following features from the original documentation are **not** implemented
-as they don't align with WRT's architecture:
+as they don't align with Kiln's architecture:
 
 1. **QNX Message Passing IPC** - All components run in-process
 2. **QNX Resource Manager (/dev/wasm)** - Direct API access instead

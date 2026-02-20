@@ -9,8 +9,8 @@
 use std::{boxed::Box, string::String, vec, vec::Vec};
 
 #[cfg(not(any(feature = "std")))]
-use wrt_foundation::{BoundedString, BoundedVec, MemoryProvider, NoStdProvider};
-use wrt_foundation::{component_value::ValType, traits::BoundedCapacity};
+use kiln_foundation::{BoundedString, BoundedVec, MemoryProvider, NoStdProvider};
+use kiln_foundation::{component_value::ValType, traits::BoundedCapacity};
 
 #[cfg(not(any(feature = "std")))]
 use crate::{WasmString, WasmVec};
@@ -78,7 +78,7 @@ pub enum StringEncoding {
 }
 
 /// Calculate canonical memory layout for a value type
-pub fn calculate_layout<P: wrt_foundation::MemoryProvider + Default + Clone + PartialEq + Eq>(
+pub fn calculate_layout<P: kiln_foundation::MemoryProvider + Default + Clone + PartialEq + Eq>(
     ty: &ValType<P>,
 ) -> CanonicalLayout {
     match ty {
@@ -418,9 +418,9 @@ pub enum TransformMode {
 #[derive(Debug, Clone)]
 pub struct TypeTransform {
     /// Original type
-    pub original: ValType<wrt_foundation::traits::DefaultMemoryProvider>,
+    pub original: ValType<kiln_foundation::traits::DefaultMemoryProvider>,
     /// Target type after transformation
-    pub target: ValType<wrt_foundation::traits::DefaultMemoryProvider>,
+    pub target: ValType<kiln_foundation::traits::DefaultMemoryProvider>,
     /// Transformation mode
     pub mode: TransformMode,
     /// Operations needed for the transformation
@@ -485,11 +485,11 @@ mod tests {
     #[test]
     fn test_primitive_layouts() {
         #[cfg(feature = "std")]
-        type TestProvider = wrt_foundation::StdMemoryProvider;
+        type TestProvider = kiln_foundation::StdMemoryProvider;
         #[cfg(not(feature = "std"))]
-        type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        type TestProvider = kiln_foundation::NoStdProvider<1024>;
         #[cfg(not(any(feature = "std")))]
-        type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        type TestProvider = kiln_foundation::NoStdProvider<1024>;
 
         let bool_layout = calculate_layout::<TestProvider>(&ValType::Bool);
         assert_eq!(bool_layout.size, 1);
@@ -512,11 +512,11 @@ mod tests {
         // TODO: Implement BoundedVec construction for ValType::Record
         // Currently commented out due to compilation issues with vec! macro
         // #[cfg(feature = "std")]
-        // type TestProvider = wrt_foundation::StdMemoryProvider;
+        // type TestProvider = kiln_foundation::StdMemoryProvider;
         // #[cfg(not(feature = "std"))]
-        // type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        // type TestProvider = kiln_foundation::NoStdProvider<1024>;
         // #[cfg(not(any(feature = "std")))]
-        // type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        // type TestProvider = kiln_foundation::NoStdProvider<1024>;
         //
         // let record_type = ValType::Record(vec![
         // ("a".to_string(), ValType::<TestProvider>::Bool),
@@ -551,11 +551,11 @@ mod tests {
     fn _test_variant_layout() {
         // TODO: Implement BoundedVec construction for ValType::Variant
         // #[cfg(feature = "std")]
-        // type TestProvider = wrt_foundation::StdMemoryProvider;
+        // type TestProvider = kiln_foundation::StdMemoryProvider;
         // #[cfg(not(feature = "std"))]
-        // type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        // type TestProvider = kiln_foundation::NoStdProvider<1024>;
         // #[cfg(not(any(feature = "std")))]
-        // type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        // type TestProvider = kiln_foundation::NoStdProvider<1024>;
         //
         // let variant_type = ValType::Variant(vec![
         // ("a".to_string(), Some(ValType::<TestProvider>::Bool)),
@@ -584,11 +584,11 @@ mod tests {
         // TODO: Fix ValType::FixedList construction - uses Box instead of
         // ValTypeRef
         // #[cfg(feature = "std")]
-        // type TestProvider = wrt_foundation::StdMemoryProvider;
+        // type TestProvider = kiln_foundation::StdMemoryProvider;
         // #[cfg(not(feature = "std"))]
-        // type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        // type TestProvider = kiln_foundation::NoStdProvider<1024>;
         // #[cfg(not(any(feature = "std")))]
-        // type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        // type TestProvider = kiln_foundation::NoStdProvider<1024>;
         //
         // Test fixed-length list layout
         // let element_type = ValType::<TestProvider>::U32;
@@ -614,11 +614,11 @@ mod tests {
     #[test]
     fn test_error_context_layout() {
         #[cfg(feature = "std")]
-        type TestProvider = wrt_foundation::StdMemoryProvider;
+        type TestProvider = kiln_foundation::StdMemoryProvider;
         #[cfg(not(feature = "std"))]
-        type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        type TestProvider = kiln_foundation::NoStdProvider<1024>;
         #[cfg(not(any(feature = "std")))]
-        type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        type TestProvider = kiln_foundation::NoStdProvider<1024>;
 
         // Test error context layout
         let error_context_type = ValType::<TestProvider>::ErrorContext;
@@ -637,11 +637,11 @@ mod tests {
     #[test]
     fn test_resource_layout() {
         #[cfg(feature = "std")]
-        type TestProvider = wrt_foundation::StdMemoryProvider;
+        type TestProvider = kiln_foundation::StdMemoryProvider;
         #[cfg(not(feature = "std"))]
-        type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        type TestProvider = kiln_foundation::NoStdProvider<1024>;
         #[cfg(not(any(feature = "std")))]
-        type TestProvider = wrt_foundation::NoStdProvider<1024>;
+        type TestProvider = kiln_foundation::NoStdProvider<1024>;
 
         // Test resource handle layouts
         let own_type = ValType::<TestProvider>::Own(42);

@@ -10,7 +10,7 @@ use core::{
 
 #[cfg(feature = "std")]
 use log::{debug, error, info, trace, warn};
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     operations::{Type as OperationType, record_global_operation},
@@ -56,7 +56,7 @@ pub enum WcetAnalysisMethod {
 }
 
 impl Checksummable for WcetAnalysisMethod {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
             WcetAnalysisMethod::Static => 0u8,
             WcetAnalysisMethod::MeasurementBased => 1u8,
@@ -68,11 +68,11 @@ impl Checksummable for WcetAnalysisMethod {
 }
 
 impl ToBytes for WcetAnalysisMethod {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let discriminant = match self {
             WcetAnalysisMethod::Static => 0u8,
             WcetAnalysisMethod::MeasurementBased => 1u8,
@@ -84,17 +84,17 @@ impl ToBytes for WcetAnalysisMethod {
 }
 
 impl FromBytes for WcetAnalysisMethod {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = u8::from_bytes_with_provider(reader, provider)?;
         match discriminant {
             0 => Ok(WcetAnalysisMethod::Static),
             1 => Ok(WcetAnalysisMethod::MeasurementBased),
             2 => Ok(WcetAnalysisMethod::Hybrid),
             3 => Ok(WcetAnalysisMethod::Probabilistic),
-            _ => Err(wrt_error::Error::runtime_error(
+            _ => Err(kiln_error::Error::runtime_error(
                 "Invalid WcetAnalysisMethod discriminant",
             )),
         }
@@ -159,7 +159,7 @@ impl Default for ControlFlowPath {
 }
 
 impl Checksummable for ControlFlowPath {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.path_id.update_checksum(checksum);
         self.basic_blocks.update_checksum(checksum);
         self.estimated_fuel.update_checksum(checksum);
@@ -170,11 +170,11 @@ impl Checksummable for ControlFlowPath {
 }
 
 impl ToBytes for ControlFlowPath {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.path_id.to_bytes_with_provider(writer, provider)?;
         self.basic_blocks.to_bytes_with_provider(writer, provider)?;
         self.estimated_fuel.to_bytes_with_provider(writer, provider)?;
@@ -188,10 +188,10 @@ impl ToBytes for ControlFlowPath {
 }
 
 impl FromBytes for ControlFlowPath {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             path_id: u32::from_bytes_with_provider(reader, provider)?,
             basic_blocks: BoundedVec::from_bytes_with_provider(reader, provider)?,
@@ -217,7 +217,7 @@ pub struct ExecutionSample {
 }
 
 impl Checksummable for ExecutionSample {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.fuel_consumed.update_checksum(checksum);
         self.timestamp.update_checksum(checksum);
         self.input_hash.update_checksum(checksum);
@@ -226,11 +226,11 @@ impl Checksummable for ExecutionSample {
 }
 
 impl ToBytes for ExecutionSample {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.fuel_consumed.to_bytes_with_provider(writer, provider)?;
         self.timestamp.to_bytes_with_provider(writer, provider)?;
         self.input_hash.to_bytes_with_provider(writer, provider)?;
@@ -240,10 +240,10 @@ impl ToBytes for ExecutionSample {
 }
 
 impl FromBytes for ExecutionSample {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             fuel_consumed: u64::from_bytes_with_provider(reader, provider)?,
             timestamp: u64::from_bytes_with_provider(reader, provider)?,
@@ -298,7 +298,7 @@ impl Default for WcetAnalysisResult {
 impl Eq for WcetAnalysisResult {}
 
 impl Checksummable for WcetAnalysisResult {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.task_id.update_checksum(checksum);
         self.method.update_checksum(checksum);
         self.wcet_fuel.update_checksum(checksum);
@@ -313,11 +313,11 @@ impl Checksummable for WcetAnalysisResult {
 }
 
 impl ToBytes for WcetAnalysisResult {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.task_id.to_bytes_with_provider(writer, provider)?;
         self.method.to_bytes_with_provider(writer, provider)?;
         self.wcet_fuel.to_bytes_with_provider(writer, provider)?;
@@ -333,10 +333,10 @@ impl ToBytes for WcetAnalysisResult {
 }
 
 impl FromBytes for WcetAnalysisResult {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             task_id: u32::from_bytes_with_provider(reader, provider)?,
             method: WcetAnalysisMethod::from_bytes_with_provider(reader, provider)?,

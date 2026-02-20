@@ -1,6 +1,6 @@
 //! Standardized output formatting utilities
 //!
-//! Provides consistent output formatting across all cargo-wrt commands,
+//! Provides consistent output formatting across all cargo-kiln commands,
 //! supporting human-readable, JSON, and JSON Lines formats.
 
 use std::fmt::Display;
@@ -8,7 +8,7 @@ use std::fmt::Display;
 use anyhow::Result;
 use colored::Colorize;
 use serde::Serialize;
-use wrt_build_core::{
+use kiln_build_core::{
     diagnostics::DiagnosticCollection,
     formatters::{FormatterFactory, OutputFormat},
 };

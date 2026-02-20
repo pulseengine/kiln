@@ -26,7 +26,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use wrt_component::component_instantiation::{
+//! use kiln_component::component_instantiation::{
 //!     ComponentLinker,
 //!     InstanceConfig,
 //! };
@@ -53,13 +53,13 @@ use std::{
 };
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId, bounded::BoundedString, collections::StaticVec as BoundedVec, safe_managed_alloc,
     safe_memory::NoStdProvider,
 };
 
 #[cfg(feature = "std")]
-use wrt_foundation::BoundedVec;
+use kiln_foundation::BoundedVec;
 
 #[cfg(not(feature = "std"))]
 type InstantiationString = BoundedString<256>;
@@ -81,9 +81,9 @@ use alloc::{
 
 // use crate::component_communication::{CallRouter, CallContext as CommCallContext};
 // use crate::call_context::CallContextManager;
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
-use wrt_foundation::{
+use kiln_foundation::{
     MemoryProvider,
     traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
     verification::Checksum,
@@ -100,11 +100,11 @@ use crate::{
 };
 
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use wrt_foundation::allocator::{CrateId, WrtVec};
+use kiln_foundation::allocator::{CrateId, KilnVec};
 
 // Tracing imports for structured logging
 #[cfg(feature = "tracing")]
-use wrt_foundation::tracing::trace;
+use kiln_foundation::tracing::trace;
 
 /// Maximum number of component instances
 const MAX_COMPONENT_INSTANCES: usize = 1024;
@@ -303,7 +303,7 @@ pub struct ResolvedImport {
     #[cfg(feature = "std")]
     pub provider_export: String,
     #[cfg(not(feature = "std"))]
-    pub provider_export: wrt_foundation::bounded::BoundedString<64>,
+    pub provider_export: kiln_foundation::bounded::BoundedString<64>,
 }
 
 /// Component function implementation
@@ -333,7 +333,7 @@ pub enum FunctionImplementation {
         #[cfg(feature = "std")]
         callback: String, // Simplified - would be actual callback in full implementation
         #[cfg(not(feature = "std"))]
-        callback: wrt_foundation::bounded::BoundedString<64>,
+        callback: kiln_foundation::bounded::BoundedString<64>,
     },
     /// Component function (calls through canonical ABI)
     Component {
@@ -343,7 +343,7 @@ pub enum FunctionImplementation {
         #[cfg(feature = "std")]
         target_function: String,
         #[cfg(not(feature = "std"))]
-        target_function: wrt_foundation::bounded::BoundedString<64>,
+        target_function: kiln_foundation::bounded::BoundedString<64>,
     },
 }
 
@@ -488,7 +488,7 @@ impl FromBytes for FunctionImplementation {
                 #[cfg(not(feature = "std"))]
                 {
                     let callback =
-                        wrt_foundation::bounded::BoundedString::<64>::from_bytes_with_provider(
+                        kiln_foundation::bounded::BoundedString::<64>::from_bytes_with_provider(
                             reader, provider,
                         )?;
                     Ok(FunctionImplementation::Host { callback })
@@ -513,7 +513,7 @@ impl FromBytes for FunctionImplementation {
                 #[cfg(not(feature = "std"))]
                 {
                     let target_function =
-                        wrt_foundation::bounded::BoundedString::<64>::from_bytes_with_provider(
+                        kiln_foundation::bounded::BoundedString::<64>::from_bytes_with_provider(
                             reader, provider,
                         )?;
                     Ok(FunctionImplementation::Component {
@@ -732,12 +732,12 @@ impl ComponentInstance {
             nested_component_instances,
         ) = {
             (
-                WrtVec::new(),
-                WrtVec::new(),
-                WrtVec::new(),
-                WrtVec::new(),
-                WrtVec::new(),
-                WrtVec::new(),
+                KilnVec::new(),
+                KilnVec::new(),
+                KilnVec::new(),
+                KilnVec::new(),
+                KilnVec::new(),
+                KilnVec::new(),
             )
         };
 
@@ -796,9 +796,9 @@ impl ComponentInstance {
             resource_tables,
             module_instances,
             nested_component_instances,
-            #[cfg(feature = "wrt-execution")]
+            #[cfg(feature = "kiln-execution")]
             runtime_engine: None,
-            #[cfg(feature = "wrt-execution")]
+            #[cfg(feature = "kiln-execution")]
             main_instance_handle: None,
         })
     }
@@ -834,8 +834,8 @@ impl ComponentInstance {
     #[cfg(feature = "std")]
     pub fn from_parsed(
         id: InstanceId,
-        parsed: &mut wrt_format::component::Component,
-        host_registry: Option<std::sync::Arc<wrt_host::CallbackRegistry>>,
+        parsed: &mut kiln_format::component::Component,
+        host_registry: Option<std::sync::Arc<kiln_host::CallbackRegistry>>,
     ) -> Result<Self> {
         #[cfg(feature = "tracing")]
         trace!("from_parsed: ENTERED, Component passed by reference");
@@ -918,7 +918,7 @@ impl ComponentInstance {
         use alloc::collections::BTreeMap as HashMap;
         #[cfg(feature = "std")]
         use std::collections::HashMap;
-        use wrt_format::component::{AliasTarget, CoreSort};
+        use kiln_format::component::{AliasTarget, CoreSort};
 
         #[cfg(feature = "tracing")]
         trace!("from_parsed: About to build alias map");
@@ -943,7 +943,7 @@ impl ComponentInstance {
         // Create capability engine for instantiation
         #[cfg(feature = "tracing")]
         trace!("from_parsed: About to create CapabilityAwareEngine");
-        use wrt_runtime::engine::{CapabilityAwareEngine, CapabilityEngine, EnginePreset};
+        use kiln_runtime::engine::{CapabilityAwareEngine, CapabilityEngine, EnginePreset};
         let mut engine = CapabilityAwareEngine::with_preset(EnginePreset::QM)?;
         #[cfg(feature = "tracing")]
         trace!("from_parsed: engine created");
@@ -964,7 +964,7 @@ impl ComponentInstance {
         use alloc::collections::BTreeMap;
         #[cfg(feature = "std")]
         use std::collections::BTreeMap;
-        use wrt_runtime::engine::InstanceHandle;
+        use kiln_runtime::engine::InstanceHandle;
         let mut core_instances_map: BTreeMap<usize, InstanceHandle> = BTreeMap::new();
         // Track InlineExports export names for later use when linking instance imports
         // Map: core_instance_idx -> Vec of (semantic_name, actual_export_name, sort)
@@ -1000,7 +1000,7 @@ impl ComponentInstance {
             // The index now comes from alias.dest_idx which was computed during parsing
             // to account for intermixed canon definitions
             use std::collections::HashMap;
-            use wrt_format::component::{AliasTarget, CoreSort};
+            use kiln_format::component::{AliasTarget, CoreSort};
             let mut alias_map: HashMap<(CoreSort, u32), (u32, String)> = HashMap::new();
 
             #[cfg(feature = "tracing")]
@@ -1027,7 +1027,7 @@ impl ComponentInstance {
 
             // Handle component instance export aliases
             // Map: (Sort, index) -> (instance_idx, export_name)
-            use wrt_format::component::Sort;
+            use kiln_format::component::Sort;
             let mut component_alias_map: HashMap<(Sort, u32), (u32, String)> = HashMap::new();
 
             for alias in &parsed.aliases {
@@ -1078,7 +1078,7 @@ impl ComponentInstance {
                     // Check if this import is a function
                     if matches!(
                         import.ty,
-                        wrt_format::component::ExternType::Function { .. }
+                        kiln_format::component::ExternType::Function { .. }
                     ) {
                         let interface = if !import.name.namespace.is_empty() {
                             import.name.namespace.clone()
@@ -1121,10 +1121,10 @@ impl ComponentInstance {
                     //   (common: WASI interfaces are encoded as type references)
                     // Function and Value imports go to their own index spaces.
                     let is_instance_import = match &import.ty {
-                        wrt_format::component::ExternType::Instance { .. } => true,
-                        wrt_format::component::ExternType::Type(_) => true,
-                        wrt_format::component::ExternType::Component { .. } => true,
-                        wrt_format::component::ExternType::Module { .. } => true,
+                        kiln_format::component::ExternType::Instance { .. } => true,
+                        kiln_format::component::ExternType::Type(_) => true,
+                        kiln_format::component::ExternType::Component { .. } => true,
+                        kiln_format::component::ExternType::Module { .. } => true,
                         _ => false,
                     };
 
@@ -1153,7 +1153,7 @@ impl ComponentInstance {
                 for (i, instance) in parsed.instances.iter().enumerate() {
                     let combined_idx = num_instance_imports + i as u32;
                     match &instance.instance_expr {
-                        wrt_format::component::InstanceExpr::ComponentReference {
+                        kiln_format::component::InstanceExpr::ComponentReference {
                             arg_refs,
                             ..
                         } => {
@@ -1164,7 +1164,7 @@ impl ComponentInstance {
                                 }
                             }
                         },
-                        wrt_format::component::InstanceExpr::InlineExports(_) => {
+                        kiln_format::component::InstanceExpr::InlineExports(_) => {
                             // InlineExports don't directly represent WASI interfaces
                         },
                     }
@@ -1184,7 +1184,7 @@ impl ComponentInstance {
             // canon.lower indices to the remaining slots.
             let mut canon_lower_map: HashMap<u32, (u32, String, String)> = HashMap::new();
             {
-                use wrt_format::component::CanonOperation;
+                use kiln_format::component::CanonOperation;
 
                 // Collect all function alias dest_idx values
                 let alias_func_indices: std::collections::HashSet<u32> = alias_map
@@ -1360,7 +1360,7 @@ impl ComponentInstance {
                 );
 
                 // Extract module reference from instance expression
-                use wrt_format::component::CoreInstanceExpr;
+                use kiln_format::component::CoreInstanceExpr;
                 match &core_instance.instance_expr {
                     CoreInstanceExpr::ModuleReference {
                         module_idx,
@@ -1452,7 +1452,7 @@ impl ComponentInstance {
 
                                     // TODO: Phase 2.2 - Implement proper alias resolution
                                     // For now, return error instead of using hardcoded indices
-                                    return Err(wrt_error::Error::component_linking_error(
+                                    return Err(kiln_error::Error::component_linking_error(
                                         "Module requires imports but no arg_refs provided - alias resolution needed",
                                     ));
                                 }
@@ -2030,7 +2030,7 @@ impl ComponentInstance {
         #[cfg(feature = "std")]
         let nested_instances = {
             use crate::types::{NestedComponentInstance, NestedExportKind, NestedExportRef};
-            use wrt_format::component::{InstanceExpr, Sort};
+            use kiln_format::component::{InstanceExpr, Sort};
 
             println!("=== Phase 7b: Nested Component Instances ===");
             println!("Nested components defined: {}", parsed.components.len());
@@ -2069,8 +2069,8 @@ impl ComponentInstance {
                                 parsed.components.len()
                             );
                             return Err(Error::new(
-                                wrt_error::ErrorCategory::Validation,
-                                wrt_error::codes::VALIDATION_ERROR,
+                                kiln_error::ErrorCategory::Validation,
+                                kiln_error::codes::VALIDATION_ERROR,
                                 "Nested component index out of range",
                             ));
                         }
@@ -2170,8 +2170,8 @@ impl ComponentInstance {
                                     MAX_COMPONENT_NESTING_DEPTH, current_depth
                                 );
                                 return Err(Error::new(
-                                    wrt_error::ErrorCategory::Validation,
-                                    wrt_error::codes::VALIDATION_ERROR,
+                                    kiln_error::ErrorCategory::Validation,
+                                    kiln_error::codes::VALIDATION_ERROR,
                                     "Maximum component nesting depth exceeded - possible circular dependency",
                                 ));
                             }
@@ -2283,8 +2283,8 @@ impl ComponentInstance {
                                     };
 
                                     return Err(Error::new(
-                                        wrt_error::ErrorCategory::ComponentRuntime,
-                                        wrt_error::codes::COMPONENT_INSTANTIATION_RUNTIME_ERROR,
+                                        kiln_error::ErrorCategory::ComponentRuntime,
+                                        kiln_error::codes::COMPONENT_INSTANTIATION_RUNTIME_ERROR,
                                         static_msg,
                                     ));
                                 },
@@ -2345,7 +2345,7 @@ impl ComponentInstance {
 
         // Build minimal runtime component
         // In future: this will hold the actual converted data
-        let component_type = crate::components::component::WrtComponentType::default();
+        let component_type = crate::components::component::KilnComponentType::default();
         let mut runtime_component = RuntimeComponent::new(component_type);
 
         // Store module binaries in runtime component
@@ -2457,7 +2457,7 @@ impl ComponentInstance {
         }
 
         // Store the engine in the instance so it can be used for executing functions
-        #[cfg(feature = "wrt-execution")]
+        #[cfg(feature = "kiln-execution")]
         {
             instance.runtime_engine = Some(Box::new(engine));
 
@@ -2605,11 +2605,11 @@ impl ComponentInstance {
     /// Looks up a type definition by its index in the type section.
     /// Returns an error if the index is out of bounds.
     #[cfg(feature = "std")]
-    pub fn get_type(&self, idx: u32) -> Result<&wrt_format::component::ComponentType> {
+    pub fn get_type(&self, idx: u32) -> Result<&kiln_format::component::ComponentType> {
         self.type_index.get(&idx).ok_or_else(|| {
             Error::new(
-                wrt_error::ErrorCategory::Validation,
-                wrt_error::codes::OUT_OF_BOUNDS_ERROR,
+                kiln_error::ErrorCategory::Validation,
+                kiln_error::codes::OUT_OF_BOUNDS_ERROR,
                 "Type index out of bounds",
             )
         })
@@ -2632,10 +2632,10 @@ impl ComponentInstance {
     #[cfg(feature = "std")]
     pub fn resolve_extern_type(
         &self,
-        extern_type: &wrt_format::component::ExternType,
-    ) -> Result<Option<&wrt_format::component::ComponentType>> {
+        extern_type: &kiln_format::component::ExternType,
+    ) -> Result<Option<&kiln_format::component::ComponentType>> {
         match extern_type {
-            wrt_format::component::ExternType::Type(idx) => {
+            kiln_format::component::ExternType::Type(idx) => {
                 // Resolve the type index
                 let resolved = self.get_type(*idx)?;
                 Ok(Some(resolved))
@@ -2654,7 +2654,7 @@ impl ComponentInstance {
     ///
     /// **Max depth**: 16 levels of indirection (ASIL-D bounded)
     #[cfg(feature = "std")]
-    pub fn resolve_type_safe(&self, idx: u32) -> Result<&wrt_format::component::ComponentType> {
+    pub fn resolve_type_safe(&self, idx: u32) -> Result<&kiln_format::component::ComponentType> {
         const MAX_RESOLUTION_DEPTH: usize = 16;
 
         let mut current_idx = idx;
@@ -2664,8 +2664,8 @@ impl ComponentInstance {
             // Check for circular reference
             if !visited.insert(current_idx) {
                 return Err(Error::new(
-                    wrt_error::ErrorCategory::Validation,
-                    wrt_error::codes::VALIDATION_ERROR,
+                    kiln_error::ErrorCategory::Validation,
+                    kiln_error::codes::VALIDATION_ERROR,
                     "Circular type reference detected",
                 ));
             }
@@ -2681,8 +2681,8 @@ impl ComponentInstance {
 
         // If we hit max depth without resolving, that's an error
         Err(Error::new(
-            wrt_error::ErrorCategory::Validation,
-            wrt_error::codes::VALIDATION_ERROR,
+            kiln_error::ErrorCategory::Validation,
+            kiln_error::codes::VALIDATION_ERROR,
             "Type resolution depth exceeded (possible circular reference)",
         ))
     }
@@ -2696,8 +2696,8 @@ impl ComponentInstance {
     /// Validate component against ASIL-D safety limits
     ///
     /// Fails fast if any limit is exceeded, preventing resource exhaustion.
-    fn validate_component_limits(parsed: &wrt_format::component::Component) -> Result<()> {
-        use wrt_error::{ErrorCategory, codes};
+    fn validate_component_limits(parsed: &kiln_format::component::Component) -> Result<()> {
+        use kiln_error::{ErrorCategory, codes};
 
         if parsed.modules.len() > MAX_CORE_MODULES {
             return Err(Error::new(
@@ -2757,8 +2757,8 @@ impl ComponentInstance {
     ///
     /// **Memory**: After this call, parsed.modules is empty - memory is transferred.
     /// **Step 4**: Now shows detailed validation output for each module
-    fn extract_core_modules(parsed: &mut wrt_format::component::Component) -> Result<Vec<Vec<u8>>> {
-        use wrt_error::{ErrorCategory, codes};
+    fn extract_core_modules(parsed: &mut kiln_format::component::Component) -> Result<Vec<Vec<u8>>> {
+        use kiln_error::{ErrorCategory, codes};
 
         #[cfg(feature = "std")]
         {
@@ -2825,8 +2825,8 @@ impl ComponentInstance {
     }
 
     /// Get a readable type name for logging/debugging
-    fn get_type_name(ty: &wrt_format::component::ComponentType) -> &'static str {
-        use wrt_format::component::ComponentTypeDefinition;
+    fn get_type_name(ty: &kiln_format::component::ComponentType) -> &'static str {
+        use kiln_format::component::ComponentTypeDefinition;
         match &ty.definition {
             ComponentTypeDefinition::Component { .. } => "Component",
             ComponentTypeDefinition::Instance { .. } => "Instance",
@@ -2844,7 +2844,7 @@ impl ComponentInstance {
     /// - Lower: Convert component values to core values
     /// - Resource: Resource lifecycle operations (new/drop/rep)
     #[cfg(feature = "std")]
-    fn parse_canonical_operations(canonicals: &[wrt_format::component::Canon]) -> Result<()> {
+    fn parse_canonical_operations(canonicals: &[kiln_format::component::Canon]) -> Result<()> {
         println!("=== STEP 5: Canonical ABI Operations ===");
         println!("Total operations: {}", canonicals.len());
 
@@ -2854,7 +2854,7 @@ impl ComponentInstance {
         }
 
         for (idx, canon) in canonicals.iter().enumerate() {
-            use wrt_format::component::CanonOperation;
+            use kiln_format::component::CanonOperation;
 
             print!("  Canon[{}]: ", idx);
 
@@ -2871,7 +2871,7 @@ impl ComponentInstance {
                     println!("    └─ Component func[{}] → Core", func_idx);
                 },
                 CanonOperation::Resource(res_op) => {
-                    use wrt_format::component::FormatResourceOperation;
+                    use kiln_format::component::FormatResourceOperation;
                     match res_op {
                         FormatResourceOperation::New(res_new) => {
                             println!("Resource.New");
@@ -2921,13 +2921,13 @@ impl ComponentInstance {
 
     /// Parse canonical operations (no_std placeholder)
     #[cfg(not(feature = "std"))]
-    fn parse_canonical_operations(_canonicals: &[wrt_format::component::Canon]) -> Result<()> {
+    fn parse_canonical_operations(_canonicals: &[kiln_format::component::Canon]) -> Result<()> {
         Ok(())
     }
 
     /// Parse and display component exports (Step 6a)
     #[cfg(feature = "std")]
-    fn parse_exports(exports: &[wrt_format::component::Export]) -> Result<()> {
+    fn parse_exports(exports: &[kiln_format::component::Export]) -> Result<()> {
         println!("=== STEP 6a: Component Exports ===");
         println!("Total exports: {}", exports.len());
 
@@ -2937,14 +2937,14 @@ impl ComponentInstance {
         }
 
         for (idx, export) in exports.iter().enumerate() {
-            use wrt_format::component::Sort;
+            use kiln_format::component::Sort;
 
             println!("  Export[{}]: \"{}\"", idx, export.name.name);
 
             // Show sort (Function, Instance, etc.)
             let sort_name = match &export.sort {
                 Sort::Core(core_sort) => {
-                    use wrt_format::component::CoreSort;
+                    use kiln_format::component::CoreSort;
                     match core_sort {
                         CoreSort::Function => "Core.Function",
                         CoreSort::Table => "Core.Table",
@@ -2966,7 +2966,7 @@ impl ComponentInstance {
 
             // Show type information if available
             if let Some(ref ty) = export.ty {
-                use wrt_format::component::ExternType;
+                use kiln_format::component::ExternType;
                 match ty {
                     ExternType::Function {
                         params, results, ..
@@ -3023,13 +3023,13 @@ impl ComponentInstance {
 
     /// Parse exports (no_std placeholder)
     #[cfg(not(feature = "std"))]
-    fn parse_exports(_exports: &[wrt_format::component::Export]) -> Result<()> {
+    fn parse_exports(_exports: &[kiln_format::component::Export]) -> Result<()> {
         Ok(())
     }
 
     /// Parse and display component imports (Step 6b)
     #[cfg(feature = "std")]
-    fn parse_imports(imports: &[wrt_format::component::Import]) -> Result<()> {
+    fn parse_imports(imports: &[kiln_format::component::Import]) -> Result<()> {
         println!("=== STEP 6b: Component Imports ===");
         println!("Total imports: {}", imports.len());
 
@@ -3039,7 +3039,7 @@ impl ComponentInstance {
         }
 
         for (idx, import) in imports.iter().enumerate() {
-            use wrt_format::component::ExternType;
+            use kiln_format::component::ExternType;
 
             // Show namespace.name format
             let full_name = if import.name.nested.is_empty() {
@@ -3108,7 +3108,7 @@ impl ComponentInstance {
 
     /// Parse imports (no_std placeholder)
     #[cfg(not(feature = "std"))]
-    fn parse_imports(_imports: &[wrt_format::component::Import]) -> Result<()> {
+    fn parse_imports(_imports: &[kiln_format::component::Import]) -> Result<()> {
         Ok(())
     }
 
@@ -3116,12 +3116,12 @@ impl ComponentInstance {
     #[cfg(feature = "std")]
     fn resolve_exports(
         instance: &mut Self,
-        parsed_exports: &[wrt_format::component::Export],
+        parsed_exports: &[kiln_format::component::Export],
     ) -> Result<()> {
         use crate::bounded_component_infra::ComponentProvider;
         use crate::instantiation::{ExportValue, FunctionExport, ResolvedExport};
-        use wrt_format::component::Sort;
-        use wrt_foundation::safe_memory::NoStdProvider;
+        use kiln_format::component::Sort;
+        use kiln_foundation::safe_memory::NoStdProvider;
 
         println!("\n=== Resolving Component Exports ===");
         println!("Total exports to resolve: {}", parsed_exports.len());
@@ -3140,7 +3140,7 @@ impl ComponentInstance {
                 Sort::Function => {
                     // Create a function export with placeholder signature
                     let provider = NoStdProvider::<4096>::default();
-                    let signature = wrt_foundation::ComponentType::unit(provider)
+                    let signature = kiln_foundation::ComponentType::unit(provider)
                         .unwrap_or_else(|_| panic!("Failed to create component type"));
 
                     let func_export = FunctionExport {
@@ -3189,14 +3189,14 @@ impl ComponentInstance {
                             params: Vec::new(),
                             #[cfg(not(feature = "std"))]
                             params: {
-                                use wrt_foundation::bounded::BoundedVec;
+                                use kiln_foundation::bounded::BoundedVec;
                                 BoundedVec::new()
                             },
                             #[cfg(feature = "std")]
                             returns: Vec::new(),
                             #[cfg(not(feature = "std"))]
                             returns: {
-                                use wrt_foundation::bounded::BoundedVec;
+                                use kiln_foundation::bounded::BoundedVec;
                                 BoundedVec::new()
                             },
                         },
@@ -3231,14 +3231,14 @@ impl ComponentInstance {
                             params: Vec::new(),
                             #[cfg(not(feature = "std"))]
                             params: {
-                                use wrt_foundation::bounded::BoundedVec;
+                                use kiln_foundation::bounded::BoundedVec;
                                 BoundedVec::new()
                             },
                             #[cfg(feature = "std")]
                             returns: Vec::new(),
                             #[cfg(not(feature = "std"))]
                             returns: {
-                                use wrt_foundation::bounded::BoundedVec;
+                                use kiln_foundation::bounded::BoundedVec;
                                 BoundedVec::new()
                             },
                         },
@@ -3277,7 +3277,7 @@ impl ComponentInstance {
     #[cfg(feature = "std")]
     fn instantiate_core_modules(
         module_binaries: &[Vec<u8>],
-    ) -> Result<Vec<wrt_runtime::module::Module>> {
+    ) -> Result<Vec<kiln_runtime::module::Module>> {
         println!("=== STEP 7: Core Module Instantiation ===");
         println!("Total modules to instantiate: {}", module_binaries.len());
 
@@ -3300,12 +3300,12 @@ impl ComponentInstance {
             println!("  Module[{}]:", idx);
             println!("    ├─ Binary size: {} bytes", binary.len());
 
-            // Parse the module using wrt-decoder
-            use wrt_decoder::load_wasm_unified;
+            // Parse the module using kiln-decoder
+            use kiln_decoder::load_wasm_unified;
             let wasm_info = load_wasm_unified(binary).map_err(|_| {
                 Error::new(
-                    wrt_error::ErrorCategory::Parse,
-                    wrt_error::codes::PARSE_ERROR,
+                    kiln_error::ErrorCategory::Parse,
+                    kiln_error::codes::PARSE_ERROR,
                     "Failed to parse core module binary",
                 )
             })?;
@@ -3318,8 +3318,8 @@ impl ComponentInstance {
 
             let module_info = wasm_info.require_module_info().map_err(|_| {
                 Error::new(
-                    wrt_error::ErrorCategory::Parse,
-                    wrt_error::codes::PARSE_ERROR,
+                    kiln_error::ErrorCategory::Parse,
+                    kiln_error::codes::PARSE_ERROR,
                     "Module info not available",
                 )
             })?;
@@ -3334,22 +3334,22 @@ impl ComponentInstance {
             let func_imports = module_info
                 .imports
                 .iter()
-                .filter(|i| matches!(i.import_type, wrt_decoder::ImportType::Function(_)))
+                .filter(|i| matches!(i.import_type, kiln_decoder::ImportType::Function(_)))
                 .count();
             let memory_imports = module_info
                 .imports
                 .iter()
-                .filter(|i| matches!(i.import_type, wrt_decoder::ImportType::Memory))
+                .filter(|i| matches!(i.import_type, kiln_decoder::ImportType::Memory))
                 .count();
             let table_imports = module_info
                 .imports
                 .iter()
-                .filter(|i| matches!(i.import_type, wrt_decoder::ImportType::Table))
+                .filter(|i| matches!(i.import_type, kiln_decoder::ImportType::Table))
                 .count();
             let global_imports = module_info
                 .imports
                 .iter()
-                .filter(|i| matches!(i.import_type, wrt_decoder::ImportType::Global))
+                .filter(|i| matches!(i.import_type, kiln_decoder::ImportType::Global))
                 .count();
 
             if func_imports > 0 {
@@ -3369,22 +3369,22 @@ impl ComponentInstance {
             let func_exports = module_info
                 .exports
                 .iter()
-                .filter(|e| matches!(e.export_type, wrt_decoder::ExportType::Function))
+                .filter(|e| matches!(e.export_type, kiln_decoder::ExportType::Function))
                 .count();
             let memory_exports = module_info
                 .exports
                 .iter()
-                .filter(|e| matches!(e.export_type, wrt_decoder::ExportType::Memory))
+                .filter(|e| matches!(e.export_type, kiln_decoder::ExportType::Memory))
                 .count();
             let table_exports = module_info
                 .exports
                 .iter()
-                .filter(|e| matches!(e.export_type, wrt_decoder::ExportType::Table))
+                .filter(|e| matches!(e.export_type, kiln_decoder::ExportType::Table))
                 .count();
             let global_exports = module_info
                 .exports
                 .iter()
-                .filter(|e| matches!(e.export_type, wrt_decoder::ExportType::Global))
+                .filter(|e| matches!(e.export_type, kiln_decoder::ExportType::Global))
                 .count();
 
             if func_exports > 0 {
@@ -3422,10 +3422,10 @@ impl ComponentInstance {
                 println!("    ├─ Key exports:");
                 for (eidx, export) in module_info.exports.iter().take(3).enumerate() {
                     let export_type = match &export.export_type {
-                        wrt_decoder::ExportType::Function => "Function",
-                        wrt_decoder::ExportType::Table => "Table",
-                        wrt_decoder::ExportType::Memory => "Memory",
-                        wrt_decoder::ExportType::Global => "Global",
+                        kiln_decoder::ExportType::Function => "Function",
+                        kiln_decoder::ExportType::Table => "Table",
+                        kiln_decoder::ExportType::Memory => "Memory",
+                        kiln_decoder::ExportType::Global => "Global",
                     };
                     if eidx < 2 {
                         println!("    │  ├─ \"{}\": {}", export.name, export_type);
@@ -3438,7 +3438,7 @@ impl ComponentInstance {
                 }
             }
 
-            // Instantiate the module using wrt-runtime
+            // Instantiate the module using kiln-runtime
             println!("    ├─ Status: Parsing successful");
 
             // Use a thread with larger stack size for module loading (16MB)
@@ -3447,26 +3447,26 @@ impl ComponentInstance {
             let runtime_module = std::thread::Builder::new()
                 .name(format!("module-loader-{}", idx))
                 .stack_size(16 * 1024 * 1024)  // 16MB stack
-                .spawn(move || -> Result<wrt_runtime::module::Module> {
+                .spawn(move || -> Result<kiln_runtime::module::Module> {
                     {
-                        let mut module = wrt_runtime::module::Module::new_empty()?;
+                        let mut module = kiln_runtime::module::Module::new_empty()?;
                         module.load_from_binary(&binary_clone)
                     }
                         .map_err(|_| Error::new(
-                            wrt_error::ErrorCategory::RuntimeTrap,
-                            wrt_error::codes::RUNTIME_ERROR,
+                            kiln_error::ErrorCategory::RuntimeTrap,
+                            kiln_error::codes::RUNTIME_ERROR,
                             "Failed to load module from binary"
                         ))
                 })
                 .map_err(|_| Error::new(
-                    wrt_error::ErrorCategory::RuntimeTrap,
-                    wrt_error::codes::RUNTIME_ERROR,
+                    kiln_error::ErrorCategory::RuntimeTrap,
+                    kiln_error::codes::RUNTIME_ERROR,
                     "Failed to spawn module loader thread"
                 ))?
                 .join()
                 .map_err(|_| Error::new(
-                    wrt_error::ErrorCategory::RuntimeTrap,
-                    wrt_error::codes::RUNTIME_ERROR,
+                    kiln_error::ErrorCategory::RuntimeTrap,
+                    kiln_error::codes::RUNTIME_ERROR,
                     "Module loader thread panicked"
                 ))??;
 
@@ -3486,14 +3486,14 @@ impl ComponentInstance {
     #[cfg(feature = "std")]
     fn instantiate_core_modules_parallel(
         module_binaries: &[Vec<u8>],
-    ) -> Result<Vec<wrt_runtime::module::Module>> {
+    ) -> Result<Vec<kiln_runtime::module::Module>> {
         use std::sync::{Arc, Mutex};
         use std::time::Instant;
 
         let start_time = Instant::now();
 
         // Shared results vector protected by Mutex
-        let results: Arc<Mutex<Vec<Option<wrt_runtime::module::Module>>>> =
+        let results: Arc<Mutex<Vec<Option<kiln_runtime::module::Module>>>> =
             Arc::new(Mutex::new(vec![None; module_binaries.len()]));
 
         // Shared error tracking
@@ -3558,15 +3558,15 @@ impl ComponentInstance {
                 println!("  Module[{}]: {}", idx, err);
             }
             return Err(Error::new(
-                wrt_error::ErrorCategory::RuntimeTrap,
-                wrt_error::codes::RUNTIME_ERROR,
+                kiln_error::ErrorCategory::RuntimeTrap,
+                kiln_error::codes::RUNTIME_ERROR,
                 "One or more modules failed to instantiate",
             ));
         }
 
         // Collect successful results
         let results_guard = results.lock().unwrap();
-        let instantiated_modules: Vec<wrt_runtime::module::Module> =
+        let instantiated_modules: Vec<kiln_runtime::module::Module> =
             results_guard.iter().filter_map(|opt| opt.as_ref().cloned()).collect();
 
         println!(
@@ -3578,14 +3578,14 @@ impl ComponentInstance {
 
     /// Instantiate a single module (helper for parallel processing)
     #[cfg(feature = "std")]
-    fn instantiate_single_module(idx: usize, binary: &[u8]) -> Result<wrt_runtime::module::Module> {
-        use wrt_decoder::load_wasm_unified;
+    fn instantiate_single_module(idx: usize, binary: &[u8]) -> Result<kiln_runtime::module::Module> {
+        use kiln_decoder::load_wasm_unified;
 
         // Parse the module
         let wasm_info = load_wasm_unified(binary).map_err(|_| {
             Error::new(
-                wrt_error::ErrorCategory::Parse,
-                wrt_error::codes::PARSE_ERROR,
+                kiln_error::ErrorCategory::Parse,
+                kiln_error::codes::PARSE_ERROR,
                 "Failed to parse core module binary",
             )
         })?;
@@ -3593,16 +3593,16 @@ impl ComponentInstance {
         // Verify it's a core module
         if !wasm_info.is_core_module() {
             return Err(Error::new(
-                wrt_error::ErrorCategory::Validation,
-                wrt_error::codes::VALIDATION_ERROR,
+                kiln_error::ErrorCategory::Validation,
+                kiln_error::codes::VALIDATION_ERROR,
                 "Not a core module",
             ));
         }
 
         let module_info = wasm_info.require_module_info().map_err(|_| {
             Error::new(
-                wrt_error::ErrorCategory::Parse,
-                wrt_error::codes::PARSE_ERROR,
+                kiln_error::ErrorCategory::Parse,
+                kiln_error::codes::PARSE_ERROR,
                 "Module info not available",
             )
         })?;
@@ -3618,11 +3618,11 @@ impl ComponentInstance {
 
         // Create runtime module directly from binary
         let runtime_module = {
-            let mut module = wrt_runtime::module::Module::new_empty()?;
+            let mut module = kiln_runtime::module::Module::new_empty()?;
             module.load_from_binary(binary).map_err(|_| {
                 Error::new(
-                    wrt_error::ErrorCategory::RuntimeTrap,
-                    wrt_error::codes::RUNTIME_ERROR,
+                    kiln_error::ErrorCategory::RuntimeTrap,
+                    kiln_error::codes::RUNTIME_ERROR,
                     "Failed to load module from binary",
                 )
             })
@@ -3635,13 +3635,13 @@ impl ComponentInstance {
     #[cfg(not(feature = "std"))]
     fn instantiate_core_modules(
         _module_binaries: &[Vec<u8>],
-    ) -> Result<Vec<wrt_runtime::module::Module>> {
+    ) -> Result<Vec<kiln_runtime::module::Module>> {
         Ok(Vec::new())
     }
 
     /// Link core modules by analyzing imports and exports (Step 9)
     #[cfg(feature = "std")]
-    fn link_core_modules(modules: &[wrt_runtime::module::Module]) -> Result<()> {
+    fn link_core_modules(modules: &[kiln_runtime::module::Module]) -> Result<()> {
         use std::collections::{HashMap, HashSet};
 
         println!("=== STEP 9: Module Linking ===");
@@ -3758,8 +3758,8 @@ impl ComponentInstance {
         ) -> Result<()> {
             if in_progress.contains(&node) {
                 return Err(Error::new(
-                    wrt_error::ErrorCategory::Validation,
-                    wrt_error::codes::VALIDATION_ERROR,
+                    kiln_error::ErrorCategory::Validation,
+                    kiln_error::codes::VALIDATION_ERROR,
                     "Circular dependency detected",
                 ));
             }
@@ -3792,7 +3792,7 @@ impl ComponentInstance {
 
     /// Link core modules (no_std placeholder)
     #[cfg(not(feature = "std"))]
-    fn link_core_modules(_modules: &[wrt_runtime::module::Module]) -> Result<()> {
+    fn link_core_modules(_modules: &[kiln_runtime::module::Module]) -> Result<()> {
         Ok(())
     }
 
@@ -3800,7 +3800,7 @@ impl ComponentInstance {
     /// Returns: Vec<(module_idx, function_name, function_idx, is_start)>
     #[cfg(feature = "std")]
     fn prepare_module_execution(
-        modules: &[wrt_runtime::module::Module],
+        modules: &[kiln_runtime::module::Module],
     ) -> Result<Vec<(usize, String, u32, bool)>> {
         println!("=== STEP 10: Execution Preparation ===");
         println!("Total modules to prepare: {}", modules.len());
@@ -3832,7 +3832,7 @@ impl ComponentInstance {
             // Count exported functions
             let mut func_exports = Vec::new();
             for (export_name, export_val) in module.exports.iter() {
-                if let wrt_runtime::module::ExportKind::Function = export_val.kind {
+                if let kiln_runtime::module::ExportKind::Function = export_val.kind {
                     // BoundedString::as_str() returns Result<&str, BoundedError>
                     let name_str = export_name.as_str().unwrap_or("<invalid>");
 
@@ -3915,14 +3915,14 @@ impl ComponentInstance {
 
     /// Prepare modules for execution (no_std placeholder)
     #[cfg(not(feature = "std"))]
-    fn prepare_module_execution(_modules: &[wrt_runtime::module::Module]) -> Result<Vec<()>> {
+    fn prepare_module_execution(_modules: &[kiln_runtime::module::Module]) -> Result<Vec<()>> {
         Ok(Vec::new())
     }
 
     /// Execute modules according to execution plan (Step 11)
     #[cfg(feature = "std")]
     fn execute_modules(
-        modules: &[wrt_runtime::module::Module],
+        modules: &[kiln_runtime::module::Module],
         execution_plan: &[(usize, String, u32, bool)],
     ) -> Result<()> {
         println!("=== STEP 11: Function Execution ===");
@@ -3996,18 +3996,18 @@ impl ComponentInstance {
 
     /// Execute modules (no_std placeholder)
     #[cfg(not(feature = "std"))]
-    fn execute_modules(_modules: &[wrt_runtime::module::Module], _plan: &[()]) -> Result<()> {
+    fn execute_modules(_modules: &[kiln_runtime::module::Module], _plan: &[()]) -> Result<()> {
         Ok(())
     }
 
     /// Initialize execution engine with configuration (Step 12)
     #[cfg(feature = "std")]
     fn initialize_engine(
-        modules: &[wrt_runtime::module::Module],
+        modules: &[kiln_runtime::module::Module],
         execution_plan: &[(usize, String, u32, bool)],
-        host_registry: Option<std::sync::Arc<wrt_host::CallbackRegistry>>,
-    ) -> Result<Box<dyn wrt_runtime::engine_factory::RuntimeEngine>> {
-        use wrt_runtime::engine_factory::{
+        host_registry: Option<std::sync::Arc<kiln_host::CallbackRegistry>>,
+    ) -> Result<Box<dyn kiln_runtime::engine_factory::RuntimeEngine>> {
+        use kiln_runtime::engine_factory::{
             EngineConfig, EngineFactory, EngineType, MemoryProviderType,
         };
 
@@ -4089,7 +4089,7 @@ impl ComponentInstance {
     /// Initialize engine (no_std placeholder)
     #[cfg(not(feature = "std"))]
     fn initialize_engine(
-        _modules: &[wrt_runtime::module::Module],
+        _modules: &[kiln_runtime::module::Module],
         _plan: &[()],
         _host_registry: Option<()>,
     ) -> Result<()> {
@@ -4105,8 +4105,8 @@ impl ComponentInstance {
     /// **Step 2**: Now stores the index for runtime type lookup
     #[cfg(feature = "std")]
     fn build_type_index(
-        types: &[wrt_format::component::ComponentType],
-    ) -> Result<std::collections::HashMap<u32, wrt_format::component::ComponentType>> {
+        types: &[kiln_format::component::ComponentType],
+    ) -> Result<std::collections::HashMap<u32, kiln_format::component::ComponentType>> {
         use std::collections::HashMap;
 
         println!("=== STEP 1: Building Type Index ===");
@@ -4119,7 +4119,7 @@ impl ComponentInstance {
             println!("  Type[{}]: {}", idx, type_name);
 
             // Additional detail for function types (most common)
-            if let wrt_format::component::ComponentTypeDefinition::Function { params, results } =
+            if let kiln_format::component::ComponentTypeDefinition::Function { params, results } =
                 &ty.definition
             {
                 println!("    ├─ Params: {}", params.len());
@@ -4135,13 +4135,13 @@ impl ComponentInstance {
 
     /// Build type index (no_std version - simplified, no printing)
     #[cfg(not(feature = "std"))]
-    fn build_type_index(types: &[wrt_format::component::ComponentType]) -> Result<()> {
+    fn build_type_index(types: &[kiln_format::component::ComponentType]) -> Result<()> {
         // In no_std, we just validate type count for now
         // Full type resolution will be implemented when needed
         if types.len() > MAX_TYPES {
             return Err(Error::new(
-                wrt_error::ErrorCategory::Validation,
-                wrt_error::codes::CAPACITY_EXCEEDED,
+                kiln_error::ErrorCategory::Validation,
+                kiln_error::codes::CAPACITY_EXCEEDED,
                 "Type count exceeds maximum",
             ));
         }
@@ -4175,12 +4175,12 @@ impl ComponentInstance {
     /// # Note
     /// This method does not support component-to-component calls. Use
     /// `call_function_with_resolver` if cross-component calls are needed.
-    #[cfg(feature = "wrt-execution")]
+    #[cfg(feature = "kiln-execution")]
     pub fn call_function(
         &mut self,
         function_name: &str,
         args: &[ComponentValue],
-        host_registry: Option<&wrt_host::CallbackRegistry>,
+        host_registry: Option<&kiln_host::CallbackRegistry>,
     ) -> Result<Vec<ComponentValue>> {
         // Define a concrete type for the resolver to satisfy type inference
         // This is the closure type that matches the resolver signature
@@ -4202,12 +4202,12 @@ impl ComponentInstance {
     /// When a function has `FunctionImplementation::Component`, this method will use the
     /// provided resolver to dispatch the call to the target component instance. The resolver
     /// is typically provided by the `ComponentLinker` which manages all instances.
-    #[cfg(feature = "wrt-execution")]
+    #[cfg(feature = "kiln-execution")]
     pub fn call_function_with_resolver<F>(
         &mut self,
         function_name: &str,
         args: &[ComponentValue],
-        host_registry: Option<&wrt_host::CallbackRegistry>,
+        host_registry: Option<&kiln_host::CallbackRegistry>,
         cross_component_resolver: Option<F>,
     ) -> Result<Vec<ComponentValue>>
     where
@@ -4290,7 +4290,7 @@ impl ComponentInstance {
     }
 
     /// Call a function in this instance (no host registry version)
-    #[cfg(not(feature = "wrt-execution"))]
+    #[cfg(not(feature = "kiln-execution"))]
     pub fn call_function(
         &mut self,
         function_name: &str,
@@ -4527,10 +4527,10 @@ impl ComponentInstance {
 
         // Use the stored engine and instance handle from component instantiation
         // This preserves all the import linkages established during instantiation
-        #[cfg(feature = "wrt-execution")]
+        #[cfg(feature = "kiln-execution")]
         {
-            use wrt_foundation::values::Value;
-            use wrt_runtime::engine::CapabilityEngine;
+            use kiln_foundation::values::Value;
+            use kiln_runtime::engine::CapabilityEngine;
 
             if let (Some(engine_box), Some(instance_handle)) =
                 (&mut self.runtime_engine, self.main_instance_handle)
@@ -4629,7 +4629,7 @@ impl ComponentInstance {
         }
 
         // Fallback: Create fresh engine if stored engine not available
-        // This path is used when wrt-execution feature is disabled or during testing
+        // This path is used when kiln-execution feature is disabled or during testing
         let module_binary = self
             .component
             .modules
@@ -4654,20 +4654,20 @@ impl ComponentInstance {
 
                 let module = {
                     // Create module directly using create_runtime_provider
-                    let provider = wrt_runtime::bounded_runtime_infra::create_runtime_provider().map_err(|e| {
+                    let provider = kiln_runtime::bounded_runtime_infra::create_runtime_provider().map_err(|e| {
                         println!("[TEST-THREAD] ✗ Failed to create runtime provider: {:?}", e);
                         Error::runtime_execution_error("Failed to create runtime provider")
                     })?;
-                    let mut m = wrt_runtime::module::Module {
+                    let mut m = kiln_runtime::module::Module {
                         types: Vec::new(),
-                        imports: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone()).map_err(|e| {
+                        imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).map_err(|e| {
                             println!("[TEST-THREAD] ✗ Failed to create imports: {:?}", e);
                             Error::runtime_execution_error("Failed to create imports")
                         })?,
                         #[cfg(feature = "std")]
                         import_order: Vec::new(),
                         #[cfg(not(feature = "std"))]
-                        import_order: wrt_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
+                        import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
                             println!("[TEST-THREAD] ✗ Failed to create import_order: {:?}", e);
                             Error::runtime_execution_error("Failed to create import_order")
                         })?,
@@ -4675,42 +4675,42 @@ impl ComponentInstance {
                         #[cfg(feature = "std")]
                         tables: Vec::new(),
                         #[cfg(not(feature = "std"))]
-                        tables: wrt_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
+                        tables: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
                             println!("[TEST-THREAD] ✗ Failed to create tables: {:?}", e);
                             Error::runtime_execution_error("Failed to create tables")
                         })?,
                         memories: Vec::new(),
-                        globals: wrt_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
+                        globals: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
                             println!("[TEST-THREAD] ✗ Failed to create globals: {:?}", e);
                             Error::runtime_execution_error("Failed to create globals")
                         })?,
                         #[cfg(feature = "std")]
                         tags: Vec::new(),
                         #[cfg(not(feature = "std"))]
-                        tags: wrt_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
+                        tags: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
                             println!("[TEST-THREAD] ✗ Failed to create tags: {:?}", e);
                             Error::runtime_execution_error("Failed to create tags")
                         })?,
                         #[cfg(feature = "std")]
                         elements: Vec::new(),
                         #[cfg(not(feature = "std"))]
-                        elements: wrt_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
+                        elements: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
                             println!("[TEST-THREAD] ✗ Failed to create elements: {:?}", e);
                             Error::runtime_execution_error("Failed to create elements")
                         })?,
                         #[cfg(feature = "std")]
                         data: Vec::new(),
                         #[cfg(not(feature = "std"))]
-                        data: wrt_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
+                        data: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
                             println!("[TEST-THREAD] ✗ Failed to create data: {:?}", e);
                             Error::runtime_execution_error("Failed to create data")
                         })?,
                         start: None,
-                        custom_sections: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone()).map_err(|e| {
+                        custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).map_err(|e| {
                             println!("[TEST-THREAD] ✗ Failed to create custom_sections: {:?}", e);
                             Error::runtime_execution_error("Failed to create custom_sections")
                         })?,
-                        exports: wrt_foundation::direct_map::DirectMap::new(),
+                        exports: kiln_foundation::direct_map::DirectMap::new(),
                         name: None,
                         binary: None,
                         validated: false,
@@ -4734,8 +4734,8 @@ impl ComponentInstance {
                 println!("[TEST-THREAD] Imports: {}", module.imports.len());
 
                 // Execute the function using the runtime engine
-                use wrt_runtime::engine::{CapabilityAwareEngine, CapabilityEngine, EnginePreset};
-                use wrt_foundation::memory_init::MemoryInitializer;
+                use kiln_runtime::engine::{CapabilityAwareEngine, CapabilityEngine, EnginePreset};
+                use kiln_foundation::memory_init::MemoryInitializer;
 
                 // Initialize memory system
                 MemoryInitializer::initialize()
@@ -4754,7 +4754,7 @@ impl ComponentInstance {
                 // Register WASI host functions with memory access
                 println!("[TEST-THREAD] Registering all WASI host functions...");
 
-                use wrt_foundation::values::Value;
+                use kiln_foundation::values::Value;
                 use std::sync::{Arc as StdArc, Mutex};
 
                 // WASI Preview 2 versions we support - register for all to ensure compatibility
@@ -4763,7 +4763,7 @@ impl ComponentInstance {
 
                 // Create shared instance state for WASI functions to access memory
                 // We'll populate this after instantiation
-                type InstanceMemory = StdArc<Mutex<Option<StdArc<wrt_runtime::module_instance::ModuleInstance>>>>;
+                type InstanceMemory = StdArc<Mutex<Option<StdArc<kiln_runtime::module_instance::ModuleInstance>>>>;
                 let instance_memory: InstanceMemory = StdArc::new(Mutex::new(None));
 
                 // Helper to read from WASM memory
@@ -5065,7 +5065,7 @@ impl ComponentInstance {
 
                 #[cfg(feature = "std")]
                 {
-                    use wrt_foundation::values::Value;
+                    use kiln_foundation::values::Value;
 
                     let mut executed = false;
                     for entry_point in &entry_points {
@@ -5121,12 +5121,12 @@ impl ComponentInstance {
         Ok(result)
     }
 
-    #[cfg(feature = "wrt-execution")]
+    #[cfg(feature = "kiln-execution")]
     fn call_host_function(
         &mut self,
         callback: &str,
         args: &[ComponentValue],
-        host_registry: Option<&wrt_host::CallbackRegistry>,
+        host_registry: Option<&kiln_host::CallbackRegistry>,
     ) -> Result<Vec<ComponentValue>> {
         // Check if this is a wasip2 canonical function
         if crate::canonical_executor::is_wasip2_canonical(callback) {
@@ -5170,28 +5170,28 @@ impl ComponentInstance {
             callback
         };
 
-        // Convert ComponentValue arguments to wrt_foundation::values::Value
+        // Convert ComponentValue arguments to kiln_foundation::values::Value
         // For now, we'll support basic types
-        use wrt_foundation::values::{FloatBits32, FloatBits64};
+        use kiln_foundation::values::{FloatBits32, FloatBits64};
         let mut wasm_args = Vec::new();
         for arg in args {
             let wasm_value = match arg {
                 ComponentValue::Bool(b) => {
-                    wrt_foundation::values::Value::I32(if *b { 1 } else { 0 })
+                    kiln_foundation::values::Value::I32(if *b { 1 } else { 0 })
                 },
-                ComponentValue::S8(v) => wrt_foundation::values::Value::I32(*v as i32),
-                ComponentValue::U8(v) => wrt_foundation::values::Value::I32(*v as i32),
-                ComponentValue::S16(v) => wrt_foundation::values::Value::I32(*v as i32),
-                ComponentValue::U16(v) => wrt_foundation::values::Value::I32(*v as i32),
-                ComponentValue::S32(v) => wrt_foundation::values::Value::I32(*v),
-                ComponentValue::U32(v) => wrt_foundation::values::Value::I32(*v as i32),
-                ComponentValue::S64(v) => wrt_foundation::values::Value::I64(*v),
-                ComponentValue::U64(v) => wrt_foundation::values::Value::I64(*v as i64),
+                ComponentValue::S8(v) => kiln_foundation::values::Value::I32(*v as i32),
+                ComponentValue::U8(v) => kiln_foundation::values::Value::I32(*v as i32),
+                ComponentValue::S16(v) => kiln_foundation::values::Value::I32(*v as i32),
+                ComponentValue::U16(v) => kiln_foundation::values::Value::I32(*v as i32),
+                ComponentValue::S32(v) => kiln_foundation::values::Value::I32(*v),
+                ComponentValue::U32(v) => kiln_foundation::values::Value::I32(*v as i32),
+                ComponentValue::S64(v) => kiln_foundation::values::Value::I64(*v),
+                ComponentValue::U64(v) => kiln_foundation::values::Value::I64(*v as i64),
                 ComponentValue::F32(v) => {
-                    wrt_foundation::values::Value::F32(FloatBits32::from_f32(*v))
+                    kiln_foundation::values::Value::F32(FloatBits32::from_f32(*v))
                 },
                 ComponentValue::F64(v) => {
-                    wrt_foundation::values::Value::F64(FloatBits64::from_f64(*v))
+                    kiln_foundation::values::Value::F64(FloatBits64::from_f64(*v))
                 },
                 _ => {
                     return Err(Error::runtime_execution_error(
@@ -5218,10 +5218,10 @@ impl ComponentInstance {
         let mut component_results = Vec::new();
         for result in results.as_slice() {
             let component_value = match result {
-                wrt_foundation::values::Value::I32(v) => ComponentValue::S32(*v),
-                wrt_foundation::values::Value::I64(v) => ComponentValue::S64(*v),
-                wrt_foundation::values::Value::F32(v) => ComponentValue::F32(v.to_f32()),
-                wrt_foundation::values::Value::F64(v) => ComponentValue::F64(v.to_f64()),
+                kiln_foundation::values::Value::I32(v) => ComponentValue::S32(*v),
+                kiln_foundation::values::Value::I64(v) => ComponentValue::S64(*v),
+                kiln_foundation::values::Value::F32(v) => ComponentValue::F32(v.to_f32()),
+                kiln_foundation::values::Value::F64(v) => ComponentValue::F64(v.to_f64()),
                 _ => {
                     return Err(Error::runtime_execution_error(
                         "Unsupported return type from host function",
@@ -5234,12 +5234,12 @@ impl ComponentInstance {
         Ok(component_results)
     }
 
-    #[cfg(not(feature = "wrt-execution"))]
+    #[cfg(not(feature = "kiln-execution"))]
     fn call_host_function(
         &mut self,
         _callback: &str,
         _args: &[ComponentValue],
-        _host_registry: Option<&()>, // Dummy type for no wrt-execution
+        _host_registry: Option<&()>, // Dummy type for no kiln-execution
     ) -> Result<Vec<ComponentValue>> {
         // Simplified implementation - would call actual host function
         Ok(vec![ComponentValue::String(String::from("host_result"))]) // Placeholder result

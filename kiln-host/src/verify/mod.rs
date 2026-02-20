@@ -2,12 +2,12 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Verification module for wrt-host using Kani.
+//! Verification module for kiln-host using Kani.
 //!
-//! This module contains verification harnesses for the wrt-host crate.
+//! This module contains verification harnesses for the kiln-host crate.
 //! It is only included when the `kani` feature is enabled.
 
-use wrt_error::Result;
+use kiln_error::Result;
 
 use super::*;
 

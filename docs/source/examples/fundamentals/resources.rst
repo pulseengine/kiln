@@ -8,7 +8,7 @@ Resource Management: Handles with Care
    
    -- Systems Programming Wisdom
 
-Resources are the bridge between the abstract world of computation and the concrete reality of system objects. Files, sockets, graphics contexts, database connections - they all need careful lifecycle management. WRT's resource system makes this both safe and efficient.
+Resources are the bridge between the abstract world of computation and the concrete reality of system objects. Files, sockets, graphics contexts, database connections - they all need careful lifecycle management. Kiln's resource system makes this both safe and efficient.
 
 .. admonition:: What You'll Learn
    :class: note
@@ -46,13 +46,13 @@ Traditional resource management is fraught with pitfalls:
        }
    }
 
-WRT's resource system eliminates these issues:
+Kiln's resource system eliminates these issues:
 
 .. code-block:: rust
-   :caption: The safe WRT way
+   :caption: The safe Kiln way
    :linenos:
 
-   use wrt_foundation::resource::{ResourceTable, ResourceHandle, Resource};
+   use kiln_foundation::resource::{ResourceTable, ResourceHandle, Resource};
    use std::fs::File;
    
    // Define a custom resource type
@@ -112,8 +112,8 @@ Let's create a comprehensive example for managing graphics resources:
    :caption: Graphics resource management system
    :linenos:
 
-   use wrt_foundation::resource::{ResourceTable, ResourceHandle, Resource};
-   use wrt_foundation::bounded::BoundedVec;
+   use kiln_foundation::resource::{ResourceTable, ResourceHandle, Resource};
+   use kiln_foundation::bounded::BoundedVec;
    use std::collections::HashMap;
    
    // Different types of graphics resources
@@ -356,8 +356,8 @@ Resources can be safely shared between components:
    :caption: Shared resource system
    :linenos:
 
-   use wrt_foundation::resource::{SharedResourceTable, WeakResourceHandle};
-   use wrt_sync::WrtMutex;
+   use kiln_foundation::resource::{SharedResourceTable, WeakResourceHandle};
+   use kiln_sync::WrtMutex;
    use std::sync::Arc;
    
    #[derive(Debug)]
@@ -470,7 +470,7 @@ Advanced resource management with lifecycle callbacks:
    :caption: Resource lifecycle management
    :linenos:
 
-   use wrt_foundation::resource::{ResourceTable, ResourceHandle, LifecycleCallback};
+   use kiln_foundation::resource::{ResourceTable, ResourceHandle, LifecycleCallback};
    
    #[derive(Debug)]
    struct ManagedResource {

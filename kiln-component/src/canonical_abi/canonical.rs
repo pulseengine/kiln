@@ -3,7 +3,7 @@
 //! This module provides the implementation of the Canonical ABI used
 //! in the WebAssembly Component Model to interface between components.
 
-// Import error kinds from wrt-error
+// Import error kinds from kiln-error
 #[cfg(not(feature = "std"))]
 use alloc::{collections::BTreeMap as HashMap, format, sync::Arc};
 #[cfg(all(feature = "std", not(feature = "safety-critical")))]
@@ -11,23 +11,23 @@ use std::collections::HashMap;
 #[cfg(feature = "std")]
 use std::sync::{Arc, Mutex, RwLock};
 
-use wrt_error::{
+use kiln_error::{
     Error, Result,
     kinds::{InvalidValue, NotImplementedError, OutOfBoundsAccess, ValueOutOfRangeError},
 };
-use wrt_format::component::FormatValType;
+use kiln_format::component::FormatValType;
 // HashMap imports - migrate to WRT allocator for safety
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use wrt_foundation::allocator::{CrateId, WrtHashMap as HashMap, WrtVec};
-use wrt_foundation::{
+use kiln_foundation::allocator::{CrateId, KilnHashMap as HashMap, KilnVec};
+use kiln_foundation::{
     component_value::ValType as FoundationValType,
     resource::ResourceOperation as FormatResourceOperation,
 };
-use wrt_intercept::{LinkInterceptor, LinkInterceptorStrategy};
+use kiln_intercept::{LinkInterceptor, LinkInterceptorStrategy};
 // Additional dependencies not in prelude
-use wrt_runtime::Memory;
+use kiln_runtime::Memory;
 #[cfg(not(feature = "std"))]
-use wrt_sync::{Mutex, RwLock};
+use kiln_sync::{Mutex, RwLock};
 
 use crate::resources::bounded_buffer_pool::BoundedBufferPool;
 // Conditional imports for buffer pools
@@ -210,7 +210,7 @@ impl CanonicalABI {
     /// use [`lower_typed`] instead.
     pub fn lower(
         &self,
-        value: &wrt_foundation::values::Value,
+        value: &kiln_foundation::values::Value,
         addr: u32,
         resource_table: &ResourceTable,
         memory_bytes: &mut [u8],
@@ -265,7 +265,7 @@ impl CanonicalABI {
     /// ```
     pub fn lower_typed(
         &self,
-        value: &wrt_foundation::values::Value,
+        value: &kiln_foundation::values::Value,
         ty: &ValType,
         addr: u32,
         resource_table: &ResourceTable,
@@ -284,7 +284,7 @@ impl CanonicalABI {
         addr: u32,
         resource_table: &ResourceTable,
         memory_bytes: &[u8],
-    ) -> Result<wrt_foundation::values::Value> {
+    ) -> Result<kiln_foundation::values::Value> {
         match ty {
             ValType::Bool => self.lift_bool(addr, memory_bytes),
             ValType::S8 => self.lift_s8(addr, memory_bytes),
@@ -439,7 +439,7 @@ impl CanonicalABI {
         #[cfg(feature = "std")]
         let mut values = Vec::new();
         #[cfg(not(feature = "std"))]
-        let mut values = wrt_foundation::collections::StaticVec::<Value, 32>::new();
+        let mut values = kiln_foundation::collections::StaticVec::<Value, 32>::new();
 
         for ty in types {
             let value = self.lift_value(ty, current_addr, resource_table, memory_bytes)?;
@@ -472,7 +472,7 @@ impl CanonicalABI {
         self.check_bounds(addr, num_bytes as u32, memory_bytes)?;
 
         #[cfg(feature = "safety-critical")]
-        let mut flags: WrtVec<String, { CrateId::Component as u8 }, 64> = WrtVec::new();
+        let mut flags: KilnVec<String, { CrateId::Component as u8 }, 64> = KilnVec::new();
         #[cfg(not(feature = "safety-critical"))]
         let mut flags = Vec::new();
 
@@ -508,7 +508,7 @@ impl CanonicalABI {
         #[cfg(feature = "std")]
         let mut values = Vec::new();
         #[cfg(not(feature = "std"))]
-        let mut values = wrt_foundation::collections::StaticVec::<Value, 256>::new();
+        let mut values = kiln_foundation::collections::StaticVec::<Value, 256>::new();
 
         for _ in 0..size {
             let value = self.lift_value(inner_ty, current_addr, resource_table, memory_bytes)?;
@@ -629,7 +629,7 @@ impl CanonicalABI {
         Ok(Value::U16(v))
     }
 
-    fn lift_s32(&self, addr: u32, memory_bytes: &[u8]) -> Result<wrt_foundation::values::Value> {
+    fn lift_s32(&self, addr: u32, memory_bytes: &[u8]) -> Result<kiln_foundation::values::Value> {
         self.check_bounds(addr, 4, memory_bytes)?;
         let bytes = &memory_bytes[addr as usize..addr as usize + 4];
         let value = i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
@@ -638,7 +638,7 @@ impl CanonicalABI {
         self.metrics.lift_bytes.fetch_add(4, core::sync::atomic::Ordering::Relaxed);
         self.metrics.max_lift_bytes.fetch_max(4, core::sync::atomic::Ordering::Relaxed);
 
-        Ok(wrt_foundation::values::Value::I32(value))
+        Ok(kiln_foundation::values::Value::I32(value))
     }
 
     fn lift_u32(&self, addr: u32, memory_bytes: &[u8]) -> Result<Value> {
@@ -652,7 +652,7 @@ impl CanonicalABI {
         Ok(Value::U32(v))
     }
 
-    fn lift_s64(&self, addr: u32, memory_bytes: &[u8]) -> Result<wrt_foundation::values::Value> {
+    fn lift_s64(&self, addr: u32, memory_bytes: &[u8]) -> Result<kiln_foundation::values::Value> {
         self.check_bounds(addr, 8, memory_bytes)?;
         let bytes = &memory_bytes[addr as usize..addr as usize + 8];
         let value = i64::from_le_bytes([
@@ -663,7 +663,7 @@ impl CanonicalABI {
         self.metrics.lift_bytes.fetch_add(8, core::sync::atomic::Ordering::Relaxed);
         self.metrics.max_lift_bytes.fetch_max(8, core::sync::atomic::Ordering::Relaxed);
 
-        Ok(wrt_foundation::values::Value::I64(value))
+        Ok(kiln_foundation::values::Value::I64(value))
     }
 
     fn lift_u64(&self, addr: u32, memory_bytes: &[u8]) -> Result<Value> {
@@ -681,7 +681,7 @@ impl CanonicalABI {
         Ok(Value::U64(v))
     }
 
-    fn lift_f32(&self, addr: u32, memory_bytes: &[u8]) -> Result<wrt_foundation::values::Value> {
+    fn lift_f32(&self, addr: u32, memory_bytes: &[u8]) -> Result<kiln_foundation::values::Value> {
         self.check_bounds(addr, 4, memory_bytes)?;
         let bytes = &memory_bytes[addr as usize..addr as usize + 4];
         let value = f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
@@ -690,12 +690,12 @@ impl CanonicalABI {
         self.metrics.lift_bytes.fetch_add(4, core::sync::atomic::Ordering::Relaxed);
         self.metrics.max_lift_bytes.fetch_max(4, core::sync::atomic::Ordering::Relaxed);
 
-        Ok(wrt_foundation::values::Value::F32(
-            wrt_foundation::float_repr::FloatBits32::from_float(value),
+        Ok(kiln_foundation::values::Value::F32(
+            kiln_foundation::float_repr::FloatBits32::from_float(value),
         ))
     }
 
-    fn lift_f64(&self, addr: u32, memory_bytes: &[u8]) -> Result<wrt_foundation::values::Value> {
+    fn lift_f64(&self, addr: u32, memory_bytes: &[u8]) -> Result<kiln_foundation::values::Value> {
         self.check_bounds(addr, 8, memory_bytes)?;
         let bytes = &memory_bytes[addr as usize..addr as usize + 8];
         let value = f64::from_le_bytes([
@@ -706,8 +706,8 @@ impl CanonicalABI {
         self.metrics.lift_bytes.fetch_add(8, core::sync::atomic::Ordering::Relaxed);
         self.metrics.max_lift_bytes.fetch_max(8, core::sync::atomic::Ordering::Relaxed);
 
-        Ok(wrt_foundation::values::Value::F64(
-            wrt_foundation::float_repr::FloatBits64::from_float(value),
+        Ok(kiln_foundation::values::Value::F64(
+            kiln_foundation::float_repr::FloatBits64::from_float(value),
         ))
     }
 
@@ -778,7 +778,7 @@ impl CanonicalABI {
         #[cfg(feature = "std")]
         let mut values = Vec::new();
         #[cfg(not(feature = "std"))]
-        let mut values = wrt_foundation::collections::StaticVec::<Value, 1024>::new();
+        let mut values = kiln_foundation::collections::StaticVec::<Value, 1024>::new();
         let mut current_addr = data_ptr;
 
         for _ in 0..length {
@@ -824,7 +824,7 @@ impl CanonicalABI {
         let mut record_values = Vec::new();
         #[cfg(not(feature = "std"))]
         let mut record_values =
-            wrt_foundation::collections::StaticVec::<(String, Value), 64>::new();
+            kiln_foundation::collections::StaticVec::<(String, Value), 64>::new();
 
         for (field_name, field_type) in fields {
             // Lift the field value
@@ -1163,8 +1163,8 @@ impl CanonicalABI {
         {
             let instance_id = self.current_instance_id.ok_or_else(|| {
                 Error::new(
-                    wrt_error::ErrorCategory::Core,
-                    wrt_error::codes::CANONICAL_ABI_ERROR,
+                    kiln_error::ErrorCategory::Core,
+                    kiln_error::codes::CANONICAL_ABI_ERROR,
                     "Cannot lower string: no instance ID configured. \
                      Use CanonicalABI::set_instance_id() before lowering.",
                 )
@@ -1176,8 +1176,8 @@ impl CanonicalABI {
         {
             // In no_std mode, non-empty string lowering requires external allocation support
             Err(Error::new(
-                wrt_error::ErrorCategory::Core,
-                wrt_error::codes::CANONICAL_ABI_ERROR,
+                kiln_error::ErrorCategory::Core,
+                kiln_error::codes::CANONICAL_ABI_ERROR,
                 "Cannot lower non-empty string in no_std mode: cabi_realloc not available",
             ))
         }
@@ -1220,8 +1220,8 @@ impl CanonicalABI {
         let ptr = {
             let realloc_manager = self.realloc_manager.as_ref().ok_or_else(|| {
                 Error::new(
-                    wrt_error::ErrorCategory::Core,
-                    wrt_error::codes::CANONICAL_ABI_ERROR,
+                    kiln_error::ErrorCategory::Core,
+                    kiln_error::codes::CANONICAL_ABI_ERROR,
                     "Cannot lower string: no ReallocManager configured. \
                      Use CanonicalABI::with_realloc_manager() to set up proper memory allocation.",
                 )
@@ -1254,7 +1254,7 @@ impl CanonicalABI {
     #[cfg(feature = "std")]
     pub fn lower_list_with_alloc(
         &self,
-        values: &Vec<wrt_foundation::values::Value>,
+        values: &Vec<kiln_foundation::values::Value>,
         inner_ty: &ValType,
         addr: u32,
         instance_id: super::canonical_realloc::ComponentInstanceId,
@@ -1281,8 +1281,8 @@ impl CanonicalABI {
         let data_ptr = {
             let realloc_manager = self.realloc_manager.as_ref().ok_or_else(|| {
                 Error::new(
-                    wrt_error::ErrorCategory::Core,
-                    wrt_error::codes::CANONICAL_ABI_ERROR,
+                    kiln_error::ErrorCategory::Core,
+                    kiln_error::codes::CANONICAL_ABI_ERROR,
                     "Cannot lower list: no ReallocManager configured. \
                      Use CanonicalABI::with_realloc_manager() to set up proper memory allocation.",
                 )
@@ -1315,7 +1315,7 @@ impl CanonicalABI {
 
     fn lower_list(
         &self,
-        values: &Vec<wrt_foundation::values::Value>,
+        values: &Vec<kiln_foundation::values::Value>,
         inner_ty: &ValType,
         addr: u32,
         resource_table: &ResourceTable,
@@ -1335,8 +1335,8 @@ impl CanonicalABI {
         {
             let instance_id = self.current_instance_id.ok_or_else(|| {
                 Error::new(
-                    wrt_error::ErrorCategory::Core,
-                    wrt_error::codes::CANONICAL_ABI_ERROR,
+                    kiln_error::ErrorCategory::Core,
+                    kiln_error::codes::CANONICAL_ABI_ERROR,
                     "Cannot lower list: no instance ID configured. \
                      Use CanonicalABI::set_instance_id() before lowering.",
                 )
@@ -1355,8 +1355,8 @@ impl CanonicalABI {
         {
             // In no_std mode, non-empty list lowering requires external allocation support
             Err(Error::new(
-                wrt_error::ErrorCategory::Core,
-                wrt_error::codes::CANONICAL_ABI_ERROR,
+                kiln_error::ErrorCategory::Core,
+                kiln_error::codes::CANONICAL_ABI_ERROR,
                 "Cannot lower non-empty list in no_std mode: cabi_realloc not available",
             ))
         }
@@ -1364,7 +1364,7 @@ impl CanonicalABI {
 
     fn lower_value(
         &self,
-        value: &wrt_foundation::values::Value,
+        value: &kiln_foundation::values::Value,
         ty: &ValType,
         addr: u32,
         resource_table: &ResourceTable,
@@ -1620,8 +1620,8 @@ impl CanonicalABI {
                 // Stream values are lowered as their handle (u32)
                 // Accepts Value::Stream (u32 handle) and Value::I32 (legacy)
                 let handle_id = match value {
-                    wrt_foundation::values::Value::Stream(handle) => *handle,
-                    wrt_foundation::values::Value::I32(handle) => *handle as u32,
+                    kiln_foundation::values::Value::Stream(handle) => *handle,
+                    kiln_foundation::values::Value::I32(handle) => *handle as u32,
                     _ => return Err(Error::runtime_type_mismatch("Expected stream handle")),
                 };
                 if addr as usize + 4 > memory_bytes.len() {
@@ -1637,8 +1637,8 @@ impl CanonicalABI {
                 // Future values are lowered as their handle (u32)
                 // Accepts Value::Future (u32 handle) and Value::I32 (legacy)
                 let handle_id = match value {
-                    wrt_foundation::values::Value::Future(handle) => *handle,
-                    wrt_foundation::values::Value::I32(handle) => *handle as u32,
+                    kiln_foundation::values::Value::Future(handle) => *handle,
+                    kiln_foundation::values::Value::I32(handle) => *handle as u32,
                     _ => return Err(Error::runtime_type_mismatch("Expected future handle")),
                 };
                 if addr as usize + 4 > memory_bytes.len() {
@@ -1655,7 +1655,7 @@ impl CanonicalABI {
 
     fn lower_record(
         &self,
-        record_fields: &Vec<(String, wrt_foundation::values::Value)>,
+        record_fields: &Vec<(String, kiln_foundation::values::Value)>,
         field_types: &[(String, ValType)],
         addr: u32,
         resource_table: &ResourceTable,
@@ -2403,24 +2403,24 @@ impl CanonicalABI {
 ///
 /// Result containing the converted Value
 pub fn convert_value_for_canonical_abi(
-    value: &wrt_foundation::values::Value,
+    value: &kiln_foundation::values::Value,
     target_type: &FormatValType,
-) -> Result<wrt_foundation::values::Value> {
+) -> Result<kiln_foundation::values::Value> {
     // Work directly with FormatValType to preserve nested type information
     match target_type {
         FormatValType::Bool => {
             if let Some(b) = value.as_bool() {
-                Ok(wrt_foundation::values::Value::Bool(b))
+                Ok(kiln_foundation::values::Value::Bool(b))
             } else {
                 Err(Error::runtime_execution_error("Type conversion failed"))
             }
         },
         FormatValType::S8 => {
             if let Some(v) = value.as_i8() {
-                Ok(wrt_foundation::values::Value::S8(v))
+                Ok(kiln_foundation::values::Value::S8(v))
             } else if let Some(i) = value.as_i32() {
                 if i >= i8::MIN as i32 && i <= i8::MAX as i32 {
-                    Ok(wrt_foundation::values::Value::S8(i as i8))
+                    Ok(kiln_foundation::values::Value::S8(i as i8))
                 } else {
                     Err(Error::component_not_found("Value out of range"))
                 }
@@ -2430,10 +2430,10 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::U8 => {
             if let Some(v) = value.as_u8() {
-                Ok(wrt_foundation::values::Value::U8(v))
+                Ok(kiln_foundation::values::Value::U8(v))
             } else if let Some(i) = value.as_i32() {
                 if i >= 0 && i <= u8::MAX as i32 {
-                    Ok(wrt_foundation::values::Value::U8(i as u8))
+                    Ok(kiln_foundation::values::Value::U8(i as u8))
                 } else {
                     Err(Error::component_not_found("Value out of range"))
                 }
@@ -2443,10 +2443,10 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::S16 => {
             if let Some(v) = value.as_i16() {
-                Ok(wrt_foundation::values::Value::S16(v))
+                Ok(kiln_foundation::values::Value::S16(v))
             } else if let Some(i) = value.as_i32() {
                 if i >= i16::MIN as i32 && i <= i16::MAX as i32 {
-                    Ok(wrt_foundation::values::Value::S16(i as i16))
+                    Ok(kiln_foundation::values::Value::S16(i as i16))
                 } else {
                     Err(Error::component_not_found("Value out of range"))
                 }
@@ -2456,10 +2456,10 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::U16 => {
             if let Some(v) = value.as_u16() {
-                Ok(wrt_foundation::values::Value::U16(v))
+                Ok(kiln_foundation::values::Value::U16(v))
             } else if let Some(i) = value.as_i32() {
                 if i >= 0 && i <= u16::MAX as i32 {
-                    Ok(wrt_foundation::values::Value::U16(i as u16))
+                    Ok(kiln_foundation::values::Value::U16(i as u16))
                 } else {
                     Err(Error::component_not_found("Value out of range"))
                 }
@@ -2469,10 +2469,10 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::S32 => {
             if let Some(v) = value.as_i32() {
-                Ok(wrt_foundation::values::Value::S32(v))
+                Ok(kiln_foundation::values::Value::S32(v))
             } else if let Some(v) = value.as_i64() {
                 if v >= i32::MIN as i64 && v <= i32::MAX as i64 {
-                    Ok(wrt_foundation::values::Value::S32(v as i32))
+                    Ok(kiln_foundation::values::Value::S32(v as i32))
                 } else {
                     Err(Error::component_not_found("Value out of range"))
                 }
@@ -2482,10 +2482,10 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::U32 => {
             if let Some(v) = value.as_u32() {
-                Ok(wrt_foundation::values::Value::U32(v))
+                Ok(kiln_foundation::values::Value::U32(v))
             } else if let Some(i) = value.as_i64() {
                 if i >= 0 && i <= u32::MAX as i64 {
-                    Ok(wrt_foundation::values::Value::U32(i as u32))
+                    Ok(kiln_foundation::values::Value::U32(i as u32))
                 } else {
                     Err(Error::component_not_found("Value out of range"))
                 }
@@ -2495,9 +2495,9 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::S64 => {
             if let Some(v) = value.as_i64() {
-                Ok(wrt_foundation::values::Value::S64(v))
+                Ok(kiln_foundation::values::Value::S64(v))
             } else if let Some(v) = value.as_i32() {
-                Ok(wrt_foundation::values::Value::S64(v as i64))
+                Ok(kiln_foundation::values::Value::S64(v as i64))
             } else {
                 Err(Error::new(
                     ErrorCategory::Runtime,
@@ -2508,10 +2508,10 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::U64 => {
             if let Some(v) = value.as_u64() {
-                Ok(wrt_foundation::values::Value::U64(v))
+                Ok(kiln_foundation::values::Value::U64(v))
             } else if let Some(i) = value.as_i64() {
                 if i >= 0 {
-                    Ok(wrt_foundation::values::Value::U64(i as u64))
+                    Ok(kiln_foundation::values::Value::U64(i as u64))
                 } else {
                     Err(Error::component_not_found("Component not found"))
                 }
@@ -2521,20 +2521,20 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::F32 => {
             if let Some(v) = value.as_f32() {
-                Ok(wrt_foundation::values::Value::F32(
-                    wrt_foundation::float_repr::FloatBits32::from_float(v),
+                Ok(kiln_foundation::values::Value::F32(
+                    kiln_foundation::float_repr::FloatBits32::from_float(v),
                 ))
             } else if let Some(v) = value.as_f64() {
-                Ok(wrt_foundation::values::Value::F32(
-                    wrt_foundation::float_repr::FloatBits32::from_float(v as f32),
+                Ok(kiln_foundation::values::Value::F32(
+                    kiln_foundation::float_repr::FloatBits32::from_float(v as f32),
                 ))
             } else if let Some(v) = value.as_i32() {
-                Ok(wrt_foundation::values::Value::F32(
-                    wrt_foundation::float_repr::FloatBits32::from_float(v as f32),
+                Ok(kiln_foundation::values::Value::F32(
+                    kiln_foundation::float_repr::FloatBits32::from_float(v as f32),
                 ))
             } else if let Some(v) = value.as_i64() {
-                Ok(wrt_foundation::values::Value::F32(
-                    wrt_foundation::float_repr::FloatBits32::from_float(v as f32),
+                Ok(kiln_foundation::values::Value::F32(
+                    kiln_foundation::float_repr::FloatBits32::from_float(v as f32),
                 ))
             } else {
                 Err(Error::new(
@@ -2546,20 +2546,20 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::F64 => {
             if let Some(v) = value.as_f64() {
-                Ok(wrt_foundation::values::Value::F64(
-                    wrt_foundation::float_repr::FloatBits64::from_float(v),
+                Ok(kiln_foundation::values::Value::F64(
+                    kiln_foundation::float_repr::FloatBits64::from_float(v),
                 ))
             } else if let Some(v) = value.as_f32() {
-                Ok(wrt_foundation::values::Value::F64(
-                    wrt_foundation::float_repr::FloatBits64::from_float(v as f64),
+                Ok(kiln_foundation::values::Value::F64(
+                    kiln_foundation::float_repr::FloatBits64::from_float(v as f64),
                 ))
             } else if let Some(v) = value.as_i32() {
-                Ok(wrt_foundation::values::Value::F64(
-                    wrt_foundation::float_repr::FloatBits64::from_float(v as f64),
+                Ok(kiln_foundation::values::Value::F64(
+                    kiln_foundation::float_repr::FloatBits64::from_float(v as f64),
                 ))
             } else if let Some(v) = value.as_i64() {
-                Ok(wrt_foundation::values::Value::F64(
-                    wrt_foundation::float_repr::FloatBits64::from_float(v as f64),
+                Ok(kiln_foundation::values::Value::F64(
+                    kiln_foundation::float_repr::FloatBits64::from_float(v as f64),
                 ))
             } else {
                 Err(Error::runtime_execution_error("Type conversion failed"))
@@ -2567,10 +2567,10 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::Char => {
             if let Some(c) = value.as_char() {
-                Ok(wrt_foundation::values::Value::Char(c))
+                Ok(kiln_foundation::values::Value::Char(c))
             } else if let Some(i) = value.as_i32() {
                 if let Some(c) = char::from_u32(i as u32) {
-                    Ok(wrt_foundation::values::Value::Char(c))
+                    Ok(kiln_foundation::values::Value::Char(c))
                 } else {
                     Err(Error::new(
                         ErrorCategory::Runtime,
@@ -2584,7 +2584,7 @@ pub fn convert_value_for_canonical_abi(
         },
         FormatValType::String => {
             if let Some(s) = value.as_str() {
-                Ok(wrt_foundation::values::Value::String(s.to_string()))
+                Ok(kiln_foundation::values::Value::String(s.to_string()))
             } else {
                 Err(Error::new(
                     ErrorCategory::Runtime,
@@ -2596,11 +2596,11 @@ pub fn convert_value_for_canonical_abi(
         FormatValType::List(inner_type) => {
             if let Some(list) = value.as_list() {
                 #[cfg(feature = "safety-critical")]
-                let mut converted_list: WrtVec<
+                let mut converted_list: KilnVec<
                     Value,
                     { CrateId::Component as u8 },
                     1024,
-                > = WrtVec::new();
+                > = KilnVec::new();
                 #[cfg(not(feature = "safety-critical"))]
                 let mut converted_list = Vec::new();
                 for item in list {
@@ -2613,7 +2613,7 @@ pub fn convert_value_for_canonical_abi(
                     #[cfg(not(feature = "safety-critical"))]
                     converted_list.push(converted_item);
                 }
-                Ok(wrt_foundation::values::Value::List(converted_list))
+                Ok(kiln_foundation::values::Value::List(converted_list))
             } else {
                 Err(Error::runtime_execution_error("Type conversion failed"))
             }
@@ -2621,11 +2621,11 @@ pub fn convert_value_for_canonical_abi(
         FormatValType::Record(fields) => {
             if let Some(record) = value.as_record() {
                 #[cfg(feature = "safety-critical")]
-                let mut converted_record: WrtVec<
+                let mut converted_record: KilnVec<
                     (String, Value),
                     { CrateId::Component as u8 },
                     64,
-                > = WrtVec::new();
+                > = KilnVec::new();
                 #[cfg(not(feature = "safety-critical"))]
                 let mut converted_record = Vec::new();
                 for (field_name, field_type) in fields {
@@ -2652,7 +2652,7 @@ pub fn convert_value_for_canonical_abi(
                         return Err(Error::component_not_found("Component not found"));
                     }
                 }
-                Ok(wrt_foundation::values::Value::Record(converted_record))
+                Ok(kiln_foundation::values::Value::Record(converted_record))
             } else {
                 Err(Error::runtime_execution_error("Type conversion failed"))
             }
@@ -2667,11 +2667,11 @@ pub fn convert_value_for_canonical_abi(
                     ));
                 }
                 #[cfg(feature = "safety-critical")]
-                let mut converted_tuple: WrtVec<
+                let mut converted_tuple: KilnVec<
                     Value,
                     { CrateId::Component as u8 },
                     32,
-                > = WrtVec::new();
+                > = KilnVec::new();
                 #[cfg(not(feature = "safety-critical"))]
                 let mut converted_tuple = Vec::new();
                 for (item, item_type) in tuple.iter().zip(types.iter()) {
@@ -2685,7 +2685,7 @@ pub fn convert_value_for_canonical_abi(
                     #[cfg(not(feature = "safety-critical"))]
                     converted_tuple.push(converted_item);
                 }
-                Ok(wrt_foundation::values::Value::Tuple(converted_tuple))
+                Ok(kiln_foundation::values::Value::Tuple(converted_tuple))
             } else {
                 Err(Error::runtime_execution_error("Type conversion failed"))
             }
@@ -2694,7 +2694,7 @@ pub fn convert_value_for_canonical_abi(
             if let Some(flags) = value.as_flags() {
                 // Flags are stored as a Vec<String> of flag names that are set
                 // Just return the flags as-is since they're already in the right format
-                Ok(wrt_foundation::values::Value::Flags(flags.clone()))
+                Ok(kiln_foundation::values::Value::Flags(flags.clone()))
             } else {
                 Err(Error::new(
                     ErrorCategory::Runtime,
@@ -2707,7 +2707,7 @@ pub fn convert_value_for_canonical_abi(
             if let Some((case_name, payload)) = value.as_variant() {
                 // Convert the string case name to owned String
                 // and clone the payload if present
-                Ok(wrt_foundation::values::Value::Variant(
+                Ok(kiln_foundation::values::Value::Variant(
                     case_name.to_string(),
                     payload.map(|p| Box::new(p.clone())),
                 ))
@@ -2719,7 +2719,7 @@ pub fn convert_value_for_canonical_abi(
                 ))
             }
         },
-        FormatValType::Void => Ok(wrt_foundation::values::Value::Void),
+        FormatValType::Void => Ok(kiln_foundation::values::Value::Void),
         // All types are now handled
         _ => Ok(value.clone()),
     }
@@ -2727,7 +2727,7 @@ pub fn convert_value_for_canonical_abi(
 
 /// Helper function to get a numeric value from Value with appropriate type
 /// conversion
-fn get_number_value(value: &wrt_foundation::values::Value) -> Result<i64> {
+fn get_number_value(value: &kiln_foundation::values::Value) -> Result<i64> {
     if let Some(v) = value.as_i32() {
         Ok(v as i64)
     } else if let Some(v) = value.as_i64() {
@@ -2740,7 +2740,7 @@ fn get_number_value(value: &wrt_foundation::values::Value) -> Result<i64> {
 }
 
 /// Helper function to get a floating point value from Value
-fn get_float_value(value: &wrt_foundation::values::Value) -> Result<f64> {
+fn get_float_value(value: &kiln_foundation::values::Value) -> Result<f64> {
     if let Some(v) = value.as_f32() {
         Ok(v as f64)
     } else if let Some(v) = value.as_f64() {
@@ -2760,15 +2760,15 @@ fn get_float_value(value: &wrt_foundation::values::Value) -> Result<f64> {
 
 /// Convert a value to the appropriate type for use in the canonical ABI
 pub fn convert_value_for_type(
-    value: &wrt_foundation::values::Value,
+    value: &kiln_foundation::values::Value,
     ty: &ValType,
-) -> Result<wrt_foundation::values::Value> {
+) -> Result<kiln_foundation::values::Value> {
     match ty {
         ValType::Bool => {
             if let Some(val) = value.as_bool() {
-                Ok(wrt_foundation::values::Value::I32(if val { 1 } else { 0 }))
+                Ok(kiln_foundation::values::Value::I32(if val { 1 } else { 0 }))
             } else if let Ok(num) = get_number_value(value) {
-                Ok(wrt_foundation::values::Value::I32(if num != 0 {
+                Ok(kiln_foundation::values::Value::I32(if num != 0 {
                     1
                 } else {
                     0
@@ -2779,22 +2779,22 @@ pub fn convert_value_for_type(
         },
         ValType::S8 | ValType::U8 | ValType::S16 | ValType::U16 | ValType::S32 | ValType::U32 => {
             if let Some(v) = value.as_i32() {
-                Ok(wrt_foundation::values::Value::I32(v))
+                Ok(kiln_foundation::values::Value::I32(v))
             } else if let Some(v) = value.as_i64() {
                 if v >= i32::MIN as i64 && v <= i32::MAX as i64 {
-                    Ok(wrt_foundation::values::Value::I32(v as i32))
+                    Ok(kiln_foundation::values::Value::I32(v as i32))
                 } else {
                     Err(Error::component_not_found("Value out of range"))
                 }
             } else if let Some(v) = value.as_f32() {
                 if v >= i32::MIN as f32 && v <= i32::MAX as f32 {
-                    Ok(wrt_foundation::values::Value::I32(v as i32))
+                    Ok(kiln_foundation::values::Value::I32(v as i32))
                 } else {
                     Err(Error::component_not_found("Component not found"))
                 }
             } else if let Some(v) = value.as_f64() {
                 if v >= i32::MIN as f64 && v <= i32::MAX as f64 {
-                    Ok(wrt_foundation::values::Value::I32(v as i32))
+                    Ok(kiln_foundation::values::Value::I32(v as i32))
                 } else {
                     Err(Error::component_not_found("Component not found"))
                 }
@@ -2804,18 +2804,18 @@ pub fn convert_value_for_type(
         },
         ValType::S64 | ValType::U64 => {
             if let Some(v) = value.as_i64() {
-                Ok(wrt_foundation::values::Value::I64(v))
+                Ok(kiln_foundation::values::Value::I64(v))
             } else if let Some(v) = value.as_i32() {
-                Ok(wrt_foundation::values::Value::I64(v as i64))
+                Ok(kiln_foundation::values::Value::I64(v as i64))
             } else if let Some(v) = value.as_f32() {
                 if v >= i64::MIN as f32 && v <= i64::MAX as f32 {
-                    Ok(wrt_foundation::values::Value::I64(v as i64))
+                    Ok(kiln_foundation::values::Value::I64(v as i64))
                 } else {
                     Err(Error::component_not_found("Value out of range"))
                 }
             } else if let Some(v) = value.as_f64() {
                 if v >= i64::MIN as f64 && v <= i64::MAX as f64 {
-                    Ok(wrt_foundation::values::Value::I64(v as i64))
+                    Ok(kiln_foundation::values::Value::I64(v as i64))
                 } else {
                     Err(Error::component_not_found("Component not found"))
                 }
@@ -2825,21 +2825,21 @@ pub fn convert_value_for_type(
         },
         ValType::F32 => {
             if let Some(v) = value.as_f32() {
-                Ok(wrt_foundation::values::Value::F32(
-                    wrt_foundation::FloatBits32::from_float(v),
+                Ok(kiln_foundation::values::Value::F32(
+                    kiln_foundation::FloatBits32::from_float(v),
                 ))
             } else if let Some(v) = value.as_f64() {
                 // Check if value fits in f32 range
-                Ok(wrt_foundation::values::Value::F32(
-                    wrt_foundation::FloatBits32::from_float(v as f32),
+                Ok(kiln_foundation::values::Value::F32(
+                    kiln_foundation::FloatBits32::from_float(v as f32),
                 ))
             } else if let Some(v) = value.as_i32() {
-                Ok(wrt_foundation::values::Value::F32(
-                    wrt_foundation::FloatBits32::from_float(v as f32),
+                Ok(kiln_foundation::values::Value::F32(
+                    kiln_foundation::FloatBits32::from_float(v as f32),
                 ))
             } else if let Some(v) = value.as_i64() {
-                Ok(wrt_foundation::values::Value::F32(
-                    wrt_foundation::FloatBits32::from_float(v as f32),
+                Ok(kiln_foundation::values::Value::F32(
+                    kiln_foundation::FloatBits32::from_float(v as f32),
                 ))
             } else {
                 Err(Error::new(
@@ -2851,20 +2851,20 @@ pub fn convert_value_for_type(
         },
         ValType::F64 => {
             if let Some(v) = value.as_f64() {
-                Ok(wrt_foundation::values::Value::F64(
-                    wrt_foundation::FloatBits64::from_float(v),
+                Ok(kiln_foundation::values::Value::F64(
+                    kiln_foundation::FloatBits64::from_float(v),
                 ))
             } else if let Some(v) = value.as_f32() {
-                Ok(wrt_foundation::values::Value::F64(
-                    wrt_foundation::FloatBits64::from_float(v as f64),
+                Ok(kiln_foundation::values::Value::F64(
+                    kiln_foundation::FloatBits64::from_float(v as f64),
                 ))
             } else if let Some(v) = value.as_i32() {
-                Ok(wrt_foundation::values::Value::F64(
-                    wrt_foundation::FloatBits64::from_float(v as f64),
+                Ok(kiln_foundation::values::Value::F64(
+                    kiln_foundation::FloatBits64::from_float(v as f64),
                 ))
             } else if let Some(v) = value.as_i64() {
-                Ok(wrt_foundation::values::Value::F64(
-                    wrt_foundation::FloatBits64::from_float(v as f64),
+                Ok(kiln_foundation::values::Value::F64(
+                    kiln_foundation::FloatBits64::from_float(v as f64),
                 ))
             } else {
                 Err(Error::runtime_execution_error("Type conversion failed"))

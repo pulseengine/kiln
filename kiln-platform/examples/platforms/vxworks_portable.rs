@@ -7,13 +7,13 @@
 //! can implement and use platform extensions with WRT.
 
 #[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
-use wrt_platform::{
+use kiln_platform::{
     vxworks_memory::{VxWorksAllocator, VxWorksAllocatorBuilder, VxWorksContext},
     vxworks_sync::{VxWorksFutex, VxWorksFutexBuilder},
     vxworks_threading::{VxWorksThread, VxWorksThreadBuilder, VxWorksThreadConfig},
 };
 
-use wrt_platform::{PageAllocator, FutexLike, WASM_PAGE_SIZE};
+use kiln_platform::{PageAllocator, FutexLike, WASM_PAGE_SIZE};
 use core::sync::atomic::Ordering;
 use core::time::Duration;
 
@@ -159,8 +159,8 @@ fn show_vxworks_concepts() {
     println!("   ```");
     
     println!("\n6. Platform Integration:");
-    println!("   - Implements wrt_platform::PageAllocator trait");
-    println!("   - Implements wrt_platform::FutexLike trait");
+    println!("   - Implements kiln_platform::PageAllocator trait");
+    println!("   - Implements kiln_platform::FutexLike trait");
     println!("   - Works seamlessly with WRT runtime components");
     
     println!("\n7. Real-time Features:");
@@ -175,8 +175,8 @@ fn show_vxworks_concepts() {
     
     println!("\nExample usage in application:");
     println!("```rust");
-    println!("use wrt_platform::vxworks_memory::*;");
-    println!("use wrt_platform::vxworks_sync::*;");
+    println!("use kiln_platform::vxworks_memory::*;");
+    println!("use kiln_platform::vxworks_sync::*;");
     println!("");
     println!("// Detect execution context");
     println!("let context = detect_vxworks_context();";
@@ -217,9 +217,9 @@ fn demonstrate_trait_usage() {
     }
     
     impl PageAllocator for MockVxWorksAllocator {
-        fn allocate_pages(&mut self, pages: usize) -> Result<core::ptr::NonNull<u8>, wrt_error::Error> {
+        fn allocate_pages(&mut self, pages: usize) -> Result<core::ptr::NonNull<u8>, kiln_error::Error> {
             if self.allocated_pages + pages > self.max_pages {
-                return Err(wrt_error::Error::runtime_execution_error("
+                return Err(kiln_error::Error::runtime_execution_error("
                 ;
             }
             
@@ -229,10 +229,10 @@ fn demonstrate_trait_usage() {
             self.allocated_pages += pages;
             
             core::ptr::NonNull::new(ptr).ok_or_else(|| 
-                wrt_error::Error::new(ErrorKind::Memory, "Allocation failed"))
+                kiln_error::Error::new(ErrorKind::Memory, "Allocation failed"))
         }
         
-        fn deallocate_pages(&mut self, ptr: core::ptr::NonNull<u8>, pages: usize) -> Result<(), wrt_error::Error> {
+        fn deallocate_pages(&mut self, ptr: core::ptr::NonNull<u8>, pages: usize) -> Result<(), kiln_error::Error> {
             // Binary std/no_std choice
             let slice = unsafe {
                 Box::from_raw(core::slice::from_raw_parts_mut(ptr.as_ptr(), pages * WASM_PAGE_SIZE))
@@ -244,7 +244,7 @@ fn demonstrate_trait_usage() {
         }
         
         fn grow_pages(&mut self, old_ptr: core::ptr::NonNull<u8>, old_pages: usize, new_pages: usize) 
-            -> Result<core::ptr::NonNull<u8>, wrt_error::Error> {
+            -> Result<core::ptr::NonNull<u8>, kiln_error::Error> {
             let new_ptr = self.allocate_pages(new_pages)?;
             
             unsafe {
@@ -282,7 +282,7 @@ fn demonstrate_trait_usage() {
     }
     
     impl FutexLike for MockVxWorksFutex {
-        fn wait(&self, expected: u32, _timeout: Option<Duration>) -> Result<(), wrt_error::Error> {
+        fn wait(&self, expected: u32, _timeout: Option<Duration>) -> Result<(), kiln_error::Error> {
             if self.value.load(Ordering::Acquire) != expected {
                 return Ok();
             }
@@ -290,12 +290,12 @@ fn demonstrate_trait_usage() {
             Ok(())
         }
         
-        fn wake_one(&self) -> Result<u32, wrt_error::Error> {
+        fn wake_one(&self) -> Result<u32, kiln_error::Error> {
             // Mock wake - in real implementation would call VxWorks signal APIs
             Ok(1)
         }
         
-        fn wake_all(&self) -> Result<u32, wrt_error::Error> {
+        fn wake_all(&self) -> Result<u32, kiln_error::Error> {
             // Mock wake all - in real implementation would call VxWorks broadcast APIs
             Ok(u32::MAX)
         }

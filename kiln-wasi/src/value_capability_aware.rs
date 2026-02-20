@@ -5,11 +5,11 @@
 
 extern crate alloc;
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{
         BoundedString,
         BoundedVec,
@@ -301,7 +301,7 @@ impl CapabilityAwareValue {
 
 /// Helper function to create a WASI value provider with capability verification
 fn create_wasi_value_provider() -> Result<NoStdProvider<8192>> {
-    use wrt_foundation::capabilities::MemoryFactory;
+    use kiln_foundation::capabilities::MemoryFactory;
 
     let context = get_global_capability_context()?;
     let operation = MemoryOperation::Allocate { size: 8192 };
@@ -413,7 +413,7 @@ impl TryFrom<crate::value_compat::Value> for CapabilityAwareValue {
 
 #[cfg(test)]
 mod tests {
-    use wrt_foundation::memory_init::MemoryInitializer;
+    use kiln_foundation::memory_init::MemoryInitializer;
 
     use super::*;
 
@@ -466,8 +466,8 @@ impl Eq for CapabilityAwareValue {}
 
 impl Eq for WasiValueBox {}
 
-impl wrt_foundation::traits::Checksummable for CapabilityAwareValue {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CapabilityAwareValue {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         // Basic checksum implementation
         match self {
             CapabilityAwareValue::Bool(b) => checksum.update_slice(&[u8::from(*b)]),
@@ -493,17 +493,17 @@ impl wrt_foundation::traits::Checksummable for CapabilityAwareValue {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for CapabilityAwareValue {
+impl kiln_foundation::traits::ToBytes for CapabilityAwareValue {
     fn serialized_size(&self) -> usize {
         // Return a reasonable default size
         core::mem::size_of::<u64>()
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Simplified serialization - just write discriminant for now
         match self {
             CapabilityAwareValue::Bool(b) => {
@@ -577,11 +577,11 @@ impl wrt_foundation::traits::ToBytes for CapabilityAwareValue {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for CapabilityAwareValue {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for CapabilityAwareValue {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => Ok(CapabilityAwareValue::Bool(reader.read_u8()? != 0)),
@@ -603,31 +603,31 @@ impl wrt_foundation::traits::FromBytes for CapabilityAwareValue {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for WasiValueBox {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for WasiValueBox {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.inner.update_checksum(checksum);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for WasiValueBox {
+impl kiln_foundation::traits::ToBytes for WasiValueBox {
     fn serialized_size(&self) -> usize {
         self.inner.serialized_size()
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.inner.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_foundation::traits::FromBytes for WasiValueBox {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for WasiValueBox {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let inner = CapabilityAwareValue::from_bytes_with_provider(reader, provider)?;
         Ok(WasiValueBox {
             inner: alloc::boxed::Box::new(inner),

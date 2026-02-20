@@ -13,8 +13,8 @@ use alloc::{collections::BTreeMap, sync::Arc};
 
 #[cfg(all(not(feature = "std"), not(feature = "std")))]
 pub mod no_alloc {
-    use wrt_error::{Error, ErrorCategory, Result};
-    use wrt_foundation::{
+    use kiln_error::{Error, ErrorCategory, Result};
+    use kiln_foundation::{
         bounded::{BoundedVec, MAX_COMPONENT_TYPES},
         safe_memory::{NoStdProvider, SafeSlice},
         verification::VerificationLevel,
@@ -65,8 +65,8 @@ pub mod no_alloc {
         pub fn validate(binary: &[u8]) -> Result<()> {
             #[cfg(feature = "decoder")]
             {
-                // Use wrt-decoder's header validation
-                wrt_decoder::component::decode_no_alloc::verify_component_header(binary)
+                // Use kiln-decoder's header validation
+                kiln_decoder::component::decode_no_alloc::verify_component_header(binary)
             }
             #[cfg(not(feature = "decoder"))]
             {
@@ -84,7 +84,7 @@ pub mod no_alloc {
     }
 }
 
-use wrt_foundation::{
+use kiln_foundation::{
     safe_memory::{SafeMemoryHandler, SafeSlice, SafeStack},
     traits::BoundedCapacity,
     Value, VerificationLevel, safe_managed_alloc,
@@ -114,8 +114,8 @@ use crate::{
 #[cfg(feature = "std")]
 struct HostFunctionImpl<
     F: Fn(
-            &[wrt_foundation::Value],
-        ) -> Result<wrt_foundation::bounded::BoundedStack<wrt_foundation::Value, 64, crate::bounded_runtime_infra::RuntimeProvider>>
+            &[kiln_foundation::Value],
+        ) -> Result<kiln_foundation::bounded::BoundedStack<kiln_foundation::Value, 64, crate::bounded_runtime_infra::RuntimeProvider>>
         + 'static
         + Send
         + Sync,
@@ -131,8 +131,8 @@ struct HostFunctionImpl<
 #[cfg(feature = "std")]
 impl<
         F: Fn(
-                &[wrt_foundation::Value],
-            ) -> Result<wrt_foundation::bounded::BoundedStack<wrt_foundation::Value, 64, wrt_foundation::safe_memory::NoStdProvider<131072>>>
+                &[kiln_foundation::Value],
+            ) -> Result<kiln_foundation::bounded::BoundedStack<kiln_foundation::Value, 64, kiln_foundation::safe_memory::NoStdProvider<131072>>>
             + 'static
             + Send
             + Sync,
@@ -141,8 +141,8 @@ impl<
     /// Call the function with the given arguments
     fn call(
         &self,
-        args: &[wrt_foundation::Value],
-    ) -> Result<wrt_foundation::bounded::BoundedStack<wrt_foundation::Value, 64, wrt_foundation::safe_memory::NoStdProvider<131072>>> {
+        args: &[kiln_foundation::Value],
+    ) -> Result<kiln_foundation::bounded::BoundedStack<kiln_foundation::Value, 64, kiln_foundation::safe_memory::NoStdProvider<131072>>> {
         (self.implementation)(args)
     }
 
@@ -155,7 +155,7 @@ impl<
 
 /// Legacy host function implementation for backward compatibility
 struct LegacyHostFunctionImpl<
-    F: Fn(&[wrt_foundation::Value]) -> Result<wrt_foundation::bounded::BoundedVec<wrt_foundation::Value, 16, wrt_foundation::safe_memory::NoStdProvider<131072>>> + 'static + Send + Sync,
+    F: Fn(&[kiln_foundation::Value]) -> Result<kiln_foundation::bounded::BoundedVec<kiln_foundation::Value, 16, kiln_foundation::safe_memory::NoStdProvider<131072>>> + 'static + Send + Sync,
 > {
     /// Function type
     func_type: FuncType,
@@ -167,20 +167,20 @@ struct LegacyHostFunctionImpl<
 
 #[cfg(feature = "std")]
 impl<
-        F: Fn(&[wrt_foundation::Value]) -> Result<wrt_foundation::bounded::BoundedVec<wrt_foundation::Value, 16, wrt_foundation::safe_memory::NoStdProvider<131072>>> + 'static + Send + Sync,
+        F: Fn(&[kiln_foundation::Value]) -> Result<kiln_foundation::bounded::BoundedVec<kiln_foundation::Value, 16, kiln_foundation::safe_memory::NoStdProvider<131072>>> + 'static + Send + Sync,
     > ComponentHostFunction for LegacyHostFunctionImpl<F>
 {
     /// Call the function with the given arguments
     fn call(
         &self,
-        args: &[wrt_foundation::Value],
-    ) -> Result<wrt_foundation::bounded::BoundedStack<wrt_foundation::Value, 64, wrt_foundation::safe_memory::NoStdProvider<131072>>> {
+        args: &[kiln_foundation::Value],
+    ) -> Result<kiln_foundation::bounded::BoundedStack<kiln_foundation::Value, 64, kiln_foundation::safe_memory::NoStdProvider<131072>>> {
         // Call the legacy function
         let vec_result = (self.implementation)(args)?;
 
         // Convert to SafeStack
         let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
-        let mut safe_stack = wrt_foundation::safe_memory::SafeStack::new(provider)?;
+        let mut safe_stack = kiln_foundation::safe_memory::SafeStack::new(provider)?;
         safe_stack.set_verification_level(self.verification_level);
 
         // Add all values to the safe stack
@@ -220,9 +220,9 @@ impl HostFunctionFactory for DefaultHostFunctionFactory {
         let verification_level = self.verification_level;
         let func_impl = HostFunctionImpl {
             func_type: ty.clone(),
-            implementation: Arc::new(move |_args: &[wrt_foundation::Value]| {
+            implementation: Arc::new(move |_args: &[kiln_foundation::Value]| {
                 let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
-                let mut result = wrt_foundation::safe_memory::SafeStack::new(provider)?;
+                let mut result = kiln_foundation::safe_memory::SafeStack::new(provider)?;
                 result.set_verification_level(verification_level);
                 Ok(result)
             }),
@@ -264,12 +264,12 @@ impl ComponentRuntime for ComponentRuntimeImpl {
             #[cfg(feature = "std")]
             host_factories: Vec::with_capacity(8),
             #[cfg(all(not(feature = "std"), not(feature = "std")))]
-            host_factories: HostFactoryVec::new(wrt_provider!(131072, CrateId::Runtime).unwrap_or_default()).expect("Failed to create host factories"),
+            host_factories: HostFactoryVec::new(kiln_provider!(131072, CrateId::Runtime).unwrap_or_default()).expect("Failed to create host factories"),
             verification_level: VerificationLevel::default(),
             #[cfg(feature = "std")]
             host_functions: HostFunctionMap::new(),
             #[cfg(all(not(feature = "std"), not(feature = "std")))]
-            host_functions: HostFunctionMap::new(wrt_provider!(131072, CrateId::Runtime).unwrap_or_default()).expect("Failed to create host functions"),
+            host_functions: HostFunctionMap::new(kiln_provider!(131072, CrateId::Runtime).unwrap_or_default()).expect("Failed to create host functions"),
         }
     }
 
@@ -318,7 +318,7 @@ impl ComponentRuntime for ComponentRuntimeImpl {
         let memory_data = vec![0; memory_size];
         #[cfg(all(not(feature = "std"), not(feature = "std")))]
         let memory_data = {
-            let mut data = wrt_foundation::bounded::BoundedVec::new();
+            let mut data = kiln_foundation::bounded::BoundedVec::new();
             for _ in 0..memory_size.min(65536) {
                 data.push(0u8).unwrap();
             }
@@ -329,7 +329,7 @@ impl ComponentRuntime for ComponentRuntimeImpl {
         #[cfg(feature = "std")]
         let mut host_function_names = Vec::new();
         #[cfg(all(not(feature = "std"), not(feature = "std")))]
-        let mut host_function_names = wrt_foundation::bounded::BoundedVec::new();
+        let mut host_function_names = kiln_foundation::bounded::BoundedVec::new();
 
         #[cfg(feature = "std")]
         let mut host_functions = {
@@ -365,7 +365,7 @@ impl ComponentRuntime for ComponentRuntimeImpl {
             Ok(Box::new(ComponentInstanceImpl {
                 component_type: component_type.clone(),
                 verification_level: self.verification_level,
-                memory_store: wrt_foundation::safe_memory::SafeMemoryHandler::<wrt_foundation::safe_memory::NoStdProvider<131072>>::new(wrt_provider!(131072, CrateId::Runtime).unwrap_or_default()),
+                memory_store: kiln_foundation::safe_memory::SafeMemoryHandler::<kiln_foundation::safe_memory::NoStdProvider<131072>>::new(kiln_provider!(131072, CrateId::Runtime).unwrap_or_default()),
                 host_function_names,
                 host_functions,
             }))
@@ -381,7 +381,7 @@ impl ComponentRuntime for ComponentRuntimeImpl {
     /// Register a host function
     fn register_host_function<F>(&mut self, name: &str, ty: FuncType, function: F) -> Result<()>
     where
-        F: Fn(&[wrt_foundation::Value]) -> Result<wrt_foundation::bounded::BoundedVec<wrt_foundation::Value, 16, wrt_foundation::safe_memory::NoStdProvider<131072>>>
+        F: Fn(&[kiln_foundation::Value]) -> Result<kiln_foundation::bounded::BoundedVec<kiln_foundation::Value, 16, kiln_foundation::safe_memory::NoStdProvider<131072>>>
             + 'static
             + Send
             + Sync,
@@ -468,7 +468,7 @@ struct ComponentInstanceImpl {
     /// Verification level
     verification_level: VerificationLevel,
     /// Memory store for the instance
-    memory_store: wrt_foundation::safe_memory::SafeMemoryHandler<wrt_foundation::safe_memory::NoStdProvider<131072>>,
+    memory_store: kiln_foundation::safe_memory::SafeMemoryHandler<kiln_foundation::safe_memory::NoStdProvider<131072>>,
     /// Named host functions that are available to this instance
     host_function_names: Vec<String>,
     /// Host functions in this runtime
@@ -481,13 +481,13 @@ impl ComponentInstance for ComponentInstanceImpl {
     fn execute_function(
         &self,
         name: &str,
-        args: &[wrt_foundation::Value],
-    ) -> Result<wrt_foundation::bounded::BoundedStack<wrt_foundation::Value, 64, wrt_foundation::safe_memory::NoStdProvider<131072>>> {
+        args: &[kiln_foundation::Value],
+    ) -> Result<kiln_foundation::bounded::BoundedStack<kiln_foundation::Value, 64, kiln_foundation::safe_memory::NoStdProvider<131072>>> {
         // Verify args (safety check)
         if self.verification_level.should_verify(128) {
             // Check that argument types match the expected types
             if name.is_empty() {
-                return Err(wrt_error::Error::runtime_execution_error("Function name cannot be empty"));
+                return Err(kiln_error::Error::runtime_execution_error("Function name cannot be empty"));
             }
         }
 
@@ -511,7 +511,7 @@ impl ComponentInstance for ComponentInstanceImpl {
         if name_check {
             // Create an empty SafeStack for the result
             let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
-            let mut result = wrt_foundation::safe_memory::SafeStack::new(provider)?;
+            let mut result = kiln_foundation::safe_memory::SafeStack::new(provider)?;
             result.set_verification_level(self.verification_level;
 
             // For testing purposes, just return a constant value
@@ -539,7 +539,7 @@ impl ComponentInstance for ComponentInstanceImpl {
 
         // Create an empty SafeStack for the result
         let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
-        let mut result = wrt_foundation::safe_memory::SafeStack::new(provider)?;
+        let mut result = kiln_foundation::safe_memory::SafeStack::new(provider)?;
         result.set_verification_level(self.verification_level;
 
         // Simulate function execution based on the function name
@@ -553,21 +553,21 @@ impl ComponentInstance for ComponentInstanceImpl {
             "add" => {
                 // Add two i32 values
                 if args.len() >= 2 {
-                    if let (wrt_foundation::Value::I32(a), wrt_foundation::Value::I32(b)) =
+                    if let (kiln_foundation::Value::I32(a), kiln_foundation::Value::I32(b)) =
                         (&args[0], &args[1])
                     {
-                        result.push(wrt_foundation::Value::I32(a + b))?;
+                        result.push(kiln_foundation::Value::I32(a + b))?;
                     } else {
-                        return Err(wrt_error::Error::runtime_execution_error("Invalid argument type"));
+                        return Err(kiln_error::Error::runtime_execution_error("Invalid argument type"));
                     }
                 } else {
-                    return Err(wrt_error::Error::new(wrt_error::ErrorCategory::Validation,
+                    return Err(kiln_error::Error::new(kiln_error::ErrorCategory::Validation,
                         1002, "Incorrect number of arguments"));
                 }
             }
             _ => {
                 // Unknown function
-                return Err(wrt_error::Error::runtime_execution_error("Unknown function"));
+                return Err(kiln_error::Error::runtime_execution_error("Unknown function"));
             }
         }
 
@@ -580,18 +580,18 @@ impl ComponentInstance for ComponentInstanceImpl {
         name: &str,
         offset: u32,
         size: u32,
-    ) -> Result<wrt_foundation::safe_memory::SafeSlice<'_>> {
+    ) -> Result<kiln_foundation::safe_memory::SafeSlice<'_>> {
         // Verify memory access (safety check)
         if self.verification_level.should_verify(128) {
             // Check that the memory name is valid
             if name.is_empty() {
-                return Err(wrt_error::Error::new(wrt_error::ErrorCategory::Resource,
+                return Err(kiln_error::Error::new(kiln_error::ErrorCategory::Resource,
                     1003, "Memory name cannot be empty"));
             }
 
             // Check that offset and size are valid
             if offset + size > self.memory_store.size() as u32 {
-                return Err(wrt_error::Error::runtime_execution_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_execution_error("Memory access out of bounds"));
             }
         }
 
@@ -605,13 +605,13 @@ impl ComponentInstance for ComponentInstanceImpl {
         if self.verification_level.should_verify(128) {
             // Check that the memory name is valid
             if name.is_empty() {
-                return Err(wrt_error::Error::new(wrt_error::ErrorCategory::Resource,
+                return Err(kiln_error::Error::new(kiln_error::ErrorCategory::Resource,
                     1003, "Memory name cannot be empty"));
             }
 
             // Check that offset and size are valid
             if offset + bytes.len() as u32 > self.memory_store.size() as u32 {
-                return Err(wrt_error::Error::runtime_execution_error("Memory write out of bounds"));
+                return Err(kiln_error::Error::runtime_execution_error("Memory write out of bounds"));
             }
         }
 
@@ -629,7 +629,7 @@ impl ComponentInstance for ComponentInstanceImpl {
         }
 
         // Export not found
-        Err(wrt_error::Error::new(wrt_error::ErrorCategory::Resource,
+        Err(kiln_error::Error::new(kiln_error::ErrorCategory::Resource,
             1005,
             "Export not found"))
     }
@@ -637,7 +637,7 @@ impl ComponentInstance for ComponentInstanceImpl {
 
 #[cfg(test)]
 mod tests {
-    use wrt_foundation::{
+    use kiln_foundation::{
         safe_memory::SafeStack, types::FuncType, verification::VerificationLevel, Value,
     };
 
@@ -698,11 +698,11 @@ mod tests {
             _ty: &crate::func::FuncType,
         ) -> Result<Box<dyn HostFunction>> {
             // Create a simple legacy echo function
-            let func_type = FuncType::new(wrt_provider!(131072, CrateId::Runtime).unwrap_or_default(), {
-                let provider = wrt_provider!(131072, CrateId::Runtime).unwrap_or_default();
+            let func_type = FuncType::new(kiln_provider!(131072, CrateId::Runtime).unwrap_or_default(), {
+                let provider = kiln_provider!(131072, CrateId::Runtime).unwrap_or_default();
                 Vec::new(provider)?
             }, {
-                let provider = wrt_provider!(131072, CrateId::Runtime).unwrap_or_default();
+                let provider = kiln_provider!(131072, CrateId::Runtime).unwrap_or_default();
                 Vec::new(provider)?
             })?;
 
@@ -756,16 +756,16 @@ mod tests {
     fn test_component_instance_memory() -> Result<()> {
         // Create a component type for testing
         let component_type =
-            ComponentType::unit(wrt_provider!(131072, CrateId::Runtime).unwrap_or_default())?;
+            ComponentType::unit(kiln_provider!(131072, CrateId::Runtime).unwrap_or_default())?;
 
         // Create a component instance with enough memory
         let mut data = vec![0; 100]; // Initialize with 100 bytes
         let mut instance = ComponentInstanceImpl {
             component_type,
             verification_level: VerificationLevel::Standard,
-            memory_store: wrt_foundation::safe_memory::SafeMemoryHandler::<wrt_foundation::safe_memory::NoStdProvider<131072>>::new(data),
+            memory_store: kiln_foundation::safe_memory::SafeMemoryHandler::<kiln_foundation::safe_memory::NoStdProvider<131072>>::new(data),
             host_function_names: {
-                let provider = wrt_provider!(131072, CrateId::Runtime).unwrap_or_default);
+                let provider = kiln_provider!(131072, CrateId::Runtime).unwrap_or_default);
                 Vec::new(provider)?
             },
             #[cfg(feature = "std")]

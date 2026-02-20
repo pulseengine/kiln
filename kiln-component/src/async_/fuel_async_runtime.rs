@@ -19,7 +19,7 @@ use core::{
     task::{Context, Poll, Waker},
     time::Duration,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec,
     bounded_collections::BoundedMap,
     operations::{record_global_operation, Type as OperationType, global_fuel_consumed},
@@ -191,7 +191,7 @@ impl FuelAsyncRuntime {
         &mut self,
         component_id: ComponentInstanceId,
         function_name: &str,
-        params: Vec<wrt_foundation::Value>,
+        params: Vec<kiln_foundation::Value>,
         fuel_budget: u64,
         asil_mode: ASILExecutionMode,
     ) -> Result<TaskId> {
@@ -528,7 +528,7 @@ impl SimpleAsyncExecutor {
         &mut self,
         component: Arc<ComponentInstance>,
         function_name: &str,
-        params: Vec<wrt_foundation::Value>,
+        params: Vec<kiln_foundation::Value>,
         fuel_budget: u64,
     ) -> Result<Vec<u8>> {
         // Register component

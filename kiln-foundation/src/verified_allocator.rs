@@ -17,8 +17,8 @@ use core::{
     sync::atomic::{AtomicUsize, AtomicBool, Ordering},
 };
 
-use wrt_sync::WrtMutex;
-use wrt_error::{Result, Error};
+use kiln_sync::KilnMutex;
+use kiln_error::{Result, Error};
 
 use crate::{
     budget_aware_provider::CrateId,
@@ -91,7 +91,7 @@ pub struct VerifiedAllocator {
     /// Allocation enabled flag
     enabled: AtomicBool,
     /// Scope stack for hierarchical memory management (fixed size for const init)
-    scopes: WrtMutex<StaticVec<ScopeInfo, MAX_SCOPES>>,
+    scopes: KilnMutex<StaticVec<ScopeInfo, MAX_SCOPES>>,
     /// Invariant checker
     #[cfg(debug_assertions)]
     invariant_checker: InvariantChecker,
@@ -116,7 +116,7 @@ impl VerifiedAllocator {
             total_budget: budget,
             allocated: AtomicUsize::new(0),
             enabled: AtomicBool::new(true),
-            scopes: WrtMutex::new(StaticVec::new()),
+            scopes: KilnMutex::new(StaticVec::new()),
             #[cfg(debug_assertions)]
             invariant_checker: InvariantChecker {
                 check_frequency: 100,

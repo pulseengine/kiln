@@ -14,7 +14,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_wrap)]
 
-use wrt_math as math;
+use kiln_math as math;
 
 use crate::{
     prelude::{

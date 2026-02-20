@@ -4,8 +4,8 @@
 //! for the canonical ABI, ensuring proper data representation across
 //! component boundaries.
 
-use wrt_format::component::FormatValType;
-use wrt_foundation::{
+use kiln_format::component::FormatValType;
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     collections::StaticVec as BoundedVec,
     safe_managed_alloc,
@@ -359,14 +359,14 @@ impl Checksummable for MemoryBuffer {
 impl ToBytes for MemoryBuffer {
     fn to_bytes_with_provider<P: MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream,
+        writer: &mut kiln_foundation::traits::WriteStream,
         provider: &P,
-    ) -> core::result::Result<(), wrt_error::Error> {
+    ) -> core::result::Result<(), kiln_error::Error> {
         // Write the length of the data buffer
         (self.data.len() as u32).to_bytes_with_provider(writer, provider)?;
         // Write the data buffer contents
         writer.write_all(&self.data).map_err(|_| {
-            wrt_error::Error::foundation_memory_provider_failed("Failed to write MemoryBuffer data")
+            kiln_error::Error::foundation_memory_provider_failed("Failed to write MemoryBuffer data")
         })?;
         // Write the in_use flag
         self.in_use.to_bytes_with_provider(writer, provider)?;
@@ -376,9 +376,9 @@ impl ToBytes for MemoryBuffer {
 
 impl FromBytes for MemoryBuffer {
     fn from_bytes_with_provider<P: MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+        reader: &mut kiln_foundation::traits::ReadStream,
         provider: &P,
-    ) -> core::result::Result<Self, wrt_error::Error> {
+    ) -> core::result::Result<Self, kiln_error::Error> {
         // Read the length of the data buffer
         let len = u32::from_bytes_with_provider(reader, provider)? as usize;
         // Read the data buffer contents
@@ -390,7 +390,7 @@ impl FromBytes for MemoryBuffer {
             vec![0u8; len]
         };
         reader.read_exact(&mut data).map_err(|_| {
-            wrt_error::Error::foundation_memory_provider_failed("Failed to read MemoryBuffer data")
+            kiln_error::Error::foundation_memory_provider_failed("Failed to read MemoryBuffer data")
         })?;
         // Read the in_use flag
         let in_use = bool::from_bytes_with_provider(reader, provider)?;
@@ -403,7 +403,7 @@ impl FromBytes for MemoryBuffer {
 
 impl CanonicalMemoryPool {
     /// Create a new memory pool
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(not(any(feature = "std",)))]
             pools: [

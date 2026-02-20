@@ -1,8 +1,8 @@
 //! Tests for ASIL-specific error handling features
 
 #[cfg(any(feature = "asil-b", feature = "asil-c", feature = "asil-d"))]
-use wrt_error::{AsilErrorContext, AsilLevel};
-use wrt_error::{Error, ErrorCategory, codes};
+use kiln_error::{AsilErrorContext, AsilLevel};
+use kiln_error::{Error, ErrorCategory, codes};
 
 #[test]
 fn test_basic_error_creation() {
@@ -97,7 +97,7 @@ fn test_asil_error_context() {
 #[cfg(any(feature = "asil-c", feature = "asil-d"))]
 #[test]
 fn test_safety_monitor() {
-    use wrt_error::SafetyMonitor;
+    use kiln_error::SafetyMonitor;
 
     let monitor = SafetyMonitor::new();
     assert_eq!(monitor.error_count(), 0);

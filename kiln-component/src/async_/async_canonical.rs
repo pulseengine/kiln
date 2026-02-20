@@ -17,13 +17,13 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec};
 
-use wrt_error::{Error, ErrorCategory, Result};
-use wrt_foundation::collections::StaticVec as BoundedVec;
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_foundation::collections::StaticVec as BoundedVec;
 #[cfg(feature = "std")]
-use wrt_foundation::component_value::ComponentValue;
+use kiln_foundation::component_value::ComponentValue;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{BoundedMap as BTreeMap, budget_aware_provider::CrateId, safe_managed_alloc};
-use wrt_runtime::{Checksummable, FromBytes, ToBytes};
+use kiln_foundation::{BoundedMap as BTreeMap, budget_aware_provider::CrateId, safe_managed_alloc};
+use kiln_runtime::{Checksummable, FromBytes, ToBytes};
 
 use crate::{
     async_::async_types::{
@@ -448,7 +448,7 @@ impl AsyncCanonicalAbi {
             let stream_enum = StreamValueEnum::Values(stream);
             self.streams
                 .push((handle, stream_enum))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many streams"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many streams"))?;
         }
 
         Ok(handle)
@@ -461,7 +461,7 @@ impl AsyncCanonicalAbi {
             if let Some(stream) = self.streams.get_mut(&stream_handle) {
                 stream.read()
             } else {
-                Err(wrt_error::Error::runtime_execution_error(
+                Err(kiln_error::Error::runtime_execution_error(
                     "Invalid stream handle",
                 ))
             }
@@ -487,9 +487,9 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Validation,
-                wrt_error::codes::INVALID_INPUT,
+            Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Validation,
+                kiln_error::codes::INVALID_INPUT,
                 "Invalid stream handle",
             ))
         }
@@ -502,7 +502,7 @@ impl AsyncCanonicalAbi {
             if let Some(stream) = self.streams.get_mut(&stream_handle) {
                 stream.write(values)
             } else {
-                Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+                Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
             }
         }
         #[cfg(not(any(feature = "std",)))]
@@ -512,13 +512,13 @@ impl AsyncCanonicalAbi {
                     return match stream {
                         StreamValueEnum::Values(s) => {
                             if s.writable_closed {
-                                return Err(wrt_error::Error::runtime_execution_error(
+                                return Err(kiln_error::Error::runtime_execution_error(
                                     "Stream is closed",
                                 ));
                             }
                             for value in values {
                                 s.buffer.push(value.clone()).map_err(|_| {
-                                    wrt_error::Error::resource_exhausted("Buffer full")
+                                    kiln_error::Error::resource_exhausted("Buffer full")
                                 })?;
                             }
                             s.state = StreamState::Ready;
@@ -527,7 +527,7 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+            Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
         }
     }
 
@@ -538,7 +538,7 @@ impl AsyncCanonicalAbi {
             if let Some(stream) = self.streams.get_mut(&stream_handle) {
                 stream.cancel_read()
             } else {
-                Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+                Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
             }
         }
         #[cfg(not(any(feature = "std",)))]
@@ -553,7 +553,7 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+            Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
         }
     }
 
@@ -564,7 +564,7 @@ impl AsyncCanonicalAbi {
             if let Some(stream) = self.streams.get_mut(&stream_handle) {
                 stream.cancel_write()
             } else {
-                Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+                Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
             }
         }
         #[cfg(not(any(feature = "std",)))]
@@ -579,7 +579,7 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+            Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
         }
     }
 
@@ -590,7 +590,7 @@ impl AsyncCanonicalAbi {
             if let Some(stream) = self.streams.get_mut(&stream_handle) {
                 stream.close_readable()
             } else {
-                Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+                Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
             }
         }
         #[cfg(not(any(feature = "std",)))]
@@ -605,7 +605,7 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+            Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
         }
     }
 
@@ -616,7 +616,7 @@ impl AsyncCanonicalAbi {
             if let Some(stream) = self.streams.get_mut(&stream_handle) {
                 stream.close_writable()
             } else {
-                Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+                Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
             }
         }
         #[cfg(not(any(feature = "std",)))]
@@ -631,7 +631,7 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+            Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
         }
     }
 
@@ -652,7 +652,7 @@ impl AsyncCanonicalAbi {
             let future_enum = FutureValueEnum::Value(future);
             self.futures
                 .push((handle, future_enum))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many futures"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many futures"))?;
         }
 
         Ok(handle)
@@ -665,7 +665,7 @@ impl AsyncCanonicalAbi {
             if let Some(future) = self.futures.get_mut(&future_handle) {
                 future.read()
             } else {
-                Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+                Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
             }
         }
         #[cfg(not(any(feature = "std",)))]
@@ -689,9 +689,9 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Validation,
-                wrt_error::codes::INVALID_INPUT,
+            Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Validation,
+                kiln_error::codes::INVALID_INPUT,
                 "Invalid stream handle",
             ))
         }
@@ -704,7 +704,7 @@ impl AsyncCanonicalAbi {
             if let Some(future) = self.futures.get_mut(&future_handle) {
                 future.write(value)
             } else {
-                Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+                Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
             }
         }
         #[cfg(not(any(feature = "std",)))]
@@ -716,7 +716,7 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+            Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
         }
     }
 
@@ -730,7 +730,7 @@ impl AsyncCanonicalAbi {
             if let Some(future) = self.futures.get_mut(&future_handle) {
                 future.cancel_read()
             } else {
-                Err(wrt_error::Error::runtime_execution_error(
+                Err(kiln_error::Error::runtime_execution_error(
                     "Invalid future handle",
                 ))
             }
@@ -747,7 +747,7 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error(
+            Err(kiln_error::Error::runtime_execution_error(
                 "Invalid future handle",
             ))
         }
@@ -763,7 +763,7 @@ impl AsyncCanonicalAbi {
             if let Some(future) = self.futures.get_mut(&future_handle) {
                 future.cancel_write()
             } else {
-                Err(wrt_error::Error::runtime_execution_error(
+                Err(kiln_error::Error::runtime_execution_error(
                     "Invalid future handle",
                 ))
             }
@@ -780,7 +780,7 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error(
+            Err(kiln_error::Error::runtime_execution_error(
                 "Invalid future handle",
             ))
         }
@@ -796,7 +796,7 @@ impl AsyncCanonicalAbi {
             if let Some(future) = self.futures.get_mut(&future_handle) {
                 future.close_readable()
             } else {
-                Err(wrt_error::Error::runtime_execution_error(
+                Err(kiln_error::Error::runtime_execution_error(
                     "Invalid future handle",
                 ))
             }
@@ -813,7 +813,7 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error(
+            Err(kiln_error::Error::runtime_execution_error(
                 "Invalid future handle",
             ))
         }
@@ -829,7 +829,7 @@ impl AsyncCanonicalAbi {
             if let Some(future) = self.futures.get_mut(&future_handle) {
                 future.close_writable()
             } else {
-                Err(wrt_error::Error::runtime_execution_error(
+                Err(kiln_error::Error::runtime_execution_error(
                     "Invalid future handle",
                 ))
             }
@@ -846,7 +846,7 @@ impl AsyncCanonicalAbi {
                     };
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error(
+            Err(kiln_error::Error::runtime_execution_error(
                 "Invalid future handle",
             ))
         }
@@ -876,7 +876,7 @@ impl AsyncCanonicalAbi {
         {
             self.error_contexts
                 .push((handle, error_context))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many error contexts"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many error contexts"))?;
         }
 
         Ok(handle)
@@ -888,7 +888,7 @@ impl AsyncCanonicalAbi {
         if let Some(error_context) = self.error_contexts.get(&handle) {
             Ok(error_context.debug_string())
         } else {
-            Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+            Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
         }
     }
 
@@ -903,7 +903,7 @@ impl AsyncCanonicalAbi {
                 return Ok(error_context.debug_string());
             }
         }
-        Err(wrt_error::Error::runtime_execution_error("Invalid handle"))
+        Err(kiln_error::Error::runtime_execution_error("Invalid handle"))
     }
 
     /// Drop an error context
@@ -943,7 +943,7 @@ impl AsyncCanonicalAbi {
         {
             self.waitable_sets
                 .push((handle, waitable_set))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many waitable sets"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many waitable sets"))?;
         }
 
         Ok(handle)
@@ -971,7 +971,7 @@ impl AsyncCanonicalAbi {
                 }
                 Ok(index)
             } else {
-                Err(wrt_error::Error::runtime_execution_error(
+                Err(kiln_error::Error::runtime_execution_error(
                     "Invalid waitable set handle",
                 ))
             }
@@ -990,7 +990,7 @@ impl AsyncCanonicalAbi {
                     return Ok(index);
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error(
+            Err(kiln_error::Error::runtime_execution_error(
                 "Invalid waitable set handle",
             ))
         }
@@ -1015,12 +1015,12 @@ impl AsyncCanonicalAbi {
                 } else {
                     // In a real implementation, this would suspend the current task
                     // and resume when a waitable becomes ready. For now, return an error.
-                    Err(wrt_error::Error::runtime_execution_error(
+                    Err(kiln_error::Error::runtime_execution_error(
                         "No waitables ready and blocking not yet implemented",
                     ))
                 }
             } else {
-                Err(wrt_error::Error::runtime_execution_error(
+                Err(kiln_error::Error::runtime_execution_error(
                     "Invalid waitable set handle",
                 ))
             }
@@ -1032,13 +1032,13 @@ impl AsyncCanonicalAbi {
                     if let Some(ready_index) = set.first_ready() {
                         return Ok(ready_index);
                     } else {
-                        return Err(wrt_error::Error::runtime_execution_error(
+                        return Err(kiln_error::Error::runtime_execution_error(
                             "No waitables ready and blocking not yet implemented",
                         ));
                     }
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error(
+            Err(kiln_error::Error::runtime_execution_error(
                 "Invalid waitable set handle",
             ))
         }
@@ -1057,7 +1057,7 @@ impl AsyncCanonicalAbi {
             if let Some(set) = self.waitable_sets.get(&set_handle) {
                 Ok(set.first_ready())
             } else {
-                Err(wrt_error::Error::runtime_execution_error(
+                Err(kiln_error::Error::runtime_execution_error(
                     "Invalid waitable set handle",
                 ))
             }
@@ -1069,7 +1069,7 @@ impl AsyncCanonicalAbi {
                     return Ok(set.first_ready());
                 }
             }
-            Err(wrt_error::Error::runtime_execution_error(
+            Err(kiln_error::Error::runtime_execution_error(
                 "Invalid waitable set handle",
             ))
         }
@@ -1085,7 +1085,7 @@ impl AsyncCanonicalAbi {
             if self.waitable_sets.remove(&set_handle).is_some() {
                 Ok(())
             } else {
-                Err(wrt_error::Error::runtime_execution_error(
+                Err(kiln_error::Error::runtime_execution_error(
                     "Invalid waitable set handle",
                 ))
             }
@@ -1097,7 +1097,7 @@ impl AsyncCanonicalAbi {
             if self.waitable_sets.len() < initial_len {
                 Ok(())
             } else {
-                Err(wrt_error::Error::runtime_execution_error(
+                Err(kiln_error::Error::runtime_execution_error(
                     "Invalid waitable set handle",
                 ))
             }
@@ -1200,7 +1200,7 @@ impl AsyncCanonicalAbi {
             let waitables: Vec<Waitable> = if let Some(set) = self.waitable_sets.get(&set_handle) {
                 set.waitables.clone()
             } else {
-                return Err(wrt_error::Error::runtime_execution_error(
+                return Err(kiln_error::Error::runtime_execution_error(
                     "Invalid waitable set handle",
                 ));
             };
@@ -1237,7 +1237,7 @@ impl AsyncCanonicalAbi {
             }
 
             if !found {
-                return Err(wrt_error::Error::runtime_execution_error(
+                return Err(kiln_error::Error::runtime_execution_error(
                     "Invalid waitable set handle",
                 ));
             }
@@ -1334,7 +1334,7 @@ impl AsyncCanonicalAbi {
                     }
                     // Not found, add new
                     self.context_slots.push((slot, v)).map_err(|_| {
-                        wrt_error::Error::resource_exhausted("Too many context slots")
+                        kiln_error::Error::resource_exhausted("Too many context slots")
                     })?;
                     Ok(())
                 },
@@ -1602,7 +1602,7 @@ where
 
     fn write(&mut self, values: &[Value]) -> Result<()> {
         if self.inner.writable_closed {
-            return Err(wrt_error::Error::runtime_execution_error(
+            return Err(kiln_error::Error::runtime_execution_error(
                 "Stream is closed",
             ));
         }
@@ -1611,7 +1611,7 @@ where
             if let Ok(typed_value) = T::try_from(value.clone()) {
                 self.inner.buffer.push(typed_value);
             } else {
-                return Err(wrt_error::Error::type_mismatch_error("Value type mismatch"));
+                return Err(kiln_error::Error::type_mismatch_error("Value type mismatch"));
             }
         }
         self.inner.state = StreamState::Ready;
@@ -1678,7 +1678,7 @@ where
         if let Ok(typed_value) = T::try_from(value.clone()) {
             self.inner.set_value(typed_value)
         } else {
-            Err(wrt_error::Error::type_mismatch_error(
+            Err(kiln_error::Error::type_mismatch_error(
                 "Value type mismatch for future",
             ))
         }

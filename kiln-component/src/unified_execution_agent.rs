@@ -15,20 +15,20 @@ use core::{fmt, mem};
 use std::{boxed::Box, sync::Arc, vec::Vec};
 
 #[cfg(feature = "std")]
-use wrt_foundation::component_value::ComponentValue;
+use kiln_foundation::component_value::ComponentValue;
 
 // For no_std, override prelude's bounded::BoundedVec with StaticVec
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticVec as BoundedVec;
+use kiln_foundation::collections::StaticVec as BoundedVec;
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedString, budget_aware_provider::CrateId, prelude::*, safe_managed_alloc,
     safe_memory::NoStdProvider,
 };
 
 // Import BoundedVec only for std - no_std uses StaticVec alias above
 #[cfg(feature = "std")]
-use wrt_foundation::bounded::BoundedVec;
+use kiln_foundation::bounded::BoundedVec;
 
 use crate::bounded_component_infra::ComponentProvider;
 
@@ -384,9 +384,9 @@ pub enum LabelKind {
 }
 
 // Serialization trait implementations for Label
-use wrt_foundation::traits::{ReadStream, WriteStream};
-use wrt_foundation::{Checksum, MemoryProvider};
-use wrt_runtime::{Checksummable, FromBytes, ToBytes};
+use kiln_foundation::traits::{ReadStream, WriteStream};
+use kiln_foundation::{Checksum, MemoryProvider};
+use kiln_runtime::{Checksummable, FromBytes, ToBytes};
 
 impl Checksummable for Label {
     fn update_checksum(&self, checksum: &mut Checksum) {
@@ -406,7 +406,7 @@ impl ToBytes for Label {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let kind_byte = match self.kind {
             LabelKind::Block => 0u8,
             LabelKind::Loop => 1u8,
@@ -423,7 +423,7 @@ impl FromBytes for Label {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let kind_byte = u8::from_bytes_with_provider(reader, provider)?;
         let kind = match kind_byte {
             0 => LabelKind::Block,
@@ -530,7 +530,7 @@ pub struct AsyncExecutionResult {
 
 impl UnifiedExecutionAgent {
     /// Create a new unified execution agent
-    pub fn new(config: AgentConfiguration) -> wrt_error::Result<Self> {
+    pub fn new(config: AgentConfiguration) -> kiln_error::Result<Self> {
         Ok(Self {
             core_state: CoreExecutionState {
                 #[cfg(feature = "std")]
@@ -539,7 +539,7 @@ impl UnifiedExecutionAgent {
                 call_stack: {
                     let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                     BoundedVec::new().map_err(|| {
-                        wrt_error::Error::resource_exhausted("Failed to create call stack")
+                        kiln_error::Error::resource_exhausted("Failed to create call stack")
                     })?
                 },
 
@@ -549,7 +549,7 @@ impl UnifiedExecutionAgent {
                 operand_stack: {
                     let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                     BoundedVec::new().map_err(|| {
-                        wrt_error::Error::resource_exhausted("Failed to create operand stack")
+                        kiln_error::Error::resource_exhausted("Failed to create operand stack")
                     })?
                 },
 
@@ -569,7 +569,7 @@ impl UnifiedExecutionAgent {
                 executions: {
                     let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                     BoundedVec::new().map_err(|| {
-                        wrt_error::Error::resource_exhausted("Failed to create async executions")
+                        kiln_error::Error::resource_exhausted("Failed to create async executions")
                     })?
                 },
                 next_execution_id: 1,
@@ -579,7 +579,7 @@ impl UnifiedExecutionAgent {
                 context_pool: {
                     let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                     BoundedVec::new().map_err(|| {
-                        wrt_error::Error::resource_exhausted("Failed to create context pool")
+                        kiln_error::Error::resource_exhausted("Failed to create context pool")
                     })?
                 },
             },
@@ -601,7 +601,7 @@ impl UnifiedExecutionAgent {
                 labels: {
                     let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                     BoundedVec::new().map_err(|| {
-                        wrt_error::Error::resource_exhausted("Failed to create labels")
+                        kiln_error::Error::resource_exhausted("Failed to create labels")
                     })?
                 },
                 stackless_mode: matches!(config.execution_mode, ExecutionMode::Stackless),
@@ -613,13 +613,13 @@ impl UnifiedExecutionAgent {
     }
 
     /// Create agent with default configuration
-    pub fn new_default() -> wrt_error::Result<Self> {
+    pub fn new_default() -> kiln_error::Result<Self> {
         Self::new(AgentConfiguration::default())
     }
 
     /// Create agent for async execution
     #[cfg(feature = "async")]
-    pub fn new_async() -> wrt_error::Result<Self> {
+    pub fn new_async() -> kiln_error::Result<Self> {
         Self::new(AgentConfiguration {
             execution_mode: ExecutionMode::Asynchronous,
             ..AgentConfiguration::default()
@@ -628,7 +628,7 @@ impl UnifiedExecutionAgent {
 
     /// Create agent for CFI-protected execution
     #[cfg(feature = "cfi")]
-    pub fn new_cfi_protected() -> wrt_error::Result<Self> {
+    pub fn new_cfi_protected() -> kiln_error::Result<Self> {
         Self::new(AgentConfiguration {
             execution_mode: ExecutionMode::CfiProtected,
             ..AgentConfiguration::default()
@@ -636,7 +636,7 @@ impl UnifiedExecutionAgent {
     }
 
     /// Create agent for stackless execution
-    pub fn new_stackless() -> wrt_error::Result<Self> {
+    pub fn new_stackless() -> kiln_error::Result<Self> {
         Self::new(AgentConfiguration {
             execution_mode: ExecutionMode::Stackless,
             ..AgentConfiguration::default()
@@ -644,7 +644,7 @@ impl UnifiedExecutionAgent {
     }
 
     /// Create agent with hybrid capabilities
-    pub fn new_hybrid(flags: HybridModeFlags) -> wrt_error::Result<Self> {
+    pub fn new_hybrid(flags: HybridModeFlags) -> kiln_error::Result<Self> {
         Self::new(AgentConfiguration {
             execution_mode: ExecutionMode::Hybrid(flags),
             ..AgentConfiguration::default()
@@ -657,7 +657,7 @@ impl UnifiedExecutionAgent {
         instance_id: u32,
         function_index: u32,
         args: &[Value],
-    ) -> wrt_error::Result<Value> {
+    ) -> kiln_error::Result<Value> {
         self.core_state.state = UnifiedExecutionState::Running;
         self.statistics.function_calls += 1;
 
@@ -682,7 +682,7 @@ impl UnifiedExecutionAgent {
             locals: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 let mut locals = BoundedVec::new()
-                    .map_err(|| wrt_error::Error::resource_exhausted("Failed to create locals"))?;
+                    .map_err(|| kiln_error::Error::resource_exhausted("Failed to create locals"))?;
                 for arg in args.iter().take(64) {
                     let _ = locals.push(arg.clone());
                 }
@@ -716,7 +716,7 @@ impl UnifiedExecutionAgent {
         &mut self,
         frame: UnifiedCallFrame,
         args: &[Value],
-    ) -> wrt_error::Result<Value> {
+    ) -> kiln_error::Result<Value> {
         // Push frame to call stack
         #[cfg(feature = "std")]
         {
@@ -727,7 +727,7 @@ impl UnifiedExecutionAgent {
             self.core_state
                 .call_stack
                 .push(frame)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Error occurred"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Error occurred"))?;
         }
 
         // Execute through runtime bridge
@@ -748,7 +748,7 @@ impl UnifiedExecutionAgent {
         #[cfg(not(feature = "std"))]
         let _function_name_str = function_name
             .as_str()
-            .map_err(|_| wrt_error::Error::runtime_error("Invalid function name"))?;
+            .map_err(|_| kiln_error::Error::runtime_error("Invalid function name"))?;
 
         // Stubbed: return default value for now
         let result = Value::S32(0);
@@ -775,7 +775,7 @@ impl UnifiedExecutionAgent {
         &mut self,
         frame: UnifiedCallFrame,
         _args: &[Value],
-    ) -> wrt_error::Result<Value> {
+    ) -> kiln_error::Result<Value> {
         // Update stackless state
         self.stackless_state.func_idx = frame.function_index;
         self.stackless_state.pc = 0;
@@ -794,7 +794,7 @@ impl UnifiedExecutionAgent {
         &mut self,
         frame: UnifiedCallFrame,
         args: &[Value],
-    ) -> wrt_error::Result<Value> {
+    ) -> kiln_error::Result<Value> {
         // Create async execution
         let execution_id = self.async_state.next_execution_id;
         self.async_state.next_execution_id += 1;
@@ -850,7 +850,7 @@ impl UnifiedExecutionAgent {
             self.async_state
                 .executions
                 .push(async_execution)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Error occurred"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Error occurred"))?;
         }
 
         self.core_state.state = UnifiedExecutionState::Completed;
@@ -867,7 +867,7 @@ impl UnifiedExecutionAgent {
         &mut self,
         frame: UnifiedCallFrame,
         args: &[Value],
-    ) -> wrt_error::Result<Value> {
+    ) -> kiln_error::Result<Value> {
         // Update CFI context
         self.cfi_state.cfi_context.current_function = frame.function_index;
 
@@ -888,7 +888,7 @@ impl UnifiedExecutionAgent {
         frame: UnifiedCallFrame,
         args: &[Value],
         flags: HybridModeFlags,
-    ) -> wrt_error::Result<Value> {
+    ) -> kiln_error::Result<Value> {
         // Apply capabilities based on flags
         if flags.cfi_enabled {
             #[cfg(feature = "cfi")]
@@ -949,7 +949,7 @@ impl UnifiedExecutionAgent {
     fn convert_values_to_component(
         &self,
         values: &[Value],
-    ) -> wrt_error::Result<Vec<ComponentValue<ComponentProvider>>> {
+    ) -> kiln_error::Result<Vec<ComponentValue<ComponentProvider>>> {
         let mut component_values = Vec::new();
         for value in values {
             component_values.push(value.clone().into());
@@ -961,15 +961,15 @@ impl UnifiedExecutionAgent {
     fn convert_values_to_component(
         &self,
         values: &[Value],
-    ) -> wrt_error::Result<BoundedVec<Value, 16>> {
+    ) -> kiln_error::Result<BoundedVec<Value, 16>> {
         let provider = safe_managed_alloc!(65536, CrateId::Component)?;
         let mut component_values = BoundedVec::new().map_err(|| {
-            wrt_error::Error::resource_exhausted("Failed to create component values")
+            kiln_error::Error::resource_exhausted("Failed to create component values")
         })?;
         for value in values.iter().take(16) {
             component_values
                 .push(value.clone())
-                .map_err(|_| wrt_error::Error::resource_exhausted("Error occurred"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Error occurred"))?;
         }
         Ok(component_values)
     }
@@ -1002,7 +1002,7 @@ impl fmt::Display for UnifiedExecutionState {
     }
 }
 
-// Traits already imported at line 404 from wrt_runtime
+// Traits already imported at line 404 from kiln_runtime
 
 impl Default for UnifiedExecutionAgent {
     fn default() -> Self {
@@ -1028,26 +1028,26 @@ impl Eq for UnifiedExecutionAgent {}
 macro_rules! impl_basic_traits {
     ($type:ty, $default_val:expr) => {
         impl Checksummable for $type {
-            fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+            fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
                 0u32.update_checksum(checksum);
             }
         }
 
         impl ToBytes for $type {
-            fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 &self,
                 _writer: &mut WriteStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<()> {
+            ) -> kiln_error::Result<()> {
                 Ok(())
             }
         }
 
         impl FromBytes for $type {
-            fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 _reader: &mut ReadStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<Self> {
+            ) -> kiln_error::Result<Self> {
                 Ok($default_val)
             }
         }

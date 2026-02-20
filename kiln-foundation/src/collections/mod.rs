@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Static Collections (heapless-inspired)
 // SW-REQ-ID: REQ_RESOURCE_001, REQ_MEM_SAFETY_001
 //
@@ -25,7 +25,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use wrt_foundation::collections::StaticVec;
+//! use kiln_foundation::collections::StaticVec;
 //!
 //! // Create a vector with capacity 10
 //! let mut vec = StaticVec::<u32, 10>::new();
@@ -42,7 +42,7 @@
 //! for value in vec.iter() {
 //!     println!("{}", value);
 //! }
-//! # Ok::<(), wrt_error::Error>(())
+//! # Ok::<(), kiln_error::Error>(())
 //! ```
 //!
 //! # ASIL Compliance

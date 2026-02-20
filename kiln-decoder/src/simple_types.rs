@@ -1,14 +1,14 @@
 //! Simple decoder types using StaticVec (no Provider)
 //!
-//! These are simplified, self-contained versions of wrt-foundation types
+//! These are simplified, self-contained versions of kiln-foundation types
 //! that use the new StaticVec collections instead of Provider-based BoundedVec.
 //!
-//! This allows wrt-decoder to migrate incrementally without waiting for
-//! full wrt-foundation migration.
+//! This allows kiln-decoder to migrate incrementally without waiting for
+//! full kiln-foundation migration.
 
 use crate::bounded_decoder_infra::{MAX_FUNCTION_PARAMS, MAX_FUNCTION_RESULTS, MAX_NAME_LENGTH};
-use wrt_format::types::ValueType;
-use wrt_foundation::collections::StaticVec;
+use kiln_format::types::ValueType;
+use kiln_foundation::collections::StaticVec;
 
 /// Function type with static inline storage
 #[derive(Debug, Clone)]
@@ -30,7 +30,7 @@ impl SimpleFuncType {
     pub fn from_iters(
         params_iter: impl IntoIterator<Item = ValueType>,
         results_iter: impl IntoIterator<Item = ValueType>,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut func_type = Self::new();
         for param in params_iter {
             func_type.params.push(param)?;
@@ -52,7 +52,7 @@ impl Default for SimpleFuncType {
 pub type SimpleString = StaticVec<u8, MAX_NAME_LENGTH>;
 
 /// Create a simple string from &str
-pub fn simple_string_from_str(s: &str) -> wrt_error::Result<SimpleString> {
+pub fn simple_string_from_str(s: &str) -> kiln_error::Result<SimpleString> {
     let mut string = StaticVec::new();
     for byte in s.bytes() {
         string.push(byte)?;

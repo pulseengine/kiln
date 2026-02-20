@@ -144,16 +144,16 @@ pub mod xtask_port {
 
         // Build documentation for each package individually to avoid conflicts
         let packages = [
-            "wrt-error",
-            "wrt-foundation",
-            "wrt-sync",
-            "wrt-logging",
-            "wrt-math",
-            "wrt-decoder",
-            "wrt-intercept",
-            "wrt-panic",
-            "wrt-build-core",
-            "cargo-wrt",
+            "kiln-error",
+            "kiln-foundation",
+            "kiln-sync",
+            "kiln-logging",
+            "kiln-math",
+            "kiln-decoder",
+            "kiln-intercept",
+            "kiln-panic",
+            "kiln-build-core",
+            "cargo-kiln",
         ];
 
         let mut any_failed = false;
@@ -215,7 +215,7 @@ pub mod xtask_port {
             println!("    ✅ Sphinx documentation generated");
         } else {
             println!("    ⚠️  Sphinx not available, skipping comprehensive documentation");
-            println!("    💡 Run 'cargo-wrt setup --install' to install documentation tools");
+            println!("    💡 Run 'cargo-kiln setup --install' to install documentation tools");
         }
 
         // 3. Open documentation if requested
@@ -411,10 +411,10 @@ pub mod xtask_port {
 
         // Build each crate with no_std features
         let no_std_crates = [
-            "wrt-runtime",
-            "wrt-component",
-            "wrt-foundation",
-            "wrt-instructions",
+            "kiln-runtime",
+            "kiln-component",
+            "kiln-foundation",
+            "kiln-instructions",
         ];
 
         for crate_name in &no_std_crates {
@@ -594,7 +594,7 @@ pub mod xtask_port {
             "📚".bright_blue()
         );
 
-        let temp_dir = std::env::temp_dir().join("wrt-docs");
+        let temp_dir = std::env::temp_dir().join("kiln-docs");
 
         // Clean and create fresh directory
         if temp_dir.exists() {
@@ -748,30 +748,30 @@ pub mod xtask_port {
         Ok(())
     }
 
-    /// Build WRTD (WebAssembly Runtime Daemon) binaries (ported from xtask
-    /// wrtd_build)
-    pub fn build_wrtd_binaries() -> BuildResult<()> {
-        println!("{} Building WRTD binaries...", "🏗️".bright_blue());
+    /// Build KilnD (WebAssembly Runtime Daemon) binaries (ported from xtask
+    /// kilnd_build)
+    pub fn build_kilnd_binaries() -> BuildResult<()> {
+        println!("{} Building KilnD binaries...", "🏗️".bright_blue());
 
-        let wrtd_targets = [
+        let kilnd_targets = [
             (
-                "wrtd-std",
+                "kilnd-std",
                 "std-runtime",
                 "Standard library runtime for servers/desktop",
             ),
             (
-                "wrtd-alloc",
+                "kilnd-alloc",
                 "alloc-runtime",
                 "Allocation runtime for embedded with heap",
             ),
             (
-                "wrtd-nostd",
+                "kilnd-nostd",
                 "nostd-runtime",
                 "No standard library runtime for bare metal",
             ),
         ];
 
-        for (binary_name, feature, description) in &wrtd_targets {
+        for (binary_name, feature, description) in &kilnd_targets {
             println!(
                 "  {} Building {} - {}",
                 "📦".bright_cyan(),
@@ -798,7 +798,7 @@ pub mod xtask_port {
         }
 
         println!(
-            "{} All WRTD binaries built successfully",
+            "{} All KilnD binaries built successfully",
             "✅".bright_green()
         );
         Ok(())
@@ -855,7 +855,7 @@ impl BuildSystem {
 
     /// Build all components in the workspace
     pub fn build_all(&self) -> BuildResult<BuildResults> {
-        println!("{} Building all WRT components...", "🔨".bright_blue());
+        println!("{} Building all Kiln components...", "🔨".bright_blue());
 
         let start_time = std::time::Instant::now();
         let mut artifacts = Vec::new();
@@ -994,7 +994,7 @@ impl BuildSystem {
                     Range::entire_line(0),
                     Severity::Error,
                     format!("Failed to parse clippy output: {}", e),
-                    "cargo-wrt".to_string(),
+                    "cargo-kiln".to_string(),
                 ));
             },
         }
@@ -1017,7 +1017,7 @@ impl BuildSystem {
                     Range::entire_line(0),
                     Severity::Warning,
                     "cargo fmt not available, skipping format check".to_string(),
-                    "cargo-wrt".to_string(),
+                    "cargo-kiln".to_string(),
                 ));
             } else {
                 // Parse unformatted files from stderr
@@ -1080,9 +1080,9 @@ impl BuildSystem {
         xtask_port::run_integrity_checks()
     }
 
-    /// Build WRTD binaries using ported xtask logic
-    pub fn build_wrtd_binaries(&self) -> BuildResult<()> {
-        xtask_port::build_wrtd_binaries()
+    /// Build KilnD binaries using ported xtask logic
+    pub fn build_kilnd_binaries(&self) -> BuildResult<()> {
+        xtask_port::build_kilnd_binaries()
     }
 
     /// Check requirements traceability
@@ -1099,7 +1099,7 @@ impl BuildSystem {
                 "⚠️".bright_yellow(),
                 req_path.display()
             );
-            println!("  Use 'cargo-wrt init-requirements' to create a sample file");
+            println!("  Use 'cargo-kiln init-requirements' to create a sample file");
             return Ok(());
         }
 
@@ -1273,7 +1273,7 @@ impl BuildSystem {
                     Range::entire_line(0),
                     Severity::Error,
                     format!("Failed to parse build output: {}", e),
-                    "cargo-wrt".to_string(),
+                    "cargo-kiln".to_string(),
                 ));
             },
         }
@@ -1285,7 +1285,7 @@ impl BuildSystem {
                 Range::entire_line(0),
                 Severity::Error,
                 format!("Build failed for package {}", package_name),
-                "cargo-wrt".to_string(),
+                "cargo-kiln".to_string(),
             ));
         } else {
             collection.add_diagnostic(Diagnostic::new(
@@ -1293,7 +1293,7 @@ impl BuildSystem {
                 Range::entire_line(0),
                 Severity::Info,
                 format!("Build succeeded for package {}", package_name),
-                "cargo-wrt".to_string(),
+                "cargo-kiln".to_string(),
             ));
         }
 
@@ -1347,7 +1347,7 @@ impl BuildSystem {
                     Range::entire_line(0),
                     Severity::Error,
                     format!("Failed to parse build output: {}", e),
-                    "cargo-wrt".to_string(),
+                    "cargo-kiln".to_string(),
                 ));
             },
         }
@@ -1359,7 +1359,7 @@ impl BuildSystem {
                 Range::entire_line(0),
                 Severity::Error,
                 "Workspace build failed".to_string(),
-                "cargo-wrt".to_string(),
+                "cargo-kiln".to_string(),
             ));
         } else {
             collection.add_diagnostic(Diagnostic::new(
@@ -1367,7 +1367,7 @@ impl BuildSystem {
                 Range::entire_line(0),
                 Severity::Info,
                 "Workspace build succeeded".to_string(),
-                "cargo-wrt".to_string(),
+                "cargo-kiln".to_string(),
             ));
         }
 
@@ -1668,7 +1668,7 @@ mod tests {
     fn test_build_results() {
         let results = BuildResults {
             success: true,
-            artifacts: vec![PathBuf::from("target/debug/wrt")],
+            artifacts: vec![PathBuf::from("target/debug/kiln")],
             duration_ms: 1000,
             warnings: vec!["warning: unused variable".to_string()],
         };

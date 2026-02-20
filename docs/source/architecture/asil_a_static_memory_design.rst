@@ -11,7 +11,7 @@ This document describes the static memory design implemented for ASIL-A complian
 Overview
 --------
 
-For ASIL-A compliance, the WRT project has eliminated all dynamic memory allocation from safety-critical components. The most significant change is replacing the HashMap-based capability storage with a static array implementation that works identically in both std and no_std environments.
+For ASIL-A compliance, the Kiln project has eliminated all dynamic memory allocation from safety-critical components. The most significant change is replacing the HashMap-based capability storage with a static array implementation that works identically in both std and no_std environments.
 
 Design Rationale
 ----------------

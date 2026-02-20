@@ -1,16 +1,16 @@
-// WRT - wrt-platform
+// Kiln - kiln-platform
 // Module: Formal Verification Support
 // SW-REQ-ID: REQ_PLATFORM_VERIFICATION_001
 // SW-REQ-ID: REQ_VERIFY_010
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
 //! Formal Verification Support for Safety-Critical WebAssembly Runtime
 //!
 //! This module provides formal verification capabilities using Kani and CBMC
-//! to prove safety properties of the WRT platform layer.
+//! to prove safety properties of the Kiln platform layer.
 //!
 //! # Verification Goals
 //! - **Memory Safety**: No buffer overflows, use-after-free, or null pointer
@@ -34,7 +34,7 @@
 
 use core::ptr::NonNull;
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 /// Formal verification annotations for safety-critical properties
 pub mod annotations {

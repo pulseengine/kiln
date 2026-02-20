@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// Kiln - kiln-component
 // Module: WebAssembly Component Model Implementation
 // SW-REQ-ID: REQ_019
 // SW-REQ-ID: REQ_002
@@ -9,7 +9,7 @@
 
 #![deny(unsafe_code)] // Rule 2 - deny instead of forbid to allow opt-in for required unsafe (e.g., Waker creation)
 
-//! Component Model implementation for the WebAssembly Runtime (WRT).
+//! Component Model implementation for the WebAssembly Runtime (Kiln).
 //!
 //! This crate provides an implementation of the WebAssembly Component Model,
 //! enabling composition and interoperability between WebAssembly modules
@@ -29,7 +29,7 @@ extern crate alloc;
 #[cfg(feature = "tracing")]
 macro_rules! debug_println {
     ($($arg:tt)*) => {
-        wrt_foundation::tracing::trace!($($arg)*);
+        kiln_foundation::tracing::trace!($($arg)*);
     };
 }
 
@@ -120,7 +120,7 @@ pub use builtins::{BuiltinHandler, BuiltinRegistry};
 pub use canonical_abi::canonical::CanonicalABI;
 pub use components::component::ComponentType;
 // Re-export MemoryProvider from foundation for type parameters
-pub use wrt_foundation::MemoryProvider;
+pub use kiln_foundation::MemoryProvider;
 // Add placeholder types for commonly missing imports (when not imported from
 // component modules)
 pub type ResourceHandle = u32;
@@ -133,7 +133,7 @@ pub use components::component::{
 #[cfg(not(feature = "std"))]
 pub use components::component_no_std::{
     Component, ComponentBuilder, ExternValue, FunctionValue, GlobalValue, MemoryValue,
-    RuntimeInstance, TableValue, WrtComponentType, WrtComponentTypeBuilder,
+    RuntimeInstance, TableValue, KilnComponentType, KilnComponentTypeBuilder,
 };
 // Component registry (consolidated implementation for both std and no_std)
 pub use components::component_registry::ComponentRegistry;

@@ -13,24 +13,24 @@ This flow shows how a WebAssembly module is loaded and prepared for execution:
 
    @startuml
    actor "Host Application" as Host
-   participant "WRT Facade" as WRT
+   participant "Kiln Facade" as Kiln
    participant "Decoder" as DEC
    participant "Runtime" as RT
    participant "Memory Manager" as MM
    participant "Platform Layer" as PL
    
-   Host -> WRT: load_module(bytes)
-   activate WRT
+   Host -> Kiln: load_module(bytes)
+   activate Kiln
    
-   WRT -> DEC: decode_module(bytes)
+   Kiln -> DEC: decode_module(bytes)
    activate DEC
    note right: Validates binary format
    DEC -> DEC: parse_sections()
    DEC -> DEC: validate_structure()
-   DEC --> WRT: Module
+   DEC --> Kiln: Module
    deactivate DEC
    
-   WRT -> RT: create_instance(module)
+   Kiln -> RT: create_instance(module)
    activate RT
    
    RT -> MM: allocate_memory(size)
@@ -54,11 +54,11 @@ This flow shows how a WebAssembly module is loaded and prepared for execution:
    
    RT -> RT: initialize_globals()
    RT -> RT: initialize_tables()
-   RT --> WRT: Instance
+   RT --> Kiln: Instance
    deactivate RT
    
-   WRT --> Host: InstanceHandle
-   deactivate WRT
+   Kiln --> Host: InstanceHandle
+   deactivate Kiln
    @enduml
 
 **Key Decision Points**:
@@ -304,4 +304,4 @@ Cross-References
 
 - **State Machines**: See :doc:`state_machines` for component lifecycles
 - **Sequence Details**: See :doc:`sequence_diagrams` for detailed timing
-- **Implementation**: See actual code in ``wrt-runtime/src/execution.rs``
+- **Implementation**: See actual code in ``kiln-runtime/src/execution.rs``

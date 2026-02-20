@@ -4,7 +4,7 @@
 
 #![forbid(unsafe_code)] // Rule 2
 
-//! Host function infrastructure for the WebAssembly Runtime (WRT).
+//! Host function infrastructure for the WebAssembly Runtime (Kiln).
 //!
 //! This crate provides the core infrastructure for registering and managing
 //! host functions that can be called from WebAssembly components. It follows
@@ -20,8 +20,8 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! # use wrt_host::prelude::*;
-//! # use wrt_foundation::Value;
+//! # use kiln_host::prelude::*;
+//! # use kiln_foundation::Value;
 //!
 //! // Create a host builder
 //! let builder = HostBuilder::new()
@@ -48,7 +48,7 @@ extern crate std;
 extern crate alloc;
 
 // Binary std/no_std choice
-// from wrt-foundation
+// from kiln-foundation
 
 // Bounded infrastructure for static memory allocation
 #[cfg(not(feature = "std"))]
@@ -103,7 +103,7 @@ pub use host::BuiltinHost;
 pub use prelude::*;
 
 // Panic handler disabled in library crates to avoid conflicts during workspace
-// builds The main wrt crate or final binary should provide the panic handler
+// builds The main kiln crate or final binary should provide the panic handler
 // #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {

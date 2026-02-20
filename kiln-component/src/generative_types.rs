@@ -4,7 +4,7 @@ use core::sync::atomic::{AtomicU32, Ordering};
 #[cfg(feature = "std")]
 use std::{collections::BTreeMap, vec::Vec};
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{BoundedVec, MAX_GENERATIVE_TYPES},
     budget_aware_provider::CrateId,
     component_value::ComponentValue,
@@ -28,8 +28,8 @@ pub struct GenerativeResourceType {
     pub generation: u32,
 }
 
-impl wrt_foundation::traits::Checksummable for GenerativeResourceType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for GenerativeResourceType {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.base_type.update_checksum(checksum);
         self.instance_id.0.update_checksum(checksum);
         self.unique_type_id.0.update_checksum(checksum);
@@ -37,12 +37,12 @@ impl wrt_foundation::traits::Checksummable for GenerativeResourceType {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for GenerativeResourceType {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for GenerativeResourceType {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.base_type.to_bytes_with_provider(writer, provider)?;
         self.instance_id.0.to_bytes_with_provider(writer, provider)?;
         self.unique_type_id.0.to_bytes_with_provider(writer, provider)?;
@@ -50,11 +50,11 @@ impl wrt_foundation::traits::ToBytes for GenerativeResourceType {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for GenerativeResourceType {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for GenerativeResourceType {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             base_type: ResourceType::from_bytes_with_provider(reader, provider)?,
             instance_id: ComponentInstanceId(u32::from_bytes_with_provider(reader, provider)?),
@@ -71,8 +71,8 @@ pub struct TypeBound {
     pub target_type: TypeId,
 }
 
-impl wrt_foundation::traits::Checksummable for TypeBound {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for TypeBound {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.type_id.0.update_checksum(checksum);
         match self.bound_kind {
             BoundKind::Eq => 0u8.update_checksum(checksum),
@@ -82,12 +82,12 @@ impl wrt_foundation::traits::Checksummable for TypeBound {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for TypeBound {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for TypeBound {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.type_id.0.to_bytes_with_provider(writer, provider)?;
         match self.bound_kind {
             BoundKind::Eq => 0u8.to_bytes_with_provider(writer, provider)?,
@@ -97,11 +97,11 @@ impl wrt_foundation::traits::ToBytes for TypeBound {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for TypeBound {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for TypeBound {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let type_id = TypeId(u32::from_bytes_with_provider(reader, provider)?);
         let bound_kind_byte = u8::from_bytes_with_provider(reader, provider)?;
         let bound_kind = match bound_kind_byte {

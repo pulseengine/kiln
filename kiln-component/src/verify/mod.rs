@@ -1,4 +1,4 @@
-//! Formal verification for wrt-component using Kani.
+//! Formal verification for kiln-component using Kani.
 //!
 //! This module contains comprehensive type safety proofs for the WebAssembly
 //! Component Model implementation. These proofs focus on:

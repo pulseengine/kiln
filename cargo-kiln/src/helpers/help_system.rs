@@ -1,7 +1,7 @@
-//! Standardized help and documentation system for cargo-wrt
+//! Standardized help and documentation system for cargo-kiln
 //!
 //! Provides consistent help formatting, command documentation,
-//! and example generation across all cargo-wrt commands.
+//! and example generation across all cargo-kiln commands.
 
 use std::collections::HashMap;
 
@@ -80,22 +80,22 @@ impl HelpSystem {
         // Build commands
         self.register_command(CommandDoc {
             name: "build",
-            brief: "Build all WRT components",
-            description: "Compiles the WRT runtime and all its components with support for \
+            brief: "Build all Kiln components",
+            description: "Compiles the Kiln runtime and all its components with support for \
                           package-specific builds, clippy integration, and format checking.",
             examples: vec![
                 CommandExample {
-                    command: "cargo-wrt build",
+                    command: "cargo-kiln build",
                     description: "Build all components",
                     output_sample: None,
                 },
                 CommandExample {
-                    command: "cargo-wrt build --package wrt-foundation",
-                    description: "Build only the wrt-foundation package",
+                    command: "cargo-kiln build --package kiln-foundation",
+                    description: "Build only the kiln-foundation package",
                     output_sample: None,
                 },
                 CommandExample {
-                    command: "cargo-wrt build --clippy --output json",
+                    command: "cargo-kiln build --clippy --output json",
                     description: "Build with clippy checks and JSON diagnostic output",
                     output_sample: None,
                 },
@@ -112,17 +112,17 @@ impl HelpSystem {
                           filtering, package-specific testing, and detailed output control.",
             examples: vec![
                 CommandExample {
-                    command: "cargo-wrt test",
+                    command: "cargo-kiln test",
                     description: "Run all tests",
                     output_sample: None,
                 },
                 CommandExample {
-                    command: "cargo-wrt test --package wrt-foundation --filter memory",
-                    description: "Run memory-related tests in wrt-foundation",
+                    command: "cargo-kiln test --package kiln-foundation --filter memory",
+                    description: "Run memory-related tests in kiln-foundation",
                     output_sample: None,
                 },
                 CommandExample {
-                    command: "cargo-wrt test --nocapture --unit-only",
+                    command: "cargo-kiln test --nocapture --unit-only",
                     description: "Run unit tests only with output capture disabled",
                     output_sample: None,
                 },
@@ -139,17 +139,17 @@ impl HelpSystem {
                           checks, formal verification with KANI, and Miri validation.",
             examples: vec![
                 CommandExample {
-                    command: "cargo-wrt verify --asil d",
+                    command: "cargo-kiln verify --asil d",
                     description: "Run ASIL-D compliance verification",
                     output_sample: None,
                 },
                 CommandExample {
-                    command: "cargo-wrt verify --asil c --detailed",
+                    command: "cargo-kiln verify --asil c --detailed",
                     description: "Detailed ASIL-C verification with full report",
                     output_sample: None,
                 },
                 CommandExample {
-                    command: "cargo-wrt verify --no-kani --no-miri",
+                    command: "cargo-kiln verify --no-kani --no-miri",
                     description: "Basic verification without formal verification tools",
                     output_sample: None,
                 },
@@ -166,17 +166,17 @@ impl HelpSystem {
                           code quality validations with auto-fix capabilities.",
             examples: vec![
                 CommandExample {
-                    command: "cargo-wrt check",
+                    command: "cargo-kiln check",
                     description: "Run standard static analysis",
                     output_sample: None,
                 },
                 CommandExample {
-                    command: "cargo-wrt check --strict --fix",
+                    command: "cargo-kiln check --strict --fix",
                     description: "Strict checking with automatic fixes applied",
                     output_sample: None,
                 },
                 CommandExample {
-                    command: "cargo-wrt check --output json --filter-severity error",
+                    command: "cargo-kiln check --output json --filter-severity error",
                     description: "JSON output showing only errors",
                     output_sample: None,
                 },
@@ -282,10 +282,10 @@ impl HelpSystem {
             output.push_str(&format!(
                 "{} {}\n\n",
                 "🚀".bright_blue(),
-                "cargo-wrt - WebAssembly Runtime Build System".bright_blue().bold()
+                "cargo-kiln - Kiln Build System".bright_blue().bold()
             ));
         } else {
-            output.push_str("🚀 cargo-wrt - WebAssembly Runtime Build System\n\n");
+            output.push_str("🚀 cargo-kiln - Kiln Build System\n\n");
         }
 
         // Group commands by category
@@ -337,20 +337,20 @@ impl HelpSystem {
         if use_colors {
             output.push_str(&format!(
                 "{}\n",
-                "Run 'cargo-wrt help <command>' for detailed help on a specific command."
+                "Run 'cargo-kiln help <command>' for detailed help on a specific command."
                     .bright_black()
             ));
             output.push_str(&format!(
                 "{}\n",
-                "Run 'cargo-wrt help diagnostics' for comprehensive diagnostic system guide."
+                "Run 'cargo-kiln help diagnostics' for comprehensive diagnostic system guide."
                     .bright_black()
             ));
         } else {
             output.push_str(
-                "Run 'cargo-wrt help <command>' for detailed help on a specific command.\n",
+                "Run 'cargo-kiln help <command>' for detailed help on a specific command.\n",
             );
             output.push_str(
-                "Run 'cargo-wrt help diagnostics' for comprehensive diagnostic system guide.\n",
+                "Run 'cargo-kiln help diagnostics' for comprehensive diagnostic system guide.\n",
             );
         }
 

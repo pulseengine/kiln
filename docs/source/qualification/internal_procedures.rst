@@ -4,7 +4,7 @@ Internal Procedures
 .. note::
    This document is a placeholder. It will be completed as part of the qualification process.
 
-This document will contain engineering-level procedures for installing the development environment, using the existing infrastructure, and working with the WRT toolchain.
+This document will contain engineering-level procedures for installing the development environment, using the existing infrastructure, and working with the Kiln toolchain.
 
 Planned Content
 ---------------

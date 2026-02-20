@@ -1,5 +1,5 @@
 @startuml high_level_decomposition
-title Pulseengine (WRT Edition) - High-Level Component Decomposition
+title Pulseengine (Kiln Edition) - High-Level Component Decomposition
 
 skinparam component {
     BackgroundColor #E6F3FF
@@ -17,61 +17,61 @@ actor User as user
 actor "Embedded Developer" as embedded_dev
 
 package "CLI & Tools Layer" {
-    component [wrtd\nWebAssembly runtime daemon] as wrtd
-    component [wrt\nPublic API facade] as wrt_cli
+    component [kilnd\nWebAssembly runtime daemon] as kilnd
+    component [kiln\nPublic API facade] as kiln_cli
 }
 
 package "Component Model Layer" {
-    component [wrt-component\nComponent Model implementation] as wrt_component
-    component [wrt-host\nHost bindings & callbacks] as wrt_host
+    component [kiln-component\nComponent Model implementation] as kiln_component
+    component [kiln-host\nHost bindings & callbacks] as kiln_host
 }
 
 package "Execution Engine Layer" {
-    component [wrt-runtime\nCore runtime engine] as wrt_runtime
-    component [wrt-instructions\nInstruction execution] as wrt_instructions
-    component [wrt-decoder\nWASM binary decoder] as wrt_decoder
+    component [kiln-runtime\nCore runtime engine] as kiln_runtime
+    component [kiln-instructions\nInstruction execution] as kiln_instructions
+    component [kiln-decoder\nWASM binary decoder] as kiln_decoder
 }
 
 package "Foundation Layer" {
-    component [wrt-foundation\nCore types & safe memory] as wrt_foundation
-    component [wrt-error\nError handling] as wrt_error
-    component [wrt-format\nWASM format definitions] as wrt_format
-    component [wrt-sync\nSynchronization primitives] as wrt_sync
+    component [kiln-foundation\nCore types & safe memory] as kiln_foundation
+    component [kiln-error\nError handling] as kiln_error
+    component [kiln-format\nWASM format definitions] as kiln_format
+    component [kiln-sync\nSynchronization primitives] as kiln_sync
 }
 
 package "Platform Abstraction Layer" {
-    component [wrt-platform\nOS abstraction] as wrt_platform
-    component [wrt-logging\nLogging infrastructure] as wrt_logging
-    component [wrt-intercept\nExecution interception] as wrt_intercept
+    component [kiln-platform\nOS abstraction] as kiln_platform
+    component [kiln-logging\nLogging infrastructure] as kiln_logging
+    component [kiln-intercept\nExecution interception] as kiln_intercept
 }
 
 database "WebAssembly Module" as wasm_module
 cloud "Operating System" as os_services
 
 ' Relationships
-user --> wrtd : "Executes WASM via"
-embedded_dev --> wrt_cli : "Integrates via"
-wrtd --> wrt_cli : "Uses"
-wrt_cli --> wrt_component : "Orchestrates"
-wrt_cli --> wrt_runtime : "Manages"
+user --> kilnd : "Executes WASM via"
+embedded_dev --> kiln_cli : "Integrates via"
+kilnd --> kiln_cli : "Uses"
+kiln_cli --> kiln_component : "Orchestrates"
+kiln_cli --> kiln_runtime : "Manages"
 
-wrt_component --> wrt_host : "Binds host functions"
-wrt_component --> wrt_runtime : "Executes components"
-wrt_runtime --> wrt_instructions : "Executes"
-wrt_runtime --> wrt_decoder : "Loads modules"
+kiln_component --> kiln_host : "Binds host functions"
+kiln_component --> kiln_runtime : "Executes components"
+kiln_runtime --> kiln_instructions : "Executes"
+kiln_runtime --> kiln_decoder : "Loads modules"
 
-wrt_runtime --> wrt_foundation : "Uses safe memory"
-wrt_instructions --> wrt_foundation : "Memory operations"
-wrt_decoder --> wrt_format : "Parses format"
+kiln_runtime --> kiln_foundation : "Uses safe memory"
+kiln_instructions --> kiln_foundation : "Memory operations"
+kiln_decoder --> kiln_format : "Parses format"
 
-wrt_foundation --> wrt_error : "Error handling"
-wrt_foundation --> wrt_sync : "Thread safety"
+kiln_foundation --> kiln_error : "Error handling"
+kiln_foundation --> kiln_sync : "Thread safety"
 
-wrt_runtime --> wrt_platform : "Platform services"
-wrt_runtime --> wrt_logging : "Diagnostics"
-wrt_host --> wrt_intercept : "Intercepts calls"
+kiln_runtime --> kiln_platform : "Platform services"
+kiln_runtime --> kiln_logging : "Diagnostics"
+kiln_host --> kiln_intercept : "Intercepts calls"
 
-wrtd --> wasm_module : "Loads & executes"
-wrt_platform --> os_services : "Abstracts"
+kilnd --> wasm_module : "Loads & executes"
+kiln_platform --> os_services : "Abstracts"
 
 @enduml

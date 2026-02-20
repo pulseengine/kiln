@@ -1,7 +1,7 @@
 //! Simplified AST types for WIT parsing
 //!
 //! This module provides basic AST node definitions that work with the current
-//! wrt-foundation constraints while still providing source location tracking.
+//! kiln-foundation constraints while still providing source location tracking.
 
 #[cfg(not(feature = "std"))]
 use core::fmt;
@@ -12,7 +12,7 @@ use std::{boxed::Box, vec::Vec};
 
 // Temporarily disabled - wit_parser module is commented out
 // use crate::wit_parser::{WitBoundedString, WitBoundedStringSmall};
-use wrt_foundation::{BoundedString, NoStdProvider};
+use kiln_foundation::{BoundedString, NoStdProvider};
 
 // Type aliases to replace wit_parser types
 type WitBoundedString = BoundedString<64>;

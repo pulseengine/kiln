@@ -1,8 +1,8 @@
 //! Core type definitions, traits, and utilities for the WebAssembly Runtime
-//! (WRT).
+//! (Kiln).
 //!
 //! This crate provides foundational data structures and functionalities used
-//! across the WRT ecosystem, ensuring type safety, memory safety, and
+//! across the Kiln ecosystem, ensuring type safety, memory safety, and
 //! consistent error handling. It supports three configurations:
 //! - `std`: Full standard library support
 //! - `no_std` + `alloc`: No standard library but with allocation
@@ -70,10 +70,10 @@
 #![allow(clippy::pedantic)]
 #![allow(clippy::identity_op)]
 
-/// Version of the wrt-foundation crate (from wrt-helper)
+/// Version of the kiln-foundation crate (from kiln-helper)
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Helper macro to check if a feature is enabled (from wrt-helper)
+/// Helper macro to check if a feature is enabled (from kiln-helper)
 #[macro_export]
 macro_rules! has_feature {
     ($feature:expr) => {
@@ -91,7 +91,7 @@ extern crate std;
 extern crate alloc;
 
 // External crates
-use wrt_error::{
+use kiln_error::{
     codes,
     kinds,
     Error,
@@ -99,7 +99,7 @@ use wrt_error::{
     Result,
 };
 
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // SW-REQ-ID: REQ_MEM_SAFETY_001
 //
 // Copyright (c) 2025 Ralf Anton Beier
@@ -147,7 +147,7 @@ pub use prelude::*;
 // Core memory system macro - the primary allocation interface
 /// Safe managed memory allocation with automatic cleanup
 ///
-/// This is the primary interface for memory allocation in WRT. It provides:
+/// This is the primary interface for memory allocation in Kiln. It provides:
 /// - Automatic budget verification
 /// - RAII-based cleanup
 /// - Capability-based access control
@@ -156,7 +156,7 @@ pub use prelude::*;
 /// # Examples
 ///
 /// ```rust
-/// use wrt_foundation::{
+/// use kiln_foundation::{
 ///     safe_managed_alloc,
 ///     CrateId,
 /// };
@@ -176,7 +176,7 @@ macro_rules! safe_managed_alloc {
         let _ = $crate::memory_init::MemoryInitializer::initialize();
 
         // Use capability-based allocation
-        $crate::wrt_memory_system::CapabilityWrtFactory::create_provider::<$size>($crate_id)
+        $crate::kiln_memory_system::CapabilityKilnFactory::create_provider::<$size>($crate_id)
     }};
 }
 
@@ -186,12 +186,12 @@ pub use bounded_slice::{
     BoundedVecSliceExt,
 };
 
-/// `Result` type alias for WRT operations using `wrt_error::Error`
+/// `Result` type alias for Kiln operations using `kiln_error::Error`
 ///
-/// **DEPRECATED**: Use `wrt_error::Result<T>` directly instead.
+/// **DEPRECATED**: Use `kiln_error::Result<T>` directly instead.
 /// This type alias is maintained for backward compatibility but will be
 /// removed.
-// WrtResult type alias has been removed - use wrt_error::Result<T> directly
+// KilnResult type alias has been removed - use kiln_error::Result<T> directly
 
 // Core modules - always available in all configurations
 /// Atomic memory operations with integrated checksumming
@@ -252,8 +252,8 @@ pub mod generic_memory_guard;
 pub mod generic_provider_factory;
 /// Generic memory coordination system - works with any project
 pub mod memory_coordinator;
-/// WRT-specific memory system implementation
-pub mod wrt_memory_system;
+/// Kiln-specific memory system implementation
+pub mod kiln_memory_system;
 // Validated collections disabled - architectural decision to keep API simple
 // Use standard bounded collections instead for better maintainability
 // #[cfg(feature = "std")]
@@ -282,7 +282,7 @@ pub mod safe_allocation;
 /// Type factory pattern for allocation boundary management
 pub mod type_factory;
 
-// WRT Compile-Time Allocator System
+// Kiln Compile-Time Allocator System
 /// Revolutionary compile-time memory allocation system with A+ safety
 /// compliance
 pub mod allocator;
@@ -444,7 +444,7 @@ pub use safe_memory::{
 
 // Type aliases for backward compatibility
 pub type DefaultMemoryProvider<const N: usize> = NoStdProvider<N>;
-pub type WrtVec<T, const CAPACITY: usize, P> = BoundedVec<T, CAPACITY, P>;
+pub type KilnVec<T, const CAPACITY: usize, P> = BoundedVec<T, CAPACITY, P>;
 // Re-export crate identifiers
 pub use budget_aware_provider::CrateId;
 // Re-export budget provider types
@@ -645,7 +645,7 @@ pub use runtime_limits::{
     STACK_DEPTH_LIMIT,
 };
 // Re-export capability-based memory factory and deprecated coordinator for compatibility
-pub use wrt_memory_system::CapabilityWrtFactory;
+pub use kiln_memory_system::CapabilityKilnFactory;
 
 // Note: Macros exported with #[macro_export] are available at the crate root
 // create_foundation_provider!, create_runtime_provider!,
@@ -709,7 +709,7 @@ pub use async_types::{
 };
 
 // Panic handler disabled to avoid conflicts with other crates
-// // Provide a panic handler only when wrt-foundation is being tested in
+// // Provide a panic handler only when kiln-foundation is being tested in
 // isolation #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {
@@ -737,7 +737,7 @@ mod tests {
 
 
     // TODO: Add comprehensive tests for all public functionality in
-    // wrt-foundation, ensuring coverage for different VerificationLevels,
+    // kiln-foundation, ensuring coverage for different VerificationLevels,
     // std/no_std features, and edge cases for component model types, value
     // conversions, etc. Specific modules like bounded.rs, safe_memory.rs,
     // math_ops.rs, etc., should have their own detailed test suites as

@@ -1,20 +1,20 @@
 //! Example demonstrating ASIL-aware error handling
 //!
-//! This example shows how to use wrt-error with different ASIL safety levels.
+//! This example shows how to use kiln-error with different ASIL safety levels.
 //!
 //! Run with different features to see different behaviors:
 //! - `cargo run --example asil_demo --features asil-b`
 //! - `cargo run --example asil_demo --features asil-c`
 //! - `cargo run --example asil_demo --features asil-d`
 
-use wrt_error::Error;
+use kiln_error::Error;
 #[cfg(any(feature = "asil-c", feature = "asil-d"))]
-use wrt_error::SafetyMonitor;
+use kiln_error::SafetyMonitor;
 #[cfg(any(feature = "asil-b", feature = "asil-c", feature = "asil-d"))]
-use wrt_error::{AsilErrorContext, AsilLevel};
+use kiln_error::{AsilErrorContext, AsilLevel};
 
 fn main() {
-    println!("WRT Error ASIL Demo");
+    println!("Kiln Error ASIL Demo");
     println!("===================\n");
 
     // Show current ASIL level
@@ -153,7 +153,7 @@ fn demonstrate_safety_monitoring() {
 
 #[cfg(feature = "asil-d")]
 fn demonstrate_asil_d_features() {
-    use wrt_error::validate_error_consistency;
+    use kiln_error::validate_error_consistency;
 
     println!("ASIL-D Specific Features");
     println!("-----------------------");

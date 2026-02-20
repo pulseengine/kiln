@@ -6,10 +6,10 @@ use core::{
 #[cfg(feature = "std")]
 use std::thread;
 
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec, bounded_collections::BoundedMap, component_value::ComponentValue,
 };
-use wrt_platform::{
+use kiln_platform::{
     advanced_sync::{Priority, PriorityInheritanceMutex},
     sync::{FutexLike, SpinFutex},
 };
@@ -90,74 +90,74 @@ impl FuelTrackedThreadContext {
     /// This integrates with the instruction-level fuel system
     pub fn consume_instruction_fuel(
         &self,
-        instruction_type: wrt_runtime::stackless::engine::InstructionFuelType,
-        verification_level: wrt_foundation::verification::VerificationLevel,
+        instruction_type: kiln_runtime::stackless::engine::InstructionFuelType,
+        verification_level: kiln_foundation::verification::VerificationLevel,
     ) -> core::result::Result<(), ThreadSpawnError> {
         // Map instruction type to operation type for fuel calculation
         let op_type = match instruction_type {
-            wrt_runtime::stackless::engine::InstructionFuelType::SimpleConstant => {
-                wrt_foundation::operations::Type::WasmSimpleConstant
+            kiln_runtime::stackless::engine::InstructionFuelType::SimpleConstant => {
+                kiln_foundation::operations::Type::WasmSimpleConstant
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::LocalAccess => {
-                wrt_foundation::operations::Type::WasmLocalAccess
+            kiln_runtime::stackless::engine::InstructionFuelType::LocalAccess => {
+                kiln_foundation::operations::Type::WasmLocalAccess
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::GlobalAccess => {
-                wrt_foundation::operations::Type::WasmGlobalAccess
+            kiln_runtime::stackless::engine::InstructionFuelType::GlobalAccess => {
+                kiln_foundation::operations::Type::WasmGlobalAccess
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::SimpleArithmetic => {
-                wrt_foundation::operations::Type::WasmSimpleArithmetic
+            kiln_runtime::stackless::engine::InstructionFuelType::SimpleArithmetic => {
+                kiln_foundation::operations::Type::WasmSimpleArithmetic
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::ComplexArithmetic => {
-                wrt_foundation::operations::Type::WasmComplexArithmetic
+            kiln_runtime::stackless::engine::InstructionFuelType::ComplexArithmetic => {
+                kiln_foundation::operations::Type::WasmComplexArithmetic
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::FloatArithmetic => {
-                wrt_foundation::operations::Type::WasmFloatArithmetic
+            kiln_runtime::stackless::engine::InstructionFuelType::FloatArithmetic => {
+                kiln_foundation::operations::Type::WasmFloatArithmetic
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::Comparison => {
-                wrt_foundation::operations::Type::WasmComparison
+            kiln_runtime::stackless::engine::InstructionFuelType::Comparison => {
+                kiln_foundation::operations::Type::WasmComparison
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::SimpleControl => {
-                wrt_foundation::operations::Type::WasmSimpleControl
+            kiln_runtime::stackless::engine::InstructionFuelType::SimpleControl => {
+                kiln_foundation::operations::Type::WasmSimpleControl
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::ComplexControl => {
-                wrt_foundation::operations::Type::WasmComplexControl
+            kiln_runtime::stackless::engine::InstructionFuelType::ComplexControl => {
+                kiln_foundation::operations::Type::WasmComplexControl
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::FunctionCall => {
-                wrt_foundation::operations::Type::WasmFunctionCall
+            kiln_runtime::stackless::engine::InstructionFuelType::FunctionCall => {
+                kiln_foundation::operations::Type::WasmFunctionCall
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::MemoryLoad => {
-                wrt_foundation::operations::Type::WasmMemoryLoad
+            kiln_runtime::stackless::engine::InstructionFuelType::MemoryLoad => {
+                kiln_foundation::operations::Type::WasmMemoryLoad
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::MemoryStore => {
-                wrt_foundation::operations::Type::WasmMemoryStore
+            kiln_runtime::stackless::engine::InstructionFuelType::MemoryStore => {
+                kiln_foundation::operations::Type::WasmMemoryStore
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::MemoryManagement => {
-                wrt_foundation::operations::Type::WasmMemoryManagement
+            kiln_runtime::stackless::engine::InstructionFuelType::MemoryManagement => {
+                kiln_foundation::operations::Type::WasmMemoryManagement
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::TableAccess => {
-                wrt_foundation::operations::Type::WasmTableAccess
+            kiln_runtime::stackless::engine::InstructionFuelType::TableAccess => {
+                kiln_foundation::operations::Type::WasmTableAccess
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::TypeConversion => {
-                wrt_foundation::operations::Type::WasmTypeConversion
+            kiln_runtime::stackless::engine::InstructionFuelType::TypeConversion => {
+                kiln_foundation::operations::Type::WasmTypeConversion
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::SimdOperation => {
-                wrt_foundation::operations::Type::WasmSimdOperation
+            kiln_runtime::stackless::engine::InstructionFuelType::SimdOperation => {
+                kiln_foundation::operations::Type::WasmSimdOperation
             },
-            wrt_runtime::stackless::engine::InstructionFuelType::AtomicOperation => {
-                wrt_foundation::operations::Type::WasmAtomicOperation
+            kiln_runtime::stackless::engine::InstructionFuelType::AtomicOperation => {
+                kiln_foundation::operations::Type::WasmAtomicOperation
             },
         };
 
         // Calculate fuel cost with verification level
         let fuel_cost =
-            wrt_foundation::operations::Type::fuel_cost_for_operation(op_type, verification_level)
+            kiln_foundation::operations::Type::fuel_cost_for_operation(op_type, verification_level)
                 .map_err(|_| ThreadSpawnError {
                     kind: ThreadSpawnErrorKind::ResourceLimitExceeded,
                     message: "Fuel calculation error",
                 })?;
 
         // Record the operation for tracking
-        wrt_foundation::operations::record_global_operation(op_type, verification_level);
+        kiln_foundation::operations::record_global_operation(op_type, verification_level);
 
         // Consume the calculated fuel
         self.consume_fuel(fuel_cost)
@@ -231,8 +231,8 @@ pub struct FuelTrackedThreadManager {
 impl FuelTrackedThreadManager {
     pub fn new() -> ThreadSpawnResult<Self> {
         let provider =
-            wrt_foundation::safe_managed_alloc!(65536, wrt_foundation::CrateId::Component)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Memory allocation failed"))?;
+            kiln_foundation::safe_managed_alloc!(65536, kiln_foundation::CrateId::Component)
+                .map_err(|_| kiln_error::Error::resource_exhausted("Memory allocation failed"))?;
 
         Ok(Self {
             base_manager: ComponentThreadManager::new()?,

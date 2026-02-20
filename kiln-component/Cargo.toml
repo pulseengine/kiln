@@ -1,11 +1,11 @@
 [package]
-name = "wrt-component"
+name = "kiln-component"
 version.workspace = true
 edition.workspace = true
-description = "WebAssembly Component Model support for WRT"
+description = "WebAssembly Component Model support for Kiln"
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/wrt-component"
+documentation = "https://docs.rs/kiln-component"
 keywords = ["wasm", "webassembly", "runtime", "component-model"]
 categories = ["wasm", "no-std"]
 
@@ -13,15 +13,15 @@ categories = ["wasm", "no-std"]
 workspace = true
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false }
-wrt-format = { workspace = true, default-features = false }
-wrt-host = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false }
-wrt-intercept = { workspace = true, default-features = false }
-wrt-decoder = { workspace = true, default-features = false, optional = true }
-wrt-platform = { workspace = true, default-features = false }
-wrt-runtime = { workspace = true, default-features = false }
-wrt-sync = { workspace = true, default-features = false }
+kiln-error = { workspace = true, default-features = false }
+kiln-format = { workspace = true, default-features = false }
+kiln-host = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false }
+kiln-intercept = { workspace = true, default-features = false }
+kiln-decoder = { workspace = true, default-features = false, optional = true }
+kiln-platform = { workspace = true, default-features = false }
+kiln-runtime = { workspace = true, default-features = false }
+kiln-sync = { workspace = true, default-features = false }
 
 # No-std support (removed invalid alloc dependency)
 
@@ -32,96 +32,96 @@ log = { version = "0.4", optional = true }
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [features]
-# By default, enable std to match wrt-runtime's default behavior
+# By default, enable std to match kiln-runtime's default behavior
 # This ensures consistent feature resolution across workspace and isolated builds
-default = ["wrt-runtime/std"]
+default = ["kiln-runtime/std"]
 
 # Standard library support
 std = [
-    "wrt-format/std",
-    "wrt-host/std",
-    "wrt-intercept/std",
-    "wrt-decoder/std",
-    "wrt-platform/std",
-    "wrt-runtime/std",
-    "wrt-sync/std",
-    "wrt-error/std",
-    "wrt-foundation/std",
-    "wrt-foundation/wrt-allocator",
+    "kiln-format/std",
+    "kiln-host/std",
+    "kiln-intercept/std",
+    "kiln-decoder/std",
+    "kiln-platform/std",
+    "kiln-runtime/std",
+    "kiln-sync/std",
+    "kiln-error/std",
+    "kiln-foundation/std",
+    "kiln-foundation/kiln-allocator",
     "dep:log"]
 
-# WRT execution engine support (enables host function registry integration)
-wrt-execution = []
+# Kiln execution engine support (enables host function registry integration)
+kiln-execution = []
 
 # WASI support (enables WASI-specific methods like pre_allocate_wasi_args)
-wasi = ["wrt-runtime/wasi"]
+wasi = ["kiln-runtime/wasi"]
 
 # Allocation support for no_std environments (DEPRECATED - use bounded-allocation instead)
 alloc = [
     "bounded-allocation",
-    "wrt-format/alloc",
-    "wrt-decoder/alloc",
-    "wrt-runtime/alloc",
-    "wrt-host/alloc",
-    "wrt-intercept/alloc"]
+    "kiln-format/alloc",
+    "kiln-decoder/alloc",
+    "kiln-runtime/alloc",
+    "kiln-host/alloc",
+    "kiln-intercept/alloc"]
 
 # ============================================================================
 # Four-Layer Safety Architecture Feature Propagation
 # ============================================================================
 
 # Layer 1: Memory Management Strategy (mutually exclusive)
-static-allocation = ["wrt-foundation/static-allocation"]
-bounded-allocation = ["wrt-foundation/bounded-allocation"]
-managed-allocation = ["wrt-foundation/managed-allocation"]
-std-allocation = ["wrt-foundation/std-allocation"]
+static-allocation = ["kiln-foundation/static-allocation"]
+bounded-allocation = ["kiln-foundation/bounded-allocation"]
+managed-allocation = ["kiln-foundation/managed-allocation"]
+std-allocation = ["kiln-foundation/std-allocation"]
 
 # Layer 3: Safety Standards (mutually exclusive within project)
-iso-26262 = ["wrt-foundation/iso-26262"]
-do-178c = ["wrt-foundation/do-178c"]
-iec-61508 = ["wrt-foundation/iec-61508"]
-iec-62304 = ["wrt-foundation/iec-62304"]
-en-50128 = ["wrt-foundation/en-50128"]
-iso-25119 = ["wrt-foundation/iso-25119"]
+iso-26262 = ["kiln-foundation/iso-26262"]
+do-178c = ["kiln-foundation/do-178c"]
+iec-61508 = ["kiln-foundation/iec-61508"]
+iec-62304 = ["kiln-foundation/iec-62304"]
+en-50128 = ["kiln-foundation/en-50128"]
+iso-25119 = ["kiln-foundation/iso-25119"]
 
 # Layer 4: Safety Integrity Levels (dependent on standard)
 # ISO 26262 - Automotive
-qm = ["wrt-foundation/qm", "wrt-format/qm", "wrt-host/qm", "wrt-decoder/qm", "wrt-platform/qm", "wrt-runtime/qm", "wrt-intercept/qm"]
-asil-a = ["wrt-foundation/asil-a", "wrt-format/asil-a", "wrt-host/asil-a", "wrt-decoder/asil-a", "wrt-platform/asil-a", "wrt-runtime/asil-a", "wrt-intercept/asil-a"]
-asil-b = ["wrt-foundation/asil-b", "wrt-format/asil-b", "wrt-host/asil-b", "wrt-decoder/asil-b", "wrt-platform/asil-b", "wrt-runtime/asil-b", "wrt-intercept/asil-b"]
-asil-c = ["wrt-foundation/asil-c", "wrt-format/asil-c", "wrt-host/asil-c", "wrt-decoder/asil-c", "wrt-platform/asil-c", "wrt-runtime/asil-c", "wrt-intercept/asil-c"]
-asil-d = ["wrt-foundation/asil-d", "wrt-format/asil-d", "wrt-host/asil-d", "wrt-decoder/asil-d", "wrt-platform/asil-d", "wrt-runtime/asil-d", "wrt-intercept/asil-d"]
+qm = ["kiln-foundation/qm", "kiln-format/qm", "kiln-host/qm", "kiln-decoder/qm", "kiln-platform/qm", "kiln-runtime/qm", "kiln-intercept/qm"]
+asil-a = ["kiln-foundation/asil-a", "kiln-format/asil-a", "kiln-host/asil-a", "kiln-decoder/asil-a", "kiln-platform/asil-a", "kiln-runtime/asil-a", "kiln-intercept/asil-a"]
+asil-b = ["kiln-foundation/asil-b", "kiln-format/asil-b", "kiln-host/asil-b", "kiln-decoder/asil-b", "kiln-platform/asil-b", "kiln-runtime/asil-b", "kiln-intercept/asil-b"]
+asil-c = ["kiln-foundation/asil-c", "kiln-format/asil-c", "kiln-host/asil-c", "kiln-decoder/asil-c", "kiln-platform/asil-c", "kiln-runtime/asil-c", "kiln-intercept/asil-c"]
+asil-d = ["kiln-foundation/asil-d", "kiln-format/asil-d", "kiln-host/asil-d", "kiln-decoder/asil-d", "kiln-platform/asil-d", "kiln-runtime/asil-d", "kiln-intercept/asil-d"]
 
 # DO-178C - Aerospace
-dal-e = ["wrt-foundation/dal-e"]
-dal-d = ["wrt-foundation/dal-d"]
-dal-c = ["wrt-foundation/dal-c"]
-dal-b = ["wrt-foundation/dal-b"]
-dal-a = ["wrt-foundation/dal-a"]
+dal-e = ["kiln-foundation/dal-e"]
+dal-d = ["kiln-foundation/dal-d"]
+dal-c = ["kiln-foundation/dal-c"]
+dal-b = ["kiln-foundation/dal-b"]
+dal-a = ["kiln-foundation/dal-a"]
 
 # IEC 61508 - Industrial
-sil-1 = ["wrt-foundation/sil-1"]
-sil-2 = ["wrt-foundation/sil-2"]
-sil-3 = ["wrt-foundation/sil-3"]
-sil-4 = ["wrt-foundation/sil-4"]
+sil-1 = ["kiln-foundation/sil-1"]
+sil-2 = ["kiln-foundation/sil-2"]
+sil-3 = ["kiln-foundation/sil-3"]
+sil-4 = ["kiln-foundation/sil-4"]
 
 # IEC 62304 - Medical
-class-a = ["wrt-foundation/class-a"]
-class-b = ["wrt-foundation/class-b"]
-class-c = ["wrt-foundation/class-c"]
+class-a = ["kiln-foundation/class-a"]
+class-b = ["kiln-foundation/class-b"]
+class-c = ["kiln-foundation/class-c"]
 
 # EN 50128 - Railway
-railway-sil-0 = ["wrt-foundation/railway-sil-0"]
-railway-sil-1 = ["wrt-foundation/railway-sil-1"]
-railway-sil-2 = ["wrt-foundation/railway-sil-2"]
-railway-sil-3 = ["wrt-foundation/railway-sil-3"]
-railway-sil-4 = ["wrt-foundation/railway-sil-4"]
+railway-sil-0 = ["kiln-foundation/railway-sil-0"]
+railway-sil-1 = ["kiln-foundation/railway-sil-1"]
+railway-sil-2 = ["kiln-foundation/railway-sil-2"]
+railway-sil-3 = ["kiln-foundation/railway-sil-3"]
+railway-sil-4 = ["kiln-foundation/railway-sil-4"]
 
 # ISO 25119 - Agricultural
-agpl-a = ["wrt-foundation/agpl-a"]
-agpl-b = ["wrt-foundation/agpl-b"]
-agpl-c = ["wrt-foundation/agpl-c"]
-agpl-d = ["wrt-foundation/agpl-d"]
-agpl-e = ["wrt-foundation/agpl-e"]
+agpl-a = ["kiln-foundation/agpl-a"]
+agpl-b = ["kiln-foundation/agpl-b"]
+agpl-c = ["kiln-foundation/agpl-c"]
+agpl-d = ["kiln-foundation/agpl-d"]
+agpl-e = ["kiln-foundation/agpl-e"]
 
 # Legacy compatibility features (DEPRECATED - use four-layer architecture above)
 safe-memory = ["iso-26262", "asil-b"]
@@ -133,28 +133,28 @@ safety-asil-d = ["iso-26262", "asil-d"]
 no_std = []
 
 # Verification with Kani
-kani = ["wrt-host/kani", "wrt-intercept/kani", "wrt-foundation/kani"]
+kani = ["kiln-host/kani", "kiln-intercept/kani", "kiln-foundation/kani"]
 
 # Performance features
 optimize = [
-    "wrt-format/optimize",
-    "wrt-host/optimize",
-    "wrt-foundation/optimize",
-    "wrt-intercept/optimize",
-    "wrt-decoder/optimize",
-    "wrt-runtime/optimize"
+    "kiln-format/optimize",
+    "kiln-host/optimize",
+    "kiln-foundation/optimize",
+    "kiln-intercept/optimize",
+    "kiln-decoder/optimize",
+    "kiln-runtime/optimize"
 ]
 
 # Debug logging
 debug-log = []
 
 # Component Model features
-component-model-core = ["wrt-format/component-model-core"]
-component-model-values = ["wrt-format/component-model-values"]
-component-model-resources = ["wrt-format/component-model-resources"]
-component-model-async = ["wrt-foundation/component-model-async"]
-component-model-error-context = ["wrt-foundation/component-model-error-context"]
-component-model-threading = ["wrt-foundation/component-model-threading"]
+component-model-core = ["kiln-format/component-model-core"]
+component-model-values = ["kiln-format/component-model-values"]
+component-model-resources = ["kiln-format/component-model-resources"]
+component-model-async = ["kiln-foundation/component-model-async"]
+component-model-error-context = ["kiln-foundation/component-model-error-context"]
+component-model-threading = ["kiln-foundation/component-model-threading"]
 component-model-all = [
     "component-model-core",
     "component-model-values",
@@ -165,7 +165,7 @@ component-model-all = [
 ]
 
 # Decoder support
-decoder = ["dep:wrt-decoder"]
+decoder = ["dep:kiln-decoder"]
 
 
 [[example]]
@@ -179,7 +179,7 @@ path = "examples/interceptor_example.rs"
 required-features = ["std"]
 
 [[bench]]
-name = "wrt_allocator_benchmarks"
+name = "kiln_allocator_benchmarks"
 harness = false
 required-features = ["std", "safety-asil-c"]
 

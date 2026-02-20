@@ -13,7 +13,7 @@ use core::{
     time::Duration,
 };
 
-use wrt_component::{
+use kiln_component::{
     ComponentInstanceId,
     async_::{
         fuel_async_bridge::{AsyncBridgeConfig, FuelAsyncBridge},
@@ -29,8 +29,8 @@ use wrt_component::{
     prelude::*,
     task_manager::TaskId,
 };
-use wrt_foundation::verification::VerificationLevel;
-use wrt_platform::advanced_sync::Priority;
+use kiln_foundation::verification::VerificationLevel;
+use kiln_platform::advanced_sync::Priority;
 
 /// Test future that simulates different types of async work
 struct SimulatedAsyncWork {

@@ -1,8 +1,8 @@
 =======================
-CLI (WRTD) Architecture
+CLI (KILND) Architecture
 =======================
 
-The WRTD command-line interface provides a user-friendly way to execute WebAssembly modules and components.
+The KilnD command-line interface provides a user-friendly way to execute WebAssembly modules and components.
 
 .. warning::
    **Implementation Status**: CLI infrastructure is implemented but WebAssembly execution 
@@ -31,7 +31,7 @@ The WRTD command-line interface provides a user-friendly way to execute WebAssem
    :status: partial
    :links: SPEC_005, REQ_003, REQ_015, REQ_RESOURCE_004, IMPL_FUEL_001
    
-   The WRTD CLI provides:
+   The KilnD CLI provides:
    
    1. **Implemented**: Command-line argument parsing
    2. **In Development**: WebAssembly file loading (parsing only)

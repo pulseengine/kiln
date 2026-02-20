@@ -38,9 +38,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
           
-    - name: Install cargo-wrt
+    - name: Install cargo-kiln
       run: |
-        cargo install --path cargo-wrt --force
+        cargo install --path cargo-kiln --force
         
     - name: Get base branch diagnostics
       id: base-diagnostics
@@ -49,8 +49,8 @@ jobs:
         git checkout ${{ github.event.pull_request.base.sha }}
         
         # Run analysis on base branch
-        cargo-wrt build --output json --cache --clear-cache > base-diagnostics.json || true
-        cargo-wrt check --output json --cache > base-check.json || true
+        cargo-kiln build --output json --cache --clear-cache > base-diagnostics.json || true
+        cargo-kiln check --output json --cache > base-check.json || true
         
         # Store baseline
         cp base-diagnostics.json baseline-build.json
@@ -67,8 +67,8 @@ jobs:
       id: pr-diagnostics  
       run: |
         # Run full analysis on PR branch
-        cargo-wrt build --output json --cache --clear-cache > pr-diagnostics.json || true
-        cargo-wrt check --output json --cache > pr-check.json || true
+        cargo-kiln build --output json --cache --clear-cache > pr-diagnostics.json || true
+        cargo-kiln check --output json --cache > pr-check.json || true
         
         # Extract metrics
         PR_ERRORS=$(jq '.summary.errors' pr-diagnostics.json)
@@ -334,12 +334,12 @@ jobs:
         echo "" >> pr_comment.md
         echo "🔧 **To reproduce locally:**" >> pr_comment.md
         echo '```bash' >> pr_comment.md
-        echo "# Install cargo-wrt" >> pr_comment.md
-        echo "cargo install --path cargo-wrt" >> pr_comment.md
+        echo "# Install cargo-kiln" >> pr_comment.md
+        echo "cargo install --path cargo-kiln" >> pr_comment.md
         echo "" >> pr_comment.md
         echo "# Analyze your changes" >> pr_comment.md
-        echo "cargo-wrt build --output json --filter-severity error" >> pr_comment.md
-        echo "cargo-wrt check --output json --filter-severity warning" >> pr_comment.md
+        echo "cargo-kiln build --output json --filter-severity error" >> pr_comment.md
+        echo "cargo-kiln check --output json --filter-severity warning" >> pr_comment.md
         echo '```' >> pr_comment.md
         
     - name: Upload diagnostic artifacts

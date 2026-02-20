@@ -2,7 +2,7 @@
 SCORE Safety Verification Tools
 ===============================
 
-WRT implements a comprehensive safety verification framework inspired by the SCORE (Safety Critical Object-Oriented Real-time Embedded) methodology. This system provides automated tools for tracking safety requirements, ASIL compliance, and certification readiness.
+Kiln implements a comprehensive safety verification framework inspired by the SCORE (Safety Critical Object-Oriented Real-time Embedded) methodology. This system provides automated tools for tracking safety requirements, ASIL compliance, and certification readiness.
 
 .. contents:: On this page
    :local:
@@ -29,7 +29,7 @@ Initialize Requirements
 .. code-block:: bash
 
    # Create requirements template (handled automatically)
-   cargo-wrt verify --asil c
+   cargo-kiln verify --asil c
 
 Run Safety Verification
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -37,16 +37,16 @@ Run Safety Verification
 .. code-block:: bash
 
    # Quick verification dashboard
-   cargo-wrt verify --detailed
+   cargo-kiln verify --detailed
    
    # Check requirements traceability
-   cargo-wrt verify --asil c
+   cargo-kiln verify --asil c
    
    # Full safety verification
-   cargo-wrt verify --asil d
+   cargo-kiln verify --asil d
    
    # Detailed requirements verification
-   cargo-wrt verify --asil d --detailed
+   cargo-kiln verify --asil d --detailed
 
 Generate Reports
 ~~~~~~~~~~~~~~~~
@@ -54,13 +54,13 @@ Generate Reports
 .. code-block:: bash
 
    # Comprehensive verification with reports
-   cargo-wrt verify --asil d --detailed
+   cargo-kiln verify --asil d --detailed
    
    # Matrix verification with reports
-   cargo-wrt verify-matrix --report
+   cargo-kiln verify-matrix --report
    
    # CI simulation with artifacts
-   cargo-wrt simulate-ci --verbose
+   cargo-kiln simulate-ci --verbose
 
 Available Commands
 ------------------
@@ -68,7 +68,7 @@ Available Commands
 Core Commands
 ~~~~~~~~~~~~~
 
-All safety verification commands are implemented in ``cargo-wrt`` for unified build system integration:
+All safety verification commands are implemented in ``cargo-kiln`` for unified build system integration:
 
 .. list-table:: Safety Verification Commands
    :widths: 30 50 20
@@ -77,22 +77,22 @@ All safety verification commands are implemented in ``cargo-wrt`` for unified bu
    * - Command
      - Description
      - Output Formats
-   * - ``cargo-wrt verify --detailed``
+   * - ``cargo-kiln verify --detailed``
      - Quick requirements file validation
      - Text
-   * - ``cargo-wrt verify --asil c``
+   * - ``cargo-kiln verify --asil c``
      - Detailed file existence checking
      - Text
-   * - ``cargo-wrt verify --asil d``
+   * - ``cargo-kiln verify --asil d``
      - SCORE-inspired safety framework verification
      - Text, JSON, HTML
-   * - ``cargo-wrt verify-matrix --report``
+   * - ``cargo-kiln verify-matrix --report``
      - Generate comprehensive safety reports
      - Text, JSON, HTML
-   * - ``cargo-wrt verify --detailed``
+   * - ``cargo-kiln verify --detailed``
      - Complete safety status overview
      - Text
-   * - ``cargo-wrt verify --asil c``
+   * - ``cargo-kiln verify --asil c``
      - Create requirements template
      - N/A
 
@@ -102,16 +102,16 @@ Advanced Options
 .. code-block:: bash
 
    # JSON output for CI integration
-   cargo-wrt verify --asil d --detailed
+   cargo-kiln verify --asil d --detailed
    
    # Detailed requirements verification
-   cargo-wrt verify --asil d --detailed
+   cargo-kiln verify --asil d --detailed
    
    # Quick verification (faster checks)
-   cargo-wrt verify --asil c
+   cargo-kiln verify --asil c
    
    # HTML report for stakeholders
-   cargo-wrt verify-matrix --report
+   cargo-kiln verify-matrix --report
 
 Requirements Format
 -------------------
@@ -121,7 +121,7 @@ Requirements are defined in ``requirements.toml`` at the workspace root:
 .. code-block:: toml
 
    [meta]
-   project = "WRT WebAssembly Runtime"
+   project = "Kiln WebAssembly Runtime"
    version = "0.2.0"
    safety_standard = "ISO26262"
    
@@ -131,8 +131,8 @@ Requirements are defined in ``requirements.toml`` at the workspace root:
    description = "All memory operations must be bounds-checked"
    type = "Memory"
    asil_level = "AsilC"
-   implementations = ["wrt-foundation/src/safe_memory.rs"]
-   tests = ["wrt-foundation/tests/memory_tests_moved.rs"]
+   implementations = ["kiln-foundation/src/safe_memory.rs"]
+   tests = ["kiln-foundation/tests/memory_tests_moved.rs"]
    documentation = ["docs/architecture/memory_model.rst"]
 
 ASIL Levels Reference
@@ -170,7 +170,7 @@ ASIL Levels Reference
 Tool Output Examples & Interpretation
 --------------------------------------
 
-The safety verification tool provides comprehensive reports with actionable insights. Here are real examples from the WRT project:
+The safety verification tool provides comprehensive reports with actionable insights. Here are real examples from the Kiln project:
 
 Safety Dashboard Output
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -281,7 +281,7 @@ Machine-readable format for CI integration and automated processing:
 .. code-block:: bash
 
    # Generate verification report
-   cargo-wrt verify --asil d --detailed
+   cargo-kiln verify --asil d --detailed
    # Output: 76.42857142857143
 
 **Example JSON Output Structure:**
@@ -291,7 +291,7 @@ Machine-readable format for CI integration and automated processing:
    {
      "timestamp": "2025-06-07T03:47:53.300873+00:00",
      "project_meta": {
-       "project": "WRT WebAssembly Runtime",
+       "project": "Kiln WebAssembly Runtime",
        "version": "0.2.0",
        "safety_standard": "ISO26262"
      },
@@ -335,13 +335,13 @@ Machine-readable format for CI integration and automated processing:
 .. code-block:: bash
 
    # Fail CI if ASIL-D verification fails
-   if ! cargo-wrt verify --asil d; then
+   if ! cargo-kiln verify --asil d; then
      echo "❌ ASIL-D compliance failure - blocking release"
      exit 1
    fi
    
    # Check verification matrix
-   if ! cargo-wrt verify-matrix --report; then
+   if ! cargo-kiln verify-matrix --report; then
      echo "❌ Build matrix verification failed"
      exit 1
    fi
@@ -353,7 +353,7 @@ Formatted reports for stakeholder presentations and documentation:
 
 .. code-block:: bash
 
-   cargo-wrt verify-matrix --report
+   cargo-kiln verify-matrix --report
 
 CI Integration
 --------------
@@ -368,8 +368,8 @@ Add to your CI pipeline:
    # .github/workflows/safety.yml
    - name: Safety Verification
      run: |
-       cargo-wrt verify --asil d --detailed
-       cargo-wrt verify-matrix --report
+       cargo-kiln verify --asil d --detailed
+       cargo-kiln verify-matrix --report
 
    - name: Upload Safety Report
      uses: actions/upload-artifact@v3
@@ -385,8 +385,8 @@ The safety verification system integrates with:
 - **CI Pipeline**: Automated safety checks on every build
 - **Documentation**: Requirements linked to Sphinx documentation  
 - **Testing**: ASIL-tagged test categorization
-- **Build System**: Integrated through cargo-wrt unified build tool
-- **cargo-wrt**: Unified command interface
+- **Build System**: Integrated through cargo-kiln unified build tool
+- **cargo-kiln**: Unified command interface
 
 Implementation Details
 ----------------------
@@ -394,9 +394,9 @@ Implementation Details
 Core Components
 ~~~~~~~~~~~~~~~
 
-- ``wrt-build-core/src/verify.rs`` - Core verification framework
+- ``kiln-build-core/src/verify.rs`` - Core verification framework
 - ``requirements.toml`` - Requirements definition file
-- ``cargo-wrt`` - Unified command interface
+- ``cargo-kiln`` - Unified command interface
 - ``docs/architecture/safety.rst`` - Safety documentation
 
 File Structure
@@ -406,9 +406,9 @@ File Structure
 
    wrt2/
    ├── requirements.toml                    # Requirements definitions
-   ├── wrt-build-core/src/
+   ├── kiln-build-core/src/
    │   └── verify.rs                       # Core implementation
-   ├── cargo-wrt/                          # Unified command interface
+   ├── cargo-kiln/                          # Unified command interface
    └── docs/
        ├── architecture/safety.rst # Architecture docs
        └── qualification/          # Certification materials
@@ -475,7 +475,7 @@ Use safety verification results to make data-driven release decisions:
    # Safety gate for release pipeline
    
    # Run verification
-   if cargo-wrt verify --asil d; then
+   if cargo-kiln verify --asil d; then
      ASIL_D_STATUS="Pass"
    else
      ASIL_D_STATUS="Fail"
@@ -532,7 +532,7 @@ Team Communication
 .. code-block:: bash
 
    # Quick standup status
-   cargo-wrt verify --detailed
+   cargo-kiln verify --detailed
    # Output: 🎯 Overall Certification Readiness: 76.4%
 
 **Weekly Stakeholder Reports:**
@@ -540,11 +540,11 @@ Team Communication
 .. code-block:: bash
 
    # Generate stakeholder-friendly report
-   cargo-wrt verify-matrix --report
+   cargo-kiln verify-matrix --report
    
    # Email-friendly summary
-   echo "WRT Safety Status - Week $(date +%U)"
-   cargo-wrt verify --asil d --detailed
+   echo "Kiln Safety Status - Week $(date +%U)"
+   cargo-kiln verify --asil d --detailed
 
 Best Practices
 --------------
@@ -563,13 +563,13 @@ Daily Development Workflow
 .. code-block:: bash
 
    # Before committing changes
-   cargo-wrt verify --detailed
+   cargo-kiln verify --detailed
    
    # Check specific requirements
-   cargo-wrt verify --asil d --detailed
+   cargo-kiln verify --asil d --detailed
    
    # Generate report for stakeholders
-   cargo-wrt verify-matrix --report
+   cargo-kiln verify-matrix --report
 
 Monitoring & Alerts
 ~~~~~~~~~~~~~~~~~~~
@@ -579,10 +579,10 @@ Monitoring & Alerts
 .. code-block:: bash
 
    # Add to CI pipeline for trend monitoring
-   cargo-wrt verify-matrix --report
+   cargo-kiln verify-matrix --report
    
    # Monitor build matrix status
-   if ! cargo-wrt verify --asil d; then
+   if ! cargo-kiln verify --asil d; then
    
      echo "🚨 ALERT: ASIL-D verification failed"
      # Send notification to team
@@ -612,7 +612,7 @@ Common Issues
    .. code-block:: bash
    
       # Check syntax
-      cargo-wrt verify --detailed
+      cargo-kiln verify --detailed
 
 See Also
 --------
@@ -624,4 +624,4 @@ See Also
 
 ---
 
-**Status**: ✅ Operational - Ready for daily use in WRT development
+**Status**: ✅ Operational - Ready for daily use in Kiln development

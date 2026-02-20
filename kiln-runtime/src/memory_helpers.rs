@@ -1,4 +1,4 @@
-//! Helper extensions for working with `Arc<Memory>` in the WRT runtime
+//! Helper extensions for working with `Arc<Memory>` in the Kiln runtime
 //!
 //! This module provides extension traits to simplify working with `Arc<Memory>`
 //! instances, reducing the need for explicit dereferencing and borrowing.
@@ -6,11 +6,11 @@
 // Import Arc from appropriate source based on feature flags
 // alloc is imported in lib.rs with proper feature gates
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     safe_memory::SafeStack,
     values::Value,
 };
@@ -43,10 +43,10 @@ pub trait ArcMemoryExt {
         offset: u32,
         len: u32,
     ) -> Result<
-        wrt_foundation::safe_memory::SafeStack<
+        kiln_foundation::safe_memory::SafeStack<
             u8,
             1024,
-            wrt_foundation::safe_memory::NoStdProvider<1024>,
+            kiln_foundation::safe_memory::NoStdProvider<1024>,
         >,
     >;
 
@@ -133,7 +133,7 @@ pub trait ArcMemoryExt {
     fn check_alignment(&self, offset: u32, access_size: u32, align: u32) -> Result<()>;
 
     /// Read standard WebAssembly value
-    fn read_value(&self, addr: u32, value_type: wrt_foundation::types::ValueType) -> Result<Value>;
+    fn read_value(&self, addr: u32, value_type: kiln_foundation::types::ValueType) -> Result<Value>;
 
     /// Write standard WebAssembly value
     fn write_value(&self, addr: u32, value: Value) -> Result<()>;
@@ -162,13 +162,13 @@ pub trait ArcMemoryExt {
     fn read_values_as_safe_stack(
         &self,
         addr: u32,
-        value_type: wrt_foundation::types::ValueType,
+        value_type: kiln_foundation::types::ValueType,
         count: usize,
     ) -> Result<
-        wrt_foundation::safe_memory::SafeStack<
+        kiln_foundation::safe_memory::SafeStack<
             Value,
             256,
-            wrt_foundation::safe_memory::NoStdProvider<1024>,
+            kiln_foundation::safe_memory::NoStdProvider<1024>,
         >,
     >;
 
@@ -205,19 +205,19 @@ impl ArcMemoryExt for Arc<Memory> {
         offset: u32,
         len: u32,
     ) -> Result<
-        wrt_foundation::safe_memory::SafeStack<
+        kiln_foundation::safe_memory::SafeStack<
             u8,
             1024,
-            wrt_foundation::safe_memory::NoStdProvider<1024>,
+            kiln_foundation::safe_memory::NoStdProvider<1024>,
         >,
     > {
         // Early return for zero-length reads
         if len == 0 {
-            let provider = wrt_foundation::safe_managed_alloc!(
+            let provider = kiln_foundation::safe_managed_alloc!(
                 1024,
-                wrt_foundation::budget_aware_provider::CrateId::Runtime
+                kiln_foundation::budget_aware_provider::CrateId::Runtime
             )?;
-            return wrt_foundation::safe_memory::SafeStack::new(provider);
+            return kiln_foundation::safe_memory::SafeStack::new(provider);
         }
 
         // Get a memory-safe slice directly instead of creating a temporary buffer
@@ -225,11 +225,11 @@ impl ArcMemoryExt for Arc<Memory> {
 
         // Create a SafeStack from the verified slice data with appropriate verification
         // level
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Runtime
+            kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
-        let mut safe_stack = wrt_foundation::safe_memory::SafeStack::new(provider)?;
+        let mut safe_stack = kiln_foundation::safe_memory::SafeStack::new(provider)?;
 
         // Set verification level to match memory's level
         let verification_level = self.as_ref().verification_level();
@@ -394,18 +394,18 @@ impl ArcMemoryExt for Arc<Memory> {
         self.as_ref().check_alignment(offset, access_size, align)
     }
 
-    fn read_value(&self, addr: u32, value_type: wrt_foundation::types::ValueType) -> Result<Value> {
+    fn read_value(&self, addr: u32, value_type: kiln_foundation::types::ValueType) -> Result<Value> {
         match value_type {
-            wrt_foundation::types::ValueType::I32 => self.read_i32(addr).map(Value::I32),
-            wrt_foundation::types::ValueType::I64 => self.read_i64(addr).map(Value::I64),
-            wrt_foundation::types::ValueType::F32 => self
+            kiln_foundation::types::ValueType::I32 => self.read_i32(addr).map(Value::I32),
+            kiln_foundation::types::ValueType::I64 => self.read_i64(addr).map(Value::I64),
+            kiln_foundation::types::ValueType::F32 => self
                 .read_f32(addr)
-                .map(|f| Value::F32(wrt_foundation::values::FloatBits32::from_float(f))),
-            wrt_foundation::types::ValueType::F64 => self
+                .map(|f| Value::F32(kiln_foundation::values::FloatBits32::from_float(f))),
+            kiln_foundation::types::ValueType::F64 => self
                 .read_f64(addr)
-                .map(|f| Value::F64(wrt_foundation::values::FloatBits64::from_float(f))),
+                .map(|f| Value::F64(kiln_foundation::values::FloatBits64::from_float(f))),
             // V128 doesn't exist in ValueType enum, so we'll handle it separately
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Unsupported value type",
             )),
         }
@@ -419,9 +419,9 @@ impl ArcMemoryExt for Arc<Memory> {
             Value::F32(v) => self.write_f32(addr, f32::from_bits(v.to_bits())),
             Value::F64(v) => self.write_f64(addr, f64::from_bits(v.to_bits())),
             Value::V128(v) => self.write_v128(addr, v.bytes),
-            _ => Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Type,
-                wrt_error::codes::TYPE_MISMATCH_ERROR,
+            _ => Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Type,
+                kiln_error::codes::TYPE_MISMATCH_ERROR,
                 "Unsupported value type for memory write",
             )),
         }
@@ -431,15 +431,15 @@ impl ArcMemoryExt for Arc<Memory> {
         // Create a safe slice of the source data for verification
         let src_data = if src < data.len() {
             let end = src.checked_add(size).ok_or_else(|| {
-                wrt_error::Error::runtime_execution_error("Source bounds overflow")
+                kiln_error::Error::runtime_execution_error("Source bounds overflow")
             })?;
 
             if end <= data.len() {
                 &data[src..end]
             } else {
-                return Err(wrt_error::Error::new(
-                    wrt_error::ErrorCategory::Memory,
-                    wrt_error::codes::MEMORY_OUT_OF_BOUNDS,
+                return Err(kiln_error::Error::new(
+                    kiln_error::ErrorCategory::Memory,
+                    kiln_error::codes::MEMORY_OUT_OF_BOUNDS,
                     "End bounds overflow",
                 ));
             }
@@ -447,16 +447,16 @@ impl ArcMemoryExt for Arc<Memory> {
             // Zero-sized init is always valid
             &[]
         } else {
-            return Err(wrt_error::Error::runtime_execution_error(
+            return Err(kiln_error::Error::runtime_execution_error(
                 "Invalid source offset",
             ));
         };
 
         // Convert dst to u32 and write the data directly
         let dst_u32 = u32::try_from(dst).map_err(|_| {
-            wrt_error::Error::new(
-                wrt_error::ErrorCategory::Memory,
-                wrt_error::codes::MEMORY_OUT_OF_BOUNDS,
+            kiln_error::Error::new(
+                kiln_error::ErrorCategory::Memory,
+                kiln_error::codes::MEMORY_OUT_OF_BOUNDS,
                 "Destination offset conversion failed",
             )
         })?;
@@ -485,21 +485,21 @@ impl ArcMemoryExt for Arc<Memory> {
     fn read_values_as_safe_stack(
         &self,
         addr: u32,
-        value_type: wrt_foundation::types::ValueType,
+        value_type: kiln_foundation::types::ValueType,
         count: usize,
     ) -> Result<
-        wrt_foundation::safe_memory::SafeStack<
+        kiln_foundation::safe_memory::SafeStack<
             Value,
             256,
-            wrt_foundation::safe_memory::NoStdProvider<1024>,
+            kiln_foundation::safe_memory::NoStdProvider<1024>,
         >,
     > {
         // Create a SafeStack to store the values
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Runtime
+            kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
-        let mut result = wrt_foundation::safe_memory::SafeStack::new(provider)?;
+        let mut result = kiln_foundation::safe_memory::SafeStack::new(provider)?;
 
         // Set verification level to match memory's level
         let verification_level = self.as_ref().verification_level();
@@ -507,12 +507,12 @@ impl ArcMemoryExt for Arc<Memory> {
 
         // Calculate size of each value in bytes
         let value_size = match value_type {
-            wrt_foundation::types::ValueType::I32 => 4,
-            wrt_foundation::types::ValueType::I64 => 8,
-            wrt_foundation::types::ValueType::F32 => 4,
-            wrt_foundation::types::ValueType::F64 => 8,
+            kiln_foundation::types::ValueType::I32 => 4,
+            kiln_foundation::types::ValueType::I64 => 8,
+            kiln_foundation::types::ValueType::F32 => 4,
+            kiln_foundation::types::ValueType::F64 => 8,
             _ => {
-                return Err(wrt_error::Error::runtime_execution_error(
+                return Err(kiln_error::Error::runtime_execution_error(
                     "Unsupported value type",
                 ))
             },
@@ -521,9 +521,9 @@ impl ArcMemoryExt for Arc<Memory> {
         // Read each value safely
         for i in 0..count {
             let offset = addr.checked_add((i * value_size) as u32).ok_or_else(|| {
-                wrt_error::Error::new(
-                    wrt_error::ErrorCategory::Memory,
-                    wrt_error::codes::MEMORY_OUT_OF_BOUNDS,
+                kiln_error::Error::new(
+                    kiln_error::ErrorCategory::Memory,
+                    kiln_error::codes::MEMORY_OUT_OF_BOUNDS,
                     "Address overflow in read_values",
                 )
             })?;
@@ -580,7 +580,7 @@ impl ArcMemoryExt for Arc<Memory> {
         // or Arc::get_mut, which this trait signature doesn't allow.
         Err(Error::new(
             ErrorCategory::Runtime,
-            wrt_error::codes::UNSUPPORTED_OPERATION,
+            kiln_error::codes::UNSUPPORTED_OPERATION,
             "Memory growth not supported for Arc<Memory>",
         ))
     }

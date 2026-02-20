@@ -1,9 +1,9 @@
-//! Bounded Infrastructure for WRTD Daemon
+//! Bounded Infrastructure for Kilnd Daemon
 //!
 //! This module provides bounded alternatives for daemon collections
 //! to ensure static memory allocation throughout the daemon operations.
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{
         BoundedString,
         BoundedVec,
@@ -21,11 +21,11 @@ use wrt_foundation::{
     CrateId,
 };
 
-/// Budget-aware memory provider for WRTD daemon (64KB)
-pub type WrtdProvider = CapabilityAwareProvider<NoStdProvider<32768>>;
+/// Budget-aware memory provider for Kilnd daemon (64KB)
+pub type KilndProvider = CapabilityAwareProvider<NoStdProvider<32768>>;
 
-/// Helper function to create a capability-aware provider for WRTD
-fn create_wrtd_provider() -> wrt_error::Result<WrtdProvider> {
+/// Helper function to create a capability-aware provider for Kilnd
+fn create_kilnd_provider() -> kiln_error::Result<KilndProvider> {
     let context = capability_context!(dynamic(CrateId::Platform, 32768))?;
     safe_capability_alloc!(context, CrateId::Platform, 32768)
 }
@@ -79,28 +79,28 @@ pub const MAX_ENV_VAR_NAME_LEN: usize = 128;
 pub const MAX_ENV_VAR_VALUE_LEN: usize = 512;
 
 /// Bounded vector for daemon services
-pub type BoundedDaemonServiceVec<T> = BoundedVec<T, MAX_DAEMON_SERVICES, WrtdProvider>;
+pub type BoundedDaemonServiceVec<T> = BoundedVec<T, MAX_DAEMON_SERVICES, KilndProvider>;
 
 /// Bounded vector for active connections
-pub type BoundedConnectionVec<T> = BoundedVec<T, MAX_ACTIVE_CONNECTIONS, WrtdProvider>;
+pub type BoundedConnectionVec<T> = BoundedVec<T, MAX_ACTIVE_CONNECTIONS, KilndProvider>;
 
 /// Bounded vector for service configurations
-pub type BoundedServiceConfigVec<T> = BoundedVec<T, MAX_SERVICE_CONFIGS, WrtdProvider>;
+pub type BoundedServiceConfigVec<T> = BoundedVec<T, MAX_SERVICE_CONFIGS, KilndProvider>;
 
 /// Bounded vector for runtime processes
-pub type BoundedProcessVec<T> = BoundedVec<T, MAX_RUNTIME_PROCESSES, WrtdProvider>;
+pub type BoundedProcessVec<T> = BoundedVec<T, MAX_RUNTIME_PROCESSES, KilndProvider>;
 
 /// Bounded vector for log entries
-pub type BoundedLogEntryVec<T> = BoundedVec<T, MAX_LOG_ENTRIES, WrtdProvider>;
+pub type BoundedLogEntryVec<T> = BoundedVec<T, MAX_LOG_ENTRIES, KilndProvider>;
 
 /// Bounded vector for metrics entries
-pub type BoundedMetricsVec<T> = BoundedVec<T, MAX_METRICS_ENTRIES, WrtdProvider>;
+pub type BoundedMetricsVec<T> = BoundedVec<T, MAX_METRICS_ENTRIES, KilndProvider>;
 
 /// Bounded vector for health checks
-pub type BoundedHealthCheckVec<T> = BoundedVec<T, MAX_HEALTH_CHECKS, WrtdProvider>;
+pub type BoundedHealthCheckVec<T> = BoundedVec<T, MAX_HEALTH_CHECKS, KilndProvider>;
 
 /// Bounded vector for environment variables
-pub type BoundedEnvVarVec<T> = BoundedVec<T, MAX_ENV_VARS, WrtdProvider>;
+pub type BoundedEnvVarVec<T> = BoundedVec<T, MAX_ENV_VARS, KilndProvider>;
 
 /// Bounded string for service names
 pub type BoundedServiceName = BoundedString<MAX_SERVICE_NAME_LEN>;
@@ -128,85 +128,85 @@ pub type BoundedEnvVarValue = BoundedString<MAX_ENV_VAR_VALUE_LEN>;
 
 /// Bounded map for daemon services
 pub type BoundedServiceMap<V> =
-    BoundedHashMap<BoundedServiceName, V, MAX_DAEMON_SERVICES, WrtdProvider>;
+    BoundedHashMap<BoundedServiceName, V, MAX_DAEMON_SERVICES, KilndProvider>;
 
 /// Bounded map for active connections
 pub type BoundedConnectionMap<V> =
-    BoundedHashMap<BoundedConnectionId, V, MAX_ACTIVE_CONNECTIONS, WrtdProvider>;
+    BoundedHashMap<BoundedConnectionId, V, MAX_ACTIVE_CONNECTIONS, KilndProvider>;
 
 /// Bounded map for service configurations
 pub type BoundedConfigMap =
-    BoundedHashMap<BoundedConfigKey, BoundedConfigValue, MAX_SERVICE_CONFIGS, WrtdProvider>;
+    BoundedHashMap<BoundedConfigKey, BoundedConfigValue, MAX_SERVICE_CONFIGS, KilndProvider>;
 
 /// Bounded map for runtime processes
 pub type BoundedProcessMap<V> = BoundedHashMap<
     u32, // Process ID
     V,
     MAX_RUNTIME_PROCESSES,
-    WrtdProvider,
+    KilndProvider,
 >;
 
 /// Bounded map for environment variables
 pub type BoundedEnvMap =
-    BoundedHashMap<BoundedEnvVarName, BoundedEnvVarValue, MAX_ENV_VARS, WrtdProvider>;
+    BoundedHashMap<BoundedEnvVarName, BoundedEnvVarValue, MAX_ENV_VARS, KilndProvider>;
 
 /// Create a new bounded daemon service vector
-pub fn new_daemon_service_vec<T>() -> wrt_error::Result<BoundedDaemonServiceVec<T>>
+pub fn new_daemon_service_vec<T>() -> kiln_error::Result<BoundedDaemonServiceVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
-    let provider = create_wrtd_provider()?;
+    let provider = create_kilnd_provider()?;
     BoundedVec::new(provider)
 }
 
 /// Create a new bounded connection vector
-pub fn new_connection_vec<T>() -> wrt_error::Result<BoundedConnectionVec<T>>
+pub fn new_connection_vec<T>() -> kiln_error::Result<BoundedConnectionVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
-    let provider = create_wrtd_provider()?;
+    let provider = create_kilnd_provider()?;
     BoundedVec::new(provider)
 }
 
 /// Create a new bounded service config vector
-pub fn new_service_config_vec<T>() -> wrt_error::Result<BoundedServiceConfigVec<T>>
+pub fn new_service_config_vec<T>() -> kiln_error::Result<BoundedServiceConfigVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
-    let provider = create_wrtd_provider()?;
+    let provider = create_kilnd_provider()?;
     BoundedVec::new(provider)
 }
 
 /// Create a new bounded process vector
-pub fn new_process_vec<T>() -> wrt_error::Result<BoundedProcessVec<T>>
+pub fn new_process_vec<T>() -> kiln_error::Result<BoundedProcessVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
-    let provider = create_wrtd_provider()?;
+    let provider = create_kilnd_provider()?;
     BoundedVec::new(provider)
 }
 
 /// Create a new bounded log entry vector
-pub fn new_log_entry_vec<T>() -> wrt_error::Result<BoundedLogEntryVec<T>>
+pub fn new_log_entry_vec<T>() -> kiln_error::Result<BoundedLogEntryVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
-    let provider = create_wrtd_provider()?;
+    let provider = create_kilnd_provider()?;
     BoundedVec::new(provider)
 }
 
 /// Create a new bounded service name
-pub fn new_service_name() -> wrt_error::Result<BoundedServiceName> {
+pub fn new_service_name() -> kiln_error::Result<BoundedServiceName> {
     BoundedString::try_from_str("").map_err(|_| {
-        wrt_error::Error::runtime_execution_error("Failed to create service name")
+        kiln_error::Error::runtime_execution_error("Failed to create service name")
     })
 }
 
 /// Create a bounded service name from str
-pub fn bounded_service_name_from_str(s: &str) -> wrt_error::Result<BoundedServiceName> {
+pub fn bounded_service_name_from_str(s: &str) -> kiln_error::Result<BoundedServiceName> {
     BoundedString::try_from_str(s).map_err(|_| {
-        wrt_error::Error::new(
-            wrt_error::ErrorCategory::Resource,
+        kiln_error::Error::new(
+            kiln_error::ErrorCategory::Resource,
             1001, // ALLOCATION_FAILED
             "Service name too long",
         )
@@ -214,17 +214,17 @@ pub fn bounded_service_name_from_str(s: &str) -> wrt_error::Result<BoundedServic
 }
 
 /// Create a new bounded configuration key
-pub fn new_config_key() -> wrt_error::Result<BoundedConfigKey> {
+pub fn new_config_key() -> kiln_error::Result<BoundedConfigKey> {
     BoundedString::try_from_str("").map_err(|_| {
-        wrt_error::Error::runtime_execution_error("Failed to create config key")
+        kiln_error::Error::runtime_execution_error("Failed to create config key")
     })
 }
 
 /// Create a bounded configuration key from str
-pub fn bounded_config_key_from_str(s: &str) -> wrt_error::Result<BoundedConfigKey> {
+pub fn bounded_config_key_from_str(s: &str) -> kiln_error::Result<BoundedConfigKey> {
     BoundedString::try_from_str(s).map_err(|_| {
-        wrt_error::Error::new(
-            wrt_error::ErrorCategory::Resource,
+        kiln_error::Error::new(
+            kiln_error::ErrorCategory::Resource,
             1001, // ALLOCATION_FAILED
             "Config key too long",
         )
@@ -232,17 +232,17 @@ pub fn bounded_config_key_from_str(s: &str) -> wrt_error::Result<BoundedConfigKe
 }
 
 /// Create a new bounded configuration value
-pub fn new_config_value() -> wrt_error::Result<BoundedConfigValue> {
+pub fn new_config_value() -> kiln_error::Result<BoundedConfigValue> {
     BoundedString::try_from_str("").map_err(|_| {
-        wrt_error::Error::runtime_execution_error("Failed to create config value")
+        kiln_error::Error::runtime_execution_error("Failed to create config value")
     })
 }
 
 /// Create a bounded configuration value from str
-pub fn bounded_config_value_from_str(s: &str) -> wrt_error::Result<BoundedConfigValue> {
+pub fn bounded_config_value_from_str(s: &str) -> kiln_error::Result<BoundedConfigValue> {
     BoundedString::try_from_str(s).map_err(|_| {
-        wrt_error::Error::new(
-            wrt_error::ErrorCategory::Resource,
+        kiln_error::Error::new(
+            kiln_error::ErrorCategory::Resource,
             1001, // ALLOCATION_FAILED
             "Config value too long",
         )
@@ -250,17 +250,17 @@ pub fn bounded_config_value_from_str(s: &str) -> wrt_error::Result<BoundedConfig
 }
 
 /// Create a new bounded log message
-pub fn new_log_message() -> wrt_error::Result<BoundedLogMessage> {
+pub fn new_log_message() -> kiln_error::Result<BoundedLogMessage> {
     BoundedString::try_from_str("").map_err(|_| {
-        wrt_error::Error::runtime_execution_error("Failed to create log message")
+        kiln_error::Error::runtime_execution_error("Failed to create log message")
     })
 }
 
 /// Create a bounded log message from str
-pub fn bounded_log_message_from_str(s: &str) -> wrt_error::Result<BoundedLogMessage> {
+pub fn bounded_log_message_from_str(s: &str) -> kiln_error::Result<BoundedLogMessage> {
     BoundedString::try_from_str(s).map_err(|_| {
-        wrt_error::Error::new(
-            wrt_error::ErrorCategory::Resource,
+        kiln_error::Error::new(
+            kiln_error::ErrorCategory::Resource,
             1001, // ALLOCATION_FAILED
             "Log message too long",
         )
@@ -268,40 +268,40 @@ pub fn bounded_log_message_from_str(s: &str) -> wrt_error::Result<BoundedLogMess
 }
 
 /// Create a new bounded service map
-pub fn new_service_map<V>() -> wrt_error::Result<BoundedServiceMap<V>>
+pub fn new_service_map<V>() -> kiln_error::Result<BoundedServiceMap<V>>
 where
     V: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
-    let provider = create_wrtd_provider()?;
+    let provider = create_kilnd_provider()?;
     BoundedHashMap::new(provider)
 }
 
 /// Create a new bounded connection map
-pub fn new_connection_map<V>() -> wrt_error::Result<BoundedConnectionMap<V>>
+pub fn new_connection_map<V>() -> kiln_error::Result<BoundedConnectionMap<V>>
 where
     V: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
-    let provider = create_wrtd_provider()?;
+    let provider = create_kilnd_provider()?;
     BoundedHashMap::new(provider)
 }
 
 /// Create a new bounded configuration map
-pub fn new_config_map() -> wrt_error::Result<BoundedConfigMap> {
-    let provider = create_wrtd_provider()?;
+pub fn new_config_map() -> kiln_error::Result<BoundedConfigMap> {
+    let provider = create_kilnd_provider()?;
     BoundedHashMap::new(provider)
 }
 
 /// Create a new bounded process map
-pub fn new_process_map<V>() -> wrt_error::Result<BoundedProcessMap<V>>
+pub fn new_process_map<V>() -> kiln_error::Result<BoundedProcessMap<V>>
 where
     V: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
-    let provider = create_wrtd_provider()?;
+    let provider = create_kilnd_provider()?;
     BoundedHashMap::new(provider)
 }
 
 /// Create a new bounded environment map
-pub fn new_env_map() -> wrt_error::Result<BoundedEnvMap> {
-    let provider = create_wrtd_provider()?;
+pub fn new_env_map() -> kiln_error::Result<BoundedEnvMap> {
+    let provider = create_kilnd_provider()?;
     BoundedHashMap::new(provider)
 }

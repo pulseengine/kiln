@@ -1,4 +1,4 @@
-# Generic Safety Feature Design for WRT
+# Generic Safety Feature Design for Kiln
 
 ## Philosophy: Capability-Based Safety Features
 
@@ -107,7 +107,7 @@ hardware-isolation = ["component-isolation"]
 ### 1. Feature-Driven Type Selection
 
 ```rust
-// In wrt-foundation/src/safety_features.rs
+// In kiln-foundation/src/safety_features.rs
 
 #[cfg(feature = "dynamic-allocation")]
 pub type DefaultMemoryProvider = DynamicProvider;
@@ -143,7 +143,7 @@ compile_error!("mathematical-proofs requires compile-time-memory-layout");
 ### 3. Safety-Level Mapping
 
 ```rust
-// In wrt-foundation/src/safety_mapping.rs
+// In kiln-foundation/src/safety_mapping.rs
 
 pub trait SafetyStandardMapping {
     fn required_features() -> &'static [&'static str];
@@ -177,7 +177,7 @@ impl SafetyStandardMapping for DalLevel {
 ### 4. Automatic Allocation Strategy
 
 ```rust
-// In wrt-foundation/src/auto_allocation.rs
+// In kiln-foundation/src/auto_allocation.rs
 
 /// Automatically select allocation strategy based on enabled features
 #[macro_export]
@@ -211,7 +211,7 @@ macro_rules! auto_allocate {
 ### Foundation Crate Features
 
 ```toml
-# wrt-foundation/Cargo.toml
+# kiln-foundation/Cargo.toml
 [features]
 default = ["dynamic-allocation"]
 
@@ -265,12 +265,12 @@ maximum-safety = [
 # Cargo.toml (workspace)
 [features]
 # Safety level presets for easy configuration
-qm = ["wrt-foundation/dynamic-allocation"]
+qm = ["kiln-foundation/dynamic-allocation"]
 
-asil-a = ["wrt-foundation/bounded-collections"]
-asil-b = ["wrt-foundation/bounded-collections"] 
-asil-c = ["wrt-foundation/static-memory-safety"]
-asil-d = ["wrt-foundation/maximum-safety"]
+asil-a = ["kiln-foundation/bounded-collections"]
+asil-b = ["kiln-foundation/bounded-collections"] 
+asil-c = ["kiln-foundation/static-memory-safety"]
+asil-d = ["kiln-foundation/maximum-safety"]
 
 # DO-178C equivalents
 dal-e = ["qm"]
@@ -375,4 +375,4 @@ verified-static-allocation = [
 ]
 ```
 
-This approach transforms WRT from having abstract safety levels to having concrete, enforceable capabilities that clearly communicate what safety guarantees are provided.
+This approach transforms Kiln from having abstract safety levels to having concrete, enforceable capabilities that clearly communicate what safety guarantees are provided.

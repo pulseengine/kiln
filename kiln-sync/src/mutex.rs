@@ -16,17 +16,17 @@ use crate::prelude::{
 /// (it just spins aggressively) and lacks features like deadlock detection or
 /// poisoning. Use with caution and consider alternatives if contention is
 /// expected to be high.
-pub struct WrtMutex<T: ?Sized> {
+pub struct KilnMutex<T: ?Sized> {
     locked: AtomicBool,
     data:   UnsafeCell<T>,
 }
 
-/// A guard that provides mutable access to the data protected by a `WrtMutex`.
+/// A guard that provides mutable access to the data protected by a `KilnMutex`.
 ///
 /// When the guard is dropped, the mutex is unlocked.
 #[clippy::has_significant_drop]
-pub struct WrtMutexGuard<'a, T: ?Sized + 'a> {
-    mutex: &'a WrtMutex<T>,
+pub struct KilnMutexGuard<'a, T: ?Sized + 'a> {
+    mutex: &'a KilnMutex<T>,
 }
 
 // Implementations
@@ -34,28 +34,28 @@ pub struct WrtMutexGuard<'a, T: ?Sized + 'a> {
 // Allow the mutex to be shared across threads.
 /// # Safety
 /// Access to the `UnsafeCell` data is protected by the atomic `locked` flag.
-/// The `Send` trait is safe because the `WrtMutex` ensures that only one thread
+/// The `Send` trait is safe because the `KilnMutex` ensures that only one thread
 /// can access the data at a time (if `T` is `Send`).
-unsafe impl<T: ?Sized + Send> Send for WrtMutex<T> {}
+unsafe impl<T: ?Sized + Send> Send for KilnMutex<T> {}
 /// # Safety
 /// Access to the `UnsafeCell` data is protected by the atomic `locked` flag.
-/// The `Sync` trait is safe because the `WrtMutex` ensures that all accesses
+/// The `Sync` trait is safe because the `KilnMutex` ensures that all accesses
 /// (read or write) are synchronized through the lock (if `T` is `Send`).
-/// If `T` is also `Sync`, then `&WrtMutex<T>` can be safely shared.
-unsafe impl<T: ?Sized + Send> Sync for WrtMutex<T> {}
+/// If `T` is also `Sync`, then `&KilnMutex<T>` can be safely shared.
+unsafe impl<T: ?Sized + Send> Sync for KilnMutex<T> {}
 
-impl<T> WrtMutex<T> {
-    /// Creates a new `WrtMutex` protecting the given data.
+impl<T> KilnMutex<T> {
+    /// Creates a new `KilnMutex` protecting the given data.
     #[inline]
     pub const fn new(data: T) -> Self {
-        WrtMutex {
+        KilnMutex {
             locked: AtomicBool::new(false),
             data:   UnsafeCell::new(data),
         }
     }
 }
 
-impl<T: ?Sized> WrtMutex<T> {
+impl<T: ?Sized> KilnMutex<T> {
     /// Acquires the lock, spinning until it is available.
     ///
     /// This function will block the current execution context until the lock is
@@ -69,10 +69,10 @@ impl<T: ?Sized> WrtMutex<T> {
     ///
     /// This function does not panic.
     /// Safety impact: [LOW|MEDIUM|HIGH] - [Brief explanation of the safety
-    /// implication] Tracking: WRTQ-XXX (qualification requirement tracking
+    /// implication] Tracking: KILNQ-XXX (qualification requirement tracking
     /// ID).
     #[inline]
-    pub fn lock(&self) -> WrtMutexGuard<'_, T> {
+    pub fn lock(&self) -> KilnMutexGuard<'_, T> {
         // Spin until the lock is acquired.
         // Use compare_exchange_weak for potentially better performance on some
         // platforms.
@@ -88,17 +88,17 @@ impl<T: ?Sized> WrtMutex<T> {
             // Hint to the CPU that we are spinning.
             core::hint::spin_loop();
         }
-        WrtMutexGuard { mutex: self }
+        KilnMutexGuard { mutex: self }
     }
 
     // Optional: Implement try_lock if needed later
-    // pub fn try_lock(&self) -> Option<WrtMutexGuard<'_, T>> {
+    // pub fn try_lock(&self) -> Option<KilnMutexGuard<'_, T>> {
     // if self
     // .locked
     // .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
     // .is_ok()
     // {
-    // Some(WrtMutexGuard { mutex: self })
+    // Some(KilnMutexGuard { mutex: self })
     // } else {
     // None
     // }
@@ -112,7 +112,7 @@ impl<T: ?Sized> WrtMutex<T> {
     // }
 }
 
-impl<T: ?Sized + fmt::Debug> fmt::Debug for WrtMutex<T> {
+impl<T: ?Sized + fmt::Debug> fmt::Debug for KilnMutex<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Attempt a non-blocking check for Debug representation if possible,
         // otherwise indicate locked status. Avoids deadlocking Debug.
@@ -121,42 +121,42 @@ impl<T: ?Sized + fmt::Debug> fmt::Debug for WrtMutex<T> {
         // correctly reject the previous unsafe dereference pattern.
         // Always show a safe representation without accessing the data.
         if self.locked.load(Ordering::Relaxed) {
-            f.debug_struct("WrtMutex").field("data", &"<locked>").finish()
+            f.debug_struct("KilnMutex").field("data", &"<locked>").finish()
         } else {
-            f.debug_struct("WrtMutex").field("data", &"<unlocked>").finish()
+            f.debug_struct("KilnMutex").field("data", &"<unlocked>").finish()
         }
     }
 }
 
 // Guard implementation
 
-impl<T: ?Sized> Deref for WrtMutexGuard<'_, T> {
+impl<T: ?Sized> Deref for KilnMutexGuard<'_, T> {
     type Target = T;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
         // # Safety
         // This `unsafe` block dereferences the raw pointer from `UnsafeCell::get()`.
-        // It is safe because a `WrtMutexGuard` can only be created if the
-        // associated `WrtMutex` is locked. The existence of the guard guarantees
+        // It is safe because a `KilnMutexGuard` can only be created if the
+        // associated `KilnMutex` is locked. The existence of the guard guarantees
         // exclusive (for `&mut`) or shared (for `&`) access to the data.
         unsafe { &*self.mutex.data.get() }
     }
 }
 
-impl<T: ?Sized> DerefMut for WrtMutexGuard<'_, T> {
+impl<T: ?Sized> DerefMut for KilnMutexGuard<'_, T> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         // # Safety
         // This `unsafe` block dereferences the raw pointer from `UnsafeCell::get()`
-        // for mutable access. It is safe because a `WrtMutexGuard` can only
-        // be created if the associated `WrtMutex` is locked. The existence of the
+        // for mutable access. It is safe because a `KilnMutexGuard` can only
+        // be created if the associated `KilnMutex` is locked. The existence of the
         // guard guarantees exclusive access to the data.
         unsafe { &mut *self.mutex.data.get() }
     }
 }
 
-impl<T: ?Sized> Drop for WrtMutexGuard<'_, T> {
+impl<T: ?Sized> Drop for KilnMutexGuard<'_, T> {
     /// Releases the lock when the guard goes out of scope.
     #[inline]
     fn drop(&mut self) {
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn test_mutex_creation() {
-        let mutex = WrtMutex::new(42);
+        let mutex = KilnMutex::new(42);
         let guard = mutex.lock();
         assert_eq!(*guard, 42);
     }
@@ -190,7 +190,7 @@ mod tests {
     #[test]
     #[cfg(any(feature = "std", feature = "dynamic-allocation"))]
     fn test_mutex_modification() {
-        let mutex = WrtMutex::new(vec![1, 2, 3]);
+        let mutex = KilnMutex::new(vec![1, 2, 3]);
         {
             let mut guard = mutex.lock();
             guard.push(4);
@@ -202,7 +202,7 @@ mod tests {
     #[test]
     #[cfg(any(feature = "std", feature = "dynamic-allocation"))]
     fn test_mutex_multiple_locks() {
-        let mutex = WrtMutex::new(String::from("test"));
+        let mutex = KilnMutex::new(String::from("test"));
         {
             let mut guard = mutex.lock();
             guard.push_str("_1");
@@ -217,15 +217,15 @@ mod tests {
 
     #[test]
     fn test_mutex_send_sync() {
-        // This test verifies that WrtMutex implements Send and Sync
+        // This test verifies that KilnMutex implements Send and Sync
         // by checking trait bounds (compile-time check)
         fn assert_send_sync<T: Send + Sync>() {}
-        assert_send_sync::<WrtMutex<i32>>();
+        assert_send_sync::<KilnMutex<i32>>();
     }
 
     #[test]
     fn test_mutex_guard_drop() {
-        let mutex = WrtMutex::new(42);
+        let mutex = KilnMutex::new(42);
         {
             let mut guard = mutex.lock();
             *guard = 100;
@@ -238,7 +238,7 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn test_mutex_concurrency() {
-        let mutex = Arc::new(WrtMutex::new(0));
+        let mutex = Arc::new(KilnMutex::new(0));
         let mut handles = vec![];
 
         for _ in 0..10 {

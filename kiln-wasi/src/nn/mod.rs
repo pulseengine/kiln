@@ -5,7 +5,7 @@
 //! preview-agnostic, working with both WASI Preview2 (synchronous) and Preview3
 //! (asynchronous).
 //!
-//! The implementation uses WRT's capability-based system to provide different
+//! The implementation uses Kiln's capability-based system to provide different
 //! safety guarantees based on the verification level, supporting various safety
 //! standards including ASIL, DO-178C, IEC 62304, and others.
 

@@ -2,7 +2,7 @@
 Async/Threading Architecture
 ======================================
 
-This section documents the comprehensive async and threading infrastructure in WRT, providing WebAssembly Component Model async support, advanced task management, and platform-specific threading optimizations.
+This section documents the comprehensive async and threading infrastructure in Kiln, providing WebAssembly Component Model async support, advanced task management, and platform-specific threading optimizations.
 
 .. contents:: Table of Contents
    :local:
@@ -11,7 +11,7 @@ This section documents the comprehensive async and threading infrastructure in W
 Overview
 --------
 
-WRT implements a sophisticated async/threading system that enables:
+Kiln implements a sophisticated async/threading system that enables:
 
 1. **WebAssembly Component Model Async Support** - Full async/await capabilities for Component Model interfaces
 2. **Advanced Task Management** - Comprehensive task scheduling, cancellation, and resource management
@@ -32,11 +32,11 @@ Async/Threading Ecosystem
 .. code-block:: text
 
     ┌─────────────────────────────────────────────────────────────────┐
-    │                    WRT ASYNC/THREADING ECOSYSTEM               │
+    │                    Kiln ASYNC/THREADING ECOSYSTEM               │
     ├─────────────────────────────────────────────────────────────────┤
     │                                                                 │
     │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │
-    │  │    wrtd     │    │     wrt     │    │ Application │        │
+    │  │    kilnd     │    │     kiln    │    │ Application │        │
     │  │             │    │             │    │             │        │
     │  │ • Runtime   │    │ • Async     │    │ • User      │        │
     │  │   modes     │────│   engine    │────│   async     │        │
@@ -47,7 +47,7 @@ Async/Threading Ecosystem
     │         └───────────────────┼───────────────────┘              │
     │                             │                                   │
     │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │
-    │  │wrt-component│    │wrt-runtime  │    │wrt-foundation│        │
+    │  │kiln-component│    │kiln-runtime  │    │kiln-foundation│        │
     │  │             │    │             │    │             │        │
     │  │ • Async     │    │ • Execution │    │ • Async     │        │
     │  │   runtime   │────│   engine    │────│   bridge    │        │
@@ -59,7 +59,7 @@ Async/Threading Ecosystem
     │         └───────────────────┼───────────────────┘              │
     │                             │                                   │
     │  ┌─────────────────────────────────────────────────────────┐   │
-    │  │                 wrt-platform                            │   │
+    │  │                 kiln-platform                            │   │
     │  │                                                         │   │
     │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │   │
     │  │  │   Linux     │  │    QNX      │  │   macOS     │    │   │
@@ -85,7 +85,7 @@ Component Model Async Runtime
 Fuel-Based Async Execution
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-WRT implements a fuel-based async execution system that provides deterministic timing guarantees across all ASIL levels. The system uses fuel consumption as a proxy for execution time, enabling predictable async behavior in no_std environments.
+Kiln implements a fuel-based async execution system that provides deterministic timing guarantees across all ASIL levels. The system uses fuel consumption as a proxy for execution time, enabling predictable async behavior in no_std environments.
 
 **Core Architecture**::
 
@@ -914,7 +914,7 @@ Phase 3: ASIL-C Deadline Scheduling
 
 **WCET Analysis and Deadline Scheduling**::
 
-    use wrt_component::async_::{
+    use kiln_component::async_::{
         FuelWcetAnalyzer, WcetAnalyzerConfig, WcetAnalysisMethod,
         FuelDeadlineScheduler, DeadlineSchedulerConfig, AsilLevel,
     };
@@ -1018,7 +1018,7 @@ Fuel-Based Async Component
 
 **Simple fuel-based async usage**::
 
-    use wrt_component::async_::{
+    use kiln_component::async_::{
         FuelAsyncExecutor, FuelAsyncBridge, AsyncBridgeConfig
     };
     
@@ -1049,7 +1049,7 @@ Fuel-Based Async Component
 
 **Async bridge with time bounds**::
 
-    use wrt_component::async_::FuelAsyncBridge;
+    use kiln_component::async_::FuelAsyncBridge;
     
     let mut bridge = FuelAsyncBridge::new(
         AsyncBridgeConfig {
@@ -1075,7 +1075,7 @@ Advanced Threading Configuration
 
 **Custom threading setup**::
 
-    use wrt_component::threading::{TaskManager, ThreadSpawnFuel};
+    use kiln_component::threading::{TaskManager, ThreadSpawnFuel};
     
     let task_manager = TaskManager::builder()
         .max_tasks(1024)
@@ -1094,7 +1094,7 @@ Platform-Specific Optimization
 
 **Linux-specific optimizations**::
 
-    use wrt_platform::linux_threading::LinuxThreading;
+    use kiln_platform::linux_threading::LinuxThreading;
     
     let linux_threading = LinuxThreading::builder()
         .futex_optimization(true)
@@ -1114,7 +1114,7 @@ Future Enhancements
 Conclusion
 ----------
 
-The WRT async/threading infrastructure provides:
+The Kiln async/threading infrastructure provides:
 
 - ✅ **Complete Async Support**: Full WebAssembly Component Model async capabilities
 - ✅ **Advanced Task Management**: Comprehensive lifecycle and resource control

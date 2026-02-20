@@ -8,11 +8,11 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
-use wrt_debug::runtime_traits::{
+use kiln_debug::runtime_traits::{
     Breakpoint, BreakpointCondition, BreakpointId, DebugAction, DebugError,
     DebuggableRuntime, RuntimeDebugger, RuntimeState,
 };
-use wrt_runtime::stackless::StacklessEngine;
+use kiln_runtime::stackless::StacklessEngine;
 
 /// Simple test debugger that counts events
 struct TestDebugger {

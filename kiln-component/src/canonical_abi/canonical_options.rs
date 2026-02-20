@@ -9,11 +9,11 @@ use alloc::sync::Arc;
 #[cfg(feature = "std")]
 use std::sync::{Arc, RwLock};
 
-use wrt_runtime::Memory;
-// Instance is from wrt_format, not wrt_runtime
-use wrt_format::component::Instance;
+use kiln_runtime::Memory;
+// Instance is from kiln_format, not kiln_runtime
+use kiln_format::component::Instance;
 #[cfg(not(feature = "std"))]
-use wrt_sync::RwLock;
+use kiln_sync::RwLock;
 
 use crate::{
     canonical_abi::canonical_realloc::{ComponentInstanceId, ReallocManager, StringEncoding},

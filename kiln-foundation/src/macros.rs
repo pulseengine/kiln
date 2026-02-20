@@ -16,7 +16,7 @@
 /// # Examples
 ///
 /// ```rust
-/// use wrt_foundation::{
+/// use kiln_foundation::{
 ///     safe_managed_alloc,
 ///     CrateId,
 /// };
@@ -54,7 +54,7 @@ macro_rules! managed_alloc {
         drop($crate::memory_init::MemoryInitializer::initialize);
 
         // Create allocation through modern capability factory
-        $crate::wrt_memory_system::CapabilityWrtFactory::create_provider::<$size>($crate_id)
+        $crate::kiln_memory_system::CapabilityKilnFactory::create_provider::<$size>($crate_id)
     }};
 }
 
@@ -66,7 +66,7 @@ macro_rules! managed_alloc {
 /// # Examples
 ///
 /// ```rust
-/// use wrt_foundation::{
+/// use kiln_foundation::{
 ///     create_provider,
 ///     safe_memory::NoStdProvider,
 ///     CrateId,
@@ -81,7 +81,7 @@ macro_rules! create_provider {
         drop($crate::memory_init::MemoryInitializer::initialize);
         // MIGRATION NOTE: create_typed_provider moved to capability system
         // This macro now requires explicit size specification in provider type
-        $crate::wrt_memory_system::CapabilityWrtFactory::create_provider::<1024>($crate_id)
+        $crate::kiln_memory_system::CapabilityKilnFactory::create_provider::<1024>($crate_id)
     }};
 }
 
@@ -92,7 +92,7 @@ macro_rules! create_provider {
 /// # Examples
 ///
 /// ```rust
-/// use wrt_foundation::{
+/// use kiln_foundation::{
 ///     hierarchical_budget,
 ///     CrateId,
 ///     MemoryPriority,
@@ -135,7 +135,7 @@ macro_rules! hierarchical_budget {
 /// # Examples
 ///
 /// ```rust
-/// use wrt_foundation::memory_region;
+/// use kiln_foundation::memory_region;
 ///
 /// // Compile-time validated region
 /// let region = memory_region!(start: 0, size: 4096;
@@ -154,7 +154,7 @@ macro_rules! memory_region {
 /// # Examples
 ///
 /// ```rust
-/// use wrt_foundation::{allocation_token, CrateId};
+/// use kiln_foundation::{allocation_token, CrateId};
 ///
 /// let token = allocation_token!(size: 1024, crate_id: CrateId::Foundation;
 /// let guard = token.allocate()?;
@@ -173,7 +173,7 @@ macro_rules! allocation_token {
 /// # Examples
 ///
 /// ```rust
-/// use wrt_foundation::{auto_provider, CrateId};
+/// use kiln_foundation::{auto_provider, CrateId};
 ///
 /// // Automatically sized for typical usage
 /// let guard = auto_provider!(CrateId::Component, typical_usage: "bounded_collections")?;
@@ -204,7 +204,7 @@ macro_rules! auto_provider {
 /// # Examples
 ///
 /// ```rust
-/// use wrt_foundation::{
+/// use kiln_foundation::{
 ///     debug_alloc,
 ///     CrateId,
 /// };

@@ -162,7 +162,7 @@ impl ExecutionContext {
 
     /// Create execution context from platform limits
     #[must_use]
-    pub fn from_platform_limits(platform_limits: &wrt_foundation::PlatformLimits) -> Self {
+    pub fn from_platform_limits(platform_limits: &kiln_foundation::PlatformLimits) -> Self {
         let max_depth = platform_limits.max_stack / (8 * 64); // Estimate stack depth
         Self::new(max_depth.max(16)) // Minimum depth of 16
     }
@@ -175,7 +175,7 @@ impl ExecutionContext {
             self.trapped = true;
             return Err(Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::CALL_STACK_EXHAUSTED,
+                kiln_error::codes::CALL_STACK_EXHAUSTED,
                 "Function call depth exceeded maximum limit",
             ));
         }
@@ -234,21 +234,21 @@ pub struct InstrumentationPoint {
     /// Location in code
     pub location:   usize,
     /// Type of instrumentation
-    pub point_type: wrt_foundation::bounded::BoundedString<64>,
+    pub point_type: kiln_foundation::bounded::BoundedString<64>,
 }
 
 impl InstrumentationPoint {
     /// Create a new instrumentation point
     pub fn new(location: usize, point_type: &str) -> Result<Self> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Runtime
+            kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
-        let bounded_point_type: wrt_foundation::bounded::BoundedString<
+        let bounded_point_type: kiln_foundation::bounded::BoundedString<
             64,
-        > = wrt_foundation::bounded::BoundedString::from_str_truncate(point_type)
+        > = kiln_foundation::bounded::BoundedString::from_str_truncate(point_type)
             .unwrap_or_else(|_| {
-                wrt_foundation::bounded::BoundedString::from_str_truncate("").unwrap()
+                kiln_foundation::bounded::BoundedString::from_str_truncate("").unwrap()
             });
         Ok(Self {
             location,

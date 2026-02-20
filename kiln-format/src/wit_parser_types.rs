@@ -8,7 +8,7 @@ use std::boxed::Box;
 #[cfg(all(not(feature = "std")))]
 use std::boxed::Box;
 
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec, BoundedString,
     bounded::MAX_GENERATIVE_TYPES,
     MemoryProvider,

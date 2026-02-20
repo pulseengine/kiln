@@ -1,4 +1,4 @@
-// WRT - wrt-sync
+// Kiln - kiln-sync
 // Module: Synchronization Primitives
 // SW-REQ-ID: REQ_006
 // SW-REQ-ID: REQ_CONCURRENCY_001
@@ -21,22 +21,22 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
-/// Synchronization primitives for WRT, supporting both std and `no_std`
+/// Synchronization primitives for Kiln, supporting both std and `no_std`
 /// environments.
 ///
-/// This module provides essential synchronization tools like `WrtMutex` and
-/// `WrtRwLock`, designed to work seamlessly in WebAssembly runtimes. They are
+/// This module provides essential synchronization tools like `KilnMutex` and
+/// `KilnRwLock`, designed to work seamlessly in WebAssembly runtimes. They are
 /// optimized for performance and safety, offering robust solutions for managing
 /// concurrent access to shared resources.
 ///
 /// ## Modules
 ///
-/// - `mutex`: Provides `WrtMutex` and `WrtMutexGuard`.
-/// - `rwlock`: Provides `WrtRwLock` and `WrtParkingRwLock`.
+/// - `mutex`: Provides `KilnMutex` and `KilnMutexGuard`.
+/// - `rwlock`: Provides `KilnRwLock` and `KilnParkingRwLock`.
 ///
 /// Each module is designed with an emphasis on ergonomics, performance, and
 /// safety, offering robust solutions for managing concurrent access to shared
-/// resources. The `WrtMutex` provides a mutual exclusion primitive.
+/// resources. The `KilnMutex` provides a mutual exclusion primitive.
 /// It ensures that only one thread or task can access the protected data at any
 /// given time. This implementation is designed for WebAssembly runtimes and
 /// transparently adapts to both standard library and `no_std` environments
@@ -53,8 +53,8 @@ pub mod mutex;
 /// # Examples
 ///
 /// ```
-/// use wrt_sync::{prelude::*, WrtOnce};
-/// static SOME_STATIC: WrtOnce<Vec<i32>> = WrtOnce::new();
+/// use kiln_sync::{prelude::*, KilnOnce};
+/// static SOME_STATIC: KilnOnce<Vec<i32>> = KilnOnce::new();
 /// fn main() {
 ///     let data = SOME_STATIC.get_or_init(|| vec![1,2,3];
 ///     assert_eq!(data, &vec![1,2,3];
@@ -62,7 +62,7 @@ pub mod mutex;
 /// ```
 pub mod once;
 
-/// Prelude module for `wrt_sync`.
+/// Prelude module for `kiln_sync`.
 ///
 /// This module re-exports commonly used items for convenience.
 pub mod prelude {
@@ -98,7 +98,7 @@ pub mod prelude {
             },
             Arc,
             // Note: Mutex, RwLock from std::sync are not re-exported here
-            // to avoid conflict with wrt_sync's own types.
+            // to avoid conflict with kiln_sync's own types.
         },
         thread::{
             self,
@@ -114,15 +114,15 @@ pub mod prelude {
 
 /// `ReadWrite` lock implementation for both std and `no_std` environments.
 ///
-/// The `WrtRwLock` allows multiple readers or a single writer at any point in
+/// The `KilnRwLock` allows multiple readers or a single writer at any point in
 /// time. This is useful for data structures that are read frequently but
-/// modified infrequently. Like `WrtMutex`, this implementation is tailored for
+/// modified infrequently. Like `KilnMutex`, this implementation is tailored for
 /// WebAssembly and adjusts its behavior for `std` and `no_std` contexts.
 ///
 /// # Features
 pub mod rwlock;
 
-/// Unified synchronization primitives that integrate with WRT foundation types.
+/// Unified synchronization primitives that integrate with Kiln foundation types.
 ///
 /// This module provides enhanced synchronization primitives that work with:
 /// - ASIL-aware safety contexts
@@ -147,25 +147,25 @@ pub mod verify;
 
 // Re-export types for convenience
 pub use mutex::{
-    WrtMutex,
-    WrtMutexGuard,
+    KilnMutex,
+    KilnMutexGuard,
 };
-pub use once::WrtOnce;
+pub use once::KilnOnce;
 // Publicly exported synchronization primitives when the `std` feature is
 // enabled. These are the parking versions.
 #[cfg(feature = "std")]
 #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 pub use rwlock::parking_impl::{
-    WrtParkingRwLock,
-    WrtParkingRwLockReadGuard,
-    WrtParkingRwLockWriteGuard,
+    KilnParkingRwLock,
+    KilnParkingRwLockReadGuard,
+    KilnParkingRwLockWriteGuard,
 };
 // Re-export the basic (spin-lock) RwLock and its guards.
 // These are always available as they don't depend on std for parking.
 pub use rwlock::{
-    WrtRwLock,
-    WrtRwLockReadGuard,
-    WrtRwLockWriteGuard,
+    KilnRwLock,
+    KilnRwLockReadGuard,
+    KilnRwLockWriteGuard,
 };
 // Re-export unified synchronization primitives
 pub use unified_sync::{
@@ -180,13 +180,13 @@ pub use unified_sync::{
 };
 
 // Convenience aliases for easier importing
-/// Type alias for WrtMutex to provide a familiar interface
-pub type Mutex<T> = WrtMutex<T>;
-/// Type alias for WrtRwLock to provide a familiar interface
-pub type RwLock<T> = WrtRwLock<T>;
+/// Type alias for KilnMutex to provide a familiar interface
+pub type Mutex<T> = KilnMutex<T>;
+/// Type alias for KilnRwLock to provide a familiar interface
+pub type RwLock<T> = KilnRwLock<T>;
 
 // Panic handler disabled to avoid conflicts with other crates
-// The main wrt crate should provide the panic handler
+// The main kiln crate should provide the panic handler
 // #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {

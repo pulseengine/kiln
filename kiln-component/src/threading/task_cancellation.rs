@@ -20,8 +20,8 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{Error, ErrorCategory, Result};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_foundation::{
     bounded::{BoundedString, BoundedVec},
     budget_aware_provider::CrateId,
     prelude::*,
@@ -484,7 +484,7 @@ impl SubtaskManager {
         self.subtasks.push(entry).map_err(|_| {
             Error::new(
                 ErrorCategory::Resource,
-                wrt_error::codes::RESOURCE_EXHAUSTED,
+                kiln_error::codes::RESOURCE_EXHAUSTED,
                 "Resource exhausted error",
             )
         })?;
@@ -650,7 +650,7 @@ impl SubtaskManager {
             .ok_or_else(|| {
                 Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::EXECUTION_ERROR,
+                    kiln_error::codes::EXECUTION_ERROR,
                     "Execution error occurred",
                 )
             })

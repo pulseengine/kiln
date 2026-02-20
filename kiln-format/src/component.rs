@@ -22,10 +22,10 @@ macro_rules! validation_error {
     };
 }
 
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 // Binary std/no_std choice
 #[cfg(feature = "std")]
-pub use wrt_foundation::component_value::ValType;
+pub use kiln_foundation::component_value::ValType;
 
 // Provide a simple stub for ValType in no_std mode
 #[cfg(not(feature = "std"))]
@@ -46,8 +46,8 @@ pub enum ValType {
     String,
 }
 #[cfg(not(any(feature = "std")))]
-use wrt_foundation::NoStdProvider;
-pub use wrt_foundation::resource::{
+use kiln_foundation::NoStdProvider;
+pub use kiln_foundation::resource::{
     ResourceDrop, ResourceNew, ResourceRep, ResourceRepresentation,
 };
 
@@ -137,9 +137,9 @@ impl Component {
     /// Helper to create a new ComponentVec for no_std
     #[cfg(not(any(feature = "std")))]
     fn new_vec<T>() -> ComponentVec<T> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Format
+            kiln_foundation::budget_aware_provider::CrateId::Format
         )
         .unwrap_or_else(|_| panic!("Failed to allocate memory provider"));
         WasmVec::new(provider).unwrap_or_else(|_| panic!("Failed to create WasmVec"))
@@ -578,7 +578,7 @@ pub type TypeRef = u32;
 /// Binary std/no_std choice
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone)]
-pub struct TypeRegistry<P: wrt_foundation::MemoryProvider = NoStdProvider<1024>> {
+pub struct TypeRegistry<P: kiln_foundation::MemoryProvider = NoStdProvider<1024>> {
     /// Type definitions stored in a bounded vector
     types: WasmVec<FormatValType<P>, P>,
     /// Next available type reference
@@ -586,9 +586,9 @@ pub struct TypeRegistry<P: wrt_foundation::MemoryProvider = NoStdProvider<1024>>
 }
 
 #[cfg(not(any(feature = "std")))]
-impl<P: wrt_foundation::MemoryProvider + Clone + Default> TypeRegistry<P> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default> TypeRegistry<P> {
     /// Create a new type registry
-    pub fn new() -> Result<Self, wrt_foundation::bounded::CapacityError> {
+    pub fn new() -> Result<Self, kiln_foundation::bounded::CapacityError> {
         Ok(Self {
             types: WasmVec::new(P::default())?,
             next_ref: 0,
@@ -599,7 +599,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default> TypeRegistry<P> {
     pub fn add_type(
         &mut self,
         val_type: FormatValType<P>,
-    ) -> Result<TypeRef, wrt_foundation::bounded::CapacityError> {
+    ) -> Result<TypeRef, kiln_foundation::bounded::CapacityError> {
         let type_ref = self.next_ref;
         self.types.push(val_type)?;
         self.next_ref += 1;
@@ -620,7 +620,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default> TypeRegistry<P> {
 /// Component Model value types - Pure No_std Version
 #[cfg(not(any(feature = "std")))]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FormatValType<P: wrt_foundation::MemoryProvider = NoStdProvider<1024>> {
+pub enum FormatValType<P: kiln_foundation::MemoryProvider = NoStdProvider<1024>> {
     /// Boolean type
     Bool,
     /// 8-bit signed integer

@@ -32,11 +32,11 @@ use alloc::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use alloc::{boxed::Box, vec::Vec};
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 #[cfg(not(feature = "std"))]
-use wrt_format::binary::{read_leb128_u32, read_string};
+use kiln_format::binary::{read_leb128_u32, read_string};
 #[cfg(feature = "std")]
-use wrt_format::{
+use kiln_format::{
     binary::{read_leb128_u32, read_string},
     component,
 };
@@ -48,8 +48,8 @@ use crate::prelude::{DecoderStringExt, DecoderVecExt, *};
 mod placeholder_types {
     use core::fmt;
 
-    use wrt_error::{Error, ErrorCategory, Result, codes};
-    use wrt_foundation::traits::BoundedCapacity;
+    use kiln_error::{Error, ErrorCategory, Result, codes};
+    use kiln_foundation::traits::BoundedCapacity;
 
     use crate::prelude::DecoderVec;
 
@@ -153,31 +153,31 @@ mod placeholder_types {
         Borrow(u32),
     }
 
-    impl wrt_format::Validatable for ComponentType {
+    impl kiln_format::Validatable for ComponentType {
         fn validate(&self) -> Result<()> {
             Ok(())
         }
     }
 
-    // Conversion function from wrt_format types to placeholder types
+    // Conversion function from kiln_format types to placeholder types
     #[cfg(feature = "std")]
-    impl From<wrt_format::component::FormatValType> for FormatValType {
-        fn from(val: wrt_format::component::FormatValType) -> Self {
-            use wrt_format::component::FormatValType as WrtFormat;
+    impl From<kiln_format::component::FormatValType> for FormatValType {
+        fn from(val: kiln_format::component::FormatValType) -> Self {
+            use kiln_format::component::FormatValType as KilnFormat;
             match val {
-                WrtFormat::Bool => FormatValType::Bool,
-                WrtFormat::S8 => FormatValType::S8,
-                WrtFormat::U8 => FormatValType::U8,
-                WrtFormat::S16 => FormatValType::S16,
-                WrtFormat::U16 => FormatValType::U16,
-                WrtFormat::S32 => FormatValType::S32,
-                WrtFormat::U32 => FormatValType::U32,
-                WrtFormat::S64 => FormatValType::S64,
-                WrtFormat::U64 => FormatValType::U64,
-                WrtFormat::F32 => FormatValType::F32,
-                WrtFormat::F64 => FormatValType::F64,
-                WrtFormat::Char => FormatValType::Char,
-                WrtFormat::String => FormatValType::String,
+                KilnFormat::Bool => FormatValType::Bool,
+                KilnFormat::S8 => FormatValType::S8,
+                KilnFormat::U8 => FormatValType::U8,
+                KilnFormat::S16 => FormatValType::S16,
+                KilnFormat::U16 => FormatValType::U16,
+                KilnFormat::S32 => FormatValType::S32,
+                KilnFormat::U32 => FormatValType::U32,
+                KilnFormat::S64 => FormatValType::S64,
+                KilnFormat::U64 => FormatValType::U64,
+                KilnFormat::F32 => FormatValType::F32,
+                KilnFormat::F64 => FormatValType::F64,
+                KilnFormat::Char => FormatValType::Char,
+                KilnFormat::String => FormatValType::String,
                 // For complex types, use placeholders for now
                 _ => FormatValType::Bool, // Placeholder
             }
@@ -185,10 +185,10 @@ mod placeholder_types {
     }
 
     // Implement required traits for BoundedVec compatibility
-    use wrt_foundation::traits::{Checksummable, FromBytes, ToBytes};
+    use kiln_foundation::traits::{Checksummable, FromBytes, ToBytes};
 
     impl Checksummable for ComponentType {
-        fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+        fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
             checksum.update_slice(&[0]); // Placeholder implementation
         }
     }
@@ -198,27 +198,27 @@ mod placeholder_types {
             0 // Placeholder implementation
         }
 
-        fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+        fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
             &self,
-            _writer: &mut wrt_foundation::traits::WriteStream<'_>,
+            _writer: &mut kiln_foundation::traits::WriteStream<'_>,
             _provider: &P,
-        ) -> wrt_error::Result<()> {
+        ) -> kiln_error::Result<()> {
             Ok(()) // Placeholder implementation
         }
     }
 
     impl FromBytes for ComponentType {
-        fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-            _reader: &mut wrt_foundation::traits::ReadStream<'_>,
+        fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+            _reader: &mut kiln_foundation::traits::ReadStream<'_>,
             _provider: &P,
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             Ok(Self::default()) // Placeholder implementation
         }
     }
 
     // Implement required traits for FormatValType
     impl Checksummable for FormatValType {
-        fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+        fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
             checksum.update_slice(&[0]); // Placeholder implementation
         }
     }
@@ -228,27 +228,27 @@ mod placeholder_types {
             0 // Placeholder implementation
         }
 
-        fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+        fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
             &self,
-            _writer: &mut wrt_foundation::traits::WriteStream<'_>,
+            _writer: &mut kiln_foundation::traits::WriteStream<'_>,
             _provider: &P,
-        ) -> wrt_error::Result<()> {
+        ) -> kiln_error::Result<()> {
             Ok(()) // Placeholder implementation
         }
     }
 
     impl FromBytes for FormatValType {
-        fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-            _reader: &mut wrt_foundation::traits::ReadStream<'_>,
+        fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+            _reader: &mut kiln_foundation::traits::ReadStream<'_>,
             _provider: &P,
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             Ok(Self::default()) // Placeholder implementation
         }
     }
 
     // Implement required traits for ComponentImport
     impl Checksummable for ComponentImport {
-        fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+        fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
             self.namespace.update_checksum(checksum);
             self.name.update_checksum(checksum);
             self.extern_type.update_checksum(checksum);
@@ -262,11 +262,11 @@ mod placeholder_types {
                 + self.extern_type.serialized_size()
         }
 
-        fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+        fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
             &self,
-            writer: &mut wrt_foundation::traits::WriteStream<'a>,
+            writer: &mut kiln_foundation::traits::WriteStream<'a>,
             provider: &P,
-        ) -> wrt_error::Result<()> {
+        ) -> kiln_error::Result<()> {
             self.namespace.to_bytes_with_provider(writer, provider)?;
             self.name.to_bytes_with_provider(writer, provider)?;
             self.extern_type.to_bytes_with_provider(writer, provider)?;
@@ -275,10 +275,10 @@ mod placeholder_types {
     }
 
     impl FromBytes for ComponentImport {
-        fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-            reader: &mut wrt_foundation::traits::ReadStream<'a>,
+        fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+            reader: &mut kiln_foundation::traits::ReadStream<'a>,
             provider: &P,
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             Ok(Self {
                 namespace: {
                     <crate::prelude::DecoderString as crate::prelude::DecoderStringExt>::from_bytes_with_provider(reader, provider)?
@@ -293,7 +293,7 @@ mod placeholder_types {
 
     // Implement required traits for ComponentExport
     impl Checksummable for ComponentExport {
-        fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+        fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
             self.name.update_checksum(checksum);
             self.extern_type.update_checksum(checksum);
         }
@@ -304,11 +304,11 @@ mod placeholder_types {
             self.name.serialized_size() + self.extern_type.serialized_size()
         }
 
-        fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+        fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
             &self,
-            writer: &mut wrt_foundation::traits::WriteStream<'a>,
+            writer: &mut kiln_foundation::traits::WriteStream<'a>,
             provider: &P,
-        ) -> wrt_error::Result<()> {
+        ) -> kiln_error::Result<()> {
             self.name.to_bytes_with_provider(writer, provider)?;
             self.extern_type.to_bytes_with_provider(writer, provider)?;
             Ok(())
@@ -316,10 +316,10 @@ mod placeholder_types {
     }
 
     impl FromBytes for ComponentExport {
-        fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-            reader: &mut wrt_foundation::traits::ReadStream<'a>,
+        fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+            reader: &mut kiln_foundation::traits::ReadStream<'a>,
             provider: &P,
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             Ok(Self {
                 name: {
                     <crate::prelude::DecoderString as crate::prelude::DecoderStringExt>::from_bytes_with_provider(reader, provider)?
@@ -331,7 +331,7 @@ mod placeholder_types {
 
     // Implement required traits for FunctionParam
     impl Checksummable for FunctionParam {
-        fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+        fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
             self.name.update_checksum(checksum);
             self.val_type.update_checksum(checksum);
         }
@@ -342,11 +342,11 @@ mod placeholder_types {
             self.name.serialized_size() + self.val_type.serialized_size()
         }
 
-        fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+        fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
             &self,
-            writer: &mut wrt_foundation::traits::WriteStream<'a>,
+            writer: &mut kiln_foundation::traits::WriteStream<'a>,
             provider: &P,
-        ) -> wrt_error::Result<()> {
+        ) -> kiln_error::Result<()> {
             self.name.to_bytes_with_provider(writer, provider)?;
             self.val_type.to_bytes_with_provider(writer, provider)?;
             Ok(())
@@ -354,10 +354,10 @@ mod placeholder_types {
     }
 
     impl FromBytes for FunctionParam {
-        fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-            reader: &mut wrt_foundation::traits::ReadStream<'a>,
+        fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+            reader: &mut kiln_foundation::traits::ReadStream<'a>,
             provider: &P,
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             Ok(Self {
                 name: {
                     <crate::prelude::DecoderString as crate::prelude::DecoderStringExt>::from_bytes_with_provider(reader, provider)?
@@ -369,7 +369,7 @@ mod placeholder_types {
 
     // Implement required traits for ExternType
     impl Checksummable for ExternType {
-        fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+        fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
             match self {
                 ExternType::Function { params, results } => {
                     checksum.update(0u8); // Tag for Function
@@ -426,11 +426,11 @@ mod placeholder_types {
             }
         }
 
-        fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+        fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
             &self,
-            writer: &mut wrt_foundation::traits::WriteStream<'a>,
+            writer: &mut kiln_foundation::traits::WriteStream<'a>,
             provider: &P,
-        ) -> wrt_error::Result<()> {
+        ) -> kiln_error::Result<()> {
             match self {
                 ExternType::Function { params, results } => {
                     writer.write_u8(0)?; // Tag
@@ -471,10 +471,10 @@ mod placeholder_types {
     }
 
     impl FromBytes for ExternType {
-        fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-            reader: &mut wrt_foundation::traits::ReadStream<'a>,
+        fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+            reader: &mut kiln_foundation::traits::ReadStream<'a>,
             provider: &P,
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             let tag = reader.read_u8()?;
             match tag {
                 0 => Ok(ExternType::Function {
@@ -542,7 +542,7 @@ mod placeholder_types {
 use placeholder_types::{ComponentExport, ComponentImport, FunctionParam};
 #[cfg(not(feature = "std"))]
 use placeholder_types::{ComponentType, ComponentTypeDefinition, ExternType, FormatValType};
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec, VerificationLevel,
     budget_aware_provider::CrateId,
     safe_memory::{NoStdMemoryProvider, NoStdProvider},
@@ -560,9 +560,9 @@ use crate::bounded_decoder_infra::{
 const MAX_TYPES_PER_COMPONENT: usize = 1024;
 
 #[cfg(feature = "std")]
-fn create_decoder_provider<const N: usize>() -> wrt_error::Result<wrt_foundation::NoStdProvider<N>>
+fn create_decoder_provider<const N: usize>() -> kiln_error::Result<kiln_foundation::NoStdProvider<N>>
 {
-    Ok(wrt_foundation::NoStdProvider::default())
+    Ok(kiln_foundation::NoStdProvider::default())
 }
 
 #[cfg(feature = "std")]
@@ -686,7 +686,7 @@ impl<'a> StreamingTypeParser<'a> {
         // For no_std mode, use StaticVec
         #[cfg(not(feature = "std"))]
         {
-            use wrt_foundation::collections::StaticVec;
+            use kiln_foundation::collections::StaticVec;
             Ok(StaticVec::new())
         }
     }
@@ -1126,7 +1126,7 @@ impl<'a> StreamingTypeParser<'a> {
     /// Parse resource representation
     fn parse_resource_representation(
         &mut self,
-    ) -> Result<wrt_foundation::resource::ResourceRepresentation> {
+    ) -> Result<kiln_foundation::resource::ResourceRepresentation> {
         if self.offset >= self.data.len() {
             return Err(Error::parse_error(
                 "Unexpected end while reading resource representation",
@@ -1137,8 +1137,8 @@ impl<'a> StreamingTypeParser<'a> {
         self.offset += 1;
 
         match repr_form {
-            0x00 => Ok(wrt_foundation::resource::ResourceRepresentation::Handle32),
-            0x01 => Ok(wrt_foundation::resource::ResourceRepresentation::Handle64),
+            0x00 => Ok(kiln_foundation::resource::ResourceRepresentation::Handle32),
+            0x01 => Ok(kiln_foundation::resource::ResourceRepresentation::Handle64),
             _ => Err(Error::parse_error("Unknown resource representation")),
         }
     }
@@ -1204,11 +1204,11 @@ impl ComponentTypeSection {
     }
 
     /// Get a type by index (ASIL-safe)
-    pub fn get_type(&self, index: usize) -> wrt_error::Result<ComponentType> {
+    pub fn get_type(&self, index: usize) -> kiln_error::Result<ComponentType> {
         self.types
             .get(index)
             .cloned()
-            .ok_or_else(|| wrt_error::Error::parse_error("Component type index out of bounds"))
+            .ok_or_else(|| kiln_error::Error::parse_error("Component type index out of bounds"))
     }
 
     /// Iterate over all types (ASIL-safe)  
@@ -1224,7 +1224,7 @@ impl ComponentTypeSection {
 
     /// Check if the section is empty
     pub fn is_empty(&self) -> bool {
-        use wrt_foundation::traits::BoundedCapacity;
+        use kiln_foundation::traits::BoundedCapacity;
         self.types.len() == 0
     }
 }

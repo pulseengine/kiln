@@ -1,10 +1,10 @@
 [package]
-name = "wrt-fuzz"
+name = "kiln-fuzz"
 version.workspace = true
 edition.workspace = true
-description = "Consolidated fuzz testing for WRT components"
+description = "Consolidated fuzz testing for Kiln components"
 license.workspace = true
-repository = "https://github.com/pulseengine/wrt"
+repository = "https://github.com/pulseengine/kiln"
 keywords = ["wasm", "webassembly", "fuzz", "testing", "safety-asil-b"]
 categories = ["wasm", "development-tools::testing"]
 
@@ -16,21 +16,17 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 
-# WRT dependencies
-wrt = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false }
-wrt-runtime = { workspace = true, default-features = false }
-wrt-error = { workspace = true, default-features = false }
-wrt-test-registry = { workspace = true, default-features = false }
+# Kiln dependencies
+kiln-foundation = { workspace = true, default-features = false }
+kiln-runtime = { workspace = true, default-features = false }
+kiln-error = { workspace = true, default-features = false }
 
 [features]
 default = ["std"]
 std = [
-    "wrt/std",
-    "wrt-foundation/std",
-    "wrt-runtime/std",
-    "wrt-error/std",
-    "wrt-test-registry/std"]
+    "kiln-foundation/std",
+    "kiln-runtime/std",
+    "kiln-error/std"]
 
 # Fuzz targets
 safety-asil-b = []

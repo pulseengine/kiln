@@ -5,9 +5,9 @@
 //! - Memory operations (size, grow)
 //! - Test operations (i32.eqz, i64.eqz)
 
-use wrt_error::Result;
-use wrt_foundation::Value;
-use wrt_instructions::{
+use kiln_error::Result;
+use kiln_foundation::Value;
+use kiln_instructions::{
     comparison_ops::ComparisonContext,
     parametric_ops::ParametricContext,
     ComparisonOp,
@@ -35,15 +35,15 @@ impl ParametricContext for SimpleContext {
 
     fn pop_value(&mut self) -> Result<Value> {
         self.stack.pop().ok_or_else(|| {
-            wrt_error::Error::runtime_execution_error("Stack underflow")
+            kiln_error::Error::runtime_execution_error("Stack underflow")
         })
     }
 
     fn peek_value(&self) -> Result<&Value> {
         self.stack.last().ok_or_else(|| {
-            wrt_error::Error::new(
-                wrt_error::ErrorCategory::Runtime,
-                wrt_error::codes::STACK_UNDERFLOW,
+            kiln_error::Error::new(
+                kiln_error::ErrorCategory::Runtime,
+                kiln_error::codes::STACK_UNDERFLOW,
                 "Stack underflow",
             )
         })

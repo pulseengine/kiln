@@ -7,7 +7,7 @@ Functional Requirements
    :align: right
    :alt: Functional Requirements Icon
 
-This document defines the functional requirements for PulseEngine (WRT Edition). These requirements specify what the system should do to accomplish its mission.
+This document defines the functional requirements for PulseEngine (Kiln Edition). These requirements specify what the system should do to accomplish its mission.
 
 .. contents:: On this page
    :local:

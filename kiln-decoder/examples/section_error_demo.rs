@@ -4,11 +4,11 @@
 
 // Example demonstrating the enhanced error handling in section_error.rs
 
-use wrt_decoder::section_error::{
+use kiln_decoder::section_error::{
     invalid_magic, invalid_section, invalid_value, malformed_content, missing_section,
     section_size_exceeds_module, unexpected_end, unsupported_version,
 };
-use wrt_format::binary;
+use kiln_format::binary;
 
 fn main() {
     // Demonstrate different error types

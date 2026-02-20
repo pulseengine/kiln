@@ -19,7 +19,7 @@ use core::{
     },
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,

@@ -6,15 +6,15 @@
 
 // alloc is imported in lib.rs with proper feature gates
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     types::FuncType,
     Value,
 };
-use wrt_instructions::control_ops::ControlContext;
+use kiln_instructions::control_ops::ControlContext;
 
 // Type alias for FuncType to match module_instance.rs
 use crate::bounded_runtime_infra::RuntimeProvider;
@@ -26,7 +26,7 @@ use crate::{
         frame::StacklessFrame,
     },
 };
-type WrtFuncType = wrt_foundation::types::FuncType;
+type KilnFuncType = kiln_foundation::types::FuncType;
 
 #[cfg(feature = "std")]
 use alloc::vec::Vec;
@@ -159,8 +159,8 @@ pub mod validation {
     ///    return type
     /// 2. The operand stack has exactly the right number of arguments
     pub fn validate_tail_call(
-        current_func_type: &WrtFuncType,
-        target_func_type: &WrtFuncType,
+        current_func_type: &KilnFuncType,
+        target_func_type: &KilnFuncType,
     ) -> Result<()> {
         // Check return type compatibility
         if current_func_type.results != target_func_type.results {

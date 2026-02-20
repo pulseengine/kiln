@@ -3,12 +3,12 @@
 //! This module implements the runtime behavior for instantiating WebAssembly
 //! components and core modules within components.
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_format::{
+use kiln_format::{
     component::{
         Component,
         CoreInstance,
@@ -22,7 +22,7 @@ use wrt_format::{
 };
 // Always use BoundedMap for HashMap to ensure trait compatibility
 // alloc is imported in lib.rs with proper feature gates
-use wrt_foundation::{
+use kiln_foundation::{
     safe_memory::NoStdProvider,
     BoundedMap,
 };
@@ -36,7 +36,7 @@ use crate::bounded_runtime_infra::{
 type HashMap<K, V> = BoundedMap<K, V, 256, RuntimeProvider>;
 
 // Use BoundedString for component names to ensure trait compatibility
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     BoundedString,
@@ -54,21 +54,21 @@ pub struct InstantiationResult {
 }
 
 
-impl wrt_foundation::traits::Checksummable for InstantiationResult {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for InstantiationResult {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.handle.update_checksum(checksum);
         self.exports.update_checksum(checksum);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for InstantiationResult {
+impl kiln_foundation::traits::ToBytes for InstantiationResult {
     fn serialized_size(&self) -> usize {
         4 + self.exports.serialized_size()
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &PStream,
     ) -> Result<()> {
         writer.write_u32_le(self.handle)?;
@@ -77,9 +77,9 @@ impl wrt_foundation::traits::ToBytes for InstantiationResult {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for InstantiationResult {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for InstantiationResult {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &PStream,
     ) -> Result<Self> {
         let handle = reader.read_u32_le()?;
@@ -113,14 +113,14 @@ impl Default for ExportedItem {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ExportedItem {
+impl kiln_foundation::traits::ToBytes for ExportedItem {
     fn serialized_size(&self) -> usize {
         5 // 1 byte discriminant + 4 bytes u32 value
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         _provider: &PStream,
     ) -> Result<()> {
         // Write discriminant
@@ -151,9 +151,9 @@ impl wrt_foundation::traits::ToBytes for ExportedItem {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ExportedItem {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for ExportedItem {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
     ) -> Result<Self> {
         let discriminant = reader.read_u8()?;
@@ -167,15 +167,15 @@ impl wrt_foundation::traits::FromBytes for ExportedItem {
             4 => Ok(ExportedItem::Function(value)),
             5 => Ok(ExportedItem::Value(value)),
             6 => Ok(ExportedItem::Instance(value)),
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Runtime execution error",
             )),
         }
     }
 }
 
-impl wrt_foundation::traits::Checksummable for ExportedItem {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ExportedItem {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
             ExportedItem::CoreFunction(_) => 0u32,
             ExportedItem::CoreTable(_) => 1u32,
@@ -226,22 +226,22 @@ pub struct CoreModuleInstance {
 }
 
 
-impl wrt_foundation::traits::Checksummable for CoreModuleInstance {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CoreModuleInstance {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.module_idx.update_checksum(checksum);
         self.imports.update_checksum(checksum);
         self.exports.update_checksum(checksum);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for CoreModuleInstance {
+impl kiln_foundation::traits::ToBytes for CoreModuleInstance {
     fn serialized_size(&self) -> usize {
         4 + self.imports.serialized_size() + self.exports.serialized_size()
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &PStream,
     ) -> Result<()> {
         writer.write_u32_le(self.module_idx)?;
@@ -251,9 +251,9 @@ impl wrt_foundation::traits::ToBytes for CoreModuleInstance {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for CoreModuleInstance {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for CoreModuleInstance {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &PStream,
     ) -> Result<Self> {
         let module_idx = reader.read_u32_le()?;
@@ -295,7 +295,7 @@ impl From<LinkingError> for Error {
         match err {
             LinkingError::ImportNotFound { module, name } => Error::new(
                 ErrorCategory::Component,
-                wrt_error::codes::COMPONENT_LINKING_ERROR,
+                kiln_error::codes::COMPONENT_LINKING_ERROR,
                 "Import not found",
             ),
             LinkingError::TypeMismatch { expected, actual } => {
@@ -306,7 +306,7 @@ impl From<LinkingError> for Error {
             },
             LinkingError::InstanceNotFound(idx) => Error::new(
                 ErrorCategory::Component,
-                wrt_error::codes::COMPONENT_LINKING_ERROR,
+                kiln_error::codes::COMPONENT_LINKING_ERROR,
                 "Instance not found",
             ),
         }
@@ -464,7 +464,7 @@ impl CoreModuleInstantiator {
                         _ => {
                             return Err(Error::new(
                                 ErrorCategory::Component,
-                                wrt_error::codes::COMPONENT_LINKING_ERROR,
+                                kiln_error::codes::COMPONENT_LINKING_ERROR,
                                 "Unsupported export sort",
                             ));
                         },

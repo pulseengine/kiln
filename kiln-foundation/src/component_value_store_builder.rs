@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Component Value Store Builder
 //
 // Copyright (c) 2025 Ralf Anton Beier
@@ -13,7 +13,7 @@
 
 use core::fmt::Debug;
 
-use wrt_error::Result;
+use kiln_error::Result;
 
 // Internal imports
 use crate::{
@@ -103,7 +103,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentValueStoreBu
     ///
     /// Returns an error if the component value store cannot be created with the
     /// given provider.
-    pub fn build(self) -> wrt_error::Result<ComponentValueStore<P>> {
+    pub fn build(self) -> kiln_error::Result<ComponentValueStore<P>> {
         // First configure the provider with the specified verification level
         let mut provider = self.provider.clone();
         provider.set_verification_level(self.verification_level);

@@ -17,7 +17,7 @@ impl Namespace {
     /// # Examples
     ///
     /// ```
-    /// use wrt_component::namespace::Namespace;
+    /// use kiln_component::namespace::Namespace;
     ///
     /// let ns = Namespace::from_string("wasi.io";
     /// assert_eq!(ns.to_string(), "wasi.io";

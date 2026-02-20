@@ -6,14 +6,14 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use wrt_component::{
+use kiln_component::{
     ComponentValue,
     resources::{
         BufferPool, HostResource, MemoryManager, MemoryStrategy, ResourceId, ResourceManager,
         ResourceOperation, ResourceStrategy,
     },
 };
-use wrt_error::Error;
+use kiln_error::Error;
 
 /// Test resource ID generation
 #[test]

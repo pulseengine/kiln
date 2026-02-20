@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: StaticQueue - Inline-storage FIFO queue
 // SW-REQ-ID: REQ_RESOURCE_001, REQ_MEM_SAFETY_001, REQ_TEMPORAL_001
 //
@@ -25,7 +25,7 @@
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 
-use wrt_error::Result;
+use kiln_error::Result;
 
 /// A FIFO queue with compile-time capacity and inline storage.
 ///
@@ -46,7 +46,7 @@ use wrt_error::Result;
 /// # Examples
 ///
 /// ```
-/// use wrt_foundation::collections::StaticQueue;
+/// use kiln_foundation::collections::StaticQueue;
 ///
 /// let mut queue = StaticQueue::<u32, 10>::new();
 /// queue.push(1)?;
@@ -56,7 +56,7 @@ use wrt_error::Result;
 /// assert_eq!(queue.pop(), Some(1));
 /// assert_eq!(queue.pop(), Some(2));
 /// assert_eq!(queue.len(), 1);
-/// # Ok::<(), wrt_error::Error>(())
+/// # Ok::<(), kiln_error::Error>(())
 /// ```
 #[derive(Debug)]
 pub struct StaticQueue<T, const N: usize> {
@@ -108,19 +108,19 @@ impl<T, const N: usize> StaticQueue<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticQueue;
+    /// use kiln_foundation::collections::StaticQueue;
     ///
     /// let mut queue = StaticQueue::<u32, 3>::new();
     /// queue.push(1)?;
     /// queue.push(2)?;
     /// queue.push(3)?;
     /// assert!(queue.push(4).is_err()); // Full
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     pub fn push(&mut self, value: T) -> Result<()> {
         if self.len >= N {
-            return Err(wrt_error::Error::foundation_bounded_capacity_exceeded(
+            return Err(kiln_error::Error::foundation_bounded_capacity_exceeded(
                 "StaticQueue capacity exceeded",
             ));
         }
@@ -144,7 +144,7 @@ impl<T, const N: usize> StaticQueue<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticQueue;
+    /// use kiln_foundation::collections::StaticQueue;
     ///
     /// let mut queue = StaticQueue::<u32, 10>::new();
     /// queue.push(1)?;
@@ -153,7 +153,7 @@ impl<T, const N: usize> StaticQueue<T, N> {
     /// assert_eq!(queue.pop(), Some(1));
     /// assert_eq!(queue.pop(), Some(2));
     /// assert_eq!(queue.pop(), None);
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     pub fn pop(&mut self) -> Option<T> {
@@ -301,7 +301,7 @@ impl<T: crate::traits::ToBytes, const N: usize> crate::traits::ToBytes for Stati
         &self,
         writer: &mut crate::traits::WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write length
         self.len().to_bytes_with_provider(writer, provider)?;
         // Write each item in FIFO order
@@ -317,7 +317,7 @@ impl<T: crate::traits::FromBytes, const N: usize> crate::traits::FromBytes for S
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut crate::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read length
         let len = usize::from_bytes_with_provider(reader, provider)?;
 

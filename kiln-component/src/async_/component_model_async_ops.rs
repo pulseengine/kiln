@@ -8,12 +8,12 @@ use core::{
     time::Duration,
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     Arc, CrateId,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     safe_managed_alloc,
 };
-use wrt_sync::Mutex;
+use kiln_sync::Mutex;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::{TaskId, TaskManager};

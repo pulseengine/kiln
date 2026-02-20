@@ -1,16 +1,16 @@
 =======================================
-PulseEngine (WRT Edition) Documentation
+PulseEngine (Kiln Edition) Documentation
 =======================================
 
 .. raw:: html
 
    <div class="landing-header">
-      <img src="_static/icons/logo.svg" alt="WRT Logo" class="landing-logo">
+      <img src="_static/icons/logo.svg" alt="Kiln Logo" class="landing-logo">
       <p class="landing-subtitle">Safety-critical WebAssembly infrastructure for embedded systems</p>
    </div>
 
 .. warning::
-   This documentation is for PulseEngine (WRT Edition) version |version|. For other versions, use the version switcher in the navigation bar.
+   This documentation is for PulseEngine (Kiln Edition) version |version|. For other versions, use the version switcher in the navigation bar.
 
 .. note::
    **Development Status**: PulseEngine provides foundational WebAssembly infrastructure. The instruction execution engine and component model are under active development.
@@ -64,19 +64,19 @@ API Reference
    :gutter: 3
 
    .. grid-item-card:: Core Runtime API
-      :link: wrt-runtime/lib
+      :link: kiln-runtime/lib
       :link-type: doc
 
       Core runtime components and interfaces
 
    .. grid-item-card:: Component Model API
-      :link: wrt-component/lib
+      :link: kiln-component/lib
       :link-type: doc
 
       Component model implementation
 
    .. grid-item-card:: Host Integration API
-      :link: wrt-host/lib
+      :link: kiln-host/lib
       :link-type: doc
 
       Host function bindings and callbacks
@@ -157,7 +157,7 @@ Developer Documentation
       :link: developer/tooling/index
       :link-type: doc
 
-      cargo-wrt unified build tool, development workflows, and safety verification
+      cargo-kiln unified build tool, development workflows, and safety verification
 
 Reference Documentation
 -----------------------
@@ -199,11 +199,11 @@ Reference Documentation
    :hidden:
    :caption: API Reference
 
-   wrt-runtime/lib
-   wrt-component/lib
-   wrt-host/lib
-   wrt-instructions/lib
-   wrt-logging/lib
+   kiln-runtime/lib
+   kiln-component/lib
+   kiln-host/lib
+   kiln-instructions/lib
+   kiln-logging/lib
    api/index
 
 .. toctree::

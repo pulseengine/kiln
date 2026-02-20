@@ -1,5 +1,5 @@
 [package]
-name = "wrt-tests"
+name = "kiln-tests"
 version = "0.2.0"
 edition = "2021"
 
@@ -13,21 +13,21 @@ safety-asil-d = ["safety-asil-c"]
 
 
 [lib]
-name = "wrt_tests"
+name = "kiln_tests"
 path = "integration/lib.rs"
 
 [dependencies]
-# Core WRT dependencies for testing
-wrt-component = { path = "../wrt-component", features = ["std"] }
-wrt-decoder = { path = "../wrt-decoder", features = ["std"] }
-wrt-format = { path = "../wrt-format", features = ["std"] }
-wrt-foundation = { path = "../wrt-foundation", features = ["std"] }
-wrt-host = { path = "../wrt-host", features = ["std"] }
-wrt-instructions = { path = "../wrt-instructions", features = ["std"] }
-wrt-platform = { path = "../wrt-platform", features = ["std"] }
-wrt-runtime = { path = "../wrt-runtime", features = ["std"] }
-wrt-sync = { path = "../wrt-sync", features = ["std"] }
-wrt-test-registry = { path = "../wrt-test-registry", features = ["std"] }
+# Core Kiln dependencies for testing
+kiln-component = { path = "../kiln-component", features = ["std"] }
+kiln-decoder = { path = "../kiln-decoder", features = ["std"] }
+kiln-format = { path = "../kiln-format", features = ["std"] }
+kiln-foundation = { path = "../kiln-foundation", features = ["std"] }
+kiln-host = { path = "../kiln-host", features = ["std"] }
+kiln-instructions = { path = "../kiln-instructions", features = ["std"] }
+kiln-platform = { path = "../kiln-platform", features = ["std"] }
+kiln-runtime = { path = "../kiln-runtime", features = ["std"] }
+kiln-sync = { path = "../kiln-sync", features = ["std"] }
+kiln-test-registry = { path = "../kiln-test-registry", features = ["std"] }
 
 # Testing utilities
 criterion = { version = "0.5", features = ["html_reports"] }

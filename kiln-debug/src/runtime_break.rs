@@ -1,7 +1,7 @@
 #![cfg(feature = "runtime-breakpoints")]
 
-use wrt_error::Error;
-use wrt_foundation::{
+use kiln_error::Error;
+use kiln_foundation::{
     bounded::{BoundedVec, MAX_DWARF_FILE_TABLE},
     budget_aware_provider::CrateId,
     safe_managed_alloc,

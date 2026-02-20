@@ -5,9 +5,9 @@ Product Overview
 .. image:: ../_static/icons/logo.svg
    :width: 120px
    :align: right
-   :alt: WRT Logo
+   :alt: Kiln Logo
 
-Welcome to the PulseEngine (WRT Edition) documentation. This section provides an overview of the product, its features, and architecture.
+Welcome to the PulseEngine (Kiln Edition) documentation. This section provides an overview of the product, its features, and architecture.
 
 .. contents:: On this page
    :local:
@@ -16,9 +16,9 @@ Welcome to the PulseEngine (WRT Edition) documentation. This section provides an
 Introduction
 ------------
 
-**PulseEngine (WRT Edition): Safety-Critical WebAssembly Infrastructure**
+**PulseEngine (Kiln Edition): Safety-Critical WebAssembly Infrastructure**
 
-PulseEngine (WRT Edition) is a pure Rust implementation of WebAssembly infrastructure designed for safety-critical systems. It provides the foundational components for WebAssembly execution in environments where deterministic behavior, memory safety, and formal verification are essential, including IoT, medical devices, automotive, and avionics applications.
+PulseEngine (Kiln Edition) is a pure Rust implementation of WebAssembly infrastructure designed for safety-critical systems. It provides the foundational components for WebAssembly execution in environments where deterministic behavior, memory safety, and formal verification are essential, including IoT, medical devices, automotive, and avionics applications.
 
 Key Capabilities
 ----------------

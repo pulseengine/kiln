@@ -2,14 +2,14 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Integration tests for wrt-error with the main wrt crate.
+//! Integration tests for kiln-error with the main kiln crate.
 extern crate alloc;
 
-// Tests the integration of wrt-error with the main wrt crate.
+// Tests the integration of kiln-error with the main kiln crate.
 //
 // This file tests the error handling functionality in the context of how it
 // would be used
-// in the main wrt crate.
+// in the main kiln crate.
 
 #[cfg(test)]
 #[allow(
@@ -19,11 +19,11 @@ extern crate alloc;
     clippy::uninlined_format_args
 )]
 mod tests {
-    use wrt_error::{Error, Result};
+    use kiln_error::{Error, Result};
 
     // Binary std/no_std choice
     // Binary std/no_std choice
-    // The `Display` trait on `wrt_error::Error` handles this internally.
+    // The `Display` trait on `kiln_error::Error` handles this internally.
 
     #[test]
     fn test_result_operations() {
@@ -41,7 +41,7 @@ mod tests {
 
     #[cfg(feature = "std")]
     mod std_alloc_tests {
-        use wrt_error::{Error, kinds};
+        use kiln_error::{Error, kinds};
         // Re-import necessary items if not directly available or for clarity
         // use crate::Error; // Assuming Error is pub from lib.rs
 

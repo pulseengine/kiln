@@ -1,7 +1,7 @@
 Requirements
 ============
 
-This section contains the requirements for the WRT project.
+This section contains the requirements for the Kiln project.
 
 Functional Requirements
 -----------------------
@@ -105,10 +105,10 @@ Low-Level Functional Requirements
    :id: REQ_HELPER_ABI_001
    :status: new
 
-   The AOT helper runtime (`libwrt_helper`) shall export a stable C ABI including 
+   The AOT helper runtime (`libkiln_helper`) shall export a stable C ABI including 
    functions for Wasm operations not efficiently inlined by the AOT compiler. 
-   This shall include `wrt_memory_copy`, `wrt_memory_fill`, `wrt_memory_grow`, 
-   `wrt_atomic_wait`, and `wrt_atomic_notify`.
+   This shall include `kiln_memory_copy`, `kiln_memory_fill`, `kiln_memory_grow`, 
+   `kiln_atomic_wait`, and `kiln_atomic_notify`.
 
 .. req:: Stackless Implementation
    :id: REQ_LFUNC_005
@@ -194,7 +194,7 @@ Low-Level Functional Requirements
    :status: planned
    :links: REQ_OBS_012, REQ_OBS_013
 
-   To enhance certifiability and maintainability, the WRT interpreter codebase shall strive for simplicity, minimize the use of complex language features (e.g., procedural macros), and restrict external dependencies to those strictly necessary for core functionality or explicitly required features (like logging or `no_std` math).
+   To enhance certifiability and maintainability, the Kiln interpreter codebase shall strive for simplicity, minimize the use of complex language features (e.g., procedural macros), and restrict external dependencies to those strictly necessary for core functionality or explicitly required features (like logging or `no_std` math).
 
 Dependency Requirements
 -----------------------
@@ -291,10 +291,10 @@ Advanced Runtime Requirements
    :id: REQ_FUNC_033
    :status: implemented
    
-   The interpreter shall support multiple runtime deployment modes through the wrtd daemon:
-   - Standard mode (wrtd-std) with full standard library support
-   - Allocation mode (wrtd-alloc) for embedded systems with heap
-   - No-std mode (wrtd-nostd) for pure bare-metal deployment
+   The interpreter shall support multiple runtime deployment modes through the kilnd daemon:
+   - Standard mode (kilnd-std) with full standard library support
+   - Allocation mode (kilnd-alloc) for embedded systems with heap
+   - No-std mode (kilnd-nostd) for pure bare-metal deployment
    - Each mode with appropriate resource limits and safety constraints
 
 .. req:: Hardware Optimization Support

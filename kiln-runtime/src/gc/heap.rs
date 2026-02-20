@@ -3,8 +3,8 @@
 //! Provides a capability-based managed heap for garbage-collected objects.
 //! Designed for no_std compatibility with fixed-size allocation.
 
-use wrt_error::{Error, Result};
-use wrt_foundation::{
+use kiln_error::{Error, Result};
+use kiln_foundation::{
     bounded::BoundedVec,
     safe_memory::NoStdProvider,
 };

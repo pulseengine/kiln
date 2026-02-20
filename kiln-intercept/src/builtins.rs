@@ -7,14 +7,14 @@
 use std::sync::Arc;
 
 #[cfg(feature = "std")]
-use wrt_foundation::component_value::{
+use kiln_foundation::component_value::{
     ComponentValue,
     ValType,
 };
 #[cfg(feature = "std")]
-use wrt_foundation::values::Value;
+use kiln_foundation::values::Value;
 #[allow(unused_imports)] // Used in feature-gated code
-use wrt_error::Error;
+use kiln_error::Error;
 
 use crate::prelude::{
     str,
@@ -118,8 +118,8 @@ impl BuiltinSerialization {
     /// - Serialization of any value fails
     /// - Unsupported value type is encountered
     pub fn serialize(
-        values: &[ComponentValue<wrt_foundation::NoStdProvider<64>>],
-    ) -> wrt_error::Result<Vec<u8>> {
+        values: &[ComponentValue<kiln_foundation::NoStdProvider<64>>],
+    ) -> kiln_error::Result<Vec<u8>> {
         // Simple implementation for now - convert to bytes
         let mut result = Vec::new();
         for value in values {
@@ -158,8 +158,8 @@ impl BuiltinSerialization {
     /// - Deserialization of any value fails
     pub fn deserialize(
         bytes: &[u8],
-        types: &[ValType<wrt_foundation::NoStdProvider<64>>],
-    ) -> wrt_error::Result<Vec<ComponentValue<wrt_foundation::NoStdProvider<64>>>> {
+        types: &[ValType<kiln_foundation::NoStdProvider<64>>],
+    ) -> kiln_error::Result<Vec<ComponentValue<kiln_foundation::NoStdProvider<64>>>> {
         let mut result = Vec::new();
         let mut offset = 0;
 
@@ -168,8 +168,8 @@ impl BuiltinSerialization {
                 ValType::S32 => {
                     if offset + 4 > bytes.len() {
                         return Err(Error::new(
-                            wrt_error::ErrorCategory::Parse,
-                            wrt_error::codes::PARSE_ERROR,
+                            kiln_error::ErrorCategory::Parse,
+                            kiln_error::codes::PARSE_ERROR,
                             "insufficient bytes for S32 deserialization",
                         ));
                     }
@@ -192,14 +192,14 @@ impl BuiltinSerialization {
                 ValType::F32 => {
                     if offset + 4 > bytes.len() {
                         return Err(Error::new(
-                            wrt_error::ErrorCategory::Parse,
-                            wrt_error::codes::PARSE_ERROR,
+                            kiln_error::ErrorCategory::Parse,
+                            kiln_error::codes::PARSE_ERROR,
                             "insufficient bytes for F32 deserialization",
                         ));
                     }
                     let mut buf = [0u8; 4];
                     buf.copy_from_slice(&bytes[offset..offset + 4]);
-                    result.push(ComponentValue::F32(wrt_foundation::FloatBits32(
+                    result.push(ComponentValue::F32(kiln_foundation::FloatBits32(
                         f32::from_le_bytes(buf).to_bits(),
                     )));
                     offset += 4;
@@ -212,15 +212,15 @@ impl BuiltinSerialization {
                     }
                     let mut buf = [0u8; 8];
                     buf.copy_from_slice(&bytes[offset..offset + 8]);
-                    result.push(ComponentValue::F64(wrt_foundation::FloatBits64(
+                    result.push(ComponentValue::F64(kiln_foundation::FloatBits64(
                         f64::from_le_bytes(buf).to_bits(),
                     )));
                     offset += 8;
                 },
                 _ => {
                     return Err(Error::new(
-                        wrt_error::ErrorCategory::Type,
-                        wrt_error::codes::INVALID_TYPE,
+                        kiln_error::ErrorCategory::Type,
+                        kiln_error::codes::INVALID_TYPE,
                         "unsupported value type for deserialization",
                     ))
                 },
@@ -272,8 +272,8 @@ impl BuiltinSerialization {
     // },
     // None => {
     // return Err(Error::new(
-    // wrt_error::ErrorCategory::Type,
-    // wrt_error::codes::INVALID_TYPE,
+    // kiln_error::ErrorCategory::Type,
+    // kiln_error::codes::INVALID_TYPE,
     // "missing type information for argument"))
     // }
     // }
@@ -315,8 +315,8 @@ pub trait BuiltinInterceptor: Send + Sync {
     fn before_builtin(
         &self,
         context: &InterceptContext,
-        args: &[ComponentValue<wrt_foundation::NoStdProvider<64>>],
-    ) -> wrt_error::Result<BeforeBuiltinResult>;
+        args: &[ComponentValue<kiln_foundation::NoStdProvider<64>>],
+    ) -> kiln_error::Result<BeforeBuiltinResult>;
 
     /// Called after a built-in function has been invoked
     ///
@@ -336,9 +336,9 @@ pub trait BuiltinInterceptor: Send + Sync {
     fn after_builtin(
         &self,
         context: &InterceptContext,
-        args: &[ComponentValue<wrt_foundation::NoStdProvider<64>>],
-        result: wrt_error::Result<Vec<ComponentValue<wrt_foundation::NoStdProvider<64>>>>,
-    ) -> wrt_error::Result<Vec<ComponentValue<wrt_foundation::NoStdProvider<64>>>>;
+        args: &[ComponentValue<kiln_foundation::NoStdProvider<64>>],
+        result: kiln_error::Result<Vec<ComponentValue<kiln_foundation::NoStdProvider<64>>>>,
+    ) -> kiln_error::Result<Vec<ComponentValue<kiln_foundation::NoStdProvider<64>>>>;
 
     /// Clone this interceptor
     ///
@@ -352,9 +352,9 @@ pub trait BuiltinInterceptor: Send + Sync {
 #[cfg(feature = "std")]
 pub enum BeforeBuiltinResult {
     /// Continue with the built-in execution using the provided arguments
-    Continue(Vec<ComponentValue<wrt_foundation::NoStdProvider<64>>>),
+    Continue(Vec<ComponentValue<kiln_foundation::NoStdProvider<64>>>),
     /// Skip the built-in execution and use these values as the result
-    Bypass(Vec<ComponentValue<wrt_foundation::NoStdProvider<64>>>),
+    Bypass(Vec<ComponentValue<kiln_foundation::NoStdProvider<64>>>),
 }
 
 /// Result of the `before_builtin` method (`no_std` version)
@@ -394,8 +394,8 @@ mod tests {
         let values = vec![
             ComponentValue::S32(123),
             ComponentValue::S64(456),
-            ComponentValue::F32(wrt_foundation::FloatBits32::from_float(1.23)),
-            ComponentValue::F64(wrt_foundation::FloatBits64::from_float(4.56)),
+            ComponentValue::F32(kiln_foundation::FloatBits32::from_float(1.23)),
+            ComponentValue::F64(kiln_foundation::FloatBits64::from_float(4.56)),
         ];
 
         let serialized_bytes = BuiltinSerialization::serialize(&values).unwrap();

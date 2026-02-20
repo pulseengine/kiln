@@ -2,7 +2,7 @@
 WAST Testing Quick Reference
 ===========================
 
-This is a quick reference guide for using the WRT WAST test infrastructure.
+This is a quick reference guide for using the Kiln WAST test infrastructure.
 
 .. contents:: Quick Navigation
    :local:
@@ -17,21 +17,21 @@ Basic Usage
 .. code-block:: bash
 
    # Run WAST tests
-   cargo test -p wrt wast_tests_new
+   cargo test -p kiln wast_tests_new
    
    # Run with external testsuite
    export WASM_TESTSUITE=/path/to/testsuite
-   cargo test -p wrt test_wast_files
+   cargo test -p kiln test_wast_files
    
    # Run example tests
-   cargo test -p wrt wast_integration_examples
+   cargo test -p kiln wast_integration_examples
 
 Programmatic Usage
 ------------------
 
 .. code-block:: rust
 
-   use wrt::tests::wast_test_runner::WastTestRunner;
+   use kiln::tests::wast_test_runner::WastTestRunner;
    
    let mut runner = WastTestRunner::new();
    let stats = runner.run_wast_content(wast_content)?;
@@ -199,7 +199,7 @@ Debug Output
    RUST_LOG=debug cargo test wast_tests_new -- --nocapture
    
    # Run single test
-   cargo test -p wrt example_basic_wast_execution -- --nocapture
+   cargo test -p kiln example_basic_wast_execution -- --nocapture
 
 Test Analysis
 -------------
@@ -301,7 +301,7 @@ Test Registry Integration
 
 .. code-block:: rust
 
-   use wrt_test_registry::TestRegistry;
+   use kiln_test_registry::TestRegistry;
    
    // Register WAST tests
    wast_test_runner::register_wast_tests();
@@ -315,7 +315,7 @@ Custom Test Suite
 
 .. code-block:: rust
 
-   use wrt_test_registry::TestSuite;
+   use kiln_test_registry::TestSuite;
    
    let mut suite = TestSuite::new("Custom WAST");
    suite.add_test("arithmetic", || {
@@ -354,5 +354,5 @@ Links
 
 - **Detailed Documentation**: :doc:`wasm_test_suite`
 - **Architecture**: :doc:`../../architecture/testing`
-- **Examples**: ``wrt/tests/wast_integration_examples.rs``
-- **Test Registry**: :doc:`../../../wrt-test-registry/README`
+- **Examples**: ``kiln/tests/wast_integration_examples.rs``
+- **Test Registry**: :doc:`../../../kiln-test-registry/README`

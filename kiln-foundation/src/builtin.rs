@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: WebAssembly Component Model Built-in Types
 // SW-REQ-ID: REQ_019
 // SW-REQ-ID: REQ_020
@@ -245,7 +245,7 @@ impl ToBytes for BuiltinType {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let byte_val = match self {
             BuiltinType::ResourceCreate => 0,
             BuiltinType::ResourceDrop => 1,
@@ -322,7 +322,7 @@ impl FromBytes for BuiltinType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let val = reader.read_u8()?;
         match val {
             0 => Ok(BuiltinType::ResourceCreate),

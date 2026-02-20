@@ -1,12 +1,12 @@
 #![deny(warnings)]
 
-use wrt_component::{
+use kiln_component::{
     ComponentValue,
     canonical::{CanonicalABI, CanonicalOptions, ValueType},
     resources::ResourceStrategy,
 };
-use wrt_error::Error;
-use wrt_foundation::values::{Integer, Real, Value};
+use kiln_error::Error;
+use kiln_foundation::values::{Integer, Real, Value};
 
 /// Tests for encoding/decoding simple primitive types
 #[test]
@@ -516,11 +516,11 @@ impl CanonicalABI {
 /// Tests for type conversion bidirectional functions
 #[test]
 fn test_type_conversion_bidirectional() {
-    use wrt_component::type_conversion::bidirectional::*;
-    use wrt_format::component::{
+    use kiln_component::type_conversion::bidirectional::*;
+    use kiln_format::component::{
         ExternType as FormatExternType, ResourceRepresentation, ValType as FormatValType,
     };
-    use wrt_foundation::{
+    use kiln_foundation::{
         ExternType as TypesExternType,
         component::ResourceType,
         component_value::ValType as TypesValType,
@@ -674,11 +674,11 @@ fn test_type_conversion_bidirectional() {
 /// Tests for more complex type conversion scenarios
 #[test]
 fn test_complex_type_conversions() {
-    use wrt_component::type_conversion::bidirectional::*;
-    use wrt_format::component::{
+    use kiln_component::type_conversion::bidirectional::*;
+    use kiln_format::component::{
         ExternType as FormatExternType, ResourceRepresentation, ValType as FormatValType,
     };
-    use wrt_foundation::{
+    use kiln_foundation::{
         ExternType as TypesExternType,
         component::ResourceType,
         component_value::ValType as TypesValType,
@@ -744,11 +744,11 @@ fn test_complex_type_conversions() {
 /// Tests for extern type conversion
 #[test]
 fn test_extern_type_conversion() {
-    use wrt_component::type_conversion::bidirectional::*;
-    use wrt_format::component::{
+    use kiln_component::type_conversion::bidirectional::*;
+    use kiln_format::component::{
         ExternType as FormatExternType, ResourceRepresentation, ValType as FormatValType,
     };
-    use wrt_foundation::{
+    use kiln_foundation::{
         ExternType as TypesExternType,
         component::ResourceType,
         component_value::ValType as TypesValType,
@@ -821,9 +821,9 @@ fn test_extern_type_conversion() {
 /// Tests for trait-based conversion
 #[test]
 fn test_conversion_traits() {
-    use wrt_component::type_conversion::bidirectional::*;
-    use wrt_format::component::{ExternType as FormatExternType, ValType as FormatValType};
-    use wrt_foundation::{
+    use kiln_component::type_conversion::bidirectional::*;
+    use kiln_format::component::{ExternType as FormatExternType, ValType as FormatValType};
+    use kiln_foundation::{
         ExternType as TypesExternType,
         types::{FuncType as TypesFuncType, ValueType},
     };

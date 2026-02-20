@@ -14,11 +14,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let wasm_bytes = fs::read(wasm_path)?;
     println!("Loaded {} bytes from {}", wasm_bytes.len(), wasm_path.display());
     
-    // Test with wrt-execution feature
-    #[cfg(all(feature = "std", feature = "wrt-execution"))]
+    // Test with kiln-execution feature
+    #[cfg(all(feature = "std", feature = "kiln-execution"))]
     {
-        use wrt::engine::{CapabilityAwareEngine, EnginePreset};
-        use wrt_foundation::values::Value;
+        use kiln::engine::{CapabilityAwareEngine, EnginePreset};
+        use kiln_foundation::values::Value;
         
         println!("\n🚀 Running with actual WebAssembly execution...\n");
         
@@ -62,11 +62,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("\n✨ WebAssembly execution test completed!");
     }
     
-    #[cfg(not(all(feature = "std", feature = "wrt-execution")))]
+    #[cfg(not(all(feature = "std", feature = "kiln-execution")))]
     {
-        println!("\n⚠️  Running in simulation mode (wrt-execution feature not enabled)");
+        println!("\n⚠️  Running in simulation mode (kiln-execution feature not enabled)");
         println!("To enable actual execution, compile with:");
-        println!("  cargo run --features std,wrt-execution --example test_add_execution");
+        println!("  cargo run --features std,kiln-execution --example test_add_execution");
     }
     
     Ok(())

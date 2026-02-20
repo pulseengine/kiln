@@ -13,7 +13,7 @@ use std::{fmt, mem, ptr};
 #[cfg(feature = "std")]
 use std::{boxed::Box, vec::Vec};
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{ BoundedString},
     prelude::*,
     safe_memory::NoStdProvider,
@@ -26,7 +26,7 @@ use crate::{
     types::{ValType, Value},
 };
 
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 
 /// Maximum number of resources in no_std environments
 const MAX_RESOURCES: usize = 1024;
@@ -355,7 +355,7 @@ impl ResourceLifecycleManager {
         self.resources.push(entry).map_err(|_| {
             Error::new(
                 ErrorCategory::Resource,
-                wrt_error::codes::RESOURCE_EXHAUSTED,
+                kiln_error::codes::RESOURCE_EXHAUSTED,
                 "Too many resources")
         })?;
 
@@ -391,7 +391,7 @@ impl ResourceLifecycleManager {
             if resource.ref_count == 0 {
                 return Err(Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::EXECUTION_ERROR,
+                    kiln_error::codes::EXECUTION_ERROR,
                     "Reference count already zero";
             }
 
@@ -477,7 +477,7 @@ impl ResourceLifecycleManager {
         if self.gc_state.gc_running {
             return Err(Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::EXECUTION_ERROR,
+                kiln_error::codes::EXECUTION_ERROR,
                 "Garbage collection already running";
         }
 
@@ -569,7 +569,7 @@ impl ResourceLifecycleManager {
             .ok_or_else(|| {
                 Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::EXECUTION_ERROR,
+                    kiln_error::codes::EXECUTION_ERROR,
                     "Resource not found")
             })
     }
@@ -686,7 +686,7 @@ impl ResourceLifecycleManager {
             .ok_or_else(|| {
                 Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::EXECUTION_ERROR,
+                    kiln_error::codes::EXECUTION_ERROR,
                     "Drop handler not found")
             })?;
         
@@ -750,7 +750,7 @@ impl ResourceMetadata {
         self.tags.push(bounded_tag).map_err(|_| {
             Error::new(
                 ErrorCategory::Resource,
-                wrt_error::codes::RESOURCE_EXHAUSTED,
+                kiln_error::codes::RESOURCE_EXHAUSTED,
                 "Too many tags")
         })
     }
@@ -765,7 +765,7 @@ impl ResourceMetadata {
         self.properties.push((bounded_key, value)).map_err(|_| {
             Error::new(
                 ErrorCategory::Resource,
-                wrt_error::codes::RESOURCE_EXHAUSTED,
+                kiln_error::codes::RESOURCE_EXHAUSTED,
                 "Too many properties")
         })
     }

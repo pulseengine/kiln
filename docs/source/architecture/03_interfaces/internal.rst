@@ -3,7 +3,7 @@
 Internal Interfaces
 ===================
 
-This section documents the internal interfaces between components within Pulseengine (WRT Edition),
+This section documents the internal interfaces between components within Pulseengine (Kiln Edition),
 focusing on how components communicate and collaborate across different runtime environments.
 
 .. arch_interface:: ARCH_IF_INT_001
@@ -21,7 +21,7 @@ Foundation Layer Interfaces
 Memory Provider Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The core memory abstraction used throughout the system (``wrt-foundation/src/safe_memory.rs:45-89``):
+The core memory abstraction used throughout the system (``kiln-foundation/src/safe_memory.rs:45-89``):
 
 .. code-block:: rust
 
@@ -53,14 +53,14 @@ The core memory abstraction used throughout the system (``wrt-foundation/src/saf
    impl MemoryProvider for BoundedMemory { /* no_alloc implementation */ }
 
 **Usage across components**:
-- ``wrt-runtime``: Uses for linear memory management
-- ``wrt-component``: Uses for component memory regions  
-- ``wrt-decoder``: Uses for parsing buffer management
+- ``kiln-runtime``: Uses for linear memory management
+- ``kiln-component``: Uses for component memory regions  
+- ``kiln-decoder``: Uses for parsing buffer management
 
 Component Value Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Value exchange between components (``wrt-foundation/src/component_value.rs:67-123``):
+Value exchange between components (``kiln-foundation/src/component_value.rs:67-123``):
 
 .. code-block:: rust
 
@@ -116,7 +116,7 @@ Runtime-Component Interface
 Component Instance Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-runtime/src/component_impl.rs:89-156``:
+From ``kiln-runtime/src/component_impl.rs:89-156``:
 
 .. code-block:: rust
 
@@ -160,7 +160,7 @@ From ``wrt-runtime/src/component_impl.rs:89-156``:
 Module Builder Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-runtime/src/module_builder.rs:78-134``:
+From ``kiln-runtime/src/module_builder.rs:78-134``:
 
 .. code-block:: rust
 
@@ -209,7 +209,7 @@ Decoder-Component Interface
 Parser Interface
 ~~~~~~~~~~~~~~~~
 
-From ``wrt-decoder/src/parser.rs:123-189``:
+From ``kiln-decoder/src/parser.rs:123-189``:
 
 .. code-block:: rust
 
@@ -258,7 +258,7 @@ From ``wrt-decoder/src/parser.rs:123-189``:
 Section Reader Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-decoder/src/section_reader.rs:67-123``:
+From ``kiln-decoder/src/section_reader.rs:67-123``:
 
 .. code-block:: rust
 
@@ -300,7 +300,7 @@ Resource Management Interface
 Resource Table Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/resources/resource_table.rs:89-156``:
+From ``kiln-component/src/resources/resource_table.rs:89-156``:
 
 .. code-block:: rust
 
@@ -342,7 +342,7 @@ From ``wrt-component/src/resources/resource_table.rs:89-156``:
 Resource Strategy Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/resources/resource_strategy.rs:78-134``:
+From ``kiln-component/src/resources/resource_strategy.rs:78-134``:
 
 .. code-block:: rust
 
@@ -385,7 +385,7 @@ Platform Interface Layer
 Synchronization Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-platform/src/sync.rs:67-123``:
+From ``kiln-platform/src/sync.rs:67-123``:
 
 .. code-block:: rust
 
@@ -423,7 +423,7 @@ From ``wrt-platform/src/sync.rs:67-123``:
 Memory Platform Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-platform/src/memory.rs:89-145``:
+From ``kiln-platform/src/memory.rs:89-145``:
 
 .. code-block:: rust
 
@@ -466,7 +466,7 @@ Error Propagation Interface
 Error Conversion Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-error/src/context.rs:78-134``:
+From ``kiln-error/src/context.rs:78-134``:
 
 .. code-block:: rust
 
@@ -480,7 +480,7 @@ From ``wrt-error/src/context.rs:78-134``:
            F: FnOnce() -> BoundedString;
        
        /// Convert to external error type
-       fn to_external(self) -> WrtError;
+       fn to_external(self) -> KilnError;
    }
 
    pub struct ContextError<E> {
@@ -491,15 +491,15 @@ From ``wrt-error/src/context.rs:78-134``:
    }
 
    // Component-specific error conversions
-   impl From<ComponentError> for WrtError {
+   impl From<ComponentError> for KilnError {
        fn from(err: ComponentError) -> Self {
-           WrtError::Component(err)
+           KilnError::Component(err)
        }
    }
 
-   impl From<RuntimeError> for WrtError {
+   impl From<RuntimeError> for KilnError {
        fn from(err: RuntimeError) -> Self {
-           WrtError::Runtime(err)
+           KilnError::Runtime(err)
        }
    }
 
@@ -517,7 +517,7 @@ Validation Interface
 Component Validation Interface
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/validation.rs:89-156``:
+From ``kiln-component/src/validation.rs:89-156``:
 
 .. code-block:: rust
 

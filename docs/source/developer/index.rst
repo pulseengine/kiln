@@ -7,7 +7,7 @@ Developer Guides
    :align: right
    :alt: Developer Icon
 
-This section provides comprehensive documentation for developers working on PulseEngine (WRT Edition).
+This section provides comprehensive documentation for developers working on PulseEngine (Kiln Edition).
 
 .. note::
    For the complete developer documentation, see :doc:`/development/index` which contains

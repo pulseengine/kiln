@@ -2,9 +2,9 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Integration tests for wrt-debug feature configurations
+//! Integration tests for kiln-debug feature configurations
 
-use wrt_debug::prelude::*;
+use kiln_debug::prelude::*;
 
 // Test data - simplified WASM module
 const TEST_MODULE: &[u8] = &[
@@ -122,7 +122,7 @@ fn test_feature_detection() {
 
 #[test]
 fn test_cursor_functionality() {
-    use wrt_debug::DwarfCursor;
+    use kiln_debug::DwarfCursor;
 
     let test_data = &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
     let mut cursor = DwarfCursor::new(test_data);

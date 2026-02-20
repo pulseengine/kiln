@@ -7,7 +7,7 @@ fn test_parse_file_ops_component() {
         .expect("Failed to read component file");
 
     let component =
-        wrt_decoder::component::decode_component_binary(&bytes).expect("Failed to parse component");
+        kiln_decoder::component::decode_component_binary(&bytes).expect("Failed to parse component");
 
     // Print section counts for debugging
     println!("\n✓ Component parsed successfully");

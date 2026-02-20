@@ -2,7 +2,7 @@
 no_std Development
 ====================
 
-This section documents the no_std compatibility requirements and development practices for WRT.
+This section documents the no_std compatibility requirements and development practices for Kiln.
 
 .. contents:: Table of Contents
    :local:
@@ -11,7 +11,7 @@ This section documents the no_std compatibility requirements and development pra
 Overview
 --------
 
-WRT is designed to run in no_std environments, enabling deployment on embedded systems, bare-metal targets, and other resource-constrained platforms. This document outlines the development practices and verification procedures for maintaining no_std compatibility.
+Kiln is designed to run in no_std environments, enabling deployment on embedded systems, bare-metal targets, and other resource-constrained platforms. This document outlines the development practices and verification procedures for maintaining no_std compatibility.
 
 no_std Compatibility Status
 ---------------------------
@@ -19,7 +19,7 @@ no_std Compatibility Status
 Current Issues
 ~~~~~~~~~~~~~~
 
-Several crates in the WRT ecosystem have no_std compatibility issues that need to be addressed:
+Several crates in the Kiln ecosystem have no_std compatibility issues that need to be addressed:
 
 1. **Import Organization**:
 
@@ -43,20 +43,20 @@ Fixed Issues
 
 The following no_std compatibility fixes have been implemented:
 
-**wrt-error**:
+**kiln-error**:
 
 - Added proper ``#![no_std]`` declaration
 - Fixed imports for ``core`` and ``alloc`` items
 - Properly feature-gated ``std::error::Error`` implementation
 - Added no_std-compatible Display implementations
 
-**wrt-sync**:
+**kiln-sync**:
 
 - Implemented no_std mutex using atomic operations
 - Added Once implementation for no_std
 - Proper feature gating for std-specific optimizations
 
-**wrt-foundation**:
+**kiln-foundation**:
 
 - Fixed bounded collection implementations for no_std
 - Added no_std HashMap implementation
@@ -101,7 +101,7 @@ Follow this import pattern for no_std compatibility::
 Feature Flags
 ~~~~~~~~~~~~~
 
-Standard feature configuration for WRT crates::
+Standard feature configuration for Kiln crates::
 
     [features]
     default = ["std"]
@@ -138,7 +138,7 @@ Collections
 
 Use bounded collections for no_std environments::
 
-    use wrt_foundation::prelude::{BoundedVec, BoundedStack};
+    use kiln_foundation::prelude::{BoundedVec, BoundedStack};
 
     // Instead of Vec<T>
     let mut vec: BoundedVec<u8, 256> = BoundedVec::new();
@@ -151,7 +151,7 @@ Memory Management
 
 For no_std environments without heap allocation::
 
-    use wrt_foundation::prelude::NoStdProvider;
+    use kiln_foundation::prelude::NoStdProvider;
 
     // Fixed-size memory provider
     let provider = NoStdProvider::<4096>::new();
@@ -228,20 +228,20 @@ Provide compatible types for different environments::
     pub type HashMap<K, V> = std::collections::HashMap<K, V>;
 
     #[cfg(not(feature = "std"))]
-    pub type HashMap<K, V> = wrt_foundation::no_std_hashmap::NoStdHashMap<K, V>;
+    pub type HashMap<K, V> = kiln_foundation::no_std_hashmap::NoStdHashMap<K, V>;
 
 Platform Abstraction
 ~~~~~~~~~~~~~~~~~~~~
 
 Use the platform layer for OS-specific operations::
 
-    use wrt_platform::traits::{PageAllocator, FutexLike};
+    use kiln_platform::traits::{PageAllocator, FutexLike};
 
     #[cfg(feature = "platform-bare")]
-    use wrt_platform::bare::{BareAllocator, BareFutex};
+    use kiln_platform::bare::{BareAllocator, BareFutex};
 
     #[cfg(feature = "platform-linux")]
-    use wrt_platform::linux::{LinuxAllocator, LinuxFutex};
+    use kiln_platform::linux::{LinuxAllocator, LinuxFutex};
 
 Testing Strategy
 ----------------

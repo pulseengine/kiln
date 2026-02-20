@@ -6,7 +6,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{
         BoundedString,
         BoundedVec,
@@ -53,7 +53,7 @@ pub type BoundedResultVec<T> = BoundedVec<T, 256, InterceptProvider>;
 ///
 /// # Errors
 /// Returns error if provider allocation fails
-pub fn new_stats_map() -> Result<BoundedStatsMap, wrt_error::Error> {
+pub fn new_stats_map() -> Result<BoundedStatsMap, kiln_error::Error> {
     // For safety-critical code that forbids unsafe, use direct provider creation
     let provider = InterceptProvider::default();
     BoundedMap::new(provider)
@@ -63,7 +63,7 @@ pub fn new_stats_map() -> Result<BoundedStatsMap, wrt_error::Error> {
 ///
 /// # Errors
 /// Returns error if provider allocation fails
-pub fn new_executing_map() -> Result<BoundedExecutingMap, wrt_error::Error> {
+pub fn new_executing_map() -> Result<BoundedExecutingMap, kiln_error::Error> {
     // For safety-critical code that forbids unsafe, use direct provider creation
     let provider = InterceptProvider::default();
     BoundedMap::new(provider)
@@ -73,11 +73,11 @@ pub fn new_executing_map() -> Result<BoundedExecutingMap, wrt_error::Error> {
 ///
 /// # Errors
 /// Returns error if provider allocation fails
-pub fn new_result_vec<T>() -> Result<BoundedResultVec<T>, wrt_error::Error>
+pub fn new_result_vec<T>() -> Result<BoundedResultVec<T>, kiln_error::Error>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq

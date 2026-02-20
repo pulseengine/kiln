@@ -5,7 +5,7 @@
 
 use std::time::{Duration, Instant};
 
-use wrt_component::{
+use kiln_component::{
     AgentConfiguration,
     AgentCreationOptions,
     AgentRegistry,
@@ -220,7 +220,7 @@ fn test_resource_management() {
     for i in 0..ITERATIONS {
         let handle = unified_agent.create_resource(
             i as u32,
-            wrt_foundation::component_value::ComponentValue::U32(i as u32),
+            kiln_foundation::component_value::ComponentValue::U32(i as u32),
         );
         if let Ok(h) = handle {
             let _ = unified_agent.drop_resource(h);
@@ -233,7 +233,7 @@ fn test_resource_management() {
     for i in 0..ITERATIONS {
         let handle = legacy_agent.create_resource(
             i as u32,
-            wrt_foundation::component_value::ComponentValue::U32(i as u32),
+            kiln_foundation::component_value::ComponentValue::U32(i as u32),
         );
         if let Ok(h) = handle {
             let _ = legacy_agent.drop_resource(h);
@@ -279,16 +279,16 @@ impl UnifiedExecutionAgent {
     fn create_resource(
         &mut self,
         type_id: u32,
-        data: wrt_foundation::component_value::ComponentValue,
-    ) -> wrt_component::wrt_error::Result<wrt_component::ResourceHandle> {
+        data: kiln_foundation::component_value::ComponentValue,
+    ) -> kiln_component::kiln_error::Result<kiln_component::ResourceHandle> {
         // Delegate to resource manager
         self.core_state.resource_manager.create_resource(type_id, data)
     }
 
     fn drop_resource(
         &mut self,
-        handle: wrt_component::ResourceHandle,
-    ) -> wrt_component::wrt_error::Result<()> {
+        handle: kiln_component::ResourceHandle,
+    ) -> kiln_component::kiln_error::Result<()> {
         self.core_state.resource_manager.drop_resource(handle)
     }
 }

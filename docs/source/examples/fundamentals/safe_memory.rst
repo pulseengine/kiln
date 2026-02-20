@@ -8,7 +8,7 @@ Safe Memory: Bounds Checking That Works
    
    -- Microsoft Security Response Center
 
-Buffer overflows. Use-after-free. Out-of-bounds access. These aren't just bugs - they're the root cause of most security vulnerabilities. WRT's safe memory primitives make these impossible at compile time or catch them at runtime with zero panic risk.
+Buffer overflows. Use-after-free. Out-of-bounds access. These aren't just bugs - they're the root cause of most security vulnerabilities. Kiln's safe memory primitives make these impossible at compile time or catch them at runtime with zero panic risk.
 
 .. admonition:: What You'll Learn
    :class: note
@@ -38,10 +38,10 @@ Here's what can go wrong with raw memory access:
 Now let's see the safe way:
 
 .. code-block:: rust
-   :caption: The safe WRT way
+   :caption: The safe Kiln way
    :linenos:
 
-   use wrt_foundation::safe_memory::{SafeSlice, MemoryError};
+   use kiln_foundation::safe_memory::{SafeSlice, MemoryError};
    
    fn safe_copy(
        src: &SafeSlice<u8>, 
@@ -63,7 +63,7 @@ SafeSlice: Your Memory Bodyguard 🛡️
    :caption: SafeSlice in action
    :linenos:
 
-   use wrt_foundation::safe_memory::{SafeSlice, MemoryError};
+   use kiln_foundation::safe_memory::{SafeSlice, MemoryError};
    
    fn process_packet(data: &[u8]) -> Result<PacketInfo, MemoryError> {
        // Wrap in SafeSlice for bounds checking
@@ -103,7 +103,7 @@ Need to read different data types? SafeSlice has you covered:
 .. code-block:: rust
    :caption: Reading various data types safely
 
-   use wrt_foundation::safe_memory::SafeSlice;
+   use kiln_foundation::safe_memory::SafeSlice;
    
    fn parse_sensor_data(data: &[u8]) -> Result<SensorReading, MemoryError> {
        let safe_data = SafeSlice::new(data);
@@ -138,7 +138,7 @@ Sometimes you need custom memory management. ``MemoryAdapter`` lets you define y
    :caption: Custom memory adapter
    :linenos:
 
-   use wrt_foundation::safe_memory::{MemoryAdapter, MemoryError};
+   use kiln_foundation::safe_memory::{MemoryAdapter, MemoryError};
    
    /// Ring buffer memory adapter
    struct RingBufferAdapter {
@@ -213,7 +213,7 @@ Here's how to safely work with WebAssembly's linear memory:
    :caption: Safe WebAssembly memory access
    :linenos:
 
-   use wrt_foundation::safe_memory::{SafeSlice, WasmMemoryAdapter};
+   use kiln_foundation::safe_memory::{SafeSlice, WasmMemoryAdapter};
    
    /// Safe wrapper for WebAssembly memory
    pub struct WasmMemory {
@@ -273,7 +273,7 @@ Let's build a zero-copy parser for a network protocol:
    :caption: Zero-copy protocol parser
    :linenos:
 
-   use wrt_foundation::safe_memory::{SafeSlice, MemoryError};
+   use kiln_foundation::safe_memory::{SafeSlice, MemoryError};
    
    /// HTTP-like protocol parser (simplified)
    struct ProtocolParser<'a> {

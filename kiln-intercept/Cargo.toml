@@ -1,18 +1,18 @@
 [package]
-name = "wrt-intercept"
+name = "kiln-intercept"
 version.workspace = true
 edition.workspace = true
-description = "Host interception for WebAssembly Runtime (WRT)"
+description = "Host interception for WebAssembly Runtime (Kiln)"
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/wrt-intercept"
+documentation = "https://docs.rs/kiln-intercept"
 keywords = ["wasm", "webassembly", "runtime", "interception"]
 categories = ["wasm", "no-std"]
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false }
-wrt-sync = { workspace = true, default-features = false }
+kiln-error = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false }
+kiln-sync = { workspace = true, default-features = false }
 
 # Optional dependencies
 log = { version = "0.4", optional = true }
@@ -26,20 +26,20 @@ pretty_assertions = "1.4.0"
 [features]
 default = []
 # Binary choice: std OR no_std (no alloc middle ground)
-std = ["wrt-foundation/std", "wrt-sync/std", "log"]
+std = ["kiln-foundation/std", "kiln-sync/std", "log"]
 # This crate is no_std by default, this feature is a no-op for compatibility
 no_std = []
 
 # Allocation support for no_std environments
-alloc = ["wrt-foundation/alloc"]
-optimize = ["wrt-foundation/optimize"]
+alloc = ["kiln-foundation/alloc"]
+optimize = ["kiln-foundation/optimize"]
 
 # Safety level presets using capability-based features
-qm = ["wrt-foundation/dynamic-allocation"]
-asil-a = ["wrt-foundation/bounded-collections"]
-asil-b = ["wrt-foundation/bounded-collections"]
-asil-c = ["wrt-foundation/static-memory-safety"]
-asil-d = ["wrt-foundation/asil-d"]
+qm = ["kiln-foundation/dynamic-allocation"]
+asil-a = ["kiln-foundation/bounded-collections"]
+asil-b = ["kiln-foundation/bounded-collections"]
+asil-c = ["kiln-foundation/static-memory-safety"]
+asil-d = ["kiln-foundation/asil-d"]
 
 # Legacy compatibility features
 safe-memory = ["asil-b"]

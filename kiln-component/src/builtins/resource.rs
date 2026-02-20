@@ -14,7 +14,7 @@ use std::{
 };
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId, collections::StaticVec as BoundedVec, safe_managed_alloc,
     safe_memory::NoStdProvider,
 };
@@ -25,14 +25,14 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, sync::Arc, vec, vec::Vec};
 
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 #[cfg(feature = "std")]
-use wrt_foundation::{builtin::BuiltinType, component_value::ComponentValue};
+use kiln_foundation::{builtin::BuiltinType, component_value::ComponentValue};
 #[cfg(not(feature = "std"))]
-use wrt_sync::Mutex;
+use kiln_sync::Mutex;
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{builtin::BuiltinType, component_value::ComponentValue};
+use kiln_foundation::{builtin::BuiltinType, component_value::ComponentValue};
 
 #[cfg(not(feature = "std"))]
 type ComponentProvider = NoStdProvider<4096>;
@@ -80,8 +80,8 @@ impl BuiltinHandler for ResourceCreateHandler {
             ComponentValue::U64(value) => *value as u32,
             _ => {
                 return Err(Error::new(
-                    wrt_error::ErrorCategory::Parameter,
-                    wrt_error::codes::TYPE_MISMATCH,
+                    kiln_error::ErrorCategory::Parameter,
+                    kiln_error::codes::TYPE_MISMATCH,
                     "Expected U32 or U64 for resource representation",
                 ));
             },
@@ -113,8 +113,8 @@ impl BuiltinHandler for ResourceCreateHandler {
             ComponentValue::U64(value) => *value as u32,
             _ => {
                 return Err(Error::new(
-                    wrt_error::ErrorCategory::Parameter,
-                    wrt_error::codes::TYPE_MISMATCH,
+                    kiln_error::ErrorCategory::Parameter,
+                    kiln_error::codes::TYPE_MISMATCH,
                     "Expected U32 or U64 for resource representation",
                 ));
             },
@@ -169,8 +169,8 @@ impl BuiltinHandler for ResourceDropHandler {
         // Validate args
         if args.len() != 1 {
             return Err(Error::new(
-                wrt_error::ErrorCategory::Parameter,
-                wrt_error::codes::EXECUTION_ERROR,
+                kiln_error::ErrorCategory::Parameter,
+                kiln_error::codes::EXECUTION_ERROR,
                 "resource.drop requires exactly one argument",
             ));
         }
@@ -189,8 +189,8 @@ impl BuiltinHandler for ResourceDropHandler {
         let mut manager = self.resource_manager.lock().unwrap();
         if !manager.has_resource(id)? {
             return Err(Error::new(
-                wrt_error::ErrorCategory::Resource,
-                wrt_error::codes::RESOURCE_NOT_FOUND,
+                kiln_error::ErrorCategory::Resource,
+                kiln_error::codes::RESOURCE_NOT_FOUND,
                 "Resource not found",
             ));
         }
@@ -209,8 +209,8 @@ impl BuiltinHandler for ResourceDropHandler {
         // Validate args
         if args.len() != 1 {
             return Err(Error::new(
-                wrt_error::ErrorCategory::Parameter,
-                wrt_error::codes::EXECUTION_ERROR,
+                kiln_error::ErrorCategory::Parameter,
+                kiln_error::codes::EXECUTION_ERROR,
                 "resource.drop requires exactly one argument",
             ));
         }
@@ -229,8 +229,8 @@ impl BuiltinHandler for ResourceDropHandler {
         let mut manager = self.resource_manager.lock();
         if !manager.has_resource(id)? {
             return Err(Error::new(
-                wrt_error::ErrorCategory::Resource,
-                wrt_error::codes::RESOURCE_NOT_FOUND,
+                kiln_error::ErrorCategory::Resource,
+                kiln_error::codes::RESOURCE_NOT_FOUND,
                 "Resource not found",
             ));
         }
@@ -282,8 +282,8 @@ impl BuiltinHandler for ResourceRepHandler {
             ComponentValue::U32(value) => ResourceId(*value),
             _ => {
                 return Err(Error::new(
-                    wrt_error::ErrorCategory::Parameter,
-                    wrt_error::codes::TYPE_MISMATCH,
+                    kiln_error::ErrorCategory::Parameter,
+                    kiln_error::codes::TYPE_MISMATCH,
                     "Expected U32 or U64 for resource representation",
                 ));
             },
@@ -320,8 +320,8 @@ impl BuiltinHandler for ResourceRepHandler {
             ComponentValue::U32(value) => ResourceId(*value),
             _ => {
                 return Err(Error::new(
-                    wrt_error::ErrorCategory::Parameter,
-                    wrt_error::codes::TYPE_MISMATCH,
+                    kiln_error::ErrorCategory::Parameter,
+                    kiln_error::codes::TYPE_MISMATCH,
                     "Expected U32 or U64 for resource representation",
                 ));
             },
@@ -377,8 +377,8 @@ impl BuiltinHandler for ResourceGetHandler {
         // Validate args
         if args.len() != 1 {
             return Err(Error::new(
-                wrt_error::ErrorCategory::Parameter,
-                wrt_error::codes::EXECUTION_ERROR,
+                kiln_error::ErrorCategory::Parameter,
+                kiln_error::codes::EXECUTION_ERROR,
                 "resource.get requires exactly one argument",
             ));
         }
@@ -411,8 +411,8 @@ impl BuiltinHandler for ResourceGetHandler {
         // Validate args
         if args.len() != 1 {
             return Err(Error::new(
-                wrt_error::ErrorCategory::Parameter,
-                wrt_error::codes::EXECUTION_ERROR,
+                kiln_error::ErrorCategory::Parameter,
+                kiln_error::codes::EXECUTION_ERROR,
                 "resource.get requires exactly one argument",
             ));
         }

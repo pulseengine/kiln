@@ -6,7 +6,7 @@
 
 #[cfg(all(feature = "platform-linux", target_os = "linux"))]
 mod linux_tests {
-    use wrt_platform::{
+    use kiln_platform::{
         LinuxAllocator,
         LinuxAllocatorBuilder,
         LinuxFutex,
@@ -37,7 +37,7 @@ mod linux_tests {
         let futex = LinuxFutexBuilder::new().with_initial_value(42).build();
 
         // Test that the futex was created with the correct initial value
-        // Note: The FutexLike trait in wrt-platform doesn't expose atomic operations
+        // Note: The FutexLike trait in kiln-platform doesn't expose atomic operations
         // directly, so we can only test construction and basic properties
         assert!(core::mem::size_of_val(&futex) > 0);
     }
@@ -50,7 +50,7 @@ mod linux_tests {
     target_os = "linux"
 ))]
 mod linux_mte_tests {
-    use wrt_platform::{
+    use kiln_platform::{
         LinuxArm64MteAllocator,
         LinuxArm64MteAllocatorBuilder,
         MteMode,
@@ -97,7 +97,7 @@ fn test_linux_platform_compilation() {
     #[cfg(feature = "platform-linux")]
     {
         // The modules should be available for import
-        use wrt_platform::*;
+        use kiln_platform::*;
 
         // Basic verification that types exist
         let _ = core::mem::size_of::<NoStdProvider>();

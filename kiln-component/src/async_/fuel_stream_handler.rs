@@ -9,7 +9,7 @@ use core::{
     task::{Context, Poll},
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId, MemoryProvider,
     collections::{StaticMap as BoundedMap, StaticQueue as BoundedDeque, StaticVec as BoundedVec},
     operations::{Type as OperationType, record_global_operation},
@@ -18,7 +18,7 @@ use wrt_foundation::{
     verification::{Checksum, VerificationLevel},
 };
 
-use wrt_foundation::safe_memory::NoStdProvider;
+use kiln_foundation::safe_memory::NoStdProvider;
 
 use crate::{
     async_::{
@@ -234,7 +234,7 @@ pub struct ComponentStream {
     pub target_component: u64,
     /// Stream of component values
     pub value_stream:
-        FuelStream<wrt_foundation::component_value::ComponentValue<NoStdProvider<4096>>>,
+        FuelStream<kiln_foundation::component_value::ComponentValue<NoStdProvider<4096>>>,
     /// Stream metadata
     pub metadata: StreamMetadata,
 }
@@ -276,7 +276,7 @@ impl ComponentStream {
     /// Send a value through the stream
     pub fn send(
         &mut self,
-        value: wrt_foundation::component_value::ComponentValue<NoStdProvider<4096>>,
+        value: kiln_foundation::component_value::ComponentValue<NoStdProvider<4096>>,
     ) -> Result<()> {
         // Check bounded stream limits
         if self.metadata.is_bounded {
@@ -295,7 +295,7 @@ impl ComponentStream {
     /// Receive a value from the stream
     pub async fn receive(
         &mut self,
-    ) -> Option<wrt_foundation::component_value::ComponentValue<NoStdProvider<4096>>> {
+    ) -> Option<kiln_foundation::component_value::ComponentValue<NoStdProvider<4096>>> {
         // Poll the stream directly using core::future::poll_fn
         core::future::poll_fn(|cx| self.value_stream.poll_next(cx)).await
     }

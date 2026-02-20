@@ -14,34 +14,34 @@
 //! # Usage
 //!
 //! ```rust
-//! use wrt_foundation::allocator::{
+//! use kiln_foundation::allocator::{
 //!     CrateId,
-//!     WrtHashMap,
-//!     WrtVec,
+//!     KilnHashMap,
+//!     KilnVec,
 //! };
 //!
 //! // Compile-time verified collections
-//! let mut vec: WrtVec<i32, { CrateId::Component as u8 }, 1000> = WrtVec::new();
-//! let mut map: WrtHashMap<String, Data, { CrateId::Component as u8 }, 256> = WrtHashMap::new();
+//! let mut vec: KilnVec<i32, { CrateId::Component as u8 }, 1000> = KilnVec::new();
+//! let mut map: KilnHashMap<String, Data, { CrateId::Component as u8 }, 256> = KilnHashMap::new();
 //!
 //! // Works exactly like std collections but with compile-time safety
 //! vec.push(42)?;
 //! map.insert("key".to_string(), data)?;
 //! ```
 
-#[cfg(feature = "wrt-allocator")]
+#[cfg(feature = "kiln-allocator")]
 pub mod collections;
 
-#[cfg(feature = "wrt-allocator")]
+#[cfg(feature = "kiln-allocator")]
 pub mod phantom_budgets;
 
-#[cfg(all(not(feature = "wrt-allocator"), feature = "std"))]
-pub use std::collections::HashMap as WrtHashMap;
+#[cfg(all(not(feature = "kiln-allocator"), feature = "std"))]
+pub use std::collections::HashMap as KilnHashMap;
 // Re-export for convenience when not using the allocator feature
-#[cfg(all(not(feature = "wrt-allocator"), feature = "std"))]
-pub use std::vec::Vec as WrtVec;
+#[cfg(all(not(feature = "kiln-allocator"), feature = "std"))]
+pub use std::vec::Vec as KilnVec;
 
-#[cfg(feature = "wrt-allocator")]
+#[cfg(feature = "kiln-allocator")]
 pub use collections::aliases::{
     ComponentHashMap,
     ComponentString,
@@ -56,13 +56,13 @@ pub use collections::aliases::{
     RuntimeString,
     RuntimeVec,
 };
-#[cfg(feature = "wrt-allocator")]
+#[cfg(feature = "kiln-allocator")]
 pub use collections::{
-    WrtHashMap,
-    WrtString,
-    WrtVec,
+    KilnHashMap,
+    KilnString,
+    KilnVec,
 };
-#[cfg(feature = "wrt-allocator")]
+#[cfg(feature = "kiln-allocator")]
 pub use phantom_budgets::{
     CapacityError,
     CrateId,
@@ -70,10 +70,10 @@ pub use phantom_budgets::{
 };
 
 // For no_std without allocator feature, use bounded collections
-#[cfg(all(not(feature = "wrt-allocator"), not(feature = "std")))]
-pub use crate::bounded::BoundedVec as WrtVec;
-#[cfg(all(not(feature = "wrt-allocator"), not(feature = "std")))]
-pub use crate::bounded_collections::BoundedMap as WrtHashMap;
+#[cfg(all(not(feature = "kiln-allocator"), not(feature = "std")))]
+pub use crate::bounded::BoundedVec as KilnVec;
+#[cfg(all(not(feature = "kiln-allocator"), not(feature = "std")))]
+pub use crate::bounded_collections::BoundedMap as KilnHashMap;
 // Provide CrateId for non-allocator builds (for compatibility)
-#[cfg(not(feature = "wrt-allocator"))]
+#[cfg(not(feature = "kiln-allocator"))]
 pub use crate::budget_aware_provider::CrateId;

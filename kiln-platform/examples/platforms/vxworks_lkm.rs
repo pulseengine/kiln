@@ -4,13 +4,13 @@
 //! LKM components run in kernel space with direct access to VxWorks kernel APIs.
 
 #[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
-use wrt_platform::{
+use kiln_platform::{
     vxworks_memory::{VxWorksAllocator, VxWorksAllocatorBuilder, VxWorksContext},
     vxworks_sync::{VxWorksFutex, VxWorksFutexBuilder},
     vxworks_threading::{VxWorksThreadBuilder, VxWorksThreadConfig},
 };
 
-use wrt_platform::{PageAllocator, FutexLike, WASM_PAGE_SIZE};
+use kiln_platform::{PageAllocator, FutexLike, WASM_PAGE_SIZE};
 use core::sync::atomic::Ordering;
 use core::time::Duration;
 

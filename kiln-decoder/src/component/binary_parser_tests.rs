@@ -11,7 +11,7 @@ mod tests {
     use alloc::vec;
     use alloc::vec::Vec;
 
-    use wrt_error::ErrorCategory;
+    use kiln_error::ErrorCategory;
 
     use super::super::binary_parser::*;
 

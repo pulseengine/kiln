@@ -1,4 +1,4 @@
-// WRT - wrt-format
+// Kiln - kiln-format
 // Module: WebAssembly Binary Format Definitions
 // SW-REQ-ID: REQ_021
 // SW-REQ-ID: REQ_013
@@ -10,7 +10,7 @@
 #![forbid(unsafe_code)] // Rule 2
 #![allow(missing_docs)] // Allow missing documentation for internal constants and utilities
 
-//! WebAssembly format handling for WRT
+//! WebAssembly format handling for Kiln
 //!
 //! This crate defines and handles the WebAssembly binary format specifications,
 //! including type encodings, section layouts, and module structures.
@@ -81,14 +81,14 @@ extern crate std;
 #[cfg(feature = "std")]
 use std::{format, string::String, vec::Vec};
 
-pub use wrt_error::Result;
+pub use kiln_error::Result;
 // External crates
-pub use wrt_error::{Error, ErrorCategory};
-// Internal crates (wrt_* imports)
+pub use kiln_error::{Error, ErrorCategory};
+// Internal crates (kiln_* imports)
 #[cfg(not(feature = "std"))]
-use wrt_foundation::bounded::{BoundedString, BoundedVec};
-pub use wrt_foundation::resource::ResourceRepresentation;
-// Re-export core types from wrt-foundation (note: these now have generic parameters)
+use kiln_foundation::bounded::{BoundedString, BoundedVec};
+pub use kiln_foundation::resource::ResourceRepresentation;
+// Re-export core types from kiln-foundation (note: these now have generic parameters)
 // BlockType, FuncType, RefType, ValueType now require MemoryProvider parameters
 // These will be re-exported as type aliases with default providers
 
@@ -96,7 +96,7 @@ pub use wrt_foundation::resource::ResourceRepresentation;
 
 // Binary std/no_std choice
 #[cfg(not(any(feature = "std")))]
-pub use wrt_foundation::{BoundedMap, BoundedSet};
+pub use kiln_foundation::{BoundedMap, BoundedSet};
 
 // Type aliases for pure no_std mode
 #[cfg(not(any(feature = "std")))]
@@ -122,7 +122,7 @@ pub type ModuleCustomSections<P> = BoundedVec<crate::section::CustomSection, 64,
 
 // Type aliases for HashMap
 #[cfg(not(feature = "std"))]
-pub type HashMap<K, V> = wrt_foundation::BoundedMap<K, V, 256, wrt_foundation::NoStdProvider<1024>>; // Default capacity
+pub type HashMap<K, V> = kiln_foundation::BoundedMap<K, V, 256, kiln_foundation::NoStdProvider<1024>>; // Default capacity
 
 #[cfg(feature = "std")]
 pub type HashMap<K, V> = std::collections::BTreeMap<K, V>;
@@ -222,7 +222,7 @@ pub mod component_conversion;
 pub mod compression;
 /// Conversion utilities for type system standardization
 pub mod conversion;
-/// Error utilities for working with wrt-error types
+/// Error utilities for working with kiln-error types
 pub mod error;
 /// Incremental parser for efficient WIT re-parsing
 #[cfg(feature = "std")]
@@ -328,12 +328,12 @@ pub use compression::CompressionType;
 pub use compression::{rle_decode, rle_encode};
 // Re-export conversion utilities
 pub use conversion::{
-    block_type_to_format_block_type, format_block_type_to_block_type, format_limits_to_wrt_limits,
-    wrt_limits_to_format_limits,
+    block_type_to_format_block_type, format_block_type_to_block_type, format_limits_to_kiln_limits,
+    kiln_limits_to_format_limits,
 };
 pub use error::{
-    parse_error, wrt_runtime_error as runtime_error, wrt_type_error as type_error,
-    wrt_validation_error as validation_error,
+    parse_error, kiln_runtime_error as runtime_error, kiln_type_error as type_error,
+    kiln_validation_error as validation_error,
 };
 // Note: Data, DataMode, ElementMode are deprecated - use pure_format_types instead
 #[allow(deprecated)]
@@ -419,13 +419,13 @@ pub mod verification {
 /// Demonstration of pure no_std WebAssembly format handling
 #[cfg(not(any(feature = "std")))]
 pub mod no_std_demo {
-    use wrt_foundation::NoStdProvider;
+    use kiln_foundation::NoStdProvider;
 
     use super::*;
 
     /// Example showing TypeRef system working
     #[cfg(feature = "std")]
-    pub fn demo_type_system() -> wrt_error::Result<()> {
+    pub fn demo_type_system() -> kiln_error::Result<()> {
         use crate::component::{FormatValType, TypeRegistry};
 
         // Create a type registry
@@ -446,12 +446,12 @@ pub mod no_std_demo {
 
     /// Example showing bounded string working
     pub fn demo_bounded_string() -> Result<()> {
-        let _provider = wrt_foundation::safe_managed_alloc!(
+        let _provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Format
+            kiln_foundation::budget_aware_provider::CrateId::Format
         )?;
         let wasm_str = WasmString::try_from_str("hello")
-            .map_err(|_| wrt_foundation::bounded::CapacityError)?;
+            .map_err(|_| kiln_foundation::bounded::CapacityError)?;
         assert_eq!(wasm_str.as_str().unwrap(), "hello");
         Ok(())
     }
@@ -467,7 +467,7 @@ pub mod no_std_demo {
 
     /// Example showing complete no_std WebAssembly parsing workflow
     pub fn demo_no_std_parsing_workflow() -> crate::Result<()> {
-        use wrt_foundation::NoStdProvider;
+        use kiln_foundation::NoStdProvider;
 
         use crate::streaming::StreamingParser;
 
@@ -480,9 +480,9 @@ pub mod no_std_demo {
         ];
 
         // Create streaming parser with bounded memory
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Format
+            kiln_foundation::budget_aware_provider::CrateId::Format
         )?;
         let mut parser = StreamingParser::new(provider)?;
 
@@ -504,14 +504,14 @@ pub mod no_std_demo {
     /// Example showing module creation in pure no_std mode
     #[cfg(feature = "std")]
     pub fn demo_module_creation() -> Result<()> {
-        use wrt_foundation::NoStdProvider;
+        use kiln_foundation::NoStdProvider;
 
         use crate::module::Module;
 
         // This demonstrates that the Module type system works in pure no_std
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Format
+            kiln_foundation::budget_aware_provider::CrateId::Format
         )?;
         let _module = Module::<NoStdProvider<1024>>::default();
 
@@ -521,7 +521,7 @@ pub mod no_std_demo {
 }
 
 // Panic handler disabled to avoid conflicts with other crates
-// // Provide a panic handler only when wrt-format is being tested in isolation
+// // Provide a panic handler only when kiln-format is being tested in isolation
 // #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {

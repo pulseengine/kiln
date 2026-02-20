@@ -8,9 +8,9 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use std::{panic, sync::Arc};
-use wrt::memory_adapter::{MemoryAdapter, SafeMemoryAdapter};
-use wrt_runtime::Memory;
-use wrt_foundation::verification::VerificationLevel;
+use kiln::memory_adapter::{MemoryAdapter, SafeMemoryAdapter};
+use kiln_runtime::Memory;
+use kiln_foundation::verification::VerificationLevel;
 
 #[derive(Arbitrary, Debug)]
 enum Operation {

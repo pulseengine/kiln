@@ -1,7 +1,7 @@
-// WRT - wrt-runtime
+// Kiln - kiln-runtime
 // Module: Foundation Type Stubs
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
@@ -12,12 +12,12 @@
 
 #![allow(dead_code)] // Allow during stub phase
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::safe_memory::NoStdProvider;
+use kiln_foundation::safe_memory::NoStdProvider;
 
 /// Temporary stub for unified memory provider
 pub trait UnifiedMemoryProvider: Send + Sync {
@@ -86,19 +86,19 @@ pub struct UnifiedTypes<const SMALL: usize, const MEDIUM: usize, const LARGE: us
 }
 
 // Convert to regular type aliases for stable compiler compatibility
-pub type UnifiedSmallVec<T> = wrt_foundation::bounded::BoundedVec<T, 64, NoStdProvider<1024>>;
-pub type UnifiedMediumVec<T> = wrt_foundation::bounded::BoundedVec<T, 1024, NoStdProvider<8192>>;
-pub type UnifiedLargeVec<T> = wrt_foundation::bounded::BoundedVec<T, 65536, NoStdProvider<65536>>;
-pub type UnifiedRuntimeString = wrt_foundation::bounded::BoundedString<1024>;
+pub type UnifiedSmallVec<T> = kiln_foundation::bounded::BoundedVec<T, 64, NoStdProvider<1024>>;
+pub type UnifiedMediumVec<T> = kiln_foundation::bounded::BoundedVec<T, 1024, NoStdProvider<8192>>;
+pub type UnifiedLargeVec<T> = kiln_foundation::bounded::BoundedVec<T, 65536, NoStdProvider<65536>>;
+pub type UnifiedRuntimeString = kiln_foundation::bounded::BoundedString<1024>;
 
 /// Default type configuration
 pub type DefaultTypes = UnifiedTypes<64, 1024, 65536>;
 pub type SmallVec<T> =
-    wrt_foundation::bounded::BoundedVec<T, 64, wrt_foundation::NoStdProvider<8192>>;
+    kiln_foundation::bounded::BoundedVec<T, 64, kiln_foundation::NoStdProvider<8192>>;
 pub type MediumVec<T> =
-    wrt_foundation::bounded::BoundedVec<T, 1024, wrt_foundation::NoStdProvider<65536>>;
+    kiln_foundation::bounded::BoundedVec<T, 1024, kiln_foundation::NoStdProvider<65536>>;
 pub type LargeVec<T> =
-    wrt_foundation::bounded::BoundedVec<T, 65536, wrt_foundation::NoStdProvider<1048576>>;
+    kiln_foundation::bounded::BoundedVec<T, 65536, kiln_foundation::NoStdProvider<1048576>>;
 
 /// ASIL levels for safety context
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -142,4 +142,4 @@ impl Default for SafetyContext {
 }
 
 /// Value type stub
-pub use wrt_foundation::values::Value;
+pub use kiln_foundation::values::Value;

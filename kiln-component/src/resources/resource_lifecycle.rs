@@ -14,11 +14,11 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::{collections::BTreeMap as HashMap, vec::Vec};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticVec;
+use kiln_foundation::collections::StaticVec;
 
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedString,
     collections::{StaticMap as SimpleHashMap, StaticVec as BoundedVec},
     safe_memory::NoStdProvider,
@@ -222,7 +222,7 @@ impl ResourceLifecycleManager {
             name: name.to_string(),
             #[cfg(not(feature = "std"))]
             name: {
-                use wrt_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
+                use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
                 let provider = safe_managed_alloc!(512, CrateId::Component).map_err(|_| {
                     Error::resource_error("Failed to allocate memory for resource name")
                 })?;

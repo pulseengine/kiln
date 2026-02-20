@@ -9,7 +9,7 @@ use core::{
     task::{RawWaker, RawWakerVTable, Waker},
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     Arc, CrateId, Mutex, collections::StaticVec as BoundedVec, safe_managed_alloc,
 };
 

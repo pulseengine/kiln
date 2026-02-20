@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Validation Utilities
 // SW-REQ-ID: REQ_VERIFY_002
 // SW-REQ-ID: REQ_VERIFY_003
@@ -18,7 +18,7 @@
 extern crate alloc;
 
 // Added BoundedVec for tests
-use wrt_error::{
+use kiln_error::{
     ErrorCategory,
     Result,
 };

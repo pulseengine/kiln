@@ -4,7 +4,7 @@
 //! It supports both std and no_std environments with appropriate
 //! implementations for each.
 
-// WRT - wrt-component
+// WRT - kiln-component
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -19,7 +19,7 @@ use crate::prelude::*;
 mod std_impl {
     use std::{collections::HashMap, string::ToString, sync::Arc};
 
-    use wrt_error::Result;
+    use kiln_error::Result;
 
     use crate::components::component::Component;
 
@@ -85,8 +85,8 @@ mod no_std_impl {
     extern crate alloc;
     use alloc::string::{String, ToString};
 
-    use wrt_error::{Error, ErrorCategory, Result, codes};
-    use wrt_foundation::collections::StaticVec as BoundedVec;
+    use kiln_error::{Error, ErrorCategory, Result, codes};
+    use kiln_foundation::collections::StaticVec as BoundedVec;
 
     use crate::components::component_no_std::Component;
 

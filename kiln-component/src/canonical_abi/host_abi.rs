@@ -29,8 +29,8 @@ use alloc::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 
-use wrt_error::{Error, Result};
-use wrt_foundation::values::Value as FoundationValue;
+use kiln_error::{Error, Result};
+use kiln_foundation::values::Value as FoundationValue;
 
 use super::{
     CanonicalABI, CanonicalMemory, ComponentType, ComponentValue,

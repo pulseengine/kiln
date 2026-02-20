@@ -104,23 +104,23 @@ jobs:
           fi
           
           # If VERSIONS_TO_PASS can contain multiple space-separated versions (e.g. from input), ensure uniqueness.
-          # The cargo-wrt expects space-separated versions.
+          # The cargo-kiln expects space-separated versions.
           UNIQUE_VERSIONS=$(echo "$VERSIONS_TO_PASS" | xargs -n1 | sort -u | xargs)
           echo "VERSIONS_TO_BUILD=$UNIQUE_VERSIONS" >> $GITHUB_ENV
-          echo "Final list of versions to build for cargo-wrt: $UNIQUE_VERSIONS"
+          echo "Final list of versions to build for cargo-kiln: $UNIQUE_VERSIONS"
 
       - name: Generate code coverage for documentation
         run: |
           echo "Generating code coverage for documentation inclusion"
-          # Ensure cargo-wrt is compiled and installed
-          cargo build --package cargo-wrt
-          cargo install --path cargo-wrt --force
+          # Ensure cargo-kiln is compiled and installed
+          cargo build --package cargo-kiln
+          cargo install --path cargo-kiln --force
           # Add Dagger to PATH
           export PATH="$HOME/.dagger/bin:$(pwd)/bin:$PATH"
           echo $PATH
           # Run coverage analysis in best-effort mode for documentation
           echo "Running coverage analysis in best-effort mode..."
-          cargo-wrt coverage --html --best-effort
+          cargo-kiln coverage --html --best-effort
         env:
           RUST_LOG: info
           RUST_BACKTRACE: 1
@@ -130,11 +130,11 @@ jobs:
           # CI environment flag
           CI: true
 
-      - name: Build documentation via cargo-wrt
+      - name: Build documentation via cargo-kiln
         run: |
           echo "Building documentation for versions: ${{ env.VERSIONS_TO_BUILD }}"
           export PATH="$HOME/.dagger/bin:$(pwd)/bin:$PATH"
-          cargo-wrt docs --open --private --output-dir ./docs_output
+          cargo-kiln docs --open --private --output-dir ./docs_output
         env:
           RUST_LOG: info
           RUST_BACKTRACE: 1
@@ -178,11 +178,11 @@ jobs:
           <html>
           <head>
               <meta charset="utf-8">
-              <title>WRT Documentation</title>
+              <title>Kiln Documentation</title>
               <meta http-equiv="refresh" content="0; url=api/wrt/index.html">
           </head>
           <body>
-              <p>Redirecting to <a href="api/wrt/index.html">WRT API Documentation</a>...</p>
+              <p>Redirecting to <a href="api/wrt/index.html">Kiln API Documentation</a>...</p>
           </body>
           </html>
           EOF

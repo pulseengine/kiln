@@ -12,7 +12,7 @@ use std::{fmt, mem};
 #[cfg(feature = "std")]
 use std::{boxed::Box, string::String, vec::Vec};
 
-use wrt_foundation::{
+use kiln_foundation::{
     collections::StaticVec as BoundedVec,
     component::ComponentType,
     component_value::ComponentValue,
@@ -23,7 +23,7 @@ use wrt_foundation::{
 };
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     safe_memory::NoStdProvider,
     budget_aware_provider::CrateId,
     safe_managed_alloc,
@@ -81,7 +81,7 @@ pub struct HostFunctionRegistry {
     #[cfg(feature = "std")]
     pub implementation: Box<dyn HostFunction>,
     #[cfg(not(any(feature = "std", )))]
-    pub implementation: fn(&[Value]) -> wrt_error::Result<Value>,
+    pub implementation: fn(&[Value]) -> kiln_error::Result<Value>,
     /// Access permissions
     pub permissions: HostFunctionPermissions,
 }
@@ -106,9 +106,9 @@ pub struct EventHandler {
     pub event_type: EventType,
     /// Handler function
     #[cfg(feature = "std")]
-    pub handler: Box<dyn Fn(&ComponentEvent) -> wrt_error::Result<()>>,
+    pub handler: Box<dyn Fn(&ComponentEvent) -> kiln_error::Result<()>>,
     #[cfg(not(any(feature = "std", )))]
-    pub handler: fn(&ComponentEvent) -> wrt_error::Result<()>,
+    pub handler: fn(&ComponentEvent) -> kiln_error::Result<()>,
     /// Handler priority (higher values execute first)
     pub priority: u32,
 }
@@ -136,7 +136,7 @@ impl Default for EventHandler {
         }
         #[cfg(not(any(feature = "std", )))]
         {
-            fn default_handler(_event: &ComponentEvent) -> wrt_error::Result<()> {
+            fn default_handler(_event: &ComponentEvent) -> kiln_error::Result<()> {
                 Ok(())
             }
             Self {
@@ -161,7 +161,7 @@ impl ToBytes for EventHandler {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.event_type.to_bytes_with_provider(writer, provider)?;
         self.priority.to_bytes_with_provider(writer, provider)?;
         // Note: Handler function cannot be serialized
@@ -173,7 +173,7 @@ impl FromBytes for EventHandler {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let event_type = EventType::from_bytes_with_provider(reader, provider)?;
         let priority = u32::from_bytes_with_provider(reader, provider)?;
 
@@ -187,7 +187,7 @@ impl FromBytes for EventHandler {
         }
         #[cfg(not(any(feature = "std", )))]
         {
-            fn default_handler(_event: &ComponentEvent) -> wrt_error::Result<()> {
+            fn default_handler(_event: &ComponentEvent) -> kiln_error::Result<()> {
                 Ok(())
             }
             Ok(Self {
@@ -358,7 +358,7 @@ pub struct SecurityPolicy {
 
 impl HostIntegrationManager {
     /// Create a new host integration manager
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             host_functions: Vec::new(),
@@ -382,7 +382,7 @@ impl HostIntegrationManager {
         signature: ComponentType,
         implementation: Box<dyn HostFunction>,
         permissions: HostFunctionPermissions,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         let function_id = self.host_functions.len() as u32;
 
         let registry_entry = HostFunctionRegistry { name, signature, implementation, permissions };
@@ -397,15 +397,15 @@ impl HostIntegrationManager {
         &mut self,
         name: BoundedString<64>,
         signature: ComponentType,
-        implementation: fn(&[Value]) -> wrt_error::Result<Value>,
+        implementation: fn(&[Value]) -> kiln_error::Result<Value>,
         permissions: HostFunctionPermissions,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         let function_id = self.host_functions.len() as u32;
 
         let registry_entry = HostFunctionRegistry { name, signature, implementation, permissions };
 
         self.host_functions.push(registry_entry).map_err(|_| {
-            wrt_error::Error::resource_exhausted("Error occurred")
+            kiln_error::Error::resource_exhausted("Error occurred")
             )
         })?;
 
@@ -419,21 +419,21 @@ impl HostIntegrationManager {
         args: &[Value],
         caller_instance: u32,
         engine: &mut ComponentExecutionEngine,
-    ) -> wrt_error::Result<Value> {
+    ) -> kiln_error::Result<Value> {
         let function = self.host_functions.get(function_id as usize).ok_or_else(|| {
-            wrt_error::Error::validation_invalid_input("Error occurred")
+            kiln_error::Error::validation_invalid_input("Error occurred")
             )
         })?;
 
         // Check security policy
         if !self.security_policy.allow_arbitrary_host_calls {
-            return Err(wrt_error::Error::runtime_error("Error occurred")
+            return Err(kiln_error::Error::runtime_error("Error occurred")
             ;
         }
 
         // Check function permissions
         if !self.check_function_permissions(&function.permissions, caller_instance) {
-            return Err(wrt_error::Error::runtime_error("Error occurred")
+            return Err(kiln_error::Error::runtime_error("Error occurred")
             ;
         }
 
@@ -473,9 +473,9 @@ impl HostIntegrationManager {
     pub fn register_event_handler(
         &mut self,
         event_type: EventType,
-        handler: Box<dyn Fn(&ComponentEvent) -> wrt_error::Result<()>>,
+        handler: Box<dyn Fn(&ComponentEvent) -> kiln_error::Result<()>>,
         priority: u32,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let event_handler = EventHandler { event_type, handler, priority };
 
         self.event_handlers.push(event_handler);
@@ -491,13 +491,13 @@ impl HostIntegrationManager {
     pub fn register_event_handler(
         &mut self,
         event_type: EventType,
-        handler: fn(&ComponentEvent) -> wrt_error::Result<()>,
+        handler: fn(&ComponentEvent) -> kiln_error::Result<()>,
         priority: u32,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let event_handler = EventHandler { event_type, handler, priority };
 
         self.event_handlers.push(event_handler).map_err(|_| {
-            wrt_error::Error::resource_exhausted("Error occurred")
+            kiln_error::Error::resource_exhausted("Error occurred")
             )
         })?;
 
@@ -505,7 +505,7 @@ impl HostIntegrationManager {
     }
 
     /// Emit an event to registered handlers
-    fn emit_event(&mut self, event: ComponentEvent) -> wrt_error::Result<()> {
+    fn emit_event(&mut self, event: ComponentEvent) -> kiln_error::Result<()> {
         for handler in &self.event_handlers {
             if handler.event_type == event.event_type {
                 #[cfg(feature = "std")]
@@ -529,10 +529,10 @@ impl HostIntegrationManager {
         resource_type: HostResourceType,
         data: ComponentValue,
         permissions: HostResourcePermissions,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         // Check security policy
         if !self.security_policy.allowed_resource_types.contains(&resource_type) {
-            return Err(wrt_error::Error::runtime_error("Error occurred")
+            return Err(kiln_error::Error::runtime_error("Error occurred")
             ;
         }
 
@@ -547,7 +547,7 @@ impl HostIntegrationManager {
         #[cfg(not(any(feature = "std", )))]
         {
             self.host_resources.resources.push(resource).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Error occurred")
+                kiln_error::Error::resource_exhausted("Error occurred")
             })?;
             })?;
         }
@@ -561,15 +561,15 @@ impl HostIntegrationManager {
         resource_id: u32,
         instance_id: u32,
         sharing_mode: ResourceSharingMode,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let resource =
             self.host_resources.resources.get(resource_id as usize).ok_or_else(|| {
-                wrt_error::Error::validation_invalid_input("Error occurred")
+                kiln_error::Error::validation_invalid_input("Error occurred")
             )
             })?;
 
         if !resource.permissions.shareable {
-            return Err(wrt_error::Error::runtime_error("Error occurred")
+            return Err(kiln_error::Error::runtime_error("Error occurred")
             ;
         }
 
@@ -585,7 +585,7 @@ impl HostIntegrationManager {
         #[cfg(not(any(feature = "std", )))]
         {
             allowed_instances.push(instance_id).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Error occurred")
+                kiln_error::Error::resource_exhausted("Error occurred")
             })?;
             })?;
         }
@@ -599,7 +599,7 @@ impl HostIntegrationManager {
         #[cfg(not(any(feature = "std", )))]
         {
             self.host_resources.sharing_policies.push(policy).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Error occurred")
+                kiln_error::Error::resource_exhausted("Error occurred")
             })?;
             })?;
         }
@@ -646,7 +646,7 @@ impl HostIntegrationManager {
 
 impl HostResourceManager {
     /// Create a new host resource manager
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             resources: Vec::new(),
@@ -710,7 +710,7 @@ impl Default for HostResourcePermissions {
 
 impl SecurityPolicy {
     /// Create a new security policy with default settings
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             allow_arbitrary_host_calls: false,
             max_memory_per_component: 64 * 1024 * 1024, // 64MB
@@ -723,7 +723,7 @@ impl SecurityPolicy {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 let mut types = BoundedVec::new();
                 types.push(HostResourceType::Buffer).map_err(|_| {
-                    wrt_error::Error::resource_exhausted("Error occurred")
+                    kiln_error::Error::resource_exhausted("Error occurred")
                 })?;
                 types
             },

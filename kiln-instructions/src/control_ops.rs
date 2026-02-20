@@ -30,7 +30,7 @@
 //! # Usage
 //!
 //! ```no_run
-//! use wrt_instructions::{
+//! use kiln_instructions::{
 //!     control_ops::{
 //!         BrTable,
 //!         CallIndirect,
@@ -56,8 +56,8 @@
 
 // Remove unused imports
 
-use wrt_error::Result;
-use wrt_foundation::Value;
+use kiln_error::Result;
+use kiln_foundation::Value;
 
 #[cfg(not(feature = "std"))]
 use crate::prelude::{
@@ -126,7 +126,7 @@ pub enum ControlOp {
         table:   Vec<u32>,
         /// Table of branch target labels (`no_std`)
         #[cfg(not(feature = "std"))]
-        table:   BoundedVec<u32, 256, wrt_foundation::NoStdProvider<8192>>,
+        table:   BoundedVec<u32, 256, kiln_foundation::NoStdProvider<8192>>,
         /// Default label to branch to if the index is out of bounds
         default: u32,
     },
@@ -313,7 +313,7 @@ pub struct BrTable {
     pub table: Vec<u32>,
 
     #[cfg(not(feature = "std"))]
-    pub table: wrt_foundation::BoundedVec<u32, 256, wrt_foundation::NoStdProvider<8192>>,
+    pub table: kiln_foundation::BoundedVec<u32, 256, kiln_foundation::NoStdProvider<8192>>,
 
     /// Default label to branch to if the index is out of bounds
     pub default: u32,
@@ -330,7 +330,7 @@ impl BrTable {
     /// Create a new `br_table` operation with `BoundedVec` (`no_std`)
     #[cfg(not(feature = "std"))]
     pub fn new_bounded(
-        table: wrt_foundation::BoundedVec<u32, 256, wrt_foundation::NoStdProvider<8192>>,
+        table: kiln_foundation::BoundedVec<u32, 256, kiln_foundation::NoStdProvider<8192>>,
         default: u32,
     ) -> Self {
         Self { table, default }
@@ -351,11 +351,11 @@ impl BrTable {
         }
         #[cfg(not(feature = "std"))]
         {
-            let provider = wrt_foundation::safe_managed_alloc!(
+            let provider = kiln_foundation::safe_managed_alloc!(
                 8192,
-                wrt_foundation::budget_aware_provider::CrateId::Instructions
+                kiln_foundation::budget_aware_provider::CrateId::Instructions
             )?;
-            let mut table = wrt_foundation::BoundedVec::new(provider)
+            let mut table = kiln_foundation::BoundedVec::new(provider)
                 .map_err(|_| Error::memory_error("Could not create BoundedVec"))?;
             for &label in table_slice {
                 table

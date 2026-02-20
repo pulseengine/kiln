@@ -1,14 +1,14 @@
-//! Example demonstrating WASI-NN integration with wrtd
+//! Example demonstrating WASI-NN integration with kilnd
 //!
 //! This example shows how to:
-//! 1. Configure wrtd with WASI-NN support
+//! 1. Configure kilnd with WASI-NN support
 //! 2. Initialize WASI-NN with appropriate capability level
 //! 3. Load and execute a WebAssembly module that uses WASI-NN
 
 #[cfg(all(feature = "std", feature = "wasi", feature = "wasi-nn"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use wrt_foundation::verification::VerificationLevel;
-    use wrt_wasi::{
+    use kiln_foundation::verification::VerificationLevel;
+    use kiln_wasi::{
         nn::{
             capabilities::create_nn_capability,
             initialize_nn,
@@ -16,14 +16,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         WasiCapabilities,
         WasiNeuralNetworkCapabilities,
     };
-    use wrtd::{
+    use kilnd::{
         EngineMode,
-        WrtdConfig,
-        WrtdEngine,
+        KilndConfig,
+        KilndEngine,
     };
 
-    // Create wrtd configuration
-    let mut config = WrtdConfig::default();
+    // Create kilnd configuration
+    let mut config = KilndConfig::default();
     config.enable_wasi = true;
     config.engine_mode = EngineMode::Interpreter;
 
@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config.wasi_capabilities = Some(wasi_caps);
 
     // Create and initialize the engine
-    let mut engine = WrtdEngine::new(config)?;
+    let mut engine = KilndEngine::new(config)?;
 
     // Initialize WASI-NN subsystem
     #[cfg(feature = "wasi-nn")]
@@ -61,11 +61,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         initialize_nn(nn_capability)?;
 
         // Initialize backend registry
-        use wrt_wasi::nn::backend::initialize_backends;
+        use kiln_wasi::nn::backend::initialize_backends;
         initialize_backends()?;
 
         // Initialize stores
-        use wrt_wasi::nn::{
+        use kiln_wasi::nn::{
             execution::initialize_context_store,
             graph::initialize_graph_store,
         };
@@ -115,8 +115,8 @@ mod tests {
     #[test]
     #[cfg(all(feature = "std", feature = "wasi", feature = "wasi-nn"))]
     fn test_nn_capability_levels() {
-        use wrt_foundation::verification::VerificationLevel;
-        use wrt_wasi::nn::capabilities::create_nn_capability;
+        use kiln_foundation::verification::VerificationLevel;
+        use kiln_wasi::nn::capabilities::create_nn_capability;
 
         // Test QM level
         let qm_cap = create_nn_capability(VerificationLevel::Standard).unwrap();

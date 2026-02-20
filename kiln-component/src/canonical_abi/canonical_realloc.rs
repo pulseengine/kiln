@@ -15,9 +15,9 @@
 //! 2. The callback receives (old_ptr, old_size, align, new_size) and returns new_ptr
 //! 3. The callback should invoke the component's exported `cabi_realloc` function
 
-use wrt_error::Result;
-use wrt_error::{Error, ErrorCategory, codes};
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_error::{Error, ErrorCategory, codes};
+use kiln_foundation::{
     bounded::MAX_COMPONENT_TYPES, budget_aware_provider::CrateId,
     collections::StaticVec as BoundedVec, safe_managed_alloc,
 };
@@ -616,7 +616,7 @@ pub mod engine_integration {
     ///
     /// # Example
     /// ```ignore
-    /// use wrt_component::canonical_abi::canonical_realloc::engine_integration::*;
+    /// use kiln_component::canonical_abi::canonical_realloc::engine_integration::*;
     ///
     /// // Find cabi_realloc export
     /// let realloc_idx = engine.find_cabi_realloc(instance_id)?;

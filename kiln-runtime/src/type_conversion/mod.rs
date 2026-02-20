@@ -1,7 +1,7 @@
-//! Type conversion utilities for the WRT runtime
+//! Type conversion utilities for the Kiln runtime
 //!
 //! This module provides conversion functions between different type
-//! representations used throughout the WRT execution pipeline.
+//! representations used throughout the Kiln execution pipeline.
 
 pub mod locals_conversion;
 pub mod slice_adapter;

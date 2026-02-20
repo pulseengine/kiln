@@ -31,24 +31,24 @@ Core Runtime Requirements
      - Code Reference
    * - FR-001
      - WebAssembly module loading
-     - ``wrt-decoder``
-     - ``wrt-decoder/src/module.rs:45``
+     - ``kiln-decoder``
+     - ``kiln-decoder/src/module.rs:45``
    * - FR-002
      - Component model support
-     - ``wrt-component``
-     - ``wrt-component/src/component.rs:89``
+     - ``kiln-component``
+     - ``kiln-component/src/component.rs:89``
    * - FR-003
      - Memory management
-     - ``wrt-foundation::safe_memory``
-     - ``wrt-foundation/src/safe_memory.rs:124``
+     - ``kiln-foundation::safe_memory``
+     - ``kiln-foundation/src/safe_memory.rs:124``
    * - FR-004
      - Instruction execution
-     - ``wrt-runtime``
-     - ``wrt-runtime/src/execution.rs:156``
+     - ``kiln-runtime``
+     - ``kiln-runtime/src/execution.rs:156``
    * - FR-005
      - Error handling
-     - ``wrt-error``
-     - ``wrt-error/src/errors.rs:78``
+     - ``kiln-error``
+     - ``kiln-error/src/errors.rs:78``
 
 Multi-Environment Requirements
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -63,24 +63,24 @@ Multi-Environment Requirements
      - Code Reference
    * - FR-010
      - std environment support
-     - ``wrt-foundation::bounded``
-     - ``wrt-foundation/src/bounded_collections.rs:15``
+     - ``kiln-foundation::bounded``
+     - ``kiln-foundation/src/bounded_collections.rs:15``
    * - FR-011
      - no_std+alloc support
-     - ``wrt-foundation::bounded``
-     - ``wrt-foundation/src/bounded_collections.rs:20``
+     - ``kiln-foundation::bounded``
+     - ``kiln-foundation/src/bounded_collections.rs:20``
    * - FR-012
      - no_std+no_alloc support
-     - ``wrt-foundation::bounded``
-     - ``wrt-foundation/src/bounded_collections.rs:25``
+     - ``kiln-foundation::bounded``
+     - ``kiln-foundation/src/bounded_collections.rs:25``
    * - FR-013
      - Feature parity across environments
      - All core components
      - Verified through conditional compilation
    * - FR-014
      - Compile-time environment detection
-     - ``wrt-foundation::prelude``
-     - ``wrt-foundation/src/prelude.rs:45``
+     - ``kiln-foundation::prelude``
+     - ``kiln-foundation/src/prelude.rs:45``
 
 Safety Requirements
 ~~~~~~~~~~~~~~~~~~~
@@ -95,20 +95,20 @@ Safety Requirements
      - Code Reference
    * - SF-001
      - Memory bounds checking
-     - ``wrt-foundation::safe_memory``
-     - ``wrt-foundation/src/safe_memory.rs:89``
+     - ``kiln-foundation::safe_memory``
+     - ``kiln-foundation/src/safe_memory.rs:89``
    * - SF-002
      - Stack overflow protection
-     - ``wrt-runtime::stackless``
-     - ``wrt-runtime/src/stackless/engine.rs:67``
+     - ``kiln-runtime::stackless``
+     - ``kiln-runtime/src/stackless/engine.rs:67``
    * - SF-003
      - Resource limit enforcement
-     - ``wrt-component::resources``
-     - ``wrt-component/src/resources/resource_table.rs:123``
+     - ``kiln-component::resources``
+     - ``kiln-component/src/resources/resource_table.rs:123``
    * - SF-004
      - Type safety validation
-     - ``wrt-component::types``
-     - ``wrt-component/src/types.rs:145``
+     - ``kiln-component::types``
+     - ``kiln-component/src/types.rs:145``
    * - SF-005
      - Panic-free operation
      - All components
@@ -127,24 +127,24 @@ Platform Requirements
      - Code Reference
    * - PF-001
      - Linux support
-     - ``wrt-platform::linux``
-     - ``wrt-platform/src/linux_memory.rs:34``
+     - ``kiln-platform::linux``
+     - ``kiln-platform/src/linux_memory.rs:34``
    * - PF-002
      - macOS support
-     - ``wrt-platform::macos``
-     - ``wrt-platform/src/macos_memory.rs:45``
+     - ``kiln-platform::macos``
+     - ``kiln-platform/src/macos_memory.rs:45``
    * - PF-003
      - QNX support
-     - ``wrt-platform::qnx``
-     - ``wrt-platform/src/qnx_memory.rs:56``
+     - ``kiln-platform::qnx``
+     - ``kiln-platform/src/qnx_memory.rs:56``
    * - PF-004
      - Zephyr RTOS support
-     - ``wrt-platform::zephyr``
-     - ``wrt-platform/src/zephyr_memory.rs:67``
+     - ``kiln-platform::zephyr``
+     - ``kiln-platform/src/zephyr_memory.rs:67``
    * - PF-005
      - Tock OS support
-     - ``wrt-platform::tock``
-     - ``wrt-platform/src/tock_memory.rs:78``
+     - ``kiln-platform::tock``
+     - ``kiln-platform/src/tock_memory.rs:78``
 
 Performance Requirements
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -159,20 +159,20 @@ Performance Requirements
      - Code Reference
    * - PER-001
      - Zero-allocation operation
-     - ``wrt-foundation::bounded``
+     - ``kiln-foundation::bounded``
      - Verified through no_alloc feature
    * - PER-002
      - Constant-time operations
-     - ``wrt-foundation::safe_memory``
-     - ``wrt-foundation/src/safe_memory.rs:234``
+     - ``kiln-foundation::safe_memory``
+     - ``kiln-foundation/src/safe_memory.rs:234``
    * - PER-003
      - Minimal memory footprint
      - All components
      - Measured through size analysis
    * - PER-004
      - Deterministic execution
-     - ``wrt-runtime::stackless``
-     - ``wrt-runtime/src/stackless/frame.rs:89``
+     - ``kiln-runtime::stackless``
+     - ``kiln-runtime/src/stackless/frame.rs:89``
 
 Component Coverage Analysis
 ---------------------------
@@ -208,17 +208,17 @@ All components implement specific requirements:
 
    * - Component
      - Implementing Requirements
-   * - ``wrt-foundation``
+   * - ``kiln-foundation``
      - FR-003, FR-010, FR-011, FR-012, FR-014, SF-001, PER-001, PER-002
-   * - ``wrt-component``
+   * - ``kiln-component``
      - FR-002, SF-003, SF-004
-   * - ``wrt-runtime``
+   * - ``kiln-runtime``
      - FR-004, SF-002, PER-004
-   * - ``wrt-decoder``
+   * - ``kiln-decoder``
      - FR-001
-   * - ``wrt-error``
+   * - ``kiln-error``
      - FR-005, SF-005
-   * - ``wrt-platform``
+   * - ``kiln-platform``
      - PF-001, PF-002, PF-003, PF-004, PF-005
 
 Environment-Specific Traceability
@@ -238,7 +238,7 @@ Critical architectural decisions for handling std/no_std/no_alloc environments:
 
    **Implementation**: 
    
-   1. **Foundation Layer** (``wrt-foundation/src/bounded_collections.rs:15-30``):
+   1. **Foundation Layer** (``kiln-foundation/src/bounded_collections.rs:15-30``):
       
       .. code-block:: rust
       
@@ -251,7 +251,7 @@ Critical architectural decisions for handling std/no_std/no_alloc environments:
          #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
          pub type BoundedVec<T> = heapless::Vec<T, 1024>;
 
-   2. **Memory Management** (``wrt-foundation/src/safe_memory.rs:45-67``):
+   2. **Memory Management** (``kiln-foundation/src/safe_memory.rs:45-67``):
       
       .. code-block:: rust
       
@@ -266,7 +266,7 @@ Critical architectural decisions for handling std/no_std/no_alloc environments:
              size: usize,
          }
 
-   3. **Component Storage** (``wrt-component/src/component_registry.rs:89-123``):
+   3. **Component Storage** (``kiln-component/src/component_registry.rs:89-123``):
       
       .. code-block:: rust
       
@@ -334,7 +334,7 @@ Future Considerations
 ~~~~~~~~~~~~~~~~~~~~~
 
 1. **Additional Platform Support**: Future requirements for additional RTOS platforms
-   will be allocated to ``wrt-platform`` extensions.
+   will be allocated to ``kiln-platform`` extensions.
 
 2. **Enhanced Safety Features**: Additional safety requirements (e.g., CFI, BTI) 
    will be allocated to new security-focused components.

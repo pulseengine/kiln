@@ -1,7 +1,7 @@
 //! Minimal WAST Test Execution Engine
 //!
 //! This module provides a simplified bridge between the WAST test framework and
-//! the WRT runtime, focusing on basic functionality with real WebAssembly
+//! the Kiln runtime, focusing on basic functionality with real WebAssembly
 //! execution using StacklessEngine directly.
 
 #![cfg(feature = "std")]
@@ -11,9 +11,9 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use wast::{WastExecute, WastInvoke};
-use wrt_decoder::decoder::decode_module;
-use wrt_foundation::values::Value;
-use wrt_runtime::{module::Module, stackless::StacklessEngine};
+use kiln_decoder::decoder::decode_module;
+use kiln_foundation::values::Value;
+use kiln_runtime::{module::Module, stackless::StacklessEngine};
 
 // Re-export value conversion utilities from wast_values module
 pub use crate::wast_values::{
@@ -28,7 +28,7 @@ pub use crate::wast_values::{
 /// - Function invocation with argument/return value conversion
 /// - Basic assert_return directive support
 pub struct WastEngine {
-    /// The underlying WRT execution engine
+    /// The underlying Kiln execution engine
     engine: StacklessEngine,
     /// Registry of loaded modules by name for multi-module tests
     /// Uses Arc to avoid cloning which loses BoundedMap data
@@ -55,22 +55,22 @@ impl WastEngine {
 
     /// Load and instantiate a WebAssembly module from binary data
     pub fn load_module(&mut self, name: Option<&str>, wasm_binary: &[u8]) -> Result<()> {
-        // Decode the WASM binary into a WrtModule
-        let wrt_module = decode_module(wasm_binary).map_err(|e| {
+        // Decode the WASM binary into a KilnModule
+        let kiln_module = decode_module(wasm_binary).map_err(|e| {
             anyhow::anyhow!("XYZZY_DECODE_FAILED({} bytes): {} [code={}, category={:?}]",
                 wasm_binary.len(), e, e.code, e.category)
         })?;
 
         // Validate the module before proceeding (Phase 1 of WAST conformance)
-        crate::wast_validator::WastModuleValidator::validate(&wrt_module)
+        crate::wast_validator::WastModuleValidator::validate(&kiln_module)
             .map_err(|e| anyhow::anyhow!("Module validation failed: {:?}", e))?;
 
-        // Convert WrtModule to RuntimeModule
+        // Convert KilnModule to RuntimeModule
         // Wrap in Arc immediately to avoid clone() which loses BoundedMap data
-        use wrt_runtime::module_instance::ModuleInstance;
+        use kiln_runtime::module_instance::ModuleInstance;
 
         let module = Arc::new(
-            *Module::from_wrt_module(&wrt_module).context("Failed to convert to runtime module")?,
+            *Module::from_kiln_module(&kiln_module).context("Failed to convert to runtime module")?,
         );
 
         // Create a module instance from the module
@@ -205,7 +205,7 @@ impl WastEngine {
         module
             .get_export(function_name)
             .filter(|export| {
-                use wrt_runtime::module::ExportKind;
+                use kiln_runtime::module::ExportKind;
                 export.kind == ExportKind::Function
             })
             .map(|export| export.index)
@@ -216,7 +216,7 @@ impl WastEngine {
 
     /// Get a global variable value by name
     pub fn get_global(&self, module_name: Option<&str>, global_name: &str) -> Result<Value> {
-        use wrt_runtime::module::ExportKind;
+        use kiln_runtime::module::ExportKind;
 
         // Get the module and instance_id
         let (module, instance_id) = if let Some(name) = module_name {
@@ -309,12 +309,12 @@ impl WastEngine {
     /// imported memories come before defined memories in the index space.
     fn resolve_spectest_memory_imports(
         module: &Module,
-        module_instance: &Arc<wrt_runtime::module_instance::ModuleInstance>,
+        module_instance: &Arc<kiln_runtime::module_instance::ModuleInstance>,
     ) -> Result<()> {
-        use wrt_foundation::clean_core_types::CoreMemoryType;
-        use wrt_foundation::types::{Limits, MemoryType};
-        use wrt_runtime::memory::Memory;
-        use wrt_runtime::module::{MemoryWrapper, RuntimeImportDesc};
+        use kiln_foundation::clean_core_types::CoreMemoryType;
+        use kiln_foundation::types::{Limits, MemoryType};
+        use kiln_runtime::memory::Memory;
+        use kiln_runtime::module::{MemoryWrapper, RuntimeImportDesc};
 
         // Look for memory imports from spectest
         for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
@@ -354,12 +354,12 @@ impl WastEngine {
     /// - global_f64: f64 = 666.6
     fn resolve_spectest_global_imports(
         module: &Module,
-        module_instance: &Arc<wrt_runtime::module_instance::ModuleInstance>,
+        module_instance: &Arc<kiln_runtime::module_instance::ModuleInstance>,
     ) -> Result<()> {
         use std::sync::{Arc as StdArc, RwLock};
-        use wrt_foundation::values::{FloatBits32, FloatBits64};
-        use wrt_runtime::global::Global;
-        use wrt_runtime::module::GlobalWrapper;
+        use kiln_foundation::values::{FloatBits32, FloatBits64};
+        use kiln_runtime::global::Global;
+        use kiln_runtime::module::GlobalWrapper;
 
         // The global_import_types stores global types in order of appearance
         // We need to match them with the corresponding import names
@@ -418,11 +418,11 @@ impl WastEngine {
     /// imported tables come before defined tables in the index space.
     fn resolve_spectest_table_imports(
         module: &Module,
-        module_instance: &Arc<wrt_runtime::module_instance::ModuleInstance>,
+        module_instance: &Arc<kiln_runtime::module_instance::ModuleInstance>,
     ) -> Result<()> {
-        use wrt_foundation::types::{Limits, RefType, TableType};
-        use wrt_runtime::module::{RuntimeImportDesc, TableWrapper};
-        use wrt_runtime::table::Table;
+        use kiln_foundation::types::{Limits, RefType, TableType};
+        use kiln_runtime::module::{RuntimeImportDesc, TableWrapper};
+        use kiln_runtime::table::Table;
 
         // The spectest table type: (table 10 20 funcref)
         // Look for table imports from spectest
@@ -460,9 +460,9 @@ impl WastEngine {
     fn resolve_registered_table_imports(
         &self,
         module: &Module,
-        module_instance: &Arc<wrt_runtime::module_instance::ModuleInstance>,
+        module_instance: &Arc<kiln_runtime::module_instance::ModuleInstance>,
     ) -> Result<()> {
-        use wrt_runtime::module::{RuntimeImportDesc, TableWrapper};
+        use kiln_runtime::module::{RuntimeImportDesc, TableWrapper};
 
         let mut table_import_idx = 0usize;
 
@@ -479,13 +479,13 @@ impl WastEngine {
                 if let Some(source_module_arc) = self.modules.get(mod_name) {
                     // Find the exported table in the source module
                     let bounded_field =
-                        wrt_foundation::bounded::BoundedString::<256>::from_str_truncate(
+                        kiln_foundation::bounded::BoundedString::<256>::from_str_truncate(
                             field_name,
                         )
                         .map_err(|e| anyhow::anyhow!("Field name too long: {:?}", e))?;
 
                     if let Some(export) = source_module_arc.exports.get(&bounded_field) {
-                        if export.kind == wrt_runtime::module::ExportKind::Table {
+                        if export.kind == kiln_runtime::module::ExportKind::Table {
                             let source_table_idx = export.index as usize;
 
                             // Get the source module instance to access its table
@@ -520,11 +520,11 @@ impl WastEngine {
     fn resolve_registered_module_imports(
         &self,
         module: &Module,
-        module_instance: &Arc<wrt_runtime::module_instance::ModuleInstance>,
+        module_instance: &Arc<kiln_runtime::module_instance::ModuleInstance>,
     ) -> Result<()> {
         use std::sync::{Arc as StdArc, RwLock};
-        use wrt_runtime::global::Global;
-        use wrt_runtime::module::GlobalWrapper;
+        use kiln_runtime::global::Global;
+        use kiln_runtime::module::GlobalWrapper;
 
         let mut global_import_idx = 0usize;
 
@@ -548,13 +548,13 @@ impl WastEngine {
                 if let Some(source_module) = self.modules.get(mod_name) {
                     // Find the exported global in the source module
                     let bounded_field =
-                        wrt_foundation::bounded::BoundedString::<256>::from_str_truncate(
+                        kiln_foundation::bounded::BoundedString::<256>::from_str_truncate(
                             field_name,
                         )
                         .map_err(|e| anyhow::anyhow!("Field name too long: {:?}", e))?;
 
                     if let Some(export) = source_module.exports.get(&bounded_field) {
-                        if export.kind == wrt_runtime::module::ExportKind::Global {
+                        if export.kind == kiln_runtime::module::ExportKind::Global {
                             let source_global_idx = export.index as usize;
 
                             // Get the value from the source module's global
@@ -604,7 +604,7 @@ impl WastEngine {
     /// This method sets up cross-instance function linking for imports
     /// from modules that have been registered (e.g., via `register "M"`).
     fn link_function_imports(&mut self, module: &Module, instance_id: usize) -> Result<()> {
-        use wrt_runtime::module::RuntimeImportDesc;
+        use kiln_runtime::module::RuntimeImportDesc;
 
         // Use import_types Vec which parallels import_order (more reliable than BoundedMap)
         let import_types = &module.import_types;
@@ -628,13 +628,13 @@ impl WastEngine {
                     // Check if the source module exports this function
                     if let Some(source_module) = self.modules.get(mod_name) {
                         let bounded_field =
-                            wrt_foundation::bounded::BoundedString::<256>::from_str_truncate(
+                            kiln_foundation::bounded::BoundedString::<256>::from_str_truncate(
                                 field_name,
                             )
                             .map_err(|e| anyhow::anyhow!("Field name too long: {:?}", e))?;
 
                         if let Some(export) = source_module.exports.get(&bounded_field) {
-                            if export.kind == wrt_runtime::module::ExportKind::Function {
+                            if export.kind == kiln_runtime::module::ExportKind::Function {
                                 // Set up the import link
                                 self.engine.register_import_link(
                                     instance_id,
@@ -891,8 +891,8 @@ mod tests {
     #[test]
     fn test_value_conversion() {
         let wast_arg = WastArg::Core(WastArgCore::I32(42));
-        let wrt_value = convert_wast_arg_to_value(&wast_arg).unwrap();
-        assert_eq!(wrt_value, Value::I32(42));
+        let kiln_value = convert_wast_arg_to_value(&wast_arg).unwrap();
+        assert_eq!(kiln_value, Value::I32(42));
     }
 
     #[test]
@@ -901,7 +901,7 @@ mod tests {
         assert!(!values_equal(&Value::I32(42), &Value::I32(43)));
 
         // Test NaN handling
-        use wrt_foundation::values::FloatBits32;
+        use kiln_foundation::values::FloatBits32;
         let nan1 = Value::F32(FloatBits32::NAN);
         let nan2 = Value::F32(FloatBits32::NAN);
         assert!(values_equal(&nan1, &nan2));
@@ -948,7 +948,7 @@ mod tests {
         println!("Binary ({} bytes): {:02x?}", binary.len(), &binary);
 
         // Try to decode
-        match wrt_decoder::decoder::decode_module(&binary) {
+        match kiln_decoder::decoder::decode_module(&binary) {
             Ok(module) => {
                 println!(
                     "SUCCESS: {} types, {} functions",
@@ -1007,7 +1007,7 @@ mod tests {
         }
 
         // Try to decode
-        match wrt_decoder::decoder::decode_module(&binary) {
+        match kiln_decoder::decoder::decode_module(&binary) {
             Ok(module) => {
                 println!("SUCCESS:");
                 println!("  {} types", module.types.len());
@@ -1055,7 +1055,7 @@ mod tests {
         }
 
         // Try to decode
-        match wrt_decoder::decoder::decode_module(&binary) {
+        match kiln_decoder::decoder::decode_module(&binary) {
             Ok(module) => {
                 println!("SUCCESS:");
                 println!("  {} types", module.types.len());
@@ -1105,7 +1105,7 @@ mod tests {
                         );
 
                         // Try to decode
-                        match wrt_decoder::decoder::decode_module(&binary) {
+                        match kiln_decoder::decoder::decode_module(&binary) {
                             Ok(module) => {
                                 println!(
                                     "  DECODE OK: {} types, {} functions, {} globals",
@@ -1121,7 +1121,7 @@ mod tests {
                                         println!("  VALIDATE OK");
 
                                         // Try to convert to runtime module
-                                        match wrt_runtime::module::Module::from_wrt_module(&module)
+                                        match kiln_runtime::module::Module::from_kiln_module(&module)
                                         {
                                             Ok(_runtime_module) => {
                                                 println!("  RUNTIME CONVERT OK");
@@ -1194,7 +1194,7 @@ mod tests {
         println!("Binary: {} bytes", binary.len());
 
         // Decode and convert to runtime module
-        let decoded = wrt_decoder::decoder::decode_module(&binary).expect("Failed to decode");
+        let decoded = kiln_decoder::decoder::decode_module(&binary).expect("Failed to decode");
         println!(
             "Decoded: {} types, {} functions, {} globals",
             decoded.types.len(),
@@ -1207,7 +1207,7 @@ mod tests {
         engine.load_module(None, &binary).expect("Failed to load module");
 
         // Call funcref function
-        let args: Vec<wrt_foundation::values::Value> = vec![];
+        let args: Vec<kiln_foundation::values::Value> = vec![];
         let results = engine
             .invoke_function(None, "funcref", &args)
             .expect("Failed to invoke funcref");
@@ -1217,10 +1217,10 @@ mod tests {
         // Check the result - should be FuncRef(None), not I32(-1)
         assert!(!results.is_empty(), "Expected one result");
         match &results[0] {
-            wrt_foundation::values::Value::FuncRef(None) => {
+            kiln_foundation::values::Value::FuncRef(None) => {
                 println!("PASS: Got FuncRef(None) as expected");
             },
-            wrt_foundation::values::Value::I32(v) => {
+            kiln_foundation::values::Value::I32(v) => {
                 panic!("FAIL: Got I32({}) instead of FuncRef(None)", v);
             },
             other => {
@@ -1235,10 +1235,10 @@ mod tests {
         println!("nullfuncref result: {:?}", results2);
         assert!(!results2.is_empty(), "Expected one result");
         match &results2[0] {
-            wrt_foundation::values::Value::FuncRef(None) => {
+            kiln_foundation::values::Value::FuncRef(None) => {
                 println!("PASS: Got FuncRef(None) as expected for nullfuncref");
             },
-            wrt_foundation::values::Value::I32(v) => {
+            kiln_foundation::values::Value::I32(v) => {
                 panic!(
                     "FAIL: Got I32({}) instead of FuncRef(None) for nullfuncref",
                     v
@@ -1315,7 +1315,7 @@ mod tests {
         );
 
         // Try to decode
-        match wrt_decoder::decoder::decode_module(&binary) {
+        match kiln_decoder::decoder::decode_module(&binary) {
             Ok(module) => {
                 println!("DECODE OK:");
                 println!("  {} types", module.types.len());

@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The WRT WebAssembly runtime now includes a comprehensive formal verification suite with 33 verified properties supporting ASIL-D compliance. This report summarizes the complete KANI infrastructure implementation.
+The Kiln WebAssembly runtime now includes a comprehensive formal verification suite with 33 verified properties supporting ASIL-D compliance. This report summarizes the complete KANI infrastructure implementation.
 
 ## Verification Statistics
 
@@ -184,6 +184,6 @@ The verification suite integrates with CI through:
 
 ## Conclusion
 
-The WRT formal verification suite successfully implements 33 properties covering all critical safety aspects required for ASIL-D compliance. The infrastructure is production-ready, well-documented, and integrated with CI/CD pipelines. While some workspace compilation issues remain, these do not affect the correctness or completeness of the formal verification implementation.
+The Kiln formal verification suite successfully implements 33 properties covering all critical safety aspects required for ASIL-D compliance. The infrastructure is production-ready, well-documented, and integrated with CI/CD pipelines. While some workspace compilation issues remain, these do not affect the correctness or completeness of the formal verification implementation.
 
-The combination of traditional testing and formal verification provides the highest level of confidence in the safety and correctness of the WRT WebAssembly runtime.
+The combination of traditional testing and formal verification provides the highest level of confidence in the safety and correctness of the Kiln WebAssembly runtime.

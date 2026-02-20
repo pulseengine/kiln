@@ -9,8 +9,8 @@ use alloc::{boxed::Box, collections::BTreeMap, format, vec::Vec};
 #[cfg(feature = "std")]
 use std::{boxed::Box, collections::BTreeMap, format, vec::Vec};
 
-use wrt_error::{Error, Result};
-use wrt_foundation::{BoundedString, CrateId, NoStdProvider, prelude::*, safe_managed_alloc};
+use kiln_error::{Error, Result};
+use kiln_foundation::{BoundedString, CrateId, NoStdProvider, prelude::*, safe_managed_alloc};
 
 use crate::bounded_debug_infra;
 // Import WIT source mapping

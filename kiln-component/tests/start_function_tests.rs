@@ -5,11 +5,11 @@ use std::{
     time::Duration,
 };
 
-use wrt_component::{
+use kiln_component::{
     CanonicalABI, Component, ComponentOptions, ComponentValue, ExecutionTimeoutError,
 };
-use wrt_error::Error;
-use wrt_intercept::{LinkInterceptorStrategy, MemoryStrategy};
+use kiln_error::Error;
+use kiln_intercept::{LinkInterceptorStrategy, MemoryStrategy};
 
 /// A simple test interceptor that logs function calls
 #[derive(Default)]

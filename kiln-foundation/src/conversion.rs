@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Type Conversion Utilities
 // SW-REQ-ID: REQ_018
 //
@@ -19,7 +19,7 @@
 // use std::vec::Vec; // This was for the module scope, func_type::create used
 // its own.
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     Result,
@@ -66,7 +66,7 @@ pub fn val_type_to_ref_type(val_type: CoreValueType) -> Result<RefType> {
 pub mod block_type {
     use super::BlockType;
 
-    /// Convert a `FormatBlockType` (from wrt-format) to `BlockType`
+    /// Convert a `FormatBlockType` (from kiln-format) to `BlockType`
     ///
     /// This utility makes it easier to work with block types across
     /// different modules without duplicating conversion logic.

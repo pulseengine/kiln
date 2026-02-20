@@ -2,7 +2,7 @@
 KANI Verification Status
 ==========================
 
-This document provides a comprehensive overview of the current KANI formal verification coverage in the WRT project and identifies gaps for ASIL-A compliance.
+This document provides a comprehensive overview of the current KANI formal verification coverage in the Kiln project and identifies gaps for ASIL-A compliance.
 
 .. contents:: On this page
    :local:
@@ -11,7 +11,7 @@ This document provides a comprehensive overview of the current KANI formal verif
 Verification Overview
 ---------------------
 
-The WRT project has extensive KANI formal verification infrastructure with multiple verification harnesses covering different aspects of the system:
+The Kiln project has extensive KANI formal verification infrastructure with multiple verification harnesses covering different aspects of the system:
 
 **Verification Categories:**
 - Memory Safety Verification
@@ -26,7 +26,7 @@ Current Verification Coverage
 Memory Safety Verification
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Location:** `/wrt-tests/integration/formal_verification/memory_safety_proofs.rs`
+**Location:** `/kiln-tests/integration/formal_verification/memory_safety_proofs.rs`
 
 **Verified Properties:**
 - ✅ Memory budget never exceeded across all allocation operations
@@ -45,7 +45,7 @@ Memory Safety Verification
 Concurrency Verification
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Location:** `/wrt-tests/integration/formal_verification/concurrency_proofs.rs`
+**Location:** `/kiln-tests/integration/formal_verification/concurrency_proofs.rs`
 
 **Verified Properties:**
 - ✅ Atomic operation correctness (compare-and-swap, fetch-and-add)
@@ -65,7 +65,7 @@ Concurrency Verification
 Resource Lifecycle Verification
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Location:** `/wrt-tests/integration/formal_verification/resource_lifecycle_proofs.rs`
+**Location:** `/kiln-tests/integration/formal_verification/resource_lifecycle_proofs.rs`
 
 **Verified Properties:**
 - ✅ Resource allocation and deallocation correctness
@@ -83,7 +83,7 @@ Resource Lifecycle Verification
 Safety Invariants Verification
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Location:** `/wrt-tests/integration/formal_verification/safety_invariants_proofs.rs`
+**Location:** `/kiln-tests/integration/formal_verification/safety_invariants_proofs.rs`
 
 **Verified Properties:**
 - ✅ Safety-critical invariants maintained under all conditions
@@ -101,7 +101,7 @@ Safety Invariants Verification
 Integration Verification
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Location:** `/wrt-tests/integration/formal_verification/integration_proofs.rs`
+**Location:** `/kiln-tests/integration/formal_verification/integration_proofs.rs`
 
 **Verified Properties:**
 - ✅ End-to-end safety preservation across components
@@ -122,7 +122,7 @@ KANI Configuration Analysis
 ASIL-A Profile Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Location:** `/wrt-tests/integration/Kani.toml`
+**Location:** `/kiln-tests/integration/Kani.toml`
 
 **Current ASIL-A Settings:**
 ```toml
@@ -249,7 +249,7 @@ pub fn verify_fault_detection_response() {
 Conclusion
 ----------
 
-**The WRT project has exceptional KANI verification coverage** that significantly exceeds typical ASIL-A requirements. The current verification infrastructure provides:
+**The Kiln project has exceptional KANI verification coverage** that significantly exceeds typical ASIL-A requirements. The current verification infrastructure provides:
 
 **Strengths:**
 - ✅ Comprehensive memory safety verification (95% coverage)
@@ -270,4 +270,4 @@ The KANI verification coverage is **ready for ASIL-A certification** with minor 
 - **Week 7-8:** Documentation and independent review
 - **Week 9-10:** ASIL-A verification complete
 
-This puts the WRT project in an exceptional position for ASIL-A compliance and provides a solid foundation for progression to higher ASIL levels.
+This puts the Kiln project in an exceptional position for ASIL-A compliance and provides a solid foundation for progression to higher ASIL levels.

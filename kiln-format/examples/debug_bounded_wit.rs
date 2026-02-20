@@ -1,9 +1,9 @@
 //! Debug version of bounded WIT parser to understand parsing issues
 
-use wrt_format::wit_parser_bounded::BoundedWitParser;
-use wrt_foundation::NoStdProvider;
+use kiln_format::wit_parser_bounded::BoundedWitParser;
+use kiln_foundation::NoStdProvider;
 
-fn main() -> Result<(), wrt_error::Error> {
+fn main() -> Result<(), kiln_error::Error> {
     println!("=== Debug Bounded WIT Parser ===\n");
 
     // Simple test case

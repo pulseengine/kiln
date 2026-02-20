@@ -54,9 +54,9 @@ Consistent Terminology
 ----------------------
 
 **Product Names:**
-- PulseEngine (WRT Edition) - Full product name
+- PulseEngine (Kiln Edition) - Full product name
 - PulseEngine - Acceptable short form
-- WRT - When referring to technical components
+- Kiln - When referring to technical components
 
 **Never use:**
 - Mixed terminology in same document
@@ -165,7 +165,7 @@ Code Examples
    .. code-block:: rust
 
       // Demonstrate safe memory allocation
-      use wrt_foundation::safe_memory::SafeVec;
+      use kiln_foundation::safe_memory::SafeVec;
 
       let mut vec = SafeVec::new(provider)?;
       vec.push(42)?;  // Returns error if allocation fails
@@ -250,7 +250,7 @@ Always use Sphinx references:
    
    The :ref:`memory-model` section explains allocation.
    
-   API details in :doc:`../api/wrt-runtime/lib`.
+   API details in :doc:`../api/kiln-runtime/lib`.
 
 External Links
 --------------

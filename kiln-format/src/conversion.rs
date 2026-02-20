@@ -1,15 +1,15 @@
 //! Format-specific type conversion utilities
 //!
 //! This module provides standardized type conversion between format-specific
-//! types in wrt-format and core types in wrt-foundation. This helps eliminate
+//! types in kiln-format and core types in kiln-foundation. This helps eliminate
 //! duplication and ensure consistency across crates.
 
 use core::fmt;
 #[cfg(feature = "std")]
 use std::format;
 
-use wrt_error::{Error, Result};
-use wrt_foundation::{BlockType, ValueType};
+use kiln_error::{Error, Result};
+use kiln_foundation::{BlockType, ValueType};
 
 use crate::{
     error::parse_error,
@@ -43,12 +43,12 @@ pub fn block_type_to_format_block_type(block_type: &BlockType) -> FormatBlockTyp
     }
 }
 
-/// Convert from format-specific Limits to wrt_foundation::Limits
+/// Convert from format-specific Limits to kiln_foundation::Limits
 ///
 /// Validates and converts format limits to core limits.
-pub fn format_limits_to_wrt_limits(
+pub fn format_limits_to_kiln_limits(
     limits: &crate::types::Limits,
-) -> Result<wrt_foundation::types::Limits> {
+) -> Result<kiln_foundation::types::Limits> {
     if limits.memory64 {
         return Err(Error::runtime_execution_error(
             "memory64 limits are not supported by the current runtime type system (u32 limits).",
@@ -104,18 +104,18 @@ pub fn format_limits_to_wrt_limits(
         }
     }
 
-    Ok(wrt_foundation::types::Limits {
+    Ok(kiln_foundation::types::Limits {
         min: min_u32,
         max: max_u32,
     })
 }
 
-/// Convert from wrt_foundation::Limits to format-specific Limits
+/// Convert from kiln_foundation::Limits to format-specific Limits
 ///
 /// Converts core limits to format-specific limits.
 ///
 /// # Arguments
-/// * `limits` - The wrt_foundation::Limits to convert
+/// * `limits` - The kiln_foundation::Limits to convert
 /// * `shared` - Whether the memory is shared (only applicable for memory
 ///   limits)
 /// * `memory64` - Whether the memory uses 64-bit addressing (only applicable
@@ -123,8 +123,8 @@ pub fn format_limits_to_wrt_limits(
 ///
 /// # Returns
 /// A format-specific Limits
-pub fn wrt_limits_to_format_limits(
-    limits: &wrt_foundation::types::Limits,
+pub fn kiln_limits_to_format_limits(
+    limits: &kiln_foundation::types::Limits,
     shared: bool,
     memory64: bool,
 ) -> Limits {
@@ -136,29 +136,29 @@ pub fn wrt_limits_to_format_limits(
     }
 }
 
-/// A shorthand function for converting wrt_foundation::Limits to format Limits
+/// A shorthand function for converting kiln_foundation::Limits to format Limits
 /// with default parameters
 ///
 /// # Arguments
-/// * `limits` - The wrt_foundation::Limits to convert
+/// * `limits` - The kiln_foundation::Limits to convert
 ///
 /// # Returns
 /// A format-specific Limits with shared=false and memory64=false
-pub fn types_limits_to_format_limits(limits: &wrt_foundation::types::Limits) -> Limits {
-    wrt_limits_to_format_limits(limits, false, false)
+pub fn types_limits_to_format_limits(limits: &kiln_foundation::types::Limits) -> Limits {
+    kiln_limits_to_format_limits(limits, false, false)
 }
 
-/// A shorthand function for converting format Limits to wrt_foundation::Limits
-/// Alias for format_limits_to_wrt_limits for consistency with
+/// A shorthand function for converting format Limits to kiln_foundation::Limits
+/// Alias for format_limits_to_kiln_limits for consistency with
 /// types_limits_to_format_limits
 ///
 /// # Arguments
 /// * `limits` - The format Limits to convert
 ///
 /// # Returns
-/// A Result containing wrt_foundation::Limits
-pub fn format_limits_to_types_limits(limits: &Limits) -> Result<wrt_foundation::types::Limits> {
-    format_limits_to_wrt_limits(limits)
+/// A Result containing kiln_foundation::Limits
+pub fn format_limits_to_types_limits(limits: &Limits) -> Result<kiln_foundation::types::Limits> {
+    format_limits_to_kiln_limits(limits)
 }
 
 /// Parse a value type from a binary representation
@@ -167,7 +167,7 @@ pub fn format_limits_to_types_limits(limits: &Limits) -> Result<wrt_foundation::
 /// that provides format-specific error handling.
 pub fn parse_value_type(byte: u8) -> Result<ValueType> {
     ValueType::from_binary(byte).map_err(|e| {
-        if e.category == wrt_error::ErrorCategory::Parse {
+        if e.category == kiln_error::ErrorCategory::Parse {
             e
         } else {
             #[cfg(feature = "std")]
@@ -258,7 +258,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use wrt_foundation::ValueType;
+    use kiln_foundation::ValueType;
 
     use super::*;
 
@@ -294,15 +294,15 @@ mod tests {
 
     #[test]
     fn test_limits_conversion() {
-        // Test wrt-foundation Limits -> FormatLimits
-        let wrt_limits_min = wrt_foundation::types::Limits { min: 10, max: None };
-        let wrt_limits_both = wrt_foundation::types::Limits {
+        // Test kiln-foundation Limits -> FormatLimits
+        let kiln_limits_min = kiln_foundation::types::Limits { min: 10, max: None };
+        let kiln_limits_both = kiln_foundation::types::Limits {
             min: 10,
             max: Some(20),
         };
 
-        let format_limits_min = wrt_limits_to_format_limits(&wrt_limits_min, false, false);
-        let format_limits_both = wrt_limits_to_format_limits(&wrt_limits_both, false, false);
+        let format_limits_min = kiln_limits_to_format_limits(&kiln_limits_min, false, false);
+        let format_limits_both = kiln_limits_to_format_limits(&kiln_limits_both, false, false);
 
         assert_eq!(format_limits_min.min, 10);
         assert_eq!(format_limits_min.max, None);
@@ -315,24 +315,24 @@ mod tests {
         assert_eq!(format_limits_both.memory64, false);
 
         // Test with shared memory
-        let format_limits_shared = wrt_limits_to_format_limits(&wrt_limits_min, true, false);
+        let format_limits_shared = kiln_limits_to_format_limits(&kiln_limits_min, true, false);
         assert_eq!(format_limits_shared.shared, true);
         assert_eq!(format_limits_shared.memory64, false);
 
         // Test with memory64
-        let format_limits_mem64 = wrt_limits_to_format_limits(&wrt_limits_min, false, true);
+        let format_limits_mem64 = kiln_limits_to_format_limits(&kiln_limits_min, false, true);
         assert_eq!(format_limits_mem64.shared, false);
         assert_eq!(format_limits_mem64.memory64, true);
 
-        // Test FormatLimits -> wrt-foundation Limits
-        let wrt_limits_min_2 = format_limits_to_wrt_limits(&format_limits_min).unwrap();
-        let wrt_limits_both_2 = format_limits_to_wrt_limits(&format_limits_both).unwrap();
+        // Test FormatLimits -> kiln-foundation Limits
+        let kiln_limits_min_2 = format_limits_to_kiln_limits(&format_limits_min).unwrap();
+        let kiln_limits_both_2 = format_limits_to_kiln_limits(&format_limits_both).unwrap();
 
-        assert_eq!(wrt_limits_min_2.min, 10);
-        assert_eq!(wrt_limits_min_2.max, None);
+        assert_eq!(kiln_limits_min_2.min, 10);
+        assert_eq!(kiln_limits_min_2.max, None);
 
-        assert_eq!(wrt_limits_both_2.min, 10);
-        assert_eq!(wrt_limits_both_2.max, Some(20));
+        assert_eq!(kiln_limits_both_2.min, 10);
+        assert_eq!(kiln_limits_both_2.max, Some(20));
     }
 
     #[test]

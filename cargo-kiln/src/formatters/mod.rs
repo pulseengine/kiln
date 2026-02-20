@@ -1,7 +1,7 @@
-//! Output formatters for cargo-wrt
+//! Output formatters for cargo-kiln
 //!
 //! Provides HTML, Markdown, and other specialized output formats
-//! for cargo-wrt command results and reports.
+//! for cargo-kiln command results and reports.
 
 pub mod html;
 pub mod markdown;

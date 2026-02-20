@@ -19,7 +19,7 @@ Basic Example
 .. code-block:: rust
    :caption: Basic host function registration
 
-   use wrt::prelude::*;
+   use kiln::prelude::*;
 
    // Define a host function
    fn print_message(message: &str) -> Result<()> {

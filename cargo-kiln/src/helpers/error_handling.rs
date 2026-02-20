@@ -1,12 +1,12 @@
-//! Standardized error handling for cargo-wrt commands
+//! Standardized error handling for cargo-kiln commands
 //!
 //! Provides consistent error formatting, categorization, and reporting
-//! across all cargo-wrt commands.
+//! across all cargo-kiln commands.
 
 use anyhow::{Context, Result};
 use colored::Colorize;
 use serde_json;
-use wrt_build_core::formatters::OutputFormat;
+use kiln_build_core::formatters::OutputFormat;
 
 use super::OutputManager;
 
@@ -288,7 +288,7 @@ pub mod build_errors {
         CategorizedError::new(ErrorCategory::Build, "Compilation failed")
             .with_context(details)
             .with_suggestion("Check the compilation output for specific errors")
-            .with_suggestion("Run 'cargo-wrt check' for detailed diagnostics")
+            .with_suggestion("Run 'cargo-kiln check' for detailed diagnostics")
     }
 
     pub fn test_failed(test_name: impl Into<String>) -> CategorizedError {
@@ -305,7 +305,7 @@ pub mod build_errors {
             format!("Missing dependency: {}", dep_name.into()),
         )
         .with_suggestion("Install the missing dependency")
-        .with_suggestion("Run 'cargo-wrt setup --check' to verify all dependencies")
+        .with_suggestion("Run 'cargo-kiln setup --check' to verify all dependencies")
     }
 }
 
@@ -324,6 +324,6 @@ pub mod config_errors {
         CategorizedError::new(ErrorCategory::Configuration, "Configuration file not found")
             .with_context(format!("Expected: {}", path.into()))
             .with_suggestion("Create the configuration file")
-            .with_suggestion("Run 'cargo-wrt init' to generate a default configuration")
+            .with_suggestion("Run 'cargo-kiln init' to generate a default configuration")
     }
 }

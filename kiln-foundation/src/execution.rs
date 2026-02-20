@@ -144,7 +144,7 @@ impl ExecutionStats {
 pub fn extract_resource_limits_from_binary(
     _binary: &[u8],
     asil_mode: ASILExecutionMode,
-) -> wrt_error::Result<Option<ASILExecutionConfig>> {
+) -> kiln_error::Result<Option<ASILExecutionConfig>> {
     // TODO: Implement actual resource limits extraction from custom sections
     // For now, return a default configuration based on ASIL mode
     Ok(Some(ASILExecutionConfig::new(asil_mode)))

@@ -8,7 +8,7 @@ use core::{
     time::Duration,
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     // Note: Using BoundedVec instead of BoundedBinaryHeap
     // Priority ordering will need to be handled manually
     Arc,
@@ -18,7 +18,7 @@ use wrt_foundation::{
     safe_managed_alloc,
     verification::VerificationLevel,
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::TaskId;

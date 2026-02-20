@@ -3,8 +3,8 @@
 //! These tests verify that the WASI-NN implementation respects memory
 //! budgets and limits required for ASIL certification.
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     safe_managed_alloc,
     CrateId,
 };
@@ -160,7 +160,7 @@ fn test_no_dynamic_allocation_pattern() {
 /// Test bounded collections in critical paths
 #[test]
 fn test_bounded_collections_usage() {
-    use wrt_foundation::BoundedVec;
+    use kiln_foundation::BoundedVec;
 
     // Test that we can create bounded collections with safe allocation
     let provider = safe_managed_alloc!(4096, CrateId::Component).unwrap();

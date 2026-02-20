@@ -11,15 +11,15 @@ use std::{format, string::String};
 use std::{format, string::String, vec::Vec};
 
 #[cfg(feature = "std")]
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 // Conditional imports for different environments
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use wrt_foundation::allocator::{CrateId, WrtVec};
+use kiln_foundation::allocator::{CrateId, KilnVec};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::bounded::{BoundedString, BoundedVec};
-// wrt_error is imported above unconditionally
+use kiln_foundation::bounded::{BoundedString, BoundedVec};
+// kiln_error is imported above unconditionally
 #[cfg(feature = "std")]
-use wrt_foundation::{RefType, ValueType};
+use kiln_foundation::{RefType, ValueType};
 
 use crate::error::parse_error;
 #[cfg(feature = "std")]
@@ -622,7 +622,7 @@ pub fn parse_binary(bytes: &[u8]) -> Result<Module> {
 
 /// Binary std/no_std choice
 /// needed)
-pub fn read_leb128_u32(bytes: &[u8], pos: usize) -> wrt_error::Result<(u32, usize)> {
+pub fn read_leb128_u32(bytes: &[u8], pos: usize) -> kiln_error::Result<(u32, usize)> {
     let mut result = 0u32;
     let mut shift = 0;
     let mut offset = 0;
@@ -669,7 +669,7 @@ pub fn read_leb128_u32(bytes: &[u8], pos: usize) -> wrt_error::Result<(u32, usiz
 }
 
 /// Read a LEB128 signed integer from a byte array
-pub fn read_leb128_i32(bytes: &[u8], pos: usize) -> wrt_error::Result<(i32, usize)> {
+pub fn read_leb128_i32(bytes: &[u8], pos: usize) -> kiln_error::Result<(i32, usize)> {
     let mut result = 0i32;
     let mut shift = 0;
     let mut offset = 0;
@@ -731,7 +731,7 @@ pub fn read_leb128_i32(bytes: &[u8], pos: usize) -> wrt_error::Result<(i32, usiz
 }
 
 /// Read a LEB128 signed 64-bit integer from a byte array
-pub fn read_leb128_i64(bytes: &[u8], pos: usize) -> wrt_error::Result<(i64, usize)> {
+pub fn read_leb128_i64(bytes: &[u8], pos: usize) -> kiln_error::Result<(i64, usize)> {
     let mut result = 0i64;
     let mut shift = 0;
     let mut offset = 0;
@@ -793,7 +793,7 @@ pub fn read_leb128_i64(bytes: &[u8], pos: usize) -> wrt_error::Result<(i64, usiz
 }
 
 /// Read a LEB128 unsigned 64-bit integer from a byte array
-pub fn read_leb128_u64(bytes: &[u8], pos: usize) -> wrt_error::Result<(u64, usize)> {
+pub fn read_leb128_u64(bytes: &[u8], pos: usize) -> kiln_error::Result<(u64, usize)> {
     let mut result = 0u64;
     let mut shift = 0;
     let mut offset = 0;
@@ -838,7 +838,7 @@ pub fn read_leb128_u64(bytes: &[u8], pos: usize) -> wrt_error::Result<(u64, usiz
 }
 
 /// Read a single byte from the byte array
-pub fn read_u8(bytes: &[u8], pos: usize) -> wrt_error::Result<(u8, usize)> {
+pub fn read_u8(bytes: &[u8], pos: usize) -> kiln_error::Result<(u8, usize)> {
     if pos >= bytes.len() {
         return Err(parse_error("Unexpected end of input"));
     }
@@ -846,7 +846,7 @@ pub fn read_u8(bytes: &[u8], pos: usize) -> wrt_error::Result<(u8, usize)> {
 }
 
 /// Binary std/no_std choice
-pub fn read_string(bytes: &[u8], pos: usize) -> wrt_error::Result<(&[u8], usize)> {
+pub fn read_string(bytes: &[u8], pos: usize) -> kiln_error::Result<(&[u8], usize)> {
     if pos >= bytes.len() {
         return Err(parse_error("String exceeds buffer bounds"));
     }
@@ -884,7 +884,7 @@ pub mod with_alloc {
 
         // Create a minimal valid module with bounded allocation
         #[cfg(feature = "safety-critical")]
-        let mut binary: WrtVec<u8, { CrateId::Format as u8 }, { 4 * 1024 * 1024 }> = WrtVec::new();
+        let mut binary: KilnVec<u8, { CrateId::Format as u8 }, { 4 * 1024 * 1024 }> = KilnVec::new();
 
         #[cfg(not(feature = "safety-critical"))]
         let mut binary = Vec::with_capacity(8);
@@ -1945,12 +1945,12 @@ pub mod with_alloc {
         Ok((name_slice, pos + len_size + name_len as usize))
     }
 
-    // STUB for parsing limits - to be fully implemented in wrt-format
-    // Should parse wrt_format::types::Limits
+    // STUB for parsing limits - to be fully implemented in kiln-format
+    // Should parse kiln_format::types::Limits
     pub fn parse_limits(
         bytes: &[u8],
         offset: usize,
-    ) -> wrt_error::Result<(crate::types::Limits, usize)> {
+    ) -> kiln_error::Result<(crate::types::Limits, usize)> {
         if offset + 1 > bytes.len() {
             // Need at least flags byte
             return Err(Error::parse_error("Unexpected end of limits"));
@@ -1969,7 +1969,7 @@ pub mod with_alloc {
             None
         };
         // Ignoring shared and memory64 flags for now as they are not in
-        // wrt_format::types::Limits directly
+        // kiln_format::types::Limits directly
 
         Ok((
             crate::types::Limits {
@@ -2930,7 +2930,7 @@ pub mod with_alloc {
 /// Returns the number of bytes written to the buffer.
 /// Buffer must be at least 5 bytes long (max size for u32 LEB128).
 #[cfg(not(any(feature = "std")))]
-pub fn write_leb128_u32_to_slice(value: u32, buffer: &mut [u8]) -> wrt_error::Result<usize> {
+pub fn write_leb128_u32_to_slice(value: u32, buffer: &mut [u8]) -> kiln_error::Result<usize> {
     if buffer.len() < 5 {
         return Err(parse_error("Buffer too small for LEB128 encoding"));
     }
@@ -2963,7 +2963,7 @@ pub fn write_leb128_u32_to_slice(value: u32, buffer: &mut [u8]) -> wrt_error::Re
 /// The format is: length (LEB128) followed by UTF-8 bytes
 /// Returns the number of bytes written.
 #[cfg(not(any(feature = "std")))]
-pub fn write_string_to_slice(value: &str, buffer: &mut [u8]) -> wrt_error::Result<usize> {
+pub fn write_string_to_slice(value: &str, buffer: &mut [u8]) -> kiln_error::Result<usize> {
     let str_bytes = value.as_bytes();
     let length = str_bytes.len() as u32;
 
@@ -2990,11 +2990,11 @@ pub fn write_string_to_slice(value: &str, buffer: &mut [u8]) -> wrt_error::Resul
 #[cfg(not(any(feature = "std")))]
 pub fn write_leb128_u32_bounded<
     const N: usize,
-    P: wrt_foundation::MemoryProvider + Clone + Default + Eq,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq,
 >(
     value: u32,
-    vec: &mut wrt_foundation::BoundedVec<u8, N, P>,
-) -> wrt_error::Result<()> {
+    vec: &mut kiln_foundation::BoundedVec<u8, N, P>,
+) -> kiln_error::Result<()> {
     let mut buffer = [0u8; 5];
     let bytes_written = write_leb128_u32_to_slice(value, &mut buffer)?;
 
@@ -3009,11 +3009,11 @@ pub fn write_leb128_u32_bounded<
 #[cfg(not(any(feature = "std")))]
 pub fn write_string_bounded<
     const N: usize,
-    P: wrt_foundation::MemoryProvider + Clone + Default + Eq,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq,
 >(
     value: &str,
-    vec: &mut wrt_foundation::BoundedVec<u8, N, P>,
-) -> wrt_error::Result<()> {
+    vec: &mut kiln_foundation::BoundedVec<u8, N, P>,
+) -> kiln_error::Result<()> {
     // Write length
     write_leb128_u32_bounded(value.len() as u32, vec)?;
 
@@ -3454,7 +3454,7 @@ mod tests {
 // Note: parse_vec functionality is handled by other parsing functions
 
 // Helper function to read a u32 (4 bytes, little-endian) from a byte array
-pub fn read_u32(bytes: &[u8], pos: usize) -> wrt_error::Result<(u32, usize)> {
+pub fn read_u32(bytes: &[u8], pos: usize) -> kiln_error::Result<(u32, usize)> {
     if pos + 4 > bytes.len() {
         return Err(parse_error("Truncated u32"));
     }

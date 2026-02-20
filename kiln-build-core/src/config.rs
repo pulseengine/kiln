@@ -201,14 +201,14 @@ mod tests {
         let content = r#"
 [workspace]
 members = [
-    "wrt",
-    "wrt-runtime",
+    "kiln",
+    "kiln-runtime",
     # "commented-out",
-    "wrt-component",
+    "kiln-component",
 ]
         "#;
 
         let members = WorkspaceConfig::parse_workspace_members(content).unwrap();
-        assert_eq!(members, vec!["wrt", "wrt-runtime", "wrt-component"]);
+        assert_eq!(members, vec!["kiln", "kiln-runtime", "kiln-component"]);
     }
 }

@@ -2,7 +2,7 @@
 macOS Installation Guide
 ========================
 
-WRT provides native support for macOS, optimized for both Intel and Apple Silicon Macs.
+Kiln provides native support for macOS, optimized for both Intel and Apple Silicon Macs.
 
 .. contents:: On this page
    :local:
@@ -37,18 +37,18 @@ Homebrew Installation
    # Install Homebrew (if not already installed)
    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
-   # Add WRT tap
-   brew tap your-org/wrt
+   # Add Kiln tap
+   brew tap your-org/kiln
 
-   # Install WRT
-   brew install wrt
+   # Install Kiln
+   brew install kiln
 
 **Update to latest version:**
 
 .. code-block:: bash
 
    brew update
-   brew upgrade wrt
+   brew upgrade kiln
 
 MacPorts Installation
 ---------------------
@@ -58,8 +58,8 @@ MacPorts Installation
    # Install MacPorts (if not already installed)
    # Download from https://www.macports.org/install.php
 
-   # Install WRT
-   sudo port install wrt
+   # Install Kiln
+   sudo port install kiln
 
 Source Installation
 -------------------
@@ -82,9 +82,9 @@ Source Installation
 
 .. code-block:: bash
 
-   git clone https://github.com/pulseengine/wrt.git
-   cd wrt
-   cargo-wrt build
+   git clone https://github.com/pulseengine/kiln.git
+   cd kiln
+   cargo-kiln build
 
 Apple Silicon Considerations
 ============================
@@ -92,7 +92,7 @@ Apple Silicon Considerations
 Native Apple Silicon Support
 -----------------------------
 
-WRT has full native support for Apple Silicon (M1, M2, M3, M4):
+Kiln has full native support for Apple Silicon (M1, M2, M3, M4):
 
 .. code-block:: bash
 
@@ -108,7 +108,7 @@ WRT has full native support for Apple Silicon (M1, M2, M3, M4):
 
    # Build with Apple Silicon optimizations
    export RUSTFLAGS="-C target-cpu=native"
-   cargo-wrt build
+   cargo-kiln build
 
 Rosetta 2 Compatibility
 -----------------------
@@ -163,11 +163,11 @@ Create `.vscode/launch.json`:
        {
          "type": "lldb",
          "request": "launch",
-         "name": "Debug WRT",
+         "name": "Debug Kiln",
          "cargo": {
-           "args": ["build", "--bin=wrtd"],
+           "args": ["build", "--bin=kilnd"],
            "filter": {
-             "name": "wrtd",
+             "name": "kilnd",
              "kind": "bin"
            }
          },
@@ -203,7 +203,7 @@ CPU Features
    # Intel optimized build
    export RUSTFLAGS="-C target-cpu=native"
 
-   cargo-wrt build
+   cargo-kiln build
 
 Memory Management
 -----------------
@@ -216,10 +216,10 @@ Memory Management
    memory_pressure
 
    # Increase stack size if needed
-   export WRT_STACK_SIZE=2097152  # 2MB
+   export KILN_STACK_SIZE=2097152  # 2MB
 
    # Monitor memory usage
-   top -pid $(pgrep wrtd)
+   top -pid $(pgrep kilnd)
 
 Security Features
 =================
@@ -229,22 +229,22 @@ macOS Security Integration
 
 **Gatekeeper and code signing:**
 
-For distribution, sign your WRT binaries:
+For distribution, sign your Kiln binaries:
 
 .. code-block:: bash
 
    # Sign binary (requires Apple Developer account)
-   codesign --force --sign "Developer ID Application: Your Name" target/release/wrtd
+   codesign --force --sign "Developer ID Application: Your Name" target/release/kilnd
 
    # Verify signature
-   codesign --verify --verbose target/release/wrtd
+   codesign --verify --verbose target/release/kilnd
 
 **Hardened Runtime:**
 
 .. code-block:: bash
 
    # Enable hardened runtime
-   codesign --force --options runtime --sign "Developer ID Application: Your Name" target/release/wrtd
+   codesign --force --options runtime --sign "Developer ID Application: Your Name" target/release/kilnd
 
 **App Sandbox (for Mac App Store):**
 
@@ -256,7 +256,7 @@ System Integration
 LaunchDaemon Configuration
 --------------------------
 
-Create `/Library/LaunchDaemons/com.yourorg.wrt.plist`:
+Create `/Library/LaunchDaemons/com.yourorg.kiln.plist`:
 
 .. code-block:: xml
 
@@ -265,12 +265,12 @@ Create `/Library/LaunchDaemons/com.yourorg.wrt.plist`:
    <plist version="1.0">
    <dict>
        <key>Label</key>
-       <string>com.yourorg.wrt</string>
+       <string>com.yourorg.kiln</string>
        <key>ProgramArguments</key>
        <array>
-           <string>/usr/local/bin/wrtd</string>
+           <string>/usr/local/bin/kilnd</string>
            <string>--config</string>
-           <string>/etc/wrt/config.toml</string>
+           <string>/etc/kiln/config.toml</string>
        </array>
        <key>RunAtLoad</key>
        <true/>
@@ -283,8 +283,8 @@ Load the service:
 
 .. code-block:: bash
 
-   sudo launchctl load /Library/LaunchDaemons/com.yourorg.wrt.plist
-   sudo launchctl start com.yourorg.wrt
+   sudo launchctl load /Library/LaunchDaemons/com.yourorg.kiln.plist
+   sudo launchctl start com.yourorg.kiln
 
 Environment Configuration
 =========================
@@ -298,9 +298,9 @@ Add to `~/.zshrc`:
 
 .. code-block:: bash
 
-   # WRT environment
+   # Kiln environment
    export PATH="$HOME/.cargo/bin:$PATH"
-   export WRT_LOG_LEVEL=info
+   export KILN_LOG_LEVEL=info
 
    # Apple Silicon optimizations
    if [[ $(uname -m) == "arm64" ]]; then
@@ -313,7 +313,7 @@ Add to `~/.bash_profile`:
 
 .. code-block:: bash
 
-   # WRT environment
+   # Kiln environment
    export PATH="$HOME/.cargo/bin:$PATH"
    source ~/.cargo/env
 
@@ -323,11 +323,11 @@ macOS-Specific Features
 Metal Performance Shaders
 --------------------------
 
-WRT can leverage Metal for GPU acceleration:
+Kiln can leverage Metal for GPU acceleration:
 
 .. code-block:: rust
 
-   // Enable Metal features in your WRT configuration
+   // Enable Metal features in your Kiln configuration
    [features]
    metal-acceleration = true
 
@@ -344,13 +344,13 @@ Framework Integration
 
 **Swift integration:**
 
-Create Swift package with WRT:
+Create Swift package with Kiln:
 
 .. code-block:: swift
 
-   import WRTRuntime
+   import KilnRuntime
 
-   let runtime = WRTRuntime()
+   let runtime = KilnRuntime()
    let result = runtime.execute(wasmModule: moduleData)
 
 Testing and Validation
@@ -367,7 +367,7 @@ Testing and Validation
    cargo test --target x86_64-apple-darwin
 
    # Run comprehensive test suite
-   cargo-wrt ci
+   cargo-kiln ci
 
 **Performance benchmarking:**
 
@@ -377,7 +377,7 @@ Testing and Validation
    cargo bench
 
    # Profile with Instruments
-   xcrun xctrace record --template "Time Profiler" --launch -- target/release/wrtd example.wasm
+   xcrun xctrace record --template "Time Profiler" --launch -- target/release/kilnd example.wasm
 
 Troubleshooting
 ===============
@@ -472,13 +472,13 @@ For distribution outside App Store:
 .. code-block:: bash
 
    # Create zip for notarization
-   zip -r wrt.zip wrtd
+   zip -r kiln.zip kilnd
 
    # Submit for notarization
-   xcrun notarytool submit wrt.zip --keychain-profile "AC_PASSWORD"
+   xcrun notarytool submit kiln.zip --keychain-profile "AC_PASSWORD"
 
    # Staple ticket
-   xcrun stapler staple wrtd
+   xcrun stapler staple kilnd
 
 Next Steps
 ==========

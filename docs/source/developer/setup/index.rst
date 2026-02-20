@@ -2,7 +2,7 @@
 Development Environment
 =======================
 
-This guide covers setting up a complete development environment for contributing to WRT.
+This guide covers setting up a complete development environment for contributing to Kiln.
 
 .. toctree::
    :maxdepth: 2
@@ -58,53 +58,53 @@ Quick Setup
 .. code-block:: bash
 
    # Clone repository
-   git clone https://github.com/pulseengine/wrt.git
-   cd wrt
+   git clone https://github.com/pulseengine/kiln.git
+   cd kiln
 
    # Install unified build tool
-   cargo install --path cargo-wrt
+   cargo install --path cargo-kiln
 
    # Setup development environment and tools
-   cargo-wrt setup --check       # Check tool dependencies
-   cargo-wrt setup --all         # Install tools and setup git hooks
+   cargo-kiln setup --check       # Check tool dependencies
+   cargo-kiln setup --all         # Install tools and setup git hooks
 
    # Verify tool versions (optional)
-   cargo-wrt tool-versions check --verbose
+   cargo-kiln tool-versions check --verbose
 
    # Verify build
-   cargo-wrt build
+   cargo-kiln build
 
    # Run tests
-   cargo-wrt test
+   cargo-kiln test
 
    # Format code and run checks
-   cargo-wrt check
+   cargo-kiln check
 
 Tool Version Management
 =======================
 
-WRT uses a sophisticated tool version management system to ensure reproducible development environments:
+Kiln uses a sophisticated tool version management system to ensure reproducible development environments:
 
 .. code-block:: bash
 
    # Check all tool versions against requirements
-   cargo-wrt tool-versions check
+   cargo-kiln tool-versions check
 
    # Show detailed version information
-   cargo-wrt tool-versions check --verbose
+   cargo-kiln tool-versions check --verbose
 
    # Check specific tool
-   cargo-wrt tool-versions check --tool kani
+   cargo-kiln tool-versions check --tool kani
 
    # Generate tool-versions.toml configuration file
-   cargo-wrt tool-versions generate
+   cargo-kiln tool-versions generate
 
 The ``tool-versions.toml`` file in the workspace root specifies:
 
 * **Exact version requirements** (e.g., kani must be exactly 0.63.0)
 * **Minimum version requirements** (e.g., git must be at least 2.30.0) 
 * **Installation commands** for each tool
-* **Command mapping** - which cargo-wrt commands require each tool
+* **Command mapping** - which cargo-kiln commands require each tool
 
 This ensures all contributors use compatible tool versions for consistent builds and testing.
 

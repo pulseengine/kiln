@@ -1,12 +1,12 @@
-// WRT - wrt-platform
+// Kiln - kiln-platform
 // Module: Library Root
 // SW-REQ-ID: REQ_PLATFORM_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! WRT Platform Abstraction Layer (PAL).
+//! Kiln Platform Abstraction Layer (PAL).
 //!
 //! Provides traits and implementations for platform-specific operations like
 //! memory allocation (`PageAllocator`) and low-level synchronization
@@ -14,7 +14,7 @@
 //!
 //! This crate adheres to safety-critical guidelines:
 //! - Unsafe code is used minimally and with justification (see `memory.rs`).
-//! - Error handling via `wrt_error::Error`.
+//! - Error handling via `kiln_error::Error`.
 //! - `panic = "abort"`.
 //! - `no_std` support.
 
@@ -39,14 +39,14 @@ extern crate std;
         feature = "asil-d-panic-handler"
     )
 ))]
-extern crate wrt_panic;
+extern crate kiln_panic;
 
 // Simple panic handler when no explicit handler is available
-// Panic handling is now fully delegated to wrt-panic crate
-// No local panic handler needed - wrt-panic provides all necessary panic
+// Panic handling is now fully delegated to kiln-panic crate
+// No local panic handler needed - kiln-panic provides all necessary panic
 // handlers Module declarations
 // pub mod bounded_platform; // Disabled due to circular dependency with
-// wrt-foundation
+// kiln-foundation
 pub mod comprehensive_limits;
 pub mod memory;
 pub mod performance_validation;
@@ -68,7 +68,7 @@ pub mod side_channel_resistance;
 #[cfg(feature = "std")]
 pub mod threading;
 
-// Threading with wasm support (requires both std and wrt-foundation)
+// Threading with wasm support (requires both std and kiln-foundation)
 #[cfg(feature = "threading")]
 pub mod wasm_thread_manager;
 
@@ -90,7 +90,7 @@ pub mod linux_threading;
 ))]
 pub mod generic_threading;
 
-// Memory management uses NoStdProvider pattern from wrt-foundation
+// Memory management uses NoStdProvider pattern from kiln-foundation
 
 // Watchdog (requires std)
 
@@ -110,8 +110,8 @@ pub mod linux_ipc;
 #[cfg(feature = "std")]
 pub mod high_availability;
 
-// Panic handling is now delegated to wrt-panic crate
-// This ensures consistent, configurable panic behavior across all WRT
+// Panic handling is now delegated to kiln-panic crate
+// This ensures consistent, configurable panic behavior across all Kiln
 // components
 //
 // Available panic handler configurations:
@@ -285,7 +285,7 @@ pub use performance_validation::{
     BenchmarkResult,
     CompileTimeValidator,
     PerformanceValidator,
-}; // This is fine as wrt_error::Error is always available
+}; // This is fine as kiln_error::Error is always available
 // Export hybrid platform abstraction
 pub use platform_abstraction::{
     paradigm,
@@ -392,7 +392,7 @@ pub use vxworks_threading::{
     VxWorksThreadConfig,
 };
 // Re-export core error type (also available via prelude)
-pub use wrt_error::Error;
+pub use kiln_error::Error;
 // Export Zephyr specific implementations if enabled
 #[cfg(feature = "platform-zephyr")]
 pub use zephyr_memory::{
@@ -423,10 +423,10 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(test, feature = "test-utils", feature = "wrt-foundation-integration"))]
+    #[cfg(all(test, feature = "test-utils", feature = "kiln-foundation-integration"))]
     fn test_memory_provider_creation() {
-        // This test is disabled until wrt-foundation dependency is re-enabled
-        // use wrt_foundation::{
+        // This test is disabled until kiln-foundation dependency is re-enabled
+        // use kiln_foundation::{
         //     capabilities::{
         //         capability_context,
         //         safe_capability_alloc,
@@ -436,7 +436,7 @@ mod tests {
         //     NoStdProvider,
         // };
 
-        // Test disabled - requires wrt-foundation dependency
+        // Test disabled - requires kiln-foundation dependency
     }
 
     #[cfg(all(feature = "platform-macos", target_os = "macos"))]

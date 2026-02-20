@@ -108,9 +108,9 @@ ARCH_003: Component Model Architecture
 **Decision**: Separate component parsing from execution engine for better modularity.
 
 **Design**:
-- wrt-component: Component parsing and type checking
-- wrt-runtime: Core execution engine
-- wrt-host: Host function integration
+- kiln-component: Component parsing and type checking
+- kiln-runtime: Core execution engine
+- kiln-host: Host function integration
 
 **Status**: 🚧 Under Review - Implementation in progress
 

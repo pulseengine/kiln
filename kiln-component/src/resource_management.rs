@@ -7,7 +7,7 @@
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     collections::{StaticMap, StaticVec as BoundedVec},
     safe_managed_alloc,
@@ -330,7 +330,7 @@ pub struct ResourceManagerStats {
 ///
 /// Returns: Ok(()) on success, or error
 #[cfg(feature = "std")]
-pub type DestructorCallback = Box<dyn FnMut(u32, u32, u32) -> wrt_error::Result<()> + Send>;
+pub type DestructorCallback = Box<dyn FnMut(u32, u32, u32) -> kiln_error::Result<()> + Send>;
 
 /// Resource manager with destructor callback support
 ///
@@ -467,9 +467,9 @@ impl ResourceManager {
     pub fn destroy_resource_with_destructor(
         &mut self,
         resource: &Resource,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         if !resource.handle.is_valid() {
-            return Err(wrt_error::Error::resource_not_found(
+            return Err(kiln_error::Error::resource_not_found(
                 "Invalid resource handle",
             ));
         }
@@ -478,7 +478,7 @@ impl ResourceManager {
         if let Some((dtor_func, instance_id)) = resource.destructor_info() {
             if let Some(ref callback_arc) = self.destructor_callback {
                 let mut callback = callback_arc.lock().map_err(|_| {
-                    wrt_error::Error::runtime_error("Failed to lock destructor callback")
+                    kiln_error::Error::runtime_error("Failed to lock destructor callback")
                 })?;
                 callback(instance_id, dtor_func, resource.handle.0)?;
             }
@@ -501,7 +501,7 @@ impl ResourceManager {
     ///
     /// Returns true if the resource was actually destroyed.
     #[cfg(feature = "std")]
-    pub fn drop_resource(&mut self, resource: &mut Resource) -> wrt_error::Result<bool> {
+    pub fn drop_resource(&mut self, resource: &mut Resource) -> kiln_error::Result<bool> {
         let new_count = resource.release();
 
         if new_count == 0 {
@@ -900,32 +900,32 @@ pub fn create_resource_type(
 }
 
 // Implement required traits for BoundedVec compatibility
-use wrt_foundation::traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream};
+use kiln_foundation::traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream};
 
 // Macro to implement basic traits for tuple structs
 macro_rules! impl_basic_traits_tuple {
     ($type:ty, $default_val:expr) => {
         impl Checksummable for $type {
-            fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+            fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
                 self.0.update_checksum(checksum);
             }
         }
 
         impl ToBytes for $type {
-            fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 &self,
                 writer: &mut WriteStream<'a>,
                 provider: &PStream,
-            ) -> wrt_error::Result<()> {
+            ) -> kiln_error::Result<()> {
                 self.0.to_bytes_with_provider(writer, provider)
             }
         }
 
         impl FromBytes for $type {
-            fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 reader: &mut ReadStream<'a>,
                 provider: &PStream,
-            ) -> wrt_error::Result<Self> {
+            ) -> kiln_error::Result<Self> {
                 Ok(Self(u32::from_bytes_with_provider(reader, provider)?))
             }
         }
@@ -936,27 +936,27 @@ macro_rules! impl_basic_traits_tuple {
 macro_rules! impl_basic_traits_enum {
     ($type:ty, $default_val:expr) => {
         impl Checksummable for $type {
-            fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+            fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
                 // Simple stub - just update with 0
                 0u8.update_checksum(checksum);
             }
         }
 
         impl ToBytes for $type {
-            fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 &self,
                 _writer: &mut WriteStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<()> {
+            ) -> kiln_error::Result<()> {
                 Ok(())
             }
         }
 
         impl FromBytes for $type {
-            fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 _reader: &mut ReadStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<Self> {
+            ) -> kiln_error::Result<Self> {
                 Ok($default_val)
             }
         }

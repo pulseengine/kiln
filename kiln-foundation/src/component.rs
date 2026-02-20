@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -6,7 +6,7 @@
 // ToString comes from prelude
 use core::fmt::Debug;
 
-use wrt_error::{
+use kiln_error::{
     ErrorCategory,
     Result,
 };
@@ -65,7 +65,7 @@ impl ToBytes for TypeRef {
         &self,
         writer: &mut WriteStream,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
@@ -75,7 +75,7 @@ impl FromBytes for TypeRef {
     fn from_bytes_with_provider<P: MemoryProvider>(
         reader: &mut ReadStream,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let index = u32::from_bytes_with_provider(reader, provider)?;
         Ok(Self(index))
     }
@@ -123,7 +123,7 @@ where
     P: MemoryProvider + Clone + Default + Eq + Debug,
 {
     /// Creates a unit component type (empty component with no imports/exports)
-    pub fn unit(provider: P) -> wrt_error::Result<Self> {
+    pub fn unit(provider: P) -> kiln_error::Result<Self> {
         Ok(Self {
             imports:         BoundedVec::new(provider.clone())?,
             exports:         BoundedVec::new(provider.clone())?,
@@ -138,7 +138,7 @@ where
     /// Constant-like accessor for Unit type (requires provider)
     /// This is used in pattern matching contexts like `ComponentType::Unit`
     #[allow(non_upper_case_globals)]
-    pub const Unit: fn(P) -> wrt_error::Result<Self> = Self::unit;
+    pub const Unit: fn(P) -> kiln_error::Result<Self> = Self::unit;
 }
 
 /// Represents an import for a component or core module.
@@ -191,7 +191,7 @@ where
 {
     /// Creates a namespace from a string like "namespace:name".
     /// The provider P must be supplied to construct WasmName instances.
-    pub fn from_str(s: &str, provider: P) -> wrt_error::Result<Self>
+    pub fn from_str(s: &str, provider: P) -> kiln_error::Result<Self>
     where
         P: Clone,
     {
@@ -311,7 +311,7 @@ impl ToBytes for ComponentAliasOuterKind {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(*self as u8)
     }
 }
@@ -320,7 +320,7 @@ impl FromBytes for ComponentAliasOuterKind {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = reader.read_u8()?;
         match byte {
             0 => Ok(Self::Type),
@@ -444,7 +444,7 @@ impl ToBytes for ExternKind {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(*self as u8)
     }
 }
@@ -453,7 +453,7 @@ impl FromBytes for ExternKind {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = reader.read_u8()?;
         match byte {
             0 => Ok(Self::Func),
@@ -704,7 +704,7 @@ macro_rules! impl_tobytes_struct {
                 &self,
                 writer: &mut WriteStream<'a>,
                 provider: &PStream,
-            ) -> wrt_error::Result<()> {
+            ) -> kiln_error::Result<()> {
                 $( self.$field.to_bytes_with_provider(writer, provider)?; )+
                 Ok(())
             }
@@ -717,7 +717,7 @@ macro_rules! impl_tobytes_struct {
                 &self,
                 writer: &mut WriteStream<'a>,
                 provider: &PStream,
-            ) -> wrt_error::Result<()> {
+            ) -> kiln_error::Result<()> {
                 $( self.$field.to_bytes_with_provider(writer, provider)?; )+
                 Ok(())
             }
@@ -730,7 +730,7 @@ macro_rules! impl_tobytes_struct {
                 &self,
                 writer: &mut WriteStream<'a>,
                 provider: &PStream,
-            ) -> wrt_error::Result<()> {
+            ) -> kiln_error::Result<()> {
                 $( self.$field.to_bytes_with_provider(writer, provider)?; )+
                 Ok(())
             }
@@ -746,7 +746,7 @@ macro_rules! impl_frombytes_struct {
             fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
                 reader: &mut ReadStream<'a>,
                 provider: &PStream,
-            ) -> wrt_error::Result<Self> {
+            ) -> kiln_error::Result<Self> {
                 $(
                     let $field = <$fieldtype>::from_bytes_with_provider(reader, provider)?;
                 )+
@@ -760,7 +760,7 @@ macro_rules! impl_frombytes_struct {
             fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
                 reader: &mut ReadStream<'a>,
                 provider: &PStream,
-            ) -> wrt_error::Result<Self> {
+            ) -> kiln_error::Result<Self> {
                 $(
                     let $field = <$fieldtype>::from_bytes_with_provider(reader, provider)?;
                 )+
@@ -774,7 +774,7 @@ macro_rules! impl_frombytes_struct {
             fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
                 reader: &mut ReadStream<'a>,
                 provider: &PStream,
-            ) -> wrt_error::Result<Self> {
+            ) -> kiln_error::Result<Self> {
                 $(
                     let $field = <$fieldtype>::from_bytes_with_provider(reader, provider)?;
                 )+
@@ -810,7 +810,7 @@ where
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.name.to_bytes_with_provider(writer, provider)?;
         self.ty.to_bytes_with_provider(writer, provider)?;
         self.desc.to_bytes_with_provider(writer, provider)?;
@@ -826,7 +826,7 @@ where
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let name = WasmName::<MAX_NAME_LEN>::from_bytes_with_provider(reader, provider)?;
         let ty = ExternType::<P>::from_bytes_with_provider(reader, provider)?;
         let desc = Option::<WasmName<MAX_NAME_LEN>>::from_bytes_with_provider(reader, provider)?;
@@ -889,7 +889,7 @@ where
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             ExternType::Func(ft) => {
                 writer.write_u8(0)?;
@@ -946,7 +946,7 @@ where
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let variant_tag = reader.read_u8()?;
         match variant_tag {
             0 => Ok(Self::Func(FuncType::from_bytes_with_provider(
@@ -1011,7 +1011,7 @@ impl<P: MemoryProvider> ToBytes for ResourceType<P> {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream, // Pass provider along to u32's method
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
     // to_bytes is provided by the trait
@@ -1021,7 +1021,7 @@ impl<P: MemoryProvider> FromBytes for ResourceType<P> {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream, // Pass provider along to u32's method
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let val = u32::from_bytes_with_provider(reader, provider)?;
         Ok(ResourceType(val, PhantomData))
     }
@@ -1040,7 +1040,7 @@ impl ToBytes for ComponentAliasExportKind {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(*self as u8)
     }
 }
@@ -1049,7 +1049,7 @@ impl FromBytes for ComponentAliasExportKind {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = reader.read_u8()?;
         match byte {
             0 => Ok(Self::Func),
@@ -1113,7 +1113,7 @@ where
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             ComponentAlias::InstanceExport(e) => {
                 writer.write_u8(0)?;
@@ -1144,7 +1144,7 @@ where
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let variant_idx = reader.read_u8()?;
         match variant_idx {
             0 => {
@@ -1207,7 +1207,7 @@ where
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             ComponentInstanceKind::Unknown => {
                 writer.write_u8(0)?;
@@ -1236,7 +1236,7 @@ where
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => Ok(ComponentInstanceKind::Unknown),
@@ -1312,7 +1312,7 @@ where
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             CoreInstanceKind::Unknown => {
                 writer.write_u8(0)?;
@@ -1338,7 +1338,7 @@ where
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => Ok(CoreInstanceKind::Unknown),
@@ -1394,7 +1394,7 @@ impl ToBytes for CoreType {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             CoreType::Unknown => {
                 writer.write_u8(0)?;
@@ -1429,7 +1429,7 @@ impl FromBytes for CoreType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => Ok(CoreType::Unknown),
@@ -1473,7 +1473,7 @@ impl ToBytes for ComponentAliasOuter {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.count.to_bytes_with_provider(writer, provider)?;
         self.index.to_bytes_with_provider(writer, provider)?;
         self.kind.to_bytes_with_provider(writer, provider)?;
@@ -1485,7 +1485,7 @@ impl FromBytes for ComponentAliasOuter {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let count = u32::from_bytes_with_provider(reader, provider)?;
         let index = u32::from_bytes_with_provider(reader, provider)?;
         let kind = ComponentAliasOuterKind::from_bytes_with_provider(reader, provider)?;
@@ -1509,7 +1509,7 @@ impl<P> ToBytes for ComponentInstantiationArg<P> {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.name.to_bytes_with_provider(writer, provider)?;
         self.index.to_bytes_with_provider(writer, provider)?;
         self.kind.to_bytes_with_provider(writer, provider)?;
@@ -1521,7 +1521,7 @@ impl<P> FromBytes for ComponentInstantiationArg<P> {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let name = WasmName::<MAX_NAME_LEN>::from_bytes_with_provider(reader, provider)?;
         let index = u32::from_bytes_with_provider(reader, provider)?;
         let kind = ExternKind::from_bytes_with_provider(reader, provider)?;
@@ -1549,7 +1549,7 @@ impl<P> ToBytes for CoreInstantiationArg<P> {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.name.to_bytes_with_provider(writer, provider)?;
         self.index.to_bytes_with_provider(writer, provider)?;
         self.kind.to_bytes_with_provider(writer, provider)?;
@@ -1561,7 +1561,7 @@ impl<P> FromBytes for CoreInstantiationArg<P> {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let name = WasmName::<MAX_NAME_LEN>::from_bytes_with_provider(reader, provider)?;
         let index = u32::from_bytes_with_provider(reader, provider)?;
         let kind = ExternKind::from_bytes_with_provider(reader, provider)?;

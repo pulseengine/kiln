@@ -4,8 +4,8 @@
 //! This module provides a fluent builder interface for creating WebAssembly
 //! engines with proper ASIL-level configuration and resource limits.
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     capabilities::MemoryCapabilityContext,
     execution::{
         extract_resource_limits_from_binary,

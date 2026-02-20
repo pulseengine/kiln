@@ -1,4 +1,4 @@
-// WRT - wrt-intercept
+// Kiln - kiln-intercept
 // Module: Function Call Interception Layer
 // SW-REQ-ID: REQ_017
 // SW-REQ-ID: REQ_VERIFY_005
@@ -10,7 +10,7 @@
 //! # Interception Layer for WebAssembly Component Linking
 //!
 //! This crate provides a flexible interception mechanism for WebAssembly
-//! component linking in the WebAssembly Runtime (WRT). It allows
+//! component linking in the WebAssembly Runtime (Kiln). It allows
 //! intercepting function calls between components and between components
 //! and the host.
 //!
@@ -37,9 +37,9 @@
 //!
 //! ```rust,no_run
 //! # use std::sync::Arc;
-//! # use wrt_intercept::{LinkInterceptor, LinkInterceptorStrategy};
-//! # use wrt_error::Result;
-//! # use wrt_foundation::values::Value;
+//! # use kiln_intercept::{LinkInterceptor, LinkInterceptorStrategy};
+//! # use kiln_error::Result;
+//! # use kiln_foundation::values::Value;
 //! # struct MyStrategy;
 //! # impl LinkInterceptorStrategy for MyStrategy {
 //! #     fn before_call(&self, _source: &str, _target: &str, _function: &str, args: &[Value]) -> Result<Vec<Value>> {
@@ -75,7 +75,7 @@
 extern crate alloc;
 
 // Binary std/no_std choice
-// from wrt-foundation
+// from kiln-foundation
 
 // Include prelude for unified imports
 pub mod prelude;
@@ -190,7 +190,7 @@ pub trait LinkInterceptorStrategy: Send + Sync {
     #[cfg(feature = "std")]
     fn intercept_lift(
         &self,
-        _ty: &ValType<wrt_foundation::NoStdProvider<64>>,
+        _ty: &ValType<kiln_foundation::NoStdProvider<64>>,
         _addr: u32,
         _memory_bytes: &[u8],
     ) -> Result<Option<Vec<u8>>> {
@@ -217,7 +217,7 @@ pub trait LinkInterceptorStrategy: Send + Sync {
     #[cfg(feature = "std")]
     fn intercept_lower(
         &self,
-        _value_type: &ValType<wrt_foundation::NoStdProvider<64>>,
+        _value_type: &ValType<kiln_foundation::NoStdProvider<64>>,
         _value_data: &[u8],
         _addr: u32,
         _memory_bytes: &mut [u8],
@@ -254,7 +254,7 @@ pub trait LinkInterceptorStrategy: Send + Sync {
     fn intercept_function_call(
         &self,
         _function_name: &str,
-        _arg_types: &[ValType<wrt_foundation::NoStdProvider<64>>],
+        _arg_types: &[ValType<kiln_foundation::NoStdProvider<64>>],
         _arg_data: &[u8],
     ) -> Result<Option<Vec<u8>>> {
         Ok(None)
@@ -280,7 +280,7 @@ pub trait LinkInterceptorStrategy: Send + Sync {
     fn intercept_function_result(
         &self,
         _function_name: &str,
-        _result_types: &[ValType<wrt_foundation::NoStdProvider<64>>],
+        _result_types: &[ValType<kiln_foundation::NoStdProvider<64>>],
         _result_data: &[u8],
     ) -> Result<Option<Vec<u8>>> {
         Ok(None)
@@ -363,7 +363,7 @@ pub trait LinkInterceptorStrategy: Send + Sync {
     fn after_start(
         &self,
         _component_name: &str,
-        _result_types: &[ValType<wrt_foundation::NoStdProvider<64>>],
+        _result_types: &[ValType<kiln_foundation::NoStdProvider<64>>],
         _result_data: Option<&[u8]>,
     ) -> Result<Option<Vec<u8>>> {
         Ok(None)
@@ -397,8 +397,8 @@ pub trait LinkInterceptorStrategy: Send + Sync {
         &self,
         _component_name: &str,
         _func_name: &str,
-        _args: &[ComponentValue<wrt_foundation::NoStdProvider<64>>],
-        _results: &[ComponentValue<wrt_foundation::NoStdProvider<64>>],
+        _args: &[ComponentValue<kiln_foundation::NoStdProvider<64>>],
+        _results: &[ComponentValue<kiln_foundation::NoStdProvider<64>>],
     ) -> Result<Option<Vec<Modification>>> {
         // Default implementation returns no modifications
         Ok(None)
@@ -631,8 +631,8 @@ impl LinkInterceptor {
         &self,
         component_name: &str,
         func_name: &str,
-        args: &[ComponentValue<wrt_foundation::NoStdProvider<64>>],
-        results: &[ComponentValue<wrt_foundation::NoStdProvider<64>>],
+        args: &[ComponentValue<kiln_foundation::NoStdProvider<64>>],
+        results: &[ComponentValue<kiln_foundation::NoStdProvider<64>>],
     ) -> Result<InterceptionResult> {
         // Create default result (no modifications)
         let mut result = InterceptionResult {
@@ -698,8 +698,8 @@ impl LinkInterceptor {
                     let start = *offset;
                     if start > modified_data.len() {
                         return Err(Error::new(
-                            wrt_error::ErrorCategory::Validation,
-                            wrt_error::codes::VALIDATION_ERROR,
+                            kiln_error::ErrorCategory::Validation,
+                            kiln_error::codes::VALIDATION_ERROR,
                             "Insert offset exceeds data length",
                         ));
                     }
@@ -734,10 +734,10 @@ pub struct InterceptionResult {
     pub modifications: Vec<Modification>,
     /// Modifications to apply to the serialized data
     #[cfg(not(feature = "std"))]
-    pub modifications: wrt_foundation::bounded::BoundedVec<
+    pub modifications: kiln_foundation::bounded::BoundedVec<
         Modification,
         32,
-        wrt_foundation::safe_memory::NoStdProvider<8192>,
+        kiln_foundation::safe_memory::NoStdProvider<8192>,
     >,
 }
 
@@ -757,10 +757,10 @@ pub enum Modification {
         data:   Vec<u8>,
         /// New data to insert at the offset
         #[cfg(not(feature = "std"))]
-        data: wrt_foundation::bounded::BoundedVec<
+        data: kiln_foundation::bounded::BoundedVec<
             u8,
             256,
-            wrt_foundation::safe_memory::NoStdProvider<4096>,
+            kiln_foundation::safe_memory::NoStdProvider<4096>,
         >,
     },
     /// Insert data at an offset
@@ -772,10 +772,10 @@ pub enum Modification {
         data:   Vec<u8>,
         /// New data to insert at the offset
         #[cfg(not(feature = "std"))]
-        data: wrt_foundation::bounded::BoundedVec<
+        data: kiln_foundation::bounded::BoundedVec<
             u8,
             256,
-            wrt_foundation::safe_memory::NoStdProvider<4096>,
+            kiln_foundation::safe_memory::NoStdProvider<4096>,
         >,
     },
     /// Remove data at an offset with a given length
@@ -789,8 +789,8 @@ pub enum Modification {
 
 
 // Implement required traits for BoundedVec compatibility
-impl wrt_foundation::traits::Checksummable for Modification {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Modification {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Modification::None => {
                 checksum.update_slice(&[0u8]);
@@ -828,7 +828,7 @@ impl wrt_foundation::traits::Checksummable for Modification {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Modification {
+impl kiln_foundation::traits::ToBytes for Modification {
     fn serialized_size(&self) -> usize {
         match self {
             Modification::None => 1, // Just the tag
@@ -841,11 +841,11 @@ impl wrt_foundation::traits::ToBytes for Modification {
         }
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Modification::None => {
                 writer.write_u8(0)?; // Tag for None
@@ -888,12 +888,12 @@ impl wrt_foundation::traits::ToBytes for Modification {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Modification {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Modification {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_error::Error;
+    ) -> kiln_error::Result<Self> {
+        use kiln_error::Error;
 
         let tag = reader.read_u8()?;
 
@@ -914,7 +914,7 @@ impl wrt_foundation::traits::FromBytes for Modification {
                 };
                 #[cfg(not(feature = "std"))]
                 let data = {
-                    use wrt_foundation::{
+                    use kiln_foundation::{
                         bounded::BoundedVec,
                         budget_aware_provider::CrateId,
                         safe_managed_alloc,
@@ -949,7 +949,7 @@ impl wrt_foundation::traits::FromBytes for Modification {
                 };
                 #[cfg(not(feature = "std"))]
                 let data = {
-                    use wrt_foundation::{
+                    use kiln_foundation::{
                         bounded::BoundedVec,
                         budget_aware_provider::CrateId,
                         safe_managed_alloc,
@@ -1175,7 +1175,7 @@ mod tests {
 }
 
 // Panic handler disabled to avoid conflicts with other crates
-// The main wrt crate should provide the panic handler
+// The main kiln crate should provide the panic handler
 // #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {

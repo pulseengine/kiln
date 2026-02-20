@@ -4,7 +4,7 @@
 
 //! DWARF line number program implementation
 
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 
 use crate::cursor::DwarfCursor;
 

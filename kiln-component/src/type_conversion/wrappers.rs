@@ -14,12 +14,12 @@
 //! # Examples
 //!
 //! ```
-//! use wrt_component::type_conversion::wrappers::{
+//! use kiln_component::type_conversion::wrappers::{
 //!     FormatComponentType,
 //!     RuntimeComponentType,
 //! };
-//! use wrt_format::component::ComponentTypeDefinition;
-//! use wrt_foundation::component::ComponentType as TypesComponentType;
+//! use kiln_format::component::ComponentTypeDefinition;
+//! use kiln_foundation::component::ComponentType as TypesComponentType;
 //!
 //! // Create a wrapper around a runtime type
 //! let rt_type = TypesComponentType {
@@ -43,16 +43,16 @@ use alloc::{
 };
 
 // Additional imports
-use wrt_error::{Error, Result};
-use wrt_format::component::{ComponentTypeDefinition, ExternType as FormatExternType};
-use wrt_foundation::{
+use kiln_error::{Error, Result};
+use kiln_format::component::{ComponentTypeDefinition, ExternType as FormatExternType};
+use kiln_foundation::{
     component::{ComponentType, ExternType as TypesExternType, InstanceType},
     safe_memory::NoStdProvider,
 };
 
 // For no_std, override prelude's bounded::BoundedVec with StaticVec
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticVec as BoundedVec;
+use kiln_foundation::collections::StaticVec as BoundedVec;
 
 use super::bidirectional::{
     IntoFormatType, IntoRuntimeType, format_to_runtime_extern_type, runtime_to_format_extern_type,
@@ -61,9 +61,9 @@ use super::bidirectional::{
 use crate::bounded_component_infra::ComponentProvider;
 
 /// Helper function to convert Namespace<P> to String
-fn namespace_to_string<P>(namespace: &wrt_foundation::component::Namespace<P>) -> Result<String>
+fn namespace_to_string<P>(namespace: &kiln_foundation::component::Namespace<P>) -> Result<String>
 where
-    P: wrt_foundation::MemoryProvider + Clone + Default + Eq + core::fmt::Debug,
+    P: kiln_foundation::MemoryProvider + Clone + Default + Eq + core::fmt::Debug,
 {
     let parts: Result<Vec<String>> = namespace
         .elements
@@ -77,14 +77,14 @@ where
     Ok(parts?.join(":"))
 }
 
-/// Wrapper around wrt_foundation::component::ComponentType
+/// Wrapper around kiln_foundation::component::ComponentType
 #[derive(Debug, Clone)]
 pub struct RuntimeComponentType {
     /// The wrapped component type
     inner: ComponentType<NoStdProvider<4096>>,
 }
 
-/// Wrapper around wrt_format::component::ComponentTypeDefinition::Component
+/// Wrapper around kiln_format::component::ComponentTypeDefinition::Component
 #[derive(Debug, Clone)]
 pub struct FormatComponentType {
     /// The component imports
@@ -93,14 +93,14 @@ pub struct FormatComponentType {
     pub exports: Vec<(String, FormatExternType)>,
 }
 
-/// Wrapper around wrt_foundation::component::InstanceType
+/// Wrapper around kiln_foundation::component::InstanceType
 #[derive(Debug, Clone)]
 pub struct RuntimeInstanceType {
     /// The wrapped instance type
     inner: InstanceType<NoStdProvider<4096>>,
 }
 
-/// Wrapper around wrt_format::component::ComponentTypeDefinition::Instance
+/// Wrapper around kiln_format::component::ComponentTypeDefinition::Instance
 #[derive(Debug, Clone)]
 pub struct FormatInstanceType {
     /// The instance exports
@@ -274,24 +274,24 @@ impl TryFrom<FormatComponentType> for RuntimeComponentType {
         let provider = ComponentProvider::default();
         #[cfg(not(feature = "std"))]
         let provider = {
-            use wrt_foundation::{CrateId, safe_managed_alloc};
+            use kiln_foundation::{CrateId, safe_managed_alloc};
             safe_managed_alloc!(4096, CrateId::Component)?
         };
 
         // Convert imports from tuples to Import<P> structs
-        let mut import_vec: wrt_foundation::BoundedVec<
-            wrt_foundation::Import<ComponentProvider>,
+        let mut import_vec: kiln_foundation::BoundedVec<
+            kiln_foundation::Import<ComponentProvider>,
             128,
             ComponentProvider,
-        > = wrt_foundation::BoundedVec::new(provider.clone())?;
+        > = kiln_foundation::BoundedVec::new(provider.clone())?;
 
         for (namespace, name, extern_type) in format_type.imports {
             let runtime_type = format_to_runtime_extern_type(&extern_type)?;
-            let namespace_obj = wrt_foundation::Namespace::from_str(&namespace, provider.clone())?;
-            let name_wasm = wrt_foundation::WasmName::try_from_str(&name)
+            let namespace_obj = kiln_foundation::Namespace::from_str(&namespace, provider.clone())?;
+            let name_wasm = kiln_foundation::WasmName::try_from_str(&name)
                 .map_err(|_| Error::runtime_execution_error("Invalid import name"))?;
-            let import = wrt_foundation::Import {
-                key: wrt_foundation::ImportKey {
+            let import = kiln_foundation::Import {
+                key: kiln_foundation::ImportKey {
                     namespace: namespace_obj,
                     name: name_wasm,
                 },
@@ -303,17 +303,17 @@ impl TryFrom<FormatComponentType> for RuntimeComponentType {
         }
 
         // Convert exports from tuples to Export<P> structs
-        let mut export_vec: wrt_foundation::BoundedVec<
-            wrt_foundation::Export<ComponentProvider>,
+        let mut export_vec: kiln_foundation::BoundedVec<
+            kiln_foundation::Export<ComponentProvider>,
             128,
             ComponentProvider,
-        > = wrt_foundation::BoundedVec::new(provider.clone())?;
+        > = kiln_foundation::BoundedVec::new(provider.clone())?;
 
         for (name, extern_type) in format_type.exports {
             let runtime_type = format_to_runtime_extern_type(&extern_type)?;
-            let name_wasm = wrt_foundation::WasmName::try_from_str(&name)
+            let name_wasm = kiln_foundation::WasmName::try_from_str(&name)
                 .map_err(|_| Error::runtime_execution_error("Invalid export name"))?;
-            let export = wrt_foundation::Export {
+            let export = kiln_foundation::Export {
                 name: name_wasm,
                 ty: runtime_type,
                 desc: None,
@@ -324,16 +324,16 @@ impl TryFrom<FormatComponentType> for RuntimeComponentType {
         }
 
         // Create empty instances for now - can be enhanced in future
-        let instances = wrt_foundation::BoundedVec::new(provider.clone())?;
+        let instances = kiln_foundation::BoundedVec::new(provider.clone())?;
 
         Ok(Self::new(ComponentType {
             imports: import_vec,
             exports: export_vec,
-            aliases: wrt_foundation::BoundedVec::new(provider.clone())?,
+            aliases: kiln_foundation::BoundedVec::new(provider.clone())?,
             instances,
-            core_instances: wrt_foundation::BoundedVec::new(provider.clone())?,
-            component_types: wrt_foundation::BoundedVec::new(provider.clone())?,
-            core_types: wrt_foundation::BoundedVec::new(provider.clone())?,
+            core_instances: kiln_foundation::BoundedVec::new(provider.clone())?,
+            component_types: kiln_foundation::BoundedVec::new(provider.clone())?,
+            core_types: kiln_foundation::BoundedVec::new(provider.clone())?,
         }))
     }
 }
@@ -373,22 +373,22 @@ impl TryFrom<FormatInstanceType> for RuntimeInstanceType {
         let provider = ComponentProvider::default();
         #[cfg(not(feature = "std"))]
         let provider = {
-            use wrt_foundation::{CrateId, safe_managed_alloc};
+            use kiln_foundation::{CrateId, safe_managed_alloc};
             safe_managed_alloc!(4096, CrateId::Component)?
         };
 
         // Convert exports from tuples to Export<P> structs
-        let mut export_vec: wrt_foundation::BoundedVec<
-            wrt_foundation::Export<ComponentProvider>,
+        let mut export_vec: kiln_foundation::BoundedVec<
+            kiln_foundation::Export<ComponentProvider>,
             128,
             ComponentProvider,
-        > = wrt_foundation::BoundedVec::new(provider.clone())?;
+        > = kiln_foundation::BoundedVec::new(provider.clone())?;
 
         for (name, extern_type) in format_type.exports {
             let runtime_type = format_to_runtime_extern_type(&extern_type)?;
-            let name_wasm = wrt_foundation::WasmName::try_from_str(&name)
+            let name_wasm = kiln_foundation::WasmName::try_from_str(&name)
                 .map_err(|_| Error::runtime_execution_error("Invalid export name"))?;
-            let export = wrt_foundation::Export {
+            let export = kiln_foundation::Export {
                 name: name_wasm,
                 ty: runtime_type,
                 desc: None,

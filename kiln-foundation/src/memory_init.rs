@@ -1,7 +1,7 @@
 //! Modern Memory Initialization System
 //!
 //! This module provides automatic memory system initialization that works
-//! across all crates in the WRT ecosystem with zero boilerplate using the
+//! across all crates in the Kiln ecosystem with zero boilerplate using the
 //! new capability-based memory management system.
 //!
 //! SW-REQ-ID: REQ_MEM_001 - Memory bounds checking
@@ -74,7 +74,7 @@ pub fn get_global_capability_context() -> Result<&'static MemoryCapabilityContex
 pub struct MemoryInitializer;
 
 impl MemoryInitializer {
-    /// Initialize the entire WRT memory system
+    /// Initialize the entire Kiln memory system
     ///
     /// This is called once at startup and configures all crate budgets
     pub fn initialize() -> Result<()> {
@@ -218,13 +218,13 @@ macro_rules! memory_safe {
 /// Static initializer using ctor if available
 #[cfg(feature = "ctor")]
 #[ctor::ctor]
-fn init_wrt_memory() {
+fn init_kiln_memory() {
     drop(MemoryInitializer::initialize());
 }
 
 /// Manual initialization function for platforms without ctor
 #[cfg(not(feature = "ctor"))]
-pub fn init_wrt_memory() -> Result<()> {
+pub fn init_kiln_memory() -> Result<()> {
     MemoryInitializer::initialize()
 }
 

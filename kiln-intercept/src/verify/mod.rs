@@ -14,8 +14,8 @@ pub mod proofs {
         vec::Vec,
     };
 
-    use wrt_error::Result;
-    use wrt_foundation::values::Value;
+    use kiln_error::Result;
+    use kiln_foundation::values::Value;
 
     use crate::{
         LinkInterceptor,
@@ -131,7 +131,7 @@ pub mod proofs {
 
         let args = vec![Value::I32(10)];
         let result = interceptor.intercept_call("target", "func", args.clone(), |_| {
-            Err(wrt_error::Error::runtime_execution_error("Test error"))
+            Err(kiln_error::Error::runtime_execution_error("Test error"))
         });
 
         assert!(result.is_err());

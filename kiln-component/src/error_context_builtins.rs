@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Module: Error Context Canonical Built-ins
 // SW-REQ-ID: REQ_ERROR_CONTEXT_001
 //
@@ -20,8 +20,8 @@ extern crate alloc;
 #[cfg(feature = "std")]
 use std::{boxed::Box, collections::HashMap, cell::RefCell as AtomicRefCell, string::String, vec::Vec};
 
-use wrt_error::{Error, ErrorCategory, Result};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_foundation::{
     bounded::{BoundedMap, BoundedString},
     component_value::ComponentValue,
     safe_memory::NoStdProvider,

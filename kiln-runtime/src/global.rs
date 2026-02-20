@@ -2,7 +2,7 @@
 //!
 //! This module provides the implementation for WebAssembly globals.
 
-// Use WrtGlobalType directly from wrt_foundation, and WrtValueType, WrtValue
+// Use KilnGlobalType directly from kiln_foundation, and KilnValueType, KilnValue
 // alloc is imported in lib.rs with proper feature gates
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
@@ -11,12 +11,12 @@ use alloc::format;
 #[cfg(feature = "std")]
 use std::format;
 
-use wrt_foundation::{
+use kiln_foundation::{
     types::{
-        GlobalType as WrtGlobalType,
-        ValueType as WrtValueType,
+        GlobalType as KilnGlobalType,
+        ValueType as KilnValueType,
     },
-    values::Value as WrtValue,
+    values::Value as KilnValue,
 };
 
 use crate::prelude::{
@@ -32,22 +32,22 @@ use crate::prelude::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Global {
     /// The global type (`value_type` and mutability).
-    /// The `initial_value` from `WrtGlobalType` is used to set the runtime
+    /// The `initial_value` from `KilnGlobalType` is used to set the runtime
     /// `value` field upon creation.
-    ty:    WrtGlobalType,
+    ty:    KilnGlobalType,
     /// The current runtime value of the global variable.
-    value: WrtValue,
+    value: KilnValue,
 }
 
 impl Global {
     /// Create a new runtime Global instance.
     /// The `initial_value` is used to set the initial runtime `value`.
-    pub fn new(value_type: WrtValueType, mutable: bool, initial_value: WrtValue) -> Result<Self> {
-        // Construct the WrtGlobalType for storage.
-        // The initial_value in WrtGlobalType might seem redundant here if we only use
+    pub fn new(value_type: KilnValueType, mutable: bool, initial_value: KilnValue) -> Result<Self> {
+        // Construct the KilnGlobalType for storage.
+        // The initial_value in KilnGlobalType might seem redundant here if we only use
         // it for the `value` field, but it keeps the `ty` field complete as per
         // its definition.
-        let global_ty_descriptor = WrtGlobalType {
+        let global_ty_descriptor = KilnGlobalType {
             value_type,
             mutable,
         };
@@ -60,14 +60,14 @@ impl Global {
     }
 
     /// Get the current runtime value of the global.
-    pub fn get(&self) -> &WrtValue {
+    pub fn get(&self) -> &KilnValue {
         &self.value
     }
 
     /// Set the runtime value of the global.
     /// Returns an error if the global is immutable or if the value type
     /// mismatches.
-    pub fn set(&mut self, new_value: &WrtValue) -> Result<()> {
+    pub fn set(&mut self, new_value: &KilnValue) -> Result<()> {
         if !self.ty.mutable {
             return Err(Error::runtime_execution_error(
                 "Cannot set immutable global variable",
@@ -90,7 +90,7 @@ impl Global {
     /// (e.g., via `global.get` of imported globals).
     ///
     /// This should only be called during module instantiation, not at runtime.
-    pub fn set_initial_value(&mut self, new_value: &WrtValue) -> Result<()> {
+    pub fn set_initial_value(&mut self, new_value: &KilnValue) -> Result<()> {
         if !new_value.matches_type(&self.ty.value_type) {
             return Err(Error::type_error(
                 "Value type does not match global variable type",
@@ -101,16 +101,16 @@ impl Global {
         Ok(())
     }
 
-    /// Get the `WrtGlobalType` descriptor (`value_type`, mutability, and
+    /// Get the `KilnGlobalType` descriptor (`value_type`, mutability, and
     /// original `initial_value`).
-    pub fn global_type_descriptor(&self) -> &WrtGlobalType {
+    pub fn global_type_descriptor(&self) -> &KilnGlobalType {
         &self.ty
     }
 }
 
 impl Default for Global {
     fn default() -> Self {
-        use wrt_foundation::{
+        use kiln_foundation::{
             types::{
                 GlobalType,
                 ValueType,
@@ -124,42 +124,42 @@ impl Default for Global {
     }
 }
 
-fn value_type_to_u8(value_type: &WrtValueType) -> u8 {
+fn value_type_to_u8(value_type: &KilnValueType) -> u8 {
     match value_type {
-        WrtValueType::I32 => 0,
-        WrtValueType::I64 => 1,
-        WrtValueType::F32 => 2,
-        WrtValueType::F64 => 3,
-        WrtValueType::V128 => 4,
-        WrtValueType::FuncRef => 5,
-        WrtValueType::NullFuncRef => 15,
-        WrtValueType::ExternRef => 6,
-        WrtValueType::I16x8 => 7,
-        WrtValueType::StructRef(_) => 8,
-        WrtValueType::ArrayRef(_) => 9,
-        WrtValueType::ExnRef => 10,
-        WrtValueType::I31Ref => 11,
-        WrtValueType::AnyRef => 12,
-        WrtValueType::EqRef => 13,
-        WrtValueType::TypedFuncRef(_, _) => 14,
+        KilnValueType::I32 => 0,
+        KilnValueType::I64 => 1,
+        KilnValueType::F32 => 2,
+        KilnValueType::F64 => 3,
+        KilnValueType::V128 => 4,
+        KilnValueType::FuncRef => 5,
+        KilnValueType::NullFuncRef => 15,
+        KilnValueType::ExternRef => 6,
+        KilnValueType::I16x8 => 7,
+        KilnValueType::StructRef(_) => 8,
+        KilnValueType::ArrayRef(_) => 9,
+        KilnValueType::ExnRef => 10,
+        KilnValueType::I31Ref => 11,
+        KilnValueType::AnyRef => 12,
+        KilnValueType::EqRef => 13,
+        KilnValueType::TypedFuncRef(_, _) => 14,
     }
 }
 
-impl wrt_foundation::traits::Checksummable for Global {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Global {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&value_type_to_u8(&self.ty.value_type).to_le_bytes());
         checksum.update_slice(&[u8::from(self.ty.mutable)]);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Global {
+impl kiln_foundation::traits::ToBytes for Global {
     fn serialized_size(&self) -> usize {
         16 // simplified
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         writer.write_all(&value_type_to_u8(&self.ty.value_type).to_le_bytes())?;
@@ -167,33 +167,33 @@ impl wrt_foundation::traits::ToBytes for Global {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Global {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Global {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         let mut bytes = [0u8; 1];
         reader.read_exact(&mut bytes)?;
         let value_type = match bytes[0] {
-            0 => wrt_foundation::types::ValueType::I32,
-            1 => wrt_foundation::types::ValueType::I64,
-            2 => wrt_foundation::types::ValueType::F32,
-            3 => wrt_foundation::types::ValueType::F64,
-            _ => wrt_foundation::types::ValueType::I32,
+            0 => kiln_foundation::types::ValueType::I32,
+            1 => kiln_foundation::types::ValueType::I64,
+            2 => kiln_foundation::types::ValueType::F32,
+            3 => kiln_foundation::types::ValueType::F64,
+            _ => kiln_foundation::types::ValueType::I32,
         };
 
         reader.read_exact(&mut bytes)?;
         let mutable = bytes[0] != 0;
 
-        use wrt_foundation::values::Value;
+        use kiln_foundation::values::Value;
         let initial_value = match value_type {
-            wrt_foundation::types::ValueType::I32 => Value::I32(0),
-            wrt_foundation::types::ValueType::I64 => Value::I64(0),
-            wrt_foundation::types::ValueType::F32 => {
-                Value::F32(wrt_foundation::float_repr::FloatBits32::from_float(0.0))
+            kiln_foundation::types::ValueType::I32 => Value::I32(0),
+            kiln_foundation::types::ValueType::I64 => Value::I64(0),
+            kiln_foundation::types::ValueType::F32 => {
+                Value::F32(kiln_foundation::float_repr::FloatBits32::from_float(0.0))
             },
-            wrt_foundation::types::ValueType::F64 => {
-                Value::F64(wrt_foundation::float_repr::FloatBits64::from_float(0.0))
+            kiln_foundation::types::ValueType::F64 => {
+                Value::F64(kiln_foundation::float_repr::FloatBits64::from_float(0.0))
             },
             _ => Value::I32(0),
         };
@@ -202,8 +202,8 @@ impl wrt_foundation::traits::FromBytes for Global {
     }
 }
 
-// The local `GlobalType` struct is no longer needed as we use WrtGlobalType
-// from wrt_foundation directly. /// Represents a WebAssembly global type
+// The local `GlobalType` struct is no longer needed as we use KilnGlobalType
+// from kiln_foundation directly. /// Represents a WebAssembly global type
 // #[derive(Debug, Clone, PartialEq)]
 // pub struct GlobalType { ... } // REMOVED
 // impl GlobalType { ... } // REMOVED

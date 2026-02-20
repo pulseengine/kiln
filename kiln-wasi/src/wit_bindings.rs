@@ -169,7 +169,7 @@ pub mod sockets_types {
     pub type UdpSocket = u32;
 }
 
-/// Convert WIT types to WRT component values
+/// Convert WIT types to Kiln component values
 pub mod conversions {
     use super::{filesystem_types, Result, Error, ErrorCategory, codes};
     use crate::Value;

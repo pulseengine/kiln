@@ -1,4 +1,4 @@
-# WRT Allowed Unsafe Code Configuration
+# Kiln Allowed Unsafe Code Configuration
 # This file documents approved unsafe code blocks that are necessary for ASIL compliance
 # Each entry must include justification and be re-evaluated when code changes
 
@@ -12,21 +12,21 @@
 
 # Waker API - Required by Rust standard library
 [[allowed]]
-file = "wrt-component/src/async_/fuel_aware_waker.rs"
+file = "kiln-component/src/async_/fuel_aware_waker.rs"
 line = 320
 function = "create_fuel_aware_waker"
 reason = "Rust's Waker API requires unsafe for Waker::from_raw"
 asil_justification = "ASIL-D compliant: Valid heap-allocated WakerData pointer with proper cleanup via waker_drop"
 
 [[allowed]]
-file = "wrt-component/src/async_/fuel_aware_waker.rs"
+file = "kiln-component/src/async_/fuel_aware_waker.rs"
 line = 338
 function = "create_fuel_aware_waker"
 reason = "Rust's Waker API requires unsafe for Waker::from_raw"
 asil_justification = "ASIL-D compliant: Noop waker with null pointer data, all vtable functions are no-ops"
 
 [[allowed]]
-file = "wrt-component/src/async_/fuel_async_executor.rs"
+file = "kiln-component/src/async_/fuel_async_executor.rs"
 line = 2911
 function = "create_noop_waker"
 reason = "Rust's Waker API requires unsafe for Waker::from_raw"
@@ -34,28 +34,28 @@ asil_justification = "ASIL-D compliant: Noop waker with null pointer data, no me
 
 # Waker vtable functions - Required for non-ASIL-D builds
 [[allowed]]
-file = "wrt-component/src/async_/fuel_aware_waker.rs"
+file = "kiln-component/src/async_/fuel_aware_waker.rs"
 line = 217
 function = "waker_clone"
 reason = "Waker vtable function signature requires unsafe"
 asil_justification = "Only used in non-ASIL-D builds with proper feature gates"
 
 [[allowed]]
-file = "wrt-component/src/async_/fuel_aware_waker.rs"
+file = "kiln-component/src/async_/fuel_aware_waker.rs"
 line = 227
 function = "waker_wake"
 reason = "Waker vtable function signature requires unsafe"
 asil_justification = "Only used in non-ASIL-D builds with proper feature gates"
 
 [[allowed]]
-file = "wrt-component/src/async_/fuel_aware_waker.rs"
+file = "kiln-component/src/async_/fuel_aware_waker.rs"
 line = 233
 function = "waker_wake_by_ref"
 reason = "Waker vtable function signature requires unsafe"
 asil_justification = "Only used in non-ASIL-D builds with proper feature gates"
 
 [[allowed]]
-file = "wrt-component/src/async_/fuel_aware_waker.rs"
+file = "kiln-component/src/async_/fuel_aware_waker.rs"
 line = 239
 function = "waker_drop"
 reason = "Waker vtable function signature requires unsafe"
@@ -63,36 +63,36 @@ asil_justification = "Only used in non-ASIL-D builds with proper feature gates"
 
 # Memory profiler - No-std environments
 [[allowed]]
-file = "wrt-debug/src/memory_profiling.rs"
+file = "kiln-debug/src/memory_profiling.rs"
 line = 881
 function = "with_profiler"
 reason = "No-std environment requires raw pointer access for static memory profiler"
 asil_justification = "ASIL-D compliant: Pointer from Box::leak with 'static lifetime, single initialization guarantee"
 
-# cargo-wrt CLI validation - Not safety critical
+# cargo-kiln CLI validation - Not safety critical
 [[allowed]]
-file = "cargo-wrt/src/main.rs"
+file = "cargo-kiln/src/main.rs"
 function = "validate_cli"
 reason = "CLI validation macros for compile-time checks"
 asil_justification = "CLI tool validation only - not part of runtime safety-critical code"
 
 # Emergency fallback code - No-std environments only
 [[allowed]]
-file = "wrt-component/src/threading/task_cancellation.rs"
+file = "kiln-component/src/threading/task_cancellation.rs"
 line = 696
 function = "new"
 reason = "Emergency fallback for CancellationTokenInner in no_std environment"
 asil_justification = "ASIL-A: Only used when std feature disabled and proper initialization fails. Will be replaced with safe alternative."
 
 [[allowed]]
-file = "wrt-component/src/threading/task_cancellation.rs"
+file = "kiln-component/src/threading/task_cancellation.rs"
 line = 712
 function = "default"
 reason = "Emergency fallback for SubtaskManager in no_std environment"
 asil_justification = "ASIL-A: Only used when std feature disabled and proper initialization fails. Will be replaced with safe alternative."
 
 [[allowed]]
-file = "wrt-component/src/threading/task_cancellation.rs"
+file = "kiln-component/src/threading/task_cancellation.rs"
 line = 716
 function = "default"
 reason = "Emergency fallback for completion handlers in no_std environment"
@@ -100,14 +100,14 @@ asil_justification = "ASIL-A: Only used when std feature disabled and proper ini
 
 # SIMD operations - Math library
 [[allowed]]
-file = "wrt-math/src/safety.rs"
+file = "kiln-math/src/safety.rs"
 line = 615
 function = "simd_operation"
 reason = "SIMD operations marked as requiring unsafe code path"
 asil_justification = "ASIL-A: Error message indicating unsafe code requirement, actual unsafe code gated behind higher ASIL levels"
 
 [[allowed]]
-file = "wrt-math/src/safety.rs"
+file = "kiln-math/src/safety.rs"
 line = 631
 function = "simd_operation"
 reason = "SIMD operations marked as requiring unsafe code path"
@@ -123,7 +123,7 @@ asil_justification = "ASIL-A: CFI stack validation with bounds checking, control
 
 # Instruction execution - Core runtime
 [[allowed]]
-file = "wrt-instructions/src/execution.rs"
+file = "kiln-instructions/src/execution.rs"
 line = 92
 function = "execute_instruction"
 reason = "Instruction execution requires unsafe memory access for performance"

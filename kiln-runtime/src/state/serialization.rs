@@ -15,12 +15,12 @@ use alloc::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_format::{
+use kiln_format::{
     compression::{
         rle_decode,
         rle_encode,
@@ -33,18 +33,18 @@ use wrt_format::{
     },
 };
 #[cfg(not(any(feature = "std")))]
-use wrt_format::{
+use kiln_format::{
     WasmString,
     WasmVec,
 };
 #[cfg(not(any(feature = "std")))]
-use wrt_foundation::{
+use kiln_foundation::{
     MemoryProvider,
     NoStdProvider,
 };
 
 /// Constants for state section names
-pub const STATE_SECTION_PREFIX: &str = "wrt-state";
+pub const STATE_SECTION_PREFIX: &str = "kiln-state";
 
 /// Types of state sections
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,22 +78,22 @@ impl StateSection {
     #[cfg(not(any(feature = "std")))]
     pub fn name(&self) -> &'static str {
         match self {
-            Self::Meta => "wrt-state-meta",
-            Self::Stack => "wrt-state-stack",
-            Self::Frames => "wrt-state-frames",
-            Self::Globals => "wrt-state-globals",
-            Self::Memory => "wrt-state-memory",
+            Self::Meta => "kiln-state-meta",
+            Self::Stack => "kiln-state-stack",
+            Self::Frames => "kiln-state-frames",
+            Self::Globals => "kiln-state-globals",
+            Self::Memory => "kiln-state-memory",
         }
     }
 
     /// Convert a section name to a StateSection
     pub fn from_name(name: &str) -> Option<Self> {
         match name {
-            "wrt-state-meta" => Some(Self::Meta),
-            "wrt-state-stack" => Some(Self::Stack),
-            "wrt-state-frames" => Some(Self::Frames),
-            "wrt-state-globals" => Some(Self::Globals),
-            "wrt-state-memory" => Some(Self::Memory),
+            "kiln-state-meta" => Some(Self::Meta),
+            "kiln-state-stack" => Some(Self::Stack),
+            "kiln-state-frames" => Some(Self::Frames),
+            "kiln-state-globals" => Some(Self::Globals),
+            "kiln-state-memory" => Some(Self::Memory),
             _ => None,
         }
     }

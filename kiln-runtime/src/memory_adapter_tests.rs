@@ -5,8 +5,8 @@ mod tests {
     use super::super::*;
     use crate::memory_adapter::{SafeMemoryAdapter, MemoryAdapter, StdMemoryProvider};
     use crate::types::MemoryType;
-    use wrt_foundation::types::Limits;
-    use wrt_foundation::verification::VerificationLevel;
+    use kiln_foundation::types::Limits;
+    use kiln_foundation::verification::VerificationLevel;
 
     fn create_test_memory_type() -> MemoryType {
         MemoryType {

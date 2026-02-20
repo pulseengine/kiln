@@ -7,23 +7,23 @@
 //! This module contains parsers for various sections in WebAssembly modules
 //! using bounded collections for static memory allocation.
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_format::{
-    DataSegment as WrtDataSegment, ElementSegment as WrtElementSegment, WasmString,
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_format::{
+    DataSegment as KilnDataSegment, ElementSegment as KilnElementSegment, WasmString,
     binary::{self},
-    module::{ElementInit, Export as WrtExport, ExportKind},
+    module::{ElementInit, Export as KilnExport, ExportKind},
     pure_format_types::{PureDataMode, PureDataSegment, PureElementMode, PureElementSegment},
     types::{RefType, parse_value_type},
 };
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{BoundedVec, WasmName},
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     safe_memory::NoStdProvider,
     traits::BoundedCapacity,
     types::{
-        FuncType as WrtFuncType, GlobalType as WrtGlobalType, Import as WrtImport,
-        ImportDesc as WrtImportDesc, MemoryType as WrtMemoryType, TableType as WrtTableType,
+        FuncType as KilnFuncType, GlobalType as KilnGlobalType, Import as KilnImport,
+        ImportDesc as KilnImportDesc, MemoryType as KilnMemoryType, TableType as KilnTableType,
     },
 };
 
@@ -33,33 +33,33 @@ use crate::{
     memory_optimized::{check_bounds_u32, safe_usize_conversion},
     optimized_string::parse_utf8_string_inplace,
 };
-use wrt_foundation::collections::StaticVec;
+use kiln_foundation::collections::StaticVec;
 
 /// WebAssembly section representation for no_std environments
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Section {
     /// Type section containing function signatures
-    Type(BoundedTypeVec<WrtFuncType>),
+    Type(BoundedTypeVec<KilnFuncType>),
     /// Import section
-    Import(BoundedImportVec<WrtImport<DecoderProvider>>),
+    Import(BoundedImportVec<KilnImport<DecoderProvider>>),
     /// Function section (function indices)
     Function(BoundedFunctionVec<u32>),
     /// Table section
-    Table(BoundedTableVec<WrtTableType>),
+    Table(BoundedTableVec<KilnTableType>),
     /// Memory section
-    Memory(BoundedMemoryVec<WrtMemoryType>),
+    Memory(BoundedMemoryVec<KilnMemoryType>),
     /// Global section
-    Global(BoundedGlobalVec<WrtGlobalType>),
+    Global(BoundedGlobalVec<KilnGlobalType>),
     /// Export section
-    Export(BoundedExportVec<WrtExport>),
+    Export(BoundedExportVec<KilnExport>),
     /// Start section
     Start(u32),
     /// Element section
-    Element(BoundedElementVec<WrtElementSegment>),
+    Element(BoundedElementVec<KilnElementSegment>),
     /// Code section (function bodies)
     Code(BoundedFunctionVec<BoundedCustomData>),
     /// Data section
-    Data(BoundedDataVec<WrtDataSegment>),
+    Data(BoundedDataVec<KilnDataSegment>),
     /// Data count section (for memory.init/data.drop validation)
     DataCount(u32),
     /// Custom section
@@ -73,8 +73,8 @@ pub enum Section {
 }
 
 // Implement required traits for Section
-impl wrt_foundation::traits::Checksummable for Section {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Section {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         // Simple checksum based on variant
         let discriminant = match self {
             Section::Type(_) => 0u8,
@@ -96,16 +96,16 @@ impl wrt_foundation::traits::Checksummable for Section {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Section {
+impl kiln_foundation::traits::ToBytes for Section {
     fn serialized_size(&self) -> usize {
         1 // Just discriminant for simplicity
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let discriminant = match self {
             Section::Type(_) => 0u8,
             Section::Import(_) => 1,
@@ -126,11 +126,11 @@ impl wrt_foundation::traits::ToBytes for Section {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Section {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Section {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             13 => Ok(Section::Empty),
@@ -143,18 +143,18 @@ impl wrt_foundation::traits::FromBytes for Section {
 fn parse_element_segment(
     bytes: &[u8],
     offset: usize,
-) -> Result<(wrt_format::pure_format_types::PureElementSegment, usize)> {
+) -> Result<(kiln_format::pure_format_types::PureElementSegment, usize)> {
     // For both std and no_std, implement basic element parsing
     // Create empty vecs using the standard library Vec type that's available in
     // no_std via alloc
     #[cfg(not(feature = "std"))]
-    use wrt_foundation::prelude::*;
+    use kiln_foundation::prelude::*;
 
     let pure_element = PureElementSegment {
-        element_type: wrt_format::types::RefType::Funcref,
+        element_type: kiln_format::types::RefType::Funcref,
         mode: PureElementMode::Passive,
         offset_expr_bytes: Default::default(),
-        init_data: wrt_format::pure_format_types::PureElementInit::FunctionIndices(
+        init_data: kiln_format::pure_format_types::PureElementInit::FunctionIndices(
             Default::default(),
         ),
     };
@@ -164,12 +164,12 @@ fn parse_element_segment(
 fn parse_data(
     bytes: &[u8],
     offset: usize,
-) -> Result<(wrt_format::pure_format_types::PureDataSegment, usize)> {
+) -> Result<(kiln_format::pure_format_types::PureDataSegment, usize)> {
     // For both std and no_std, implement basic data parsing
     // Create empty vecs using the standard library Vec type that's available in
     // no_std via alloc
     #[cfg(not(feature = "std"))]
-    use wrt_foundation::prelude::*;
+    use kiln_foundation::prelude::*;
 
     let pure_data = PureDataSegment {
         mode: PureDataMode::Passive,
@@ -179,7 +179,7 @@ fn parse_data(
     Ok((pure_data, offset + 1))
 }
 
-fn parse_limits(bytes: &[u8], offset: usize) -> Result<(wrt_format::types::Limits, usize)> {
+fn parse_limits(bytes: &[u8], offset: usize) -> Result<(kiln_format::types::Limits, usize)> {
     if offset >= bytes.len() {
         return Err(Error::parse_error("Unexpected end while parsing limits"));
     }
@@ -215,7 +215,7 @@ fn parse_limits(bytes: &[u8], offset: usize) -> Result<(wrt_format::types::Limit
     let shared = flags & 0x02 != 0;
 
     Ok((
-        wrt_format::types::Limits {
+        kiln_format::types::Limits {
             min,
             max,
             shared,
@@ -230,7 +230,7 @@ pub mod parsers {
     use super::*;
 
     /// Parse a type section with bounded memory
-    pub fn parse_type_section(bytes: &[u8]) -> Result<BoundedTypeVec<WrtFuncType>> {
+    pub fn parse_type_section(bytes: &[u8]) -> Result<BoundedTypeVec<KilnFuncType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         check_bounds_u32(count, MAX_TYPES as u32, "type count")?;
@@ -300,7 +300,7 @@ pub mod parsers {
             }
 
             // Create FuncType (no longer needs provider after StaticVec migration)
-            let func_type = WrtFuncType::new(params.iter().copied(), results.iter().copied())?;
+            let func_type = KilnFuncType::new(params.iter().copied(), results.iter().copied())?;
 
             format_func_types
                 .push(func_type)
@@ -333,7 +333,7 @@ pub mod parsers {
     /// Parse an import section with bounded memory
     pub fn parse_import_section(
         bytes: &[u8],
-    ) -> Result<BoundedImportVec<WrtImport<DecoderProvider>>> {
+    ) -> Result<BoundedImportVec<KilnImport<DecoderProvider>>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         check_bounds_u32(count, MAX_IMPORTS as u32, "import count")?;
@@ -365,45 +365,45 @@ pub mod parsers {
                     // Function import
                     let (type_idx, new_offset) = binary::read_leb128_u32(bytes, offset)?;
                     offset = new_offset;
-                    WrtImportDesc::Function(type_idx)
+                    KilnImportDesc::Function(type_idx)
                 },
                 0x01 => {
                     // Table import
                     let (table_type, new_offset) =
-                        (wrt_foundation::TableType::default(), offset + 1); // TODO: Implement table type parsing
+                        (kiln_foundation::TableType::default(), offset + 1); // TODO: Implement table type parsing
                     offset = new_offset;
-                    // Convert to WrtTableType - needs implementation
-                    WrtImportDesc::Table(table_type)
+                    // Convert to KilnTableType - needs implementation
+                    KilnImportDesc::Table(table_type)
                 },
                 0x02 => {
                     // Memory import
                     let (mem_limits, new_offset) = parse_limits(bytes, offset)?;
                     offset = new_offset;
                     // Convert to MemoryType
-                    let memory_type = WrtMemoryType {
-                        limits: wrt_foundation::types::Limits {
+                    let memory_type = KilnMemoryType {
+                        limits: kiln_foundation::types::Limits {
                             min: mem_limits.min as u32,
                             max: mem_limits.max.map(|v| v as u32),
                         },
                         shared: mem_limits.shared,
                         memory64: mem_limits.memory64,
                     };
-                    WrtImportDesc::Memory(memory_type)
+                    KilnImportDesc::Memory(memory_type)
                 },
                 0x03 => {
                     // Global import
                     let (global_type, new_offset) =
-                        (wrt_foundation::GlobalType::default(), offset + 1); // TODO: Implement global type parsing
+                        (kiln_foundation::GlobalType::default(), offset + 1); // TODO: Implement global type parsing
                     offset = new_offset;
-                    // Convert to WrtGlobalType - needs implementation
-                    WrtImportDesc::Global(global_type)
+                    // Convert to KilnGlobalType - needs implementation
+                    KilnImportDesc::Global(global_type)
                 },
                 _ => {
                     return Err(Error::parse_error("Invalid import descriptor type"));
                 },
             };
 
-            // Convert to WrtImport (use DecoderProvider size for consistency)
+            // Convert to KilnImport (use DecoderProvider size for consistency)
             let provider = safe_managed_alloc!(65536, CrateId::Decoder)?;
             let module_str = module_string
                 .as_str()
@@ -415,14 +415,14 @@ pub mod parsers {
             let item_name = WasmName::try_from_str(field_str)
                 .map_err(|_| Error::memory_error("Item name too long"))?;
 
-            let wrt_import = WrtImport {
+            let kiln_import = KilnImport {
                 module_name,
                 item_name,
                 desc: import_desc,
             };
 
             format_imports
-                .push(wrt_import)
+                .push(kiln_import)
                 .map_err(|_| Error::memory_error("Too many imports"))?;
         }
 
@@ -430,7 +430,7 @@ pub mod parsers {
     }
 
     /// Parse a table section with bounded memory
-    pub fn parse_table_section(bytes: &[u8]) -> Result<BoundedTableVec<WrtTableType>> {
+    pub fn parse_table_section(bytes: &[u8]) -> Result<BoundedTableVec<KilnTableType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         check_bounds_u32(count, MAX_TABLE_ENTRIES as u32, "table count")?;
@@ -438,17 +438,17 @@ pub mod parsers {
         let mut tables = new_table_vec();
 
         for _ in 0..count {
-            let (table_type, new_offset) = (wrt_foundation::TableType::default(), offset + 1); // TODO: Implement table type parsing
+            let (table_type, new_offset) = (kiln_foundation::TableType::default(), offset + 1); // TODO: Implement table type parsing
             offset = new_offset;
 
-            // Convert to WrtTableType - needs implementation
-            let wrt_table_type = WrtTableType {
+            // Convert to KilnTableType - needs implementation
+            let kiln_table_type = KilnTableType {
                 element_type: table_type.element_type,
                 limits: table_type.limits,
             };
 
             tables
-                .push(wrt_table_type)
+                .push(kiln_table_type)
                 .map_err(|_| Error::memory_error("Too many tables"))?;
         }
 
@@ -456,7 +456,7 @@ pub mod parsers {
     }
 
     /// Parse a memory section with bounded memory
-    pub fn parse_memory_section(bytes: &[u8]) -> Result<BoundedMemoryVec<WrtMemoryType>> {
+    pub fn parse_memory_section(bytes: &[u8]) -> Result<BoundedMemoryVec<KilnMemoryType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         check_bounds_u32(count, MAX_MEMORIES as u32, "memory count")?;
@@ -467,13 +467,13 @@ pub mod parsers {
             let (limits, new_offset) = parse_limits(bytes, offset)?;
             offset = new_offset;
 
-            // Convert wrt_format::Limits to wrt_foundation::Limits
-            let wrt_limits = wrt_foundation::types::Limits {
+            // Convert kiln_format::Limits to kiln_foundation::Limits
+            let kiln_limits = kiln_foundation::types::Limits {
                 min: limits.min as u32,
                 max: limits.max.map(|v| v as u32),
             };
-            let memory_type = WrtMemoryType {
-                limits: wrt_limits,
+            let memory_type = KilnMemoryType {
+                limits: kiln_limits,
                 shared: limits.shared,
                 memory64: limits.memory64,
             };
@@ -487,7 +487,7 @@ pub mod parsers {
     }
 
     /// Parse a global section with bounded memory
-    pub fn parse_global_section(bytes: &[u8]) -> Result<BoundedGlobalVec<WrtGlobalType>> {
+    pub fn parse_global_section(bytes: &[u8]) -> Result<BoundedGlobalVec<KilnGlobalType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         check_bounds_u32(count, MAX_GLOBALS as u32, "global count")?;
@@ -495,20 +495,20 @@ pub mod parsers {
         let mut globals = new_global_vec();
 
         for _ in 0..count {
-            let (global_type, new_offset) = (wrt_foundation::GlobalType::default(), offset + 1); // TODO: Implement global type parsing
+            let (global_type, new_offset) = (kiln_foundation::GlobalType::default(), offset + 1); // TODO: Implement global type parsing
             offset = new_offset;
 
             // Skip init expression parsing for now
             // In real implementation, we'd parse the init expression here
 
-            // Convert to WrtGlobalType
-            let wrt_global_type = WrtGlobalType {
+            // Convert to KilnGlobalType
+            let kiln_global_type = KilnGlobalType {
                 value_type: global_type.value_type,
                 mutable: global_type.mutable,
             };
 
             globals
-                .push(wrt_global_type)
+                .push(kiln_global_type)
                 .map_err(|_| Error::memory_error("Too many globals"))?;
         }
 
@@ -516,7 +516,7 @@ pub mod parsers {
     }
 
     /// Parse an export section with bounded memory
-    pub fn parse_export_section(bytes: &[u8]) -> Result<BoundedExportVec<WrtExport>> {
+    pub fn parse_export_section(bytes: &[u8]) -> Result<BoundedExportVec<KilnExport>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         check_bounds_u32(count, MAX_EXPORTS as u32, "export count")?;
@@ -551,9 +551,9 @@ pub mod parsers {
             offset = new_offset;
 
             // Convert string to WasmString with proper provider size
-            let string_provider = wrt_foundation::safe_managed_alloc!(
+            let string_provider = kiln_foundation::safe_managed_alloc!(
                 1024,
-                wrt_foundation::budget_aware_provider::CrateId::Decoder
+                kiln_foundation::budget_aware_provider::CrateId::Decoder
             )?;
             let name_str = name_string
                 .as_str()
@@ -561,7 +561,7 @@ pub mod parsers {
             let export_name = WasmString::try_from_str(name_str)
                 .map_err(|_| Error::memory_error("Export name too long"))?;
 
-            let export = WrtExport {
+            let export = KilnExport {
                 name: export_name,
                 kind,
                 index,
@@ -576,13 +576,13 @@ pub mod parsers {
     /// Parse an element section with bounded memory
     pub fn parse_element_section(
         bytes: &[u8],
-    ) -> Result<BoundedElementVec<wrt_format::pure_format_types::PureElementSegment>> {
+    ) -> Result<BoundedElementVec<kiln_format::pure_format_types::PureElementSegment>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         check_bounds_u32(count, MAX_ELEMENTS as u32, "element count")?;
 
         let mut elements =
-            StaticVec::<wrt_format::pure_format_types::PureElementSegment, MAX_ELEMENTS>::new();
+            StaticVec::<kiln_format::pure_format_types::PureElementSegment, MAX_ELEMENTS>::new();
 
         for _ in 0..count {
             let (pure_element, new_offset) = parse_element_segment(bytes, offset)?;
@@ -642,13 +642,13 @@ pub mod parsers {
     /// Parse a data section with bounded memory
     pub fn parse_data_section(
         bytes: &[u8],
-    ) -> Result<BoundedDataVec<wrt_format::pure_format_types::PureDataSegment>> {
+    ) -> Result<BoundedDataVec<kiln_format::pure_format_types::PureDataSegment>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         check_bounds_u32(count, MAX_DATA_SEGMENTS as u32, "data count")?;
 
         let mut data_segments =
-            StaticVec::<wrt_format::pure_format_types::PureDataSegment, MAX_DATA_SEGMENTS>::new();
+            StaticVec::<kiln_format::pure_format_types::PureDataSegment, MAX_DATA_SEGMENTS>::new();
 
         for _ in 0..count {
             let (pure_data, new_offset) = parse_data(bytes, offset)?;

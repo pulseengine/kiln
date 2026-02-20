@@ -24,12 +24,12 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
 
-use wrt_foundation::values::Value;
+use kiln_foundation::values::Value;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use wrt_error::Result;
+use kiln_error::Result;
 
 /// Component Model value types (re-exported for convenience)
 /// These are high-level values that have been lifted from core WASM representation
@@ -137,7 +137,7 @@ impl<'a> LoweringContext<'a> {
         self.alloc_offset = aligned + size;
 
         if (self.alloc_offset as usize) > self.memory.len() {
-            return Err(wrt_error::Error::runtime_error("Out of memory for lowering"));
+            return Err(kiln_error::Error::runtime_error("Out of memory for lowering"));
         }
 
         Ok(ptr)
@@ -149,7 +149,7 @@ impl<'a> LoweringContext<'a> {
         let end = start + data.len();
 
         if end > self.memory.len() {
-            return Err(wrt_error::Error::runtime_error("Memory write out of bounds"));
+            return Err(kiln_error::Error::runtime_error("Memory write out of bounds"));
         }
 
         self.memory[start..end].copy_from_slice(data);
@@ -404,7 +404,7 @@ pub fn lift_wasi_args(
     memory: Option<&[u8]>,
 ) -> Result<Vec<ComponentValue>> {
     let sig = get_wasi_function_signature(interface, function)
-        .ok_or_else(|| wrt_error::Error::runtime_error("Unknown WASI function"))?;
+        .ok_or_else(|| kiln_error::Error::runtime_error("Unknown WASI function"))?;
 
     let mut result = Vec::new();
     let mut core_idx = 0;
@@ -472,7 +472,7 @@ fn lift_single_value(
         WasiComponentType::Char => {
             let v = get_i32(core_values, 0)?;
             let ch = char::from_u32(v as u32)
-                .ok_or_else(|| wrt_error::Error::runtime_error("Invalid char"))?;
+                .ok_or_else(|| kiln_error::Error::runtime_error("Invalid char"))?;
             Ok((ComponentValue::Char(ch), 1))
         }
         WasiComponentType::Handle => {
@@ -489,17 +489,17 @@ fn lift_single_value(
             let len = get_i32(core_values, 1)? as u32;
 
             let mem = memory.ok_or_else(||
-                wrt_error::Error::runtime_error("Memory required for string lifting"))?;
+                kiln_error::Error::runtime_error("Memory required for string lifting"))?;
 
             let start = ptr as usize;
             let end = start + len as usize;
             if end > mem.len() {
-                return Err(wrt_error::Error::runtime_error("String out of bounds"));
+                return Err(kiln_error::Error::runtime_error("String out of bounds"));
             }
 
             let bytes = &mem[start..end];
             let s = core::str::from_utf8(bytes)
-                .map_err(|_| wrt_error::Error::runtime_error("Invalid UTF-8"))?;
+                .map_err(|_| kiln_error::Error::runtime_error("Invalid UTF-8"))?;
 
             Ok((ComponentValue::String(s.into()), 2))
         }
@@ -510,12 +510,12 @@ fn lift_single_value(
             let len = get_i32(core_values, 1)? as u32;
 
             let mem = memory.ok_or_else(||
-                wrt_error::Error::runtime_error("Memory required for list lifting"))?;
+                kiln_error::Error::runtime_error("Memory required for list lifting"))?;
 
             let start = ptr as usize;
             let end = start + len as usize;
             if end > mem.len() {
-                return Err(wrt_error::Error::runtime_error("List out of bounds"));
+                return Err(kiln_error::Error::runtime_error("List out of bounds"));
             }
 
             let bytes = &mem[start..end];
@@ -538,7 +538,7 @@ fn lift_single_value(
 
             // For non-empty lists, we need memory access
             let mem = memory.ok_or_else(||
-                wrt_error::Error::runtime_error("Memory required for list lifting"))?;
+                kiln_error::Error::runtime_error("Memory required for list lifting"))?;
 
             // Calculate element size based on type
             let element_size = get_element_size(element_ty);
@@ -548,7 +548,7 @@ fn lift_single_value(
             let end = start + total_size;
 
             if end > mem.len() {
-                return Err(wrt_error::Error::runtime_error("List out of bounds"));
+                return Err(kiln_error::Error::runtime_error("List out of bounds"));
             }
 
             // Lift each element from memory
@@ -631,7 +631,7 @@ pub fn lower_wasi_results(
     _alloc_ptr: u32,
 ) -> Result<Vec<Value>> {
     let sig = get_wasi_function_signature(interface, function)
-        .ok_or_else(|| wrt_error::Error::runtime_error("Unknown WASI function"))?;
+        .ok_or_else(|| kiln_error::Error::runtime_error("Unknown WASI function"))?;
 
     let mut result = Vec::new();
 
@@ -656,8 +656,8 @@ fn lower_single_value(value: &ComponentValue, out: &mut Vec<Value>) -> Result<()
         ComponentValue::S16(v) => out.push(Value::I32(*v as i32)),
         ComponentValue::S32(v) => out.push(Value::I32(*v)),
         ComponentValue::S64(v) => out.push(Value::I64(*v)),
-        ComponentValue::F32(v) => out.push(Value::F32(wrt_foundation::float_repr::FloatBits32::from_f32(*v))),
-        ComponentValue::F64(v) => out.push(Value::F64(wrt_foundation::float_repr::FloatBits64::from_f64(*v))),
+        ComponentValue::F32(v) => out.push(Value::F32(kiln_foundation::float_repr::FloatBits32::from_f32(*v))),
+        ComponentValue::F64(v) => out.push(Value::F64(kiln_foundation::float_repr::FloatBits64::from_f64(*v))),
         ComponentValue::Char(ch) => out.push(Value::I32(*ch as i32)),
         ComponentValue::Handle(h) => out.push(Value::I32(*h as i32)),
 
@@ -667,8 +667,8 @@ fn lower_single_value(value: &ComponentValue, out: &mut Vec<Value>) -> Result<()
             // For now, FAIL if we actually try to lower a non-empty string
             if !s.is_empty() {
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::warn!(len = s.len(), "String lowering not implemented");
-                return Err(wrt_error::Error::runtime_error(
+                kiln_foundation::tracing::warn!(len = s.len(), "String lowering not implemented");
+                return Err(kiln_error::Error::runtime_error(
                     "String lowering requires memory allocation - not implemented"
                 ));
             }
@@ -682,8 +682,8 @@ fn lower_single_value(value: &ComponentValue, out: &mut Vec<Value>) -> Result<()
             // Phase 4 TODO: Allocate memory, recursively lower elements, return ptr+len
             if !items.is_empty() {
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::warn!(len = items.len(), "List lowering not implemented");
-                return Err(wrt_error::Error::runtime_error(
+                kiln_foundation::tracing::warn!(len = items.len(), "List lowering not implemented");
+                return Err(kiln_error::Error::runtime_error(
                     "List lowering requires memory allocation - not implemented"
                 ));
             }
@@ -744,7 +744,7 @@ pub fn lower_wasi_results_with_context(
     ctx: &mut LoweringContext<'_>,
 ) -> Result<Vec<Value>> {
     let sig = get_wasi_function_signature(interface, function)
-        .ok_or_else(|| wrt_error::Error::runtime_error("Unknown WASI function"))?;
+        .ok_or_else(|| kiln_error::Error::runtime_error("Unknown WASI function"))?;
 
     let mut result = Vec::new();
 
@@ -775,8 +775,8 @@ fn lower_single_value_with_context(
         (ComponentValue::S16(v), _) => out.push(Value::I32(*v as i32)),
         (ComponentValue::S32(v), _) => out.push(Value::I32(*v)),
         (ComponentValue::S64(v), _) => out.push(Value::I64(*v)),
-        (ComponentValue::F32(v), _) => out.push(Value::F32(wrt_foundation::float_repr::FloatBits32::from_f32(*v))),
-        (ComponentValue::F64(v), _) => out.push(Value::F64(wrt_foundation::float_repr::FloatBits64::from_f64(*v))),
+        (ComponentValue::F32(v), _) => out.push(Value::F32(kiln_foundation::float_repr::FloatBits32::from_f32(*v))),
+        (ComponentValue::F64(v), _) => out.push(Value::F64(kiln_foundation::float_repr::FloatBits64::from_f64(*v))),
         (ComponentValue::Char(ch), _) => out.push(Value::I32(*ch as i32)),
         (ComponentValue::Handle(h), _) => out.push(Value::I32(*h as i32)),
 
@@ -834,7 +834,7 @@ fn lower_single_value_with_context(
                 }).collect();
 
                 if bytes.len() != items.len() {
-                    return Err(wrt_error::Error::runtime_error("ListU8 contains non-byte elements"));
+                    return Err(kiln_error::Error::runtime_error("ListU8 contains non-byte elements"));
                 }
 
                 ctx.write_bytes(ptr, &bytes)?;
@@ -897,7 +897,7 @@ fn write_element_to_memory(
 ) -> Result<()> {
     let write_bytes = |mem: &mut [u8], off: usize, data: &[u8]| -> Result<()> {
         if off + data.len() > mem.len() {
-            return Err(wrt_error::Error::runtime_error("Memory write out of bounds"));
+            return Err(kiln_error::Error::runtime_error("Memory write out of bounds"));
         }
         mem[off..off + data.len()].copy_from_slice(data);
         Ok(())
@@ -919,7 +919,7 @@ fn write_element_to_memory(
         (ComponentValue::F64(v), _) => write_bytes(memory, offset, &v.to_bits().to_le_bytes()),
         (ComponentValue::Char(ch), _) => write_bytes(memory, offset, &(*ch as u32).to_le_bytes()),
         (ComponentValue::Handle(h), _) => write_bytes(memory, offset, &h.to_le_bytes()),
-        _ => Err(wrt_error::Error::runtime_error(
+        _ => Err(kiln_error::Error::runtime_error(
             "Cannot write complex type directly to memory"
         )),
     }
@@ -932,7 +932,7 @@ fn get_i32(values: &[Value], idx: usize) -> Result<i32> {
             Value::I32(i) => Some(*i),
             _ => None,
         })
-        .ok_or_else(|| wrt_error::Error::runtime_error("Expected i32"))
+        .ok_or_else(|| kiln_error::Error::runtime_error("Expected i32"))
 }
 
 fn get_i64(values: &[Value], idx: usize) -> Result<i64> {
@@ -941,7 +941,7 @@ fn get_i64(values: &[Value], idx: usize) -> Result<i64> {
             Value::I64(i) => Some(*i),
             _ => None,
         })
-        .ok_or_else(|| wrt_error::Error::runtime_error("Expected i64"))
+        .ok_or_else(|| kiln_error::Error::runtime_error("Expected i64"))
 }
 
 fn get_f32(values: &[Value], idx: usize) -> Result<f32> {
@@ -950,7 +950,7 @@ fn get_f32(values: &[Value], idx: usize) -> Result<f32> {
             Value::F32(f) => Some(f.to_f32()),
             _ => None,
         })
-        .ok_or_else(|| wrt_error::Error::runtime_error("Expected f32"))
+        .ok_or_else(|| kiln_error::Error::runtime_error("Expected f32"))
 }
 
 fn get_f64(values: &[Value], idx: usize) -> Result<f64> {
@@ -959,7 +959,7 @@ fn get_f64(values: &[Value], idx: usize) -> Result<f64> {
             Value::F64(f) => Some(f.to_f64()),
             _ => None,
         })
-        .ok_or_else(|| wrt_error::Error::runtime_error("Expected f64"))
+        .ok_or_else(|| kiln_error::Error::runtime_error("Expected f64"))
 }
 
 /// Get the byte size of an element in memory for a given type
@@ -995,39 +995,39 @@ fn lift_element_from_memory(
     match ty {
         WasiComponentType::Bool => {
             if offset >= memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             Ok(ComponentValue::Bool(memory[offset] != 0))
         }
         WasiComponentType::U8 => {
             if offset >= memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             Ok(ComponentValue::U8(memory[offset]))
         }
         WasiComponentType::S8 => {
             if offset >= memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             Ok(ComponentValue::S8(memory[offset] as i8))
         }
         WasiComponentType::U16 => {
             if offset + 2 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let value = u16::from_le_bytes([memory[offset], memory[offset + 1]]);
             Ok(ComponentValue::U16(value))
         }
         WasiComponentType::S16 => {
             if offset + 2 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let value = i16::from_le_bytes([memory[offset], memory[offset + 1]]);
             Ok(ComponentValue::S16(value))
         }
         WasiComponentType::U32 => {
             if offset + 4 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let value = u32::from_le_bytes([
                 memory[offset], memory[offset + 1],
@@ -1037,7 +1037,7 @@ fn lift_element_from_memory(
         }
         WasiComponentType::S32 => {
             if offset + 4 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let value = i32::from_le_bytes([
                 memory[offset], memory[offset + 1],
@@ -1047,7 +1047,7 @@ fn lift_element_from_memory(
         }
         WasiComponentType::U64 => {
             if offset + 8 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let value = u64::from_le_bytes([
                 memory[offset], memory[offset + 1], memory[offset + 2], memory[offset + 3],
@@ -1057,7 +1057,7 @@ fn lift_element_from_memory(
         }
         WasiComponentType::S64 => {
             if offset + 8 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let value = i64::from_le_bytes([
                 memory[offset], memory[offset + 1], memory[offset + 2], memory[offset + 3],
@@ -1067,7 +1067,7 @@ fn lift_element_from_memory(
         }
         WasiComponentType::F32 => {
             if offset + 4 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let bits = u32::from_le_bytes([
                 memory[offset], memory[offset + 1],
@@ -1077,7 +1077,7 @@ fn lift_element_from_memory(
         }
         WasiComponentType::F64 => {
             if offset + 8 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let bits = u64::from_le_bytes([
                 memory[offset], memory[offset + 1], memory[offset + 2], memory[offset + 3],
@@ -1087,20 +1087,20 @@ fn lift_element_from_memory(
         }
         WasiComponentType::Char => {
             if offset + 4 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let code = u32::from_le_bytes([
                 memory[offset], memory[offset + 1],
                 memory[offset + 2], memory[offset + 3],
             ]);
             let ch = char::from_u32(code)
-                .ok_or_else(|| wrt_error::Error::runtime_error("Invalid char code point"))?;
+                .ok_or_else(|| kiln_error::Error::runtime_error("Invalid char code point"))?;
             Ok(ComponentValue::Char(ch))
         }
         WasiComponentType::String => {
             // String is ptr + len in memory
             if offset + 8 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let ptr = u32::from_le_bytes([
                 memory[offset], memory[offset + 1],
@@ -1116,17 +1116,17 @@ fn lift_element_from_memory(
             }
 
             if ptr + len > memory.len() {
-                return Err(wrt_error::Error::runtime_error("String data out of bounds"));
+                return Err(kiln_error::Error::runtime_error("String data out of bounds"));
             }
 
             let bytes = &memory[ptr..ptr + len];
             let s = core::str::from_utf8(bytes)
-                .map_err(|_| wrt_error::Error::runtime_error("Invalid UTF-8 in string"))?;
+                .map_err(|_| kiln_error::Error::runtime_error("Invalid UTF-8 in string"))?;
             Ok(ComponentValue::String(s.to_string()))
         }
         WasiComponentType::Handle => {
             if offset + 4 > memory.len() {
-                return Err(wrt_error::Error::runtime_error("Memory access out of bounds"));
+                return Err(kiln_error::Error::runtime_error("Memory access out of bounds"));
             }
             let value = u32::from_le_bytes([
                 memory[offset], memory[offset + 1],
@@ -1140,7 +1140,7 @@ fn lift_element_from_memory(
         WasiComponentType::ListU8 | WasiComponentType::List(_) |
         WasiComponentType::Option(_) | WasiComponentType::Result(_, _) |
         WasiComponentType::Tuple(_) => {
-            Err(wrt_error::Error::runtime_error(
+            Err(kiln_error::Error::runtime_error(
                 "Nested complex types in lists not yet supported"
             ))
         }
@@ -1266,7 +1266,7 @@ impl Wasip2Host {
         let trimmed_data = &data[..actual_len];
 
         #[cfg(feature = "tracing")]
-        wrt_foundation::tracing::trace!(
+        kiln_foundation::tracing::trace!(
             handle = handle,
             ptr = data_ptr,
             len = data_len,
@@ -1282,7 +1282,7 @@ impl Wasip2Host {
                 {
                     use std::io::{self, Write};
                     #[cfg(feature = "tracing")]
-                    wrt_foundation::tracing::trace!(bytes = trimmed_data.len(), "Writing to STDOUT");
+                    kiln_foundation::tracing::trace!(bytes = trimmed_data.len(), "Writing to STDOUT");
                     let _ = io::stdout().write_all(trimmed_data);
                     let _ = io::stdout().flush();
                 }
@@ -1332,7 +1332,7 @@ impl Wasip2Host {
             if status_ok {
                 Ok(vec![])
             } else {
-                Err(wrt_error::Error::runtime_error("Component exited with failure status"))
+                Err(kiln_error::Error::runtime_error("Component exited with failure status"))
             }
         }
     }
@@ -1368,35 +1368,35 @@ impl Wasip2Host {
             ("wasi:io/streams", "[method]output-stream.blocking-write-and-flush") |
             ("wasi:io/streams", "output-stream.blocking-write-and-flush") => {
                 if args.len() < 3 {
-                    return Err(wrt_error::Error::runtime_error("Invalid args for blocking-write-and-flush"));
+                    return Err(kiln_error::Error::runtime_error("Invalid args for blocking-write-and-flush"));
                 }
                 let handle = match args[0] {
                     Value::I32(h) => h as u32,
-                    _ => return Err(wrt_error::Error::runtime_error("Invalid handle type")),
+                    _ => return Err(kiln_error::Error::runtime_error("Invalid handle type")),
                 };
                 let data_ptr = match args[1] {
                     Value::I32(p) => p as u32,
-                    _ => return Err(wrt_error::Error::runtime_error("Invalid ptr type")),
+                    _ => return Err(kiln_error::Error::runtime_error("Invalid ptr type")),
                 };
                 let data_len = match args[2] {
                     Value::I32(l) => l as u32,
-                    _ => return Err(wrt_error::Error::runtime_error("Invalid len type")),
+                    _ => return Err(kiln_error::Error::runtime_error("Invalid len type")),
                 };
 
                 if let Some(mem) = memory {
                     self.io_streams_output_stream_blocking_write_and_flush(handle, data_ptr, data_len, mem)
                 } else {
-                    Err(wrt_error::Error::runtime_error("No memory for blocking-write-and-flush"))
+                    Err(kiln_error::Error::runtime_error("No memory for blocking-write-and-flush"))
                 }
             },
             ("wasi:io/streams", "[method]output-stream.blocking-flush") |
             ("wasi:io/streams", "output-stream.blocking-flush") => {
                 if args.is_empty() {
-                    return Err(wrt_error::Error::runtime_error("Invalid args for blocking-flush"));
+                    return Err(kiln_error::Error::runtime_error("Invalid args for blocking-flush"));
                 }
                 let handle = match args[0] {
                     Value::I32(h) => h as u32,
-                    _ => return Err(wrt_error::Error::runtime_error("Invalid handle type")),
+                    _ => return Err(kiln_error::Error::runtime_error("Invalid handle type")),
                 };
                 self.io_streams_output_stream_blocking_flush(handle)
             },
@@ -1457,15 +1457,15 @@ impl Wasip2Host {
                     if let Some(mem) = memory {
                         let handle = match args[0] {
                             Value::I32(h) => h as u32,
-                            _ => return Err(wrt_error::Error::runtime_error("Invalid handle")),
+                            _ => return Err(kiln_error::Error::runtime_error("Invalid handle")),
                         };
                         let data_ptr = match args[1] {
                             Value::I32(p) => p as u32,
-                            _ => return Err(wrt_error::Error::runtime_error("Invalid ptr")),
+                            _ => return Err(kiln_error::Error::runtime_error("Invalid ptr")),
                         };
                         let data_len = match args[2] {
                             Value::I32(l) => l as u32,
-                            _ => return Err(wrt_error::Error::runtime_error("Invalid len")),
+                            _ => return Err(kiln_error::Error::runtime_error("Invalid len")),
                         };
                         return self.io_streams_output_stream_blocking_write_and_flush(handle, data_ptr, data_len, mem);
                     }
@@ -1485,7 +1485,7 @@ impl Wasip2Host {
             _ => {
                 #[cfg(feature = "std")]
                 eprintln!("[WASIP2] Unknown function: {}/{}", base_interface, function);
-                Err(wrt_error::Error::runtime_error("Unknown wasip2 function"))
+                Err(kiln_error::Error::runtime_error("Unknown wasip2 function"))
             }
         }
     }
@@ -1530,7 +1530,7 @@ impl Wasip2Host {
             ("wasi:io/streams", "output-stream.blocking-write-and-flush") => {
                 // Args: [handle, list<u8>]
                 if args.len() < 2 {
-                    return Err(wrt_error::Error::runtime_error(
+                    return Err(kiln_error::Error::runtime_error(
                         "blocking-write-and-flush requires 2 args: handle, contents"
                     ));
                 }
@@ -1539,7 +1539,7 @@ impl Wasip2Host {
                     ComponentValue::Handle(h) => *h,
                     ComponentValue::U32(h) => *h,
                     ComponentValue::S32(h) => *h as u32,
-                    _ => return Err(wrt_error::Error::runtime_error("First arg must be handle")),
+                    _ => return Err(kiln_error::Error::runtime_error("First arg must be handle")),
                 };
 
                 // Get the data - either as a lifted list<u8> or as a string
@@ -1552,7 +1552,7 @@ impl Wasip2Host {
                         }).collect()
                     },
                     ComponentValue::String(s) => s.as_bytes().to_vec(),
-                    _ => return Err(wrt_error::Error::runtime_error("Second arg must be list<u8> or string")),
+                    _ => return Err(kiln_error::Error::runtime_error("Second arg must be list<u8> or string")),
                 };
 
                 // Perform the write
@@ -1594,7 +1594,7 @@ impl Wasip2Host {
                     if success {
                         Ok(vec![])
                     } else {
-                        Err(wrt_error::Error::runtime_error("Component exited with failure"))
+                        Err(kiln_error::Error::runtime_error("Component exited with failure"))
                     }
                 }
             },
@@ -1631,8 +1631,8 @@ impl Wasip2Host {
 
             _ => {
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::warn!(interface = interface, function = function, "Unknown WASIP2 component function");
-                Err(wrt_error::Error::runtime_error("Unknown wasip2 component function"))
+                kiln_foundation::tracing::warn!(interface = interface, function = function, "Unknown WASIP2 component function");
+                Err(kiln_error::Error::runtime_error("Unknown wasip2 component function"))
             }
         }
     }
@@ -1641,7 +1641,7 @@ impl Wasip2Host {
     fn write_to_stream(&mut self, handle: u32, data: &[u8]) -> Result<()> {
         let stream_idx = (handle - 1) as usize;
         if stream_idx >= self.output_streams.len() {
-            return Err(wrt_error::Error::runtime_error("Invalid stream handle"));
+            return Err(kiln_error::Error::runtime_error("Invalid stream handle"));
         }
 
         match &self.output_streams[stream_idx].target {
@@ -1650,9 +1650,9 @@ impl Wasip2Host {
                 {
                     use std::io::{self, Write};
                     io::stdout().write_all(data).map_err(|_|
-                        wrt_error::Error::runtime_error("stdout write failed"))?;
+                        kiln_error::Error::runtime_error("stdout write failed"))?;
                     io::stdout().flush().map_err(|_|
-                        wrt_error::Error::runtime_error("stdout flush failed"))?;
+                        kiln_error::Error::runtime_error("stdout flush failed"))?;
                 }
                 Ok(())
             },
@@ -1661,14 +1661,14 @@ impl Wasip2Host {
                 {
                     use std::io::{self, Write};
                     io::stderr().write_all(data).map_err(|_|
-                        wrt_error::Error::runtime_error("stderr write failed"))?;
+                        kiln_error::Error::runtime_error("stderr write failed"))?;
                     io::stderr().flush().map_err(|_|
-                        wrt_error::Error::runtime_error("stderr flush failed"))?;
+                        kiln_error::Error::runtime_error("stderr flush failed"))?;
                 }
                 Ok(())
             },
             OutputTarget::File(_) => {
-                Err(wrt_error::Error::runtime_error("File output not implemented"))
+                Err(kiln_error::Error::runtime_error("File output not implemented"))
             },
             OutputTarget::Memory(_) => {
                 // Would append to buffer

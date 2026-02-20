@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: MIT
 
 #![allow(clippy::unwrap_used)]
-//! Integration tests for the wrt-error crate.
+//! Integration tests for the kiln-error crate.
 
 #[cfg(test)]
 mod tests {
-    use wrt_error::{Error, Result, codes};
+    use kiln_error::{Error, Result, codes};
 
     #[test]
     fn test_error_creation() {

@@ -18,18 +18,18 @@ pub struct DebugString<'a> {
 
 // Implement required traits for BoundedVec compatibility
 
-impl<'a> wrt_foundation::traits::Checksummable for DebugString<'a> {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl<'a> kiln_foundation::traits::Checksummable for DebugString<'a> {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(self.data.as_bytes());
     }
 }
 
-impl<'a> wrt_foundation::traits::ToBytes for DebugString<'a> {
-    fn to_bytes_with_provider<'b, P: wrt_foundation::MemoryProvider>(
+impl<'a> kiln_foundation::traits::ToBytes for DebugString<'a> {
+    fn to_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'b>,
+        writer: &mut kiln_foundation::traits::WriteStream<'b>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write length followed by string data
         writer.write_u32_le(self.data.len() as u32)?;
         writer.write_all(self.data.as_bytes())?;
@@ -37,11 +37,11 @@ impl<'a> wrt_foundation::traits::ToBytes for DebugString<'a> {
     }
 }
 
-impl<'a> wrt_foundation::traits::FromBytes for DebugString<'a> {
-    fn from_bytes_with_provider<'b, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'b>,
+impl<'a> kiln_foundation::traits::FromBytes for DebugString<'a> {
+    fn from_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'b>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // This is tricky because we need to return a reference with lifetime 'a
         // In practice, this should not be called for DebugString as it's a zero-copy
         // type We'll return a default value for now

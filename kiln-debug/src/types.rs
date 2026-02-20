@@ -4,7 +4,7 @@
 
 //! DWARF type definitions
 
-use wrt_foundation::prelude::*;
+use kiln_foundation::prelude::*;
 
 /// Section offset information
 #[derive(Debug, Clone, Copy)]

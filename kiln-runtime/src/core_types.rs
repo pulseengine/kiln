@@ -1,11 +1,11 @@
-//! Core type definitions for wrt-runtime
+//! Core type definitions for kiln-runtime
 //!
 //! This module provides essential type definitions that are used throughout
 //! the runtime. These types are designed to work in both std and `no_std`
 //! environments.
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     bounded::BoundedVec,
     prelude::{
         codes,
@@ -25,7 +25,7 @@ use wrt_foundation::{
         ToBytes,
     },
 };
-use wrt_instructions::Value;
+use kiln_instructions::Value;
 
 use crate::{
     bounded_runtime_infra::RuntimeProvider,
@@ -51,7 +51,7 @@ pub struct CallFrame {
 }
 
 impl Checksummable for CallFrame {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.function_index.to_le_bytes());
         checksum.update_slice(&self.instruction_pointer.to_le_bytes());
         checksum.update_slice(&(self.locals.len() as u32).to_le_bytes());
@@ -59,9 +59,9 @@ impl Checksummable for CallFrame {
 }
 
 impl ToBytes for CallFrame {
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &PStream,
     ) -> Result<()> {
         writer.write_all(&self.function_index.to_le_bytes())?;
@@ -71,8 +71,8 @@ impl ToBytes for CallFrame {
 }
 
 impl FromBytes for CallFrame {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         provider: &PStream,
     ) -> Result<Self> {
         let mut func_bytes = [0u8; 4];
@@ -109,7 +109,7 @@ pub struct ComponentExecutionState {
 }
 
 impl Checksummable for ComponentExecutionState {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&[if self.is_running { 1u8 } else { 0u8 }]);
         checksum.update_slice(&self.instruction_pointer.to_le_bytes());
         checksum.update_slice(&(self.stack_depth as u32).to_le_bytes());
@@ -118,9 +118,9 @@ impl Checksummable for ComponentExecutionState {
 }
 
 impl ToBytes for ComponentExecutionState {
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &PStream,
     ) -> Result<()> {
         writer.write_all(&[if self.is_running { 1 } else { 0 }])?;
@@ -132,8 +132,8 @@ impl ToBytes for ComponentExecutionState {
 }
 
 impl FromBytes for ComponentExecutionState {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &PStream,
     ) -> Result<Self> {
         let mut byte = [0u8; 1];

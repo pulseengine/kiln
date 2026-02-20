@@ -13,8 +13,8 @@
 
 #[cfg(all(test, any(feature = "std", feature = "alloc")))]
 mod tests {
-    use wrt_foundation::budget_aware_provider::CrateId;
-    use wrt_runtime::engine::{
+    use kiln_foundation::budget_aware_provider::CrateId;
+    use kiln_runtime::engine::{
         CapabilityAwareEngine,
         EnginePreset,
     };
@@ -34,7 +34,7 @@ mod tests {
 
     #[test]
     fn test_handle_types_clippy_clean() {
-        use wrt_runtime::engine::{
+        use kiln_runtime::engine::{
             InstanceHandle,
             ModuleHandle,
         };

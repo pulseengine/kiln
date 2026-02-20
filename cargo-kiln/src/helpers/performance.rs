@@ -1,4 +1,4 @@
-//! Performance optimization utilities for cargo-wrt
+//! Performance optimization utilities for cargo-kiln
 //!
 //! Provides tools for optimizing build performance, caching strategies,
 //! and resource usage monitoring.

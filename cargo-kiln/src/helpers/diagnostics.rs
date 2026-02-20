@@ -1,10 +1,10 @@
 //! Diagnostic integration utilities
 //!
 //! Provides standardized patterns for integrating diagnostic collection,
-//! caching, and filtering across all cargo-wrt commands.
+//! caching, and filtering across all cargo-kiln commands.
 
 use anyhow::Result;
-use wrt_build_core::{
+use kiln_build_core::{
     BuildSystem,
     cache::CacheManager,
     diagnostics::{DiagnosticCollection, Severity},
@@ -115,7 +115,7 @@ where
 
 /// Get cache path for diagnostics
 fn get_cache_path(workspace_root: &std::path::Path) -> std::path::PathBuf {
-    workspace_root.join("target").join("cargo-wrt-cache")
+    workspace_root.join("target").join("cargo-kiln-cache")
 }
 
 /// Simple wrapper for commands that don't yet support full diagnostics

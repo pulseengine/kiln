@@ -1,8 +1,8 @@
-//! Example demonstrating safe memory usage in wrt-decoder
+//! Example demonstrating safe memory usage in kiln-decoder
 
-use wrt_decoder::{SafeSlice, module::decode_module};
-use wrt_error::Result;
-use wrt_foundation::{safe_memory::SafeMemoryHandler, verification::VerificationLevel};
+use kiln_decoder::{SafeSlice, module::decode_module};
+use kiln_error::Result;
+use kiln_foundation::{safe_memory::SafeMemoryHandler, verification::VerificationLevel};
 
 // Sample minimal WebAssembly module (empty module)
 const MINIMAL_WASM: [u8; 8] = [0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00];
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
 }
 
 /// Decode a WebAssembly module using a SafeSlice
-fn decode_module_safe(slice: &SafeSlice) -> Result<wrt_decoder::module::Module> {
+fn decode_module_safe(slice: &SafeSlice) -> Result<kiln_decoder::module::Module> {
     // Get the raw data from the safe slice (performs integrity check)
     let data = slice.data()?;
 

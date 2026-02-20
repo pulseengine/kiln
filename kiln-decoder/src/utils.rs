@@ -7,8 +7,8 @@
 //! This module contains shared functionality used by both the core WebAssembly
 //! module parser and the Component Model parser.
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_format::{
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_format::{
     COMPONENT_MAGIC, COMPONENT_VERSION,
     binary::{WASM_MAGIC, WASM_VERSION},
 };
@@ -18,7 +18,7 @@ use crate::prelude::{String, is_valid_wasm_header, read_name};
 /// Read a WebAssembly name string from binary data
 #[cfg(feature = "std")]
 pub fn read_name_as_string(data: &[u8], offset: usize) -> Result<(String, usize)> {
-    // There's no decode_string in wrt-format, so we use read_name and convert to a
+    // There's no decode_string in kiln-format, so we use read_name and convert to a
     // String We could use read_string directly, but keeping this function for
     // backward compatibility
     let (name_bytes, bytes_read) = read_name(data, offset)?;
@@ -29,7 +29,7 @@ pub fn read_name_as_string(data: &[u8], offset: usize) -> Result<(String, usize)
         Ok(s) => alloc::string::ToString::to_string(s),
         #[cfg(not(feature = "std"))]
         Ok(s) => {
-            use wrt_foundation::BoundedString;
+            use kiln_foundation::BoundedString;
             BoundedString::try_from_str(s)
                 .map_err(|_| Error::parse_error("String too long for bounded storage"))?
         },
@@ -41,7 +41,7 @@ pub fn read_name_as_string(data: &[u8], offset: usize) -> Result<(String, usize)
 
 /// Verify WebAssembly binary header
 pub fn verify_binary_header(data: &[u8]) -> Result<()> {
-    // Use wrt-format's is_valid_wasm_header function
+    // Use kiln-format's is_valid_wasm_header function
     if !is_valid_wasm_header(data) {
         if data.len() < 8 {
             return Err(Error::parse_error("WebAssembly binary too short"));
