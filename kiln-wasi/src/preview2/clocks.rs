@@ -1,11 +1,11 @@
 //! WASI clocks interface implementation
 //!
-//! Implements the `wasi:clocks` interface for time operations using WRT's
+//! Implements the `wasi:clocks` interface for time operations using Kiln's
 //! platform abstractions and proven patterns.
 
 use core::any::Any;
 
-use wrt_platform::time::PlatformTime;
+use kiln_platform::time::PlatformTime;
 
 use crate::{
     capabilities::WasiClockCapabilities,

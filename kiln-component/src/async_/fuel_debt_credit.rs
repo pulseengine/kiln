@@ -5,8 +5,8 @@
 
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use wrt_foundation::{Arc, CrateId, collections::StaticMap as BoundedMap, safe_managed_alloc};
-use wrt_sync::Mutex;
+use kiln_foundation::{Arc, CrateId, collections::StaticMap as BoundedMap, safe_managed_alloc};
+use kiln_sync::Mutex;
 
 use crate::ComponentInstanceId;
 use crate::prelude::*;

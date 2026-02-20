@@ -39,8 +39,8 @@ impl ExecutionContext {
 
 // Memory adapter stub
 pub trait UnifiedMemoryAdapter: Send + Sync {
-    fn allocate(&mut self, size: usize) -> core::result::Result<&mut [u8], wrt_error::Error>;
-    fn deallocate(&mut self, ptr: &mut [u8]) -> core::result::Result<(), wrt_error::Error>;
+    fn allocate(&mut self, size: usize) -> core::result::Result<&mut [u8], kiln_error::Error>;
+    fn deallocate(&mut self, ptr: &mut [u8]) -> core::result::Result<(), kiln_error::Error>;
     fn available_memory(&self) -> usize;
     fn total_memory(&self) -> usize;
 }
@@ -51,7 +51,7 @@ pub struct GenericMemoryAdapter {
 }
 
 impl GenericMemoryAdapter {
-    pub fn new(total_memory: usize) -> core::result::Result<Self, wrt_error::Error> {
+    pub fn new(total_memory: usize) -> core::result::Result<Self, kiln_error::Error> {
         Ok(Self {
             total_memory,
             allocated: 0,
@@ -60,16 +60,16 @@ impl GenericMemoryAdapter {
 }
 
 impl UnifiedMemoryAdapter for GenericMemoryAdapter {
-    fn allocate(&mut self, size: usize) -> core::result::Result<&mut [u8], wrt_error::Error> {
+    fn allocate(&mut self, size: usize) -> core::result::Result<&mut [u8], kiln_error::Error> {
         if self.allocated + size > self.total_memory {
-            return Err(wrt_error::Error::resource_exhausted("Out of memory"));
+            return Err(kiln_error::Error::resource_exhausted("Out of memory"));
         }
         self.allocated += size;
         // This is a stub - real implementation would return actual memory
-        Err(wrt_error::Error::runtime_error("Memory allocation stub"))
+        Err(kiln_error::Error::runtime_error("Memory allocation stub"))
     }
 
-    fn deallocate(&mut self, _ptr: &mut [u8]) -> core::result::Result<(), wrt_error::Error> {
+    fn deallocate(&mut self, _ptr: &mut [u8]) -> core::result::Result<(), kiln_error::Error> {
         Ok(())
     }
 
@@ -120,7 +120,7 @@ pub struct CfiEngine {
 }
 
 impl CfiEngine {
-    pub fn new(_limits: &ExecutionLimits) -> core::result::Result<Self, wrt_error::Error> {
+    pub fn new(_limits: &ExecutionLimits) -> core::result::Result<Self, kiln_error::Error> {
         Ok(Self {
             validation_enabled: true,
         })
@@ -129,7 +129,7 @@ impl CfiEngine {
     pub fn validate_call(
         &self,
         _function: &Function,
-    ) -> core::result::Result<(), wrt_error::Error> {
+    ) -> core::result::Result<(), kiln_error::Error> {
         if self.validation_enabled {
             // Stub validation always passes
             Ok(())
@@ -178,7 +178,7 @@ pub struct CallFrame {
 impl ExecutionEngine {
     pub fn new(
         platform_limits: &ComprehensivePlatformLimits,
-    ) -> core::result::Result<Self, wrt_error::Error> {
+    ) -> core::result::Result<Self, kiln_error::Error> {
         let limits = ExecutionLimits::from_platform(platform_limits);
         let cfi_engine = CfiEngine::new(&limits)?;
 
@@ -195,10 +195,10 @@ impl ExecutionEngine {
         &mut self,
         function: &Function,
         args: &[Value],
-    ) -> core::result::Result<Vec<Value>, wrt_error::Error> {
+    ) -> core::result::Result<Vec<Value>, kiln_error::Error> {
         // Validate execution against limits
         if self.call_stack.len() >= self.limits.max_stack_depth {
-            return Err(wrt_error::Error::runtime_stack_overflow(
+            return Err(kiln_error::Error::runtime_stack_overflow(
                 "Call stack depth exceeded",
             ));
         }

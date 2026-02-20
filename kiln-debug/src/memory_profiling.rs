@@ -1,7 +1,7 @@
 //! Runtime Memory Profiling and Debugging
 //!
 //! This module provides comprehensive runtime profiling and debugging
-//! capabilities for the WRT memory system, enabling detailed analysis of memory
+//! capabilities for the Kiln memory system, enabling detailed analysis of memory
 //! usage patterns, allocation tracking, and performance profiling. It
 //! complements the existing memory inspection capabilities with advanced
 //! profiling features.
@@ -17,14 +17,14 @@ use core::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 #[cfg(feature = "std")]
 use std::sync::{Mutex, OnceLock};
 
-use wrt_error::Result;
+use kiln_error::Result;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::no_std_hashmap::BoundedHashMap;
-use wrt_foundation::{
+use kiln_foundation::no_std_hashmap::BoundedHashMap;
+use kiln_foundation::{
     CrateId, NoStdProvider,
     bounded::{BoundedString, BoundedVec},
     verification::Checksum,
-    wrt_provider,
+    kiln_provider,
 };
 
 use crate::{bounded_debug_infra, runtime_memory::MemoryInspector};
@@ -90,20 +90,20 @@ impl Default for AllocationType {
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::Checksummable for AllocationType {
-    fn calculate_checksum(&self) -> wrt_foundation::verification::Checksum {
-        wrt_foundation::verification::Checksum::new(*self as u32)
+impl kiln_foundation::traits::Checksummable for AllocationType {
+    fn calculate_checksum(&self) -> kiln_foundation::verification::Checksum {
+        kiln_foundation::verification::Checksum::new(*self as u32)
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::ToBytes for AllocationType {
+impl kiln_foundation::traits::ToBytes for AllocationType {
     fn to_bytes(
         &self,
-    ) -> wrt_foundation::bounded::BoundedVec<u8, 32, crate::bounded_debug_infra::DebugProvider>
+    ) -> kiln_foundation::bounded::BoundedVec<u8, 32, crate::bounded_debug_infra::DebugProvider>
     {
-        let mut vec = wrt_foundation::bounded::BoundedVec::new(
-            wrt_provider!(32, CrateId::Debug).unwrap_or_default(),
+        let mut vec = kiln_foundation::bounded::BoundedVec::new(
+            kiln_provider!(32, CrateId::Debug).unwrap_or_default(),
         )
         .expect("Failed to create bounded vector");
         let _ = vec.push(*self as u8);
@@ -112,11 +112,11 @@ impl wrt_foundation::traits::ToBytes for AllocationType {
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::FromBytes for AllocationType {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for AllocationType {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let bytes = reader.read_bytes(1)?;
         match bytes[0] {
             0 => Ok(Self::Heap),
@@ -125,7 +125,7 @@ impl wrt_foundation::traits::FromBytes for AllocationType {
             3 => Ok(Self::Shared),
             4 => Ok(Self::Bounded),
             5 => Ok(Self::Provider),
-            _ => Err(wrt_error::Error::parse_error(
+            _ => Err(kiln_error::Error::parse_error(
                 "Invalid AllocationType value",
             )),
         }
@@ -216,17 +216,17 @@ impl<'a> MemoryProfiler<'a> {
     pub fn new() -> Self {
         Self {
             allocations: BoundedVec::new(
-                wrt_provider!({ { MAX_ALLOCATION_RECORDS * 32 } }, CrateId::Debug)
+                kiln_provider!({ { MAX_ALLOCATION_RECORDS * 32 } }, CrateId::Debug)
                     .unwrap_or_default(),
             )
             .expect("Failed to create allocations vector"),
             access_records: BoundedVec::new(
-                wrt_provider!({ { MAX_ALLOCATION_RECORDS * 32 } }, CrateId::Debug)
+                kiln_provider!({ { MAX_ALLOCATION_RECORDS * 32 } }, CrateId::Debug)
                     .unwrap_or_default(),
             )
             .expect("Failed to create access records vector"),
             perf_samples: BoundedVec::new(
-                wrt_provider!({ { MAX_PERF_SAMPLES * 32 } }, CrateId::Debug).unwrap_or_default(),
+                kiln_provider!({ { MAX_PERF_SAMPLES * 32 } }, CrateId::Debug).unwrap_or_default(),
             )
             .expect("Failed to create perf samples vector"),
             next_alloc_id: AtomicU32::new(1),
@@ -279,7 +279,7 @@ impl<'a> MemoryProfiler<'a> {
         size: usize,
         alloc_type: AllocationType,
         tag: &str,
-    ) -> wrt_error::Result<u32> {
+    ) -> kiln_error::Result<u32> {
         if !Self::is_allocation_tracking_enabled() {
             return Ok(0);
         }
@@ -309,7 +309,7 @@ impl<'a> MemoryProfiler<'a> {
     }
 
     /// Track a deallocation
-    pub fn track_deallocation(&mut self, alloc_id: u32) -> wrt_error::Result<()> {
+    pub fn track_deallocation(&mut self, alloc_id: u32) -> kiln_error::Result<()> {
         if !Self::is_allocation_tracking_enabled() {
             return Ok();
         }
@@ -334,7 +334,7 @@ impl<'a> MemoryProfiler<'a> {
         access_type: AccessType,
         size: usize,
         crate_id: CrateId,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         if !Self::is_profiling_enabled() {
             return Ok();
         }
@@ -368,7 +368,7 @@ impl<'a> MemoryProfiler<'a> {
     }
 
     /// Complete profiling and record sample
-    pub fn complete_profiling(&mut self, handle: ProfilingHandle) -> wrt_error::Result<()> {
+    pub fn complete_profiling(&mut self, handle: ProfilingHandle) -> kiln_error::Result<()> {
         if !Self::is_profiling_enabled() {
             return Ok();
         }
@@ -399,9 +399,9 @@ impl<'a> MemoryProfiler<'a> {
     /// Detect potential memory leaks
     pub fn detect_leaks(
         &self,
-    ) -> wrt_error::Result<BoundedVec<LeakInfo, 16, NoStdProvider<{ 16 * 256 }>>> {
+    ) -> kiln_error::Result<BoundedVec<LeakInfo, 16, NoStdProvider<{ 16 * 256 }>>> {
         let mut leaks =
-            BoundedVec::new(wrt_provider!({ 16 * 256 }, CrateId::Debug).unwrap_or_default())?;
+            BoundedVec::new(kiln_provider!({ 16 * 256 }, CrateId::Debug).unwrap_or_default())?;
         let current_time = self.get_relative_timestamp();
 
         for alloc in self.allocations.iter() {
@@ -413,7 +413,7 @@ impl<'a> MemoryProfiler<'a> {
             let age = current_time - alloc.timestamp;
             let mut confidence = 0u8;
             let mut reason = BoundedString::<128, crate::bounded_debug_infra::DebugProvider>::new(
-                wrt_provider!(128, CrateId::Debug).unwrap_or_default(),
+                kiln_provider!(128, CrateId::Debug).unwrap_or_default(),
             )?;
 
             // Long-lived allocation
@@ -456,7 +456,7 @@ impl<'a> MemoryProfiler<'a> {
     }
 
     /// Generate memory profiling report
-    pub fn generate_profile_report(&self) -> wrt_error::Result<ProfileReport> {
+    pub fn generate_profile_report(&self) -> kiln_error::Result<ProfileReport> {
         // Create bounded maps for stats
         #[cfg(feature = "std")]
         let mut crate_stats = BTreeMap::new();
@@ -465,12 +465,12 @@ impl<'a> MemoryProfiler<'a> {
 
         #[cfg(not(feature = "std"))]
         let mut crate_stats = BoundedHashMap::<CrateId, usize, 32, NoStdProvider<{ 32 * 64 }>>::new(
-            wrt_provider!({ 32 * 64 }, CrateId::Debug).unwrap_or_default(),
+            kiln_provider!({ 32 * 64 }, CrateId::Debug).unwrap_or_default(),
         );
         #[cfg(not(feature = "std"))]
         let mut type_stats =
             BoundedHashMap::<AllocationType, usize, 16, NoStdProvider<{ 16 * 64 }>>::new(
-                wrt_provider!({ 16 * 64 }, CrateId::Debug).unwrap_or_default(),
+                kiln_provider!({ 16 * 64 }, CrateId::Debug).unwrap_or_default(),
             );
 
         // Analyze active allocations
@@ -505,13 +505,13 @@ impl<'a> MemoryProfiler<'a> {
     }
 
     /// Check if allocation has been accessed recently
-    fn no_recent_access(&self, alloc_id: u32, threshold: u64) -> wrt_error::Result<bool> {
+    fn no_recent_access(&self, alloc_id: u32, threshold: u64) -> kiln_error::Result<bool> {
         // Simplified implementation - in production, would track actual access patterns
         Ok(true)
     }
 
     /// Analyze access patterns
-    fn analyze_access_patterns(&self) -> wrt_error::Result<AccessPatternSummary> {
+    fn analyze_access_patterns(&self) -> kiln_error::Result<AccessPatternSummary> {
         let mut read_count = 0;
         let mut write_count = 0;
         let mut sequential_count = 0;
@@ -556,16 +556,16 @@ impl<'a> MemoryProfiler<'a> {
     /// Detect memory hotspots
     fn detect_memory_hotspots(
         &self,
-    ) -> wrt_error::Result<BoundedVec<MemoryHotspot, 8, NoStdProvider<{ 8 * 32 }>>> {
+    ) -> kiln_error::Result<BoundedVec<MemoryHotspot, 8, NoStdProvider<{ 8 * 32 }>>> {
         let mut hotspots =
-            BoundedVec::new(wrt_provider!({ 8 * 32 }, CrateId::Debug).unwrap_or_default())?;
+            BoundedVec::new(kiln_provider!({ 8 * 32 }, CrateId::Debug).unwrap_or_default())?;
 
         // Group accesses by address range
         #[cfg(feature = "std")]
         let mut access_counts = BTreeMap::new();
         #[cfg(not(feature = "std"))]
         let mut access_counts = BoundedHashMap::<usize, usize, 64, NoStdProvider<{ 64 * 32 }>>::new(
-            wrt_provider!({ 64 * 32 }, CrateId::Debug).unwrap_or_default(),
+            kiln_provider!({ 64 * 32 }, CrateId::Debug).unwrap_or_default(),
         );
 
         for access in self.access_records.iter() {
@@ -575,7 +575,7 @@ impl<'a> MemoryProfiler<'a> {
 
         // Find top hotspots
         let mut sorted: BoundedVec<(usize, usize), 32, NoStdProvider<{ 32 * 16 }>> =
-            BoundedVec::new(wrt_provider!({ 32 * 16 }, CrateId::Debug).unwrap_or_default())?;
+            BoundedVec::new(kiln_provider!({ 32 * 16 }, CrateId::Debug).unwrap_or_default())?;
         for (region, count) in access_counts {
             let _ = sorted.push((region, count));
         }
@@ -606,7 +606,7 @@ impl<'a> MemoryProfiler<'a> {
     }
 
     /// Analyze performance metrics
-    fn analyze_performance(&self) -> wrt_error::Result<PerformanceAnalysis> {
+    fn analyze_performance(&self) -> kiln_error::Result<PerformanceAnalysis> {
         let mut total_duration = 0u64;
         let mut total_allocations = 0usize;
         let mut total_deallocations = 0usize;
@@ -616,7 +616,7 @@ impl<'a> MemoryProfiler<'a> {
         #[cfg(not(feature = "std"))]
         let mut operation_times =
             BoundedHashMap::<BoundedString<64>, (u64, u32), 32, NoStdProvider<{ 32 * 96 }>>::new(
-                wrt_provider!({ 32 * 96 }, CrateId::Debug).unwrap_or_default(),
+                kiln_provider!({ 32 * 96 }, CrateId::Debug).unwrap_or_default(),
             );
 
         for sample in self.perf_samples.iter() {
@@ -632,7 +632,7 @@ impl<'a> MemoryProfiler<'a> {
         // Find slowest operations
         let mut slowest_ops =
             BoundedVec::<(BoundedString<64>, u64), 5, NoStdProvider<{ 5 * 72 }>>::new(
-                wrt_provider!({ 5 * 72 }, CrateId::Debug).unwrap_or_default(),
+                kiln_provider!({ 5 * 72 }, CrateId::Debug).unwrap_or_default(),
             )?;
         for (op, (total_time, count)) in operation_times {
             let avg_time = total_time / count as u64;
@@ -663,13 +663,13 @@ impl<'a> MemoryProfiler<'a> {
     /// Capture simplified call stack
     fn capture_call_stack(
         &self,
-    ) -> wrt_error::Result<
+    ) -> kiln_error::Result<
         BoundedVec<u64, MAX_CALL_STACK_DEPTH, NoStdProvider<{ MAX_CALL_STACK_DEPTH * 8 }>>,
     > {
         // In a real implementation, this would use platform-specific
         // stack unwinding. For now, return a dummy stack.
         let mut stack = BoundedVec::new(
-            wrt_provider!({ MAX_CALL_STACK_DEPTH * 8 }, CrateId::Debug).unwrap_or_default(),
+            kiln_provider!({ MAX_CALL_STACK_DEPTH * 8 }, CrateId::Debug).unwrap_or_default(),
         )?;
         let _ = stack.push(0x1000); // Dummy addresses
         let _ = stack.push(0x2000);
@@ -690,7 +690,7 @@ impl<'a> MemoryProfiler<'a> {
     }
 
     /// Evict oldest inactive allocation
-    fn evict_oldest_inactive(&mut self) -> wrt_error::Result<()> {
+    fn evict_oldest_inactive(&mut self) -> kiln_error::Result<()> {
         let mut oldest_idx = None;
         let mut oldest_time = u64::MAX;
 
@@ -799,7 +799,7 @@ use core::sync::atomic::AtomicPtr;
 static MEMORY_PROFILER: AtomicPtr<MemoryProfiler<'static>> = AtomicPtr::new(core::ptr::null_mut);
 
 /// Initialize the memory profiler (ASIL-D safe)
-pub fn init_profiler() -> wrt_error::Result<()> {
+pub fn init_profiler() -> kiln_error::Result<()> {
     #[cfg(feature = "std")]
     {
         MEMORY_PROFILER.get_or_init(|| Mutex::new(MemoryProfiler::new()));
@@ -815,9 +815,9 @@ pub fn init_profiler() -> wrt_error::Result<()> {
 }
 
 /// Get mutable reference to profiler (ASIL-D safe)
-pub fn with_profiler<F, R>(f: F) -> wrt_error::Result<R>
+pub fn with_profiler<F, R>(f: F) -> kiln_error::Result<R>
 where
-    F: FnOnce(&mut MemoryProfiler<'static>) -> wrt_error::Result<R>,
+    F: FnOnce(&mut MemoryProfiler<'static>) -> kiln_error::Result<R>,
 {
     // ASIL-D safe: Use safe lock access without unsafe
     #[cfg(feature = "std")]
@@ -825,16 +825,16 @@ where
         match MEMORY_PROFILER.get() {
             Some(profiler_mutex) => match profiler_mutex.lock() {
                 Ok(mut profiler) => f(&mut *profiler),
-                Err(_) => Err(wrt_error::Error::memory_error("Failed to lock profiler")),
+                Err(_) => Err(kiln_error::Error::memory_error("Failed to lock profiler")),
             },
-            None => Err(wrt_error::Error::memory_error("Profiler not initialized")),
+            None => Err(kiln_error::Error::memory_error("Profiler not initialized")),
         }
     }
     #[cfg(not(feature = "std"))]
     {
         let ptr = MEMORY_PROFILER.load(Ordering::SeqCst);
         if ptr.is_null() {
-            Err(wrt_error::Error::memory_error("Profiler not initialized"))
+            Err(kiln_error::Error::memory_error("Profiler not initialized"))
         } else {
             // SAFETY: We only store valid pointers from Box::leak
             // and the profiler has 'static lifetime

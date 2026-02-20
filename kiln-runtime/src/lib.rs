@@ -1,4 +1,4 @@
-// WRT - wrt-runtime
+// Kiln - kiln-runtime
 // Module: Core WebAssembly Runtime
 // SW-REQ-ID: REQ_001
 // SW-REQ-ID: REQ_002
@@ -8,7 +8,7 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! WebAssembly Runtime (WRT) - Runtime Implementation
+//! WebAssembly Runtime (Kiln) - Runtime Implementation
 //!
 //! This crate provides the core runtime types and implementations for
 //! WebAssembly, shared between both the core WebAssembly and Component Model
@@ -133,7 +133,7 @@ pub mod component;
 pub mod resources;
 pub mod state;
 
-// Import platform abstractions from wrt-foundation
+// Import platform abstractions from kiln-foundation
 // Re-export commonly used types
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use atomic_execution::{
@@ -176,7 +176,7 @@ pub use memory_adapter::{
 pub use memory_helpers::ArcMemoryExt;
 pub use prelude::FuncType;
 pub use table::Table;
-pub use wrt_foundation::platform_abstraction;
+pub use kiln_foundation::platform_abstraction;
 
 /// The WebAssembly memory page size (64KiB)
 pub const PAGE_SIZE: usize = 65536;
@@ -195,4 +195,4 @@ pub use component_traits::HostImportHandler;
 
 // Panic handler is provided by the main binary crate to avoid conflicts
 
-// Panic handler is provided by wrt-platform when needed
+// Panic handler is provided by kiln-platform when needed

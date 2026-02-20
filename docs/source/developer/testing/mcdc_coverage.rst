@@ -1,5 +1,5 @@
 ============================
-MC/DC Coverage for WRT
+MC/DC Coverage for Kiln
 ============================
 
 .. image:: ../../_static/icons/testing.svg
@@ -7,7 +7,7 @@ MC/DC Coverage for WRT
    :align: center
    :alt: MC/DC Coverage Icon
 
-Modified Condition/Decision Coverage (MC/DC) is a critical requirement for safety-critical systems (ASIL-D, SIL-3). This guide explains how to achieve and measure MC/DC coverage in the WRT project.
+Modified Condition/Decision Coverage (MC/DC) is a critical requirement for safety-critical systems (ASIL-D, SIL-3). This guide explains how to achieve and measure MC/DC coverage in the Kiln project.
 
 .. contents:: On this page
    :local:
@@ -99,7 +99,7 @@ MC/DC requires testing combinations where changing each variable independently c
        }
    }
 
-WRT-Specific MC/DC Patterns
+Kiln-Specific MC/DC Patterns
 ---------------------------
 
 Memory Safety Conditions
@@ -241,7 +241,7 @@ Workspace-Wide Coverage
 
    # Exclude non-safety-critical crates
    cargo +nightly llvm-cov --mcdc --workspace \
-     --exclude wrt-debug \
+     --exclude kiln-debug \
      --html --output-dir safety-mcdc test
 
 Safety-Critical Subset
@@ -251,10 +251,10 @@ Safety-Critical Subset
 
    # Focus on safety-critical crates only
    cargo +nightly llvm-cov --mcdc \
-     --package wrt-foundation \
-     --package wrt-runtime \
-     --package wrt-component \
-     --package wrt-memory \
+     --package kiln-foundation \
+     --package kiln-runtime \
+     --package kiln-component \
+     --package kiln-memory \
      --html --output-dir asil-mcdc test
 
 Configuration for Different ASIL Levels
@@ -357,7 +357,7 @@ GitHub Actions Workflow
          - name: Run MC/DC Coverage
            run: |
              cargo +nightly llvm-cov --mcdc --workspace \
-               --exclude wrt-debug \
+               --exclude kiln-debug \
                --html --output-dir mcdc-coverage test
                
          - name: Upload Coverage Report

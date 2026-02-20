@@ -1,11 +1,11 @@
-//! Log handler for the WebAssembly Runtime.
+//! Log handler for the Kiln WebAssembly Runtime.
 //!
 //! This module provides types for handling logs from WebAssembly components.
 
 #[cfg(feature = "std")]
 use alloc::boxed::Box;
 
-use wrt_host::{
+use kiln_host::{
     CallbackRegistry,
     CallbackType,
 };
@@ -46,7 +46,7 @@ pub trait LoggingExt {
     fn register_log_handler(&mut self, handler: LogHandler);
 
     /// Handle a log operation
-    fn handle_log(&self, operation: LogOperation) -> wrt_error::Result<()>;
+    fn handle_log(&self, operation: LogOperation) -> kiln_error::Result<()>;
 
     /// Check if a log handler is registered
     fn has_log_handler(&self) -> bool;
@@ -84,7 +84,7 @@ impl LoggingExt for CallbackRegistry {
                          // complex design
     }
 
-    fn handle_log(&self, operation: LogOperation) -> wrt_error::Result<()> {
+    fn handle_log(&self, operation: LogOperation) -> kiln_error::Result<()> {
         // In no_std mode, we can't dynamically dispatch to handlers
         let _ = operation; // Acknowledge the parameter
                            // Default no-op implementation for no_std

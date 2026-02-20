@@ -23,7 +23,7 @@ use std::{
 };
 
 #[cfg(feature = "std")]
-use wrt_error::Result;
+use kiln_error::Result;
 
 #[cfg(feature = "std")]
 use crate::{
@@ -49,8 +49,8 @@ pub struct FunctionStats {
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::Checksummable for FunctionStats {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for FunctionStats {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         for byte in self.call_count.to_le_bytes() {
             checksum.update(byte);
         }
@@ -64,16 +64,16 @@ impl wrt_foundation::traits::Checksummable for FunctionStats {
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::ToBytes for FunctionStats {
+impl kiln_foundation::traits::ToBytes for FunctionStats {
     fn serialized_size(&self) -> usize {
         24 // 3 * u64 = 24 bytes
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u64_le(self.call_count)?;
         writer.write_u64_le(self.success_count)?;
         writer.write_u64_le(self.error_count)?;
@@ -82,11 +82,11 @@ impl wrt_foundation::traits::ToBytes for FunctionStats {
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::FromBytes for FunctionStats {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for FunctionStats {
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let call_count = reader.read_u64_le()?;
         let success_count = reader.read_u64_le()?;
         let error_count = reader.read_u64_le()?;
@@ -123,8 +123,8 @@ pub struct FunctionStats {
 impl Eq for FunctionStats {}
 
 #[cfg(feature = "std")]
-impl wrt_foundation::traits::Checksummable for FunctionStats {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for FunctionStats {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         for byte in self.call_count.to_le_bytes() {
             checksum.update(byte);
         }
@@ -154,17 +154,17 @@ impl wrt_foundation::traits::Checksummable for FunctionStats {
 }
 
 #[cfg(feature = "std")]
-impl wrt_foundation::traits::ToBytes for FunctionStats {
+impl kiln_foundation::traits::ToBytes for FunctionStats {
     fn serialized_size(&self) -> usize {
         // 5 * u64 + 2 * Option<f64> + f64 = approximately 56 bytes max
         56
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u64_le(self.call_count)?;
         writer.write_u64_le(self.success_count)?;
         writer.write_u64_le(self.error_count)?;
@@ -183,11 +183,11 @@ impl wrt_foundation::traits::ToBytes for FunctionStats {
 }
 
 #[cfg(feature = "std")]
-impl wrt_foundation::traits::FromBytes for FunctionStats {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for FunctionStats {
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let call_count = reader.read_u64_le()?;
         let success_count = reader.read_u64_le()?;
         let error_count = reader.read_u64_le()?;
@@ -436,7 +436,7 @@ mod tests {
         // Second call (error)
         strategy.before_call(source, target, function, &args).unwrap();
         thread::sleep(Duration::from_millis(5)); // Simulate some work
-        let result = Err(wrt_error::Error::runtime_error("Test error"));
+        let result = Err(kiln_error::Error::runtime_error("Test error"));
         let _ = strategy.after_call(source, target, function, &args, result);
 
         // Check statistics

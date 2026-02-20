@@ -22,7 +22,7 @@ Memory management is where platform differences really shine (or burn, depending
 The Universal Memory Interface 🌐
 ---------------------------------
 
-Every platform in WRT implements the same ``PageAllocator`` trait, but how they do it varies wildly:
+Every platform in Kiln implements the same ``PageAllocator`` trait, but how they do it varies wildly:
 
 .. code-block:: rust
    :caption: The trait every platform must implement
@@ -63,7 +63,7 @@ Linux gives us the most flexibility with its virtual memory system:
    :caption: Linux memory allocation with all the bells and whistles
    :linenos:
 
-   use wrt_platform::{LinuxAllocator, LinuxAllocatorBuilder};
+   use kiln_platform::{LinuxAllocator, LinuxAllocatorBuilder};
    
    fn create_linux_allocator() -> Result<LinuxAllocator, Error> {
        LinuxAllocatorBuilder::new()
@@ -78,7 +78,7 @@ Linux gives us the most flexibility with its virtual memory system:
    // Advanced: ARM64 Memory Tagging Extension
    #[cfg(all(target_arch = "aarch64", feature = "linux-mte"))]
    fn create_mte_allocator() -> Result<LinuxArm64MteAllocator, Error> {
-       use wrt_platform::{LinuxArm64MteAllocator, LinuxArm64MteAllocatorBuilder, MteMode};
+       use kiln_platform::{LinuxArm64MteAllocator, LinuxArm64MteAllocatorBuilder, MteMode};
        
        LinuxArm64MteAllocatorBuilder::new()
            .with_maximum_pages(512)
@@ -96,8 +96,8 @@ QNX's memory partitioning provides guaranteed memory reservations:
    :caption: QNX memory with partition support
    :linenos:
 
-   use wrt_platform::{QnxAllocator, QnxAllocatorBuilder, QnxPartitionFlags};
-   use wrt_platform::{QnxMemoryPartition, QnxMemoryPartitionBuilder};
+   use kiln_platform::{QnxAllocator, QnxAllocatorBuilder, QnxPartitionFlags};
+   use kiln_platform::{QnxMemoryPartition, QnxMemoryPartitionBuilder};
    
    fn create_qnx_partitioned_memory() -> Result<QnxAllocator, Error> {
        // First, create a memory partition
@@ -125,7 +125,7 @@ macOS has its own special VM system with unique features:
    :caption: macOS memory with VM features
    :linenos:
 
-   use wrt_platform::{MacOsAllocator, MacOsAllocatorBuilder};
+   use kiln_platform::{MacOsAllocator, MacOsAllocatorBuilder};
    
    fn create_macos_allocator() -> Result<MacOsAllocator, Error> {
        let allocator = MacOsAllocatorBuilder::new()
@@ -151,7 +151,7 @@ For embedded systems, dynamic allocation is often a no-go:
    :caption: Static allocation for embedded platforms
    :linenos:
 
-   use wrt_platform::{TockAllocator, TockAllocatorBuilder};
+   use kiln_platform::{TockAllocator, TockAllocatorBuilder};
    
    // Static buffer allocated at compile time
    static mut WASM_MEMORY: [u8; 1024 * 1024] = [0; 1024 * 1024]; // 1MB
@@ -234,7 +234,7 @@ Reduce TLB pressure with huge pages:
    :caption: Huge page optimization
    :linenos:
 
-   use wrt_platform::memory_optimizations::{
+   use kiln_platform::memory_optimizations::{
        MemoryOptimization, 
        PlatformMemoryOptimizer
    };

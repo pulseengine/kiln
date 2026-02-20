@@ -1,7 +1,7 @@
-//! Helper modules for cargo-wrt command implementations
+//! Helper modules for cargo-kiln command implementations
 //!
 //! This module provides common functionality and patterns used across
-//! all cargo-wrt command handlers to ensure consistency and reduce duplication.
+//! all cargo-kiln command handlers to ensure consistency and reduce duplication.
 
 pub mod autofix;
 pub mod command_suggestions;
@@ -29,7 +29,7 @@ pub use command_trait::{
     BuildCommand, CheckCommand, CommandExt, CommandResult, StandardCommand, TestCommand,
 };
 pub use config::{
-    CargoWrtConfig, MergedConfig, create_and_open_html_report, get_browser_command,
+    CargoKilnConfig, MergedConfig, create_and_open_html_report, get_browser_command,
     load_config_file, merge_global_args, open_in_browser,
 };
 pub use diagnostics::{

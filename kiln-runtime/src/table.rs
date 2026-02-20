@@ -5,26 +5,26 @@
 
 // alloc is imported in lib.rs with proper feature gates
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedVec,
     safe_memory::NoStdMemoryProvider,
     types::{
-        Limits as WrtLimits,
-        RefType as WrtRefType,
-        TableType as WrtTableType,
-        ValueType as WrtValueType,
+        Limits as KilnLimits,
+        RefType as KilnRefType,
+        TableType as KilnTableType,
+        ValueType as KilnValueType,
     },
     values::{
-        ExternRef as WrtExternRef,
-        FuncRef as WrtFuncRef,
-        Value as WrtValue,
+        ExternRef as KilnExternRef,
+        FuncRef as KilnFuncRef,
+        Value as KilnValue,
     },
     // Use clean collections instead of runtime allocator types
     verification::VerificationLevel,
 };
 
 // Platform-aware memory provider for table operations
-type TableProvider = wrt_foundation::safe_memory::NoStdProvider<8192>; // 8KB for table operations
+type TableProvider = kiln_foundation::safe_memory::NoStdProvider<8192>; // 8KB for table operations
 
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
 use alloc::format;
@@ -32,8 +32,8 @@ use alloc::format;
 #[cfg(feature = "std")]
 use std::format;
 
-// Import the TableOperations trait from wrt-instructions
-use wrt_instructions::table_ops::TableOperations;
+// Import the TableOperations trait from kiln-instructions
+use kiln_instructions::table_ops::TableOperations;
 
 use crate::prelude::{
     Arc,
@@ -53,7 +53,7 @@ use crate::prelude::{
 #[cfg(feature = "std")]
 use std::sync::Mutex;
 #[cfg(not(feature = "std"))]
-use wrt_sync::WrtMutex as Mutex;
+use kiln_sync::KilnMutex as Mutex;
 
 /// Invalid index error code
 const INVALID_INDEX: u16 = 4004;
@@ -93,13 +93,13 @@ fn usize_to_wasm_u32(size: usize) -> Result<u32> {
 }
 
 /// Type alias for the inner elements storage
-type TableElements = wrt_foundation::bounded::BoundedVec<Option<WrtValue>, 1024, TableProvider>;
+type TableElements = kiln_foundation::bounded::BoundedVec<Option<KilnValue>, 1024, TableProvider>;
 
 /// A WebAssembly table is a vector of opaque values of a single type.
 /// Uses interior mutability (Mutex) for thread-safe element access.
 pub struct Table {
-    /// The table type, using the canonical `WrtTableType`
-    pub ty:                 WrtTableType,
+    /// The table type, using the canonical `KilnTableType`
+    pub ty:                 KilnTableType,
     /// The table elements - wrapped in Mutex for interior mutability
     /// This allows setting elements through Arc<Table> references
     #[cfg(feature = "std")]
@@ -131,7 +131,7 @@ impl Debug for Table {
 impl Clone for Table {
     fn clone(&self) -> Self {
         let mut new_elements: TableElements =
-            wrt_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
 
         // Lock the source elements for reading
         #[cfg(feature = "std")]
@@ -201,12 +201,12 @@ impl Eq for Table {}
 
 impl Default for Table {
     fn default() -> Self {
-        use wrt_foundation::types::{
+        use kiln_foundation::types::{
             Limits,
             TableType,
         };
         let table_type = TableType {
-            element_type: WrtRefType::Funcref,
+            element_type: KilnRefType::Funcref,
             limits:       Limits {
                 min: 0,
                 max: Some(1),
@@ -216,11 +216,11 @@ impl Default for Table {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for Table {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Table {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let element_type_byte = match self.ty.element_type {
-            WrtRefType::Funcref => 0u8,
-            WrtRefType::Externref => 1u8,
+            KilnRefType::Funcref => 0u8,
+            KilnRefType::Externref => 1u8,
         };
         checksum.update_slice(&element_type_byte.to_le_bytes());
         checksum.update_slice(&self.ty.limits.min.to_le_bytes());
@@ -230,42 +230,42 @@ impl wrt_foundation::traits::Checksummable for Table {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Table {
+impl kiln_foundation::traits::ToBytes for Table {
     fn serialized_size(&self) -> usize {
         16 // simplified
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         let element_type_byte = match self.ty.element_type {
-            WrtRefType::Funcref => 0u8,
-            WrtRefType::Externref => 1u8,
+            KilnRefType::Funcref => 0u8,
+            KilnRefType::Externref => 1u8,
         };
         writer.write_all(&element_type_byte.to_le_bytes())?;
         writer.write_all(&self.ty.limits.min.to_le_bytes())
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Table {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Table {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         let mut bytes = [0u8; 1];
         reader.read_exact(&mut bytes)?;
         let element_type = match bytes[0] {
-            0 => wrt_foundation::types::RefType::Funcref,
-            _ => wrt_foundation::types::RefType::Externref,
+            0 => kiln_foundation::types::RefType::Funcref,
+            _ => kiln_foundation::types::RefType::Externref,
         };
 
         let mut min_bytes = [0u8; 4];
         reader.read_exact(&mut min_bytes)?;
         let min = u32::from_le_bytes(min_bytes);
 
-        use wrt_foundation::types::{
+        use kiln_foundation::types::{
             Limits,
             TableType,
         };
@@ -283,33 +283,33 @@ impl wrt_foundation::traits::FromBytes for Table {
 impl Table {
     /// Creates a new table with the specified type.
     /// Elements are initialized to a type-appropriate null value.
-    pub fn new(ty: WrtTableType) -> Result<Self> {
+    pub fn new(ty: KilnTableType) -> Result<Self> {
         // Determine the type-appropriate null value for initialization
         let init_val = match ty.element_type {
-            WrtRefType::Funcref => Some(WrtValue::FuncRef(None)),
-            WrtRefType::Externref => Some(WrtValue::ExternRef(None)),
+            KilnRefType::Funcref => Some(KilnValue::FuncRef(None)),
+            KilnRefType::Externref => Some(KilnValue::ExternRef(None)),
         };
 
         let initial_size = wasm_index_to_usize(ty.limits.min)?;
 
         #[cfg(feature = "tracing")]
-        wrt_foundation::tracing::trace!(capacity = 1024, elements = initial_size, "Creating Table BoundedVec");
+        kiln_foundation::tracing::trace!(capacity = 1024, elements = initial_size, "Creating Table BoundedVec");
 
         let mut elements: TableElements =
-            wrt_foundation::bounded::BoundedVec::new(TableProvider::default()).map_err(|e| {
+            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).map_err(|e| {
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::error!(error = ?e, "BoundedVec::new failed");
+                kiln_foundation::tracing::error!(error = ?e, "BoundedVec::new failed");
                 e
             })?;
         // Note: BoundedVec doesn't have set_verification_level method
 
         #[cfg(feature = "tracing")]
-        wrt_foundation::tracing::trace!(elements = initial_size, "Pushing elements to table");
+        kiln_foundation::tracing::trace!(elements = initial_size, "Pushing elements to table");
 
         for i in 0..initial_size {
             if let Err(e) = elements.push(init_val.clone()) {
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::error!(index = i, error = ?e, "Failed to push element");
+                kiln_foundation::tracing::error!(index = i, error = ?e, "Failed to push element");
                 return Err(e.into());
             }
         }
@@ -336,10 +336,10 @@ impl Table {
     /// # Errors
     ///
     /// Returns an error if the table cannot be created
-    pub fn with_capacity(capacity: u32, element_type: &WrtRefType) -> Result<Self> {
-        let table_type = WrtTableType {
+    pub fn with_capacity(capacity: u32, element_type: &KilnRefType) -> Result<Self> {
+        let table_type = KilnTableType {
             element_type: *element_type,
-            limits:       WrtLimits {
+            limits:       KilnLimits {
                 min: capacity,
                 max: Some(capacity),
             },
@@ -374,7 +374,7 @@ impl Table {
     /// # Errors
     ///
     /// Returns an error if the index is out of bounds
-    pub fn get(&self, idx: u32) -> Result<Option<WrtValue>> {
+    pub fn get(&self, idx: u32) -> Result<Option<KilnValue>> {
         let idx_usize = wasm_index_to_usize(idx)?;
 
         #[cfg(feature = "std")]
@@ -419,7 +419,7 @@ impl Table {
     ///
     /// Returns an error if the index is out of bounds or if the value type
     /// doesn't match the table element type
-    pub fn set(&mut self, idx: u32, value: Option<WrtValue>) -> Result<()> {
+    pub fn set(&mut self, idx: u32, value: Option<KilnValue>) -> Result<()> {
         let idx_usize = wasm_index_to_usize(idx)?;
 
         #[cfg(feature = "std")]
@@ -433,7 +433,7 @@ impl Table {
         }
 
         if let Some(ref val) = value {
-            let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+            let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
             if !val_matches {
                 return Err(Error::validation_error(
                     "Element value type doesn't match table element type",
@@ -461,7 +461,7 @@ impl Table {
     ///
     /// Returns an error if the index is out of bounds or if the value type
     /// doesn't match the table element type
-    pub fn set_shared(&self, idx: u32, value: Option<WrtValue>) -> Result<()> {
+    pub fn set_shared(&self, idx: u32, value: Option<KilnValue>) -> Result<()> {
         let idx_usize = wasm_index_to_usize(idx)?;
 
         #[cfg(feature = "std")]
@@ -475,7 +475,7 @@ impl Table {
         }
 
         if let Some(ref val) = value {
-            let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+            let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
             if !val_matches {
                 return Err(Error::validation_error(
                     "Element value type doesn't match table element type",
@@ -502,8 +502,8 @@ impl Table {
     /// # Errors
     ///
     /// Returns an error if the table cannot be grown
-    pub fn grow_shared(&self, delta: u32, init_value_from_arg: WrtValue) -> Result<u32> {
-        let init_val_matches = matches!((&init_value_from_arg, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+    pub fn grow_shared(&self, delta: u32, init_value_from_arg: KilnValue) -> Result<u32> {
+        let init_val_matches = matches!((&init_value_from_arg, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
         if !init_val_matches {
             return Err(Error::validation_error(
                 "Grow operation init value type doesn't match table element type",
@@ -520,7 +520,7 @@ impl Table {
                 // As per spec, grow should return -1 (or an error indicating failure)
                 return Err(Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::CAPACITY_EXCEEDED,
+                    kiln_error::codes::CAPACITY_EXCEEDED,
                     "Table size exceeds maximum limit",
                 ));
             }
@@ -546,7 +546,7 @@ impl Table {
     pub fn fill_elements_shared(
         &self,
         offset: usize,
-        value: Option<WrtValue>,
+        value: Option<KilnValue>,
         len: usize,
     ) -> Result<()> {
         #[cfg(feature = "std")]
@@ -569,7 +569,7 @@ impl Table {
 
         // Create a new stack with the filled elements
         let mut result_vec: TableElements =
-            wrt_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
 
         // Copy elements with fill applied
         for i in 0..elements.len() {
@@ -614,7 +614,7 @@ impl Table {
 
         // Create temporary stack to store elements during copy
         let mut temp_vec: TableElements =
-            wrt_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
 
         // Read source elements into temporary stack
         for i in 0..len {
@@ -623,7 +623,7 @@ impl Table {
 
         // Create a new stack for the full result
         let mut result_vec: TableElements =
-            wrt_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
 
         // Copy elements with the updated values
         for i in 0..elements.len() {
@@ -645,7 +645,7 @@ impl Table {
     /// Initialize a range of elements in the table through a shared reference.
     /// This method provides interior mutability for use when the table is
     /// wrapped in an Arc.
-    pub fn init_shared(&self, offset: u32, init_data: &[Option<WrtValue>]) -> Result<()> {
+    pub fn init_shared(&self, offset: u32, init_data: &[Option<KilnValue>]) -> Result<()> {
         #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
@@ -659,7 +659,7 @@ impl Table {
         }
         for (i, val_opt) in init_data.iter().enumerate() {
             if let Some(val) = val_opt {
-                let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+                let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
                 if !val_matches {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }
@@ -683,8 +683,8 @@ impl Table {
     /// # Errors
     ///
     /// Returns an error if the table cannot be grown
-    pub fn grow(&mut self, delta: u32, init_value_from_arg: WrtValue) -> Result<u32> {
-        let init_val_matches = matches!((&init_value_from_arg, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+    pub fn grow(&mut self, delta: u32, init_value_from_arg: KilnValue) -> Result<u32> {
+        let init_val_matches = matches!((&init_value_from_arg, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
         if !init_val_matches {
             return Err(Error::validation_error(
                 "Grow operation init value type doesn't match table element type",
@@ -702,7 +702,7 @@ impl Table {
                 // For now, let's return an error. The runtime execution might interpret this.
                 return Err(Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::CAPACITY_EXCEEDED,
+                    kiln_error::codes::CAPACITY_EXCEEDED,
                     "Table size exceeds maximum limit",
                 ));
             }
@@ -741,14 +741,14 @@ impl Table {
     /// Returns an error if the index is out of bounds or the table element type
     /// isn't a funcref
     pub fn set_func(&mut self, idx: u32, func_idx: u32) -> Result<()> {
-        if !matches!(self.ty.element_type, WrtRefType::Funcref) {
+        if !matches!(self.ty.element_type, KilnRefType::Funcref) {
             return Err(Error::runtime_execution_error(
                 "Table element type must be funcref",
             ));
         }
         self.set(
             idx,
-            Some(WrtValue::FuncRef(Some(WrtFuncRef { index: func_idx }))),
+            Some(KilnValue::FuncRef(Some(KilnFuncRef { index: func_idx }))),
         )
     }
 
@@ -766,7 +766,7 @@ impl Table {
     /// # Errors
     ///
     /// Returns an error if the operation fails
-    pub fn init(&mut self, offset: u32, init_data: &[Option<WrtValue>]) -> Result<()> {
+    pub fn init(&mut self, offset: u32, init_data: &[Option<KilnValue>]) -> Result<()> {
         #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
@@ -780,7 +780,7 @@ impl Table {
         }
         for (i, val_opt) in init_data.iter().enumerate() {
             if let Some(val) = val_opt {
-                let val_matches = matches!((&val, &self.ty.element_type), (WrtValue::FuncRef(_), WrtRefType::Funcref) | (WrtValue::ExternRef(_), WrtRefType::Externref));
+                let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
                 if !val_matches {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }
@@ -814,7 +814,7 @@ impl Table {
 
         // Create temporary stack to store elements during copy
         let mut temp_vec: TableElements =
-            wrt_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
         // Note: verification level handled by provider
 
         // Read source elements into temporary stack
@@ -824,7 +824,7 @@ impl Table {
 
         // Create a new stack for the full result
         let mut result_vec: TableElements =
-            wrt_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
         // Note: verification level handled by provider
 
         // Copy elements with the updated values
@@ -848,7 +848,7 @@ impl Table {
     pub fn fill_elements(
         &mut self,
         offset: usize,
-        value: Option<WrtValue>,
+        value: Option<KilnValue>,
         len: usize,
     ) -> Result<()> {
         #[cfg(feature = "std")]
@@ -871,7 +871,7 @@ impl Table {
 
         // Create a new stack with the filled elements
         let mut result_vec: TableElements =
-            wrt_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
 
         // Copy elements with fill applied
         for i in 0..elements.len() {
@@ -912,7 +912,7 @@ impl Table {
     }
 
     /// Sets an element at the given index.
-    pub fn init_element(&mut self, idx: usize, value: Option<WrtValue>) -> Result<()> {
+    pub fn init_element(&mut self, idx: usize, value: Option<KilnValue>) -> Result<()> {
         #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
@@ -937,9 +937,9 @@ impl Table {
     /// # Returns
     ///
     /// A string containing the statistics
-    pub fn safety_stats(&self) -> wrt_foundation::bounded::BoundedString<256> {
+    pub fn safety_stats(&self) -> kiln_foundation::bounded::BoundedString<256> {
         let stats_text = "Table Safety Stats: [Runtime table]";
-        wrt_foundation::bounded::BoundedString::try_from_str(stats_text)
+        kiln_foundation::bounded::BoundedString::try_from_str(stats_text)
             .unwrap_or_default()
     }
 }
@@ -951,25 +951,25 @@ pub trait ArcTableExt {
     fn size(&self) -> u32;
 
     /// Get an element from the table
-    fn get(&self, idx: u32) -> Result<Option<WrtValue>>;
+    fn get(&self, idx: u32) -> Result<Option<KilnValue>>;
 
     /// Set an element in the table
-    fn set(&self, idx: u32, value: Option<WrtValue>) -> Result<()>;
+    fn set(&self, idx: u32, value: Option<KilnValue>) -> Result<()>;
 
     /// Grow the table by a given number of elements
-    fn grow(&self, delta: u32, init_value: WrtValue) -> Result<u32>;
+    fn grow(&self, delta: u32, init_value: KilnValue) -> Result<u32>;
 
     /// Set a function reference in the table
     fn set_func(&self, idx: u32, func_idx: u32) -> Result<()>;
 
     /// Initialize a range of elements from a vector
-    fn init(&self, offset: u32, init: &[Option<WrtValue>]) -> Result<()>;
+    fn init(&self, offset: u32, init: &[Option<KilnValue>]) -> Result<()>;
 
     /// Copy elements from one range to another
     fn copy(&self, dst: u32, src: u32, len: u32) -> Result<()>;
 
     /// Fill a range of elements with a value
-    fn fill(&self, offset: u32, len: u32, value: Option<WrtValue>) -> Result<()>;
+    fn fill(&self, offset: u32, len: u32, value: Option<KilnValue>) -> Result<()>;
 }
 
 #[cfg(feature = "std")]
@@ -978,11 +978,11 @@ impl ArcTableExt for Arc<Table> {
         self.as_ref().size()
     }
 
-    fn get(&self, idx: u32) -> Result<Option<WrtValue>> {
+    fn get(&self, idx: u32) -> Result<Option<KilnValue>> {
         self.as_ref().get(idx)
     }
 
-    fn set(&self, idx: u32, value: Option<WrtValue>) -> Result<()> {
+    fn set(&self, idx: u32, value: Option<KilnValue>) -> Result<()> {
         // Clone-and-mutate pattern for thread safety
         let mut table_clone = self.as_ref().clone();
 
@@ -990,7 +990,7 @@ impl ArcTableExt for Arc<Table> {
         table_clone.set(idx, value)
     }
 
-    fn grow(&self, delta: u32, init_value: WrtValue) -> Result<u32> {
+    fn grow(&self, delta: u32, init_value: KilnValue) -> Result<u32> {
         // Clone-and-mutate pattern for thread safety
         let mut table_clone = self.as_ref().clone();
 
@@ -1006,7 +1006,7 @@ impl ArcTableExt for Arc<Table> {
         table_clone.set_func(idx, func_idx)
     }
 
-    fn init(&self, offset: u32, init: &[Option<WrtValue>]) -> Result<()> {
+    fn init(&self, offset: u32, init: &[Option<KilnValue>]) -> Result<()> {
         // Clone-and-mutate pattern for thread safety
         let mut table_clone = self.as_ref().clone();
 
@@ -1022,7 +1022,7 @@ impl ArcTableExt for Arc<Table> {
         table_clone.copy_elements(dst as usize, src as usize, len as usize)
     }
 
-    fn fill(&self, offset: u32, len: u32, value: Option<WrtValue>) -> Result<()> {
+    fn fill(&self, offset: u32, len: u32, value: Option<KilnValue>) -> Result<()> {
         // Clone-and-mutate pattern for thread safety
         let mut table_clone = self.as_ref().clone();
 
@@ -1034,14 +1034,14 @@ impl ArcTableExt for Arc<Table> {
 /// Table manager to handle multiple tables for `TableOperations` trait
 #[derive(Debug)]
 pub struct TableManager {
-    tables: wrt_foundation::bounded::BoundedVec<Table, 1024, TableProvider>,
+    tables: kiln_foundation::bounded::BoundedVec<Table, 1024, TableProvider>,
 }
 
 impl TableManager {
     /// Create a new table manager
     pub fn new() -> Result<Self> {
         Ok(Self {
-            tables: wrt_foundation::bounded::BoundedVec::new(TableProvider::default())?,
+            tables: kiln_foundation::bounded::BoundedVec::new(TableProvider::default())?,
         })
     }
 

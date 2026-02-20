@@ -11,8 +11,8 @@ use std::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 use std::{fmt, mem};
 
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use wrt_foundation::allocator::{CrateId, WrtHashMap, WrtVec};
-use wrt_foundation::{
+use kiln_foundation::allocator::{CrateId, KilnHashMap, KilnVec};
+use kiln_foundation::{
     bounded::BoundedString,
     budget_aware_provider::CrateId,
     collections::StaticVec,
@@ -29,7 +29,7 @@ use crate::{
     execution_engine::ComponentExecutionEngine,
     export::Export,
     import::Import,
-    prelude::{ExportKind, WrtComponentType, WrtComponentValue},
+    prelude::{ExportKind, KilnComponentType, KilnComponentValue},
     resources::ResourceTable as ComponentResourceTable,
     resources::resource_lifecycle::ResourceLifecycleManager,
     types::{ComponentInstance, ValType, Value},
@@ -51,16 +51,16 @@ pub enum ImportValue {
     /// A function import
     Function(FunctionImport),
     /// A value import (global, memory, table)
-    Value(WrtComponentValue<ComponentProvider>),
+    Value(KilnComponentValue<ComponentProvider>),
     /// An instance import
     Instance(InstanceImport),
     /// A type import
-    Type(WrtComponentType<ComponentProvider>),
+    Type(KilnComponentType<ComponentProvider>),
 }
 
 impl Default for ImportValue {
     fn default() -> Self {
-        Self::Value(WrtComponentValue::Unit)
+        Self::Value(KilnComponentValue::Unit)
     }
 }
 
@@ -79,7 +79,7 @@ impl PartialEq for ImportValue {
 impl Eq for ImportValue {}
 
 impl Checksummable for ImportValue {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::Function(_) => 0u8.update_checksum(checksum),
             Self::Value(v) => {
@@ -96,11 +96,11 @@ impl Checksummable for ImportValue {
 }
 
 impl ToBytes for ImportValue {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::Function(_) => 0u8.to_bytes_with_provider(writer, provider),
             Self::Value(v) => {
@@ -117,10 +117,10 @@ impl ToBytes for ImportValue {
 }
 
 impl FromBytes for ImportValue {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -129,12 +129,12 @@ impl FromBytes for ImportValue {
 #[derive(Clone)]
 pub struct FunctionImport {
     /// Function signature
-    pub signature: WrtComponentType<ComponentProvider>,
+    pub signature: KilnComponentType<ComponentProvider>,
     /// Function implementation
     #[cfg(feature = "std")]
-    pub implementation: Arc<dyn Fn(&[Value]) -> wrt_error::Result<Value> + Send + Sync>,
+    pub implementation: Arc<dyn Fn(&[Value]) -> kiln_error::Result<Value> + Send + Sync>,
     #[cfg(not(any(feature = "std",)))]
-    pub implementation: fn(&[Value]) -> wrt_error::Result<Value>,
+    pub implementation: fn(&[Value]) -> kiln_error::Result<Value>,
 }
 
 impl core::fmt::Debug for FunctionImport {
@@ -151,7 +151,7 @@ impl core::fmt::Debug for FunctionImport {
 pub struct InstanceImport {
     /// Instance exports
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub exports: WrtHashMap<String, Box<ExportValue>, { CrateId::Component as u8 }, 256>,
+    pub exports: KilnHashMap<String, Box<ExportValue>, { CrateId::Component as u8 }, 256>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     pub exports: BTreeMap<String, Box<ExportValue>>,
     #[cfg(not(feature = "std"))]
@@ -159,7 +159,7 @@ pub struct InstanceImport {
 }
 
 impl Checksummable for InstanceImport {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         #[cfg(feature = "std")]
         {
             self.exports.len().update_checksum(checksum);
@@ -182,11 +182,11 @@ impl Checksummable for InstanceImport {
 }
 
 impl ToBytes for InstanceImport {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             (self.exports.len() as u32).to_bytes_with_provider(writer, provider)?;
@@ -210,10 +210,10 @@ impl ToBytes for InstanceImport {
 }
 
 impl FromBytes for InstanceImport {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -224,16 +224,16 @@ pub enum ExportValue {
     /// A function export
     Function(FunctionExport),
     /// A value export
-    Value(WrtComponentValue<ComponentProvider>),
+    Value(KilnComponentValue<ComponentProvider>),
     /// An instance export
     Instance(InstanceImport),
     /// A type export
-    Type(WrtComponentType<ComponentProvider>),
+    Type(KilnComponentType<ComponentProvider>),
 }
 
 impl Default for ExportValue {
     fn default() -> Self {
-        Self::Value(WrtComponentValue::Unit)
+        Self::Value(KilnComponentValue::Unit)
     }
 }
 
@@ -252,7 +252,7 @@ impl PartialEq for ExportValue {
 impl Eq for ExportValue {}
 
 impl Checksummable for ExportValue {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::Function(f) => {
                 0u8.update_checksum(checksum);
@@ -272,11 +272,11 @@ impl Checksummable for ExportValue {
 }
 
 impl ToBytes for ExportValue {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::Function(f) => {
                 0u8.to_bytes_with_provider(writer, provider)?;
@@ -296,10 +296,10 @@ impl ToBytes for ExportValue {
 }
 
 impl FromBytes for ExportValue {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -308,7 +308,7 @@ impl FromBytes for ExportValue {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash)]
 pub struct FunctionExport {
     /// Function signature
-    pub signature: WrtComponentType<ComponentProvider>,
+    pub signature: KilnComponentType<ComponentProvider>,
     /// Function index in the instance
     pub index: u32,
 }
@@ -317,7 +317,7 @@ pub struct FunctionExport {
 pub struct ImportValues {
     /// Map of import names to values
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    imports: WrtHashMap<String, ImportValue, { CrateId::Component as u8 }, 256>,
+    imports: KilnHashMap<String, ImportValue, { CrateId::Component as u8 }, 256>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     imports: BTreeMap<String, ImportValue>,
     #[cfg(not(feature = "std"))]
@@ -326,10 +326,10 @@ pub struct ImportValues {
 
 impl ImportValues {
     /// Create new import values
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            imports: WrtHashMap::new(),
+            imports: KilnHashMap::new(),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             imports: BTreeMap::new(),
             #[cfg(not(feature = "std"))]
@@ -342,26 +342,26 @@ impl ImportValues {
 
     /// Add an import value
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub fn add(&mut self, name: String, value: ImportValue) -> wrt_error::Result<()> {
+    pub fn add(&mut self, name: String, value: ImportValue) -> kiln_error::Result<()> {
         self.imports
             .insert(name, value)
-            .map_err(|_| wrt_error::Error::resource_exhausted("Too many imports (limit: 256)"))?;
+            .map_err(|_| kiln_error::Error::resource_exhausted("Too many imports (limit: 256)"))?;
         Ok(())
     }
 
     /// Add an import value
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
-    pub fn add(&mut self, name: String, value: ImportValue) -> wrt_error::Result<()> {
+    pub fn add(&mut self, name: String, value: ImportValue) -> kiln_error::Result<()> {
         self.imports.insert(name, value);
         Ok(())
     }
 
     /// Add an import value (no_std version)
     #[cfg(not(any(feature = "std",)))]
-    pub fn add(&mut self, name: BoundedString<64>, value: ImportValue) -> wrt_error::Result<()> {
+    pub fn add(&mut self, name: BoundedString<64>, value: ImportValue) -> kiln_error::Result<()> {
         self.imports
             .push((name, value))
-            .map_err(|_| wrt_error::Error::resource_exhausted("Too many imports"))
+            .map_err(|_| kiln_error::Error::resource_exhausted("Too many imports"))
     }
 
     /// Get an import value by name
@@ -389,7 +389,7 @@ impl Default for ImportValues {
             // Fallback for default construction in case allocation fails
             Self {
                 #[cfg(all(feature = "std", feature = "safety-critical"))]
-                imports: WrtHashMap::new(),
+                imports: KilnHashMap::new(),
                 #[cfg(all(feature = "std", not(feature = "safety-critical")))]
                 imports: BTreeMap::new(),
                 #[cfg(not(feature = "std"))]
@@ -417,7 +417,7 @@ pub struct InstantiationContext {
 
 impl InstantiationContext {
     /// Create a new instantiation context
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             canonical_abi: CanonicalABI::new(64),
             resource_manager: ResourceLifecycleManager::new(),
@@ -444,7 +444,7 @@ impl InstantiationContext {
     ///
     /// # Example
     /// ```ignore
-    /// use wrt_component::canonical_abi::engine_integration::*;
+    /// use kiln_component::canonical_abi::engine_integration::*;
     ///
     /// // After instantiation, set up realloc
     /// let realloc_manager = setup_realloc_manager(engine.clone(), instance_id)?;
@@ -490,7 +490,7 @@ impl Component {
         &self,
         imports: &ImportValues,
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<ComponentInstance> {
+    ) -> kiln_error::Result<ComponentInstance> {
         // Generate unique instance ID
         let instance_id = context.next_instance_id();
 
@@ -527,13 +527,13 @@ impl Component {
             resource_table: ComponentResourceTable::new()?,
             built_in_requirements: None,
             original_binary: None,
-            verification_level: wrt_foundation::verification::VerificationLevel::Standard,
+            verification_level: kiln_foundation::verification::VerificationLevel::Standard,
         };
 
         let instance = ComponentInstance {
-            #[cfg(feature = "wrt-execution")]
+            #[cfg(feature = "kiln-execution")]
             runtime_engine: None,
-            #[cfg(feature = "wrt-execution")]
+            #[cfg(feature = "kiln-execution")]
             main_instance_handle: None,
             id: instance_id,
             component: component_ref,
@@ -548,8 +548,8 @@ impl Component {
             functions: {
                 #[cfg(all(feature = "std", feature = "safety-critical"))]
                 {
-                    use wrt_foundation::allocator::WrtVec;
-                    WrtVec::new()
+                    use kiln_foundation::allocator::KilnVec;
+                    KilnVec::new()
                 }
                 #[cfg(all(feature = "std", not(feature = "safety-critical")))]
                 {
@@ -567,8 +567,8 @@ impl Component {
             nested_component_instances: {
                 #[cfg(all(feature = "std", feature = "safety-critical"))]
                 {
-                    use wrt_foundation::allocator::WrtVec;
-                    WrtVec::new()
+                    use kiln_foundation::allocator::KilnVec;
+                    KilnVec::new()
                 }
                 #[cfg(all(feature = "std", not(feature = "safety-critical")))]
                 {
@@ -585,7 +585,7 @@ impl Component {
     }
 
     /// Validate that provided imports match component requirements
-    fn validate_imports(&self, imports: &ImportValues) -> wrt_error::Result<()> {
+    fn validate_imports(&self, imports: &ImportValues) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             for import in &self.imports {
@@ -595,7 +595,7 @@ impl Component {
                         self.validate_import_type(import, value)?;
                     },
                     None => {
-                        return Err(wrt_error::Error::validation_invalid_input(
+                        return Err(kiln_error::Error::validation_invalid_input(
                             "Missing required import",
                         ));
                     },
@@ -607,7 +607,7 @@ impl Component {
             // In no_std, we have limited validation
             // Just check that we have some imports if required
             if !self.imports.is_empty() && imports.imports.is_empty() {
-                return Err(wrt_error::Error::validation_invalid_input(
+                return Err(kiln_error::Error::validation_invalid_input(
                     "Missing required imports",
                 ));
             }
@@ -617,12 +617,12 @@ impl Component {
     }
 
     /// Validate that an import value matches the expected type
-    fn validate_import_type(&self, import: &Import, value: &ImportValue) -> wrt_error::Result<()> {
+    fn validate_import_type(&self, import: &Import, value: &ImportValue) -> kiln_error::Result<()> {
         match (&import.import_type, value) {
             (crate::import::ImportType::Function(expected), ImportValue::Function(actual)) => {
                 // Check function signature compatibility
                 if !self.is_function_compatible(expected, &actual.signature) {
-                    return Err(wrt_error::Error::type_mismatch_error(
+                    return Err(kiln_error::Error::type_mismatch_error(
                         "Function import type mismatch",
                     ));
                 }
@@ -630,7 +630,7 @@ impl Component {
             (crate::import::ImportType::Value(expected), ImportValue::Value(actual)) => {
                 // Check value type compatibility
                 if !self.is_value_compatible(expected, actual) {
-                    return Err(wrt_error::Error::type_mismatch_error(
+                    return Err(kiln_error::Error::type_mismatch_error(
                         "Value import type mismatch",
                     ));
                 }
@@ -644,7 +644,7 @@ impl Component {
                 // TODO: Implement type equality checking
             },
             _ => {
-                return Err(wrt_error::Error::type_mismatch_error(
+                return Err(kiln_error::Error::type_mismatch_error(
                     "Import kind mismatch",
                 ));
             },
@@ -655,8 +655,8 @@ impl Component {
     /// Check if function types are compatible
     fn is_function_compatible(
         &self,
-        expected: &WrtComponentType<ComponentProvider>,
-        actual: &WrtComponentType<ComponentProvider>,
+        expected: &KilnComponentType<ComponentProvider>,
+        actual: &KilnComponentType<ComponentProvider>,
     ) -> bool {
         // Check basic type equality for now
         // In a full implementation, this would check subtyping rules
@@ -675,14 +675,14 @@ impl Component {
     /// Check if value types are compatible
     fn is_value_compatible(
         &self,
-        expected: &WrtComponentType<ComponentProvider>,
-        actual: &WrtComponentValue<ComponentProvider>,
+        expected: &KilnComponentType<ComponentProvider>,
+        actual: &KilnComponentValue<ComponentProvider>,
     ) -> bool {
         // Basic type compatibility check
         // Check if expected is unit type and actual is Unit value
         if expected.imports.is_empty()
             && expected.exports.is_empty()
-            && matches!(actual, WrtComponentValue::Unit)
+            && matches!(actual, KilnComponentValue::Unit)
         {
             return true;
         }
@@ -694,8 +694,8 @@ impl Component {
     #[cfg(all(feature = "std", feature = "safety-critical"))]
     fn create_resource_tables(
         &self,
-    ) -> wrt_error::Result<WrtVec<ResourceTable, { CrateId::Component as u8 }, 16>> {
-        let mut tables = WrtVec::new();
+    ) -> kiln_error::Result<KilnVec<ResourceTable, { CrateId::Component as u8 }, 16>> {
+        let mut tables = KilnVec::new();
 
         // Create resource tables based on component types
         // For each resource type in the component, create a table
@@ -703,7 +703,7 @@ impl Component {
             // Create a budget-aware table for this resource type
             let table = ResourceTable::new()?;
             tables.push(table).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Too many resource tables (limit: 16)")
+                kiln_error::Error::resource_exhausted("Too many resource tables (limit: 16)")
             })?;
         }
 
@@ -712,7 +712,7 @@ impl Component {
 
     /// Create resource tables for the instance
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
-    fn create_resource_tables(&self) -> wrt_error::Result<Vec<ResourceTable>> {
+    fn create_resource_tables(&self) -> kiln_error::Result<Vec<ResourceTable>> {
         let mut tables = Vec::new();
 
         // Create resource tables based on component types
@@ -729,8 +729,8 @@ impl Component {
     }
 
     #[cfg(not(any(feature = "std",)))]
-    fn create_resource_tables(&self) -> wrt_error::Result<StaticVec<ResourceTable, 16>> {
-        use wrt_foundation::collections::StaticVec;
+    fn create_resource_tables(&self) -> kiln_error::Result<StaticVec<ResourceTable, 16>> {
+        use kiln_foundation::collections::StaticVec;
 
         let mut tables = StaticVec::new();
 
@@ -741,7 +741,7 @@ impl Component {
             };
             tables
                 .push(table)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many resource tables"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many resource tables"))?;
         }
 
         Ok(tables)
@@ -753,14 +753,14 @@ impl Component {
         &self,
         imports: &ImportValues,
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<WrtVec<ResolvedImport, { CrateId::Component as u8 }, 256>> {
-        let mut resolved = WrtVec::new();
+    ) -> kiln_error::Result<KilnVec<ResolvedImport, { CrateId::Component as u8 }, 256>> {
+        let mut resolved = KilnVec::new();
 
         for import in &self.imports {
             if let Some(value) = imports.get(&import.name) {
                 let resolved_import = self.resolve_import(import, value, context)?;
                 resolved.push(resolved_import).map_err(|_| {
-                    wrt_error::Error::resource_exhausted("Too many resolved imports (limit: 256)")
+                    kiln_error::Error::resource_exhausted("Too many resolved imports (limit: 256)")
                 })?;
             }
         }
@@ -774,7 +774,7 @@ impl Component {
         &self,
         imports: &ImportValues,
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<Vec<ResolvedImport>> {
+    ) -> kiln_error::Result<Vec<ResolvedImport>> {
         let mut resolved = Vec::new();
 
         for import in &self.imports {
@@ -792,7 +792,7 @@ impl Component {
         &self,
         imports: &ImportValues,
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<BoundedVec<ResolvedImport, 256>> {
+    ) -> kiln_error::Result<BoundedVec<ResolvedImport, 256>> {
         let mut resolved = BoundedVec::new();
 
         for import in &self.imports {
@@ -803,7 +803,7 @@ impl Component {
                     if name_str == import.name.as_str() {
                         let resolved_import = self.resolve_import(import, value, context)?;
                         resolved.push(resolved_import).map_err(|_| {
-                            wrt_error::Error::resource_exhausted("Too many resolved imports")
+                            kiln_error::Error::resource_exhausted("Too many resolved imports")
                         })?;
                         break;
                     }
@@ -820,7 +820,7 @@ impl Component {
         import: &Import,
         value: &ImportValue,
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<ResolvedImport> {
+    ) -> kiln_error::Result<ResolvedImport> {
         match value {
             ImportValue::Function(func) => {
                 // Register the function with the execution engine
@@ -853,8 +853,8 @@ impl Component {
         &self,
         resolved_imports: &[ResolvedImport],
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<WrtVec<ModuleInstance, { CrateId::Component as u8 }, 64>> {
-        let mut instances = WrtVec::new();
+    ) -> kiln_error::Result<KilnVec<ModuleInstance, { CrateId::Component as u8 }, 64>> {
+        let mut instances = KilnVec::new();
 
         // Initialize each embedded module
         for (module_index, _module) in self.modules.iter().enumerate() {
@@ -863,7 +863,7 @@ impl Component {
                 module_index: module_index as u32,
             };
             instances.push(instance).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Too many module instances (limit: 64)")
+                kiln_error::Error::resource_exhausted("Too many module instances (limit: 64)")
             })?;
         }
 
@@ -876,7 +876,7 @@ impl Component {
         &self,
         resolved_imports: &[ResolvedImport],
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<Vec<ModuleInstance>> {
+    ) -> kiln_error::Result<Vec<ModuleInstance>> {
         let mut instances = Vec::new();
 
         // Initialize each embedded module
@@ -896,7 +896,7 @@ impl Component {
         &self,
         resolved_imports: &BoundedVec<ResolvedImport, 256>,
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<BoundedVec<ModuleInstance, 64>> {
+    ) -> kiln_error::Result<BoundedVec<ModuleInstance, 64>> {
         let mut instances = BoundedVec::new();
 
         // Initialize each embedded module
@@ -906,7 +906,7 @@ impl Component {
             };
             instances
                 .push(instance)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many module instances"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many module instances"))?;
         }
 
         Ok(instances)
@@ -918,8 +918,8 @@ impl Component {
         &self,
         module_instances: &[ModuleInstance],
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<WrtVec<ResolvedExport, { CrateId::Component as u8 }, 256>> {
-        let mut exports = WrtVec::new();
+    ) -> kiln_error::Result<KilnVec<ResolvedExport, { CrateId::Component as u8 }, 256>> {
+        let mut exports = KilnVec::new();
 
         for export in &self.exports {
             // Resolve export to actual value based on export kind
@@ -927,7 +927,7 @@ impl Component {
                 ExportKind::Function { function_index } => {
                     // Create function export
                     let func_export = FunctionExport {
-                        signature: WrtComponentType::Unit(ComponentProvider::default())?, // TODO: Get actual signature
+                        signature: KilnComponentType::Unit(ComponentProvider::default())?, // TODO: Get actual signature
                         index: *function_index,
                     };
                     let export_val = ExportValue::Function(func_export);
@@ -939,7 +939,7 @@ impl Component {
                 },
                 ExportKind::Value { value_index } => {
                     // Create value export
-                    let export_val = ExportValue::Value(WrtComponentValue::Unit);
+                    let export_val = ExportValue::Value(KilnComponentValue::Unit);
                     ResolvedExport {
                         name: export.name.clone(),
                         value: export_val.clone(),
@@ -949,7 +949,7 @@ impl Component {
                 ExportKind::Type { type_index } => {
                     // Create type export
                     let export_val =
-                        ExportValue::Type(WrtComponentType::Unit(ComponentProvider::default())?);
+                        ExportValue::Type(KilnComponentType::Unit(ComponentProvider::default())?);
                     ResolvedExport {
                         name: export.name.clone(),
                         value: export_val.clone(),
@@ -958,7 +958,7 @@ impl Component {
                 },
                 ExportKind::Instance { instance_index } => {
                     // Create instance export - simplified
-                    let export_val = ExportValue::Value(WrtComponentValue::Unit);
+                    let export_val = ExportValue::Value(KilnComponentValue::Unit);
                     ResolvedExport {
                         name: export.name.clone(),
                         value: export_val.clone(),
@@ -967,7 +967,7 @@ impl Component {
                 },
             };
             exports.push(resolved).map_err(|_| {
-                wrt_error::Error::resource_exhausted("Too many exports (limit: 256)")
+                kiln_error::Error::resource_exhausted("Too many exports (limit: 256)")
             })?;
         }
 
@@ -980,7 +980,7 @@ impl Component {
         &self,
         module_instances: &[ModuleInstance],
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<Vec<ResolvedExport>> {
+    ) -> kiln_error::Result<Vec<ResolvedExport>> {
         let mut exports = Vec::new();
 
         for export in &self.exports {
@@ -989,7 +989,7 @@ impl Component {
                 ExportKind::Function { function_index } => {
                     // Create function export
                     let func_export = FunctionExport {
-                        signature: WrtComponentType::Unit(ComponentProvider::default())?, // TODO: Get actual signature
+                        signature: KilnComponentType::Unit(ComponentProvider::default())?, // TODO: Get actual signature
                         index: *function_index,
                     };
                     let export_val = ExportValue::Function(func_export);
@@ -1001,7 +1001,7 @@ impl Component {
                 },
                 ExportKind::Value { value_index } => {
                     // Create value export
-                    let export_val = ExportValue::Value(WrtComponentValue::Unit);
+                    let export_val = ExportValue::Value(KilnComponentValue::Unit);
                     ResolvedExport {
                         name: export.name.clone(),
                         value: export_val.clone(),
@@ -1011,7 +1011,7 @@ impl Component {
                 ExportKind::Type { type_index } => {
                     // Create type export
                     let export_val =
-                        ExportValue::Type(WrtComponentType::Unit(ComponentProvider::default())?);
+                        ExportValue::Type(KilnComponentType::Unit(ComponentProvider::default())?);
                     ResolvedExport {
                         name: export.name.clone(),
                         value: export_val.clone(),
@@ -1020,7 +1020,7 @@ impl Component {
                 },
                 ExportKind::Instance { instance_index } => {
                     // Create instance export - simplified
-                    let export_val = ExportValue::Value(WrtComponentValue::Unit);
+                    let export_val = ExportValue::Value(KilnComponentValue::Unit);
                     ResolvedExport {
                         name: export.name.clone(),
                         value: export_val.clone(),
@@ -1039,13 +1039,13 @@ impl Component {
         &self,
         module_instances: &BoundedVec<ModuleInstance, 64>,
         context: &mut InstantiationContext,
-    ) -> wrt_error::Result<BoundedVec<ResolvedExport, 256>> {
+    ) -> kiln_error::Result<BoundedVec<ResolvedExport, 256>> {
         let mut exports = BoundedVec::new();
 
         for export in &self.exports {
             // Create provider for ComponentType if needed
             let provider = safe_managed_alloc!(4096, CrateId::Component)?;
-            let unit_type = WrtComponentType::unit(provider)?;
+            let unit_type = KilnComponentType::unit(provider)?;
 
             let resolved = match &export.kind {
                 ExportKind::Function { function_index } => {
@@ -1067,7 +1067,7 @@ impl Component {
                     }
                 },
                 ExportKind::Value { value_index } => {
-                    let export_val = ExportValue::Value(WrtComponentValue::Unit);
+                    let export_val = ExportValue::Value(KilnComponentValue::Unit);
                     ResolvedExport {
                         #[cfg(feature = "std")]
                         name: export.name.clone(),
@@ -1095,7 +1095,7 @@ impl Component {
                     }
                 },
                 ExportKind::Instance { instance_index } => {
-                    let export_val = ExportValue::Value(WrtComponentValue::Unit);
+                    let export_val = ExportValue::Value(KilnComponentValue::Unit);
                     ResolvedExport {
                         #[cfg(feature = "std")]
                         name: export.name.clone(),
@@ -1111,7 +1111,7 @@ impl Component {
             };
             exports
                 .push(resolved)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many exports"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many exports"))?;
         }
 
         Ok(exports)
@@ -1122,19 +1122,19 @@ impl Component {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ResolvedImport {
     Function(u32), // Function index in execution engine
-    Value(WrtComponentValue<ComponentProvider>),
+    Value(KilnComponentValue<ComponentProvider>),
     Instance(InstanceImport),
-    Type(WrtComponentType<ComponentProvider>),
+    Type(KilnComponentType<ComponentProvider>),
 }
 
 impl Default for ResolvedImport {
     fn default() -> Self {
-        Self::Value(WrtComponentValue::Unit)
+        Self::Value(KilnComponentValue::Unit)
     }
 }
 
 impl Checksummable for ResolvedImport {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::Function(idx) => {
                 0u8.update_checksum(checksum);
@@ -1157,11 +1157,11 @@ impl Checksummable for ResolvedImport {
 }
 
 impl ToBytes for ResolvedImport {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::Function(idx) => {
                 0u8.to_bytes_with_provider(writer, provider)?;
@@ -1184,10 +1184,10 @@ impl ToBytes for ResolvedImport {
 }
 
 impl FromBytes for ResolvedImport {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -1204,7 +1204,7 @@ pub struct ResolvedExport {
 }
 
 impl Checksummable for ResolvedExport {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         #[cfg(feature = "std")]
         {
             self.name.as_bytes().update_checksum(checksum);
@@ -1221,11 +1221,11 @@ impl Checksummable for ResolvedExport {
 }
 
 impl ToBytes for ResolvedExport {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             (self.name.len() as u32).to_bytes_with_provider(writer, provider)?;
@@ -1242,10 +1242,10 @@ impl ToBytes for ResolvedExport {
 }
 
 impl FromBytes for ResolvedExport {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -1265,26 +1265,26 @@ pub struct ModuleInstance {
 }
 
 impl Checksummable for ModuleInstance {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.module_index.update_checksum(checksum);
     }
 }
 
 impl ToBytes for ModuleInstance {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.module_index.to_bytes_with_provider(writer, provider)
     }
 }
 
 impl FromBytes for ModuleInstance {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             module_index: u32::from_bytes_with_provider(reader, provider)?,
         })
@@ -1294,17 +1294,17 @@ impl FromBytes for ModuleInstance {
 /// Host function wrapper for the execution engine
 #[cfg(feature = "std")]
 struct HostFunctionWrapper {
-    signature: WrtComponentType<ComponentProvider>,
-    implementation: Arc<dyn Fn(&[Value]) -> wrt_error::Result<Value> + Send + Sync>,
+    signature: KilnComponentType<ComponentProvider>,
+    implementation: Arc<dyn Fn(&[Value]) -> kiln_error::Result<Value> + Send + Sync>,
 }
 
 #[cfg(feature = "std")]
 impl crate::execution_engine::HostFunction for HostFunctionWrapper {
-    fn call(&mut self, args: &[Value]) -> wrt_error::Result<Value> {
+    fn call(&mut self, args: &[Value]) -> kiln_error::Result<Value> {
         (self.implementation)(args)
     }
 
-    fn signature(&self) -> &WrtComponentType<ComponentProvider> {
+    fn signature(&self) -> &KilnComponentType<ComponentProvider> {
         &self.signature
     }
 }

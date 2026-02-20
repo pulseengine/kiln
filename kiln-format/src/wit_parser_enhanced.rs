@@ -15,13 +15,13 @@ compile_error!("Enhanced WIT parser requires std or alloc feature";
 
 use core::fmt;
 
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec, BoundedString,
     bounded::MAX_GENERATIVE_TYPES,
     NoStdProvider,
 };
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 use crate::ast_simple::*;
 use crate::wit_parser::{WitBoundedString, WitBoundedStringSmall, WitParseError};

@@ -1,7 +1,7 @@
 @startuml
 
 actor User
-participant "WRTD CLI" as WRTD
+participant "KILND CLI" as KILND
 participant "Engine" as Engine
 participant "Component" as Component
 participant "Module" as Module
@@ -9,22 +9,22 @@ participant "Stack" as Stack
 participant "Memory" as Memory
 participant "ResourceManager" as ResMan
 
-User -> WRTD: Run WebAssembly/Component
-activate WRTD
+User -> KILND: Run WebAssembly/Component
+activate KILND
 
-WRTD -> WRTD: Parse command arguments
-WRTD -> Engine: Create engine
+KILND -> KILND: Parse command arguments
+KILND -> Engine: Create engine
 activate Engine
 
 alt WebAssembly Module
-  WRTD -> Module: Load module
+  KILND -> Module: Load module
   activate Module
   Module -> Module: Parse and validate
   Module -> Engine: Instantiate
   Engine -> Memory: Initialize memory
   Engine -> Stack: Initialize stack
-  WRTD -> Engine: set_fuel(limit)
-  WRTD -> Engine: execute(function, args)
+  KILND -> Engine: set_fuel(limit)
+  KILND -> Engine: execute(function, args)
   
   loop until execution completes or fuel exhausts
     Engine -> Engine: Execute instructions
@@ -36,23 +36,23 @@ alt WebAssembly Module
     end
     
     alt if fuel exhausted
-      Engine --> WRTD: Execution paused (OUT_OF_FUEL)
-      WRTD -> WRTD: Show execution status
-      WRTD -> Engine: set_fuel(additional)
-      WRTD -> Engine: resume()
+      Engine --> KILND: Execution paused (OUT_OF_FUEL)
+      KILND -> KILND: Show execution status
+      KILND -> Engine: set_fuel(additional)
+      KILND -> Engine: resume()
     end
   end
   
-  Engine --> WRTD: Execution result
+  Engine --> KILND: Execution result
   deactivate Module
 else WebAssembly Component
-  WRTD -> Component: Load component
+  KILND -> Component: Load component
   activate Component
   Component -> Component: Parse and validate
   Component -> Engine: Create component instance
   Engine -> Memory: Initialize memory
   Engine -> ResMan: Initialize resource manager
-  WRTD -> Component: Invoke export
+  KILND -> Component: Invoke export
   
   Component -> ResMan: Create resources
   Component -> Engine: Perform canonical conversion
@@ -69,23 +69,23 @@ else WebAssembly Component
     
     alt if fuel exhausted
       Engine --> Component: Execution paused (OUT_OF_FUEL)
-      Component --> WRTD: Out of fuel error
-      WRTD -> WRTD: Show execution status
-      WRTD -> Engine: set_fuel(additional)
-      WRTD -> Component: Resume invocation
+      Component --> KILND: Out of fuel error
+      KILND -> KILND: Show execution status
+      KILND -> Engine: set_fuel(additional)
+      KILND -> Component: Resume invocation
     end
   end
   
   Component -> Component: Perform canonical conversion of result
-  Component --> WRTD: Execution result
+  Component --> KILND: Execution result
   deactivate Component
 end
 
-WRTD -> WRTD: Display results
-WRTD -> WRTD: Show execution statistics
+KILND -> KILND: Display results
+KILND -> KILND: Show execution statistics
 deactivate Engine
-WRTD --> User: Execution complete
+KILND --> User: Execution complete
 
-deactivate WRTD
+deactivate KILND
 
 @enduml

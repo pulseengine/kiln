@@ -1,8 +1,8 @@
-// WRT - wrt-runtime
+// Kiln - kiln-runtime
 // Module: Platform-Aware Runtime Implementation
 // SW-REQ-ID: REQ_RUNTIME_PLATFORM_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
@@ -31,7 +31,7 @@ use alloc::{
 
 // For no_std without alloc, use BoundedVec instead of Vec
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-use wrt_foundation::bounded::BoundedVec;
+use kiln_foundation::bounded::BoundedVec;
 
 use crate::{
     cfi_engine::{
@@ -51,7 +51,7 @@ use crate::{
     unified_types::UnifiedMemoryAdapter as UnifiedMemoryAdapterTrait,
 };
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-type PlatformVec<T> = BoundedVec<T, 16, wrt_foundation::NoStdProvider<1024>>;
+type PlatformVec<T> = BoundedVec<T, 16, kiln_foundation::NoStdProvider<1024>>;
 
 // Type alias for Vec that works in all feature configurations
 #[cfg(any(feature = "std", feature = "alloc"))]
@@ -60,22 +60,22 @@ type ValueVec = Vec<Value>;
 type ValueVec = PlatformVec<Value>;
 
 // Import Value type
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::Value;
+use kiln_foundation::Value;
 // Import specific allocators conditionally
 #[cfg(all(feature = "platform-linux", target_os = "linux"))]
-use wrt_platform::LinuxAllocatorBuilder;
+use kiln_platform::LinuxAllocatorBuilder;
 #[cfg(all(feature = "platform-macos", target_os = "macos"))]
-use wrt_platform::MacOsAllocatorBuilder;
+use kiln_platform::MacOsAllocatorBuilder;
 #[cfg(all(feature = "platform-qnx", target_os = "nto"))]
-use wrt_platform::QnxAllocatorBuilder;
-// Import from wrt-platform for all platform abstractions
+use kiln_platform::QnxAllocatorBuilder;
+// Import from kiln-platform for all platform abstractions
 #[cfg(feature = "std")]
-use wrt_platform::{
+use kiln_platform::{
     ComprehensivePlatformLimits,
     PageAllocator,
     PlatformId,
@@ -84,22 +84,22 @@ use wrt_platform::{
 };
 
 // CFI imports temporarily disabled since CFI module is disabled
-// use wrt_instructions::CfiControlFlowProtection;
+// use kiln_instructions::CfiControlFlowProtection;
 use crate::cfi_engine::CfiControlFlowProtection;
 
 // Helper function to convert between ASIL level types
 #[cfg(feature = "std")]
-fn convert_asil_level(platform_asil: wrt_platform::AsilLevel) -> AsilLevel {
+fn convert_asil_level(platform_asil: kiln_platform::AsilLevel) -> AsilLevel {
     match platform_asil {
-        wrt_platform::AsilLevel::QM => AsilLevel::QM,
-        wrt_platform::AsilLevel::AsilA => AsilLevel::A,
-        wrt_platform::AsilLevel::AsilB => AsilLevel::B,
-        wrt_platform::AsilLevel::AsilC => AsilLevel::C,
-        wrt_platform::AsilLevel::AsilD => AsilLevel::D,
+        kiln_platform::AsilLevel::QM => AsilLevel::QM,
+        kiln_platform::AsilLevel::AsilA => AsilLevel::A,
+        kiln_platform::AsilLevel::AsilB => AsilLevel::B,
+        kiln_platform::AsilLevel::AsilC => AsilLevel::C,
+        kiln_platform::AsilLevel::AsilD => AsilLevel::D,
     }
 }
 
-// Use PageAllocator from wrt-platform instead of custom trait
+// Use PageAllocator from kiln-platform instead of custom trait
 
 /// Platform-aware WebAssembly runtime
 pub struct PlatformAwareRuntime {
@@ -256,7 +256,7 @@ impl PlatformAwareRuntime {
             if self.metrics.components_instantiated >= self.platform_limits.max_components as u32 {
                 return Err(Error::new(
                     ErrorCategory::Resource,
-                    wrt_error::codes::RESOURCE_LIMIT_EXCEEDED,
+                    kiln_error::codes::RESOURCE_LIMIT_EXCEEDED,
                     "Maximum component limit exceeded",
                 ));
             }
@@ -276,7 +276,7 @@ impl PlatformAwareRuntime {
                 // Fixed limit for no_std
                 return Err(Error::new(
                     ErrorCategory::Resource,
-                    wrt_error::codes::RESOURCE_LIMIT_EXCEEDED,
+                    kiln_error::codes::RESOURCE_LIMIT_EXCEEDED,
                     "Component instantiation limit exceeded",
                 ));
             }
@@ -334,19 +334,19 @@ impl PlatformAwareRuntime {
         }
     }
 
-    /// Create platform-specific memory allocator using wrt-platform
+    /// Create platform-specific memory allocator using kiln-platform
     #[cfg(all(any(feature = "std", feature = "alloc"), feature = "platform"))]
     fn create_memory_allocator(
         limits: &ComprehensivePlatformLimits,
     ) -> Result<Box<dyn PageAllocator>> {
-        use wrt_platform::prelude::*;
+        use kiln_platform::prelude::*;
 
         let max_pages = limits.max_total_memory / WASM_PAGE_SIZE;
 
         match limits.platform_id {
             #[cfg(all(feature = "platform-linux", target_os = "linux"))]
             PlatformId::Linux => {
-                let allocator = wrt_platform::LinuxAllocatorBuilder::new()
+                let allocator = kiln_platform::LinuxAllocatorBuilder::new()
                     .with_maximum_pages(max_pages as u32)
                     .with_guard_pages(true)
                     .build();
@@ -354,14 +354,14 @@ impl PlatformAwareRuntime {
             },
             #[cfg(all(feature = "platform-qnx", target_os = "nto"))]
             PlatformId::QNX => {
-                let allocator = wrt_platform::QnxAllocatorBuilder::new()
+                let allocator = kiln_platform::QnxAllocatorBuilder::new()
                     .with_maximum_pages(max_pages as u32)
                     .build();
                 Ok(Box::new(allocator))
             },
             #[cfg(all(feature = "platform-macos", target_os = "macos"))]
             PlatformId::MacOS => {
-                let allocator = wrt_platform::MacOsAllocatorBuilder::new()
+                let allocator = kiln_platform::MacOsAllocatorBuilder::new()
                     .with_maximum_pages(max_pages as u32)
                     .build();
                 Ok(Box::new(allocator))
@@ -371,7 +371,7 @@ impl PlatformAwareRuntime {
                 // create a basic allocator using the foundation types
                 use core::ptr::NonNull;
 
-                use wrt_foundation::safe_memory::NoStdProvider;
+                use kiln_foundation::safe_memory::NoStdProvider;
 
                 /// Basic allocator implementation for fallback
                 #[derive(Debug)]
@@ -397,7 +397,7 @@ impl PlatformAwareRuntime {
                         if current_pages + additional_pages > self.max_pages {
                             return Err(Error::new(
                                 ErrorCategory::Memory,
-                                wrt_error::codes::MEMORY_ALLOCATION_ERROR,
+                                kiln_error::codes::MEMORY_ALLOCATION_ERROR,
                                 "Memory growth would exceed limit",
                             ));
                         }
@@ -418,7 +418,7 @@ impl PlatformAwareRuntime {
         }
     }
 
-    // No-std environments use NoStdProvider from wrt-platform
+    // No-std environments use NoStdProvider from kiln-platform
 
     /// Create CFI protection configuration based on platform capabilities
     #[cfg(feature = "std")]
@@ -454,7 +454,7 @@ impl PlatformAwareRuntime {
         if self.available_memory() < 4096 {
             return Err(Error::new(
                 ErrorCategory::Resource,
-                wrt_error::codes::MEMORY_ALLOCATION_ERROR,
+                kiln_error::codes::MEMORY_ALLOCATION_ERROR,
                 "Insufficient memory available",
             ));
         }
@@ -502,7 +502,7 @@ impl PlatformAwareRuntime {
         // Simplified implementation - in real scenario this would extract actual values
         #[cfg(any(feature = "std", feature = "alloc"))]
         {
-            use wrt_foundation::{
+            use kiln_foundation::{
                 budget_aware_provider::CrateId,
                 capability_allocators::capability_alloc::capability_vec,
                 memory_init::get_global_capability_context,
@@ -519,7 +519,7 @@ impl PlatformAwareRuntime {
         #[cfg(not(any(feature = "std", feature = "alloc")))]
         {
             // For no_std no_alloc, return a fixed array wrapped as Vec-like
-            use wrt_foundation::{
+            use kiln_foundation::{
                 bounded::BoundedVec,
                 budget_aware_provider::CrateId,
                 safe_managed_alloc,
@@ -530,7 +530,7 @@ impl PlatformAwareRuntime {
             result.push(Value::I32(0)).map_err(|_| {
                 Error::new(
                     ErrorCategory::Memory,
-                    wrt_error::codes::MEMORY_ALLOCATION_ERROR,
+                    kiln_error::codes::MEMORY_ALLOCATION_ERROR,
                     "Failed to push value to result",
                 )
             })?;
@@ -563,6 +563,6 @@ impl PlatformAwareRuntime {
     }
 }
 
-// All platform-specific memory adapters removed - using wrt-platform
+// All platform-specific memory adapters removed - using kiln-platform
 // abstractions instead
 

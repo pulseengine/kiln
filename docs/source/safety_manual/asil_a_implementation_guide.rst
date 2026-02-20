@@ -7,7 +7,7 @@ ASIL-A Implementation Guide
    :align: right
    :alt: ASIL-A Safety Icon
 
-This document provides complete implementation guidance for deploying WRT (WebAssembly Runtime) components at ASIL-A level according to ISO 26262:2018.
+This document provides complete implementation guidance for deploying Kiln (WebAssembly Runtime) components at ASIL-A level according to ISO 26262:2018.
 
 .. contents:: Table of Contents
    :local:
@@ -19,7 +19,7 @@ Executive Summary
 Status
 ------
 
-✅ **ASIL-A READY**: WRT foundation components are ready for ASIL-A deployment
+✅ **ASIL-A READY**: Kiln foundation components are ready for ASIL-A deployment
 ✅ **Verification Complete**: 83% KANI formal verification coverage achieved
 ✅ **Safety Monitoring**: Runtime safety monitoring system operational
 ✅ **Memory Safety**: Unified capability-based allocation system deployed
@@ -48,7 +48,7 @@ REQ-ASIL-A-MEM-001: Capability-Based Allocation
 
 .. code-block:: rust
 
-   use wrt_foundation::{safe_managed_alloc, CrateId};
+   use kiln_foundation::{safe_managed_alloc, CrateId};
    
    // Automatic capability verification and safety monitoring
    let provider = safe_managed_alloc!(4096, CrateId::YourCrate)?;
@@ -67,7 +67,7 @@ REQ-ASIL-A-MEM-002: Budget Enforcement
 
 .. code-block:: rust
 
-   use wrt_foundation::capabilities::MemoryFactory;
+   use kiln_foundation::capabilities::MemoryFactory;
    
    // Budget violations automatically recorded in safety monitor
    if MemoryFactory::get_critical_violations() > 0 {
@@ -105,7 +105,7 @@ REQ-ASIL-A-MON-001: Runtime Health Monitoring
 
 .. code-block:: rust
 
-   use wrt_foundation::capabilities::MemoryFactory;
+   use kiln_foundation::capabilities::MemoryFactory;
    
    // Periodic health checks
    if !MemoryFactory::is_system_healthy() {
@@ -148,7 +148,7 @@ REQ-ASIL-A-ERR-001: Safe Error Propagation
 
 .. code-block:: rust
 
-   use wrt_foundation::{Result, Error};
+   use kiln_foundation::{Result, Error};
    
    fn safe_operation() -> Result<ProcessedData> {
        let provider = safe_managed_alloc!(2048, CrateId::YourCrate)?;
@@ -170,7 +170,7 @@ Required features for ASIL-A deployment:
 
 .. code-block:: toml
 
-   [dependencies.wrt-foundation]
+   [dependencies.kiln-foundation]
    version = "0.3"
    features = [
        "safety-monitoring",    # Runtime safety monitoring
@@ -205,8 +205,8 @@ Configure memory budgets per crate:
 
 .. code-block:: rust
 
-   use wrt_foundation::capabilities::{MemoryCapabilityContext, MemoryFactory};
-   use wrt_foundation::verification::VerificationLevel;
+   use kiln_foundation::capabilities::{MemoryCapabilityContext, MemoryFactory};
+   use kiln_foundation::verification::VerificationLevel;
    
    // ASIL-A configuration
    let mut context = MemoryCapabilityContext::new(
@@ -288,7 +288,7 @@ Initialize telemetry for production deployment:
 
 .. code-block:: rust
 
-   use wrt_foundation::telemetry::{init_telemetry, Severity};
+   use kiln_foundation::telemetry::{init_telemetry, Severity};
    
    // Production telemetry configuration
    init_telemetry(
@@ -297,7 +297,7 @@ Initialize telemetry for production deployment:
    );
    
    // Monitor telemetry statistics
-   let stats = wrt_foundation::telemetry::get_telemetry_stats();
+   let stats = kiln_foundation::telemetry::get_telemetry_stats();
    println!("Events recorded: {}", stats.events_recorded);
 
 ASIL-A Verification Evidence
@@ -351,7 +351,7 @@ ASIL-A Integration Guidelines
 Pre-Integration Checklist
 --------------------------
 
-Before integrating WRT components at ASIL-A level:
+Before integrating Kiln components at ASIL-A level:
 
 .. checklist::
 
@@ -371,7 +371,7 @@ Integration Steps
    .. code-block:: rust
    
       // Configure for ASIL-A deployment
-      use wrt_foundation::capabilities::{MemoryCapabilityContext, MemoryFactory};
+      use kiln_foundation::capabilities::{MemoryCapabilityContext, MemoryFactory};
       
       // Initialize capability context
       let context = setup_asil_a_context()?;
@@ -410,10 +410,10 @@ Integration Steps
 System-Level Safety Integration
 -------------------------------
 
-When integrating WRT at the system level:
+When integrating Kiln at the system level:
 
 1. **Safety Concept Integration**
-   - Map WRT safety events to your safety concept
+   - Map Kiln safety events to your safety concept
    - Define safety responses for each violation type
    - Implement fail-safe mechanisms
 
@@ -423,7 +423,7 @@ When integrating WRT at the system level:
    - Set up monitoring dashboards
 
 3. **Verification Integration**
-   - Include WRT safety evidence in your safety case
+   - Include Kiln safety evidence in your safety case
    - Verify assumption compliance at system level
    - Perform integration testing
 
@@ -433,7 +433,7 @@ Maintenance and Updates
 Safety Change Management
 ------------------------
 
-When updating WRT components:
+When updating Kiln components:
 
 1. **Impact Analysis**
    - Assess impact on safety properties
@@ -491,7 +491,7 @@ These overheads are acceptable for ASIL-A level requirements.
 Conclusion
 ==========
 
-WRT provides a robust foundation for ASIL-A automotive applications with:
+Kiln provides a robust foundation for ASIL-A automotive applications with:
 
 ✅ **Comprehensive Safety Mechanisms**: Capability-based allocation, runtime monitoring, formal verification
 ✅ **Production Ready**: Telemetry integration, error handling, performance monitoring
@@ -500,4 +500,4 @@ WRT provides a robust foundation for ASIL-A automotive applications with:
 
 The unified memory allocation system with integrated safety monitoring provides the foundation for safe, reliable WebAssembly runtime deployment in automotive safety-critical systems.
 
-For questions or additional guidance, refer to the complete safety manual or contact the WRT safety team.
+For questions or additional guidance, refer to the complete safety manual or contact the Kiln safety team.

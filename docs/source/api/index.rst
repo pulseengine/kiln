@@ -15,46 +15,46 @@ This section contains the API documentation for all PulseEngine libraries and co
    :maxdepth: 2
    :caption: Core Libraries:
 
-   wrt-error <../_generated_rust_docs/wrt-error/lib>
-   wrt-foundation <../_generated_rust_docs/wrt-foundation/lib>
-   wrt-sync <../_generated_rust_docs/wrt-sync/lib>
-   wrt-math <../_generated_rust_docs/wrt-math/lib>
+   kiln-error <../_generated_rust_docs/kiln-error/lib>
+   kiln-foundation <../_generated_rust_docs/kiln-foundation/lib>
+   kiln-sync <../_generated_rust_docs/kiln-sync/lib>
+   kiln-math <../_generated_rust_docs/kiln-math/lib>
 
 .. toctree::
    :maxdepth: 2
    :caption: Format and Parsing:
 
-   wrt-format <../_generated_rust_docs/wrt-format/lib>
-   wrt-decoder <../_generated_rust_docs/wrt-decoder/lib>
+   kiln-format <../_generated_rust_docs/kiln-format/lib>
+   kiln-decoder <../_generated_rust_docs/kiln-decoder/lib>
 
 .. toctree::
    :maxdepth: 2
    :caption: Runtime and Execution:
 
-   wrt-instructions <../_generated_rust_docs/wrt-instructions/lib>
+   kiln-instructions <../_generated_rust_docs/kiln-instructions/lib>
 
 .. toctree::
    :maxdepth: 2
    :caption: Platform Support:
 
-   wrt-platform <../_generated_rust_docs/wrt-platform/lib>
+   kiln-platform <../_generated_rust_docs/kiln-platform/lib>
 
 .. toctree::
    :maxdepth: 2
    :caption: Host Integration:
 
-   wrt-host <../_generated_rust_docs/wrt-host/lib>
-   wrt-intercept <../_generated_rust_docs/wrt-intercept/lib>
-   wrt-logging <../_generated_rust_docs/wrt-logging/lib>
+   kiln-host <../_generated_rust_docs/kiln-host/lib>
+   kiln-intercept <../_generated_rust_docs/kiln-intercept/lib>
+   kiln-logging <../_generated_rust_docs/kiln-logging/lib>
 
 .. note::
    Additional crate documentation will be enabled progressively as we resolve 
    build dependencies and improve the rust documentation generation pipeline.
    
    Planned additions:
-   - wrt-foundation (core types and collections)
-   - wrt-runtime (execution engine)
-   - wrt-component (Component Model implementation)
-   - wrt-platform (platform abstraction)
-   - wrt-decoder (binary format parsing)
+   - kiln-foundation (core types and collections)
+   - kiln-runtime (execution engine)
+   - kiln-component (Component Model implementation)
+   - kiln-platform (platform abstraction)
+   - kiln-decoder (binary format parsing)
    - And more... 

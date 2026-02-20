@@ -16,8 +16,8 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{Error, Result};
-use wrt_foundation::{BoundedString, prelude::*};
+use kiln_error::{Error, Result};
+use kiln_foundation::{BoundedString, prelude::*};
 
 use crate::{
     ast::*,

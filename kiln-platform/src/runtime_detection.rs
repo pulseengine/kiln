@@ -6,7 +6,7 @@
 //! - Libraries that want to provide best-effort platform support
 //! - Testing and benchmarking across multiple platforms
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 /// Platform capabilities detected at runtime
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

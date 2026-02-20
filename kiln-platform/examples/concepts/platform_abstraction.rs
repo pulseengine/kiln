@@ -3,7 +3,7 @@
 //! This example demonstrates WRT platform concepts and shows how
 //! external developers can extend platform support.
 
-use wrt_platform::FutexLike;
+use kiln_platform::FutexLike;
 use core::time::Duration;
 
 fn main() {
@@ -50,12 +50,12 @@ fn show_external_platform_strategy() {
     println!("   ```");
     println!("   [dependencies]");
     println!("   wrt = \"0.2\"");
-    println!("   wrt-platform-myos = \"0.1\"  # External platform support");
+    println!("   kiln-platform-myos = \"0.1\"  # External platform support");
     println!("   ```");
     
     println!("\n   Implementation Steps:");
-    println!("   1. Create new crate: cargo new wrt-platform-myos --lib");
-    println!("   2. Add wrt-platform and wrt-error dependencies");
+    println!("   1. Create new crate: cargo new kiln-platform-myos --lib");
+    println!("   2. Add kiln-platform and kiln-error dependencies");
     println!("   3. Implement PageAllocator trait for your platform");
     println!("   4. Implement FutexLike trait for your platform");
     println!("   5. Provide high-level platform interface");
@@ -93,7 +93,7 @@ fn show_vxworks_integration_example() {
     
     println!("\n   Configuration Example:");
     println!("   ```rust");
-    println!("   use wrt_platform_vxworks::{{VxWorksContext, VxWorksPlatform}};");
+    println!("   use kiln_platform_vxworks::{{VxWorksContext, VxWorksPlatform}};");
     println!("   ");
     println!("   // Auto-detect execution context");
     println!("   let context = if in_kernel_space() {{");
@@ -156,7 +156,7 @@ fn demonstrate_trait_integration() {
     println!("   ================================");
     
     // Use the built-in SpinFutex as an example
-    use wrt_platform::sync::{SpinFutex, SpinFutexBuilder};
+    use kiln_platform::sync::{SpinFutex, SpinFutexBuilder};
     
     let futex = SpinFutexBuilder::new()
         .with_initial_value(0)
@@ -192,7 +192,7 @@ fn show_external_crate_template() {
     println!("   ========================");
     
     println!("\n   Project Structure:");
-    println!("   wrt-platform-myos/");
+    println!("   kiln-platform-myos/");
     println!("   ├── Cargo.toml");
     println!("   ├── src/");
     println!("   │   ├── lib.rs");
@@ -207,22 +207,22 @@ fn show_external_crate_template() {
     println!("\n   Cargo.toml:");
     println!("   ```toml");
     println!("   [package]");
-    println!("   name = \"wrt-platform-myos\"");
+    println!("   name = \"kiln-platform-myos\"");
     println!("   version = \"0.1.0\"");
     println!("   ");
     println!("   [dependencies]");
-    println!("   wrt-platform = {{ version = \"0.2\", default-features = false }}");
-    println!("   wrt-error = {{ version = \"0.2\", default-features = false }}");
+    println!("   kiln-platform = {{ version = \"0.2\", default-features = false }}");
+    println!("   kiln-error = {{ version = \"0.2\", default-features = false }}");
     println!("   ");
     println!("   [features]");
     println!("   default = [\"std\"]");
-    println!("   std = [\"wrt-platform/std\", \"wrt-error/std\"]");
-    println!("   alloc = [\"wrt-platform/alloc\", \"wrt-error/alloc\"]");
+    println!("   std = [\"kiln-platform/std\", \"kiln-error/std\"]");
+    println!("   alloc = [\"kiln-platform/alloc\", \"kiln-error/alloc\"]");
     println!("   ```");
     
     println!("\n   Usage in Applications:");
     println!("   ```rust");
-    println!("   use wrt_platform_myos::MyOsPlatform;");
+    println!("   use kiln_platform_myos::MyOsPlatform;");
     println!("   ");
     println!("   fn main() -> Result<(), Box<dyn std::error::Error>> {{");
     println!("       let platform = MyOsPlatform::detect()?;";
@@ -247,7 +247,7 @@ fn show_external_crate_template() {
     println!("   ✓ Support for any platform, including proprietary ones");
     
     println!("\n   Get started with the template at:");
-    println!("   wrt-platform/templates/external_platform_template.rs");
+    println!("   kiln-platform/templates/external_platform_template.rs");
     
     println!("\n=== Platform Extension Complete ===");
     println!("\nThis approach enables unlimited platform extensibility");

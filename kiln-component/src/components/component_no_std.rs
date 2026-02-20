@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -8,10 +8,10 @@
 //! This module provides types and implementations for the WebAssembly Component
 //! Model in a no_std environment.
 
-// use wrt_decoder::component::decode::Component as DecodedComponent;
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_format::component::ExternType;
-use wrt_foundation::{
+// use kiln_decoder::component::decode::Component as DecodedComponent;
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_format::component::ExternType;
+use kiln_foundation::{
     MemoryProvider,
     bounded::{BoundedString, MAX_COMPONENT_TYPES, MAX_WASM_NAME_LENGTH},
     budget_aware_provider::CrateId,
@@ -25,8 +25,8 @@ use wrt_foundation::{
     values::Value,
     verification::VerificationLevel,
 };
-// Import types from wrt-foundation instead of wrt-runtime
-use wrt_foundation::types::{MemoryType, TableType};
+// Import types from kiln-foundation instead of kiln-runtime
+use kiln_foundation::types::{MemoryType, TableType};
 
 // InstanceValue handles std/no_std internally now
 use crate::instance::InstanceValue;
@@ -42,32 +42,32 @@ use crate::{
 // ComponentProvider removed - using capability-based allocation via safe_managed_alloc!
 
 // Implement required traits for BoundedVec compatibility
-use wrt_foundation::traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream};
+use kiln_foundation::traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream};
 
 // Macro to implement basic traits for complex types
 macro_rules! impl_basic_traits {
     ($type:ty, $default_val:expr) => {
         impl Checksummable for $type {
-            fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+            fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
                 0u32.update_checksum(checksum);
             }
         }
 
         impl ToBytes for $type {
-            fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 &self,
                 _writer: &mut WriteStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<()> {
+            ) -> kiln_error::Result<()> {
                 Ok(())
             }
         }
 
         impl FromBytes for $type {
-            fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 _reader: &mut ReadStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<Self> {
+            ) -> kiln_error::Result<Self> {
                 Ok($default_val)
             }
         }
@@ -76,11 +76,11 @@ macro_rules! impl_basic_traits {
 
 // Define types for resources, memories, tables, and function types
 /// Type alias for function type
-pub type FuncType = wrt_foundation::types::FuncType;
+pub type FuncType = kiln_foundation::types::FuncType;
 /// Type alias for global type
-pub type GlobalType = wrt_foundation::types::GlobalType;
+pub type GlobalType = kiln_foundation::types::GlobalType;
 /// Type alias for memory limit (using Limits from foundation)
-pub type MemoryLimit = wrt_foundation::types::Limits;
+pub type MemoryLimit = kiln_foundation::types::Limits;
 
 // Maximum sizes for bounded collections
 /// Maximum table size
@@ -351,7 +351,7 @@ pub const MAX_BINARY_SIZE: usize = 1024 * 1024; // 1 MB
 
 /// No-std compatible component type
 #[derive(Debug, Clone)]
-pub struct WrtComponentType {
+pub struct KilnComponentType {
     /// Component imports
     pub imports: BoundedVec<
         (
@@ -366,12 +366,12 @@ pub struct WrtComponentType {
         BoundedVec<(BoundedString<MAX_WASM_NAME_LENGTH>, ExternType), MAX_COMPONENT_EXPORTS>,
     /// Component instances
     pub instances:
-        BoundedVec<wrt_format::component::ComponentTypeDefinition, MAX_COMPONENT_INSTANCES>,
+        BoundedVec<kiln_format::component::ComponentTypeDefinition, MAX_COMPONENT_INSTANCES>,
     /// Verification level for this component type
     pub verification_level: VerificationLevel,
 }
 
-impl WrtComponentType {
+impl KilnComponentType {
     /// Creates a new empty component type
     pub fn new() -> Result<Self> {
         Ok(Self {
@@ -457,7 +457,7 @@ impl WrtComponentType {
     /// Add an instance to the component type
     pub fn add_instance(
         &mut self,
-        instance: wrt_format::component::ComponentTypeDefinition,
+        instance: kiln_format::component::ComponentTypeDefinition,
     ) -> Result<()> {
         self.instances.push(instance).map_err(|_| {
             Error::new(
@@ -471,26 +471,26 @@ impl WrtComponentType {
     }
 }
 
-impl Default for WrtComponentType {
+impl Default for KilnComponentType {
     fn default() -> Self {
         Self::new()
-            .unwrap_or_else(|_| panic!("Failed to allocate memory for WrtComponentType::default"))
+            .unwrap_or_else(|_| panic!("Failed to allocate memory for KilnComponentType::default"))
     }
 }
 
-/// Builder for WrtComponentType
-pub struct WrtComponentTypeBuilder {
+/// Builder for KilnComponentType
+pub struct KilnComponentTypeBuilder {
     /// Component imports
     imports: Vec<(String, String, ExternType)>,
     /// Component exports
     exports: Vec<(String, ExternType)>,
     /// Component instances
-    instances: Vec<wrt_format::component::ComponentTypeDefinition>,
+    instances: Vec<kiln_format::component::ComponentTypeDefinition>,
     /// Verification level for this component type
     verification_level: VerificationLevel,
 }
 
-impl WrtComponentTypeBuilder {
+impl KilnComponentTypeBuilder {
     /// Creates a new component type builder
     pub fn new() -> Self {
         Self {
@@ -528,7 +528,7 @@ impl WrtComponentTypeBuilder {
     /// Add an instance to the component type
     pub fn with_instance(
         mut self,
-        instance: wrt_format::component::ComponentTypeDefinition,
+        instance: kiln_format::component::ComponentTypeDefinition,
     ) -> Self {
         self.instances.push(instance);
         self
@@ -537,7 +537,7 @@ impl WrtComponentTypeBuilder {
     /// Add multiple instances to the component type
     pub fn with_instances(
         mut self,
-        instances: Vec<wrt_format::component::ComponentTypeDefinition>,
+        instances: Vec<kiln_format::component::ComponentTypeDefinition>,
     ) -> Self {
         self.instances.extend(instances);
         self
@@ -550,8 +550,8 @@ impl WrtComponentTypeBuilder {
     }
 
     /// Build the component type
-    pub fn build(self) -> Result<WrtComponentType> {
-        let mut component_type = WrtComponentType::new()?;
+    pub fn build(self) -> Result<KilnComponentType> {
+        let mut component_type = KilnComponentType::new()?;
         component_type.verification_level = self.verification_level;
 
         // Add imports
@@ -573,7 +573,7 @@ impl WrtComponentTypeBuilder {
     }
 }
 
-impl Default for WrtComponentTypeBuilder {
+impl Default for KilnComponentTypeBuilder {
     fn default() -> Self {
         Self::new()
     }
@@ -719,7 +719,7 @@ impl Default for RuntimeInstance {
 #[derive(Debug, Clone)]
 pub struct Component {
     /// Component type
-    pub component_type: WrtComponentType,
+    pub component_type: KilnComponentType,
     /// Component exports
     pub exports: BoundedVec<Export, MAX_COMPONENT_EXPORTS>,
     /// Component imports
@@ -750,7 +750,7 @@ impl Component {
         let linked_components_provider = safe_managed_alloc!(65536, CrateId::Component)?;
 
         Ok(Self {
-            component_type: WrtComponentType::new()?,
+            component_type: KilnComponentType::new()?,
             exports: BoundedVec::new(),
             imports: BoundedVec::new(),
             instances: BoundedVec::new(),
@@ -771,7 +771,7 @@ impl Component {
         let linked_components_provider = safe_managed_alloc!(65536, CrateId::Component)?;
 
         Ok(Self {
-            component_type: WrtComponentType::new()?,
+            component_type: KilnComponentType::new()?,
             exports: BoundedVec::new(),
             imports: BoundedVec::new(),
             instances: BoundedVec::new(),
@@ -794,7 +794,7 @@ impl Component {
     }
 
     /// Creates a new component from a type definition
-    pub fn from_type(component_type: WrtComponentType) -> Result<Self> {
+    pub fn from_type(component_type: KilnComponentType) -> Result<Self> {
         let exports_provider = safe_managed_alloc!(65536, CrateId::Component)?;
         let imports_provider = safe_managed_alloc!(65536, CrateId::Component)?;
         let instances_provider = safe_managed_alloc!(65536, CrateId::Component)?;
@@ -955,7 +955,7 @@ impl Default for Component {
 /// Builder for Component in no_std environment
 pub struct ComponentBuilder {
     /// Component type
-    component_type: Option<WrtComponentType>,
+    component_type: Option<KilnComponentType>,
     /// Component exports
     exports: Vec<Export>,
     /// Component imports
@@ -994,7 +994,7 @@ impl ComponentBuilder {
     }
 
     /// Set the component type
-    pub fn with_component_type(mut self, component_type: WrtComponentType) -> Self {
+    pub fn with_component_type(mut self, component_type: KilnComponentType) -> Self {
         self.component_type = Some(component_type);
         self
     }

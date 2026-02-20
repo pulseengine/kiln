@@ -12,13 +12,13 @@ use alloc::{
 };
 use core::time::Duration;
 
-use wrt_error::{
+use kiln_error::{
     ErrorCategory,
     ErrorSource,
     Result,
     ToErrorCategory,
 };
-use wrt_sync::WrtRwLock;
+use kiln_sync::KilnRwLock;
 
 #[cfg(target_os = "linux")]
 use crate::linux_sync::{
@@ -47,7 +47,7 @@ type ExecutorFn = Arc<dyn Fn(u32, Vec<u8>) -> Result<Vec<u8>> + Send + Sync>;
 /// Atomic wait/notify coordinator that manages futex objects per memory address
 pub struct AtomicCoordinator {
     /// Map of memory addresses to futex objects
-    futex_map:        Arc<WrtRwLock<BTreeMap<u64, Arc<dyn FutexLike + Send + Sync>>>>,
+    futex_map:        Arc<KilnRwLock<BTreeMap<u64, Arc<dyn FutexLike + Send + Sync>>>>,
     /// Thread manager for spawning atomic operation threads
     thread_manager:   Arc<WasmThreadManager>,
     /// Module registered for atomic operations
@@ -70,7 +70,7 @@ impl AtomicCoordinator {
         thread_manager.register_module(atomic_module)?;
 
         Ok(Self {
-            futex_map: Arc::new(WrtRwLock::new(BTreeMap::new())),
+            futex_map: Arc::new(KilnRwLock::new(BTreeMap::new())),
             thread_manager,
             atomic_module_id: u64::MAX,
         })

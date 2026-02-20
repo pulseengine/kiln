@@ -1,4 +1,4 @@
-//! Command implementations for cargo-wrt
+//! Command implementations for cargo-kiln
 //!
 //! This module contains command-specific implementations that use
 //! the standardized command framework and helper modules.

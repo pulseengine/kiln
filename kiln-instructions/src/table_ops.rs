@@ -30,8 +30,8 @@
 //! # Usage
 //!
 //! ```no_run
-//! use wrt_foundation::values::FuncRef;
-//! use wrt_instructions::{
+//! use kiln_foundation::values::FuncRef;
+//! use kiln_instructions::{
 //!     table_ops::{
 //!         TableGet,
 //!         TableSet,
@@ -139,7 +139,7 @@ pub trait ElementSegmentOperations {
         &self,
         elem_index: u32,
     ) -> Result<
-        Option<wrt_foundation::BoundedVec<Value, 65536, wrt_foundation::NoStdProvider<65536>>>,
+        Option<kiln_foundation::BoundedVec<Value, 65536, kiln_foundation::NoStdProvider<65536>>>,
     >;
 
     /// Drop (mark as unavailable) an element segment
@@ -931,7 +931,7 @@ mod tests {
         vec::Vec,
     };
 
-    use wrt_foundation::values::{
+    use kiln_foundation::values::{
         ExternRef,
         FuncRef,
     };
@@ -1135,10 +1135,10 @@ mod tests {
             &self,
             elem_index: u32,
         ) -> Result<
-            Option<wrt_foundation::BoundedVec<Value, 65536, wrt_foundation::NoStdProvider<65536>>>,
+            Option<kiln_foundation::BoundedVec<Value, 65536, kiln_foundation::NoStdProvider<65536>>>,
         > {
             if let Some(Some(seg)) = self.segments.get(elem_index as usize) {
-                let mut bounded = wrt_foundation::BoundedVec::new();
+                let mut bounded = kiln_foundation::BoundedVec::new();
                 for value in seg {
                     bounded
                         .push(value.clone())

@@ -1,5 +1,5 @@
-// WRT - wrt-error
-// Module: WRT Error Types
+// Kiln - kiln-error
+// Module: Kiln Error Types
 // SW-REQ-ID: REQ_004
 // SW-REQ-ID: REQ_ERROR_001
 //
@@ -7,10 +7,10 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-/// Unified error handling system for WRT
+/// Unified error handling system for Kiln
 ///
 /// This module provides a comprehensive error handling system that covers all
-/// error cases across the WRT codebase. It includes error types, categories,
+/// error cases across the Kiln codebase. It includes error types, categories,
 /// and helper functions.
 use core::fmt;
 
@@ -19,7 +19,7 @@ use crate::{
     prelude::{Debug, Eq, PartialEq, str},
 };
 
-/// `Error` categories for WRT operations
+/// `Error` categories for Kiln operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ErrorCategory {
     /// Core WebAssembly errors
@@ -94,7 +94,7 @@ pub trait ErrorSource: fmt::Debug + Send + Sync {
     fn category(&self) -> ErrorCategory;
 }
 
-/// WRT `Error` type
+/// Kiln `Error` type
 ///
 /// This is the main error type for the WebAssembly Runtime.
 /// It provides categorized errors with error codes and optional messages.

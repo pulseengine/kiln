@@ -1,5 +1,5 @@
-// WRT - wrt-error
-// Module: WRT Error Codes
+// Kiln - kiln-error
+// Module: Kiln Error Codes
 // SW-REQ-ID: REQ_004
 // SW-REQ-ID: REQ_ERROR_001
 //
@@ -7,7 +7,7 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Error codes for WRT
+//! Error codes for Kiln
 
 /// Stack underflow error
 pub const STACK_UNDERFLOW: u16 = 1000;

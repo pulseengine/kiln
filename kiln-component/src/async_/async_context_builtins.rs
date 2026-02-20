@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Module: Async Context Management Built-ins
 // SW-REQ-ID: REQ_ASYNC_CONTEXT_001
 //
@@ -26,10 +26,10 @@ use std::{
     vec::Vec,
 };
 
-// use wrt_decoder::prelude::DecoderVecExt; // TODO: Re-enable when wrt_decoder is available
-use wrt_error::{Error, ErrorCategory, Result};
-use wrt_foundation::{
-    // atomic_memory::AtomicRefCell, // Not available in wrt-foundation
+// use kiln_decoder::prelude::DecoderVecExt; // TODO: Re-enable when kiln_decoder is available
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_foundation::{
+    // atomic_memory::AtomicRefCell, // Not available in kiln-foundation
     BoundedMap,
     BoundedString,
     BoundedVec,
@@ -45,7 +45,7 @@ use wrt_foundation::{
 use crate::bounded_component_infra::ComponentProvider;
 #[cfg(not(feature = "std"))]
 use crate::prelude::Mutex as AtomicRefCell;
-use crate::prelude::WrtComponentValue;
+use crate::prelude::KilnComponentValue;
 #[cfg(feature = "std")]
 use std::cell::RefCell as AtomicRefCell;
 
@@ -78,27 +78,27 @@ impl Default for ContextKey {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for ContextKey {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ContextKey {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
-impl wrt_runtime::ToBytes for ContextKey {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for ContextKey {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_runtime::FromBytes for ContextKey {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for ContextKey {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         #[cfg(feature = "std")]
         return Ok(Self(String::from_bytes_with_provider(reader, provider)?));
         #[cfg(not(any(feature = "std",)))]
@@ -135,7 +135,7 @@ impl ContextKey {
 #[derive(Debug, Clone)]
 pub enum ContextValue {
     /// Simple value types
-    Simple(WrtComponentValue<ComponentProvider>),
+    Simple(KilnComponentValue<ComponentProvider>),
     /// Binary data (for serialized complex types)
     #[cfg(feature = "std")]
     Binary(Vec<u8>),
@@ -145,7 +145,7 @@ pub enum ContextValue {
 
 impl Default for ContextValue {
     fn default() -> Self {
-        Self::Simple(WrtComponentValue::default())
+        Self::Simple(KilnComponentValue::default())
     }
 }
 
@@ -161,8 +161,8 @@ impl PartialEq for ContextValue {
 
 impl Eq for ContextValue {}
 
-impl wrt_foundation::traits::Checksummable for ContextValue {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ContextValue {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::Simple(v) => v.update_checksum(checksum),
             Self::Binary(b) => {
@@ -175,12 +175,12 @@ impl wrt_foundation::traits::Checksummable for ContextValue {
     }
 }
 
-impl wrt_runtime::ToBytes for ContextValue {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for ContextValue {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::Simple(v) => {
                 0u8.to_bytes_with_provider(writer, provider)?;
@@ -199,14 +199,14 @@ impl wrt_runtime::ToBytes for ContextValue {
     }
 }
 
-impl wrt_runtime::FromBytes for ContextValue {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for ContextValue {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let tag = u8::from_bytes_with_provider(reader, provider)?;
         match tag {
-            0 => Ok(Self::Simple(WrtComponentValue::from_bytes_with_provider(
+            0 => Ok(Self::Simple(KilnComponentValue::from_bytes_with_provider(
                 reader, provider,
             )?)),
             1 => {
@@ -227,7 +227,7 @@ impl wrt_runtime::FromBytes for ContextValue {
 }
 
 impl ContextValue {
-    pub fn from_component_value(value: WrtComponentValue<ComponentProvider>) -> Self {
+    pub fn from_component_value(value: KilnComponentValue<ComponentProvider>) -> Self {
         Self::Simple(value)
     }
 
@@ -244,7 +244,7 @@ impl ContextValue {
         Ok(Self::Binary(bounded_data))
     }
 
-    pub fn as_component_value(&self) -> Option<&WrtComponentValue<ComponentProvider>> {
+    pub fn as_component_value(&self) -> Option<&KilnComponentValue<ComponentProvider>> {
         match self {
             Self::Simple(value) => Some(value),
             _ => None,
@@ -472,35 +472,35 @@ pub mod canonical_builtins {
 
     /// `context.get` canonical built-in
     /// Returns the current async context as a component value
-    pub fn canon_context_get() -> Result<WrtComponentValue<ComponentProvider>> {
+    pub fn canon_context_get() -> Result<KilnComponentValue<ComponentProvider>> {
         let context = AsyncContextManager::context_get()?;
         match context {
             Some(ctx) => {
                 // Serialize context to component value
                 // For now, return a simple boolean indicating presence
-                Ok(WrtComponentValue::Bool(true))
+                Ok(KilnComponentValue::Bool(true))
             },
-            None => Ok(WrtComponentValue::Bool(false)),
+            None => Ok(KilnComponentValue::Bool(false)),
         }
     }
 
     /// `context.set` canonical built-in  
     /// Sets the current async context from a component value
-    pub fn canon_context_set(value: WrtComponentValue<ComponentProvider>) -> Result<()> {
+    pub fn canon_context_set(value: KilnComponentValue<ComponentProvider>) -> Result<()> {
         match value {
-            WrtComponentValue::Bool(true) => {
+            KilnComponentValue::Bool(true) => {
                 // Create a new empty context
                 let context = AsyncContext::new()?;
                 AsyncContextManager::context_set(context)
             },
-            WrtComponentValue::Bool(false) => {
+            KilnComponentValue::Bool(false) => {
                 // Clear the current context
                 AsyncContextManager::context_pop()?;
                 Ok(())
             },
             _ => Err(Error::new(
                 ErrorCategory::Type,
-                wrt_error::codes::TYPE_MISMATCH,
+                kiln_error::codes::TYPE_MISMATCH,
                 "Invalid context value type - expected boolean",
             )),
         }
@@ -509,7 +509,7 @@ pub mod canonical_builtins {
     /// Helper function to get a typed value from context
     pub fn get_typed_context_value<T>(key: &str, value_type: ValueType) -> Result<Option<T>>
     where
-        T: TryFrom<WrtComponentValue<ComponentProvider>>,
+        T: TryFrom<KilnComponentValue<ComponentProvider>>,
         T::Error: Into<Error>,
     {
         #[cfg(feature = "std")]
@@ -532,7 +532,7 @@ pub mod canonical_builtins {
     /// Helper function to set a typed value in context
     pub fn set_typed_context_value<T>(key: &str, value: T) -> Result<()>
     where
-        T: Into<WrtComponentValue<ComponentProvider>>,
+        T: Into<KilnComponentValue<ComponentProvider>>,
     {
         #[cfg(feature = "std")]
         let context_key = ContextKey::new(key.to_string());

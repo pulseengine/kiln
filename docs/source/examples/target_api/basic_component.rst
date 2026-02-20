@@ -210,8 +210,8 @@ Now let's use our calculator component from a host application:
    // This code shows the intended Component Model API design
    // Current implementation status: WIT interface definitions exist, component execution in development
    
-   use wrt::component::*;  // Not yet implemented
-   use wrt::{Config, Engine, Store};  // Infrastructure exists, execution engine in progress
+   use kiln::component::*;  // Not yet implemented
+   use kiln::{Config, Engine, Store};  // Infrastructure exists, execution engine in progress
    
    bindgen!({  // Target API - component bindings under development
        world: "calculator-world",

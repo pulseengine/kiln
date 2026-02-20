@@ -21,7 +21,7 @@ Certification Scope
 
 This checklist covers ASIL-A certification requirements for:
 
-- WRT foundation memory management system
+- Kiln foundation memory management system
 - Capability-based allocation mechanisms  
 - Runtime safety monitoring system
 - Production telemetry infrastructure
@@ -679,4 +679,4 @@ Next Steps
    - Execute assessment activities
    - Address findings and obtain certification
 
-This checklist provides a roadmap for completing ASIL-A certification activities and achieving formal safety certification for WRT foundation components.
+This checklist provides a roadmap for completing ASIL-A certification activities and achieving formal safety certification for Kiln foundation components.

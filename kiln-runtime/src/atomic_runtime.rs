@@ -28,14 +28,14 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::format;
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::values::Value;
-use wrt_instructions::atomic_ops::{
+use kiln_foundation::values::Value;
+use kiln_instructions::atomic_ops::{
     AtomicCmpxchgInstr,
     AtomicFence,
     AtomicLoadOp,
@@ -306,7 +306,7 @@ pub fn atomic_i32_load(
     thread_id: ThreadId,
     addr: u32,
 ) -> Result<i32> {
-    let memarg = wrt_foundation::MemArg {
+    let memarg = kiln_foundation::MemArg {
         offset: addr,
         align_exponent: 2,
         memory_index: 0,
@@ -330,7 +330,7 @@ pub fn atomic_i32_store(
     addr: u32,
     value: i32,
 ) -> Result<()> {
-    let memarg = wrt_foundation::MemArg {
+    let memarg = kiln_foundation::MemArg {
         offset: addr,
         align_exponent: 2,
         memory_index: 0,
@@ -352,7 +352,7 @@ pub fn atomic_i32_compare_and_swap(
     expected: i32,
     replacement: i32,
 ) -> Result<i32> {
-    let memarg = wrt_foundation::MemArg {
+    let memarg = kiln_foundation::MemArg {
         offset: addr,
         align_exponent: 2,
         memory_index: 0,
@@ -384,7 +384,7 @@ pub fn atomic_i32_fetch_add(
     addr: u32,
     value: i32,
 ) -> Result<i32> {
-    let memarg = wrt_foundation::MemArg {
+    let memarg = kiln_foundation::MemArg {
         offset: addr,
         align_exponent: 2,
         memory_index: 0,

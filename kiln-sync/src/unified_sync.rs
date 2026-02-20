@@ -1,7 +1,7 @@
-//! Unified Synchronization Primitives for WRT Foundation
+//! Unified Synchronization Primitives for Kiln Foundation
 //!
 //! This module provides enhanced synchronization primitives that integrate with
-//! the WRT foundation's unified type system, memory providers, and safety
+//! the Kiln foundation's unified type system, memory providers, and safety
 //! primitives. These synchronization types are designed to work seamlessly with
 //! ASIL-aware safety contexts and bounded collections.
 //!
@@ -19,11 +19,11 @@
 //! # Usage
 //!
 //! ```rust
-//! use wrt_foundation::safety_system::{
+//! use kiln_foundation::safety_system::{
 //!     AsilLevel,
 //!     SafetyContext,
 //! };
-//! use wrt_sync::unified_sync::{
+//! use kiln_sync::unified_sync::{
 //!     BoundedChannel,
 //!     SafeMutex,
 //! };
@@ -131,7 +131,7 @@ use foundation_stubs::{
 /// Safety-aware mutex that integrates with ASIL safety contexts
 ///
 /// This mutex provides traditional mutual exclusion semantics while integrating
-/// with the WRT safety system. It can perform additional verification and
+/// with the Kiln safety system. It can perform additional verification and
 /// safety checks based on the configured ASIL level.
 #[derive(Debug)]
 pub struct SafeMutex<T> {

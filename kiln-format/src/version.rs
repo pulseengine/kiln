@@ -1,4 +1,4 @@
-//! Version information for wrt-format.
+//! Version information for kiln-format.
 //!
 //! This module provides utilities for handling versioning and feature detection
 //! in WebAssembly Component Model binaries.
@@ -13,7 +13,7 @@ use std::collections::BTreeMap as HashMap;
 /// Current state serialization format version
 pub const STATE_VERSION: u32 = 1;
 
-/// Magic bytes that identify WRT state sections
+/// Magic bytes that identify Kiln state sections
 pub const STATE_MAGIC: &[u8; 4] = b"WRT\0";
 
 /// Represents the version of a WebAssembly Component Model binary
@@ -95,7 +95,7 @@ impl Default for VersionInfo {
         let features = HashMap::new();
 
         #[cfg(not(any(feature = "std",)))]
-        let features = crate::HashMap::new(wrt_foundation::NoStdProvider::default())
+        let features = crate::HashMap::new(kiln_foundation::NoStdProvider::default())
             .expect("Failed to create feature map");
 
         let mut info = Self {
@@ -118,7 +118,7 @@ impl Clone for VersionInfo {
 
         #[cfg(not(any(feature = "std",)))]
         let features = {
-            let new_features = crate::HashMap::new(wrt_foundation::NoStdProvider::default())
+            let new_features = crate::HashMap::new(kiln_foundation::NoStdProvider::default())
                 .expect("Failed to create feature map");
             // For now, create a new empty map since BoundedMap doesn't have Clone
             new_features
@@ -314,14 +314,14 @@ impl VersionInfo {
 }
 
 // Manual trait implementations for no_std compatibility with BoundedMap
-use wrt_foundation::traits::{
+use kiln_foundation::traits::{
     Checksummable,
     FromBytes,
     ToBytes,
 };
 
 impl Checksummable for ComponentModelFeature {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update(*self as u8);
     }
 }
@@ -331,20 +331,20 @@ impl ToBytes for ComponentModelFeature {
         1 // One byte for the enum value
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(*self as u8)
     }
 }
 
 impl FromBytes for ComponentModelFeature {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = reader.read_u8()?;
         match byte {
             0 => Ok(ComponentModelFeature::CoreModule),
@@ -359,7 +359,7 @@ impl FromBytes for ComponentModelFeature {
             9 => Ok(ComponentModelFeature::Export),
             10 => Ok(ComponentModelFeature::Value),
             11 => Ok(ComponentModelFeature::ResourceTypes),
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Invalid ComponentModelFeature value",
             )),
         }
@@ -367,7 +367,7 @@ impl FromBytes for ComponentModelFeature {
 }
 
 impl Checksummable for FeatureStatus {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update(*self as u8);
     }
 }
@@ -377,28 +377,28 @@ impl ToBytes for FeatureStatus {
         1 // One byte for the enum value
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(*self as u8)
     }
 }
 
 impl FromBytes for FeatureStatus {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = reader.read_u8()?;
         match byte {
             0 => Ok(FeatureStatus::Unavailable),
             1 => Ok(FeatureStatus::ExperimentalSupported),
             2 => Ok(FeatureStatus::FullySupported),
-            _ => Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Parse,
-                wrt_error::codes::INVALID_VALUE,
+            _ => Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Parse,
+                kiln_error::codes::INVALID_VALUE,
                 "Invalid FeatureStatus value",
             )),
         }

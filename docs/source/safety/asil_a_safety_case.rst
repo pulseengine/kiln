@@ -2,7 +2,7 @@
 ASIL-A Safety Case
 =======================
 
-This document presents the safety case for achieving ASIL-A compliance in the WRT (WebAssembly Runtime) project according to ISO 26262.
+This document presents the safety case for achieving ASIL-A compliance in the Kiln (WebAssembly Runtime) project according to ISO 26262.
 
 .. contents:: On this page
    :local:
@@ -11,7 +11,7 @@ This document presents the safety case for achieving ASIL-A compliance in the WR
 Executive Summary
 -----------------
 
-The WRT project demonstrates readiness for ASIL-A certification through:
+The Kiln project demonstrates readiness for ASIL-A certification through:
 
 - **Capability-based memory safety architecture** preventing memory violations
 - **Comprehensive formal verification** with KANI covering 90% of safety properties
@@ -24,16 +24,16 @@ Safety Case Structure
 
 This safety case follows the Goal Structuring Notation (GSN) methodology to demonstrate that:
 
-1. The WRT runtime is acceptably safe for ASIL-A automotive applications
+1. The Kiln runtime is acceptably safe for ASIL-A automotive applications
 2. All ASIL-A requirements from ISO 26262 are satisfied
 3. Residual risks are identified and mitigated to acceptable levels
 
 Top-Level Safety Goal
 ~~~~~~~~~~~~~~~~~~~~~
 
-**G1: WRT Runtime is Safe for ASIL-A Applications**
+**G1: Kiln Runtime is Safe for ASIL-A Applications**
 
-The WRT runtime shall provide acceptably safe execution of WebAssembly modules in automotive systems requiring ASIL-A integrity level.
+The Kiln runtime shall provide acceptably safe execution of WebAssembly modules in automotive systems requiring ASIL-A integrity level.
 
 Safety Argument Structure
 -------------------------
@@ -41,7 +41,7 @@ Safety Argument Structure
 Argument by Architecture (G1.1)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Claim:** The WRT architecture inherently prevents safety violations
+**Claim:** The Kiln architecture inherently prevents safety violations
 
 **Evidence:**
 
@@ -52,7 +52,7 @@ Argument by Architecture (G1.1)
    - Runtime capability checks prevent unauthorized access
    - No direct memory manipulation possible
    
-   *Reference:* ``/wrt-foundation/src/capabilities/``
+   *Reference:* ``/kiln-foundation/src/capabilities/``
 
 2. **Type-Safe Component Model**
    
@@ -61,7 +61,7 @@ Argument by Architecture (G1.1)
    - Component isolation enforced at type level
    - Resource ownership tracked through Rust's type system
    
-   *Reference:* ``/wrt-component/src/types.rs``
+   *Reference:* ``/kiln-component/src/types.rs``
 
 3. **Deterministic Execution Model**
    
@@ -70,7 +70,7 @@ Argument by Architecture (G1.1)
    - Predictable worst-case execution times
    - No unbounded loops or recursion
    
-   *Reference:* ``/wrt-runtime/src/execution.rs``
+   *Reference:* ``/kiln-runtime/src/execution.rs``
 
 Argument by Verification (G1.2)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -111,7 +111,7 @@ Argument by Verification (G1.2)
    - 100+ property-based tests
    - Continuous verification in CI/CD
    
-   *Reference:* ``/wrt-tests/integration/formal_verification/``
+   *Reference:* ``/kiln-tests/integration/formal_verification/``
 
 Argument by Process (G1.3)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -135,7 +135,7 @@ Argument by Process (G1.3)
    - System tests: End-to-end scenarios
    - Fuzz testing: 24/7 continuous fuzzing
    
-   *Reference:* ``cargo-wrt test --coverage``
+   *Reference:* ``cargo-kiln test --coverage``
 
 3. **Change Management**
    
@@ -157,7 +157,7 @@ Argument by Testing (G1.4)
    - Branch coverage: 88% (target: 85%)
    - MC/DC coverage: 82% (target: 80%)
    
-   *Command:* ``cargo-wrt test --coverage --mcdc``
+   *Command:* ``cargo-kiln test --coverage --mcdc``
 
 2. **Test Categories**
    
@@ -174,7 +174,7 @@ Argument by Testing (G1.4)
    - Error injection testing
    - Fault recovery validation
    
-   *Reference:* ``/wrt-tests/integration/``
+   *Reference:* ``/kiln-tests/integration/``
 
 Hazard Analysis and Risk Assessment
 -----------------------------------
@@ -384,24 +384,24 @@ Limitations
 Safety Manual References
 ------------------------
 
-Users of WRT must consult the safety manual for:
+Users of Kiln must consult the safety manual for:
 
 - **Configuration Guidelines:** Proper resource limit settings
-- **Integration Requirements:** How to safely integrate WRT
+- **Integration Requirements:** How to safely integrate Kiln
 - **Operational Constraints:** Runtime limitations and assumptions
 - **Maintenance Procedures:** Updating and patching safely
 
 Conclusion
 ----------
 
-The WRT project demonstrates strong readiness for ASIL-A certification through:
+The Kiln project demonstrates strong readiness for ASIL-A certification through:
 
 1. **Inherently Safe Architecture:** Memory safety by design, not by testing
 2. **Comprehensive Verification:** 90% formal verification coverage
 3. **Systematic Process:** Following ISO 26262 development lifecycle
 4. **Extensive Evidence:** Documentation, tests, and proofs
 
-**Recommendation:** The WRT runtime is suitable for ASIL-A automotive applications when used according to the safety manual guidelines and within the stated assumptions and limitations.
+**Recommendation:** The Kiln runtime is suitable for ASIL-A automotive applications when used according to the safety manual guidelines and within the stated assumptions and limitations.
 
 Independent Assessment
 ----------------------

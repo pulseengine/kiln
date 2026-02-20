@@ -6,17 +6,17 @@
 #[cfg(feature = "std")]
 use std::sync::Arc;
 
-use wrt_decoder::decoder::decode_module;
-use wrt_error::{
+use kiln_decoder::decoder::decode_module;
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     values::Value,
 };
-use wrt_runtime::{
+use kiln_runtime::{
     module::Module,
     module_instance::ModuleInstance,
     stackless::StacklessEngine,
@@ -56,7 +56,7 @@ const COUNTER_WASM: &[u8] = &[
 fn test_instruction_parsing_integration() -> Result<()> {
     // Test that our instruction parsing actually works
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_wrt_module(&decoded)?;
+    let runtime_module = Module::from_kiln_module(&decoded)?;
 
     // Verify that functions have parsed instructions
     assert!(
@@ -82,7 +82,7 @@ fn test_instruction_parsing_integration() -> Result<()> {
 fn test_stackless_engine_execution() -> Result<()> {
     // Test real execution through the stackless engine
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_wrt_module(&decoded)?;
+    let runtime_module = Module::from_kiln_module(&decoded)?;
 
     // Create stackless engine
     let mut engine = StacklessEngine::new();
@@ -115,7 +115,7 @@ fn test_stackless_engine_execution() -> Result<()> {
 fn test_memory_bounded_execution() -> Result<()> {
     // Test execution with bounded memory constraints (ASIL-B compliance)
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_wrt_module(&decoded)?;
+    let runtime_module = Module::from_kiln_module(&decoded)?;
 
     // Verify all collections are bounded
     assert!(
@@ -142,7 +142,7 @@ fn test_memory_bounded_execution() -> Result<()> {
 fn test_multiple_function_calls() -> Result<()> {
     // Test multiple executions to verify engine state management
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_wrt_module(&decoded)?;
+    let runtime_module = Module::from_kiln_module(&decoded)?;
 
     let mut engine = StacklessEngine::new();
     let instance = ModuleInstance::new(runtime_module, 0)?;
@@ -179,7 +179,7 @@ fn test_capability_based_memory_allocation() -> Result<()> {
     );
 
     // Test bounded collection creation with capability
-    let mut test_vec = wrt_foundation::bounded::BoundedVec::<i32, 10, _>::new(provider)?;
+    let mut test_vec = kiln_foundation::bounded::BoundedVec::<i32, 10, _>::new(provider)?;
     test_vec.push(42)?;
     assert_eq!(test_vec.len(), 1);
     assert_eq!(test_vec.get(0)?, 42);
@@ -193,7 +193,7 @@ fn test_instruction_dispatch_coverage() -> Result<()> {
     // Test that our instruction parser and dispatcher can handle basic instruction
     // types
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_wrt_module(&decoded)?;
+    let runtime_module = Module::from_kiln_module(&decoded)?;
 
     let function = runtime_module.functions.get(0)?;
 
@@ -231,7 +231,7 @@ fn test_instruction_dispatch_coverage() -> Result<()> {
 fn test_error_handling_and_bounds() -> Result<()> {
     // Test error handling for invalid operations
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_wrt_module(&decoded)?;
+    let runtime_module = Module::from_kiln_module(&decoded)?;
 
     let mut engine = StacklessEngine::new();
     let instance = ModuleInstance::new(runtime_module, 0)?;
@@ -258,7 +258,7 @@ fn test_error_handling_and_bounds() -> Result<()> {
 fn test_asil_b_compliance_features() -> Result<()> {
     // Test ASIL-B specific compliance features
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_wrt_module(&decoded)?;
+    let runtime_module = Module::from_kiln_module(&decoded)?;
 
     // Verify deterministic behavior - same inputs should give same outputs
     let mut engine1 = StacklessEngine::new();

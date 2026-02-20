@@ -8,10 +8,10 @@ use crate::{
     bounded::BoundedString,
     MemoryProvider,
     traits::{BoundedCapacity, Checksummable, ToBytes, FromBytes},
-    wrt_error::Result,
+    kiln_error::Result,
 };
-use wrt_error::{Error, Result};
-use wrt_error::Result;
+use kiln_error::{Error, Result};
+use kiln_error::Result;
 #[cfg(feature = "std")]
 use std::string::String;
 #[cfg(not(feature = "std"))]
@@ -67,7 +67,7 @@ where
     }
     
     /// Get the string content as a &str
-    pub fn as_str(&self) -> wrt_error::Result<&str> {
+    pub fn as_str(&self) -> kiln_error::Result<&str> {
         self.inner.as_str()
     }
     
@@ -108,7 +108,7 @@ where
         &self,
         writer: &mut crate::traits::WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.inner.to_bytes_with_provider(writer, provider)
     }
 }
@@ -120,7 +120,7 @@ where
     fn from_bytes_with_provider<'a, PStream: MemoryProvider>(
         reader: &mut crate::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self>
+    ) -> kiln_error::Result<Self>
     where
         Self: Sized,
     {

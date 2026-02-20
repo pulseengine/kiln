@@ -1,6 +1,6 @@
-//! Type aliases for `no_std` compatibility in wrt-runtime
+//! Type aliases for `no_std` compatibility in kiln-runtime
 
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedMap,
     BoundedVec,
 };
@@ -61,10 +61,10 @@ pub const MAX_INSTRUMENTATION_POINTS: usize = 2048;
 // Runtime state vectors
 /// Value stack type for std environments
 #[cfg(feature = "std")]
-pub type ValueStackVec = Vec<wrt_foundation::Value>;
+pub type ValueStackVec = Vec<kiln_foundation::Value>;
 /// Value stack type for `no_std` environments
 #[cfg(not(feature = "std"))]
-pub type ValueStackVec = BoundedVec<wrt_foundation::Value, MAX_VALUE_STACK, RuntimeProvider>;
+pub type ValueStackVec = BoundedVec<kiln_foundation::Value, MAX_VALUE_STACK, RuntimeProvider>;
 
 /// Call stack type for std environments
 #[cfg(feature = "std")]
@@ -75,10 +75,10 @@ pub type CallStackVec = BoundedVec<crate::core_types::CallFrame, MAX_CALL_STACK,
 
 /// Local variables vector type for std environments
 #[cfg(feature = "std")]
-pub type LocalsVec = Vec<wrt_foundation::Value>;
+pub type LocalsVec = Vec<kiln_foundation::Value>;
 /// Local variables vector type for `no_std` environments
 #[cfg(not(feature = "std"))]
-pub type LocalsVec = BoundedVec<wrt_foundation::Value, MAX_LOCALS, RuntimeProvider>;
+pub type LocalsVec = BoundedVec<kiln_foundation::Value, MAX_LOCALS, RuntimeProvider>;
 
 /// Global variables vector type for std environments
 #[cfg(feature = "std")]
@@ -124,24 +124,24 @@ pub type MemoriesVec = BoundedVec<crate::memory::Memory, MAX_MEMORIES, RuntimePr
 
 /// Element segments vector type for std environments
 #[cfg(feature = "std")]
-pub type ElementsVec = Vec<wrt_foundation::types::ElementSegment>;
+pub type ElementsVec = Vec<kiln_foundation::types::ElementSegment>;
 /// Element segments vector type for `no_std` environments
 #[cfg(not(feature = "std"))]
 pub type ElementsVec =
-    BoundedVec<wrt_foundation::types::ElementSegment, MAX_ELEMENTS, RuntimeProvider>;
+    BoundedVec<kiln_foundation::types::ElementSegment, MAX_ELEMENTS, RuntimeProvider>;
 
 /// Data segments vector type for std environments
 #[cfg(feature = "std")]
-pub type DataVec = Vec<wrt_foundation::types::DataSegment>;
+pub type DataVec = Vec<kiln_foundation::types::DataSegment>;
 /// Data segments vector type for `no_std` environments
 #[cfg(not(feature = "std"))]
-pub type DataVec = BoundedVec<wrt_foundation::types::DataSegment, MAX_DATA, RuntimeProvider>;
+pub type DataVec = BoundedVec<kiln_foundation::types::DataSegment, MAX_DATA, RuntimeProvider>;
 
 // Instruction vectors
 /// Instructions vector type for std environments
 #[cfg(feature = "std")]
-// Instructions module is temporarily disabled in wrt-decoder
-// pub type InstructionVec = Vec<wrt_decoder::instructions::Instruction>;
+// Instructions module is temporarily disabled in kiln-decoder
+// pub type InstructionVec = Vec<kiln_decoder::instructions::Instruction>;
 pub type InstructionVec = Vec<crate::prelude::Instruction>;
 /// Instructions vector type for `no_std` environments
 #[cfg(not(feature = "std"))]
@@ -193,7 +193,7 @@ pub type TableDataVec =
 pub type RuntimeString = String;
 /// Runtime string type for `no_std` environments
 #[cfg(not(feature = "std"))]
-pub type RuntimeString = wrt_foundation::BoundedString<MAX_STRING_LENGTH>;
+pub type RuntimeString = kiln_foundation::BoundedString<MAX_STRING_LENGTH>;
 
 // Maps for runtime state
 /// Function map type for std environments
@@ -251,7 +251,7 @@ pub type ByteVec = BoundedVec<u8, 65536, RuntimeProvider>;
 // Error collection for batch operations
 /// Error vector type for std environments
 #[cfg(feature = "std")]
-pub type ErrorVec = Vec<wrt_error::Error>;
+pub type ErrorVec = Vec<kiln_error::Error>;
 /// Error vector type for `no_std` environments
 #[cfg(not(feature = "std"))]
-pub type ErrorVec = BoundedVec<wrt_error::Error, 256, RuntimeProvider>;
+pub type ErrorVec = BoundedVec<kiln_error::Error, 256, RuntimeProvider>;

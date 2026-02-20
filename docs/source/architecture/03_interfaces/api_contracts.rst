@@ -3,7 +3,7 @@
 API Contracts and Specifications
 =================================
 
-This section defines the formal contracts and specifications for all APIs in Pulseengine (WRT Edition),
+This section defines the formal contracts and specifications for all APIs in Pulseengine (Kiln Edition),
 ensuring consistent behavior across std, no_std+alloc, and no_std+no_alloc environments.
 
 .. arch_interface:: ARCH_IF_CONTRACT_001
@@ -21,7 +21,7 @@ Memory Provider Contracts
 Core Memory Provider Contract
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Contract Definition** (``wrt-foundation/src/safe_memory.rs:45-89``):
+**Contract Definition** (``kiln-foundation/src/safe_memory.rs:45-89``):
 
 .. code-block:: rust
 
@@ -132,7 +132,7 @@ Component Instance Contracts
 Component Execution Contract
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Contract Definition** (``wrt-runtime/src/component_impl.rs:89-156``):
+**Contract Definition** (``kiln-runtime/src/component_impl.rs:89-156``):
 
 .. code-block:: rust
 
@@ -211,7 +211,7 @@ Resource Management Contracts
 Resource Table Contract
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-**Contract Definition** (``wrt-component/src/resources/resource_table.rs:89-156``):
+**Contract Definition** (``kiln-component/src/resources/resource_table.rs:89-156``):
 
 .. code-block:: rust
 
@@ -308,7 +308,7 @@ Parser Interface Contracts
 WebAssembly Parser Contract
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**Contract Definition** (``wrt-decoder/src/parser.rs:123-189``):
+**Contract Definition** (``kiln-decoder/src/parser.rs:123-189``):
 
 .. code-block:: rust
 
@@ -377,7 +377,7 @@ Error Handling Contracts
 Error Context Contract
 ~~~~~~~~~~~~~~~~~~~~~~
 
-**Contract Definition** (``wrt-error/src/context.rs:78-134``):
+**Contract Definition** (``kiln-error/src/context.rs:78-134``):
 
 .. code-block:: rust
 

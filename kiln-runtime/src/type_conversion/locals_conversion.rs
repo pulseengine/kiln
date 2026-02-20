@@ -1,14 +1,14 @@
 //! Type conversion utilities for local variables
 //!
 //! This module provides conversion between different representations of local
-//! variables used in the WRT execution pipeline.
+//! variables used in the Kiln execution pipeline.
 
 // alloc is imported in lib.rs with proper feature gates
 #[cfg(any(feature = "std", feature = "alloc"))]
 use alloc::vec::Vec;
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     bounded::BoundedVec,
     budget_aware_provider::CrateId,
     safe_managed_alloc,

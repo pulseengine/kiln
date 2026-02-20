@@ -4,11 +4,11 @@
 //! instructions. It focuses on basic type checking without requiring
 //! complex trait implementations.
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::types::{
+use kiln_foundation::types::{
     BlockType,
     ValueType,
 };

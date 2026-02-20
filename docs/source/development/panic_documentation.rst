@@ -4,7 +4,7 @@ Panic Documentation Guidelines
 Overview
 --------
 
-This document outlines our approach to documenting and managing panics in the WRT project Rust codebase. As a safety-critical project, we need to carefully track where panics can occur, understand their impact, and plan appropriate mitigation strategies.
+This document outlines our approach to documenting and managing panics in the Kiln project Rust codebase. As a safety-critical project, we need to carefully track where panics can occur, understand their impact, and plan appropriate mitigation strategies.
 
 Why Document Panics?
 --------------------
@@ -31,7 +31,7 @@ All functions that may panic should include a "Panics" section in their document
     /// 
     /// Safety impact: [LOW|MEDIUM|HIGH] - [Brief explanation of the safety implication]
     /// 
-    /// Tracking: WRTQ-XXX (qualification requirement tracking ID).
+    /// Tracking: KILNQ-XXX (qualification requirement tracking ID).
 
 Safety Impact Levels
 ~~~~~~~~~~~~~~~~~~~~
@@ -43,7 +43,7 @@ Safety Impact Levels
 Tracking IDs
 ~~~~~~~~~~~~
 
-Each documented panic must have a tracking ID in our issue tracker (WRTQ-XXX format). This allows us to:
+Each documented panic must have a tracking ID in our issue tracker (KILNQ-XXX format). This allows us to:
 
 1. Track the resolution status of each panic
 2. Document the risk assessment
@@ -99,7 +99,7 @@ Document these scenarios consistently:
       /// 
       /// Panics if the underlying operation fails. This typically occurs when [specific conditions].
       /// Safety impact: MEDIUM - [Explain impact]
-      /// Tracking: WRTQ-001
+      /// Tracking: KILNQ-001
 
 2. **Array/Slice Indexing**:
 
@@ -109,7 +109,7 @@ Document these scenarios consistently:
       /// 
       /// Panics if `index` is out of bounds (>= `self.len()`).
       /// Safety impact: MEDIUM - Invalid memory access
-      /// Tracking: WRTQ-002
+      /// Tracking: KILNQ-002
 
 3. **Integer Overflow/Underflow**:
 
@@ -119,7 +119,7 @@ Document these scenarios consistently:
       /// 
       /// Panics in debug mode if arithmetic operation overflows.
       /// Safety impact: HIGH - Potential for memory corruption
-      /// Tracking: WRTQ-003
+      /// Tracking: KILNQ-003
 
 Best Practices
 --------------

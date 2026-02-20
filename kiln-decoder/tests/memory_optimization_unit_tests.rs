@@ -4,7 +4,7 @@
 mod tests {
     #[test]
     fn test_bounds_checking() {
-        use wrt_decoder::memory_optimized::check_bounds_u32;
+        use kiln_decoder::memory_optimized::check_bounds_u32;
 
         // Test successful bounds check
         assert!(check_bounds_u32(10, 20, "test").is_ok());
@@ -22,7 +22,7 @@ mod tests {
 
     #[test]
     fn test_safe_usize_conversion() {
-        use wrt_decoder::memory_optimized::safe_usize_conversion;
+        use kiln_decoder::memory_optimized::safe_usize_conversion;
 
         // Test successful conversion
         assert_eq!(safe_usize_conversion(42, "test").unwrap(), 42);
@@ -32,7 +32,7 @@ mod tests {
 
     #[test]
     fn test_memory_optimization_integration() {
-        use wrt_decoder::memory_optimized::{check_bounds_u32, safe_usize_conversion};
+        use kiln_decoder::memory_optimized::{check_bounds_u32, safe_usize_conversion};
 
         // Simulate parsing a section with bounds checking
         let alleged_count = 1000u32;
@@ -52,7 +52,7 @@ mod tests {
 
     #[test]
     fn test_bounds_checking_prevents_over_allocation() {
-        use wrt_decoder::memory_optimized::check_bounds_u32;
+        use kiln_decoder::memory_optimized::check_bounds_u32;
 
         // Test that maliciously large counts are rejected
         let malicious_count = u32::MAX;
@@ -73,7 +73,7 @@ mod tests {
 mod string_optimization_tests {
     #[test]
     fn test_utf8_validation_without_allocation() {
-        use wrt_decoder::optimized_string::validate_utf8_name;
+        use kiln_decoder::optimized_string::validate_utf8_name;
 
         // Create test data: [length][string_bytes]
         let mut test_data = vec![];
@@ -90,7 +90,7 @@ mod string_optimization_tests {
 
     #[test]
     fn test_invalid_utf8_handling() {
-        use wrt_decoder::optimized_string::validate_utf8_name;
+        use kiln_decoder::optimized_string::validate_utf8_name;
 
         // Create test data with invalid UTF-8
         let mut test_data = vec![];
@@ -107,11 +107,11 @@ mod string_optimization_tests {
 
 #[cfg(all(not(feature = "std")))]
 mod no_std_tests {
-    use wrt_foundation::NoStdProvider;
+    use kiln_foundation::NoStdProvider;
 
     #[test]
     fn test_memory_pool_with_no_std_provider() {
-        use wrt_decoder::memory_optimized::MemoryPool;
+        use kiln_decoder::memory_optimized::MemoryPool;
 
         let provider = NoStdProvider::<2048>::default();
         let mut pool = MemoryPool::new(provider);

@@ -1,7 +1,7 @@
 //! Runtime-specific module types and functionality
 //!
 //! This module contains runtime-specific data that extends the pure format
-//! definitions from wrt-format. It handles execution concerns like start
+//! definitions from kiln-format. It handles execution concerns like start
 //! functions and active segment initialization.
 
 use crate::prelude::*;
@@ -57,7 +57,7 @@ impl RuntimeModuleData {
     
     /// Extract runtime data from a format module during conversion
     #[cfg(feature = "format")]
-    pub fn from_format_module(module: &wrt_format::module::Module) -> Self {
+    pub fn from_format_module(module: &kiln_format::module::Module) -> Self {
         let mut runtime_data = Self::new();
         
         // Extract start function
@@ -65,7 +65,7 @@ impl RuntimeModuleData {
         
         // Extract active data segments
         for (idx, data) in module.data.iter().enumerate() {
-            if let wrt_format::pure_format_types::PureDataMode::Active { memory_index, .. } = &data.mode {
+            if let kiln_format::pure_format_types::PureDataMode::Active { memory_index, .. } = &data.mode {
                 runtime_data.active_data_segments.push(ActiveDataSegment {
                     memory_index: *memory_index,
                     offset_expr: data.offset.to_vec(),
@@ -76,7 +76,7 @@ impl RuntimeModuleData {
         
         // Extract active element segments
         for (idx, elem) in module.elements.iter().enumerate() {
-            if let wrt_format::pure_format_types::PureElementMode::Active { table_index, .. } = &elem.mode {
+            if let kiln_format::pure_format_types::PureElementMode::Active { table_index, .. } = &elem.mode {
                 runtime_data.active_element_segments.push(ActiveElementSegment {
                     table_index: *table_index,
                     offset_expr: elem.offset_expr.to_vec(),

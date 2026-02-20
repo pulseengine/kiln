@@ -65,8 +65,8 @@ pub use resource_operation::{from_format_resource_operation, to_format_resource_
 pub use resource_strategy::{
     GenericResourceStrategy, MAX_RESOURCE_BUFFER_SIZE, ResourceStrategy, ResourceStrategyNoStd,
 };
-// Re-export MAX_BUFFER_SIZE directly from wrt_foundation for public access
-pub use wrt_foundation::bounded::MAX_BUFFER_SIZE;
+// Re-export MAX_BUFFER_SIZE directly from kiln_foundation for public access
+pub use kiln_foundation::bounded::MAX_BUFFER_SIZE;
 // Export ResourceTable components based on feature flags
 #[cfg(feature = "std")]
 pub use resource_table::{

@@ -1,6 +1,6 @@
 use core::ptr::NonNull;
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorKind,
 };

@@ -6,7 +6,7 @@
 
 use core::hint::black_box;
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 /// Performance benchmark results
 #[derive(Debug, Clone, Copy)]

@@ -11,13 +11,13 @@ use core::sync::atomic::{
     Ordering,
 };
 
-use wrt_error::{
+use kiln_error::{
     helpers::memory_limit_exceeded_error,
     Result,
 };
 
 // Capability-based imports
-use crate::wrt_memory_system::CapabilityWrtFactory;
+use crate::kiln_memory_system::CapabilityKilnFactory;
 use crate::{
     budget_aware_provider::CrateId,
     capabilities::{
@@ -209,7 +209,7 @@ impl<const MAX_SUB_BUDGETS: usize> HierarchicalBudget<MAX_SUB_BUDGETS> {
             sub_budget.try_allocate(size)?;
 
             // Create capability-guarded provider through the WRT factory
-            let guard = CapabilityWrtFactory::create_provider::<N>(self.crate_id)?;
+            let guard = CapabilityKilnFactory::create_provider::<N>(self.crate_id)?;
 
             Ok((guard, idx))
         } else {

@@ -16,10 +16,10 @@ mod component_binary_parser {
 
     use core::fmt;
 
-    use wrt_error::{Error, ErrorCategory, Result, codes};
-    use wrt_format::{Validatable, component::Component};
+    use kiln_error::{Error, ErrorCategory, Result, codes};
+    use kiln_format::{Validatable, component::Component};
     // Import ValidationLevel from foundation if available, otherwise define locally
-    pub use wrt_foundation::VerificationLevel as ValidationLevel;
+    pub use kiln_foundation::VerificationLevel as ValidationLevel;
 
     use crate::prelude::*;
 
@@ -422,7 +422,7 @@ mod component_binary_parser {
             &self,
             _component: &mut Component,
             _index: usize,
-            _module: &wrt_format::module::Module,
+            _module: &kiln_format::module::Module,
         ) -> Result<()> {
             // For now, just validate that parsing succeeded
             // In a full implementation, you would integrate this with
@@ -475,7 +475,7 @@ mod component_binary_parser {
 
             #[cfg(feature = "tracing")]
             {
-                use wrt_foundation::tracing::trace;
+                use kiln_foundation::tracing::trace;
                 trace!("Parsing {} nested component(s)", count);
             }
 
@@ -499,7 +499,7 @@ mod component_binary_parser {
 
                 #[cfg(feature = "tracing")]
                 {
-                    use wrt_foundation::tracing::trace;
+                    use kiln_foundation::tracing::trace;
                     trace!("Parsing nested component {} ({} bytes)", i, comp_size);
                 }
 
@@ -514,7 +514,7 @@ mod component_binary_parser {
 
                 #[cfg(feature = "tracing")]
                 {
-                    use wrt_foundation::tracing::trace;
+                    use kiln_foundation::tracing::trace;
                     trace!("Successfully parsed nested component {}", i);
                 }
             }
@@ -595,9 +595,9 @@ mod component_binary_parser {
                 }
 
                 // Add to component's types collection
-                // Convert placeholder type to wrt_format type - temporary stub
-                let dummy_comp_type = wrt_format::component::ComponentType {
-                    definition: wrt_format::component::ComponentTypeDefinition::Function {
+                // Convert placeholder type to kiln_format type - temporary stub
+                let dummy_comp_type = kiln_format::component::ComponentType {
+                    definition: kiln_format::component::ComponentTypeDefinition::Function {
                         params: Vec::new(),
                         results: Vec::new(),
                     },
@@ -615,7 +615,7 @@ mod component_binary_parser {
             &self,
             component: &mut Component,
             _index: usize,
-            comp_type: &wrt_format::component::ComponentType,
+            comp_type: &kiln_format::component::ComponentType,
         ) -> Result<()> {
             // Store the type in the component's types vector
             component.types.push(comp_type.clone());
@@ -832,7 +832,7 @@ pub use component_binary_parser::{
 // No-std stub implementations
 #[cfg(not(feature = "std"))]
 pub mod no_std_stubs {
-    use wrt_error::{Error, ErrorCategory, Result, codes};
+    use kiln_error::{Error, ErrorCategory, Result, codes};
 
     /// Validation level stub for no_std environments
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -3,8 +3,8 @@
 //! This module provides component model type definitions.
 
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use wrt_foundation::allocator::{CrateId, WrtVec};
-use wrt_foundation::{
+use kiln_foundation::allocator::{CrateId, KilnVec};
+use kiln_foundation::{
     bounded::BoundedString,
     collections::StaticVec,
     traits::{Checksummable, FromBytes, ToBytes},
@@ -107,12 +107,12 @@ pub struct ComponentInstance {
     pub metadata: ComponentMetadata,
     /// Type index for runtime type resolution (Step 2)
     #[cfg(feature = "std")]
-    pub type_index: std::collections::HashMap<u32, wrt_format::component::ComponentType>,
+    pub type_index: std::collections::HashMap<u32, kiln_format::component::ComponentType>,
     #[cfg(not(feature = "std"))]
     pub type_index: (), // Placeholder for no_std
     /// Function table for this instance
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub functions: WrtVec<
+    pub functions: KilnVec<
         crate::components::component_instantiation::ComponentFunction,
         { CrateId::Component as u8 },
         128,
@@ -123,28 +123,28 @@ pub struct ComponentInstance {
     pub functions: BoundedVec<crate::components::component_instantiation::ComponentFunction, 128>,
     /// Resolved imports for this instance
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub imports: WrtVec<ResolvedImport, { CrateId::Component as u8 }, 256>,
+    pub imports: KilnVec<ResolvedImport, { CrateId::Component as u8 }, 256>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     pub imports: Vec<ResolvedImport>,
     #[cfg(not(any(feature = "std",)))]
     pub imports: BoundedVec<ResolvedImport, 256>,
     /// Resolved exports from this instance
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub exports: WrtVec<ResolvedExport, { CrateId::Component as u8 }, 256>,
+    pub exports: KilnVec<ResolvedExport, { CrateId::Component as u8 }, 256>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     pub exports: Vec<ResolvedExport>,
     #[cfg(not(any(feature = "std",)))]
     pub exports: BoundedVec<ResolvedExport, 256>,
     /// Resource tables for this instance
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub resource_tables: WrtVec<ResourceTable, { CrateId::Component as u8 }, 16>,
+    pub resource_tables: KilnVec<ResourceTable, { CrateId::Component as u8 }, 16>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     pub resource_tables: Vec<ResourceTable>,
     #[cfg(not(any(feature = "std",)))]
     pub resource_tables: BoundedVec<ResourceTable, 16>,
     /// Module instances embedded in this component
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    pub module_instances: WrtVec<ModuleInstance, { CrateId::Component as u8 }, 64>,
+    pub module_instances: KilnVec<ModuleInstance, { CrateId::Component as u8 }, 64>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     pub module_instances: Vec<ModuleInstance>,
     #[cfg(not(any(feature = "std",)))]
@@ -153,17 +153,17 @@ pub struct ComponentInstance {
     /// Maps from component instance index to the instantiated ComponentInstance
     #[cfg(all(feature = "std", feature = "safety-critical"))]
     pub nested_component_instances:
-        WrtVec<NestedComponentInstance, { CrateId::Component as u8 }, 16>,
+        KilnVec<NestedComponentInstance, { CrateId::Component as u8 }, 16>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     pub nested_component_instances: Vec<NestedComponentInstance>,
     #[cfg(not(any(feature = "std",)))]
     pub nested_component_instances: BoundedVec<NestedComponentInstance, 16>,
     /// Runtime engine for executing WASM functions (if available)
-    #[cfg(feature = "wrt-execution")]
-    pub runtime_engine: Option<Box<wrt_runtime::engine::CapabilityAwareEngine>>,
+    #[cfg(feature = "kiln-execution")]
+    pub runtime_engine: Option<Box<kiln_runtime::engine::CapabilityAwareEngine>>,
     /// Main module instance handle for execution
-    #[cfg(feature = "wrt-execution")]
-    pub main_instance_handle: Option<wrt_runtime::engine::InstanceHandle>,
+    #[cfg(feature = "kiln-execution")]
+    pub main_instance_handle: Option<kiln_runtime::engine::InstanceHandle>,
 }
 
 impl fmt::Debug for ComponentInstance {
@@ -252,8 +252,8 @@ impl ComponentInstance {
     /// let dispatcher = WasiDispatcher::with_defaults()?;
     /// instance.set_host_handler(Box::new(dispatcher));
     /// ```
-    #[cfg(all(feature = "std", feature = "wrt-execution"))]
-    pub fn set_host_handler(&mut self, handler: Box<dyn wrt_foundation::HostImportHandler>) {
+    #[cfg(all(feature = "std", feature = "kiln-execution"))]
+    pub fn set_host_handler(&mut self, handler: Box<dyn kiln_foundation::HostImportHandler>) {
         if let Some(ref mut engine) = self.runtime_engine {
             engine.set_host_handler(handler);
         }
@@ -268,8 +268,8 @@ impl ComponentInstance {
     /// # Returns
     /// Ok(()) if pre-allocation succeeded or no engine is available,
     /// Err if cabi_realloc fails
-    #[cfg(all(feature = "std", feature = "wrt-execution", feature = "wasi"))]
-    pub fn pre_allocate_wasi_args(&mut self) -> wrt_error::Result<()> {
+    #[cfg(all(feature = "std", feature = "kiln-execution", feature = "wasi"))]
+    pub fn pre_allocate_wasi_args(&mut self) -> kiln_error::Result<()> {
         if let (Some(engine), Some(handle)) = (&mut self.runtime_engine, self.main_instance_handle)
         {
             engine.pre_allocate_wasi_args(handle)
@@ -559,7 +559,7 @@ impl Default for Value {
 // for the purposes of value equality in collections and comparisons.
 impl Eq for Value {}
 
-impl wrt_foundation::traits::ToBytes for Value {
+impl kiln_foundation::traits::ToBytes for Value {
     fn serialized_size(&self) -> usize {
         match self {
             Value::Bool(_) => 2,                                // discriminant + bool
@@ -573,12 +573,12 @@ impl wrt_foundation::traits::ToBytes for Value {
         }
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
-        use wrt_foundation::traits::WriteStream;
+    ) -> kiln_error::Result<()> {
+        use kiln_foundation::traits::WriteStream;
 
         match self {
             Value::Bool(b) => {
@@ -638,12 +638,12 @@ impl wrt_foundation::traits::ToBytes for Value {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Value {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for Value {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
-        use wrt_foundation::traits::ReadStream;
+    ) -> kiln_error::Result<Self> {
+        use kiln_foundation::traits::ReadStream;
 
         let discriminant = reader.read_u8()?;
 
@@ -705,8 +705,8 @@ impl wrt_foundation::traits::FromBytes for Value {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for Value {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Value {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         // Simple checksum based on the discriminant and basic content
         let discriminant = match self {
             Value::Bool(_) => 0u8,
@@ -783,26 +783,26 @@ impl From<ComponentInstanceId> for u64 {
 }
 
 impl Checksummable for ComponentInstanceId {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
 impl ToBytes for ComponentInstanceId {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
 impl FromBytes for ComponentInstanceId {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u32::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -829,26 +829,26 @@ impl TypeId {
 }
 
 impl Checksummable for TypeId {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
 impl ToBytes for TypeId {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
 impl FromBytes for TypeId {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u32::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -875,26 +875,26 @@ impl ResourceId {
 }
 
 impl Checksummable for ResourceId {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
 impl ToBytes for ResourceId {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
 impl FromBytes for ResourceId {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u32::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -961,10 +961,10 @@ impl fmt::Display for ComponentError {
 #[cfg(feature = "std")]
 impl std::error::Error for ComponentError {}
 
-// Conversion to wrt_error::Error for unified error handling
-impl From<ComponentError> for wrt_error::Error {
+// Conversion to kiln_error::Error for unified error handling
+impl From<ComponentError> for kiln_error::Error {
     fn from(err: ComponentError) -> Self {
-        use wrt_error::{ErrorCategory, codes};
+        use kiln_error::{ErrorCategory, codes};
         match err {
             ComponentError::TooManyGenerativeTypes => Self::new(
                 ErrorCategory::ComponentRuntime,
@@ -1026,33 +1026,33 @@ impl From<ComponentError> for wrt_error::Error {
 }
 
 // Implement required traits for BoundedVec compatibility
-use wrt_foundation::traits::{ReadStream, WriteStream};
+use kiln_foundation::traits::{ReadStream, WriteStream};
 
 // Macro to implement basic traits for complex types
 macro_rules! impl_basic_traits {
     ($type:ty, $default_val:expr) => {
         impl Checksummable for $type {
-            fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+            fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
                 // Simple stub implementation
                 0u32.update_checksum(checksum);
             }
         }
 
         impl ToBytes for $type {
-            fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 &self,
                 _writer: &mut WriteStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<()> {
+            ) -> kiln_error::Result<()> {
                 Ok(())
             }
         }
 
         impl FromBytes for $type {
-            fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 _reader: &mut ReadStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<Self> {
+            ) -> kiln_error::Result<Self> {
                 Ok($default_val)
             }
         }

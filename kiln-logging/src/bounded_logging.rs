@@ -8,11 +8,11 @@ use alloc::{
 };
 
 // Always import Error and Result regardless of feature flags
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     traits::{
         Checksummable,
         FromBytes,
@@ -693,9 +693,9 @@ impl Default for BoundedLogger {
     }
 }
 
-// Implement WRT traits for BoundedLogger
-impl wrt_foundation::traits::Checksummable for BoundedLogger {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+// Implement Kiln traits for BoundedLogger
+impl kiln_foundation::traits::Checksummable for BoundedLogger {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         // Update checksum with all fields
         checksum.update_slice(&self.id.0.to_le_bytes());
         checksum.update_slice(&self.component_id.0.to_le_bytes());

@@ -1,8 +1,8 @@
-//! Prelude module for wrt-runtime
+//! Prelude module for kiln-runtime
 //!
 //! This module provides a unified set of imports for both std and `no_std`
 //! environments. It re-exports commonly used types and traits to ensure
-//! consistency across all crates in the WRT project and simplify imports in
+//! consistency across all crates in the Kiln project and simplify imports in
 //! individual modules.
 
 // Core imports for both std and no_std environments
@@ -18,15 +18,15 @@ extern crate alloc;
 // P Users must specify their own provider when using these types
 /// `BoundedHashMap` type for `no_std` environments with bounded capacity
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
-pub type BoundedHashMap<K, V, P> = wrt_foundation::bounded_collections::BoundedMap<K, V, 128, P>;
+pub type BoundedHashMap<K, V, P> = kiln_foundation::bounded_collections::BoundedMap<K, V, 128, P>;
 
 /// `BoundedHashSet` type for `no_std` environments with bounded capacity  
 #[cfg(all(not(feature = "std"), feature = "alloc"))]
-pub type BoundedHashSet<T, P> = wrt_foundation::bounded_collections::BoundedSet<T, 128, P>;
+pub type BoundedHashSet<T, P> = kiln_foundation::bounded_collections::BoundedSet<T, 128, P>;
 
 // Platform-aware string and vector types
 #[cfg(not(feature = "std"))]
-pub use wrt_foundation::bounded::BoundedString;
+pub use kiln_foundation::bounded::BoundedString;
 
 // Helper macro to create Vec
 /// Create a new Vec for `no_std` environments
@@ -91,36 +91,36 @@ macro_rules! format {
 // Helper functions for Option<Value> conversion
 /// Convert Option<Value> to Option<i32> for `no_std` environments
 #[cfg(not(feature = "std"))]
-pub fn option_value_as_i32(value: &Option<wrt_foundation::Value>) -> Option<i32> {
+pub fn option_value_as_i32(value: &Option<kiln_foundation::Value>) -> Option<i32> {
     match value {
-        Some(wrt_foundation::Value::I32(val)) => Some(*val),
+        Some(kiln_foundation::Value::I32(val)) => Some(*val),
         _ => None,
     }
 }
 
 /// Convert Option<Value> to Option<i64> for `no_std` environments
 #[cfg(not(feature = "std"))]
-pub fn option_value_as_i64(value: &Option<wrt_foundation::Value>) -> Option<i64> {
+pub fn option_value_as_i64(value: &Option<kiln_foundation::Value>) -> Option<i64> {
     match value {
-        Some(wrt_foundation::Value::I64(val)) => Some(*val),
+        Some(kiln_foundation::Value::I64(val)) => Some(*val),
         _ => None,
     }
 }
 
 /// Convert Option<Value> to Option<f32> for `no_std` environments
 #[cfg(not(feature = "std"))]
-pub fn option_value_as_f32(value: &Option<wrt_foundation::Value>) -> Option<f32> {
+pub fn option_value_as_f32(value: &Option<kiln_foundation::Value>) -> Option<f32> {
     match value {
-        Some(wrt_foundation::Value::F32(val)) => Some(val.value()),
+        Some(kiln_foundation::Value::F32(val)) => Some(val.value()),
         _ => None,
     }
 }
 
 /// Convert Option<Value> to Option<f64> for `no_std` environments
 #[cfg(not(feature = "std"))]
-pub fn option_value_as_f64(value: &Option<wrt_foundation::Value>) -> Option<f64> {
+pub fn option_value_as_f64(value: &Option<kiln_foundation::Value>) -> Option<f64> {
     match value {
-        Some(wrt_foundation::Value::F64(val)) => Some(val.value()),
+        Some(kiln_foundation::Value::F64(val)) => Some(val.value()),
         _ => None,
     }
 }
@@ -241,7 +241,7 @@ pub use std::{
 
 // Provide String and ToString for pure no_std environments
 #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-pub use wrt_foundation::bounded::BoundedString as String;
+pub use kiln_foundation::bounded::BoundedString as String;
 
 #[cfg(all(not(feature = "std"), not(feature = "alloc")))]
 pub trait ToString {
@@ -260,16 +260,16 @@ impl ToString for &str {
 
 // Remove duplicate definitions - Vec and String are already defined above
 
-// Re-export from wrt-decoder (aliased to avoid name clashes)
-// Component module is temporarily disabled in wrt-decoder
+// Re-export from kiln-decoder (aliased to avoid name clashes)
+// Component module is temporarily disabled in kiln-decoder
 // #[cfg(feature = "std")]
-// pub use wrt_decoder::component::Component as DecoderComponentDefinition;
-// Re-export from wrt-instructions for instruction types
+// pub use kiln_decoder::component::Component as DecoderComponentDefinition;
+// Re-export from kiln-instructions for instruction types
 // Decoder imports are optional and may not be available
-// pub use wrt_decoder::instructions::Instruction;
-// pub use wrt_decoder::prelude::Module as DecoderModule;
-// Re-export from wrt-error for error handling
-pub use wrt_error::prelude::{
+// pub use kiln_decoder::instructions::Instruction;
+// pub use kiln_decoder::prelude::Module as DecoderModule;
+// Re-export from kiln-error for error handling
+pub use kiln_error::prelude::{
     kinds::{
         self,
         ComponentError,
@@ -284,11 +284,11 @@ pub use wrt_error::prelude::{
     ErrorCategory,
     Result,
 };
-// Re-export from wrt-format for format specifications (aliased to avoid name clashes)
+// Re-export from kiln-format for format specifications (aliased to avoid name clashes)
 #[cfg(feature = "std")]
-pub use wrt_format::component::Component as FormatComponent;
+pub use kiln_format::component::Component as FormatComponent;
 #[cfg(feature = "std")]
-pub use wrt_format::{
+pub use kiln_format::{
     module::{
         Element as FormatElement,
         Export as FormatExport,
@@ -305,33 +305,33 @@ pub use wrt_format::{
 };
 // Clean core WebAssembly types (for runtime use)
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub use wrt_foundation::clean_core_types::{
+pub use kiln_foundation::clean_core_types::{
     CoreGlobalType,
     CoreMemoryType,
     CoreTableType,
 };
 // For ExternType, use the clean_types version which doesn't have provider parameters
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub use wrt_foundation::clean_types::ExternType as CleanExternType;
-// Re-export from wrt-foundation for core types
+pub use kiln_foundation::clean_types::ExternType as CleanExternType;
+// Re-export from kiln-foundation for core types
 #[cfg(feature = "std")]
-pub use wrt_foundation::component::ComponentType;
-// Import required traits (these should already be implemented by wrt_foundation::Value)
-pub use wrt_foundation::traits::{
+pub use kiln_foundation::component::ComponentType;
+// Import required traits (these should already be implemented by kiln_foundation::Value)
+pub use kiln_foundation::traits::{
     Checksummable,
     FromBytes,
     ToBytes,
 };
-// Re-export core types from wrt_foundation instead of wrt_format
-pub use wrt_foundation::types::{
+// Re-export core types from kiln_foundation instead of kiln_format
+pub use kiln_foundation::types::{
     CustomSection, /* Assuming this is the intended replacement for FormatCustomSection
-                    * Add other direct re-exports from wrt_foundation::types if they were
-                    * previously from wrt_format::module e.g., DataSegment,
+                    * Add other direct re-exports from kiln_foundation::types if they were
+                    * previously from kiln_format::module e.g., DataSegment,
                     * ElementSegment, Export, GlobalType, Import, MemoryType, TableType,
                     * FuncType For now, only replacing what was directly
                     * aliased or used in a way that implies a direct replacement need. */
 };
-pub use wrt_foundation::{
+pub use kiln_foundation::{
     prelude::{
         BoundedStack,
         BoundedVec,
@@ -353,7 +353,7 @@ pub use wrt_foundation::{
 };
 // Use foundation Value directly for runtime (not clean_types)
 // This ensures compatibility with BoundedVec and bounded collections
-pub use wrt_foundation::{
+pub use kiln_foundation::{
     types::FuncType as CleanFuncType,
     types::ValueType as CleanValType,
     GlobalType as CleanGlobalType,
@@ -362,25 +362,25 @@ pub use wrt_foundation::{
     Value as CleanValue,
 };
 
-/// Core function type from wrt_foundation.
+/// Core function type from kiln_foundation.
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub type CoreFuncType = wrt_foundation::types::FuncType;
+pub type CoreFuncType = kiln_foundation::types::FuncType;
 
 // Fallback for no_std environments - provide core types
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-pub use wrt_foundation::types::{
+pub use kiln_foundation::types::{
     GlobalType as CoreGlobalType,
     MemoryType as CoreMemoryType,
     TableType as CoreTableType,
 };
 
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-pub type CoreFuncType = wrt_foundation::types::FuncType;
+pub type CoreFuncType = kiln_foundation::types::FuncType;
 
 // Public type aliases using clean CORE types (not component types)
 /// Type alias for WebAssembly function types
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub type FuncType = wrt_foundation::types::FuncType;
+pub type FuncType = kiln_foundation::types::FuncType;
 /// Type alias for WebAssembly memory types
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub type MemoryType = CoreMemoryType;
@@ -400,10 +400,10 @@ pub type ExternType = CleanExternType;
 
 // Factory for internal allocation when needed
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub use wrt_foundation::type_factory::RuntimeFactory64K as DefaultFactory;
+pub use kiln_foundation::type_factory::RuntimeFactory64K as DefaultFactory;
 // Fallback for no-alloc environments - use legacy provider-based types temporarily
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-pub use wrt_foundation::types::{
+pub use kiln_foundation::types::{
     FuncType,
     GlobalType,
     MemoryType,
@@ -414,39 +414,39 @@ pub use wrt_foundation::types::{
 // Default provider factory for capability-based allocation
 /// Default memory provider factory with 64KB allocation capacity
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub type DefaultProviderFactory = wrt_foundation::type_factory::RuntimeFactory64K;
+pub type DefaultProviderFactory = kiln_foundation::type_factory::RuntimeFactory64K;
 
 /// Default memory provider factory for pure no_std (smaller capacity)
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-pub type DefaultProviderFactory = wrt_foundation::type_factory::RuntimeFactory8K;
+pub type DefaultProviderFactory = kiln_foundation::type_factory::RuntimeFactory8K;
 
 /// Runtime function type alias for consistency
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub type RuntimeFuncType = FuncType;
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-pub type RuntimeFuncType = wrt_foundation::types::FuncType;
+pub type RuntimeFuncType = kiln_foundation::types::FuncType;
 
 /// Runtime string type alias for consistency
 #[cfg(feature = "std")]
 pub type RuntimeString = String;
 #[cfg(not(feature = "std"))]
-pub type RuntimeString = wrt_foundation::bounded::BoundedString<256>;
+pub type RuntimeString = kiln_foundation::bounded::BoundedString<256>;
 
 // Safety-critical wrapper types for runtime (deterministic, verifiable)
 // SIMD execution integration
 
 // Binary std/no_std choice
 #[cfg(feature = "std")]
-pub use wrt_foundation::prelude::{
+pub use kiln_foundation::prelude::{
     ComponentValue,
     ValType as ComponentValType,
 };
-// Re-export from wrt-host (for runtime host interaction items)
+// Re-export from kiln-host (for runtime host interaction items)
 #[cfg(feature = "std")]
-pub use wrt_host::prelude::CallbackRegistry as HostFunctionRegistry;
+pub use kiln_host::prelude::CallbackRegistry as HostFunctionRegistry;
 #[cfg(feature = "std")]
-pub use wrt_host::prelude::HostFunctionHandler as HostFunction;
-pub use wrt_instructions::{
+pub use kiln_host::prelude::HostFunctionHandler as HostFunction;
+pub use kiln_instructions::{
     arithmetic_ops::ArithmeticOp,
     control_ops::{
         BranchTarget as Label,
@@ -480,8 +480,8 @@ pub enum Instruction {
 
 
 // Implement required traits for Instruction
-impl wrt_foundation::traits::Checksummable for Instruction {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Instruction {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Instruction::Nop => {
                 checksum.update_slice(&[0u8]); // Variant discriminant for Nop
@@ -504,7 +504,7 @@ impl wrt_foundation::traits::Checksummable for Instruction {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Instruction {
+impl kiln_foundation::traits::ToBytes for Instruction {
     fn serialized_size(&self) -> usize {
         1 + match self {
             Instruction::Nop => 0,           // No additional data
@@ -514,9 +514,9 @@ impl wrt_foundation::traits::ToBytes for Instruction {
         }
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         match self {
@@ -532,9 +532,9 @@ impl wrt_foundation::traits::ToBytes for Instruction {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Instruction {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Instruction {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         let mut discriminant = [0u8; 1];
@@ -549,47 +549,47 @@ impl wrt_foundation::traits::FromBytes for Instruction {
                 let func_idx = u32::from_le_bytes(func_bytes);
                 Ok(Instruction::Call(func_idx))
             },
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Unsupported instruction discriminant",
             )),
         }
     }
 }
-// Re-export from wrt-intercept (for runtime interception items)
-pub use wrt_intercept::prelude::{
+// Re-export from kiln-intercept (for runtime interception items)
+pub use kiln_intercept::prelude::{
     LinkInterceptor as InterceptorRegistry,
     LinkInterceptorStrategy as InterceptStrategy,
 };
 // Binary std/no_std choice
 #[cfg(not(feature = "std"))]
-pub use wrt_sync::{
-    WrtMutex as Mutex,
-    WrtMutexGuard as MutexGuard,
-    WrtRwLock as RwLock,
-    WrtRwLockReadGuard as RwLockReadGuard,
-    WrtRwLockWriteGuard as RwLockWriteGuard,
+pub use kiln_sync::{
+    KilnMutex as Mutex,
+    KilnMutexGuard as MutexGuard,
+    KilnRwLock as RwLock,
+    KilnRwLockReadGuard as RwLockReadGuard,
+    KilnRwLockWriteGuard as RwLockWriteGuard,
 };
 
-// Execution related types defined in wrt-runtime
+// Execution related types defined in kiln-runtime
 pub use crate::execution::{
     ExecutionContext,
     ExecutionStats,
 }; /* Removed ExecutionResult as
     * it's not defined in
     * execution.rs */
-// --- Local definitions from wrt-runtime ---
-// These are types defined within wrt-runtime itself, re-exported for convenience if used
+// --- Local definitions from kiln-runtime ---
+// These are types defined within kiln-runtime itself, re-exported for convenience if used
 // widely.
 
 // Core runtime structures
 // pub use crate::func::Function; // Removed: func.rs only re-exports FuncType from
-// wrt_foundation, which is already in prelude. RuntimeFunction (from module.rs) is the primary
+// kiln_foundation, which is already in prelude. RuntimeFunction (from module.rs) is the primary
 // Function struct for the runtime.
 pub use crate::global::Global;
 // Adapters and helpers if they are part of the public API exported by this prelude
 // Temporarily disabled - memory_adapter module is disabled
 // pub use crate::memory_adapter::MemoryAdapter;
-// Module items specific to wrt-runtime module structure
+// Module items specific to kiln-runtime module structure
 pub use crate::module::{
     Data,
     Element,
@@ -611,11 +611,11 @@ pub use crate::{
     table::Table,
 };
 
-// The following re-exports from wrt_format are removed as wrt-runtime should
-// not depend on wrt-format. pub use wrt_format::module::{ // REMOVED
+// The following re-exports from kiln_format are removed as kiln-runtime should
+// not depend on kiln-format. pub use kiln_format::module::{ // REMOVED
 // DataMode as FormatDataMode, Element as FormatElement, Export as FormatExport,
 // // ... and others }; // REMOVED
-// pub use wrt_format::section::CustomSection as FormatCustomSection; // REMOVED
-// pub use wrt_format::component::Component as FormatComponent; // REMOVED
-// (Component model types should come from wrt_component or wrt_foundation if
+// pub use kiln_format::section::CustomSection as FormatCustomSection; // REMOVED
+// pub use kiln_format::component::Component as FormatComponent; // REMOVED
+// (Component model types should come from kiln_component or kiln_foundation if
 // foundational)

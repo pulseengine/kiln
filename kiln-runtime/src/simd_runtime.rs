@@ -17,17 +17,17 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::format;
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::values::{
+use kiln_foundation::values::{
     Value,
     V128,
 };
-use wrt_instructions::simd_ops::SimdOp;
+use kiln_instructions::simd_ops::SimdOp;
 
 // Import additional SIMD operations
 #[path = "simd_additional_ops.rs"]
@@ -3418,7 +3418,7 @@ fn execute_f32x4_extract_lane(inputs: &[Value], lane: u8) -> Result<Value> {
         a[lane_idx * 4 + 2],
         a[lane_idx * 4 + 3],
     ]);
-    Ok(Value::F32(wrt_foundation::FloatBits32::from_f32(val)))
+    Ok(Value::F32(kiln_foundation::FloatBits32::from_f32(val)))
 }
 
 fn execute_f32x4_replace_lane(inputs: &[Value], lane: u8) -> Result<Value> {
@@ -3454,7 +3454,7 @@ fn execute_f64x2_extract_lane(inputs: &[Value], lane: u8) -> Result<Value> {
         val_bytes[6],
         val_bytes[7],
     ]);
-    Ok(Value::F64(wrt_foundation::FloatBits64::from_f64(val)))
+    Ok(Value::F64(kiln_foundation::FloatBits64::from_f64(val)))
 }
 
 fn execute_f64x2_replace_lane(inputs: &[Value], lane: u8) -> Result<Value> {

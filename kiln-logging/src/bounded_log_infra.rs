@@ -6,7 +6,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{
         BoundedString,
         BoundedVec,
@@ -44,17 +44,17 @@ pub type BoundedLogMessage = BoundedString<MAX_LOG_MESSAGE_LEN>;
 pub type BoundedModuleName = BoundedString<MAX_MODULE_NAME_LEN>;
 
 /// Create a new bounded log entry vector
-pub fn new_log_entry_vec() -> wrt_error::Result<BoundedLogEntryVec> {
+pub fn new_log_entry_vec() -> kiln_error::Result<BoundedLogEntryVec> {
     let provider = safe_managed_alloc!(8192, CrateId::Logging)?;
     BoundedVec::new(provider)
 }
 
 /// Create a new bounded logger vector
-pub fn new_logger_vec<T>() -> wrt_error::Result<BoundedLoggerVec<T>>
+pub fn new_logger_vec<T>() -> kiln_error::Result<BoundedLoggerVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq

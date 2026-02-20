@@ -2,7 +2,7 @@
 
 #![cfg(feature = "wasi-nn")]
 
-use wrt_wasi::{
+use kiln_wasi::{
     nn::{
         capabilities::{
             create_nn_capability,
@@ -47,7 +47,7 @@ fn test_nn_capability_creation() {
 
 #[test]
 fn test_nn_initialization() {
-    use wrt_wasi::nn::is_nn_available;
+    use kiln_wasi::nn::is_nn_available;
 
     // Test initializing the NN subsystem
     let capability = create_nn_capability(VerificationLevel::Standard).unwrap();
@@ -65,7 +65,7 @@ fn test_nn_initialization() {
 
 #[test]
 fn test_graph_encoding_conversion() {
-    use wrt_wasi::nn::wit_types::WitTypeConversion;
+    use kiln_wasi::nn::wit_types::WitTypeConversion;
 
     // Test encoding conversions
     let encoding = GraphEncoding::ONNX;
@@ -89,7 +89,7 @@ fn test_graph_encoding_conversion() {
 
 #[test]
 fn test_tensor_type_conversion() {
-    use wrt_wasi::nn::wit_types::WitTypeConversion;
+    use kiln_wasi::nn::wit_types::WitTypeConversion;
 
     // Test tensor type conversions
     let tensor_type = TensorType::F32;
@@ -100,7 +100,7 @@ fn test_tensor_type_conversion() {
 
 #[test]
 fn test_nn_load_without_backend() {
-    use wrt_wasi::nn::is_nn_available;
+    use kiln_wasi::nn::is_nn_available;
 
     // Initialize NN first if not already initialized
     if !is_nn_available() {
@@ -122,7 +122,7 @@ fn test_nn_load_without_backend() {
 
 #[test]
 fn test_tensor_dimensions() {
-    use wrt_wasi::nn::TensorDimensions;
+    use kiln_wasi::nn::TensorDimensions;
 
     // Test creating tensor dimensions
     let dims = TensorDimensions::new(&[1, 224, 224, 3]).unwrap();
@@ -142,7 +142,7 @@ fn test_tensor_dimensions() {
 
 #[test]
 fn test_tensor_creation() {
-    use wrt_wasi::nn::{
+    use kiln_wasi::nn::{
         capabilities::DynamicNNCapability,
         Tensor,
         TensorDimensions,
@@ -162,7 +162,7 @@ fn test_tensor_creation() {
 
 #[test]
 fn test_error_conversions() {
-    use wrt_wasi::nn::wit_types::ErrorCode;
+    use kiln_wasi::nn::wit_types::ErrorCode;
 
     // Test error code conversions
     let error = Error::wasi_invalid_argument("test");
@@ -177,7 +177,7 @@ fn test_error_conversions() {
 #[cfg(feature = "tract")]
 #[test]
 fn test_tract_backend_creation() {
-    use wrt_wasi::nn::{
+    use kiln_wasi::nn::{
         backend::{
             BackendProvider,
             NeuralNetworkBackend,
@@ -203,7 +203,7 @@ fn test_tract_backend_creation() {
 
 #[test]
 fn test_capability_limits() {
-    use wrt_wasi::nn::capabilities::{
+    use kiln_wasi::nn::capabilities::{
         BoundedNNCapability,
         ModelFormat,
         NNOperation,

@@ -13,11 +13,11 @@
 
 extern crate alloc;
 
-use wrt_component::bounded_component_infra::*;
+use kiln_component::bounded_component_infra::*;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticMap as BoundedHashMap;
-use wrt_foundation::{
-    WrtError, bounded::BoundedString, budget_aware_provider::CrateId,
+use kiln_foundation::collections::StaticMap as BoundedHashMap;
+use kiln_foundation::{
+    KilnError, bounded::BoundedString, budget_aware_provider::CrateId,
     collections::StaticVec as BoundedVec, managed_alloc,
 };
 
@@ -52,7 +52,7 @@ mod capacity_limit_tests {
         let overflow_result = vec.try_push(999);
         assert!(overflow_result.is_err());
         match overflow_result {
-            Err(WrtError::CapacityExceeded) => {
+            Err(KilnError::CapacityExceeded) => {
                 // Expected error
             },
             _ => panic!("Expected CapacityExceeded error"),
@@ -86,7 +86,7 @@ mod capacity_limit_tests {
 
         // Verify overflow handling
         let overflow = vec.try_push(0);
-        assert!(matches!(overflow, Err(WrtError::CapacityExceeded)));
+        assert!(matches!(overflow, Err(KilnError::CapacityExceeded)));
     }
 
     /// Test resource handle vector limits
@@ -271,14 +271,14 @@ mod capacity_limit_tests {
     /// Test post-return callback limits
     #[test]
     fn test_post_return_callback_limits() {
-        type Callback = fn() -> wrt_error::Result<()>;
+        type Callback = fn() -> kiln_error::Result<()>;
 
         let vec_result = new_post_return_vec::<Callback>();
         assert!(vec_result.is_ok());
 
         let mut vec = vec_result.unwrap();
 
-        fn dummy_callback() -> wrt_error::Result<()> {
+        fn dummy_callback() -> kiln_error::Result<()> {
             Ok(())
         }
 

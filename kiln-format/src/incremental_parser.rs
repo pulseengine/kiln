@@ -8,8 +8,8 @@ use std::{collections::BTreeMap, vec::Vec};
 #[cfg(not(feature = "std"))]
 use std::{collections::BTreeMap, vec::Vec};
 
-use wrt_error::{Error, Result};
-use wrt_foundation::{BoundedString, NoStdProvider, prelude::*};
+use kiln_error::{Error, Result};
+use kiln_foundation::{BoundedString, NoStdProvider, prelude::*};
 
 use crate::ast::*;
 
@@ -128,9 +128,9 @@ impl IncrementalParser {
         self.source.clear();
         self.total_length = 0;
 
-        let _provider = wrt_foundation::safe_managed_alloc!(
+        let _provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Format
+            kiln_foundation::budget_aware_provider::CrateId::Format
         )?;
 
         for line in content.lines() {
@@ -215,9 +215,9 @@ impl IncrementalParser {
 
         // Parse using enhanced parser (when fixed) or simple parser
         // For now, create a stub AST
-        let _provider = wrt_foundation::safe_managed_alloc!(
+        let _provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Format
+            kiln_foundation::budget_aware_provider::CrateId::Format
         )?;
         let doc = WitDocument {
             package: None,

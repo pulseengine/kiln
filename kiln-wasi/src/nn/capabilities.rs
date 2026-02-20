@@ -17,16 +17,16 @@ use std::{
     },
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     safe_memory::NoStdProvider,
     BoundedVec,
 };
-use wrt_platform::side_channel_resistance::constant_time;
+use kiln_platform::side_channel_resistance::constant_time;
 
 use crate::prelude::*;
 
 /// Neural Network specific verification levels that map to ASIL standards
-/// Maps to wrt_foundation::VerificationLevel for consistency
+/// Maps to kiln_foundation::VerificationLevel for consistency
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum NNVerificationLevel {
     /// QM (Quality Management) - Standard verification level
@@ -35,49 +35,49 @@ pub enum NNVerificationLevel {
     Sampling,
     /// ASIL-B (Continuous) - Static verification with pre-approved models
     Continuous,
-    /// ASIL-C (Redundant) - Redundant verification (not supported in wrtd)
+    /// ASIL-C (Redundant) - Redundant verification (not supported in kilnd)
     Redundant,
-    /// ASIL-D (Formal) - Formal verification (not supported in wrtd)
+    /// ASIL-D (Formal) - Formal verification (not supported in kilnd)
     Formal,
 }
 
-impl From<NNVerificationLevel> for wrt_foundation::verification::VerificationLevel {
+impl From<NNVerificationLevel> for kiln_foundation::verification::VerificationLevel {
     fn from(level: NNVerificationLevel) -> Self {
         match level {
             NNVerificationLevel::Standard => {
-                wrt_foundation::verification::VerificationLevel::Standard
+                kiln_foundation::verification::VerificationLevel::Standard
             },
             NNVerificationLevel::Sampling => {
-                wrt_foundation::verification::VerificationLevel::Sampling
+                kiln_foundation::verification::VerificationLevel::Sampling
             },
             NNVerificationLevel::Continuous => {
-                wrt_foundation::verification::VerificationLevel::Full
+                kiln_foundation::verification::VerificationLevel::Full
             },
             NNVerificationLevel::Redundant => {
-                wrt_foundation::verification::VerificationLevel::Redundant
+                kiln_foundation::verification::VerificationLevel::Redundant
             },
             NNVerificationLevel::Formal => {
-                wrt_foundation::verification::VerificationLevel::Redundant
+                kiln_foundation::verification::VerificationLevel::Redundant
             }, // Best available mapping
         }
     }
 }
 
-impl From<wrt_foundation::verification::VerificationLevel> for NNVerificationLevel {
-    fn from(level: wrt_foundation::verification::VerificationLevel) -> Self {
+impl From<kiln_foundation::verification::VerificationLevel> for NNVerificationLevel {
+    fn from(level: kiln_foundation::verification::VerificationLevel) -> Self {
         match level {
-            wrt_foundation::verification::VerificationLevel::Off => NNVerificationLevel::Standard,
-            wrt_foundation::verification::VerificationLevel::Basic => NNVerificationLevel::Standard,
-            wrt_foundation::verification::VerificationLevel::Standard => {
+            kiln_foundation::verification::VerificationLevel::Off => NNVerificationLevel::Standard,
+            kiln_foundation::verification::VerificationLevel::Basic => NNVerificationLevel::Standard,
+            kiln_foundation::verification::VerificationLevel::Standard => {
                 NNVerificationLevel::Standard
             },
-            wrt_foundation::verification::VerificationLevel::Full => {
+            kiln_foundation::verification::VerificationLevel::Full => {
                 NNVerificationLevel::Continuous
             },
-            wrt_foundation::verification::VerificationLevel::Sampling => {
+            kiln_foundation::verification::VerificationLevel::Sampling => {
                 NNVerificationLevel::Sampling
             },
-            wrt_foundation::verification::VerificationLevel::Redundant => {
+            kiln_foundation::verification::VerificationLevel::Redundant => {
                 NNVerificationLevel::Redundant
             },
         }
@@ -586,7 +586,7 @@ fn get_current_time_ms() -> u64 {
     }
     #[cfg(not(feature = "std"))]
     {
-        wrt_platform::time::PlatformTime::get_monotonic_time_us() / 1000
+        kiln_platform::time::PlatformTime::get_monotonic_time_us() / 1000
     }
 }
 
@@ -998,7 +998,7 @@ pub fn create_nn_capability(level: VerificationLevel) -> Result<Box<dyn NeuralNe
         },
         VerificationLevel::Redundant | VerificationLevel::Formal => {
             Err(Error::wasi_unsupported_operation(
-                "ASIL-C/D (Redundant/Formal) not supported in wrtd configuration",
+                "ASIL-C/D (Redundant/Formal) not supported in kilnd configuration",
             ))
         },
     }

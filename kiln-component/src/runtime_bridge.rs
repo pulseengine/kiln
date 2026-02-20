@@ -28,11 +28,11 @@ use std::{vec::Vec, string::String, collections::HashMap, boxed::Box, format};
 use std::{vec::Vec, string::String, collections::BTreeMap as HashMap, boxed::Box, format};
 
 #[cfg(not(any(feature = "std", )))]
-use wrt_foundation::{BoundedVec as Vec, BoundedString as String, BoundedMap as HashMap};
+use kiln_foundation::{BoundedVec as Vec, BoundedString as String, BoundedMap as HashMap};
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_foundation::{values::Value as CoreValue, types::ValueType};
-use wrt_runtime::{ExecutionStats, Module, ModuleInstance};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::{values::Value as CoreValue, types::ValueType};
+use kiln_runtime::{ExecutionStats, Module, ModuleInstance};
 
 use crate::prelude::*;
 

@@ -2,16 +2,16 @@
 //!
 //! This module provides the Import type for component imports.
 
-use wrt_format::component::ExternType;
-use wrt_foundation::{
-    // component::WrtComponentType, // Not available
+use kiln_format::component::ExternType;
+use kiln_foundation::{
+    // component::KilnComponentType, // Not available
     ExternType as RuntimeExternType,
     component::Namespace,
     traits::{Checksummable, FromBytes, ToBytes},
 };
 
 // Placeholder type for missing import
-// WrtComponentType now exported from crate root
+// KilnComponentType now exported from crate root
 #[cfg(feature = "std")]
 use crate::components::component::ExternValue;
 #[cfg(not(feature = "std"))]
@@ -28,13 +28,13 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum ImportType {
     /// Function import
-    Function(WrtComponentType<ComponentProvider>),
+    Function(KilnComponentType<ComponentProvider>),
     /// Value import (global, memory, table)
-    Value(WrtComponentType<ComponentProvider>),
+    Value(KilnComponentType<ComponentProvider>),
     /// Instance import
-    Instance(WrtComponentType<ComponentProvider>),
+    Instance(KilnComponentType<ComponentProvider>),
     /// Type import
-    Type(WrtComponentType<ComponentProvider>),
+    Type(KilnComponentType<ComponentProvider>),
 }
 
 /// Import to a component
@@ -59,28 +59,28 @@ impl Default for Import {
         #[cfg(not(feature = "std"))]
         use crate::components::component_no_std::FunctionValue;
 
-        use wrt_foundation::safe_memory::NoStdProvider;
+        use kiln_foundation::safe_memory::NoStdProvider;
         // Create a default Unit type with a provider
-        let component_type = WrtComponentType::unit(NoStdProvider::<4096>::default())
+        let component_type = KilnComponentType::unit(NoStdProvider::<4096>::default())
             .unwrap_or_else(|_| panic!("Failed to create unit component type"));
 
         #[cfg(feature = "std")]
         let func_value = FunctionValue {
-            ty: wrt_foundation::types::FuncType::new([], []).unwrap_or_default(),
+            ty: kiln_foundation::types::FuncType::new([], []).unwrap_or_default(),
             export_name: String::new(),
         };
 
         #[cfg(not(feature = "std"))]
         let func_value = {
-            use wrt_foundation::bounded::MAX_WASM_NAME_LENGTH;
+            use kiln_foundation::bounded::MAX_WASM_NAME_LENGTH;
 
             // Create function type using Default
-            let func_type = wrt_foundation::types::FuncType::default();
+            let func_type = kiln_foundation::types::FuncType::default();
 
             // Create export name using BoundedString
             let export_name_provider = NoStdProvider::<512>::default();
             let export_name =
-                wrt_foundation::BoundedString::<MAX_WASM_NAME_LENGTH>::from_str_truncate("")
+                kiln_foundation::BoundedString::<MAX_WASM_NAME_LENGTH>::from_str_truncate("")
                     .unwrap_or_else(|_| panic!("Failed to create default export name"));
 
             FunctionValue {
@@ -111,18 +111,18 @@ impl PartialEq for Import {
 impl Eq for Import {}
 
 impl Checksummable for Import {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.namespace.update_checksum(checksum);
         self.name.update_checksum(checksum);
     }
 }
 
 impl ToBytes for Import {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.namespace.to_bytes_with_provider(writer, provider)?;
         self.name.to_bytes_with_provider(writer, provider)?;
         Ok(())
@@ -130,10 +130,10 @@ impl ToBytes for Import {
 }
 
 impl FromBytes for Import {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -146,10 +146,10 @@ impl Import {
         ty: ExternType,
         value: ExternValue,
     ) -> Self {
-        use wrt_foundation::safe_memory::NoStdProvider;
+        use kiln_foundation::safe_memory::NoStdProvider;
         // Default import type based on ExternType - this is a simplified mapping
         let import_type = ImportType::Function(
-            WrtComponentType::unit(NoStdProvider::<4096>::default())
+            KilnComponentType::unit(NoStdProvider::<4096>::default())
                 .unwrap_or_else(|_| panic!("Failed to create unit component type")),
         );
         Self {

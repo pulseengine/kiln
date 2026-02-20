@@ -14,7 +14,7 @@ Context
 
 **Teaching Point**: Start by explaining the problem space and constraints.
 
-Pulseengine (WRT Edition) must support multiple deployment environments:
+Pulseengine (Kiln Edition) must support multiple deployment environments:
 
 1. **Cloud/Server**: Abundant memory, standard OS services
 2. **Embedded Linux**: Limited memory, but has OS allocator
@@ -40,7 +40,7 @@ Implement a **three-tier memory allocation strategy** based on available feature
    
    .. code-block:: rust
    
-      // Actual implementation in wrt-foundation/src/safe_memory.rs
+      // Actual implementation in kiln-foundation/src/safe_memory.rs
       pub struct StdProvider {
           data: Vec<u8>,
           access_tracker: MemoryAccessTracker,
@@ -114,7 +114,7 @@ The `MemoryProvider` trait unifies all strategies:
 
 .. code-block:: rust
 
-   // From wrt-foundation/src/traits.rs
+   // From kiln-foundation/src/traits.rs
    pub trait MemoryProvider: Clone + PartialEq + Eq {
        type Allocator: Allocator;
        
@@ -172,7 +172,7 @@ This decision is validated by:
 References
 ----------
 
-- **Implementation**: ``wrt-foundation/src/safe_memory.rs``
-- **Bounded Types**: ``wrt-foundation/src/bounded.rs``
+- **Implementation**: ``kiln-foundation/src/safe_memory.rs``
+- **Bounded Types**: ``kiln-foundation/src/bounded.rs``
 - **Examples**: :doc:`/examples/foundation/safe_memory`
 - **Related ADRs**: :doc:`adr-002-bounded-collections`

@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Module: Waitable Set Canonical Operations
 // SW-REQ-ID: REQ_WAITABLE_SET_001
 //
@@ -24,8 +24,8 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{Error, ErrorCategory, Result};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_foundation::{
     bounded::BoundedVec,
     bounded_collections::{BoundedMap, BoundedSet},
     budget_aware_provider::CrateId,
@@ -394,7 +394,7 @@ impl WaitableSetBuiltins {
         let mut registry_ref = WAITABLE_SET_REGISTRY.try_borrow_mut().map_err(|_| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::INVALID_STATE,
+                kiln_error::codes::INVALID_STATE,
                 "Error message needed",
             )
         })?;
@@ -413,7 +413,7 @@ impl WaitableSetBuiltins {
         let registry = registry_ref.as_ref().ok_or_else(|| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::INVALID_STATE,
+                kiln_error::codes::INVALID_STATE,
                 "Error message needed",
             )
         })?;
@@ -431,7 +431,7 @@ impl WaitableSetBuiltins {
         let registry = registry_ref.as_mut().ok_or_else(|| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::INVALID_STATE,
+                kiln_error::codes::INVALID_STATE,
                 "Error message needed",
             )
         })?;
@@ -466,7 +466,7 @@ impl WaitableSetBuiltins {
             } else {
                 Err(Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::RESOURCE_INVALID_HANDLE,
+                    kiln_error::codes::RESOURCE_INVALID_HANDLE,
                     "Error message needed",
                 ))
             }
@@ -512,7 +512,7 @@ impl WaitableSetBuiltins {
             } else {
                 Err(Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::RESOURCE_INVALID_HANDLE,
+                    kiln_error::codes::RESOURCE_INVALID_HANDLE,
                     "Error message needed",
                 ))
             }
@@ -542,7 +542,7 @@ impl WaitableSetBuiltins {
     #[cfg(not(any(feature = "std")))]
     pub fn waitable_set_poll_all(
         set_id: WaitableSetId,
-    ) -> core::result::Result<BoundedVec<WaitableEntry, MAX_WAIT_RESULTS>, wrt_error::Error> {
+    ) -> core::result::Result<BoundedVec<WaitableEntry, MAX_WAIT_RESULTS>, kiln_error::Error> {
         Self::with_registry_mut(|registry| {
             if let Some(set) = registry.get_set_mut(set_id) {
                 set.check_ready()

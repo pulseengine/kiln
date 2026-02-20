@@ -3,17 +3,17 @@
 
 // For no_std, override prelude's bounded::BoundedVec with StaticVec
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticVec as BoundedVec;
+use kiln_foundation::collections::StaticVec as BoundedVec;
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedString, budget_aware_provider::CrateId, prelude::*, safe_managed_alloc,
 };
 
 // Import BoundedVec only for std - no_std uses StaticVec alias above
 #[cfg(feature = "std")]
-use wrt_foundation::bounded::BoundedVec;
+use kiln_foundation::bounded::BoundedVec;
 
-use crate::{bounded_component_infra::ComponentProvider, prelude::WrtComponentValue, types::Value};
+use crate::{bounded_component_infra::ComponentProvider, prelude::KilnComponentValue, types::Value};
 
 /// Canonical ABI processor stub
 #[derive(Debug, Default, Clone)]
@@ -53,23 +53,23 @@ impl ResourceLifecycleManager {
     pub fn create_resource(
         &mut self,
         _type_id: u32,
-        _data: WrtComponentValue<ComponentProvider>,
-    ) -> wrt_error::Result<ResourceHandle> {
+        _data: KilnComponentValue<ComponentProvider>,
+    ) -> kiln_error::Result<ResourceHandle> {
         let handle = ResourceHandle(self.next_handle);
         self.next_handle += 1;
         Ok(handle)
     }
 
-    pub fn drop_resource(&mut self, _handle: ResourceHandle) -> wrt_error::Result<()> {
+    pub fn drop_resource(&mut self, _handle: ResourceHandle) -> kiln_error::Result<()> {
         Ok(())
     }
 
     pub fn borrow_resource(
         &mut self,
         _handle: ResourceHandle,
-    ) -> wrt_error::Result<&WrtComponentValue<ComponentProvider>> {
+    ) -> kiln_error::Result<&KilnComponentValue<ComponentProvider>> {
         // Return a dummy value - in real implementation this would be tracked
-        static DUMMY: WrtComponentValue<ComponentProvider> = WrtComponentValue::Bool(false);
+        static DUMMY: KilnComponentValue<ComponentProvider> = KilnComponentValue::Bool(false);
         Ok(&DUMMY)
     }
 
@@ -77,7 +77,7 @@ impl ResourceLifecycleManager {
         &mut self,
         _handle: ResourceHandle,
         _new_owner: u32,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         Ok(())
     }
 }
@@ -109,10 +109,10 @@ impl ComponentRuntimeBridge {
         &mut self,
         _instance_id: u32,
         _function_name: &str,
-        _args: &[WrtComponentValue<ComponentProvider>],
-    ) -> core::result::Result<WrtComponentValue<ComponentProvider>, wrt_error::Error> {
+        _args: &[KilnComponentValue<ComponentProvider>],
+    ) -> core::result::Result<KilnComponentValue<ComponentProvider>, kiln_error::Error> {
         // Return a dummy successful result
-        Ok(WrtComponentValue::<ComponentProvider>::U32(42))
+        Ok(KilnComponentValue::<ComponentProvider>::U32(42))
     }
 
     pub fn register_component_instance(
@@ -121,7 +121,7 @@ impl ComponentRuntimeBridge {
         _module_name: String,
         _function_count: u32,
         _memory_size: u32,
-    ) -> core::result::Result<u32, wrt_error::Error> {
+    ) -> core::result::Result<u32, kiln_error::Error> {
         Ok(1)
     }
 
@@ -131,12 +131,12 @@ impl ComponentRuntimeBridge {
         _name: String,
         _signature: crate::component_instantiation::FunctionSignature,
         _func: F,
-    ) -> core::result::Result<usize, wrt_error::Error>
+    ) -> core::result::Result<usize, kiln_error::Error>
     where
         F: Fn(
-                &[WrtComponentValue<ComponentProvider>],
+                &[KilnComponentValue<ComponentProvider>],
             )
-                -> core::result::Result<WrtComponentValue<ComponentProvider>, wrt_error::Error>
+                -> core::result::Result<KilnComponentValue<ComponentProvider>, kiln_error::Error>
             + Send
             + Sync
             + 'static,
@@ -150,43 +150,43 @@ impl ComponentRuntimeBridge {
         _name: BoundedString<64>,
         _signature: crate::component_instantiation::FunctionSignature,
         _func: fn(
-            &[WrtComponentValue<ComponentProvider>],
+            &[KilnComponentValue<ComponentProvider>],
         )
-            -> core::result::Result<WrtComponentValue<ComponentProvider>, wrt_error::Error>,
-    ) -> core::result::Result<usize, wrt_error::Error> {
+            -> core::result::Result<KilnComponentValue<ComponentProvider>, kiln_error::Error>,
+    ) -> core::result::Result<usize, kiln_error::Error> {
         Ok(0)
     }
 }
 
 /// Component value conversion stubs
-impl From<WrtComponentValue<ComponentProvider>> for Value {
-    fn from(cv: WrtComponentValue<ComponentProvider>) -> Self {
+impl From<KilnComponentValue<ComponentProvider>> for Value {
+    fn from(cv: KilnComponentValue<ComponentProvider>) -> Self {
         match cv {
-            WrtComponentValue::Bool(b) => Value::Bool(b),
-            WrtComponentValue::U8(v) => Value::U8(v),
-            WrtComponentValue::U16(v) => Value::U16(v),
-            WrtComponentValue::U32(v) => Value::U32(v),
-            WrtComponentValue::U64(v) => Value::U64(v),
-            WrtComponentValue::S8(v) => Value::S8(v),
-            WrtComponentValue::S16(v) => Value::S16(v),
-            WrtComponentValue::S32(v) => Value::S32(v),
-            WrtComponentValue::S64(v) => Value::S64(v),
-            WrtComponentValue::F32(v) => Value::F32(v.to_f32()),
-            WrtComponentValue::F64(v) => Value::F64(v.to_f64()),
-            WrtComponentValue::Char(c) => Value::Char(c),
+            KilnComponentValue::Bool(b) => Value::Bool(b),
+            KilnComponentValue::U8(v) => Value::U8(v),
+            KilnComponentValue::U16(v) => Value::U16(v),
+            KilnComponentValue::U32(v) => Value::U32(v),
+            KilnComponentValue::U64(v) => Value::U64(v),
+            KilnComponentValue::S8(v) => Value::S8(v),
+            KilnComponentValue::S16(v) => Value::S16(v),
+            KilnComponentValue::S32(v) => Value::S32(v),
+            KilnComponentValue::S64(v) => Value::S64(v),
+            KilnComponentValue::F32(v) => Value::F32(v.to_f32()),
+            KilnComponentValue::F64(v) => Value::F64(v.to_f64()),
+            KilnComponentValue::Char(c) => Value::Char(c),
             #[cfg(feature = "std")]
-            WrtComponentValue::String(s) => {
+            KilnComponentValue::String(s) => {
                 let provider = safe_managed_alloc!(2048, CrateId::Component)
                     .unwrap_or_else(|_| NoStdProvider::default());
-                let bounded_str = wrt_foundation::bounded::BoundedString::try_from_str(&s)
+                let bounded_str = kiln_foundation::bounded::BoundedString::try_from_str(&s)
                     .unwrap_or_else(|_| panic!("Failed to convert string"));
                 Value::String(bounded_str)
             },
             #[cfg(not(any(feature = "std",)))]
-            WrtComponentValue::String(s) => {
+            KilnComponentValue::String(s) => {
                 let _provider = safe_managed_alloc!(2048, CrateId::Component)
                     .unwrap_or_else(|_| NoStdProvider::default());
-                let bounded_str = wrt_foundation::bounded::BoundedString::try_from_str(s.as_str())
+                let bounded_str = kiln_foundation::bounded::BoundedString::try_from_str(s.as_str())
                     .unwrap_or_else(|_| panic!("Failed to convert string"));
                 Value::String(bounded_str)
             },
@@ -195,38 +195,38 @@ impl From<WrtComponentValue<ComponentProvider>> for Value {
     }
 }
 
-impl From<Value> for WrtComponentValue<ComponentProvider> {
+impl From<Value> for KilnComponentValue<ComponentProvider> {
     fn from(v: Value) -> Self {
         match v {
-            Value::Bool(b) => WrtComponentValue::Bool(b),
-            Value::U8(v) => WrtComponentValue::U8(v),
-            Value::U16(v) => WrtComponentValue::U16(v),
-            Value::U32(v) => WrtComponentValue::U32(v),
-            Value::U64(v) => WrtComponentValue::U64(v),
-            Value::S8(v) => WrtComponentValue::S8(v),
-            Value::S16(v) => WrtComponentValue::S16(v),
-            Value::S32(v) => WrtComponentValue::S32(v),
-            Value::S64(v) => WrtComponentValue::S64(v),
-            Value::F32(v) => WrtComponentValue::F32(wrt_foundation::FloatBits32::from_f32(v)),
-            Value::F64(v) => WrtComponentValue::F64(wrt_foundation::FloatBits64::from_f64(v)),
-            Value::Char(c) => WrtComponentValue::Char(c),
+            Value::Bool(b) => KilnComponentValue::Bool(b),
+            Value::U8(v) => KilnComponentValue::U8(v),
+            Value::U16(v) => KilnComponentValue::U16(v),
+            Value::U32(v) => KilnComponentValue::U32(v),
+            Value::U64(v) => KilnComponentValue::U64(v),
+            Value::S8(v) => KilnComponentValue::S8(v),
+            Value::S16(v) => KilnComponentValue::S16(v),
+            Value::S32(v) => KilnComponentValue::S32(v),
+            Value::S64(v) => KilnComponentValue::S64(v),
+            Value::F32(v) => KilnComponentValue::F32(kiln_foundation::FloatBits32::from_f32(v)),
+            Value::F64(v) => KilnComponentValue::F64(kiln_foundation::FloatBits64::from_f64(v)),
+            Value::Char(c) => KilnComponentValue::Char(c),
             #[cfg(feature = "std")]
             Value::String(s) => {
                 let string =
                     s.as_str().unwrap_or_else(|_| panic!("Failed to get string slice")).to_string();
-                WrtComponentValue::String(string)
+                KilnComponentValue::String(string)
             },
             #[cfg(not(any(feature = "std",)))]
             Value::String(s) => {
                 match s.as_str() {
                     Ok(str_ref) => {
                         // Convert BoundedString to String
-                        WrtComponentValue::String(str_ref.into())
+                        KilnComponentValue::String(str_ref.into())
                     },
-                    Err(_) => WrtComponentValue::Bool(false), // Fallback on error
+                    Err(_) => KilnComponentValue::Bool(false), // Fallback on error
                 }
             },
-            _ => WrtComponentValue::Bool(false), // Fallback
+            _ => KilnComponentValue::Bool(false), // Fallback
         }
     }
 }
@@ -383,7 +383,7 @@ pub mod cfi_stubs {
             _table_idx: u32,
             _protection: &CfiControlFlowProtection,
             _context: &mut CfiExecutionContext,
-        ) -> core::result::Result<CfiProtectedBranchTarget, wrt_error::Error> {
+        ) -> core::result::Result<CfiProtectedBranchTarget, kiln_error::Error> {
             Ok(CfiProtectedBranchTarget {
                 target: 0,
                 protection: CfiProtection::default(),
@@ -394,7 +394,7 @@ pub mod cfi_stubs {
             &mut self,
             _protection: &CfiControlFlowProtection,
             _context: &mut CfiExecutionContext,
-        ) -> core::result::Result<(), wrt_error::Error> {
+        ) -> core::result::Result<(), kiln_error::Error> {
             Ok(())
         }
 
@@ -404,7 +404,7 @@ pub mod cfi_stubs {
             _conditional: bool,
             _protection: &CfiControlFlowProtection,
             _context: &mut CfiExecutionContext,
-        ) -> core::result::Result<CfiProtectedBranchTarget, wrt_error::Error> {
+        ) -> core::result::Result<CfiProtectedBranchTarget, kiln_error::Error> {
             Ok(CfiProtectedBranchTarget {
                 target: _label_idx,
                 protection: CfiProtection::default(),
@@ -413,7 +413,7 @@ pub mod cfi_stubs {
     }
 
     impl CfiExecutionContext {
-        pub fn new() -> wrt_error::Result<Self> {
+        pub fn new() -> kiln_error::Result<Self> {
             Ok(Self {
                 current_function: 0,
                 current_instruction: 0,

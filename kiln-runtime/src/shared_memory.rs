@@ -41,13 +41,13 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     shared_memory::{
         MemoryType,
         SharedMemoryAccess,
@@ -59,7 +59,7 @@ use wrt_foundation::{
     values::Value,
     MemArg,
 };
-use wrt_instructions::{
+use kiln_instructions::{
     atomic_ops::{
         AtomicWaitNotifyOp,
         MemoryOrdering,
@@ -74,12 +74,12 @@ use crate::thread_manager::{
     ThreadId,
     ThreadManager,
 };
-use wrt_sync::{
+use kiln_sync::{
     AsilLevel,
     SafeAtomicCounter,
     SafetyContext,
-    WrtMutex,
-    WrtRwLock,
+    KilnMutex,
+    KilnRwLock,
 };
 
 /// Maximum number of shared memory instances per module
@@ -198,7 +198,7 @@ pub struct SafeAtomicMemoryContext {
     /// Thread manager for coordinating thread access.
     thread_manager: ThreadManager,
     /// Capability context for memory access control.
-    capability_context: wrt_foundation::capabilities::MemoryCapabilityContext,
+    capability_context: kiln_foundation::capabilities::MemoryCapabilityContext,
     /// Statistics for atomic operations.
     pub stats: AtomicExecutionStats,
 }
@@ -209,7 +209,7 @@ impl SafeAtomicMemoryContext {
         memory_base: *mut u8,
         memory_size: usize,
         thread_manager: ThreadManager,
-        capability_context: wrt_foundation::capabilities::MemoryCapabilityContext,
+        capability_context: kiln_foundation::capabilities::MemoryCapabilityContext,
     ) -> Result<Self> {
         Ok(Self {
             memory_base,
@@ -221,7 +221,7 @@ impl SafeAtomicMemoryContext {
     }
 
     /// Executes an atomic operation on the memory.
-    pub fn execute_atomic(&mut self, thread_id: ThreadId, atomic_op: wrt_instructions::atomic_ops::AtomicOp) -> Result<Vec<u64>> {
+    pub fn execute_atomic(&mut self, thread_id: ThreadId, atomic_op: kiln_instructions::atomic_ops::AtomicOp) -> Result<Vec<u64>> {
         // Placeholder implementation - real implementation would execute the atomic operation
         self.stats.total_operations += 1;
         Ok(vec![0])
@@ -233,13 +233,13 @@ pub struct SharedMemoryInstance {
     /// Memory type specification.
     pub memory_type: MemoryType,
     /// Underlying memory implementation.
-    memory:          Arc<WrtRwLock<Box<dyn MemoryOperations + Send + Sync>>>,
+    memory:          Arc<KilnRwLock<Box<dyn MemoryOperations + Send + Sync>>>,
     /// Shared memory manager for access control.
-    manager:         Arc<WrtMutex<SharedMemoryManager>>,
+    manager:         Arc<KilnMutex<SharedMemoryManager>>,
     /// Atomic context for atomic operations.
-    atomic_context:  Arc<WrtMutex<SafeAtomicMemoryContext>>,
+    atomic_context:  Arc<KilnMutex<SafeAtomicMemoryContext>>,
     /// Access statistics.
-    pub stats:       Arc<WrtMutex<SharedMemoryStats>>,
+    pub stats:       Arc<KilnMutex<SharedMemoryStats>>,
 }
 
 impl SharedMemoryInstance {
@@ -248,7 +248,7 @@ impl SharedMemoryInstance {
         memory_type: MemoryType,
         memory: Box<dyn MemoryOperations + Send + Sync>,
         thread_manager: ThreadManager,
-        capability_context: wrt_foundation::capabilities::MemoryCapabilityContext,
+        capability_context: kiln_foundation::capabilities::MemoryCapabilityContext,
     ) -> Result<Self> {
         if !memory_type.is_shared() {
             return Err(Error::validation_error(
@@ -274,10 +274,10 @@ impl SharedMemoryInstance {
 
         Ok(Self {
             memory_type,
-            memory: Arc::new(WrtRwLock::new(memory)),
-            manager: Arc::new(WrtMutex::new(SharedMemoryManager::new())),
-            atomic_context: Arc::new(WrtMutex::new(atomic_context)),
-            stats: Arc::new(WrtMutex::new(SharedMemoryStats {
+            memory: Arc::new(KilnRwLock::new(memory)),
+            manager: Arc::new(KilnMutex::new(SharedMemoryManager::new())),
+            atomic_context: Arc::new(KilnMutex::new(atomic_context)),
+            stats: Arc::new(KilnMutex::new(SharedMemoryStats {
                 registered_segments: 0,
                 memory_accesses: 0,
                 atomic_operations: 0,
@@ -307,8 +307,8 @@ impl SharedMemoryInstance {
                     align_exponent: 2,
                     memory_index: 0,
                 }; // Assume 4-byte alignment
-                let load_op = wrt_instructions::atomic_ops::AtomicLoadOp::I32AtomicLoad { memarg };
-                let atomic_op = wrt_instructions::atomic_ops::AtomicOp::Load(load_op);
+                let load_op = kiln_instructions::atomic_ops::AtomicLoadOp::I32AtomicLoad { memarg };
+                let atomic_op = kiln_instructions::atomic_ops::AtomicOp::Load(load_op);
 
                 let result = atomic_context.execute_atomic(thread_id, atomic_op)?;
                 if result.len() == 1 {
@@ -331,8 +331,8 @@ impl SharedMemoryInstance {
                     memory_index: 0,
                 }; // Assume 4-byte alignment
                 let store_op =
-                    wrt_instructions::atomic_ops::AtomicStoreOp::I32AtomicStore { memarg };
-                let atomic_op = wrt_instructions::atomic_ops::AtomicOp::Store(store_op);
+                    kiln_instructions::atomic_ops::AtomicStoreOp::I32AtomicStore { memarg };
+                let atomic_op = kiln_instructions::atomic_ops::AtomicOp::Store(store_op);
 
                 atomic_context.execute_atomic(thread_id, atomic_op)?;
                 Ok(None)
@@ -360,7 +360,7 @@ impl SharedMemoryInstance {
                     Value::I64(_) => AtomicWaitNotifyOp::MemoryAtomicWait64 { memarg },
                     _ => return Err(Error::type_error("Atomic wait expects i32 or i64 value")),
                 };
-                let atomic_op = wrt_instructions::atomic_ops::AtomicOp::WaitNotify(wait_op);
+                let atomic_op = kiln_instructions::atomic_ops::AtomicOp::WaitNotify(wait_op);
 
                 let result = atomic_context.execute_atomic(thread_id, atomic_op)?;
                 if result.len() == 1 {
@@ -383,7 +383,7 @@ impl SharedMemoryInstance {
                     memory_index: 0,
                 };
                 let notify_op = AtomicWaitNotifyOp::MemoryAtomicNotify { memarg };
-                let atomic_op = wrt_instructions::atomic_ops::AtomicOp::WaitNotify(notify_op);
+                let atomic_op = kiln_instructions::atomic_ops::AtomicOp::WaitNotify(notify_op);
 
                 let result = atomic_context.execute_atomic(thread_id, atomic_op)?;
                 if result.len() == 1 {
@@ -457,7 +457,7 @@ pub struct SharedMemoryContext {
     memory_counter: SafeAtomicCounter,
 
     /// Global shared memory statistics.
-    pub global_stats: Arc<WrtMutex<SharedMemoryStats>>,
+    pub global_stats: Arc<KilnMutex<SharedMemoryStats>>,
 }
 
 impl SharedMemoryContext {
@@ -471,7 +471,7 @@ impl SharedMemoryContext {
             #[cfg(not(feature = "std"))]
             memories: core::array::from_fn(|i| (i as u32, None)),
             memory_counter: SafeAtomicCounter::new(MAX_SHARED_MEMORIES, safety_context),
-            global_stats: Arc::new(WrtMutex::new(SharedMemoryStats {
+            global_stats: Arc::new(KilnMutex::new(SharedMemoryStats {
                 registered_segments: 0,
                 memory_accesses: 0,
                 atomic_operations: 0,
@@ -609,13 +609,13 @@ pub fn create_shared_memory(
     memory_type: MemoryType,
     initial_data: Option<Vec<u8>>,
     thread_manager: ThreadManager,
-    capability_context: wrt_foundation::capabilities::MemoryCapabilityContext,
+    capability_context: kiln_foundation::capabilities::MemoryCapabilityContext,
 ) -> Result<Arc<SharedMemoryInstance>> {
     use crate::memory::Memory;
 
     // Create memory instance
     let core_mem_type = CoreMemoryType {
-        limits: wrt_foundation::types::Limits {
+        limits: kiln_foundation::types::Limits {
             min: memory_type.min_pages(),
             max: memory_type.max_pages(),
         },

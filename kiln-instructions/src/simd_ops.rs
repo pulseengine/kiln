@@ -1,4 +1,4 @@
-// WRT - wrt-instructions
+// WRT - kiln-instructions
 // Module: SIMD Operations
 // SW-REQ-ID: REQ_SIMD_INST_001
 //
@@ -13,8 +13,8 @@
 //! operations). These instructions operate on 128-bit vectors and are essential
 //! for high-performance computing in WebAssembly.
 
-use wrt_error::Result;
-use wrt_foundation::values::Value;
+use kiln_error::Result;
+use kiln_foundation::values::Value;
 
 use crate::prelude::{
     Debug,
@@ -875,7 +875,7 @@ pub trait SimdExecutionContext {
 }
 
 #[cfg(feature = "std")]
-impl<T: SimdExecutionContext> PureInstruction<T, wrt_error::Error> for SimdInstruction {
+impl<T: SimdExecutionContext> PureInstruction<T, kiln_error::Error> for SimdInstruction {
     fn execute(&self, context: &mut T) -> Result<()> {
         // Get the required inputs from the execution stack
         let input_count = self.op.input_count();
@@ -900,10 +900,10 @@ impl<T: SimdExecutionContext> PureInstruction<T, wrt_error::Error> for SimdInstr
 }
 
 #[cfg(not(feature = "std"))]
-impl<T: SimdExecutionContext> PureInstruction<T, wrt_error::Error> for SimdInstruction {
+impl<T: SimdExecutionContext> PureInstruction<T, kiln_error::Error> for SimdInstruction {
     fn execute(&self, _context: &mut T) -> Result<()> {
         // Binary std/no_std choice
-        Err(wrt_error::Error::runtime_execution_error(
+        Err(kiln_error::Error::runtime_execution_error(
             "SIMD operations require alloc feature",
         ))
     }

@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Module: Advanced Threading Built-ins
 // SW-REQ-ID: REQ_ADVANCED_THREADING_001
 //
@@ -20,16 +20,16 @@ use core::cell::RefCell as AtomicRefCell;
 #[cfg(feature = "std")]
 use std::{boxed::Box, collections::HashMap, vec::Vec};
 
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::BoundedString;
+use kiln_foundation::BoundedString;
 #[cfg(feature = "std")]
-use wrt_foundation::component_value::ComponentValue;
+use kiln_foundation::component_value::ComponentValue;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedMap as HashMap, BoundedVec as Vec, budget_aware_provider::CrateId, safe_managed_alloc,
 };
-use wrt_foundation::{bounded::BoundedVec, bounded_collections::BoundedMap, types::ValueType};
+use kiln_foundation::{bounded::BoundedVec, bounded_collections::BoundedMap, types::ValueType};
 
 // Type aliases for no_std compatibility
 #[cfg(not(feature = "std"))]
@@ -472,7 +472,7 @@ impl AdvancedThreadingBuiltins {
         let registry_ref = ADVANCED_THREAD_REGISTRY.try_borrow().map_err(|_| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::INVALID_STATE,
+                kiln_error::codes::INVALID_STATE,
                 "Error message needed",
             )
         })?;
@@ -490,7 +490,7 @@ impl AdvancedThreadingBuiltins {
         let mut registry_ref = ADVANCED_THREAD_REGISTRY.try_borrow_mut().map_err(|_| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::INVALID_STATE,
+                kiln_error::codes::INVALID_STATE,
                 "Error message needed",
             )
         })?;
@@ -628,7 +628,7 @@ impl AdvancedThreadingBuiltins {
             } else {
                 Err(Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::RESOURCE_INVALID_HANDLE,
+                    kiln_error::codes::RESOURCE_INVALID_HANDLE,
                     "Error message needed",
                 ))
             }

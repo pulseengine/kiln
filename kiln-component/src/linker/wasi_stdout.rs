@@ -1,20 +1,20 @@
 //! WASI stdout implementation for Component Model
 //!
 //! **DEPRECATED**: This module provides legacy standalone functions for stdout.
-//! The proper Preview2 implementation is in `wrt_wasi::WasiDispatcher` which
+//! The proper Preview2 implementation is in `kiln_wasi::WasiDispatcher` which
 //! uses dynamic resource allocation via `WasiResourceManager`.
 //!
 //! These functions are kept for backwards compatibility but should not be used
 //! for new code. Use `WasiDispatcher::dispatch()` instead.
 
-use wrt_error::Result;
+use kiln_error::Result;
 
 #[cfg(feature = "std")]
 use std::io::Write;
 
 // Tracing imports for structured logging
 #[cfg(feature = "tracing")]
-use wrt_foundation::tracing::trace;
+use kiln_foundation::tracing::trace;
 
 /// DEPRECATED: Get stdout output stream handle
 ///
@@ -53,15 +53,15 @@ pub fn wasi_blocking_write_and_flush(handle: u32, bytes: &[u8]) -> Result<u64> {
     if handle == 1 {
         std::io::stdout()
             .write_all(bytes)
-            .map_err(|_| wrt_error::Error::runtime_error("Write failed"))?;
+            .map_err(|_| kiln_error::Error::runtime_error("Write failed"))?;
 
         std::io::stdout()
             .flush()
-            .map_err(|_| wrt_error::Error::runtime_error("Flush failed"))?;
+            .map_err(|_| kiln_error::Error::runtime_error("Flush failed"))?;
 
         Ok(bytes.len() as u64)
     } else {
-        Err(wrt_error::Error::runtime_error(
+        Err(kiln_error::Error::runtime_error(
             "Invalid output stream handle",
         ))
     }
@@ -75,7 +75,7 @@ pub fn wasi_blocking_write_and_flush(handle: u32, bytes: &[u8]) -> Result<u64> {
     if handle == 1 {
         Ok(bytes.len() as u64)
     } else {
-        Err(wrt_error::Error::runtime_error(
+        Err(kiln_error::Error::runtime_error(
             "Invalid output stream handle",
         ))
     }

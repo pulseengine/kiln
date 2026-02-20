@@ -1,13 +1,13 @@
-//! Source-level line tracing support for wrtd
+//! Source-level line tracing support for kilnd
 //!
 //! This module provides DWARF-based source line tracing during WebAssembly
 //! execution. When enabled via `--trace-lines`, it prints file:line information
 //! as the program executes.
 
-use wrt_debug::runtime_traits::{
+use kiln_debug::runtime_traits::{
     Breakpoint, DebugAction, RuntimeDebugger, RuntimeState,
 };
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 
 /// WASM binary format constants
 const WASM_MAGIC: [u8; 4] = [0x00, 0x61, 0x73, 0x6D];
@@ -198,7 +198,7 @@ fn parse_core_module_sections(
 /// Source line tracer that wraps DwarfDebugInfo and provides line-by-line output
 pub struct SourceLineTracer<'a> {
     /// DWARF debug info parser
-    debug_info: wrt_debug::DwarfDebugInfo<'a>,
+    debug_info: kiln_debug::DwarfDebugInfo<'a>,
     /// Last printed file index (to avoid duplicates)
     last_file: u16,
     /// Last printed line (to avoid duplicates)
@@ -210,7 +210,7 @@ pub struct SourceLineTracer<'a> {
 impl<'a> SourceLineTracer<'a> {
     /// Create a new source line tracer from WASM bytes
     pub fn new(wasm_bytes: &'a [u8]) -> Result<Self> {
-        let mut debug_info = wrt_debug::DwarfDebugInfo::new(wasm_bytes)?;
+        let mut debug_info = kiln_debug::DwarfDebugInfo::new(wasm_bytes)?;
 
         // Parse custom sections and register DWARF sections
         let sections = parse_custom_sections(wasm_bytes)?;
@@ -336,7 +336,7 @@ pub struct LineTracingDebugger {
     wasm_bytes: Vec<u8>,
     /// DWARF section offsets and sizes
     dwarf_sections: Vec<(String, u32, u32)>,
-    /// File table parsed using wrt_debug
+    /// File table parsed using kiln_debug
     file_table: Vec<FileInfo>,
     /// Last printed file index
     last_file: std::sync::atomic::AtomicU32,
@@ -372,9 +372,9 @@ impl LineTracingDebugger {
 
         let has_debug_info = !dwarf_sections.is_empty();
 
-        // Parse file table using wrt_debug
+        // Parse file table using kiln_debug
         let file_table = if has_debug_info {
-            let mut debug_info = wrt_debug::DwarfDebugInfo::new(&wasm_bytes)?;
+            let mut debug_info = kiln_debug::DwarfDebugInfo::new(&wasm_bytes)?;
             for (name, offset, size) in &dwarf_sections {
                 debug_info.add_section(name, *offset, *size);
             }
@@ -384,7 +384,7 @@ impl LineTracingDebugger {
                 eprintln!("[trace-lines] Warning: File table parse error: {}", e);
             }
 
-            // Extract filenames (wrt_debug uses 1-based indexing)
+            // Extract filenames (kiln_debug uses 1-based indexing)
             let mut files = Vec::new();
             for i in 1..=debug_info.file_count() {
                 if let Some(name) = debug_info.get_filename(i as u16) {
@@ -490,7 +490,7 @@ impl LineTracingDebugger {
 
         // Create a temporary DwarfDebugInfo to resolve line info
         // This is not ideal for performance but works for the debugger use case
-        if let Ok(mut debug_info) = wrt_debug::DwarfDebugInfo::new(&self.wasm_bytes) {
+        if let Ok(mut debug_info) = kiln_debug::DwarfDebugInfo::new(&self.wasm_bytes) {
             for (name, offset, size) in &self.dwarf_sections {
                 debug_info.add_section(name, *offset, *size);
             }
@@ -550,7 +550,7 @@ impl RuntimeDebugger for LineTracingDebugger {
             DebuggerMode::Profile => {
                 // In profile mode, collect hit counts silently
                 if self.has_debug_info {
-                    if let Ok(mut debug_info) = wrt_debug::DwarfDebugInfo::new(&self.wasm_bytes) {
+                    if let Ok(mut debug_info) = kiln_debug::DwarfDebugInfo::new(&self.wasm_bytes) {
                         for (name, offset, size) in &self.dwarf_sections {
                             debug_info.add_section(name, *offset, *size);
                         }

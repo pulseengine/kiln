@@ -10,7 +10,7 @@
 
 #![allow(unsafe_code)] // Required for platform-specific APIs
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,

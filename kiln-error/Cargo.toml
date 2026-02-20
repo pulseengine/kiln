@@ -1,16 +1,16 @@
 [package]
-name = "wrt-error"
+name = "kiln-error"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Error handling for the WebAssembly Runtime"
+description = "Error handling for the Kiln WebAssembly Runtime"
 repository.workspace = true
 readme = "../README.md"
 keywords = ["webassembly", "wasm", "error", "no_std", "component-model"]
 categories = ["wasm", "no-std", "embedded"]
 
 [lib]
-name = "wrt_error"
+name = "kiln_error"
 path = "src/lib.rs"
 
 [dependencies]
@@ -19,7 +19,7 @@ path = "src/lib.rs"
 [features]
 default = []
 
-# Core allocation strategies (aligned with wrt-foundation)
+# Core allocation strategies (aligned with kiln-foundation)
 dynamic-allocation = []
 static-allocation = []
 verified-static-allocation = ["static-allocation"]

@@ -10,7 +10,7 @@ Memory Subsystem Architecture
    :align: right
    :alt: Memory Management Icon
 
-The memory subsystem provides a consolidated implementation across the WRT ecosystem with enhanced safety features.
+The memory subsystem provides a consolidated implementation across the Kiln ecosystem with enhanced safety features.
 
 .. spec:: Memory Subsystem Architecture (Original)
    :id: SPEC_007
@@ -28,8 +28,8 @@ The memory subsystem provides a consolidated implementation across the WRT ecosy
    
    The original memory subsystem architecture consisted of:
    
-   1. Centralized memory implementation in ``wrt-runtime::Memory`` (using ``Vec<u8>``)
-   2. Memory operations in ``wrt-instructions::memory_ops``
+   1. Centralized memory implementation in ``kiln-runtime::Memory`` (using ``Vec<u8>``)
+   2. Memory operations in ``kiln-instructions::memory_ops``
    3. Consistent memory access across core and component models
    4. Thread-safe memory metrics for profiling and optimization
    5. Comprehensive bounds checking for safety
@@ -42,7 +42,7 @@ The memory subsystem provides a consolidated implementation across the WRT ecosy
    :status: implemented
    :links: SPEC_002, SPEC_007, REQ_018, REQ_023, REQ_024, REQ_MEM_SAFETY_001, IMPL_BOUNDS_001
    
-   The original ``Memory`` struct in ``wrt-runtime`` provided a consolidated implementation that:
+   The original ``Memory`` struct in ``kiln-runtime`` provided a consolidated implementation that:
    
    1. Handled memory allocations and resizing (via ``Vec<u8>``)
    2. Enforced memory access boundaries
@@ -70,7 +70,7 @@ The memory subsystem provides a consolidated implementation across the WRT ecosy
    :status: implemented
    :links: SPEC_007, REQ_018, REQ_023, REQ_MEM_SAFETY_001, REQ_MEM_SAFETY_003, IMPL_WASM_MEM_001
    
-   The ``memory_ops`` module in ``wrt-instructions`` provided:
+   The ``memory_ops`` module in ``kiln-instructions`` provided:
    
    1. Standardized memory access operations
    2. Implementation of WebAssembly memory instructions

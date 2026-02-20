@@ -20,15 +20,15 @@ use core::{
     time::Duration,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_sync::{
-    WrtMutex,
-    WrtRwLock,
+use kiln_sync::{
+    KilnMutex,
+    KilnRwLock,
 };
 
 use crate::threading::{
@@ -98,7 +98,7 @@ struct ThreadInfo {
 /// Simple execution monitor implementation
 pub struct SimpleExecutionMonitor {
     /// Tracked threads
-    threads: Arc<WrtRwLock<BTreeMap<u64, ThreadMonitorInfo>>>,
+    threads: Arc<KilnRwLock<BTreeMap<u64, ThreadMonitorInfo>>>,
     /// Monitoring enabled
     enabled: bool,
 }
@@ -116,7 +116,7 @@ impl SimpleExecutionMonitor {
     /// Create new execution monitor
     pub fn new() -> Self {
         Self {
-            threads: Arc::new(WrtRwLock::new(BTreeMap::new())),
+            threads: Arc::new(KilnRwLock::new(BTreeMap::new())),
             enabled: true,
         }
     }
@@ -186,13 +186,13 @@ pub struct WasmThreadManager {
     /// Execution monitor
     monitor:          Arc<dyn ExecutionMonitor>,
     /// Active threads
-    threads:          Arc<WrtRwLock<BTreeMap<u64, ThreadInfo>>>,
+    threads:          Arc<KilnRwLock<BTreeMap<u64, ThreadInfo>>>,
     /// Module registry
-    modules:          Arc<WrtRwLock<BTreeMap<u64, WasmModuleInfo>>>,
+    modules:          Arc<KilnRwLock<BTreeMap<u64, WasmModuleInfo>>>,
     /// Next thread ID
     next_thread_id:   AtomicU64,
     /// Shutdown flag
-    shutdown:         WrtMutex<bool>,
+    shutdown:         KilnMutex<bool>,
     /// Task executor function
     executor:         ExecutorFn,
 }
@@ -227,10 +227,10 @@ impl WasmThreadManager {
             pool,
             resource_tracker,
             monitor,
-            threads: Arc::new(WrtRwLock::new(BTreeMap::new())),
-            modules: Arc::new(WrtRwLock::new(BTreeMap::new())),
+            threads: Arc::new(KilnRwLock::new(BTreeMap::new())),
+            modules: Arc::new(KilnRwLock::new(BTreeMap::new())),
             next_thread_id: AtomicU64::new(1),
-            shutdown: WrtMutex::new(false),
+            shutdown: KilnMutex::new(false),
             executor,
         })
     }

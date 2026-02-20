@@ -1,37 +1,37 @@
 [package]
-name = "wrtd"
+name = "kilnd"
 version.workspace = true
 edition.workspace = true
 license = { workspace = true }
-description = "WebAssembly Runtime Daemon - minimal optimized binary for different environments"
-repository = "https://github.com/pulseengine/wrt"
+description = "Kiln WebAssembly Runtime Daemon - minimal optimized binary for different environments"
+repository = "https://github.com/pulseengine/kiln"
 readme = "README.md"
 keywords = ["wasm", "webassembly", "daemon", "runtime", "host"]
 categories = ["wasm", "command-line-utilities", "network-programming"]
 
 # Single binary with runtime mode detection
 [[bin]]
-name = "wrtd"
+name = "kilnd"
 path = "src/main.rs"
 
 [dependencies]
-# Core WRT dependencies (minimal internal-only dependencies)
-wrt-error = { workspace = true, default-features = false }
-wrt-logging = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false, optional = true }
+# Core Kiln dependencies (minimal internal-only dependencies)
+kiln-error = { workspace = true, default-features = false }
+kiln-logging = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false, optional = true }
 # Centralized panic handler for safety-critical operation
-wrt-panic = { workspace = true, default-features = false }
+kiln-panic = { workspace = true, default-features = false }
 
-# Only add core WRT libraries when actually needed
-wrt-runtime = { workspace = true, default-features = false, optional = true }
-wrt-platform = { workspace = true, default-features = false, optional = true }
-wrt-host = { workspace = true, default-features = false, optional = true }
-wrt-component = { workspace = true, default-features = false, optional = true }
-wrt-decoder = { workspace = true, default-features = false, optional = true }
-wrt-debug = { workspace = true, default-features = false, optional = true }
+# Only add core Kiln libraries when actually needed
+kiln-runtime = { workspace = true, default-features = false, optional = true }
+kiln-platform = { workspace = true, default-features = false, optional = true }
+kiln-host = { workspace = true, default-features = false, optional = true }
+kiln-component = { workspace = true, default-features = false, optional = true }
+kiln-decoder = { workspace = true, default-features = false, optional = true }
+kiln-debug = { workspace = true, default-features = false, optional = true }
 
 # WASI support
-wrt-wasi = { path = "../wrt-wasi", default-features = false, optional = true }
+kiln-wasi = { path = "../kiln-wasi", default-features = false, optional = true }
 
 # Global allocator for no_std mode
 linked_list_allocator = { version = "0.10", optional = true }
@@ -43,66 +43,66 @@ tracing-subscriber = { version = "0.3", optional = true, default-features = fals
 # No external dependencies - use internal capabilities only
 
 [features]
-default = ["std", "wrt-execution", "component-model", "wasi"]
+default = ["std", "kiln-execution", "component-model", "wasi"]
 
 # Binary choice: std OR no_std (no alloc middle ground)
 std = [
-    "wrt-error/std",
-    "wrt-logging/std",
-    "dep:wrt-foundation"
+    "kiln-error/std",
+    "kiln-logging/std",
+    "dep:kiln-foundation"
 ]
 
-# Enable actual WRT execution (vs demo mode) - without wrt-component for now
-wrt-execution = [
+# Enable actual Kiln execution (vs demo mode) - without kiln-component for now
+kiln-execution = [
     "std",
-    "dep:wrt-runtime",
-    "dep:wrt-platform",
-    "dep:wrt-host",
-    "wrt-runtime/std",
-    "wrt-platform/std",
-    "wrt-host/std"
+    "dep:kiln-runtime",
+    "dep:kiln-platform",
+    "dep:kiln-host",
+    "kiln-runtime/std",
+    "kiln-platform/std",
+    "kiln-host/std"
 ]
 
 # Tracing support for debugging
 tracing = [
     "dep:tracing",
     "dep:tracing-subscriber",
-    "wrt-foundation?/tracing",
-    "wrt-runtime?/tracing"
+    "kiln-foundation?/tracing",
+    "kiln-runtime?/tracing"
 ]
 
 # WASI support features
-wasi = ["wrt-execution", "dep:wrt-wasi", "wrt-wasi/preview2", "wrt-wasi/std", "wrt-runtime/wasi", "wrt-component?/wasi"]
-wasi-filesystem = ["wasi", "wrt-wasi/wasi-filesystem"]
-wasi-cli = ["wasi", "wrt-wasi/wasi-cli"]
-wasi-clocks = ["wasi", "wrt-wasi/wasi-clocks"]
-wasi-io = ["wasi", "wrt-wasi/wasi-io"]
-wasi-random = ["wasi", "wrt-wasi/wasi-random"]
-wasi-nn = ["wasi", "wrt-wasi/wasi-nn"]
+wasi = ["kiln-execution", "dep:kiln-wasi", "kiln-wasi/preview2", "kiln-wasi/std", "kiln-runtime/wasi", "kiln-component?/wasi"]
+wasi-filesystem = ["wasi", "kiln-wasi/wasi-filesystem"]
+wasi-cli = ["wasi", "kiln-wasi/wasi-cli"]
+wasi-clocks = ["wasi", "kiln-wasi/wasi-clocks"]
+wasi-io = ["wasi", "kiln-wasi/wasi-io"]
+wasi-random = ["wasi", "kiln-wasi/wasi-random"]
+wasi-nn = ["wasi", "kiln-wasi/wasi-nn"]
 
 # Component model support
-component-model = ["wrt-execution", "dep:wrt-component", "dep:wrt-decoder", "wrt-component/std", "wrt-component/wrt-execution", "wrt-decoder/std"]
+component-model = ["kiln-execution", "dep:kiln-component", "dep:kiln-decoder", "kiln-component/std", "kiln-component/kiln-execution", "kiln-decoder/std"]
 
 # Debugger and profiler support - enables runtime debugging callbacks
-debugger = ["wrt-execution", "dep:wrt-debug", "wrt-debug/runtime-traits", "wrt-runtime/debugger"]
+debugger = ["kiln-execution", "dep:kiln-debug", "kiln-debug/runtime-traits", "kiln-runtime/debugger"]
 
 # Safety level presets using capability-based features
-# wrtd with wrt-wasi supports QM to ASIL-B (daemon/service use cases)
-qm = ["wrt-foundation/dynamic-allocation", "wrt-logging/qm"]
-asil-a = ["wrt-foundation/bounded-collections", "wrt-logging/asil-a"]
-asil-b = ["wrt-foundation/bounded-collections", "wrt-logging/asil-b"]
-# Note: ASIL-C and ASIL-D are not supported for wrtd+wrt-wasi configuration
-# Use the core 'wrt' crate for ASIL-C/D applications
+# kilnd with kiln-wasi supports QM to ASIL-B (daemon/service use cases)
+qm = ["kiln-foundation/dynamic-allocation", "kiln-logging/qm"]
+asil-a = ["kiln-foundation/bounded-collections", "kiln-logging/asil-a"]
+asil-b = ["kiln-foundation/bounded-collections", "kiln-logging/asil-b"]
+# Note: ASIL-C and ASIL-D are not supported for kilnd+kiln-wasi configuration
+# Use the core 'kiln' crate for ASIL-C/D applications
 
 # Legacy compatibility features
 safe-memory = ["asil-b"]
 safety-asil-b = ["asil-b"]
 
-# Panic handler for no_std builds - ASIL-B compliant (highest level for wrtd)
-enable-panic-handler = ["wrt-panic/default-panic-handler", "wrt-panic/asil-b", "dep:linked_list_allocator"]
+# Panic handler for no_std builds - ASIL-B compliant (highest level for kilnd)
+enable-panic-handler = ["kiln-panic/default-panic-handler", "kiln-panic/asil-b", "dep:linked_list_allocator"]
 
 # Development panic handler (enhanced debugging)
-dev-panic = ["wrt-panic/default-panic-handler", "wrt-panic/dev", "dep:linked_list_allocator"]
+dev-panic = ["kiln-panic/default-panic-handler", "kiln-panic/dev", "dep:linked_list_allocator"]
 
 
 [lints]

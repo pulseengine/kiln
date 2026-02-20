@@ -12,11 +12,11 @@ use std::{
     },
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::values::Value;
+use kiln_foundation::values::Value;
 
 /// Test execution statistics
 #[derive(Debug, Default, Clone)]

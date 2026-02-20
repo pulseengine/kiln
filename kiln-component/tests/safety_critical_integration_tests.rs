@@ -19,7 +19,7 @@ use alloc::sync::Arc;
 #[cfg(feature = "std")]
 use std::sync::{Arc, Mutex};
 
-use wrt_component::{
+use kiln_component::{
     bounded_component_infra::*,
     canonical_abi::canonical::{CanonicalABI, CanonicalOptions},
     resource_management::ResourceTable,
@@ -31,13 +31,13 @@ use wrt_component::{
     },
 };
 #[cfg(not(feature = "std"))]
-use wrt_foundation::collections::StaticMap as BoundedHashMap;
-use wrt_foundation::{
-    WrtError, bounded::BoundedString, budget_aware_provider::CrateId,
+use kiln_foundation::collections::StaticMap as BoundedHashMap;
+use kiln_foundation::{
+    KilnError, bounded::BoundedString, budget_aware_provider::CrateId,
     collections::StaticVec as BoundedVec, managed_alloc,
 };
 #[cfg(not(feature = "std"))]
-use wrt_sync::Mutex;
+use kiln_sync::Mutex;
 
 #[cfg(test)]
 mod integration_tests {
@@ -78,7 +78,7 @@ mod integration_tests {
         for i in 0..100 {
             match resource_table.allocate() {
                 Ok(handle) => handles.push(handle),
-                Err(WrtError::CapacityExceeded) => break,
+                Err(KilnError::CapacityExceeded) => break,
                 Err(e) => panic!("Unexpected error: {:?}", e),
             }
         }
@@ -128,7 +128,7 @@ mod integration_tests {
             let result = call_manager.initiate_call(1, 2, "test_func", &[]);
             match result {
                 Ok(_) => successful_calls += 1,
-                Err(WrtError::CapacityExceeded) => break,
+                Err(KilnError::CapacityExceeded) => break,
                 Err(e) => panic!("Unexpected error: {:?}", e),
             }
         }
@@ -263,7 +263,7 @@ mod integration_tests {
     fn test_error_propagation_integration() {
         fn create_component_stack(
             depth: usize,
-        ) -> wrt_error::Result<BoundedComponentVec<MockComponent>> {
+        ) -> kiln_error::Result<BoundedComponentVec<MockComponent>> {
             let mut components = new_component_vec()?;
 
             for i in 0..depth {
@@ -286,8 +286,8 @@ mod integration_tests {
             Err(e) => {
                 // Any error should be properly typed
                 match e {
-                    WrtError::OutOfMemory => {},
-                    WrtError::CapacityExceeded => {},
+                    KilnError::OutOfMemory => {},
+                    KilnError::CapacityExceeded => {},
                     _ => panic!("Unexpected error type: {:?}", e),
                 }
             },
@@ -296,7 +296,7 @@ mod integration_tests {
         // Test with excessive depth
         match create_component_stack(MAX_COMPONENT_INSTANCES + 1) {
             Ok(_) => panic!("Should have failed with capacity error"),
-            Err(WrtError::CapacityExceeded) => {
+            Err(KilnError::CapacityExceeded) => {
                 // Expected
             },
             Err(e) => panic!("Unexpected error: {:?}", e),
@@ -323,28 +323,28 @@ mod integration_tests {
         }
 
         impl TestStrategy {
-            fn allocate(&self, size: usize) -> wrt_error::Result<u32> {
+            fn allocate(&self, size: usize) -> kiln_error::Result<u32> {
                 let mut allocs = self.allocations.lock().unwrap();
                 let handle = allocs.len() as u32;
                 allocs.try_push(size as u32)?;
                 Ok(handle)
             }
 
-            fn deallocate(&self, handle: u32) -> wrt_error::Result<()> {
+            fn deallocate(&self, handle: u32) -> kiln_error::Result<()> {
                 let allocs = self.allocations.lock().unwrap();
                 if (handle as usize) < allocs.len() {
                     Ok(())
                 } else {
-                    Err(WrtError::InvalidHandle)
+                    Err(KilnError::InvalidHandle)
                 }
             }
 
-            fn verify(&self, handle: u32) -> wrt_error::Result<()> {
+            fn verify(&self, handle: u32) -> kiln_error::Result<()> {
                 let allocs = self.allocations.lock().unwrap();
                 if (handle as usize) < allocs.len() {
                     Ok(())
                 } else {
-                    Err(WrtError::InvalidHandle)
+                    Err(KilnError::InvalidHandle)
                 }
             }
         }
@@ -358,7 +358,7 @@ mod integration_tests {
         for size in (0..MAX_RESOURCE_HANDLES).step_by(100) {
             match strategy.allocate(size) {
                 Ok(handle) => handles.push(handle),
-                Err(WrtError::CapacityExceeded) => break,
+                Err(KilnError::CapacityExceeded) => break,
                 Err(e) => panic!("Unexpected error: {:?}", e),
             }
         }
@@ -407,11 +407,11 @@ impl ComponentLinker {
         }
     }
 
-    fn register_component(&mut self, component: MockComponent) -> wrt_error::Result<()> {
+    fn register_component(&mut self, component: MockComponent) -> kiln_error::Result<()> {
         self.components.try_push(component)
     }
 
-    fn link(&mut self, provider_id: u32, consumer_id: u32) -> wrt_error::Result<()> {
+    fn link(&mut self, provider_id: u32, consumer_id: u32) -> kiln_error::Result<()> {
         // Use a combined key for the link
         let key = (provider_id << 16) | consumer_id;
         self.links.try_insert(key, true)?;
@@ -449,7 +449,7 @@ impl CrossComponentCallManager {
         }
     }
 
-    fn register_component(&self, component: MockComponent) -> wrt_error::Result<()> {
+    fn register_component(&self, component: MockComponent) -> kiln_error::Result<()> {
         let mut components = self.components.lock().unwrap();
         components.try_push(component)
     }
@@ -460,7 +460,7 @@ impl CrossComponentCallManager {
         callee_id: u32,
         function: &str,
         args: &[u8],
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let mut stack = self.call_stack.lock().unwrap();
 
         let frame = CallFrame {
@@ -516,7 +516,7 @@ mod safety_critical_integration {
         // Even at capacity, operations don't panic
         match overflow_test {
             Ok(_) => {},
-            Err(WrtError::CapacityExceeded) => {},
+            Err(KilnError::CapacityExceeded) => {},
             Err(e) => panic!("Unexpected error: {:?}", e),
         }
     }

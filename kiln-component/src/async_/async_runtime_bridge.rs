@@ -12,17 +12,17 @@ use alloc::string::{String, ToString};
 #[cfg(feature = "std")]
 use std::string::{String, ToString};
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-type String = wrt_foundation::bounded::BoundedString<256>;
+type String = kiln_foundation::bounded::BoundedString<256>;
 
 use core::{
     pin::Pin,
     task::{Context, Poll, Waker},
 };
 
-use wrt_error::Error;
+use kiln_error::Error;
 #[cfg(feature = "std")]
-use wrt_foundation::BoundedVec;
-use wrt_runtime::{Checksummable, FromBytes, ToBytes};
+use kiln_foundation::BoundedVec;
+use kiln_runtime::{Checksummable, FromBytes, ToBytes};
 
 use super::async_types::{
     Future as WasmFuture, FutureHandle, FutureState, Stream as WasmStream, StreamHandle,
@@ -131,7 +131,7 @@ pub mod component_async {
 
     #[cfg(not(any(feature = "std", feature = "alloc")))]
     fn error_string(msg: &str) -> String {
-        use wrt_foundation::{bounded::BoundedString, safe_memory::NoStdProvider};
+        use kiln_foundation::{bounded::BoundedString, safe_memory::NoStdProvider};
         // Use a stack-allocated provider for error strings
         let provider1 = NoStdProvider::<1024>::default();
         BoundedString::try_from_str(msg).unwrap_or_else(|_| {

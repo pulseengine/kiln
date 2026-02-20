@@ -18,14 +18,14 @@ extern crate alloc;
 use alloc::{vec, boxed::Box};
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec as Vec, 
     safe_memory::NoStdProvider,
     budget_aware_provider::CrateId,
     safe_managed_alloc,
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{ BoundedString},
     prelude::*,
 };
@@ -36,7 +36,7 @@ use crate::{
     types::{ValType, Value},
 };
 
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 
 /// Maximum buffer size for streaming operations in no_std environments
 const MAX_STREAM_BUFFER_SIZE: usize = 8192;

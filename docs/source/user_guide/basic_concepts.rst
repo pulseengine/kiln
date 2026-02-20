@@ -2,7 +2,7 @@
 Basic Concepts
 ==============
 
-Understanding the fundamental concepts of WebAssembly and WRT.
+Understanding the fundamental concepts of WebAssembly and Kiln.
 
 WebAssembly Overview
 ====================
@@ -17,10 +17,10 @@ Key Properties
 * **Portable**: Runs on any platform with a WebAssembly runtime
 * **Compact**: Efficient binary format for fast loading
 
-WRT Runtime Model
+Kiln Runtime Model
 =================
 
-WRT provides a safety-critical WebAssembly runtime with:
+Kiln provides a safety-critical WebAssembly runtime with:
 
 Modules and Instances
 ---------------------
@@ -70,7 +70,7 @@ Interface Types
 Safety Features
 ===============
 
-WRT emphasizes safety through multiple mechanisms:
+Kiln emphasizes safety through multiple mechanisms:
 
 Memory Safety
 -------------
@@ -99,7 +99,7 @@ Security Model
 Performance Characteristics
 ===========================
 
-WRT is designed for predictable, high-performance execution:
+Kiln is designed for predictable, high-performance execution:
 
 Deterministic Execution
 -----------------------
@@ -120,7 +120,7 @@ Optimization Features
 Deployment Models
 =================
 
-WRT supports various deployment scenarios:
+Kiln supports various deployment scenarios:
 
 Embedded Systems
 ----------------
@@ -149,7 +149,7 @@ Edge Computing
 Next Steps
 ==========
 
-* Learn how to :doc:`running_modules` with WRT
+* Learn how to :doc:`running_modules` with Kiln
 * Understand :doc:`configuration` options
 * Explore :doc:`../examples/index` for practical usage
 * See :doc:`../platform_guides/index` for platform-specific guidance

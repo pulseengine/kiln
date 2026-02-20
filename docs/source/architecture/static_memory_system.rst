@@ -7,7 +7,7 @@ Static Memory Enforcement
    :align: center
    :alt: Static Memory System Icon
 
-The WebAssembly Runtime (WRT) implements a comprehensive static memory enforcement system to ensure predictable memory usage, eliminate runtime allocation failures, and maintain safety-critical compliance.
+The WebAssembly Runtime (Kiln) implements a comprehensive static memory enforcement system to ensure predictable memory usage, eliminate runtime allocation failures, and maintain safety-critical compliance.
 
 .. contents:: On this page
    :local:
@@ -276,7 +276,7 @@ Basic Collection Usage
 
 .. code-block:: rust
 
-   use wrt_foundation::{BoundedVec, BoundedMap, BoundedString, MediumProvider};
+   use kiln_foundation::{BoundedVec, BoundedMap, BoundedString, MediumProvider};
    
    fn create_collections() -> Result<(), Error> {
        let provider = MediumProvider::new();
@@ -323,7 +323,7 @@ Integration with Safety Systems
 
 .. code-block:: rust
 
-   use wrt_foundation::{SafetyContext, SafetyLevel, safe_managed_alloc};
+   use kiln_foundation::{SafetyContext, SafetyLevel, safe_managed_alloc};
    
    fn create_safety_critical_collection() -> Result<SafeComponent, Error> {
        // Create safety context

@@ -11,8 +11,8 @@ use std::{boxed::Box, collections::VecDeque, vec::Vec};
 #[cfg(feature = "std")]
 use std::{fmt, mem, time::Duration};
 
-use wrt_error::{Error, ErrorCategory, Result};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_foundation::{
     MemoryProvider,
     bounded::{BoundedError, BoundedString},
     budget_aware_provider::CrateId,
@@ -205,27 +205,27 @@ impl PartialEq for StreamEntry {
 
 impl Eq for StreamEntry {}
 
-impl wrt_foundation::traits::Checksummable for StreamEntry {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for StreamEntry {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.handle.update_checksum(checksum);
     }
 }
 
-impl wrt_runtime::ToBytes for StreamEntry {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for StreamEntry {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.handle.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_runtime::FromBytes for StreamEntry {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for StreamEntry {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             handle: StreamHandle::from_bytes_with_provider(reader, provider)?,
             stream: Stream::default(),
@@ -282,27 +282,27 @@ impl PartialEq for FutureEntry {
 
 impl Eq for FutureEntry {}
 
-impl wrt_foundation::traits::Checksummable for FutureEntry {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for FutureEntry {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.handle.update_checksum(checksum);
     }
 }
 
-impl wrt_runtime::ToBytes for FutureEntry {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for FutureEntry {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.handle.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_runtime::FromBytes for FutureEntry {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for FutureEntry {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             handle: FutureHandle::from_bytes_with_provider(reader, provider)?,
             future: Future::default(),
@@ -350,31 +350,31 @@ impl PartialEq for ScheduledTask {
 
 impl Eq for ScheduledTask {}
 
-impl wrt_foundation::traits::Checksummable for ScheduledTask {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ScheduledTask {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.task_id.update_checksum(checksum);
         self.priority.update_checksum(checksum);
         self.estimated_time_us.update_checksum(checksum);
     }
 }
 
-impl wrt_runtime::ToBytes for ScheduledTask {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for ScheduledTask {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.task_id.to_bytes_with_provider(writer, provider)?;
         self.priority.to_bytes_with_provider(writer, provider)?;
         self.estimated_time_us.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_runtime::FromBytes for ScheduledTask {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for ScheduledTask {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             task_id: TaskId::from_bytes_with_provider(reader, provider)?,
             priority: u8::from_bytes_with_provider(reader, provider)?,
@@ -418,8 +418,8 @@ impl PartialEq for WaitingTask {
 
 impl Eq for WaitingTask {}
 
-impl wrt_foundation::traits::Checksummable for WaitingTask {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for WaitingTask {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.task_id.update_checksum(checksum);
         if let Some(timeout) = self.timeout_us {
             timeout.update_checksum(checksum);
@@ -427,22 +427,22 @@ impl wrt_foundation::traits::Checksummable for WaitingTask {
     }
 }
 
-impl wrt_runtime::ToBytes for WaitingTask {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for WaitingTask {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.task_id.to_bytes_with_provider(writer, provider)?;
         self.timeout_us.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_runtime::FromBytes for WaitingTask {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for WaitingTask {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             task_id: TaskId::from_bytes_with_provider(reader, provider)?,
             wait_condition: WaitCondition::Timer(0),
@@ -539,29 +539,29 @@ impl PartialEq for ReactorEvent {
 
 impl Eq for ReactorEvent {}
 
-impl wrt_foundation::traits::Checksummable for ReactorEvent {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ReactorEvent {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.id.update_checksum(checksum);
         self.data.update_checksum(checksum);
     }
 }
 
-impl wrt_runtime::ToBytes for ReactorEvent {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for ReactorEvent {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.id.to_bytes_with_provider(writer, provider)?;
         self.data.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_runtime::FromBytes for ReactorEvent {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for ReactorEvent {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             id: u32::from_bytes_with_provider(reader, provider)?,
             event_type: ReactorEventType::StreamReady(StreamHandle::default()),

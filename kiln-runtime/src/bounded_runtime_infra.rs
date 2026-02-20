@@ -3,17 +3,17 @@
 //! This module provides bounded alternatives for runtime collections
 //! to ensure static memory allocation throughout the runtime execution.
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
 };
 #[cfg(any(feature = "std", feature = "alloc"))]
-use wrt_foundation::capabilities::factory::CapabilityGuardedProvider;
-// Box is re-exported by wrt_foundation
-use wrt_foundation::Box;
+use kiln_foundation::capabilities::factory::CapabilityGuardedProvider;
+// Box is re-exported by kiln_foundation
+use kiln_foundation::Box;
 #[cfg(feature = "std")]
-use wrt_foundation::heap_provider::HeapProvider;
-use wrt_foundation::{
+use kiln_foundation::heap_provider::HeapProvider;
+use kiln_foundation::{
     bounded::{
         BoundedString,
         BoundedVec,
@@ -61,9 +61,9 @@ pub type DefaultRuntimeProvider = RuntimeProvider;
 
 /// Helper function to create a runtime provider using an existing context
 pub fn create_runtime_provider_with_context(
-    _context: &wrt_foundation::capabilities::MemoryCapabilityContext,
-) -> wrt_error::Result<RuntimeProvider> {
-    use wrt_foundation::{
+    _context: &kiln_foundation::capabilities::MemoryCapabilityContext,
+) -> kiln_error::Result<RuntimeProvider> {
+    use kiln_foundation::{
         capabilities::{
             DynamicMemoryCapability,
             MemoryCapability,
@@ -109,11 +109,11 @@ pub fn create_runtime_provider_with_context(
 ///
 /// In std mode, creates a HeapProvider with large capacity for ML modules.
 /// In no_std mode, creates a NoStdProvider with small stack allocation.
-pub fn create_runtime_provider() -> wrt_error::Result<RuntimeProvider> {
+pub fn create_runtime_provider() -> kiln_error::Result<RuntimeProvider> {
     #[cfg(feature = "tracing")]
-    wrt_foundation::tracing::trace!("create_runtime_provider() called");
+    kiln_foundation::tracing::trace!("create_runtime_provider() called");
 
-    use wrt_foundation::{
+    use kiln_foundation::{
         capabilities::DynamicMemoryCapability,
         verification::VerificationLevel,
     };
@@ -281,7 +281,7 @@ pub type BoundedThreadMap<V> = BoundedMap<
 >;
 
 /// Create a new bounded runtime vector
-pub fn new_runtime_vec<T>() -> wrt_error::Result<BoundedRuntimeVec<T>>
+pub fn new_runtime_vec<T>() -> kiln_error::Result<BoundedRuntimeVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -290,7 +290,7 @@ where
 }
 
 /// Create a new bounded module vector
-pub fn new_module_vec<T>() -> wrt_error::Result<BoundedModuleVec<T>>
+pub fn new_module_vec<T>() -> kiln_error::Result<BoundedModuleVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -299,7 +299,7 @@ where
 }
 
 /// Create a new bounded function vector
-pub fn new_function_vec<T>() -> wrt_error::Result<BoundedFunctionVec<T>>
+pub fn new_function_vec<T>() -> kiln_error::Result<BoundedFunctionVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -308,7 +308,7 @@ where
 }
 
 /// Create a new bounded memory vector
-pub fn new_memory_vec<T>() -> wrt_error::Result<BoundedMemoryVec<T>>
+pub fn new_memory_vec<T>() -> kiln_error::Result<BoundedMemoryVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -317,7 +317,7 @@ where
 }
 
 /// Create a new bounded table vector
-pub fn new_table_vec<T>() -> wrt_error::Result<BoundedTableVec<T>>
+pub fn new_table_vec<T>() -> kiln_error::Result<BoundedTableVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -326,7 +326,7 @@ where
 }
 
 /// Create a new bounded global vector
-pub fn new_global_vec<T>() -> wrt_error::Result<BoundedGlobalVec<T>>
+pub fn new_global_vec<T>() -> kiln_error::Result<BoundedGlobalVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -335,7 +335,7 @@ where
 }
 
 /// Create a new bounded thread vector
-pub fn new_thread_vec<T>() -> wrt_error::Result<BoundedThreadVec<T>>
+pub fn new_thread_vec<T>() -> kiln_error::Result<BoundedThreadVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -344,7 +344,7 @@ where
 }
 
 /// Create a new bounded call stack vector
-pub fn new_call_stack_vec<T>() -> wrt_error::Result<BoundedCallStackVec<T>>
+pub fn new_call_stack_vec<T>() -> kiln_error::Result<BoundedCallStackVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -353,7 +353,7 @@ where
 }
 
 /// Create a new bounded execution context vector
-pub fn new_execution_context_vec<T>() -> wrt_error::Result<BoundedExecutionContextVec<T>>
+pub fn new_execution_context_vec<T>() -> kiln_error::Result<BoundedExecutionContextVec<T>>
 where
     T: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -362,31 +362,31 @@ where
 }
 
 /// Create a new bounded module name
-pub fn new_module_name() -> wrt_error::Result<BoundedModuleName> {
+pub fn new_module_name() -> kiln_error::Result<BoundedModuleName> {
     BoundedString::try_from_str("")
         .map_err(|e| Error::memory_serialization_error("Failed to create bounded string"))
 }
 
 /// Create a bounded module name from str
-pub fn bounded_module_name_from_str(s: &str) -> wrt_error::Result<BoundedModuleName> {
+pub fn bounded_module_name_from_str(s: &str) -> kiln_error::Result<BoundedModuleName> {
     BoundedString::try_from_str(s)
         .map_err(|e| Error::memory_serialization_error("Failed to create bounded string"))
 }
 
 /// Create a new bounded function name
-pub fn new_function_name() -> wrt_error::Result<BoundedFunctionName> {
+pub fn new_function_name() -> kiln_error::Result<BoundedFunctionName> {
     BoundedString::try_from_str("")
         .map_err(|e| Error::memory_serialization_error("Failed to create bounded string"))
 }
 
 /// Create a bounded function name from str
-pub fn bounded_function_name_from_str(s: &str) -> wrt_error::Result<BoundedFunctionName> {
+pub fn bounded_function_name_from_str(s: &str) -> kiln_error::Result<BoundedFunctionName> {
     BoundedString::try_from_str(s)
         .map_err(|e| Error::memory_serialization_error("Failed to create bounded string"))
 }
 
 /// Create a new bounded atomic operation map
-pub fn new_atomic_op_map<V>() -> wrt_error::Result<BoundedAtomicOpMap<V>>
+pub fn new_atomic_op_map<V>() -> kiln_error::Result<BoundedAtomicOpMap<V>>
 where
     V: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -395,7 +395,7 @@ where
 }
 
 /// Create a new bounded module map
-pub fn new_module_map<V>() -> wrt_error::Result<BoundedModuleMap<V>>
+pub fn new_module_map<V>() -> kiln_error::Result<BoundedModuleMap<V>>
 where
     V: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -404,7 +404,7 @@ where
 }
 
 /// Create a new bounded import map
-pub fn new_import_map<V>() -> wrt_error::Result<BoundedImportMap<V>>
+pub fn new_import_map<V>() -> kiln_error::Result<BoundedImportMap<V>>
 where
     V: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -413,7 +413,7 @@ where
 }
 
 /// Create a new bounded export map
-pub fn new_export_map<V>() -> wrt_error::Result<BoundedExportMap<V>>
+pub fn new_export_map<V>() -> kiln_error::Result<BoundedExportMap<V>>
 where
     V: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
@@ -422,7 +422,7 @@ where
 }
 
 /// Create a new bounded thread map
-pub fn new_thread_map<V>() -> wrt_error::Result<BoundedThreadMap<V>>
+pub fn new_thread_map<V>() -> kiln_error::Result<BoundedThreadMap<V>>
 where
     V: Sized + Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {

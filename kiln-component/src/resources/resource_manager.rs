@@ -43,11 +43,11 @@ impl<T: 'static + Send + Sync> HostResource for T {}
 mod std_impl {
     use std::sync::Mutex;
 
-    use wrt_error::kinds::PoisonedLockError;
-    use wrt_foundation::{
+    use kiln_error::kinds::PoisonedLockError;
+    use kiln_foundation::{
         ResourceOperation as FormatResourceOperation, component_value::ComponentValue,
     };
-    use wrt_sync::WrtMutex;
+    use kiln_sync::KilnMutex;
 
     use super::*;
     use crate::bounded_component_infra::ComponentProvider;
@@ -244,7 +244,7 @@ mod std_impl {
         }
 
         /// Get a resource by handle
-        pub fn get_resource(&self, handle: u32) -> Result<Arc<WrtMutex<Resource>>> {
+        pub fn get_resource(&self, handle: u32) -> Result<Arc<KilnMutex<Resource>>> {
             let table = self.table.lock().map_err(|_| {
                 Error::runtime_poisoned_lock("Failed to acquire resource table lock")
             })?;
@@ -386,7 +386,7 @@ mod no_std_impl {
     extern crate alloc;
     use alloc::{boxed::Box, string::String, sync::Arc};
 
-    use wrt_foundation::bounded::BoundedString;
+    use kiln_foundation::bounded::BoundedString;
 
     use super::*;
     use crate::resources::{MemoryStrategy, Resource, ResourceTable, VerificationLevel};

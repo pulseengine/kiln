@@ -4,19 +4,19 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::needless_borrow)]
 
-//! # WRT WASI Implementation
+//! # Kiln WASI Implementation
 //!
-//! WASI (WebAssembly System Interface) Preview2 implementation for the WRT
+//! WASI (WebAssembly System Interface) Preview2 implementation for the Kiln
 //! WebAssembly runtime. This crate provides WASI host functions that integrate
-//! seamlessly with the WRT component model and resource management system.
+//! seamlessly with the Kiln component model and resource management system.
 //!
 //! ## Features
 //!
 //! - **WASI Preview2**: Complete implementation of WASI Preview2 interfaces
 //! - **Component Model**: Native integration with WebAssembly Component Model
-//! - **Resource Management**: Built on WRT's proven resource management
+//! - **Resource Management**: Built on Kiln's proven resource management
 //!   patterns
-//! - **Memory Safety**: Uses WRT's safe memory allocation system
+//! - **Memory Safety**: Uses Kiln's safe memory allocation system
 //! - **Platform Abstraction**: Works across `std/no_std` environments
 //! - **Preview3 Preparation**: Foundation for future WASI Preview3 features
 //!
@@ -37,8 +37,8 @@
 //! ## Usage
 //!
 //! ```rust,ignore
-//! use wrt_wasi::{WasiCapabilities, ComponentModelProvider};
-//! use wrt_component::ComponentLinker;
+//! use kiln_wasi::{WasiCapabilities, ComponentModelProvider};
+//! use kiln_component::ComponentLinker;
 //!
 //! // Create WASI capabilities
 //! let mut capabilities = WasiCapabilities::minimal();
@@ -60,26 +60,26 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-// Re-export core WRT types for convenience
-pub use wrt_error::{
+// Re-export core Kiln types for convenience
+pub use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
 // Safety configuration for WASI
-use wrt_foundation::safety_features::runtime;
-pub use wrt_foundation::{
+use kiln_foundation::safety_features::runtime;
+pub use kiln_foundation::{
     resource::Resource,
     MemoryProvider,
 };
 
 // Re-export safety-aware allocation macros
-pub use wrt_foundation::{
+pub use kiln_foundation::{
     safe_managed_alloc,
     safety_aware_alloc,
     CrateId,
 };
-pub use wrt_host::{
+pub use kiln_host::{
     CallbackRegistry,
     HostFunctionHandler,
 };
@@ -112,7 +112,7 @@ pub use dispatcher::WasiDispatcher;
 // Re-export types for two-phase dispatch protocol
 #[cfg(feature = "preview2")]
 pub use dispatcher::{AllocationRequest, DispatchResult};
-// Re-export global args/env functions for use by wrtd
+// Re-export global args/env functions for use by kilnd
 #[cfg(all(feature = "preview2", feature = "std"))]
 pub use dispatcher::{
     set_global_wasi_args,
@@ -239,12 +239,12 @@ pub struct HostFunction {
     #[cfg(feature = "std")]
     pub name:        String,
     #[cfg(not(feature = "std"))]
-    pub name: wrt_foundation::BoundedString<256, wrt_foundation::safe_memory::NoStdProvider<1024>>,
+    pub name: kiln_foundation::BoundedString<256, kiln_foundation::safe_memory::NoStdProvider<1024>>,
     /// Function handler
     pub handler:     HostFunctionHandler,
     /// External type (for component model integration)
     #[cfg(feature = "std")]
-    pub extern_type: wrt_format::component::ExternType,
+    pub extern_type: kiln_format::component::ExternType,
     #[cfg(not(feature = "std"))]
     pub extern_type: ExternType,
 }
@@ -298,9 +298,9 @@ pub mod prelude {
     //! Common imports for WASI implementations
 
     // Re-export component values
-    pub use wrt_foundation::Value;
-    // Re-export commonly used WRT foundation types
-    pub use wrt_foundation::{
+    pub use kiln_foundation::Value;
+    // Re-export commonly used Kiln foundation types
+    pub use kiln_foundation::{
         capability_context,
         safe_capability_alloc,
         BoundedMap,
@@ -309,7 +309,7 @@ pub mod prelude {
         CrateId,
     };
     // Re-export platform abstractions
-    pub use wrt_platform::{
+    pub use kiln_platform::{
         memory::MemoryProvider as PlatformMemoryProvider,
         time::PlatformTime,
     };

@@ -3,7 +3,7 @@
 //! Provides comprehensive platform limit discovery capabilities across
 //! different operating systems and runtime environments.
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 #[cfg(feature = "std")]
 extern crate std;
@@ -130,7 +130,7 @@ impl ComprehensiveLimitProvider for LinuxLimitProvider {
             }
 
             // Check for environment variables
-            if let Ok(max_mem) = std::env::var("WRT_MAX_MEMORY") {
+            if let Ok(max_mem) = std::env::var("KILN_MAX_MEMORY") {
                 if let Ok(limit) = max_mem.parse::<usize>() {
                     limits.max_total_memory = limit;
                     limits.max_wasm_linear_memory = (limit * 3) / 4;

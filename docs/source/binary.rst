@@ -1,5 +1,5 @@
 ================================================
-WebAssembly Component Model Binary Format in WRT
+WebAssembly Component Model Binary Format in Kiln
 ================================================
 
 .. image:: _static/icons/validation_process.svg
@@ -7,7 +7,7 @@ WebAssembly Component Model Binary Format in WRT
    :align: right
    :alt: Validation Process Icon
 
-This document describes the implementation of the WebAssembly Component Model Binary Format in WRT, following the official `Component Model Binary Format specification <https://github.com/WebAssembly/component-model/blob/main/design/mvp/Binary.md>`_.
+This document describes the implementation of the WebAssembly Component Model Binary Format in Kiln, following the official `Component Model Binary Format specification <https://github.com/WebAssembly/component-model/blob/main/design/mvp/Binary.md>`_.
 
 .. contents:: Table of Contents
    :local:
@@ -18,15 +18,15 @@ Overview
 
 The WebAssembly Component Model binary format builds upon the core WebAssembly binary format, adding a new layer identifier to distinguish components from modules. The top-level production is ``component`` and the convention is that a file with the ``.wasm`` extension may contain either a core module or a component.
 
-WRT Implementation Status
+Kiln Implementation Status
 -------------------------
 
-The current WRT implementation provides foundational support for the Component Model binary format with the following implementation components:
+The current Kiln implementation provides foundational support for the Component Model binary format with the following implementation components:
 
-- **Decoder**: Implemented in ``wrt-decoder/src/component/decode.rs`` 
-- **Section Parsers**: Defined in ``wrt-decoder/src/component/parse.rs``
-- **Data Structures**: Defined in ``wrt-format/src/component.rs``
-- **Binary Constants**: Defined in ``wrt-format/src/binary.rs``
+- **Decoder**: Implemented in ``kiln-decoder/src/component/decode.rs`` 
+- **Section Parsers**: Defined in ``kiln-decoder/src/component/parse.rs``
+- **Data Structures**: Defined in ``kiln-format/src/component.rs``
+- **Binary Constants**: Defined in ``kiln-format/src/binary.rs``
 
 Many aspects of the specification are still in development, with placeholder implementations that will be completed in future versions.
 
@@ -46,9 +46,9 @@ The specification defines:
    version   ::= 0x0d 0x00
    layer     ::= 0x01 0x00
 
-**WRT Implementation**:
+**Kiln Implementation**:
 
-The WRT implementation uses different version and layer encoding:
+The Kiln implementation uses different version and layer encoding:
 
 .. code-block:: text
 
@@ -59,9 +59,9 @@ The WRT implementation uses different version and layer encoding:
    // Version 1.0, Layer 1
    pub const COMPONENT_VERSION: [u8; 4] = [0x01, 0x00, 0x01, 0x00];
 
-**Discrepancy**: The specification uses version ``[0x0d, 0x00]`` with layer ``[0x01, 0x00]``, while WRT implements version ``[0x01, 0x00]`` with layer ``[0x01, 0x00]``. Additionally, WRT combines these into a single 4-byte field rather than two separate 2-byte fields.
+**Discrepancy**: The specification uses version ``[0x0d, 0x00]`` with layer ``[0x01, 0x00]``, while Kiln implements version ``[0x01, 0x00]`` with layer ``[0x01, 0x00]``. Additionally, Kiln combines these into a single 4-byte field rather than two separate 2-byte fields.
 
-The implementation in ``wrt-decoder/src/component/decode.rs`` verifies only the first 8 bytes (magic + version), without distinguishing between version and layer as separate fields.
+The implementation in ``kiln-decoder/src/component/decode.rs`` verifies only the first 8 bytes (magic + version), without distinguishing between version and layer as separate fields.
 
 Section Definitions
 -------------------
@@ -84,9 +84,9 @@ The specification defines the following section types:
               | e*:section_11(vec(<export>))        => e*
               | v*:section_12(vec(<value>))         => v*
 
-**WRT Implementation**:
+**Kiln Implementation**:
 
-WRT defines section IDs in ``wrt-format/src/binary.rs``:
+Kiln defines section IDs in ``kiln-format/src/binary.rs``:
 
 .. code-block:: text
 
@@ -104,7 +104,7 @@ WRT defines section IDs in ``wrt-format/src/binary.rs``:
    pub const COMPONENT_EXPORT_SECTION_ID: u8 = 0x0B;
    pub const COMPONENT_VALUE_SECTION_ID: u8 = 0x0C;
 
-The section parsing is implemented in ``wrt-decoder/src/component/decode.rs``, which iterates through sections and delegates to appropriate parsers in ``wrt-decoder/src/component/parse.rs``.
+The section parsing is implemented in ``kiln-decoder/src/component/decode.rs``, which iterates through sections and delegates to appropriate parsers in ``kiln-decoder/src/component/parse.rs``.
 
 Instance Definitions
 ====================
@@ -120,9 +120,9 @@ The specification defines:
    core:instanceexpr   ::= 0x00 m:<moduleidx> arg*:vec(<core:instantiatearg>) => (instantiate m arg*)
                          | 0x01 e*:vec(<core:inlineexport>)                   => e*
 
-**WRT Implementation**:
+**Kiln Implementation**:
 
-WRT implements core instance definitions in ``wrt-format/src/component.rs``:
+Kiln implements core instance definitions in ``kiln-format/src/component.rs``:
 
 .. code-block:: text
 
@@ -143,7 +143,7 @@ WRT implements core instance definitions in ``wrt-format/src/component.rs``:
        InlineExports(Vec<CoreInlineExport>),
    }
 
-The binary parsing is implemented in ``wrt-decoder/src/component/parse.rs`` in the ``parse_core_instance_section`` and ``parse_core_instance_expr`` functions.
+The binary parsing is implemented in ``kiln-decoder/src/component/parse.rs`` in the ``parse_core_instance_section`` and ``parse_core_instance_expr`` functions.
 
 Component Instance Definitions
 ------------------------------
@@ -162,9 +162,9 @@ The specification defines:
                          | 0x04                                               => component
                          | 0x05                                               => instance
 
-**WRT Implementation**:
+**Kiln Implementation**:
 
-WRT implements component instance definitions in ``wrt-format/src/component.rs``:
+Kiln implements component instance definitions in ``kiln-format/src/component.rs``:
 
 .. code-block:: text
 
@@ -200,7 +200,7 @@ WRT implements component instance definitions in ``wrt-format/src/component.rs``
        Instance,
    }
 
-The sorts are defined in ``wrt-format/src/binary.rs`` with values matching the specification:
+The sorts are defined in ``kiln-format/src/binary.rs`` with values matching the specification:
 
 .. code-block:: text
 
@@ -214,7 +214,7 @@ The sorts are defined in ``wrt-format/src/binary.rs`` with values matching the s
 Type Definitions
 ================
 
-The specification defines various component types. WRT implements them in ``wrt-format/src/component.rs``:
+The specification defines various component types. Kiln implements them in ``kiln-format/src/component.rs``:
 
 .. code-block:: text
 
@@ -252,7 +252,7 @@ The specification defines various component types. WRT implements them in ``wrt-
 Value Types
 -----------
 
-The specification defines numerous value types. WRT implements them in ``wrt-format/src/component.rs``:
+The specification defines numerous value types. Kiln implements them in ``kiln-format/src/component.rs``:
 
 .. code-block:: text
 
@@ -315,7 +315,7 @@ The specification defines numerous value types. WRT implements them in ``wrt-for
        ErrorContext,
    }
 
-The binary type codes are defined in ``wrt-format/src/binary.rs``:
+The binary type codes are defined in ``kiln-format/src/binary.rs``:
 
 .. code-block:: text
 
@@ -327,7 +327,7 @@ The binary type codes are defined in ``wrt-format/src/binary.rs``:
 Resource Types
 --------------
 
-WRT implements resource types with a custom representation:
+Kiln implements resource types with a custom representation:
 
 .. code-block:: text
 
@@ -347,7 +347,7 @@ This differs from the specification, which has a simpler representation focused 
 Alias Definitions
 =================
 
-The specification defines different forms of aliases. WRT implements them in ``wrt-format/src/component.rs``:
+The specification defines different forms of aliases. Kiln implements them in ``kiln-format/src/component.rs``:
 
 .. code-block:: text
 
@@ -381,12 +381,12 @@ The specification defines different forms of aliases. WRT implements them in ``w
        },
    }
 
-The parsing is implemented in ``parse_alias_section`` and ``parse_alias_target`` in ``wrt-decoder/src/component/parse.rs``.
+The parsing is implemented in ``parse_alias_section`` and ``parse_alias_target`` in ``kiln-decoder/src/component/parse.rs``.
 
 Canonical Function Definitions
 ==============================
 
-The specification defines canonical operations for function lifting and lowering. WRT implements an extended version in ``wrt-format/src/component.rs``:
+The specification defines canonical operations for function lifting and lowering. Kiln implements an extended version in ``kiln-format/src/component.rs``:
 
 .. code-block:: text
 
@@ -441,7 +441,7 @@ The specification defines canonical operations for function lifting and lowering
        },
    }
 
-The parsing is implemented in ``parse_canon_section`` and related functions in ``wrt-decoder/src/component/parse.rs``.
+The parsing is implemented in ``parse_canon_section`` and related functions in ``kiln-decoder/src/component/parse.rs``.
 
 Start Definitions
 =================
@@ -452,9 +452,9 @@ The specification defines:
 
    start ::= f:<funcidx> arg*:vec(<valueidx>) r:<u32> => (start f (value arg)* (result (value))ʳ)
 
-**WRT Implementation**:
+**Kiln Implementation**:
 
-WRT implements the start definition in ``wrt-format/src/component.rs``:
+Kiln implements the start definition in ``kiln-format/src/component.rs``:
 
 .. code-block:: text
 
@@ -467,12 +467,12 @@ WRT implements the start definition in ``wrt-format/src/component.rs``:
        pub results: u32,
    }
 
-**Implementation Status**: The ``parse_start_section`` function in ``wrt-decoder/src/component/parse.rs`` currently returns a "not implemented" error, indicating this feature is planned but not yet implemented.
+**Implementation Status**: The ``parse_start_section`` function in ``kiln-decoder/src/component/parse.rs`` currently returns a "not implemented" error, indicating this feature is planned but not yet implemented.
 
 Import and Export Definitions
 =============================
 
-The specification defines import and export declarations. WRT implements them in ``wrt-format/src/component.rs``:
+The specification defines import and export declarations. Kiln implements them in ``kiln-format/src/component.rs``:
 
 .. code-block:: text
 
@@ -494,7 +494,7 @@ The specification defines import and export declarations. WRT implements them in
        pub ty: Option<ExternType>,
    }
 
-WRT has extended name structures:
+Kiln has extended name structures:
 
 .. code-block:: text
 
@@ -522,12 +522,12 @@ WRT has extended name structures:
        pub nested: Vec<String>,
    }
 
-The parsing is implemented in ``parse_import_section`` and ``parse_export_section`` in ``wrt-decoder/src/component/parse.rs``.
+The parsing is implemented in ``parse_import_section`` and ``parse_export_section`` in ``kiln-decoder/src/component/parse.rs``.
 
 Value Definitions
 =================
 
-The specification defines detailed value encoding rules. WRT implements a simplified version in ``wrt-format/src/component.rs``:
+The specification defines detailed value encoding rules. Kiln implements a simplified version in ``kiln-format/src/component.rs``:
 
 .. code-block:: text
 
@@ -566,24 +566,24 @@ The specification defines detailed value encoding rules. WRT implements a simpli
        Const(ConstValue),
    }
 
-The parsing is implemented in ``parse_value_section`` and related functions in ``wrt-decoder/src/component/parse.rs``.
+The parsing is implemented in ``parse_value_section`` and related functions in ``kiln-decoder/src/component/parse.rs``.
 
 Name Section
 ============
 
-The specification defines a name section for components similar to the core WebAssembly name section. WRT has an initial implementation in ``wrt-decoder/src/component_name_section.rs`` that parses the component name but does not yet support the full specification's naming capabilities for all component elements.
+The specification defines a name section for components similar to the core WebAssembly name section. Kiln has an initial implementation in ``kiln-decoder/src/component_name_section.rs`` that parses the component name but does not yet support the full specification's naming capabilities for all component elements.
 
 Current Implementation Differences Summary
 ==========================================
 
-1. **Version Field Format**: WRT uses ``[0x01, 0x00, 0x01, 0x00]`` while the specification uses ``[0x0D, 0x00]`` for version followed by ``[0x01, 0x00]`` for layer.
+1. **Version Field Format**: Kiln uses ``[0x01, 0x00, 0x01, 0x00]`` while the specification uses ``[0x0D, 0x00]`` for version followed by ``[0x01, 0x00]`` for layer.
 
 2. **Incomplete Section Implementations**: Many section parsers are currently placeholder implementations or only partially implemented:
    - Start section parser explicitly returns "not implemented"
    - Value section parser has incomplete value encoding/decoding
    - Resource types have a different representation structure
 
-3. **Extended Structure**: WRT implements additional fields and structures beyond the specification:
+3. **Extended Structure**: Kiln implements additional fields and structures beyond the specification:
    - Extended import/export name structures with packaging and nesting information
    - Additional canonical operation types for async functions and memory management
    - Value expressions have multiple forms beyond the specification's direct encoding
@@ -595,7 +595,7 @@ Current Implementation Differences Summary
 Binary Format Parsing Process
 =============================
 
-The WRT component binary parsing process in ``wrt-decoder/src/component/decode.rs`` follows these steps:
+The Kiln component binary parsing process in ``kiln-decoder/src/component/decode.rs`` follows these steps:
 
 1. Verify the magic number (``\0asm``)
 2. Check the version bytes (currently checking only for 8 total bytes)
@@ -604,7 +604,7 @@ The WRT component binary parsing process in ``wrt-decoder/src/component/decode.r
    b. Extract section bytes
    c. Delegate to the appropriate section parser
 
-Each section parser in ``wrt-decoder/src/component/parse.rs`` is responsible for:
+Each section parser in ``kiln-decoder/src/component/parse.rs`` is responsible for:
 1. Reading the count of elements in the section
 2. Parsing each element according to its binary format
 3. Returning a vector of the parsed elements
@@ -612,7 +612,7 @@ Each section parser in ``wrt-decoder/src/component/parse.rs`` is responsible for
 Next Steps in Implementation
 ============================
 
-Key areas for future development of the WRT binary format implementation:
+Key areas for future development of the Kiln binary format implementation:
 
 1. **Align Version Handling**: Update to match the specification's separate version and layer fields
 2. **Complete Parsers**: Implement the remaining placeholder parsers, particularly for start sections and value encoding
@@ -624,7 +624,7 @@ Key areas for future development of the WRT binary format implementation:
 Current Implementation Status
 -----------------------------
 
-The WRT implementation differs from the specification in several key aspects:
+The Kiln implementation differs from the specification in several key aspects:
 
 **Version Field Discrepancy**
 
@@ -635,14 +635,14 @@ The specification defines:
    version   ::= 0x0D 0x00
    layer     ::= 0x01 0x00
 
-But WRT implements:
+But Kiln implements:
 
 .. code-block:: text
 
    // Component Model binary format version - version 0.1
    COMPONENT_VERSION: [0x01, 0x00, 0x00, 0x01]
 
-This means WRT uses a 4-byte field structured as "version + layer", with the first 2 bytes representing the version (0x01, 0x00) and the last 2 bytes representing the layer (0x00, 0x01).
+This means Kiln uses a 4-byte field structured as "version + layer", with the first 2 bytes representing the version (0x01, 0x00) and the last 2 bytes representing the layer (0x00, 0x01).
 
 Instance Definitions
 ====================
@@ -668,7 +668,7 @@ The specification defines:
                          | 0x12                                               => instance
    core:inlineexport   ::= n:<core:name> si:<core:sortidx>                    => (export n si)
 
-WRT implements the core sort values as constants:
+Kiln implements the core sort values as constants:
 
 .. code-block:: text
 
@@ -680,7 +680,7 @@ WRT implements the core sort values as constants:
    COMPONENT_CORE_SORT_MODULE: 0x11
    COMPONENT_CORE_SORT_INSTANCE: 0x12
 
-The data structure in WRT:
+The data structure in Kiln:
 
 .. code-block:: text
 
@@ -717,7 +717,7 @@ The specification defines:
                          | 0x05                                               => instance
    inlineexport        ::= n:<exportname> si:<sortidx>                        => (export n si)
 
-WRT implements these sort values as constants:
+Kiln implements these sort values as constants:
 
 .. code-block:: text
 
@@ -731,7 +731,7 @@ WRT implements these sort values as constants:
 Component Type Definitions
 ==========================
 
-The WRT implementation provides support for the following component type definitions with data structures in ``wrt-format/src/component.rs``:
+The Kiln implementation provides support for the following component type definitions with data structures in ``kiln-format/src/component.rs``:
 
 .. code-block:: text
 
@@ -771,7 +771,7 @@ This implements the specification's component type definitions, though the binar
 Value Types
 -----------
 
-The WRT implementation supports the following value types:
+The Kiln implementation supports the following value types:
 
 .. code-block:: text
 
@@ -833,7 +833,7 @@ The WRT implementation supports the following value types:
 Alias Definitions
 =================
 
-The specification defines various forms of aliases, and WRT implements them as:
+The specification defines various forms of aliases, and Kiln implements them as:
 
 .. code-block:: text
 
@@ -872,7 +872,7 @@ This differs slightly from the specification, which has more detailed alias form
 Canonical Function Definitions
 ==============================
 
-WRT implements canonical function operations:
+Kiln implements canonical function operations:
 
 .. code-block:: text
 
@@ -906,7 +906,7 @@ The specification defines:
 
    start ::= f:<funcidx> arg*:vec(<valueidx>) r:<u32> => (start f (value arg)* (result (value))ʳ)
 
-WRT implements this as:
+Kiln implements this as:
 
 .. code-block:: text
 
@@ -919,12 +919,12 @@ WRT implements this as:
        pub results: u32,
    }
 
-However, the parsing is currently incomplete in WRT, as indicated by the implementation in ``parse_start_section`` which returns a not implemented error.
+However, the parsing is currently incomplete in Kiln, as indicated by the implementation in ``parse_start_section`` which returns a not implemented error.
 
 Import and Export Definitions
 =============================
 
-WRT implements imports and exports with these structures:
+Kiln implements imports and exports with these structures:
 
 .. code-block:: text
 
@@ -951,7 +951,7 @@ These implement the specification imports and exports, though with some differen
 Value Definitions
 =================
 
-WRT implements a Value structure, though the binary parsing is still incomplete:
+Kiln implements a Value structure, though the binary parsing is still incomplete:
 
 .. code-block:: text
 
@@ -967,7 +967,7 @@ The specification defines more detailed value encoding rules which are not yet f
 Section Parsing Process
 =======================
 
-The decoding process in ``wrt-decoder/src/component/decode.rs`` follows these steps:
+The decoding process in ``kiln-decoder/src/component/decode.rs`` follows these steps:
 
 1. Verify the magic number (``\0asm``)
 2. Read the version field
@@ -976,12 +976,12 @@ The decoding process in ``wrt-decoder/src/component/decode.rs`` follows these st
    b. Extract section bytes
    c. Parse section based on ID
 
-Each section type has a corresponding parser in ``wrt-decoder/src/component/parse.rs``, but many of these are currently placeholders that don't fully implement the specification.
+Each section type has a corresponding parser in ``kiln-decoder/src/component/parse.rs``, but many of these are currently placeholders that don't fully implement the specification.
 
 Binary Format Constants
 =======================
 
-The binary format constants are defined in ``wrt-format/src/binary.rs``:
+The binary format constants are defined in ``kiln-format/src/binary.rs``:
 
 .. code-block:: text
 
@@ -1015,7 +1015,7 @@ The binary format constants are defined in ``wrt-format/src/binary.rs``:
 Name Section Implementation
 ===========================
 
-The specification defines a name section for components, similar to the core WebAssembly name section. The WRT implementation has a partial implementation in ``wrt-decoder/src/component_name_section.rs`` but with some discrepancies:
+The specification defines a name section for components, similar to the core WebAssembly name section. The Kiln implementation has a partial implementation in ``kiln-decoder/src/component_name_section.rs`` but with some discrepancies:
 
 The specification defines:
 
@@ -1037,7 +1037,7 @@ The specification defines:
 Current Implementation Differences Summary
 ==========================================
 
-1. **Version Implementation**: WRT uses a 4-byte version field ``[0x01, 0x00, 0x00, 0x01]`` while the specification separates this into a 2-byte version field ``[0x0D, 0x00]`` followed by a 2-byte layer field ``[0x01, 0x00]``.
+1. **Version Implementation**: Kiln uses a 4-byte version field ``[0x01, 0x00, 0x00, 0x01]`` while the specification separates this into a 2-byte version field ``[0x0D, 0x00]`` followed by a 2-byte layer field ``[0x01, 0x00]``.
 
 2. **Placeholder Implementations**: Many section parsers are currently placeholder implementations that will be fully implemented in future versions:
    - ``parse_core_module_section``
@@ -1053,20 +1053,20 @@ Current Implementation Differences Summary
    - ``parse_value_section``
    - ``parse_alias_section``
 
-3. **Resource Types Implementation**: The resource type representation in WRT has a different structure than specified, with specific types for handle32, handle64, record, and aggregate.
+3. **Resource Types Implementation**: The resource type representation in Kiln has a different structure than specified, with specific types for handle32, handle64, record, and aggregate.
 
 4. **Start Function Implementation**: The start function section is defined in the data structure but parsing is explicitly not implemented yet.
 
-5. **Value Encoding/Decoding**: The specification defines detailed value encoding rules which are not yet fully implemented in WRT.
+5. **Value Encoding/Decoding**: The specification defines detailed value encoding rules which are not yet fully implemented in Kiln.
 
-6. **Name Section Implementation**: The name section implementation in WRT differs from the specification in structure and completeness.
+6. **Name Section Implementation**: The name section implementation in Kiln differs from the specification in structure and completeness.
 
-7. **Validation**: The specification requires detailed validation of each section's contents which is not yet fully implemented in WRT.
+7. **Validation**: The specification requires detailed validation of each section's contents which is not yet fully implemented in Kiln.
 
 Future Work
 ===========
 
-The WRT implementation of the Component Model binary format is under active development. Future work includes:
+The Kiln implementation of the Component Model binary format is under active development. Future work includes:
 
 1. Complete implementation of all section parsers
 2. Updating the version field structure to match the specification

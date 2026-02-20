@@ -9,7 +9,7 @@ use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 #[cfg(feature = "std")]
 use std::sync::Weak;
 
-use wrt_foundation::{
+use kiln_foundation::{
     Arc, CrateId, MemoryProvider, Mutex,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     operations::{Type as OperationType, record_global_operation},
@@ -85,7 +85,7 @@ impl ToBytes for CleanupAction {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::DropResource(h) => {
                 0u8.to_bytes_with_provider(writer, provider)?;
@@ -117,7 +117,7 @@ impl FromBytes for CleanupAction {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::CloseStream(0))
     }
 }
@@ -172,7 +172,7 @@ impl ToBytes for CleanupCallback {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.action.to_bytes_with_provider(writer, provider)?;
         self.priority.to_bytes_with_provider(writer, provider)?;
         self.fuel_cost.to_bytes_with_provider(writer, provider)?;
@@ -184,7 +184,7 @@ impl FromBytes for CleanupCallback {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             action: CleanupAction::from_bytes_with_provider(reader, provider)?,
             priority: u32::from_bytes_with_provider(reader, provider)?,

@@ -118,7 +118,7 @@ pub mod kani_verification {
     /// Verify that Result works correctly with different error types
     #[cfg_attr(kani, kani::proof)]
     pub fn verify_result_type() {
-        // Test with wrt_error::Error
+        // Test with kiln_error::Error
         let result1: Result<i32> = Ok(42); // Result<T> is core::result::Result<T, crate::Error>
         assert_eq!(result1.unwrap(), 42);
 

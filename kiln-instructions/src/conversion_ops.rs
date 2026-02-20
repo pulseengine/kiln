@@ -14,7 +14,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_possible_truncation)]
 
-use wrt_math as math;
+use kiln_math as math;
 
 use crate::prelude::{
     Debug,
@@ -156,7 +156,7 @@ impl<T: ConversionContext> PureInstruction<T, Error> for ConversionOp {
                         "Expected F32 for i32.trunc_f32_s operand",
                     ));
                 };
-                // Convert wrt_foundation::FloatBits32 to wrt_math::FloatBits32
+                // Convert kiln_foundation::FloatBits32 to kiln_math::FloatBits32
                 let math_bits = math::FloatBits32(float_bits.0);
                 let result = math::i32_trunc_f32_s(math_bits)?;
                 context.push_conversion_value(Value::I32(result))
@@ -329,7 +329,7 @@ impl<T: ConversionContext> PureInstruction<T, Error> for ConversionOp {
                     .into_i32()
                     .map_err(|_| Error::type_error("Expected I32 for f32.convert_i32_s operand"))?;
                 let result = math::f32_convert_i32_s(a)?;
-                // Convert wrt_math::FloatBits32 to wrt_foundation::FloatBits32
+                // Convert kiln_math::FloatBits32 to kiln_foundation::FloatBits32
                 context.push_conversion_value(Value::F32(FloatBits32(result.0)))
             },
             Self::F32ConvertI32U => {

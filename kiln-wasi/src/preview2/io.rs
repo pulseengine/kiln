@@ -1,6 +1,6 @@
 //! WASI I/O interface implementation
 //!
-//! Implements the `wasi:io` interface for stream operations using WRT's
+//! Implements the `wasi:io` interface for stream operations using Kiln's
 //! resource management patterns and platform abstractions.
 //!
 //! ## Pollable System

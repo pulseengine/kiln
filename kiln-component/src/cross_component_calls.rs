@@ -10,10 +10,10 @@ use std::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use std::{fmt, mem};
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     collections::StaticVec as BoundedVec,
-    component_value::{ComponentValue, ValType as WrtComponentType},
+    component_value::{ComponentValue, ValType as KilnComponentType},
     safe_managed_alloc,
     safe_memory::NoStdProvider,
 };
@@ -191,7 +191,7 @@ pub struct CallTarget {
     /// Target function index within the component
     pub function_index: u32,
     /// Function signature
-    pub signature: WrtComponentType<NoStdProvider<4096>>,
+    pub signature: KilnComponentType<NoStdProvider<4096>>,
     /// Call permissions
     pub permissions: CallPermissions,
     /// Resource transfer policy
@@ -257,7 +257,7 @@ pub struct TransferredResource {
 #[derive(Debug, Clone)]
 pub struct CrossCallResult {
     /// Function call result
-    pub result: wrt_error::Result<Value>,
+    pub result: kiln_error::Result<Value>,
     /// Resources that were transferred
     #[cfg(feature = "std")]
     pub transferred_resources: Vec<TransferredResource>,
@@ -282,7 +282,7 @@ pub struct CallStatistics {
 
 impl CrossComponentCallManager {
     /// Create a new cross-component call manager
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             targets: Vec::new(),
@@ -331,7 +331,7 @@ impl CrossComponentCallManager {
     }
 
     /// Register a call target
-    pub fn register_target(&mut self, target: CallTarget) -> wrt_error::Result<u32> {
+    pub fn register_target(&mut self, target: CallTarget) -> kiln_error::Result<u32> {
         let target_id = self.targets.len() as u32;
 
         #[cfg(feature = "std")]
@@ -342,7 +342,7 @@ impl CrossComponentCallManager {
         {
             self.targets
                 .push(target)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many call targets"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many call targets"))?;
         }
 
         Ok(target_id)
@@ -355,10 +355,10 @@ impl CrossComponentCallManager {
         target_id: u32,
         args: &[Value],
         engine: &mut ComponentExecutionEngine,
-    ) -> wrt_error::Result<CrossCallResult> {
+    ) -> kiln_error::Result<CrossCallResult> {
         // Check call depth
         if self.call_stack.len() >= self.max_call_depth {
-            return Err(wrt_error::Error::resource_exhausted(
+            return Err(kiln_error::Error::resource_exhausted(
                 "Maximum call depth exceeded",
             ));
         }
@@ -367,12 +367,12 @@ impl CrossComponentCallManager {
         let target = self
             .targets
             .get(target_id as usize)
-            .ok_or_else(|| wrt_error::Error::validation_invalid_input("Invalid input"))?
+            .ok_or_else(|| kiln_error::Error::validation_invalid_input("Invalid input"))?
             .clone();
 
         // Check permissions
         if !target.permissions.allowed {
-            return Err(wrt_error::Error::runtime_error(
+            return Err(kiln_error::Error::runtime_error(
                 "Cross-component call not allowed",
             ));
         }
@@ -402,7 +402,7 @@ impl CrossComponentCallManager {
         {
             self.call_stack
                 .push(call_frame)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Call stack overflow"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Call stack overflow"))?;
         }
 
         // Prepare arguments with resource transfer
@@ -489,7 +489,7 @@ impl CrossComponentCallManager {
         args: &[Value],
         target: &CallTarget,
         caller_instance: u32,
-    ) -> wrt_error::Result<(Vec<Value>, Vec<TransferredResource>)> {
+    ) -> kiln_error::Result<(Vec<Value>, Vec<TransferredResource>)> {
         let mut prepared_args = Vec::new();
         let mut transferred_resources = Vec::new();
 
@@ -508,7 +508,7 @@ impl CrossComponentCallManager {
                         transferred_resources.push(transferred);
                         prepared_args.push(arg.clone());
                     } else {
-                        return Err(wrt_error::Error::runtime_error(
+                        return Err(kiln_error::Error::runtime_error(
                             "Resource transfer not allowed",
                         ));
                     }
@@ -529,7 +529,7 @@ impl CrossComponentCallManager {
         args: &[Value],
         target: &CallTarget,
         caller_instance: u32,
-    ) -> wrt_error::Result<(BoundedVec<Value, 32>, BoundedVec<TransferredResource, 32>)> {
+    ) -> kiln_error::Result<(BoundedVec<Value, 32>, BoundedVec<TransferredResource, 32>)> {
         let mut prepared_args = BoundedVec::new();
         let mut transferred_resources = BoundedVec::new();
 
@@ -546,13 +546,13 @@ impl CrossComponentCallManager {
                             transfer_type,
                         )?;
                         transferred_resources.push(transferred).map_err(|_| {
-                            wrt_error::Error::runtime_error("Too many transferred resources")
+                            kiln_error::Error::runtime_error("Too many transferred resources")
                         })?;
                         prepared_args
                             .push(arg.clone())
-                            .map_err(|_| wrt_error::Error::runtime_error("Too many arguments"))?;
+                            .map_err(|_| kiln_error::Error::runtime_error("Too many arguments"))?;
                     } else {
-                        return Err(wrt_error::Error::runtime_error(
+                        return Err(kiln_error::Error::runtime_error(
                             "Resource transfer not permitted",
                         ));
                     }
@@ -560,7 +560,7 @@ impl CrossComponentCallManager {
                 _ => {
                     prepared_args
                         .push(arg.clone())
-                        .map_err(|_| wrt_error::Error::runtime_error("Too many arguments"))?;
+                        .map_err(|_| kiln_error::Error::runtime_error("Too many arguments"))?;
                 },
             }
         }
@@ -575,9 +575,9 @@ impl CrossComponentCallManager {
         from_instance: u32,
         to_instance: u32,
         transfer_type: ResourceTransferPolicy,
-    ) -> wrt_error::Result<TransferredResource> {
+    ) -> kiln_error::Result<TransferredResource> {
         match transfer_type {
-            ResourceTransferPolicy::None => Err(wrt_error::Error::runtime_error(
+            ResourceTransferPolicy::None => Err(kiln_error::Error::runtime_error(
                 "Resource transfer not allowed",
             )),
             ResourceTransferPolicy::Transfer => {
@@ -614,7 +614,7 @@ impl CrossComponentCallManager {
     fn finalize_resource_transfers(
         &mut self,
         transfers: &[TransferredResource],
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         for transfer in transfers {
             match transfer.transfer_type {
                 ResourceTransferPolicy::Transfer => {
@@ -635,7 +635,7 @@ impl CrossComponentCallManager {
     }
 
     /// Restore resources after failed call
-    fn restore_resources(&mut self, transfers: &[TransferredResource]) -> wrt_error::Result<()> {
+    fn restore_resources(&mut self, transfers: &[TransferredResource]) -> kiln_error::Result<()> {
         for transfer in transfers {
             match transfer.transfer_type {
                 ResourceTransferPolicy::Transfer => {
@@ -772,7 +772,7 @@ impl CrossComponentCallManager {
         source_component: u32,
         target_component: u32,
         transfer_type: ResourceTransferType,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let transfer = PendingTransfer {
             resource_handle,
             source_component,
@@ -788,14 +788,14 @@ impl CrossComponentCallManager {
         {
             self.pending_transfers
                 .push(transfer)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many pending transfers"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many pending transfers"))?;
         }
 
         Ok(())
     }
 
     /// Process batch resource transfers for optimization
-    fn flush_pending_transfers(&mut self) -> wrt_error::Result<()> {
+    fn flush_pending_transfers(&mut self) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             if self.pending_transfers.is_empty() {
@@ -868,7 +868,7 @@ impl CrossComponentCallManager {
         signature: FunctionSignature,
         abi_adapter: Option<AbiAdapter>,
         resource_requirements: ResourceRequirements,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let cached_target = CachedCallTarget {
             function_index,
             signature,
@@ -886,14 +886,14 @@ impl CrossComponentCallManager {
         {
             self.call_cache
                 .push((key, cached_target))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Call cache full"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Call cache full"))?;
         }
 
         Ok(())
     }
 
     /// Calculate a hash of the function signature for caching
-    fn calculate_signature_hash(&self, signature: &WrtComponentType<NoStdProvider<4096>>) -> u64 {
+    fn calculate_signature_hash(&self, signature: &KilnComponentType<NoStdProvider<4096>>) -> u64 {
         // Simple hash implementation - in real implementation would use a proper hasher
         use core::hash::{Hash, Hasher};
 
@@ -914,20 +914,20 @@ impl CrossComponentCallManager {
         let mut hasher = SimpleHasher(0);
         // For now, just hash a simple representation of the type
         match signature {
-            WrtComponentType::Bool => 1u8.hash(&mut hasher),
-            WrtComponentType::S8 => 2u8.hash(&mut hasher),
-            WrtComponentType::U8 => 3u8.hash(&mut hasher),
-            WrtComponentType::S16 => 4u8.hash(&mut hasher),
-            WrtComponentType::U16 => 5u8.hash(&mut hasher),
-            WrtComponentType::S32 => 6u8.hash(&mut hasher),
-            WrtComponentType::U32 => 7u8.hash(&mut hasher),
-            WrtComponentType::S64 => 8u8.hash(&mut hasher),
-            WrtComponentType::U64 => 9u8.hash(&mut hasher),
-            WrtComponentType::F32 => 10u8.hash(&mut hasher),
-            WrtComponentType::F64 => 11u8.hash(&mut hasher),
-            WrtComponentType::Char => 12u8.hash(&mut hasher),
-            WrtComponentType::String => 13u8.hash(&mut hasher),
-            WrtComponentType::Void => 0u8.hash(&mut hasher),
+            KilnComponentType::Bool => 1u8.hash(&mut hasher),
+            KilnComponentType::S8 => 2u8.hash(&mut hasher),
+            KilnComponentType::U8 => 3u8.hash(&mut hasher),
+            KilnComponentType::S16 => 4u8.hash(&mut hasher),
+            KilnComponentType::U16 => 5u8.hash(&mut hasher),
+            KilnComponentType::S32 => 6u8.hash(&mut hasher),
+            KilnComponentType::U32 => 7u8.hash(&mut hasher),
+            KilnComponentType::S64 => 8u8.hash(&mut hasher),
+            KilnComponentType::U64 => 9u8.hash(&mut hasher),
+            KilnComponentType::F32 => 10u8.hash(&mut hasher),
+            KilnComponentType::F64 => 11u8.hash(&mut hasher),
+            KilnComponentType::Char => 12u8.hash(&mut hasher),
+            KilnComponentType::String => 13u8.hash(&mut hasher),
+            KilnComponentType::Void => 0u8.hash(&mut hasher),
             // For complex types, would need more sophisticated hashing
             _ => 255u8.hash(&mut hasher),
         }
@@ -966,7 +966,7 @@ impl CallTarget {
     pub fn new(
         target_instance: u32,
         function_index: u32,
-        signature: WrtComponentType<NoStdProvider<4096>>,
+        signature: KilnComponentType<NoStdProvider<4096>>,
         permissions: CallPermissions,
         resource_policy: ResourceTransferPolicy,
     ) -> Self {

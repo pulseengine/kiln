@@ -6,7 +6,7 @@
 
 // Import tracing utilities
 #[cfg(feature = "tracing")]
-use wrt_foundation::tracing::{debug, trace, warn};
+use kiln_foundation::tracing::{debug, trace, warn};
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::sync::Arc;
@@ -18,14 +18,14 @@ use core::sync::atomic::{
 use alloc::sync::Arc;
 
 // Import decoder function
-use wrt_decoder::decoder::decode_module;
-// Import execution configuration from wrt-foundation where it belongs
-use wrt_foundation::execution::{
+use kiln_decoder::decoder::decode_module;
+// Import execution configuration from kiln-foundation where it belongs
+use kiln_foundation::execution::{
     extract_resource_limits_from_binary,
     ASILExecutionConfig,
     ASILExecutionMode,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     bounded_collections::BoundedMap,
     budget_aware_provider::CrateId,
     capabilities::{
@@ -41,7 +41,7 @@ use wrt_foundation::{
     },
     values::Value,
 };
-use wrt_host::{
+use kiln_host::{
     BoundedHostIntegrationManager,
     CallbackRegistry,
     HostBuilder,
@@ -68,20 +68,20 @@ impl ModuleHandle {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for ModuleHandle {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ModuleHandle {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         for byte in self.0.to_le_bytes() {
             checksum.update(byte);
         }
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ModuleHandle {
+impl kiln_foundation::traits::ToBytes for ModuleHandle {
     fn serialized_size(&self) -> usize {
         4
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
@@ -90,8 +90,8 @@ impl wrt_foundation::traits::ToBytes for ModuleHandle {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ModuleHandle {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::FromBytes for ModuleHandle {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
     ) -> Result<Self> {
@@ -116,20 +116,20 @@ impl InstanceHandle {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for InstanceHandle {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for InstanceHandle {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         for byte in self.0.to_le_bytes() {
             checksum.update(byte);
         }
     }
 }
 
-impl wrt_foundation::traits::ToBytes for InstanceHandle {
+impl kiln_foundation::traits::ToBytes for InstanceHandle {
     fn serialized_size(&self) -> usize {
         4
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
@@ -138,8 +138,8 @@ impl wrt_foundation::traits::ToBytes for InstanceHandle {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for InstanceHandle {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::FromBytes for InstanceHandle {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
     ) -> Result<Self> {
@@ -326,7 +326,7 @@ impl CapabilityAwareEngine {
     /// This allows updating the registry after engine creation, which is needed
     /// for component model instantiation where the registry is created separately.
     #[cfg(feature = "std")]
-    pub fn set_host_registry(&mut self, registry: std::sync::Arc<wrt_host::CallbackRegistry>) {
+    pub fn set_host_registry(&mut self, registry: std::sync::Arc<kiln_host::CallbackRegistry>) {
         self.host_registry = Some((*registry).clone());
         self.inner.set_host_registry(registry);
     }
@@ -337,7 +337,7 @@ impl CapabilityAwareEngine {
     /// The engine has no knowledge of specific host interfaces - it delegates
     /// all import resolution to this handler.
     #[cfg(feature = "std")]
-    pub fn set_host_handler(&mut self, handler: Box<dyn wrt_foundation::HostImportHandler>) {
+    pub fn set_host_handler(&mut self, handler: Box<dyn kiln_foundation::HostImportHandler>) {
         self.inner.set_host_handler(handler);
     }
 
@@ -365,8 +365,8 @@ impl CapabilityAwareEngine {
                 #[cfg(feature = "std")]
                 {
                     let builder = HostBuilder::new()
-                        .with_component_name("wrt_qm_component")
-                        .with_host_id("wrt_qm_host");
+                        .with_component_name("kiln_qm_component")
+                        .with_host_id("kiln_qm_host");
                     let registry = builder.build()?;
                     Ok((Some(registry), None))
                 }
@@ -411,7 +411,7 @@ impl CapabilityAwareEngine {
         #[cfg(feature = "std")]
         {
             if let Some(ref mut registry) = self.host_registry {
-                use wrt_host::CloneableFn;
+                use kiln_host::CloneableFn;
                 use core::any::Any;
 
                 // Wrap the user's function to match the HostFunctionHandler signature
@@ -438,7 +438,7 @@ impl CapabilityAwareEngine {
         #[cfg(not(feature = "std"))]
         {
             if let Some(ref mut manager) = self.host_manager {
-                use wrt_host::BoundedHostFunction;
+                use kiln_host::BoundedHostFunction;
                 // TODO: Create BoundedHostFunction and add to manager
                 // For now, return success as placeholder
                 Ok(())
@@ -575,7 +575,7 @@ impl CapabilityEngine for CapabilityAwareEngine {
         // TODO: Apply resource limits to execution context
         // This would integrate with the fuel async executor to enforce limits
 
-        // Decode the module using wrt-decoder (Box to avoid stack overflow)
+        // Decode the module using kiln-decoder (Box to avoid stack overflow)
         #[cfg(feature = "tracing")]
         trace!(binary_size = binary.len(), "Decoding module");
         let decoded = Box::new(decode_module(binary)?);
@@ -583,7 +583,7 @@ impl CapabilityEngine for CapabilityAwareEngine {
         trace!(types = decoded.types.len(), functions = decoded.functions.len(), "Decode successful, converting to runtime module");
 
         // Convert to runtime module (pass by reference, returns Box<Module>)
-        let runtime_module = Module::from_wrt_module(&*decoded)?;
+        let runtime_module = Module::from_kiln_module(&*decoded)?;
         #[cfg(feature = "tracing")]
         trace!("Conversion successful");
 
@@ -611,7 +611,7 @@ impl CapabilityEngine for CapabilityAwareEngine {
             trace!(
                 element_count = elem_count,
                 first_element_items = first_elem_items,
-                "After from_wrt_module"
+                "After from_kiln_module"
             );
         }
 
@@ -619,7 +619,7 @@ impl CapabilityEngine for CapabilityAwareEngine {
         // #[cfg(feature = "std")]
         // runtime_module.initialize_data_segments()?;
 
-        // Stack pointer is now initialized early during global creation in from_wrt_module()
+        // Stack pointer is now initialized early during global creation in from_kiln_module()
         // No need for late initialization here anymore
 
         // Create and store with unique handle (wrapped in Arc to avoid deep clones)
@@ -1255,7 +1255,7 @@ impl CapabilityAwareEngine {
         &self,
         _instance_handle: InstanceHandle,
         _func_name: &str,
-    ) -> Result<Option<wrt_foundation::types::FuncType>> {
+    ) -> Result<Option<kiln_foundation::types::FuncType>> {
         // TODO: Fix type system inconsistency between BaseRuntimeProvider and actual
         // module provider
         Ok(None)
@@ -1266,8 +1266,8 @@ impl CapabilityAwareEngine {
         &mut self,
         instance_handle: InstanceHandle,
         func_name: &str,
-        args: &[wrt_foundation::values::Value],
-    ) -> Result<Vec<wrt_foundation::values::Value>> {
+        args: &[kiln_foundation::values::Value],
+    ) -> Result<Vec<kiln_foundation::values::Value>> {
         // Additional capability-based validation (DirectMap returns Option)
         let instance = self
             .instances
@@ -1276,12 +1276,12 @@ impl CapabilityAwareEngine {
 
         // Verify memory capability allows function execution
         // Note: Using read operation as placeholder since Execute variant doesn't exist
-        let operation = wrt_foundation::capabilities::MemoryOperation::Read {
+        let operation = kiln_foundation::capabilities::MemoryOperation::Read {
             offset: 0,
             len:    64, // Small placeholder size for function validation
         };
         self.context.verify_operation(
-            wrt_foundation::budget_aware_provider::CrateId::Runtime,
+            kiln_foundation::budget_aware_provider::CrateId::Runtime,
             &operation,
         )?;
 

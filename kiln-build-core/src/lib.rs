@@ -1,7 +1,7 @@
-//! WRT Build Core - Centralized build system for WebAssembly Runtime
+//! Kiln Build Core - Centralized build system for WebAssembly Runtime
 //!
 //! This library provides the core functionality for building, testing, and
-//! verifying the WRT (WebAssembly Runtime) project. It serves as the single
+//! verifying the Kiln (WebAssembly Runtime) project. It serves as the single
 //! source of truth for all build operations, replacing the previous fragmented
 //! approach with justfile, xtask, and shell scripts.
 //!
@@ -10,7 +10,7 @@
 //! The build system is organized around a central [`BuildSystem`] struct that
 //! manages workspace operations and coordinates various build tasks:
 //!
-//! - **Build Operations**: Compilation of all WRT components
+//! - **Build Operations**: Compilation of all Kiln components
 //! - **Test Execution**: Running unit, integration, and verification tests
 //! - **Safety Verification**: SCORE-inspired safety checks and formal
 //!   verification
@@ -114,14 +114,14 @@ mod tests {
 
     #[test]
     fn test_workspace_detection() {
-        // This test should find the WRT workspace root
+        // This test should find the Kiln workspace root
         let workspace = detect_workspace_root();
         assert!(workspace.is_ok(), "Should detect workspace root");
 
         let root = workspace.unwrap();
         assert!(root.join("Cargo.toml").exists(), "Should have Cargo.toml");
         assert!(
-            root.join("wrt-build-core").exists(),
+            root.join("kiln-build-core").exists(),
             "Should contain this crate"
         );
     }

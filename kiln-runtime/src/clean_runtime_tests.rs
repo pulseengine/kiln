@@ -1,8 +1,8 @@
 //! Test module for clean architecture migration
 //!
-//! This module demonstrates how to use clean types from wrt-foundation
+//! This module demonstrates how to use clean types from kiln-foundation
 //! instead of provider-embedded types, serving as a prototype for the
-//! full wrt-runtime migration.
+//! full kiln-runtime migration.
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 use alloc::{
@@ -10,14 +10,14 @@ use alloc::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
 #[cfg(any(feature = "std", feature = "alloc"))]
-use wrt_foundation::{
+use kiln_foundation::{
     CleanFuncType,
     CleanMemoryType,
     CleanTableType,

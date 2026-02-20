@@ -18,10 +18,10 @@ use std::{
 
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 // Import the execution components
-use wrt_decoder::decoder::decode_module;
-use wrt_error::Result;
-use wrt_foundation::values::Value;
-use wrt_runtime::{module::Module, module_instance::ModuleInstance, stackless::StacklessEngine};
+use kiln_decoder::decoder::decode_module;
+use kiln_error::Result;
+use kiln_foundation::values::Value;
+use kiln_runtime::{module::Module, module_instance::ModuleInstance, stackless::StacklessEngine};
 
 // Benchmark sizes for different test scenarios
 const SMALL_ITERATION: usize = 10;
@@ -31,10 +31,10 @@ const LARGE_ITERATION: usize = 1000;
 /// Helper function to load and prepare a test WASM module
 fn load_test_module() -> Result<Module> {
     let wasm_bytes = fs::read("test_add.wasm")
-        .map_err(|_| wrt_error::Error::system_io_error("Failed to read test_add.wasm"))?;
+        .map_err(|_| kiln_error::Error::system_io_error("Failed to read test_add.wasm"))?;
 
     let decoded = decode_module(&wasm_bytes)?;
-    Module::from_wrt_module(&decoded)
+    Module::from_kiln_module(&decoded)
 }
 
 /// Helper function to create test arguments
@@ -57,7 +57,7 @@ fn bench_module_loading(c: &mut Criterion) {
         group.bench_function("convert_to_runtime", |b| {
             let decoded = decode_module(&wasm_bytes).unwrap();
             b.iter(|| {
-                let runtime_module = Module::from_wrt_module(black_box(&decoded)).unwrap();
+                let runtime_module = Module::from_kiln_module(black_box(&decoded)).unwrap();
                 black_box(runtime_module)
             })
         });
@@ -65,7 +65,7 @@ fn bench_module_loading(c: &mut Criterion) {
         group.bench_function("full_module_loading", |b| {
             b.iter(|| {
                 let decoded = decode_module(black_box(&wasm_bytes)).unwrap();
-                let runtime_module = Module::from_wrt_module(&decoded).unwrap();
+                let runtime_module = Module::from_kiln_module(&decoded).unwrap();
                 black_box(runtime_module)
             })
         });

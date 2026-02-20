@@ -15,13 +15,13 @@ use core::{
 #[cfg(feature = "std")]
 use std::sync::Weak;
 
-use wrt_foundation::{
+use kiln_foundation::{
     Arc, CrateId, Mutex,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     component_value::ComponentValue,
     safe_managed_alloc,
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::{
@@ -142,9 +142,9 @@ impl Default for ComponentAsyncTask {
     }
 }
 
-impl wrt_runtime::Checksummable for ComponentAsyncTask {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-        use wrt_runtime::Checksummable;
+impl kiln_runtime::Checksummable for ComponentAsyncTask {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+        use kiln_runtime::Checksummable;
         self.component_task_id.update_checksum(checksum);
         self.executor_task_id.update_checksum(checksum);
         self.component_id.update_checksum(checksum);
@@ -157,13 +157,13 @@ impl wrt_runtime::Checksummable for ComponentAsyncTask {
     }
 }
 
-impl wrt_runtime::ToBytes for ComponentAsyncTask {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for ComponentAsyncTask {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
-        use wrt_runtime::ToBytes;
+    ) -> kiln_error::Result<()> {
+        use kiln_runtime::ToBytes;
         self.component_task_id.to_bytes_with_provider(writer, provider)?;
         self.executor_task_id.to_bytes_with_provider(writer, provider)?;
         self.component_id.to_bytes_with_provider(writer, provider)?;
@@ -179,12 +179,12 @@ impl wrt_runtime::ToBytes for ComponentAsyncTask {
     }
 }
 
-impl wrt_runtime::FromBytes for ComponentAsyncTask {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for ComponentAsyncTask {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_runtime::FromBytes;
+    ) -> kiln_error::Result<Self> {
+        use kiln_runtime::FromBytes;
         Ok(Self {
             component_task_id: u32::from_bytes_with_provider(reader, provider)?,
             executor_task_id: u32::from_bytes_with_provider(reader, provider)?,
@@ -220,9 +220,9 @@ pub enum ComponentAsyncTaskType {
     AsyncOperation,
 }
 
-impl wrt_runtime::Checksummable for ComponentAsyncTaskType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-        use wrt_runtime::Checksummable;
+impl kiln_runtime::Checksummable for ComponentAsyncTaskType {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+        use kiln_runtime::Checksummable;
         let discriminant = match self {
             ComponentAsyncTaskType::AsyncFunction => 0u8,
             ComponentAsyncTaskType::FutureWait => 1u8,
@@ -235,13 +235,13 @@ impl wrt_runtime::Checksummable for ComponentAsyncTaskType {
     }
 }
 
-impl wrt_runtime::ToBytes for ComponentAsyncTaskType {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for ComponentAsyncTaskType {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
-        use wrt_runtime::ToBytes;
+    ) -> kiln_error::Result<()> {
+        use kiln_runtime::ToBytes;
         let discriminant = match self {
             ComponentAsyncTaskType::AsyncFunction => 0u8,
             ComponentAsyncTaskType::FutureWait => 1u8,
@@ -254,12 +254,12 @@ impl wrt_runtime::ToBytes for ComponentAsyncTaskType {
     }
 }
 
-impl wrt_runtime::FromBytes for ComponentAsyncTaskType {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for ComponentAsyncTaskType {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_runtime::FromBytes;
+    ) -> kiln_error::Result<Self> {
+        use kiln_runtime::FromBytes;
         let discriminant = u8::from_bytes_with_provider(reader, provider)?;
         match discriminant {
             0 => Ok(ComponentAsyncTaskType::AsyncFunction),
@@ -268,7 +268,7 @@ impl wrt_runtime::FromBytes for ComponentAsyncTaskType {
             3 => Ok(ComponentAsyncTaskType::ResourceAsync),
             4 => Ok(ComponentAsyncTaskType::LifecycleAsync),
             5 => Ok(ComponentAsyncTaskType::AsyncOperation),
-            _ => Err(wrt_error::Error::runtime_error(
+            _ => Err(kiln_error::Error::runtime_error(
                 "Invalid ComponentAsyncTaskType discriminant",
             )),
         }
@@ -312,9 +312,9 @@ struct ComponentAsyncContext {
     resource_limits: ComponentResourceLimits,
 }
 
-impl wrt_runtime::Checksummable for ComponentAsyncContext {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-        use wrt_runtime::Checksummable;
+impl kiln_runtime::Checksummable for ComponentAsyncContext {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+        use kiln_runtime::Checksummable;
         self.component_id.update_checksum(checksum);
         self.active_tasks.update_checksum(checksum);
         self.futures.update_checksum(checksum);
@@ -324,13 +324,13 @@ impl wrt_runtime::Checksummable for ComponentAsyncContext {
     }
 }
 
-impl wrt_runtime::ToBytes for ComponentAsyncContext {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for ComponentAsyncContext {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
-        use wrt_runtime::ToBytes;
+    ) -> kiln_error::Result<()> {
+        use kiln_runtime::ToBytes;
         self.component_id.to_bytes_with_provider(writer, provider)?;
         self.active_tasks.to_bytes_with_provider(writer, provider)?;
         self.futures.to_bytes_with_provider(writer, provider)?;
@@ -341,12 +341,12 @@ impl wrt_runtime::ToBytes for ComponentAsyncContext {
     }
 }
 
-impl wrt_runtime::FromBytes for ComponentAsyncContext {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for ComponentAsyncContext {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_runtime::FromBytes;
+    ) -> kiln_error::Result<Self> {
+        use kiln_runtime::FromBytes;
         Ok(Self {
             component_id: ComponentInstanceId::new(u32::from_bytes_with_provider(
                 reader, provider,
@@ -376,9 +376,9 @@ pub enum ComponentAsyncState {
     Terminated,
 }
 
-impl wrt_runtime::Checksummable for ComponentAsyncState {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-        use wrt_runtime::Checksummable;
+impl kiln_runtime::Checksummable for ComponentAsyncState {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+        use kiln_runtime::Checksummable;
         let discriminant = match self {
             ComponentAsyncState::Active => 0u8,
             ComponentAsyncState::Suspending => 1u8,
@@ -390,13 +390,13 @@ impl wrt_runtime::Checksummable for ComponentAsyncState {
     }
 }
 
-impl wrt_runtime::ToBytes for ComponentAsyncState {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for ComponentAsyncState {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
-        use wrt_runtime::ToBytes;
+    ) -> kiln_error::Result<()> {
+        use kiln_runtime::ToBytes;
         let discriminant = match self {
             ComponentAsyncState::Active => 0u8,
             ComponentAsyncState::Suspending => 1u8,
@@ -408,12 +408,12 @@ impl wrt_runtime::ToBytes for ComponentAsyncState {
     }
 }
 
-impl wrt_runtime::FromBytes for ComponentAsyncState {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for ComponentAsyncState {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_runtime::FromBytes;
+    ) -> kiln_error::Result<Self> {
+        use kiln_runtime::FromBytes;
         let discriminant = u8::from_bytes_with_provider(reader, provider)?;
         match discriminant {
             0 => Ok(ComponentAsyncState::Active),
@@ -421,7 +421,7 @@ impl wrt_runtime::FromBytes for ComponentAsyncState {
             2 => Ok(ComponentAsyncState::Suspended),
             3 => Ok(ComponentAsyncState::Terminating),
             4 => Ok(ComponentAsyncState::Terminated),
-            _ => Err(wrt_error::Error::runtime_error(
+            _ => Err(kiln_error::Error::runtime_error(
                 "Invalid ComponentAsyncState discriminant",
             )),
         }
@@ -438,9 +438,9 @@ pub struct ComponentResourceLimits {
     memory_limit: usize,
 }
 
-impl wrt_runtime::Checksummable for ComponentResourceLimits {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-        use wrt_runtime::Checksummable;
+impl kiln_runtime::Checksummable for ComponentResourceLimits {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+        use kiln_runtime::Checksummable;
         self.max_concurrent_tasks.update_checksum(checksum);
         self.max_futures.update_checksum(checksum);
         self.max_streams.update_checksum(checksum);
@@ -449,13 +449,13 @@ impl wrt_runtime::Checksummable for ComponentResourceLimits {
     }
 }
 
-impl wrt_runtime::ToBytes for ComponentResourceLimits {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_runtime::ToBytes for ComponentResourceLimits {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
-        use wrt_runtime::ToBytes;
+    ) -> kiln_error::Result<()> {
+        use kiln_runtime::ToBytes;
         self.max_concurrent_tasks.to_bytes_with_provider(writer, provider)?;
         self.max_futures.to_bytes_with_provider(writer, provider)?;
         self.max_streams.to_bytes_with_provider(writer, provider)?;
@@ -465,12 +465,12 @@ impl wrt_runtime::ToBytes for ComponentResourceLimits {
     }
 }
 
-impl wrt_runtime::FromBytes for ComponentResourceLimits {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_runtime::FromBytes for ComponentResourceLimits {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
-        use wrt_runtime::FromBytes;
+    ) -> kiln_error::Result<Self> {
+        use kiln_runtime::FromBytes;
         Ok(Self {
             max_concurrent_tasks: usize::from_bytes_with_provider(reader, provider)?,
             max_futures: usize::from_bytes_with_provider(reader, provider)?,
@@ -688,9 +688,9 @@ impl TaskManagerAsyncBridge {
         future: crate::async_::async_types::Future<T>,
     ) -> Result<FutureHandle>
     where
-        T: wrt_runtime::Checksummable
-            + wrt_runtime::ToBytes
-            + wrt_runtime::FromBytes
+        T: kiln_runtime::Checksummable
+            + kiln_runtime::ToBytes
+            + kiln_runtime::FromBytes
             + Default
             + Clone
             + PartialEq
@@ -749,9 +749,9 @@ impl TaskManagerAsyncBridge {
         stream: crate::async_::async_types::Stream<T>,
     ) -> Result<StreamHandle>
     where
-        T: wrt_runtime::Checksummable
-            + wrt_runtime::ToBytes
-            + wrt_runtime::FromBytes
+        T: kiln_runtime::Checksummable
+            + kiln_runtime::ToBytes
+            + kiln_runtime::FromBytes
             + Default
             + Clone
             + PartialEq

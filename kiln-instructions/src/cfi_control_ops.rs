@@ -1,4 +1,4 @@
-// WRT - wrt-instructions
+// WRT - kiln-instructions
 // Module: CFI-Aware Control Flow Operations
 // SW-REQ-ID: REQ_CFI_CONTROL_001
 //
@@ -264,8 +264,8 @@ pub enum CfiTargetType {
     FunctionEntry,
 }
 
-impl wrt_foundation::traits::Checksummable for CfiTargetType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CfiTargetType {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
             Self::DirectCall => 0u8,
             Self::IndirectCall => 1u8,
@@ -278,12 +278,12 @@ impl wrt_foundation::traits::Checksummable for CfiTargetType {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for CfiTargetType {
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for CfiTargetType {
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let discriminant = match self {
             Self::DirectCall => 0u8,
             Self::IndirectCall => 1u8,
@@ -296,11 +296,11 @@ impl wrt_foundation::traits::ToBytes for CfiTargetType {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for CfiTargetType {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+impl kiln_foundation::traits::FromBytes for CfiTargetType {
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => Ok(Self::DirectCall),
@@ -425,8 +425,8 @@ pub enum CfiExpectedValue {
     CallSiteId(u32),
 }
 
-impl wrt_foundation::traits::Checksummable for CfiExpectedValue {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CfiExpectedValue {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::None => checksum.update_slice(&[0u8]),
             Self::FunctionSignatureHash(hash) => {
@@ -445,12 +445,12 @@ impl wrt_foundation::traits::Checksummable for CfiExpectedValue {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for CfiExpectedValue {
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for CfiExpectedValue {
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::None => writer.write_u8(0u8),
             Self::FunctionSignatureHash(hash) => {
@@ -469,11 +469,11 @@ impl wrt_foundation::traits::ToBytes for CfiExpectedValue {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for CfiExpectedValue {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+impl kiln_foundation::traits::FromBytes for CfiExpectedValue {
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => Ok(Self::None),
@@ -560,8 +560,8 @@ pub enum CfiValidationRequirement {
     TemporalCheck { max_duration: u64 },
 }
 
-impl wrt_foundation::traits::Checksummable for CfiValidationRequirement {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CfiValidationRequirement {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Self::TypeSignatureCheck {
                 expected_type_index,
@@ -587,12 +587,12 @@ impl wrt_foundation::traits::Checksummable for CfiValidationRequirement {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for CfiValidationRequirement {
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for CfiValidationRequirement {
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::TypeSignatureCheck {
                 expected_type_index,
@@ -634,11 +634,11 @@ impl wrt_foundation::traits::ToBytes for CfiValidationRequirement {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for CfiValidationRequirement {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+impl kiln_foundation::traits::FromBytes for CfiValidationRequirement {
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => {
@@ -672,7 +672,7 @@ impl wrt_foundation::traits::FromBytes for CfiValidationRequirement {
                     valid_targets.push(reader.read_u32_le()?);
                     #[cfg(not(feature = "std"))]
                     valid_targets.push(reader.read_u32_le()?).map_err(|_| {
-                        wrt_error::Error::validation_error("Failed to push to bounded vec")
+                        kiln_error::Error::validation_error("Failed to push to bounded vec")
                     })?;
                 }
                 Ok(Self::ControlFlowTargetCheck { valid_targets })
@@ -789,10 +789,10 @@ pub struct CfiExecutionContext {
     #[cfg(feature = "std")]
     pub valid_branch_targets:     Vec<u32>,
     #[cfg(not(feature = "std"))]
-    pub valid_branch_targets: wrt_foundation::bounded::BoundedVec<
+    pub valid_branch_targets: kiln_foundation::bounded::BoundedVec<
         u32,
         256,
-        wrt_foundation::safe_memory::NoStdProvider<1024>,
+        kiln_foundation::safe_memory::NoStdProvider<1024>,
     >,
     /// Maximum number of types supported
     pub max_types:                u32,
@@ -800,10 +800,10 @@ pub struct CfiExecutionContext {
     #[cfg(feature = "std")]
     pub type_signatures:          Vec<u64>,
     #[cfg(not(feature = "std"))]
-    pub type_signatures: wrt_foundation::bounded::BoundedVec<
+    pub type_signatures: kiln_foundation::bounded::BoundedVec<
         u64,
         256,
-        wrt_foundation::safe_memory::NoStdProvider<2048>,
+        kiln_foundation::safe_memory::NoStdProvider<2048>,
     >,
     /// Maximum shadow stack depth
     pub max_shadow_stack_depth:   usize,
@@ -811,10 +811,10 @@ pub struct CfiExecutionContext {
     #[cfg(feature = "std")]
     pub indirect_branch_targets:  Vec<u32>,
     #[cfg(not(feature = "std"))]
-    pub indirect_branch_targets: wrt_foundation::bounded::BoundedVec<
+    pub indirect_branch_targets: kiln_foundation::bounded::BoundedVec<
         u32,
         128,
-        wrt_foundation::safe_memory::NoStdProvider<512>,
+        kiln_foundation::safe_memory::NoStdProvider<512>,
     >,
 }
 
@@ -871,7 +871,7 @@ impl CfiExecutionContext {
                 #[cfg(not(feature = "std"))]
                 {
                     let provider = safe_managed_alloc!(1024, CrateId::Instructions)?;
-                    wrt_foundation::bounded::BoundedVec::new(provider).map_err(|_| {
+                    kiln_foundation::bounded::BoundedVec::new(provider).map_err(|_| {
                         Error::memory_error("Failed to create valid_branch_targets BoundedVec")
                     })?
                 }
@@ -885,7 +885,7 @@ impl CfiExecutionContext {
                 #[cfg(not(feature = "std"))]
                 {
                     let provider = safe_managed_alloc!(2048, CrateId::Instructions)?;
-                    wrt_foundation::bounded::BoundedVec::new(provider).map_err(|_| {
+                    kiln_foundation::bounded::BoundedVec::new(provider).map_err(|_| {
                         Error::memory_error("Failed to create type_signatures BoundedVec")
                     })?
                 }
@@ -899,7 +899,7 @@ impl CfiExecutionContext {
                 #[cfg(not(feature = "std"))]
                 {
                     let provider = safe_managed_alloc!(512, CrateId::Instructions)?;
-                    wrt_foundation::bounded::BoundedVec::new(provider).map_err(|_| {
+                    kiln_foundation::bounded::BoundedVec::new(provider).map_err(|_| {
                         Error::memory_error("Failed to create indirect_branch_targets BoundedVec")
                     })?
                 }
@@ -957,8 +957,8 @@ pub struct ShadowStackEntry {
     pub call_site_id:   u32,
 }
 
-impl wrt_foundation::traits::Checksummable for ShadowStackEntry {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ShadowStackEntry {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.return_address.0.to_le_bytes());
         checksum.update_slice(&self.return_address.1.to_le_bytes());
         checksum.update_slice(&self.signature_hash.to_le_bytes());
@@ -967,12 +967,12 @@ impl wrt_foundation::traits::Checksummable for ShadowStackEntry {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ShadowStackEntry {
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for ShadowStackEntry {
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_all(&self.return_address.0.to_le_bytes())?;
         writer.write_all(&self.return_address.1.to_le_bytes())?;
         writer.write_all(&self.signature_hash.to_le_bytes())?;
@@ -982,11 +982,11 @@ impl wrt_foundation::traits::ToBytes for ShadowStackEntry {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ShadowStackEntry {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+impl kiln_foundation::traits::FromBytes for ShadowStackEntry {
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut func_bytes = [0u8; 4];
         reader.read_exact(&mut func_bytes)?;
         let func_idx = u32::from_le_bytes(func_bytes);
@@ -1033,8 +1033,8 @@ pub struct LandingPadExpectation {
 }
 
 
-impl wrt_foundation::traits::Checksummable for LandingPadExpectation {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for LandingPadExpectation {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.function_index.to_le_bytes());
         checksum.update_slice(&self.instruction_offset.to_le_bytes());
         self.target_type.update_checksum(checksum);
@@ -1048,12 +1048,12 @@ impl wrt_foundation::traits::Checksummable for LandingPadExpectation {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for LandingPadExpectation {
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for LandingPadExpectation {
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_all(&self.function_index.to_le_bytes())?;
         writer.write_all(&self.instruction_offset.to_le_bytes())?;
         self.target_type.to_bytes_with_provider(writer, provider)?;
@@ -1068,11 +1068,11 @@ impl wrt_foundation::traits::ToBytes for LandingPadExpectation {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for LandingPadExpectation {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+impl kiln_foundation::traits::FromBytes for LandingPadExpectation {
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut func_bytes = [0u8; 4];
         reader.read_exact(&mut func_bytes)?;
         let function_index = u32::from_le_bytes(func_bytes);

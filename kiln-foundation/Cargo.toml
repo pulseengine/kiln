@@ -1,8 +1,8 @@
 [package]
-name = "wrt-foundation"
+name = "kiln-foundation"
 version.workspace = true
 edition.workspace = true
-description = "Foundation library providing core types and memory safety primitives for the WebAssembly Runtime (WRT)."
+description = "Foundation library providing core types and memory safety primitives for the Kiln WebAssembly Runtime."
 readme = "README.md"
 license.workspace = true
 repository.workspace = true
@@ -254,7 +254,7 @@ agpl-e = ["static-allocation", "mathematical-proofs"]        # Life-threatening 
 # These will be removed in a future major version.
 
 # DEPRECATED: Use std-allocation instead
-std = ["wrt-sync/std", "std-allocation", "tracing?/std"]
+std = ["kiln-sync/std", "std-allocation", "tracing?/std"]
 no_std = []
 
 # Tracing support - works with both std and no_std+alloc
@@ -274,7 +274,7 @@ safe-memory = ["bounded-allocation"]
 budget-enforcement = ["bounded-budget-enforcement"]
 
 # DEPRECATED: Use std-allocation instead
-wrt-allocator = ["std-allocation"]
+kiln-allocator = ["std-allocation"]
 default-provider = ["std-allocation"]
 
 # Platform profile features (for limits module)
@@ -290,7 +290,7 @@ allocation-tracing = []
 optimize = []
 kani = ["dep:kani-verifier"]
 use-hashbrown = ["dep:hashbrown", "std"]
-platform-memory = ["dep:wrt-platform"]
+platform-memory = ["dep:kiln-platform"]
 
 # DEPRECATED: Use bounded-allocation instead
 safety = ["bounded-allocation"]
@@ -315,9 +315,9 @@ async-api = []
 disable-panic-handler = []
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false }
-wrt-sync = { workspace = true, default-features = false } # Make alloc conditional via features
-wrt-platform = { workspace = true, optional = true }
+kiln-error = { workspace = true, default-features = false }
+kiln-sync = { workspace = true, default-features = false } # Make alloc conditional via features
+kiln-platform = { workspace = true, optional = true }
 
 # Only include hashbrown when explicitly requested with alloc feature
 hashbrown = { version = "0.15", optional = true } # For no_std with alloc

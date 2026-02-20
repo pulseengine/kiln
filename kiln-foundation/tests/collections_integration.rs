@@ -1,8 +1,8 @@
 // Integration test for new collections module
 // Tests collections in isolation from legacy code
 
-use wrt_foundation::collections::{StaticVec, StaticQueue, StaticMap};
-use wrt_error::Result;
+use kiln_foundation::collections::{StaticVec, StaticQueue, StaticMap};
+use kiln_error::Result;
 
 #[test]
 fn test_static_vec_basic() -> Result<()> {

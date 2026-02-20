@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -169,7 +169,7 @@ impl fmt::Display for ResourceOperation {
 }
 
 impl core::str::FromStr for ResourceOperation {
-    type Err = wrt_error::Error;
+    type Err = kiln_error::Error;
 
     fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
         match s {
@@ -183,7 +183,7 @@ impl core::str::FromStr for ResourceOperation {
             "new" => Ok(ResourceOperation::New),
             "drop" => Ok(ResourceOperation::Drop),
             "rep" => Ok(ResourceOperation::Rep),
-            _ => Err(wrt_error::Error::parse_error("Unknown resource operation")),
+            _ => Err(kiln_error::Error::parse_error("Unknown resource operation")),
         }
     }
 }
@@ -236,7 +236,7 @@ impl fmt::Display for ResourceRepresentation {
 }
 
 impl core::str::FromStr for ResourceRepresentation {
-    type Err = wrt_error::Error;
+    type Err = kiln_error::Error;
 
     fn from_str(s: &str) -> core::result::Result<Self, Self::Err> {
         match s {
@@ -283,13 +283,13 @@ impl core::str::FromStr for ResourceRepresentation {
                 }
                 #[cfg(not(feature = "std"))]
                 {
-                    Err(wrt_error::Error::parse_error(
+                    Err(kiln_error::Error::parse_error(
                         "ResourceRepresentation::Aggregate is not available without the 'alloc' \
                          feature",
                     ))
                 }
             },
-            _ => Err(wrt_error::Error::parse_error(
+            _ => Err(kiln_error::Error::parse_error(
                 "Unknown resource representation",
             )),
         }
@@ -365,7 +365,7 @@ impl<P: MemoryProvider + Default + Clone + Eq + Debug> ToBytes for ResourceRepr<
         &self,
         writer: &mut WriteStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             ResourceRepr::Primitive(val_type) => {
                 writer.write_u8(0)?; // Tag for Primitive
@@ -392,7 +392,7 @@ impl<P: MemoryProvider + Default + Clone + Eq + Debug> FromBytes for ResourceRep
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let tag = reader.read_u8()?;
         match tag {
             0 => {
@@ -405,7 +405,7 @@ impl<P: MemoryProvider + Default + Clone + Eq + Debug> FromBytes for ResourceRep
                     MAX_RESOURCE_FIELDS,
                     P,
                 >::from_bytes_with_provider(reader, stream_provider)
-                .map_err(wrt_error::Error::from)?;
+                .map_err(kiln_error::Error::from)?;
                 Ok(ResourceRepr::Record(fields))
             },
             2 => {
@@ -485,7 +485,7 @@ impl<P: MemoryProvider + Default + Clone + Eq + Debug> ToBytes for Resource<P> {
         &self,
         writer: &mut WriteStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.id.to_bytes_with_provider(writer, stream_provider)?; // u32 doesn't use provider, but trait requires it
         self.repr.to_bytes_with_provider(writer, stream_provider)?;
         self.name.to_bytes_with_provider(writer, stream_provider)?;
@@ -498,7 +498,7 @@ impl<P: MemoryProvider + Default + Clone + Eq + Debug> FromBytes for Resource<P>
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let id = u32::from_bytes_with_provider(reader, stream_provider)?; // u32 doesn't use provider, but trait requires it
         let repr = ResourceRepr::<P>::from_bytes_with_provider(reader, stream_provider)?;
         let name = Option::<WasmName<MAX_WASM_NAME_LENGTH>>::from_bytes_with_provider(
@@ -575,7 +575,7 @@ impl ToBytes for ResourceTableIdx {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream, // Not used by u32
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, _provider) // u32's to_bytes
                                                          // doesn't take
                                                          // provider
@@ -586,7 +586,7 @@ impl FromBytes for ResourceTableIdx {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream, // Not used by u32
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let val = u32::from_bytes_with_provider(reader, _provider)?; // u32's from_bytes doesn't take provider
         Ok(ResourceTableIdx(val))
     }
@@ -597,7 +597,7 @@ impl<P: MemoryProvider + Default + Clone + Eq + Debug> ToBytes for ResourceType<
         &self,
         writer: &mut WriteStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             ResourceType::Record(fields) => {
                 writer.write_u8(DISCRIMINANT_RESOURCE_TYPE_RECORD)?;
@@ -620,7 +620,7 @@ impl<P: MemoryProvider + Default + Clone + Eq + Debug> FromBytes for ResourceTyp
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         stream_provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let tag = reader.read_u8()?;
         match tag {
             DISCRIMINANT_RESOURCE_TYPE_RECORD => {
@@ -630,7 +630,7 @@ impl<P: MemoryProvider + Default + Clone + Eq + Debug> FromBytes for ResourceTyp
                     MAX_RESOURCE_FIELDS,
                     P,
                 >::from_bytes_with_provider(reader, stream_provider)
-                .map_err(wrt_error::Error::from)?;
+                .map_err(kiln_error::Error::from)?;
                 Ok(ResourceType::Record(fields))
             },
             DISCRIMINANT_RESOURCE_TYPE_AGGREGATE => {

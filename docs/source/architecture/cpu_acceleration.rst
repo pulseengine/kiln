@@ -4,12 +4,12 @@ CPU Acceleration Analysis
 Overview
 --------
 
-This document analyzes opportunities for CPU acceleration in the wrt-math crate and architectural considerations for platform-specific optimizations.
+This document analyzes opportunities for CPU acceleration in the kiln-math crate and architectural considerations for platform-specific optimizations.
 
 Current Architecture
 -------------------
 
-The wrt-math crate provides pure Rust implementations of WebAssembly numeric operations. These implementations:
+The kiln-math crate provides pure Rust implementations of WebAssembly numeric operations. These implementations:
 
 - Use standard Rust integer/float operations
 - Rely on LLVM for optimization
@@ -88,10 +88,10 @@ For v128 operations, platform-specific SIMD would be essential:
 4. Platform-specific Considerations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Should we move to wrt-platform?
+Should we move to kiln-platform?
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-**Pros of keeping in wrt-math:**
+**Pros of keeping in kiln-math:**
 
 - Single source of truth for math operations
 - Easier to maintain consistency
@@ -106,9 +106,9 @@ Should we move to wrt-platform?
 
 **Recommendation:** Hybrid approach
 
-1. Keep basic operations in wrt-math (they optimize well)
+1. Keep basic operations in kiln-math (they optimize well)
 2. Add optional ``platform-accel`` feature that enables intrinsics
-3. For SIMD operations, consider a separate ``wrt-math-simd`` crate that depends on wrt-platform
+3. For SIMD operations, consider a separate ``kiln-math-simd`` crate that depends on kiln-platform
 
 Implementation Strategy
 -----------------------
@@ -147,7 +147,7 @@ When implementing v128 operations:
 
 .. code-block:: text
 
-    wrt-math-simd/
+    kiln-math-simd/
     ├── src/
     │   ├── lib.rs          # Public API
     │   ├── portable.rs     # Portable implementations

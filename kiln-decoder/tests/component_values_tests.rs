@@ -1,12 +1,12 @@
 //! Tests for WebAssembly Component Model value encoding and decoding
 
-use wrt_decoder::component::{decode_component, encode_component};
-use wrt_error::Result;
-use wrt_format::component::{FormatValType, Value};
+use kiln_decoder::component::{decode_component, encode_component};
+use kiln_error::Result;
+use kiln_format::component::{FormatValType, Value};
 
 /// Create a simple component with values of different types
-fn create_test_component() -> Result<wrt_format::component::Component> {
-    let mut component = wrt_format::component::Component::new();
+fn create_test_component() -> Result<kiln_format::component::Component> {
+    let mut component = kiln_format::component::Component::new();
 
     // Add test values
     component.values = vec![

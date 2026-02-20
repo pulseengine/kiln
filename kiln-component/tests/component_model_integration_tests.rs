@@ -1,6 +1,6 @@
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use wrt_component::{
+use kiln_component::{
     ComponentInstance, ComponentInstanceId, ResourceHandle, TypeId, ValType,
     async_types::{AsyncType, ErrorContext, Future, FutureState, Stream, StreamState},
     canonical_options::{CanonicalOptions, LiftContext, LowerContext},
@@ -29,7 +29,7 @@ use wrt_component::{
         VirtualImport, VirtualSource, VirtualizationManager,
     },
 };
-use wrt_foundation::{
+use kiln_foundation::{
     bounded_collections::{BoundedHashMap, BoundedVec},
     component_value::ComponentValue,
     safe_memory::SafeMemory,

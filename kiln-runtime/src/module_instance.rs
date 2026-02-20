@@ -7,13 +7,13 @@
 // alloc is imported in lib.rs with proper feature gates
 
 #[cfg(feature = "debug-full")]
-use wrt_debug::FunctionInfo;
+use kiln_debug::FunctionInfo;
 #[cfg(feature = "debug")]
-use wrt_debug::{
+use kiln_debug::{
     DwarfDebugInfo,
     LineInfo,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     traits::{
@@ -26,7 +26,7 @@ use wrt_foundation::{
     },
     verification::Checksum,
 };
-use wrt_instructions::reference_ops::ReferenceOperations;
+use kiln_instructions::reference_ops::ReferenceOperations;
 
 // Type alias for FuncType to make signatures more readable - uses unified RuntimeProvider
 #[cfg(not(feature = "std"))]
@@ -64,7 +64,7 @@ use crate::{
     },
     table::Table,
 };
-type WrtFuncType = wrt_foundation::types::FuncType;
+type KilnFuncType = kiln_foundation::types::FuncType;
 
 // Platform sync primitives - use prelude imports for consistency
 #[cfg(all(feature = "alloc", not(feature = "std")))]
@@ -113,13 +113,13 @@ pub struct ModuleInstance {
     #[cfg(feature = "std")]
     dropped_elements: Arc<Mutex<Vec<bool>>>,
     #[cfg(not(feature = "std"))]
-    dropped_elements: Arc<Mutex<wrt_foundation::bounded::BoundedVec<bool, 256, wrt_foundation::safe_memory::NoStdProvider<1024>>>>,
+    dropped_elements: Arc<Mutex<kiln_foundation::bounded::BoundedVec<bool, 256, kiln_foundation::safe_memory::NoStdProvider<1024>>>>,
     /// Tracks which data segments have been dropped via data.drop
     /// After dropping, memory.init will treat the segment as having 0 length
     #[cfg(feature = "std")]
     dropped_data: Arc<Mutex<Vec<bool>>>,
     #[cfg(not(feature = "std"))]
-    dropped_data: Arc<Mutex<wrt_foundation::bounded::BoundedVec<bool, 256, wrt_foundation::safe_memory::NoStdProvider<1024>>>>,
+    dropped_data: Arc<Mutex<kiln_foundation::bounded::BoundedVec<bool, 256, kiln_foundation::safe_memory::NoStdProvider<1024>>>>,
     /// Debug information (optional)
     #[cfg(feature = "debug")]
     debug_info:  Option<DwarfDebugInfo<'static>>,
@@ -164,20 +164,20 @@ impl ModuleInstance {
         let shared_provider = create_runtime_provider()?;
 
         // Allocate memory for memories collection
-        let memories_vec = wrt_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
+        let memories_vec = kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
 
         // Allocate memory for tables collection
-        let tables_vec = wrt_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
+        let tables_vec = kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
 
         // Allocate memory for globals collection
-        let globals_vec = wrt_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
+        let globals_vec = kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
 
         // Allocate memory for dropped segment tracking
-        let dropped_elements_vec = wrt_foundation::bounded::BoundedVec::new(
-            wrt_foundation::safe_memory::NoStdProvider::<1024>::default()
+        let dropped_elements_vec = kiln_foundation::bounded::BoundedVec::new(
+            kiln_foundation::safe_memory::NoStdProvider::<1024>::default()
         )?;
-        let dropped_data_vec = wrt_foundation::bounded::BoundedVec::new(
-            wrt_foundation::safe_memory::NoStdProvider::<1024>::default()
+        let dropped_data_vec = kiln_foundation::bounded::BoundedVec::new(
+            kiln_foundation::safe_memory::NoStdProvider::<1024>::default()
         )?;
 
         Ok(Self {
@@ -451,15 +451,15 @@ impl ModuleInstance {
         let params_slice = ty.params.as_slice();
         let results_slice = ty.results.as_slice();
 
-        let mut params = wrt_foundation::bounded::BoundedVec::<
-            wrt_foundation::ValueType,
+        let mut params = kiln_foundation::bounded::BoundedVec::<
+            kiln_foundation::ValueType,
             128,
             RuntimeProvider,
         >::new(create_runtime_provider()?)
         .map_err(|_| Error::memory_error("Failed to create params vec"))?;
 
-        let mut results = wrt_foundation::bounded::BoundedVec::<
-            wrt_foundation::ValueType,
+        let mut results = kiln_foundation::bounded::BoundedVec::<
+            kiln_foundation::ValueType,
             128,
             RuntimeProvider,
         >::new(create_runtime_provider()?)
@@ -486,7 +486,7 @@ impl ModuleInstance {
 
     /// Get the function type for a function (no_std version)
     #[cfg(not(any(feature = "std", feature = "alloc")))]
-    pub fn function_type(&self, idx: u32) -> Result<WrtFuncType> {
+    pub fn function_type(&self, idx: u32) -> Result<KilnFuncType> {
         let function = self
             .module
             .functions
@@ -585,7 +585,7 @@ impl ModuleInstance {
     /// - Indices N+ are defined globals
     pub fn populate_globals_from_module(&self) -> Result<()> {
         #[cfg(feature = "tracing")]
-        use wrt_foundation::tracing::{debug, info};
+        use kiln_foundation::tracing::{debug, info};
 
         #[cfg(feature = "tracing")]
         info!("Populating globals from module for instance {}", self.instance_id);
@@ -603,16 +603,16 @@ impl ModuleInstance {
             // First, create placeholder globals for imports using the direct global_import_types vector
             // This bypasses the broken nested BoundedMap serialization issue
             for (idx, global_type) in self.module.global_import_types.iter().enumerate() {
-                use wrt_foundation::values::{Value, FloatBits32, FloatBits64};
+                use kiln_foundation::values::{Value, FloatBits32, FloatBits64};
 
                 // Create a placeholder global with default value
                 let default_value = match global_type.value_type {
-                    wrt_foundation::ValueType::I32 => Value::I32(0),
-                    wrt_foundation::ValueType::I64 => Value::I64(0),
-                    wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                    wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
-                    wrt_foundation::ValueType::FuncRef => Value::FuncRef(None),
-                    wrt_foundation::ValueType::ExternRef => Value::ExternRef(None),
+                    kiln_foundation::ValueType::I32 => Value::I32(0),
+                    kiln_foundation::ValueType::I64 => Value::I64(0),
+                    kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
+                    kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                    kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                    kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
                     _ => Value::I32(0),
                 };
                 let placeholder = Global::new(global_type.value_type, global_type.mutable, default_value)
@@ -664,15 +664,15 @@ impl ModuleInstance {
                         // Look up the specific import
                         if let Ok(Some(import)) = import_map.get(&item_name) {
                             if let ImportDesc::Global(global_type) = &import.desc {
-                                use wrt_foundation::values::{Value, FloatBits32, FloatBits64};
+                                use kiln_foundation::values::{Value, FloatBits32, FloatBits64};
 
                                 let default_value = match global_type.value_type {
-                                    wrt_foundation::ValueType::I32 => Value::I32(0),
-                                    wrt_foundation::ValueType::I64 => Value::I64(0),
-                                    wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                                    wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
-                                    wrt_foundation::ValueType::FuncRef => Value::FuncRef(None),
-                                    wrt_foundation::ValueType::ExternRef => Value::ExternRef(None),
+                                    kiln_foundation::ValueType::I32 => Value::I32(0),
+                                    kiln_foundation::ValueType::I64 => Value::I64(0),
+                                    kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
+                                    kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                                    kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                                    kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
                                     _ => Value::I32(0),
                                 };
                                 let placeholder = Global::new(global_type.value_type, global_type.mutable, default_value)
@@ -707,7 +707,7 @@ impl ModuleInstance {
     /// This copies all memory instances from the module definition to the instance
     pub fn populate_memories_from_module(&self) -> Result<()> {
         #[cfg(feature = "tracing")]
-        use wrt_foundation::tracing::{debug, info};
+        use kiln_foundation::tracing::{debug, info};
 
         #[cfg(feature = "tracing")]
         info!("Populating memories from module for instance {}", self.instance_id);
@@ -752,7 +752,7 @@ impl ModuleInstance {
     /// This copies all table instances from the module definition to the instance
     pub fn populate_tables_from_module(&self) -> Result<()> {
         #[cfg(feature = "tracing")]
-        use wrt_foundation::tracing::{debug, info};
+        use kiln_foundation::tracing::{debug, info};
 
         #[cfg(feature = "tracing")]
         info!("Populating tables from module for instance {}", self.instance_id);
@@ -774,7 +774,7 @@ impl ModuleInstance {
             info!("Populated {} tables for instance {}", self.module.tables.len(), self.instance_id);
 
             #[cfg(feature = "tracing")]
-            wrt_foundation::tracing::trace!(
+            kiln_foundation::tracing::trace!(
                 table_count = self.module.tables.len(),
                 instance_id = self.instance_id,
                 "Populated tables for instance"
@@ -908,15 +908,15 @@ impl ModuleInstance {
     /// This copies the static data from data segments into the appropriate memory locations
     pub fn initialize_data_segments(&self) -> Result<()> {
         #[cfg(feature = "tracing")]
-        use wrt_foundation::tracing::{debug, info};
-        use wrt_foundation::DataMode as WrtDataMode;
+        use kiln_foundation::tracing::{debug, info};
+        use kiln_foundation::DataMode as KilnDataMode;
 
         #[cfg(feature = "tracing")]
         info!("Initializing data segments for instance {} - module has {} data segments",
               self.instance_id, self.module.data.len());
 
         #[cfg(feature = "tracing")]
-        wrt_foundation::tracing::trace!(
+        kiln_foundation::tracing::trace!(
             instance_id = self.instance_id,
             segment_count = self.module.data.len(),
             "Initializing data segments"
@@ -927,7 +927,7 @@ impl ModuleInstance {
             #[cfg(feature = "tracing")]
             debug!("Processing data segment {}", idx);
             // Only process active data segments
-            if let WrtDataMode::Active { .. } = &data_segment.mode {
+            if let KilnDataMode::Active { .. } = &data_segment.mode {
                 #[cfg(feature = "tracing")]
                 debug!("Processing active data segment {}", idx);
 
@@ -939,18 +939,18 @@ impl ModuleInstance {
                     // Evaluate the offset expression - for now, assume it's a constant
                     // In a complete implementation, we'd need to evaluate the expression
                     // Most data segments use simple i32.const instructions for offsets
-                    // WrtExpr has instructions field that contains parsed Instructions
+                    // KilnExpr has instructions field that contains parsed Instructions
                     let expr_instructions = &offset_expr.instructions;
 
                     // Check if we have an I32Const or GlobalGet instruction
                     if !expr_instructions.is_empty() {
                         match &expr_instructions[0] {
-                            wrt_foundation::types::Instruction::I32Const(value) => {
+                            kiln_foundation::types::Instruction::I32Const(value) => {
                                 #[cfg(feature = "tracing")]
                                 debug!("Data segment {} has I32Const offset: {}", idx, value);
                                 *value as u32
                             }
-                            wrt_foundation::types::Instruction::GlobalGet(global_idx) => {
+                            kiln_foundation::types::Instruction::GlobalGet(global_idx) => {
                                 // Look up the global value for the offset
                                 #[cfg(feature = "tracing")]
                                 debug!("Data segment {} has GlobalGet({}) offset", idx, global_idx);
@@ -966,7 +966,7 @@ impl ModuleInstance {
                                     match global_wrapper.0.read() {
                                         Ok(global) => {
                                             match global.get() {
-                                                wrt_foundation::values::Value::I32(v) => {
+                                                kiln_foundation::values::Value::I32(v) => {
                                                     #[cfg(feature = "tracing")]
                                                     debug!("Data segment {} global offset value: {}", idx, v);
                                                     *v as u32
@@ -1037,7 +1037,7 @@ impl ModuleInstance {
                 debug!("Writing {} bytes of data to memory at offset {:#x}", init_data.len(), offset);
 
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::trace!(
+                kiln_foundation::tracing::trace!(
                     bytes = init_data.len(),
                     memory_idx = memory_idx,
                     offset = format!("{:#x}", offset),
@@ -1048,7 +1048,7 @@ impl ModuleInstance {
                 memory.write_shared(offset, init_data)?;
 
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::trace!(segment_idx = idx, "Successfully wrote data segment");
+                kiln_foundation::tracing::trace!(segment_idx = idx, "Successfully wrote data segment");
 
                 #[cfg(feature = "tracing")]
                 info!("Successfully initialized data segment {} ({} bytes)", idx, init_data.len());
@@ -1067,16 +1067,16 @@ impl ModuleInstance {
     /// This populates table entries from active element segments
     pub fn initialize_element_segments(&self) -> Result<()> {
         #[cfg(feature = "tracing")]
-        use wrt_foundation::tracing::{debug, info};
-        use wrt_foundation::types::ElementMode as WrtElementMode;
-        use wrt_foundation::values::{Value as WrtValue, FuncRef as WrtFuncRef};
+        use kiln_foundation::tracing::{debug, info};
+        use kiln_foundation::types::ElementMode as KilnElementMode;
+        use kiln_foundation::values::{Value as KilnValue, FuncRef as KilnFuncRef};
 
         #[cfg(feature = "tracing")]
         info!("Initializing element segments for instance {} - module has {} element segments",
               self.instance_id, self.module.elements.len());
 
         #[cfg(feature = "tracing")]
-        wrt_foundation::tracing::trace!(
+        kiln_foundation::tracing::trace!(
             instance_id = self.instance_id,
             segment_count = self.module.elements.len(),
             "Initializing element segments"
@@ -1100,18 +1100,18 @@ impl ModuleInstance {
                 #[cfg(feature = "tracing")]
                 debug!("Processing element segment {}", idx);
                 // Only process active element segments
-                if let WrtElementMode::Active { table_index, offset: mode_offset } = &elem_segment.mode {
+                if let KilnElementMode::Active { table_index, offset: mode_offset } = &elem_segment.mode {
                     // Evaluate the actual offset - check offset_expr for GlobalGet
                     let actual_offset = if let Some(ref offset_expr) = elem_segment.offset_expr {
                         let instructions = &offset_expr.instructions;
                         if !instructions.is_empty() {
                             match &instructions[0] {
-                                wrt_foundation::types::Instruction::I32Const(value) => {
+                                kiln_foundation::types::Instruction::I32Const(value) => {
                                     #[cfg(feature = "tracing")]
                                     debug!("Element segment {} has I32Const offset: {}", idx, value);
                                     *value as u32
                                 }
-                                wrt_foundation::types::Instruction::GlobalGet(global_idx) => {
+                                kiln_foundation::types::Instruction::GlobalGet(global_idx) => {
                                     // Look up the global value for the offset
                                     #[cfg(feature = "tracing")]
                                     debug!("Element segment {} has GlobalGet({}) offset", idx, global_idx);
@@ -1119,7 +1119,7 @@ impl ModuleInstance {
                                         match global_wrapper.0.read() {
                                             Ok(global) => {
                                                 match global.get() {
-                                                    wrt_foundation::values::Value::I32(v) => {
+                                                    kiln_foundation::values::Value::I32(v) => {
                                                         #[cfg(feature = "tracing")]
                                                         debug!("Element segment {} global offset value: {}", idx, v);
                                                         *v as u32
@@ -1147,7 +1147,7 @@ impl ModuleInstance {
                            idx, table_index, actual_offset, elem_segment.items.len());
 
                     #[cfg(feature = "tracing")]
-                    wrt_foundation::tracing::trace!(
+                    kiln_foundation::tracing::trace!(
                         segment_idx = idx,
                         table_index = table_index,
                         offset = actual_offset,
@@ -1167,7 +1167,7 @@ impl ModuleInstance {
                     // Set each element in the table
                     // Use the element segment's type to determine if we're dealing with
                     // funcref or externref elements
-                    let is_externref = matches!(elem_segment.element_type, wrt_foundation::types::RefType::Externref);
+                    let is_externref = matches!(elem_segment.element_type, kiln_foundation::types::RefType::Externref);
 
                     for (item_idx, func_idx) in elem_segment.items.iter().enumerate() {
                         let table_offset = actual_offset + item_idx as u32;
@@ -1178,16 +1178,16 @@ impl ModuleInstance {
                         let value = if func_idx == u32::MAX {
                             // ref.null - set to null reference based on element type
                             if is_externref {
-                                Some(WrtValue::ExternRef(None))
+                                Some(KilnValue::ExternRef(None))
                             } else {
-                                Some(WrtValue::FuncRef(None))
+                                Some(KilnValue::FuncRef(None))
                             }
                         } else if func_idx == u32::MAX - 1 {
                             // Deferred - skip, will be set by item_exprs processing below
                             continue;
                         } else {
                             // Normal function reference (only valid for funcref elements)
-                            Some(WrtValue::FuncRef(Some(WrtFuncRef { index: func_idx })))
+                            Some(KilnValue::FuncRef(Some(KilnFuncRef { index: func_idx })))
                         };
 
                         // Use set_shared which provides interior mutability
@@ -1195,7 +1195,7 @@ impl ModuleInstance {
 
                         #[cfg(feature = "tracing")]
                         if item_idx < 3 || item_idx == elem_segment.items.len() - 1 {
-                            wrt_foundation::tracing::trace!(table_offset = table_offset, func_idx = func_idx, "Set table element");
+                            kiln_foundation::tracing::trace!(table_offset = table_offset, func_idx = func_idx, "Set table element");
                         }
                     }
 
@@ -1205,31 +1205,31 @@ impl ModuleInstance {
                         let table_offset = actual_offset + *item_idx;
                         // Evaluate the expression to get the funcref
                         if let Some(instr) = expr.instructions.first() {
-                            if let wrt_foundation::types::Instruction::GlobalGet(global_idx) = instr {
+                            if let kiln_foundation::types::Instruction::GlobalGet(global_idx) = instr {
                                 // Look up the global value
                                 if let Some(global_wrapper) = globals.iter().nth(*global_idx as usize) {
                                     match global_wrapper.0.read() {
                                         Ok(global) => {
                                             match global.get() {
-                                                WrtValue::FuncRef(func_ref_opt) => {
+                                                KilnValue::FuncRef(func_ref_opt) => {
                                                     #[cfg(feature = "tracing")]
-                                                    wrt_foundation::tracing::trace!(
+                                                    kiln_foundation::tracing::trace!(
                                                         table_offset = table_offset,
                                                         func_ref = ?func_ref_opt,
                                                         global_idx = global_idx,
                                                         "Set table element from global.get"
                                                     );
-                                                    table.set_shared(table_offset, Some(WrtValue::FuncRef(func_ref_opt.clone())))?;
+                                                    table.set_shared(table_offset, Some(KilnValue::FuncRef(func_ref_opt.clone())))?;
                                                 },
                                                 _ => {
                                                     #[cfg(feature = "tracing")]
-                                                    wrt_foundation::tracing::warn!(table_offset = table_offset, global_idx = global_idx, "Global has non-funcref type");
+                                                    kiln_foundation::tracing::warn!(table_offset = table_offset, global_idx = global_idx, "Global has non-funcref type");
                                                 }
                                             }
                                         },
                                         Err(_) => {
                                             #[cfg(feature = "tracing")]
-                                            wrt_foundation::tracing::warn!(table_offset = table_offset, global_idx = global_idx, "Failed to read global");
+                                            kiln_foundation::tracing::warn!(table_offset = table_offset, global_idx = global_idx, "Failed to read global");
                                         }
                                     }
                                 }
@@ -1253,7 +1253,7 @@ impl ModuleInstance {
                 if let Ok(elem_segment) = self.module.elements.get(idx) {
                     #[cfg(feature = "tracing")]
                     debug!("Processing element segment {}", idx);
-                    if let WrtElementMode::Active { table_index, offset } = &elem_segment.mode {
+                    if let KilnElementMode::Active { table_index, offset } = &elem_segment.mode {
                         #[cfg(feature = "tracing")]
                         debug!("Processing active element segment {}", idx);
 
@@ -1268,7 +1268,7 @@ impl ModuleInstance {
                             for item_idx in 0..elem_segment.items.len() {
                                 if let Ok(func_idx) = elem_segment.items.get(item_idx) {
                                     let table_offset = *offset + item_idx as u32;
-                                    let value = Some(WrtValue::FuncRef(Some(WrtFuncRef { index: func_idx })));
+                                    let value = Some(KilnValue::FuncRef(Some(KilnFuncRef { index: func_idx })));
                                     table.set_shared(table_offset, value)?;
                                 }
                             }
@@ -1342,7 +1342,7 @@ impl ModuleInstance {
     }
 
     /// Get function type by index - alias for compatibility with tail_call.rs
-    pub fn get_function_type(&self, idx: usize) -> Result<WrtFuncType> {
+    pub fn get_function_type(&self, idx: usize) -> Result<KilnFuncType> {
         #[cfg(feature = "std")]
         let function = self
             .module
@@ -1373,7 +1373,7 @@ impl ModuleInstance {
     }
 
     /// Get a type by index - alias for compatibility with tail_call.rs
-    pub fn get_type(&self, idx: usize) -> Result<WrtFuncType> {
+    pub fn get_type(&self, idx: usize) -> Result<KilnFuncType> {
         // In std mode, types is Vec so get() returns Option<&T>
         #[cfg(feature = "std")]
         return self.module.types.get(idx)
@@ -1477,30 +1477,30 @@ impl Default for ModuleInstance {
                     module: Arc::new(Module::empty()),
                     memories: Arc::new(Mutex::new(
                         // Try to create with RuntimeProvider, fallback to empty vector creation
-                        wrt_foundation::bounded::BoundedVec::new(runtime_provider.clone())
+                        kiln_foundation::bounded::BoundedVec::new(runtime_provider.clone())
                             .unwrap_or_else(|_| {
                                 // Last resort: try creating another provider
                                 let fallback_provider = create_runtime_provider()
                                     .expect("Failed to create fallback runtime provider");
-                                wrt_foundation::bounded::BoundedVec::new(fallback_provider)
+                                kiln_foundation::bounded::BoundedVec::new(fallback_provider)
                                     .expect("Failed to create even minimal memory vector")
                             }),
                     )),
                     tables: Arc::new(Mutex::new(
-                        wrt_foundation::bounded::BoundedVec::new(runtime_provider.clone())
+                        kiln_foundation::bounded::BoundedVec::new(runtime_provider.clone())
                             .unwrap_or_else(|_| {
                                 let fallback_provider = create_runtime_provider()
                                     .expect("Failed to create fallback runtime provider");
-                                wrt_foundation::bounded::BoundedVec::new(fallback_provider)
+                                kiln_foundation::bounded::BoundedVec::new(fallback_provider)
                                     .expect("Failed to create even minimal table vector")
                             }),
                     )),
                     globals: Arc::new(Mutex::new(
-                        wrt_foundation::bounded::BoundedVec::new(runtime_provider).unwrap_or_else(
+                        kiln_foundation::bounded::BoundedVec::new(runtime_provider).unwrap_or_else(
                             |_| {
                                 let fallback_provider = create_runtime_provider()
                                     .expect("Failed to create fallback runtime provider");
-                                wrt_foundation::bounded::BoundedVec::new(fallback_provider)
+                                kiln_foundation::bounded::BoundedVec::new(fallback_provider)
                                     .expect("Failed to create even minimal global vector")
                             },
                         ),
@@ -1592,7 +1592,7 @@ impl ToBytes for ModuleInstance {
         8 + 12 + 64
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
@@ -1640,7 +1640,7 @@ impl ToBytes for ModuleInstance {
 }
 
 impl FromBytes for ModuleInstance {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
     ) -> Result<Self> {
@@ -1686,33 +1686,33 @@ impl FromBytes for ModuleInstance {
 
         let default_module = Module {
             types: Vec::new(),
-            imports: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
             #[cfg(feature = "std")]
             import_order: Vec::new(),
             #[cfg(not(feature = "std"))]
-            import_order: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             functions: Vec::new(),
             #[cfg(feature = "std")]
             tables: Vec::new(),
             #[cfg(not(feature = "std"))]
-            tables: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
-            globals: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             tags: Vec::new(),
             #[cfg(not(feature = "std"))]
-            tags: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            tags: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             elements: Vec::new(),
             #[cfg(not(feature = "std"))]
-            elements: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             data: Vec::new(),
             #[cfg(not(feature = "std"))]
-            data: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            data: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             start: None,
-            custom_sections: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            exports: wrt_foundation::direct_map::DirectMap::new(),
+            custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            exports: kiln_foundation::direct_map::DirectMap::new(),
             name: None,
             binary: None,
             validated: false,
@@ -1727,7 +1727,7 @@ impl FromBytes for ModuleInstance {
 
         // Create the instance using the new method
         Self::new(Arc::new(default_module), instance_id).map_err(|_| {
-            wrt_error::Error::runtime_error("Failed to create module instance from bytes")
+            kiln_error::Error::runtime_error("Failed to create module instance from bytes")
         })
     }
 }

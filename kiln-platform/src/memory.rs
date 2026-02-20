@@ -1,8 +1,8 @@
-// WRT - wrt-platform
+// Kiln - kiln-platform
 // Module: Platform Memory Management Abstraction
 // SW-REQ-ID: REQ_PLATFORM_001, REQ_MEMORY_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
@@ -13,14 +13,14 @@ use core::{
     ptr::NonNull,
 };
 
-use wrt_error::Result;
+use kiln_error::Result;
 
 // Definitions are now local to this file.
-// REMOVED: use wrt_foundation::memory_traits::{PageAllocator, WASM_PAGE_SIZE};
+// REMOVED: use kiln_foundation::memory_traits::{PageAllocator, WASM_PAGE_SIZE};
 
-// Import verification level from wrt-foundation if available, otherwise define
+// Import verification level from kiln-foundation if available, otherwise define
 // our own Define our own VerificationLevel since we don't depend on
-// wrt-foundation
+// kiln-foundation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 /// Verification level for resource and memory safety
 pub enum VerificationLevel {
@@ -42,7 +42,7 @@ impl Default for VerificationLevel {
     }
 }
 
-// START DEFINITIONS MOVED FROM wrt-foundation/src/memory_traits.rs
+// START DEFINITIONS MOVED FROM kiln-foundation/src/memory_traits.rs
 // (and originally present here before being moved out)
 
 /// Represents a single WebAssembly page (64 `KiB`).
@@ -151,14 +151,14 @@ pub trait MemoryProvider: Send + Sync {
     /// # Errors
     ///
     /// Returns an error if the write would exceed memory bounds.
-    fn write_data(&mut self, offset: usize, data: &[u8]) -> wrt_error::Result<usize>;
+    fn write_data(&mut self, offset: usize, data: &[u8]) -> kiln_error::Result<usize>;
 
     /// Reads data from the specified offset into the provided buffer.
     ///
     /// # Errors
     ///
     /// Returns an error if the read would exceed memory bounds.
-    fn read_data(&self, offset: usize, buffer: &mut [u8]) -> wrt_error::Result<usize>;
+    fn read_data(&self, offset: usize, buffer: &mut [u8]) -> kiln_error::Result<usize>;
 }
 
 /// A simple in-memory provider for platforms that don't need special
@@ -200,11 +200,11 @@ impl NoStdProvider {
 /// Builder for `NoStdProvider` to provide a fluent configuration API.
 ///
 /// # Deprecated
-/// Use `WrtProviderFactory::create_provider()` for budget-aware allocation
+/// Use `KilnProviderFactory::create_provider()` for budget-aware allocation
 /// instead.
 #[deprecated(
     since = "0.3.0",
-    note = "Use WrtProviderFactory::create_provider() from wrt-foundation for new code"
+    note = "Use KilnProviderFactory::create_provider() from kiln-foundation for new code"
 )]
 #[derive(Debug)]
 pub struct NoStdProviderBuilder {
@@ -247,7 +247,7 @@ impl NoStdProviderBuilder {
     /// Builds and returns a configured `NoStdProvider`.
     pub fn build(self) -> NoStdProvider {
         // Note: This is a temporary workaround for the deprecated NoStdProvider
-        // This entire module should be migrated to use wrt-foundation's memory system
+        // This entire module should be migrated to use kiln-foundation's memory system
         NoStdProvider {
             buffer:             unsafe {
                 static mut DUMMY_BUFFER: [u8; 4096] = [0; 4096];
@@ -272,9 +272,9 @@ impl MemoryProvider for NoStdProvider {
         self.verification_level = level;
     }
 
-    fn write_data(&mut self, offset: usize, data: &[u8]) -> wrt_error::Result<usize> {
+    fn write_data(&mut self, offset: usize, data: &[u8]) -> kiln_error::Result<usize> {
         if offset >= self.buffer.len() {
-            return Err(wrt_error::Error::runtime_execution_error(
+            return Err(kiln_error::Error::runtime_execution_error(
                 "Write offset out of bounds",
             ));
         }
@@ -287,10 +287,10 @@ impl MemoryProvider for NoStdProvider {
         Ok(write_size)
     }
 
-    fn read_data(&self, offset: usize, buffer: &mut [u8]) -> wrt_error::Result<usize> {
+    fn read_data(&self, offset: usize, buffer: &mut [u8]) -> kiln_error::Result<usize> {
         if offset >= self.buffer.len() {
-            return Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Memory,
+            return Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Memory,
                 1,
                 "Read offset out of bounds",
             ));
@@ -305,12 +305,12 @@ impl MemoryProvider for NoStdProvider {
     }
 }
 
-// END DEFINITIONS MOVED FROM wrt-foundation/src/memory_traits.rs
+// END DEFINITIONS MOVED FROM kiln-foundation/src/memory_traits.rs
 
 #[cfg(test)]
 #[allow(clippy::panic, clippy::unwrap_used)] // Allow panic/unwrap in tests
 mod tests {
-    use wrt_error::{
+    use kiln_error::{
         codes,
         Error,
         ErrorCategory,
@@ -353,7 +353,7 @@ mod tests {
             max_pages: Option<u32>,
         ) -> Result<(NonNull<u8>, usize)> {
             if self.allocated_ptr.is_some() {
-                return Err(wrt_error::Error::runtime_execution_error(
+                return Err(kiln_error::Error::runtime_execution_error(
                     "Memory already allocated",
                 ));
             }
@@ -376,8 +376,8 @@ mod tests {
 
         fn grow(&mut self, current_pages: u32, additional_pages: u32) -> Result<()> {
             if self.allocated_ptr.is_none() {
-                return Err(wrt_error::Error::new(
-                    wrt_error::ErrorCategory::System,
+                return Err(kiln_error::Error::new(
+                    kiln_error::ErrorCategory::System,
                     1,
                     "Memory not allocated",
                 ));
@@ -385,7 +385,7 @@ mod tests {
             let new_total_pages = current_pages + additional_pages;
             if let Some(max) = self.max_pages {
                 if new_total_pages > max {
-                    return Err(wrt_error::Error::runtime_execution_error(
+                    return Err(kiln_error::Error::runtime_execution_error(
                         "Memory growth would exceed maximum pages",
                     ));
                 }
@@ -394,8 +394,8 @@ mod tests {
 
             // Binary std/no_std choice
             if new_size > 5 * WASM_PAGE_SIZE {
-                return Err(wrt_error::Error::new(
-                    wrt_error::ErrorCategory::Memory,
+                return Err(kiln_error::Error::new(
+                    kiln_error::ErrorCategory::Memory,
                     1,
                     "Allocation exceeds limit",
                 ));
@@ -412,7 +412,7 @@ mod tests {
                 || self.allocated_ptr.unwrap() != ptr
                 || self.allocated_size != size
             {
-                return Err(wrt_error::Error::runtime_execution_error(
+                return Err(kiln_error::Error::runtime_execution_error(
                     "Deallocation mismatch",
                 ));
             }

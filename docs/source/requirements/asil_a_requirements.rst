@@ -11,7 +11,7 @@ This document defines the specific requirements for achieving ASIL-A compliance 
 ASIL-A Overview
 ---------------
 
-ASIL-A is the lowest safety integrity level in ISO 26262, suitable for functions where failure poses minimal risk to vehicle occupants. The WRT project targets ASIL-A as the initial safety certification level.
+ASIL-A is the lowest safety integrity level in ISO 26262, suitable for functions where failure poses minimal risk to vehicle occupants. The Kiln project targets ASIL-A as the initial safety certification level.
 
 **Key ASIL-A Requirements:**
 - Basic hazard analysis and risk assessment
@@ -31,12 +31,12 @@ REQ_ASIL_A_MEM_001: Memory Allocation Safety
 **Status:** Implemented  
 
 **Requirement:**  
-The WRT runtime SHALL use capability-based memory allocation to prevent unauthorized memory access and ensure deterministic memory usage patterns.
+The Kiln runtime SHALL use capability-based memory allocation to prevent unauthorized memory access and ensure deterministic memory usage patterns.
 
 **Implementation:**  
-- Located in: `/wrt-foundation/src/capabilities/`
+- Located in: `/kiln-foundation/src/capabilities/`
 - Verified by: KANI harness `kani_verify_memory_budget_never_exceeded`
-- Test coverage: Memory allocation tests in `wrt-foundation/tests/`
+- Test coverage: Memory allocation tests in `kiln-foundation/tests/`
 
 **Rationale:**  
 Capability-based allocation provides the deterministic memory management required for ASIL-A certification while preventing common memory safety issues.
@@ -49,16 +49,16 @@ REQ_ASIL_A_MEM_002: Memory Budget Enforcement
 **Status:** Implemented  
 
 **Requirement:**  
-The WRT runtime SHALL enforce memory budgets at compile-time to prevent memory exhaustion during runtime execution.
+The Kiln runtime SHALL enforce memory budgets at compile-time to prevent memory exhaustion during runtime execution.
 
 **Implementation:**  
-- Located in: `/wrt-foundation/src/budget_verification.rs`
+- Located in: `/kiln-foundation/src/budget_verification.rs`
 - Macros: `safe_managed_alloc!` with budget checking
 - Configuration: `CRATE_BUDGETS` constant arrays
 
 **Verification:**  
 - KANI harness: `kani_verify_hierarchical_budget_consistency`
-- Build-time verification through `cargo-wrt` tool
+- Build-time verification through `cargo-kiln` tool
 
 REQ_ASIL_A_MEM_003: No Dynamic Memory Allocation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -68,7 +68,7 @@ REQ_ASIL_A_MEM_003: No Dynamic Memory Allocation
 **Status:** Partially Implemented  
 
 **Requirement:**  
-The WRT runtime SHALL NOT perform dynamic memory allocation during execution in safety-critical contexts.
+The Kiln runtime SHALL NOT perform dynamic memory allocation during execution in safety-critical contexts.
 
 **Implementation:**  
 - `NoStdProvider` using fixed-size arrays
@@ -90,15 +90,15 @@ REQ_ASIL_A_ERR_001: Systematic Error Classification
 **Status:** Implemented  
 
 **Requirement:**  
-The WRT runtime SHALL classify all errors according to their ASIL level and handle them appropriately.
+The Kiln runtime SHALL classify all errors according to their ASIL level and handle them appropriately.
 
 **Implementation:**  
-- Located in: `/wrt-error/src/asil.rs`
+- Located in: `/kiln-error/src/asil.rs`
 - Enum: `AsilLevel` with QM through ASIL-D levels
 - Error classification in `Error` struct
 
 **Verification:**  
-- Tests in: `/wrt-error/tests/asil_tests.rs`
+- Tests in: `/kiln-error/tests/asil_tests.rs`
 - ASIL-tagged test framework
 
 REQ_ASIL_A_ERR_002: Fault Detection Coverage
@@ -109,7 +109,7 @@ REQ_ASIL_A_ERR_002: Fault Detection Coverage
 **Status:** In Progress  
 
 **Requirement:**  
-The WRT runtime SHALL detect and respond to basic fault conditions including memory violations and resource exhaustion.
+The Kiln runtime SHALL detect and respond to basic fault conditions including memory violations and resource exhaustion.
 
 **Implementation Plan:**  
 - Memory bounds checking in all allocations
@@ -127,10 +127,10 @@ REQ_ASIL_A_VER_001: Formal Verification Coverage
 **Status:** Implemented  
 
 **Requirement:**  
-The WRT runtime SHALL use formal verification (KANI) to prove correctness of safety-critical memory operations.
+The Kiln runtime SHALL use formal verification (KANI) to prove correctness of safety-critical memory operations.
 
 **Implementation:**  
-- KANI configuration: `/wrt-tests/integration/Kani.toml`
+- KANI configuration: `/kiln-tests/integration/Kani.toml`
 - Verification profiles for each ASIL level
 - 7+ existing KANI harnesses for memory operations
 
@@ -148,7 +148,7 @@ REQ_ASIL_A_VER_002: Test Coverage Requirements
 **Status:** In Progress  
 
 **Requirement:**  
-The WRT runtime SHALL achieve comprehensive test coverage for all ASIL-A classified components with systematic boundary testing.
+The Kiln runtime SHALL achieve comprehensive test coverage for all ASIL-A classified components with systematic boundary testing.
 
 **Target Metrics:**  
 - Line coverage: ≥95% for safety-critical paths
@@ -166,7 +166,7 @@ REQ_ASIL_A_PROC_001: Safety Development Lifecycle
 **Status:** In Progress  
 
 **Requirement:**  
-The WRT runtime development SHALL follow ISO 26262 safety development lifecycle processes.
+The Kiln runtime development SHALL follow ISO 26262 safety development lifecycle processes.
 
 **Implementation Plan:**  
 - Safety requirements specification (this document)
@@ -182,7 +182,7 @@ REQ_ASIL_A_PROC_002: Change Control Process
 **Status:** Planned  
 
 **Requirement:**  
-All changes to safety-critical WRT components SHALL be subject to controlled change management with safety impact assessment.
+All changes to safety-critical Kiln components SHALL be subject to controlled change management with safety impact assessment.
 
 **Implementation Plan:**  
 - Git-based change tracking

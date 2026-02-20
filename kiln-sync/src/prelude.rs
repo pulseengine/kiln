@@ -1,8 +1,8 @@
-//! Prelude module for wrt-sync
+//! Prelude module for kiln-sync
 //!
 //! This module provides a unified set of imports for both std and no_std environments.
 //! It re-exports commonly used types and traits to ensure consistency across all crates
-//! in the WRT project and simplify imports in individual modules.
+//! in the Kiln project and simplify imports in individual modules.
 
 // Core imports for both std and no_std environments
 pub use core::{
@@ -55,22 +55,22 @@ pub type Arc<T> = core::marker::PhantomData<T>;
 #[cfg(all(not(feature = "std"), not(feature = "alloc"), not(feature = "dynamic-allocation")))]
 pub type Box<T> = core::marker::PhantomData<T>;
 
-// Re-export from wrt-error if enabled
+// Re-export from kiln-error if enabled
 #[cfg(feature = "error")]
-pub use wrt_error::{codes, kinds, Error, ErrorCategory, Result};
+pub use kiln_error::{codes, kinds, Error, ErrorCategory, Result};
 
 // Re-export from this crate
-pub use crate::mutex::{WrtMutex, WrtMutexGuard};
-pub use crate::rwlock::{WrtRwLock, WrtRwLockReadGuard, WrtRwLockWriteGuard};
+pub use crate::mutex::{KilnMutex, KilnMutexGuard};
+pub use crate::rwlock::{KilnRwLock, KilnRwLockReadGuard, KilnRwLockWriteGuard};
 
 // Re-alias for convenience if not using std's versions
 #[cfg(not(feature = "std"))]
-pub use WrtMutex as Mutex;
+pub use KilnMutex as Mutex;
 #[cfg(not(feature = "std"))]
-pub use WrtMutexGuard as MutexGuard;
+pub use KilnMutexGuard as MutexGuard;
 #[cfg(not(feature = "std"))]
-pub use WrtRwLock as RwLock;
+pub use KilnRwLock as RwLock;
 #[cfg(not(feature = "std"))]
-pub use WrtRwLockReadGuard as RwLockReadGuard;
+pub use KilnRwLockReadGuard as RwLockReadGuard;
 #[cfg(not(feature = "std"))]
-pub use WrtRwLockWriteGuard as RwLockWriteGuard;
+pub use KilnRwLockWriteGuard as RwLockWriteGuard;

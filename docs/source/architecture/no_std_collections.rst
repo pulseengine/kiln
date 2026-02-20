@@ -6,7 +6,7 @@ no_std/no_alloc Collections
 Overview
 --------
 
-This document describes the bounded collection types designed for ``no_std`` and ``no_alloc`` environments in the WRT system. These collections provide memory-safe alternatives to standard library collections, with strict capacity limits, verification mechanisms, and platform-specific optimizations.
+This document describes the bounded collection types designed for ``no_std`` and ``no_alloc`` environments in the Kiln system. These collections provide memory-safe alternatives to standard library collections, with strict capacity limits, verification mechanisms, and platform-specific optimizations.
 
 Design Goals
 -----------

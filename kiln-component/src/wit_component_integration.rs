@@ -8,20 +8,20 @@ use std::{collections::BTreeMap, vec::Vec};
 #[cfg(all(not(feature = "std")))]
 use std::{collections::BTreeMap, vec::Vec};
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{BoundedString},
     prelude::*,
     traits::{ToBytes, FromBytes, Checksummable, WriteStream, ReadStream},
     verification::Checksum,
 };
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 
 // Platform-aware type aliases for WIT component integration
-type ComponentProvider = wrt_foundation::budget_provider::BudgetProvider<4096>;  // 4KB for component data
+type ComponentProvider = kiln_foundation::budget_provider::BudgetProvider<4096>;  // 4KB for component data
 type WitBoundedString<const N: usize> = BoundedString<N>;
 
 // Re-export WIT AST types for convenience
-pub use wrt_format::ast::{
+pub use kiln_format::ast::{
     WitDocument, InterfaceDecl, FunctionDecl, TypeDecl, WorldDecl,
     TypeExpr, PrimitiveKind, SourceSpan,
 };
@@ -207,11 +207,11 @@ impl Default for ComponentType {
 }
 
 impl ToBytes for ComponentType {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write discriminant for the type
         let discriminant: u8 = match self {
             ComponentType::U8 => 0,
@@ -235,10 +235,10 @@ impl ToBytes for ComponentType {
 }
 
 impl FromBytes for ComponentType {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         match discriminant {
             0 => Ok(ComponentType::U8),
@@ -341,13 +341,13 @@ impl WitComponentContext {
         // Process interfaces
         for item in &self.document.items {
             match item {
-                wrt_format::ast::TopLevelItem::Interface(interface) => {
+                kiln_format::ast::TopLevelItem::Interface(interface) => {
                     self.process_interface(interface)?;
                 }
-                wrt_format::ast::TopLevelItem::World(world) => {
+                kiln_format::ast::TopLevelItem::World(world) => {
                     self.process_world(world)?;
                 }
-                wrt_format::ast::TopLevelItem::Type(type_decl) => {
+                kiln_format::ast::TopLevelItem::Type(type_decl) => {
                     self.process_type_declaration(type_decl)?;
                 }
             }
@@ -364,15 +364,15 @@ impl WitComponentContext {
         // Process interface items
         for item in &interface.items {
             match item {
-                wrt_format::ast::InterfaceItem::Function(func) => {
+                kiln_format::ast::InterfaceItem::Function(func) => {
                     let mapping = self.process_function(func)?;
                     functions.push(mapping);
                 }
-                wrt_format::ast::InterfaceItem::Type(type_decl) => {
+                kiln_format::ast::InterfaceItem::Type(type_decl) => {
                     let mapping = self.process_type_declaration(type_decl)?;
                     types.push(mapping);
                 }
-                wrt_format::ast::InterfaceItem::Use(_) => {
+                kiln_format::ast::InterfaceItem::Use(_) => {
                     // Handle use declarations if needed
                 }
             }
@@ -416,14 +416,14 @@ impl WitComponentContext {
         
         // Process return types
         match &func.func.results {
-            wrt_format::ast::FunctionResults::None => {
+            kiln_format::ast::FunctionResults::None => {
                 // No return types
             }
-            wrt_format::ast::FunctionResults::Type(ty) => {
+            kiln_format::ast::FunctionResults::Type(ty) => {
                 let type_mapping = self.convert_wit_type(ty)?;
                 return_types.push(type_mapping);
             }
-            wrt_format::ast::FunctionResults::Named(_named) => {
+            kiln_format::ast::FunctionResults::Named(_named) => {
                 // Handle named results
             }
         }

@@ -3,7 +3,7 @@
 //! This module provides simple integration examples for the capability system.
 
 #[cfg(feature = "std")]
-use wrt_foundation::capabilities::{
+use kiln_foundation::capabilities::{
     PlatformAllocator,
     PlatformCapabilityBuilder,
     PlatformCapabilityProvider,

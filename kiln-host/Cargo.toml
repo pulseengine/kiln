@@ -1,11 +1,11 @@
 [package]
-name = "wrt-host"
+name = "kiln-host"
 version.workspace = true
 edition.workspace = true
-description = "Host function infrastructure for the WebAssembly Runtime (WRT)"
+description = "Host function infrastructure for the WebAssembly Runtime (Kiln)"
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/wrt-host"
+documentation = "https://docs.rs/kiln-host"
 keywords = ["wasm", "webassembly", "runtime", "host", "component-model"]
 categories = ["wasm", "no-std"]
 
@@ -13,10 +13,10 @@ categories = ["wasm", "no-std"]
 workspace = true
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false }
-wrt-intercept = { workspace = true, default-features = false }
-wrt-sync = { workspace = true, default-features = false }
+kiln-error = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false }
+kiln-intercept = { workspace = true, default-features = false }
+kiln-sync = { workspace = true, default-features = false }
 
 # Std dependencies
 log = { version = "0.4", optional = true }
@@ -25,24 +25,24 @@ log = { version = "0.4", optional = true }
 [features]
 default = []
 # Binary choice: std OR no_std (no alloc middle ground)
-std = ["log", "wrt-foundation/std", "wrt-intercept/std", "wrt-sync/std", "wrt-foundation/wrt-allocator"]
+std = ["log", "kiln-foundation/std", "kiln-intercept/std", "kiln-sync/std", "kiln-foundation/kiln-allocator"]
 # This crate is no_std by default, this feature is a no-op for compatibility
 no_std = []
 
 # Allocation support for no_std environments
-alloc = ["wrt-foundation/alloc", "wrt-intercept/alloc"]
-optimize = ["wrt-foundation/optimize", "wrt-intercept/optimize"]
+alloc = ["kiln-foundation/alloc", "kiln-intercept/alloc"]
+optimize = ["kiln-foundation/optimize", "kiln-intercept/optimize"]
 
 # Safety level presets using capability-based features
-qm = ["wrt-foundation/dynamic-allocation"]
-asil-a = ["wrt-foundation/bounded-collections"]
-asil-b = ["wrt-foundation/bounded-collections"]
-asil-c = ["wrt-foundation/static-memory-safety"]
-asil-d = ["wrt-foundation/asil-d"]
+qm = ["kiln-foundation/dynamic-allocation"]
+asil-a = ["kiln-foundation/bounded-collections"]
+asil-b = ["kiln-foundation/bounded-collections"]
+asil-c = ["kiln-foundation/static-memory-safety"]
+asil-d = ["kiln-foundation/asil-d"]
 
 # Legacy compatibility features
 safe-memory = ["asil-b"]
 safety-asil-b = ["asil-b"]
 safety-asil-c = ["asil-c"]
 safety-asil-d = ["asil-d"]
-kani = ["wrt-intercept/kani"] 
+kani = ["kiln-intercept/kani"] 

@@ -3,7 +3,7 @@
 Architectural Patterns
 ======================
 
-This section documents the architectural patterns used throughout the Pulseengine (WRT Edition) implementation, with specific focus on how these patterns handle the multi-environment requirement (std, no_std+alloc, no_std+no_alloc).
+This section documents the architectural patterns used throughout the Pulseengine (Kiln Edition) implementation, with specific focus on how these patterns handle the multi-environment requirement (std, no_std+alloc, no_std+no_alloc).
 
 .. arch_component:: ARCH_COMP_PATTERNS_001
    :title: Multi-Environment Pattern System
@@ -29,11 +29,11 @@ Environment Abstraction Pattern
 Implementation in Foundation Layer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The pattern is implemented in ``wrt-foundation`` using conditional compilation:
+The pattern is implemented in ``kiln-foundation`` using conditional compilation:
 
 .. code-block:: rust
 
-   // From wrt-foundation/src/bounded_collections.rs
+   // From kiln-foundation/src/bounded_collections.rs
    #[cfg(feature = "std")]
    pub type BoundedVec<T> = Vec<T>;
 
@@ -58,7 +58,7 @@ Memory Management Patterns
 Safe Memory Provider Pattern
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Implemented in ``wrt-foundation/src/safe_memory.rs``:
+Implemented in ``kiln-foundation/src/safe_memory.rs``:
 
 .. code-block:: rust
 
@@ -90,7 +90,7 @@ Builder Pattern with Environment Adaptation
 Component Builder Implementation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-foundation/src/component_builder.rs``:
+From ``kiln-foundation/src/component_builder.rs``:
 
 .. code-block:: rust
 
@@ -142,21 +142,21 @@ Error Handling Patterns
 No-Std Error Pattern
 ~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-error/src/errors.rs``:
+From ``kiln-error/src/errors.rs``:
 
 .. code-block:: rust
 
    #[derive(Debug, Clone, PartialEq, Eq)]
-   pub enum WrtError {
+   pub enum KilnError {
        Memory(MemoryError),
        Component(ComponentError),
        Runtime(RuntimeError),
    }
 
    #[cfg(feature = "std")]
-   impl std::error::Error for WrtError {}
+   impl std::error::Error for KilnError {}
 
-   impl core::fmt::Display for WrtError {
+   impl core::fmt::Display for KilnError {
        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
            match self {
                Self::Memory(e) => write!(f, "Memory error: {}", e),
@@ -181,7 +181,7 @@ Resource Management Patterns
 Resource Table Pattern
 ~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/resources/resource_table_no_std.rs``:
+From ``kiln-component/src/resources/resource_table_no_std.rs``:
 
 .. code-block:: rust
 
@@ -217,7 +217,7 @@ Factory Pattern with Environment Constraints
 Component Factory Implementation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/factory.rs``:
+From ``kiln-component/src/factory.rs``:
 
 .. code-block:: rust
 
@@ -264,7 +264,7 @@ Observer Pattern for Runtime Events
 Runtime Event System
 ~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-runtime/src/execution.rs``:
+From ``kiln-runtime/src/execution.rs``:
 
 .. code-block:: rust
 
@@ -296,7 +296,7 @@ Type-State Pattern for Safety
 Component Lifecycle States
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/component.rs``:
+From ``kiln-component/src/component.rs``:
 
 .. code-block:: rust
 

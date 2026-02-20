@@ -8,11 +8,11 @@ use std::{boxed::Box, collections::BTreeMap, vec::Vec};
 #[cfg(all(not(feature = "std")))]
 use std::{boxed::Box, collections::BTreeMap, vec::Vec};
 
-use wrt_error::{Error, Result};
-/// Source location span (re-exported from wrt-format for consistency)
+use kiln_error::{Error, Result};
+/// Source location span (re-exported from kiln-format for consistency)
 #[cfg(feature = "wit-integration")]
-pub use wrt_format::ast::SourceSpan;
-use wrt_foundation::{BoundedString, BoundedVec, NoStdProvider, prelude::*, safe_managed_alloc};
+pub use kiln_format::ast::SourceSpan;
+use kiln_foundation::{BoundedString, BoundedVec, NoStdProvider, prelude::*, safe_managed_alloc};
 
 use crate::bounded_debug_infra;
 

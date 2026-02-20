@@ -1,44 +1,44 @@
 @startuml deployment_architecture
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Deployment.puml
 
-title Pulseengine (WRT Edition) - Deployment Architecture
+title Pulseengine (Kiln Edition) - Deployment Architecture
 
 ' Define deployment nodes for different platforms
 Deployment_Node(server_env, "Server Environment", "Linux/macOS") {
     Deployment_Node(docker, "Docker Container", "Optional") {
-        Container(wrtd_server, "wrtd", "Rust Binary", "Full std features")
+        Container(kilnd_server, "kilnd", "Rust Binary", "Full std features")
     }
-    Container(wrt_lib_server, "wrt library", "Rust Library", "Embedded in application")
+    Container(kiln_lib_server, "kiln library", "Rust Library", "Embedded in application")
 }
 
 Deployment_Node(embedded_linux, "Embedded Linux", "Yocto/BuildRoot") {
-    Container(wrt_embedded_linux, "wrt", "Static Library", "no_std + alloc")
+    Container(kiln_embedded_linux, "kiln", "Static Library", "no_std + alloc")
     Container(app_linux, "User Application", "C/C++/Rust", "Safety-critical app")
 }
 
 Deployment_Node(qnx_system, "QNX Neutrino", "RTOS") {
     Deployment_Node(qnx_partition, "QNX Partition", "Protected") {
-        Container(wrt_qnx, "wrt", "QNX Process", "Memory partitioning")
+        Container(kiln_qnx, "kiln", "QNX Process", "Memory partitioning")
         Container(app_qnx, "Safety App", "C/C++", "ISO 26262 compliant")
     }
 }
 
 Deployment_Node(zephyr_rtos, "Zephyr RTOS", "MCU") {
     Deployment_Node(zephyr_kernel, "Zephyr Kernel Space") {
-        Container(wrt_zephyr, "wrt", "Zephyr Module", "no_std, no_alloc")
+        Container(kiln_zephyr, "kiln", "Zephyr Module", "no_std, no_alloc")
     }
     Container(app_zephyr, "RTOS Task", "C", "Periodic task")
 }
 
 Deployment_Node(bare_metal, "Bare Metal", "ARM Cortex-M/RISC-V") {
-    Container(wrt_bare, "wrt", "Static Library", "no_std, fixed memory")
+    Container(kiln_bare, "kiln", "Static Library", "no_std, fixed memory")
     Container(bootloader, "Bootloader", "Assembly/C", "Minimal runtime")
 }
 
 ' Memory configurations for each deployment
 Deployment_Node(memory_models, "Memory Models", "Per Platform") {
     Component(heap_alloc, "Heap Allocator", "std::alloc", "Dynamic allocation")
-    Component(custom_alloc, "Custom Allocator", "wrt-foundation", "Bounded allocation")
+    Component(custom_alloc, "Custom Allocator", "kiln-foundation", "Bounded allocation")
     Component(static_alloc, "Static Allocation", "compile-time", "Fixed buffers")
 }
 
@@ -51,24 +51,24 @@ Deployment_Node(security_features, "Hardware Security", "Platform-specific") {
 }
 
 ' Relationships
-wrtd_server --> heap_alloc : "Uses"
-wrt_lib_server --> heap_alloc : "Uses"
+kilnd_server --> heap_alloc : "Uses"
+kiln_lib_server --> heap_alloc : "Uses"
 
-wrt_embedded_linux --> custom_alloc : "Uses"
-app_linux --> wrt_embedded_linux : "Links"
+kiln_embedded_linux --> custom_alloc : "Uses"
+app_linux --> kiln_embedded_linux : "Links"
 
-wrt_qnx --> custom_alloc : "Uses"
-wrt_qnx --> qnx_secpol : "Protected by"
-app_qnx --> wrt_qnx : "IPC"
+kiln_qnx --> custom_alloc : "Uses"
+kiln_qnx --> qnx_secpol : "Protected by"
+app_qnx --> kiln_qnx : "IPC"
 
-wrt_zephyr --> static_alloc : "Uses"
-app_zephyr --> wrt_zephyr : "Calls"
+kiln_zephyr --> static_alloc : "Uses"
+app_zephyr --> kiln_zephyr : "Calls"
 
-wrt_bare --> static_alloc : "Uses"
-bootloader --> wrt_bare : "Loads"
+kiln_bare --> static_alloc : "Uses"
+bootloader --> kiln_bare : "Loads"
 
-wrt_embedded_linux --> arm_mte : "Optional"
-wrt_lib_server --> arm_pac : "When on ARM64"
-wrt_lib_server --> intel_cet : "When on x86_64"
+kiln_embedded_linux --> arm_mte : "Optional"
+kiln_lib_server --> arm_pac : "When on ARM64"
+kiln_lib_server --> intel_cet : "When on x86_64"
 
 @enduml

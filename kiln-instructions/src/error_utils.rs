@@ -3,7 +3,7 @@
 // Error formatting may truncate large values for display - acceptable behavior.
 #![allow(clippy::cast_possible_truncation)]
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
 };

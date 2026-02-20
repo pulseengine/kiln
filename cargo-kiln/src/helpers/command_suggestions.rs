@@ -1,4 +1,4 @@
-//! Command suggestion system for cargo-wrt
+//! Command suggestion system for cargo-kiln
 //!
 //! Provides intelligent command suggestions based on context,
 //! typo correction, and workflow patterns.
@@ -86,7 +86,7 @@ impl CommandSuggestionEngine {
                 name: "build".to_string(),
                 aliases: vec!["b".to_string(), "compile".to_string()],
                 category: "Build".to_string(),
-                description: "Build all WRT components".to_string(),
+                description: "Build all Kiln components".to_string(),
                 usage_frequency: 0.9,
                 typical_context: vec!["development".to_string(), "ci".to_string()],
             },
@@ -381,11 +381,11 @@ impl CommandSuggestionEngine {
     pub fn format_suggestions(&self, suggestions: &[Suggestion], use_colors: bool) -> String {
         if suggestions.is_empty() {
             return if use_colors {
-                "No suggestions available. Try 'cargo-wrt help' for available commands."
+                "No suggestions available. Try 'cargo-kiln help' for available commands."
                     .bright_black()
                     .to_string()
             } else {
-                "No suggestions available. Try 'cargo-wrt help' for available commands.".to_string()
+                "No suggestions available. Try 'cargo-kiln help' for available commands.".to_string()
             };
         }
 
@@ -439,10 +439,10 @@ impl CommandSuggestionEngine {
         if use_colors {
             output.push_str(&format!(
                 "Run: {}\n",
-                format!("cargo-wrt <command>").bright_cyan()
+                format!("cargo-kiln <command>").bright_cyan()
             ));
         } else {
-            output.push_str("Run: cargo-wrt <command>\n");
+            output.push_str("Run: cargo-kiln <command>\n");
         }
 
         output

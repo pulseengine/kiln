@@ -2,11 +2,11 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Prelude module for wrt-instructions
+//! Prelude module for kiln-instructions
 //!
 //! This module provides a unified set of imports for both std and `no_std`
 //! environments. It re-exports commonly used types and traits to ensure
-//! consistency across all crates in the WRT project and simplify imports in
+//! consistency across all crates in the Kiln project and simplify imports in
 //! individual modules.
 
 // Core imports for both std and no_std environments
@@ -55,14 +55,14 @@ pub use std::{
 };
 
 // BoundedVec available for both std and no_std modes
-pub use wrt_foundation::bounded::{
+pub use kiln_foundation::bounded::{
     BoundedString,
     BoundedVec,
 };
 
-// Type alias for Vec in no_std mode to match wrt-runtime behavior
+// Type alias for Vec in no_std mode to match kiln-runtime behavior
 #[cfg(not(feature = "std"))]
-pub type Vec<T> = wrt_foundation::bounded::BoundedVec<T, 256, wrt_foundation::NoStdProvider<1024>>;
+pub type Vec<T> = kiln_foundation::bounded::BoundedVec<T, 256, kiln_foundation::NoStdProvider<1024>>;
 
 // Binary std/no_std choice
 #[cfg(not(feature = "std"))]
@@ -81,22 +81,22 @@ macro_rules! format {
 macro_rules! vec {
     () => {
         {
-            (|| -> wrt_error::Result<_> {
-                let provider = wrt_foundation::safe_managed_alloc!(1024, wrt_foundation::budget_aware_provider::CrateId::Instructions)?;
+            (|| -> kiln_error::Result<_> {
+                let provider = kiln_foundation::safe_managed_alloc!(1024, kiln_foundation::budget_aware_provider::CrateId::Instructions)?;
                 $crate::types::InstructionVec::new(provider)
-                    .map_err(|_| wrt_error::Error::memory_error("Failed to create BoundedVec"))
+                    .map_err(|_| kiln_error::Error::memory_error("Failed to create BoundedVec"))
             })()
             .unwrap_or_else(|_| panic!("Failed to create vec!"))
         }
     };
     ($($x:expr),+ $(,)?) => {
         {
-            (|| -> wrt_error::Result<_> {
-                let provider = wrt_foundation::safe_managed_alloc!(1024, wrt_foundation::budget_aware_provider::CrateId::Instructions)?;
+            (|| -> kiln_error::Result<_> {
+                let provider = kiln_foundation::safe_managed_alloc!(1024, kiln_foundation::budget_aware_provider::CrateId::Instructions)?;
                 let mut temp_vec = $crate::types::InstructionVec::new(provider)
-                    .map_err(|_| wrt_error::Error::memory_error("Failed to create BoundedVec"))?;
+                    .map_err(|_| kiln_error::Error::memory_error("Failed to create BoundedVec"))?;
                 $(
-                    temp_vec.push($x).map_err(|_| wrt_error::Error::memory_error("Failed to push to BoundedVec"))?;
+                    temp_vec.push($x).map_err(|_| kiln_error::Error::memory_error("Failed to push to BoundedVec"))?;
                 )*
                 Ok(temp_vec)
             })()
@@ -105,16 +105,16 @@ macro_rules! vec {
     };
 }
 
-// Re-export from wrt-error
-pub use wrt_error::{
+// Re-export from kiln-error
+pub use kiln_error::{
     codes,
     kinds,
     Error,
     ErrorCategory,
     Result,
 };
-// Re-export from wrt-foundation
-pub use wrt_foundation::{
+// Re-export from kiln-foundation
+pub use kiln_foundation::{
     bounded::BoundedStack,
     // Memory allocation macros
     safe_managed_alloc,
@@ -147,12 +147,12 @@ pub use wrt_foundation::{
     verification::VerificationLevel,
 };
 // Import synchronization primitives for both std and no_std
-pub use wrt_sync::{
-    WrtMutex as Mutex,
-    WrtMutexGuard as MutexGuard,
-    WrtRwLock as RwLock,
-    WrtRwLockReadGuard as RwLockReadGuard,
-    WrtRwLockWriteGuard as RwLockWriteGuard,
+pub use kiln_sync::{
+    KilnMutex as Mutex,
+    KilnMutexGuard as MutexGuard,
+    KilnRwLock as RwLock,
+    KilnRwLockReadGuard as RwLockReadGuard,
+    KilnRwLockWriteGuard as RwLockWriteGuard,
 };
 
 // Re-export constant expression types

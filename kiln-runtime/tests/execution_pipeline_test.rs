@@ -1,8 +1,8 @@
 //! Test the complete execution pipeline with real WebAssembly
 
-use wrt_error::Result;
-use wrt_foundation::values::Value;
-use wrt_runtime::engine::{
+use kiln_error::Result;
+use kiln_foundation::values::Value;
+use kiln_runtime::engine::{
     CapabilityAwareEngine,
     CapabilityEngine,
     EnginePreset,

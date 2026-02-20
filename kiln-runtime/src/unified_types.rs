@@ -1,4 +1,4 @@
-//! Unified Type System for WRT Runtime - CRITICAL COMPILATION FIX
+//! Unified Type System for Kiln Runtime - CRITICAL COMPILATION FIX
 //!
 //! This module provides a unified type system that resolves the 421+
 //! compilation errors caused by incompatible bounded collection capacities
@@ -7,11 +7,11 @@
 
 use core::marker::PhantomData;
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{
         BoundedString,
         BoundedVec,
@@ -295,7 +295,7 @@ where
         // Placeholder - real implementation would use provider
         Err(Error::new(
             ErrorCategory::Memory,
-            wrt_error::codes::NOT_IMPLEMENTED,
+            kiln_error::codes::NOT_IMPLEMENTED,
             "Allocation not implemented",
         ))
     }

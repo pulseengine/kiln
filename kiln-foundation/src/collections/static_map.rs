@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: StaticMap - Inline-storage sorted map
 // SW-REQ-ID: REQ_RESOURCE_001, REQ_MEM_SAFETY_001, REQ_TEMPORAL_001
 //
@@ -26,7 +26,7 @@ use core::cmp::Ordering;
 use core::mem::MaybeUninit;
 use core::marker::PhantomData;
 
-use wrt_error::Result;
+use kiln_error::Result;
 
 /// A sorted map with compile-time capacity and inline storage.
 ///
@@ -45,7 +45,7 @@ use wrt_error::Result;
 /// # Examples
 ///
 /// ```
-/// use wrt_foundation::collections::StaticMap;
+/// use kiln_foundation::collections::StaticMap;
 ///
 /// let mut map = StaticMap::<&str, u32, 10>::new();
 /// map.insert("foo", 42)?;
@@ -53,7 +53,7 @@ use wrt_error::Result;
 ///
 /// assert_eq!(map.get("foo"), Some(&42));
 /// assert_eq!(map.get("baz"), None);
-/// # Ok::<(), wrt_error::Error>(())
+/// # Ok::<(), kiln_error::Error>(())
 /// ```
 #[derive(Debug)]
 pub struct StaticMap<K, V, const N: usize>
@@ -105,14 +105,14 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticMap;
+    /// use kiln_foundation::collections::StaticMap;
     ///
     /// let mut map = StaticMap::<&str, u32, 3>::new();
     /// assert!(map.insert("a", 1).is_ok());
     /// assert!(map.insert("b", 2).is_ok());
     /// assert!(map.insert("c", 3).is_ok());
     /// assert!(map.insert("d", 4).is_err()); // Full
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn insert(&mut self, key: K, value: V) -> Result<Option<V>> {
         // Binary search to find insertion point
@@ -127,7 +127,7 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
             Err(index) => {
                 // Key doesn't exist, insert at index
                 if self.len >= N {
-                    return Err(wrt_error::Error::foundation_bounded_capacity_exceeded(
+                    return Err(kiln_error::Error::foundation_bounded_capacity_exceeded(
                         "StaticMap capacity exceeded",
                     ));
                 }
@@ -160,14 +160,14 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticMap;
+    /// use kiln_foundation::collections::StaticMap;
     ///
     /// let mut map = StaticMap::<&str, u32, 10>::new();
     /// map.insert("foo", 42)?;
     ///
     /// assert_eq!(map.get("foo"), Some(&42));
     /// assert_eq!(map.get("bar"), None);
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -204,14 +204,14 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticMap;
+    /// use kiln_foundation::collections::StaticMap;
     ///
     /// let mut map = StaticMap::<&str, u32, 10>::new();
     /// map.insert("foo", 42)?;
     ///
     /// assert_eq!(map.remove("foo"), Some(42));
     /// assert_eq!(map.remove("foo"), None);
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn remove(&mut self, key: &K) -> Option<V> {
         match self.binary_search(key) {
@@ -359,13 +359,13 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticMap;
+    /// use kiln_foundation::collections::StaticMap;
     ///
     /// let mut map = StaticMap::<&str, u32, 10>::new();
     ///
     /// map.entry("key").or_insert(42);
     /// assert_eq!(map.get("key"), Some(&42));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V, N> {
         match self.binary_search(&key) {
@@ -397,14 +397,14 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticMap;
+    /// use kiln_foundation::collections::StaticMap;
     ///
     /// let mut map = StaticMap::<&str, u32, 10>::new();
     ///
     /// let value = map.get_mut_or_insert("key", 42)?;
     /// *value = 100;
     /// assert_eq!(map.get("key"), Some(&100));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn get_mut_or_insert(&mut self, key: K, default: V) -> Result<&mut V> {
         self.entry(key).or_insert(default)
@@ -533,7 +533,7 @@ impl<'a, K: Ord, V, const N: usize> VacantEntry<'a, K, V, N> {
     /// Sets the value of the entry with the VacantEntry's key and returns a mutable reference to it.
     pub fn insert(self, value: V) -> Result<&'a mut V> {
         if self.map.len >= N {
-            return Err(wrt_error::Error::foundation_bounded_capacity_exceeded(
+            return Err(kiln_error::Error::foundation_bounded_capacity_exceeded(
                 "StaticMap capacity exceeded",
             ));
         }
@@ -609,7 +609,7 @@ impl<K: crate::traits::ToBytes + Ord, V: crate::traits::ToBytes, const N: usize>
         &self,
         writer: &mut crate::traits::WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write length
         self.len().to_bytes_with_provider(writer, provider)?;
         // Write each key-value pair
@@ -626,7 +626,7 @@ impl<K: crate::traits::FromBytes + Ord, V: crate::traits::FromBytes, const N: us
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut crate::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read length
         let len = usize::from_bytes_with_provider(reader, provider)?;
 

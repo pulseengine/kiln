@@ -1,13 +1,13 @@
-# WRT Documentation Standards
+# Kiln Documentation Standards
 
-This document defines the documentation standards for the WebAssembly Runtime (WRT) project to ensure consistency, safety compliance, and maintainability across all modules.
+This document defines the documentation standards for the WebAssembly Runtime (Kiln) project to ensure consistency, safety compliance, and maintainability across all modules.
 
 ## Module Documentation Template
 
 All modules should follow this comprehensive documentation template:
 
 ```rust
-// WRT - {crate-name}
+// Kiln - {crate-name}
 // Module: {Module Description}
 // SW-REQ-ID: {requirement-ids}
 //
@@ -133,7 +133,7 @@ Modules providing integration between components **MUST** include:
 
 ### Mandatory Elements
 
-- [x] Module header with WRT identification
+- [x] Module header with Kiln identification
 - [x] Copyright and license information
 - [x] SW-REQ-ID traceability (where applicable)
 - [x] Brief module description
@@ -278,21 +278,21 @@ scripts/generate-traceability-report.sh
 
 Create documentation snippets for consistent formatting:
 
-- `wrt-module-doc`: Module documentation template
-- `wrt-function-doc`: Function documentation template
-- `wrt-safety-doc`: Safety-critical function documentation
+- `kiln-module-doc`: Module documentation template
+- `kiln-function-doc`: Function documentation template
+- `kiln-safety-doc`: Safety-critical function documentation
 
 ### Documentation Generation
 
 ```bash
 # Generate complete documentation
-cargo-wrt docs
+cargo-kiln docs
 
 # Generate documentation with safety analysis
-cargo-wrt docs --safety
+cargo-kiln docs --safety
 
 # Validate documentation consistency
-cargo-wrt docs --check
+cargo-kiln docs --check
 ```
 
-This documentation standard ensures that WRT maintains world-class documentation quality appropriate for safety-critical software development while providing clear guidance for developers and safety engineers.
+This documentation standard ensures that Kiln maintains world-class documentation quality appropriate for safety-critical software development while providing clear guidance for developers and safety engineers.

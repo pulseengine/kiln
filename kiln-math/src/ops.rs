@@ -1,4 +1,4 @@
-// WRT - wrt-math
+// Kiln - kiln-math
 // Module: Math Operations
 // SW-REQ-ID: REQ_018 (Wasm numeric operations)
 //
@@ -22,18 +22,18 @@ use std::{
     f64,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes::TrapCode,
-    Error as WrtError,
+    Error as KilnError,
     Result,
 };
 
-// Import necessary items from this crate's prelude and wrt-error
+// Import necessary items from this crate's prelude and kiln-error
 use crate::prelude::{
     FloatBits32,
     FloatBits64,
-}; // Result, TrapCode, WrtError should come
-   // via wrt_error directly or be aliased in
+}; // Result, TrapCode, KilnError should come
+   // via kiln_error directly or be aliased in
    // prelude
 
 // Module-level constants for Wasm conversion boundaries
@@ -522,11 +522,11 @@ fn f64_signum_compat(x: f64) -> f64 {
 
 // --- Helper for Traps ---
 
-/// Helper function to create a WRT trap error.
+/// Helper function to create a Kiln trap error.
 #[inline]
-fn trap(code: TrapCode) -> WrtError {
+fn trap(code: TrapCode) -> KilnError {
     // Using specific category and code for traps
-    code.into() // Relies on the From<TrapCode> for WrtError impl
+    code.into() // Relies on the From<TrapCode> for KilnError impl
 }
 
 // --- I32 Operations ---

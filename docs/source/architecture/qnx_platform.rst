@@ -2,7 +2,7 @@
 QNX Platform Integration
 =======================
 
-This section describes the QNX Neutrino RTOS-specific platform components for the WebAssembly Runtime (WRT), including arena-based memory allocation, memory partitioning, and platform-specific optimizations.
+This section describes the QNX Neutrino RTOS-specific platform components for the WebAssembly Runtime (Kiln), including arena-based memory allocation, memory partitioning, and platform-specific optimizations.
 
 .. contents:: Table of Contents
    :local:
@@ -22,7 +22,7 @@ All components are designed to:
 - Work in no_std environments without heap allocations
 - Utilize native QNX system calls directly via FFI
 - Provide safety guarantees required for safety-critical applications
-- Integrate seamlessly with the WRT platform abstraction layer
+- Integrate seamlessly with the Kiln platform abstraction layer
 
 QNX Arena Allocator
 -------------------
@@ -483,4 +483,4 @@ Future Improvements
 Conclusion
 ----------
 
-The QNX platform implementation provides a robust foundation for running WebAssembly on QNX Neutrino RTOS. By leveraging QNX's native capabilities and integrating with WRT's safety mechanisms, it enables high-performance WebAssembly execution in safety-critical environments with strong isolation, real-time guarantees, and comprehensive security features.
+The QNX platform implementation provides a robust foundation for running WebAssembly on QNX Neutrino RTOS. By leveraging QNX's native capabilities and integrating with Kiln's safety mechanisms, it enables high-performance WebAssembly execution in safety-critical environments with strong isolation, real-time guarantees, and comprehensive security features.

@@ -6,8 +6,8 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-use crate::bounded_wrtd_infra::{
-    BoundedLogEntryVec, WrtdProvider, new_log_entry_vec
+use crate::bounded_kilnd_infra::{
+    BoundedLogEntryVec, KilndProvider, new_log_entry_vec
 };
 
 /// Configuration for no-std runtime

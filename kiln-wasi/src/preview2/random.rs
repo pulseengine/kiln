@@ -1,7 +1,7 @@
 //! WASI random interface implementation
 //!
 //! Implements the `wasi:random` interface for random number generation using
-//! WRT's platform abstractions and security patterns.
+//! Kiln's platform abstractions and security patterns.
 
 use core::any::Any;
 
@@ -138,7 +138,7 @@ fn extract_length(args: &[Value]) -> Result<usize> {
 
 /// Generate secure random bytes using platform-specific implementation
 ///
-/// Uses wrt-platform's `PlatformRandom` which provides:
+/// Uses kiln-platform's `PlatformRandom` which provides:
 /// - Linux: `/dev/urandom`
 /// - macOS: `getentropy()` system call
 /// - Windows: `BCryptGenRandom()`
@@ -148,7 +148,7 @@ fn extract_length(args: &[Value]) -> Result<usize> {
 fn generate_secure_random(len: usize) -> Result<Vec<u8>> {
     #[cfg(feature = "std")]
     {
-        use wrt_platform::random::PlatformRandom;
+        use kiln_platform::random::PlatformRandom;
 
         let mut buffer = vec![0u8; len];
         PlatformRandom::get_secure_bytes(&mut buffer)
@@ -175,7 +175,7 @@ fn generate_secure_random(len: usize) -> Result<Vec<u8>> {
 #[allow(clippy::unnecessary_wraps)]
 fn generate_pseudo_random(len: usize) -> Result<Vec<u8>> {
     // Use platform time as seed
-    use wrt_platform::time::PlatformTime;
+    use kiln_platform::time::PlatformTime;
     let seed = PlatformTime::monotonic_ns();
 
     let mut buffer = vec![0u8; len];

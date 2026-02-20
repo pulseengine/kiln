@@ -1,39 +1,39 @@
 @startuml high_level_decomposition
 !includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
 
-title Pulseengine (WRT Edition) - High-Level Component Decomposition
+title Pulseengine (Kiln Edition) - High-Level Component Decomposition
 
-Person(user, "User", "Developer using WRT")
+Person(user, "User", "Developer using Kiln")
 Person(embedded_dev, "Embedded Developer", "Safety-critical system developer")
 
-System_Boundary(wrt_system, "Pulseengine WebAssembly Runtime") {
+System_Boundary(kiln_system, "Pulseengine WebAssembly Runtime") {
     Container_Boundary(cli_layer, "CLI & Tools Layer") {
-        Component(wrtd, "wrtd", "Rust Binary", "WebAssembly runtime daemon")
-        Component(wrt_cli, "wrt", "Rust Library", "Public API facade")
+        Component(kilnd, "kilnd", "Rust Binary", "WebAssembly runtime daemon")
+        Component(kiln_cli, "kiln", "Rust Library", "Public API facade")
     }
     
     Container_Boundary(component_layer, "Component Model Layer") {
-        Component(wrt_component, "wrt-component", "Rust Library", "Component Model implementation")
-        Component(wrt_host, "wrt-host", "Rust Library", "Host bindings & callbacks")
+        Component(kiln_component, "kiln-component", "Rust Library", "Component Model implementation")
+        Component(kiln_host, "kiln-host", "Rust Library", "Host bindings & callbacks")
     }
     
     Container_Boundary(runtime_layer, "Execution Engine Layer") {
-        Component(wrt_runtime, "wrt-runtime", "Rust Library", "Core runtime engine")
-        Component(wrt_instructions, "wrt-instructions", "Rust Library", "Instruction execution")
-        Component(wrt_decoder, "wrt-decoder", "Rust Library", "WASM binary decoder")
+        Component(kiln_runtime, "kiln-runtime", "Rust Library", "Core runtime engine")
+        Component(kiln_instructions, "kiln-instructions", "Rust Library", "Instruction execution")
+        Component(kiln_decoder, "kiln-decoder", "Rust Library", "WASM binary decoder")
     }
     
     Container_Boundary(foundation_layer, "Foundation Layer") {
-        Component(wrt_foundation, "wrt-foundation", "Rust Library", "Core types & safe memory")
-        Component(wrt_error, "wrt-error", "Rust Library", "Error handling")
-        Component(wrt_format, "wrt-format", "Rust Library", "WASM format definitions")
-        Component(wrt_sync, "wrt-sync", "Rust Library", "Synchronization primitives")
+        Component(kiln_foundation, "kiln-foundation", "Rust Library", "Core types & safe memory")
+        Component(kiln_error, "kiln-error", "Rust Library", "Error handling")
+        Component(kiln_format, "kiln-format", "Rust Library", "WASM format definitions")
+        Component(kiln_sync, "kiln-sync", "Rust Library", "Synchronization primitives")
     }
     
     Container_Boundary(platform_layer, "Platform Abstraction Layer") {
-        Component(wrt_platform, "wrt-platform", "Rust Library", "OS abstraction")
-        Component(wrt_logging, "wrt-logging", "Rust Library", "Logging infrastructure")
-        Component(wrt_intercept, "wrt-intercept", "Rust Library", "Execution interception")
+        Component(kiln_platform, "kiln-platform", "Rust Library", "OS abstraction")
+        Component(kiln_logging, "kiln-logging", "Rust Library", "Logging infrastructure")
+        Component(kiln_intercept, "kiln-intercept", "Rust Library", "Execution interception")
     }
 }
 
@@ -41,29 +41,29 @@ System_Ext(wasm_module, "WebAssembly Module", "User's WASM binary")
 System_Ext(os_services, "Operating System", "Linux/macOS/QNX/Zephyr/Bare-metal")
 
 ' Relationships
-user --> wrtd : "Executes WASM via"
-embedded_dev --> wrt_cli : "Integrates via"
-wrtd --> wrt_cli : "Uses"
-wrt_cli --> wrt_component : "Orchestrates"
-wrt_cli --> wrt_runtime : "Manages"
+user --> kilnd : "Executes WASM via"
+embedded_dev --> kiln_cli : "Integrates via"
+kilnd --> kiln_cli : "Uses"
+kiln_cli --> kiln_component : "Orchestrates"
+kiln_cli --> kiln_runtime : "Manages"
 
-wrt_component --> wrt_host : "Binds host functions"
-wrt_component --> wrt_runtime : "Executes components"
-wrt_runtime --> wrt_instructions : "Executes"
-wrt_runtime --> wrt_decoder : "Loads modules"
+kiln_component --> kiln_host : "Binds host functions"
+kiln_component --> kiln_runtime : "Executes components"
+kiln_runtime --> kiln_instructions : "Executes"
+kiln_runtime --> kiln_decoder : "Loads modules"
 
-wrt_runtime --> wrt_foundation : "Uses safe memory"
-wrt_instructions --> wrt_foundation : "Memory operations"
-wrt_decoder --> wrt_format : "Parses format"
+kiln_runtime --> kiln_foundation : "Uses safe memory"
+kiln_instructions --> kiln_foundation : "Memory operations"
+kiln_decoder --> kiln_format : "Parses format"
 
-wrt_foundation --> wrt_error : "Error handling"
-wrt_foundation --> wrt_sync : "Thread safety"
+kiln_foundation --> kiln_error : "Error handling"
+kiln_foundation --> kiln_sync : "Thread safety"
 
-wrt_runtime --> wrt_platform : "Platform services"
-wrt_runtime --> wrt_logging : "Diagnostics"
-wrt_host --> wrt_intercept : "Intercepts calls"
+kiln_runtime --> kiln_platform : "Platform services"
+kiln_runtime --> kiln_logging : "Diagnostics"
+kiln_host --> kiln_intercept : "Intercepts calls"
 
-wrtd --> wasm_module : "Loads & executes"
-wrt_platform --> os_services : "Abstracts"
+kilnd --> wasm_module : "Loads & executes"
+kiln_platform --> os_services : "Abstracts"
 
 @enduml

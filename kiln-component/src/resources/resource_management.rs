@@ -25,7 +25,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use wrt_component::resource_management::{ResourceManager, ResourceType, ResourceHandle};
+//! use kiln_component::resource_management::{ResourceManager, ResourceType, ResourceHandle};
 //!
 //! // Create a resource manager
 //! let mut manager = ResourceManager::new();
@@ -49,10 +49,10 @@ use std::{boxed::Box, collections::HashMap, format, string::String, vec::Vec};
 use std::{boxed::Box, collections::BTreeMap as HashMap, format, string::String, vec::Vec};
 
 #[cfg(not(any(feature = "std", )))]
-use wrt_foundation::{BoundedString as String, BoundedVec as Vec, NoStdHashMap as HashMap};
+use kiln_foundation::{BoundedString as String, BoundedVec as Vec, NoStdHashMap as HashMap};
 
 use crate::component_instantiation::InstanceId;
-use wrt_error::{codes, Error, ErrorCategory, Result};
+use kiln_error::{codes, Error, ErrorCategory, Result};
 
 /// Maximum number of resource types
 const MAX_RESOURCE_TYPES: usize = 1024;

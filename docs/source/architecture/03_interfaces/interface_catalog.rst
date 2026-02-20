@@ -13,7 +13,7 @@ Stackless Engine Interface
 .. arch_interface:: Stackless Engine
    :id: ARCH_IF_001
    :component: ARCH_COMP_001
-   :file: wrt-runtime/src/stackless/engine.rs
+   :file: kiln-runtime/src/stackless/engine.rs
    :type: provided
    :stability: stable
 
@@ -57,7 +57,7 @@ Platform Memory Interface
 .. arch_interface:: Platform Memory
    :id: ARCH_IF_020
    :component: ARCH_COMP_002
-   :file: wrt-platform/src/memory.rs
+   :file: kiln-platform/src/memory.rs
    :type: provided
    :stability: stable
 
@@ -140,7 +140,7 @@ CFI Control Flow Operations Interface
 .. arch_interface:: CFI Control Flow Operations
    :id: ARCH_IF_101
    :component: ARCH_COMP_101
-   :file: wrt-instructions/src/cfi_control_ops.rs
+   :file: kiln-instructions/src/cfi_control_ops.rs
    :type: provided
    :stability: stable
 
@@ -188,7 +188,7 @@ Async Runtime Interface
 .. arch_interface:: Async Runtime
    :id: ARCH_IF_102
    :component: ARCH_COMP_102
-   :file: wrt-component/src/async_/async_runtime.rs
+   :file: kiln-component/src/async_/async_runtime.rs
    :type: provided
    :stability: stable
 
@@ -221,7 +221,7 @@ Threading Management Interface
 .. arch_interface:: Threading Management
    :id: ARCH_IF_103
    :component: ARCH_COMP_103
-   :file: wrt-component/src/threading/task_manager.rs
+   :file: kiln-component/src/threading/task_manager.rs
    :type: provided
    :stability: stable
 
@@ -251,7 +251,7 @@ Debug Infrastructure Interface
 .. arch_interface:: Debug Infrastructure
    :id: ARCH_IF_104
    :component: ARCH_COMP_104
-   :file: wrt-debug/src/lib.rs
+   :file: kiln-debug/src/lib.rs
    :type: provided
    :stability: stable
 
@@ -290,7 +290,7 @@ Component Instance Interface
 .. arch_interface:: Component Instance
    :id: ARCH_IF_030
    :component: ARCH_COMP_003
-   :file: wrt-component/src/component_traits.rs
+   :file: kiln-component/src/component_traits.rs
    :type: provided
    :stability: stable
 
@@ -299,10 +299,10 @@ Component Instance Interface
 .. code-block:: rust
 
    pub trait ComponentInstance {
-       fn new(runtime: Arc<dyn ComponentRuntime>) -> WrtResult<Self> where Self: Sized;
-       fn add_import(&mut self, name: String, instance: Arc<dyn ComponentInstance>) -> WrtResult<()>;
+       fn new(runtime: Arc<dyn ComponentRuntime>) -> KilnResult<Self> where Self: Sized;
+       fn add_import(&mut self, name: String, instance: Arc<dyn ComponentInstance>) -> KilnResult<()>;
        fn get_export(&self, name: &str) -> Option<Arc<dyn Any>>;
-       fn instantiate(&mut self) -> WrtResult<()>;
+       fn instantiate(&mut self) -> KilnResult<()>;
    }
 
 Host Function Interface
@@ -311,7 +311,7 @@ Host Function Interface
 .. arch_interface:: Host Function
    :id: ARCH_IF_031
    :component: ARCH_COMP_003
-   :file: wrt-component/src/component_traits.rs
+   :file: kiln-component/src/component_traits.rs
    :type: required
    :stability: stable
 
@@ -320,7 +320,7 @@ Host Function Interface
 .. code-block:: rust
 
    pub trait HostFunction: Send + Sync {
-       fn call(&self, args: &[Value]) -> WrtResult<Vec<Value>>;
+       fn call(&self, args: &[Value]) -> KilnResult<Vec<Value>>;
        fn signature(&self) -> &FuncType;
    }
 
@@ -333,7 +333,7 @@ Page Allocator Interface
 .. arch_interface:: Page Allocator
    :id: ARCH_IF_050
    :component: ARCH_COMP_005
-   :file: wrt-platform/src/memory.rs
+   :file: kiln-platform/src/memory.rs
    :type: provided
    :stability: stable
 
@@ -361,7 +361,7 @@ Synchronization Interface
 .. arch_interface:: Futex-like Operations
    :id: ARCH_IF_051
    :component: ARCH_COMP_005
-   :file: wrt-platform/src/sync.rs
+   :file: kiln-platform/src/sync.rs
    :type: provided
    :stability: stable
 
@@ -381,7 +381,7 @@ Instruction Traits
 .. arch_interface:: Pure Instruction
    :id: ARCH_IF_060
    :component: ARCH_COMP_011
-   :file: wrt-instructions/src/instruction_traits.rs
+   :file: kiln-instructions/src/instruction_traits.rs
    :type: internal
    :stability: stable
 
@@ -400,7 +400,7 @@ Verification Interface
 .. arch_interface:: Validatable
    :id: ARCH_IF_070
    :component: ARCH_COMP_002
-   :file: wrt-foundation/src/traits.rs
+   :file: kiln-foundation/src/traits.rs
    :type: internal
    :stability: stable
 

@@ -9,7 +9,7 @@ use core::{
     task::{Context, Poll, Waker},
 };
 
-use wrt_foundation::{Arc, Mutex, verification::VerificationLevel};
+use kiln_foundation::{Arc, Mutex, verification::VerificationLevel};
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::TaskId;

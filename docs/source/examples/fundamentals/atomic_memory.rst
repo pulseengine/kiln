@@ -8,7 +8,7 @@ Atomic Memory: Integrity Through Atomicity
    
    -- Every developer who's debugged concurrent code
 
-Ever had a bit flip corrupt your data between writing and checksumming? Or worried about concurrent access breaking your memory integrity checks? WRT's atomic memory operations ensure that write operations and checksum calculations happen atomically - no race conditions, no corruption!
+Ever had a bit flip corrupt your data between writing and checksumming? Or worried about concurrent access breaking your memory integrity checks? Kiln's atomic memory operations ensure that write operations and checksum calculations happen atomically - no race conditions, no corruption!
 
 .. admonition:: What You'll Learn
    :class: note
@@ -42,7 +42,7 @@ The atomic solution ensures write and checksum happen together:
    :caption: The atomic way (DO THIS!)
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        atomic_memory::{AtomicMemoryOps, AtomicMemoryExt},
        safe_memory::{SafeMemoryHandler, NoStdProvider},
        verification::VerificationLevel,
@@ -79,12 +79,12 @@ The ``AtomicMemoryOps`` type wraps a ``SafeMemoryHandler`` in a mutex, ensuring 
    :caption: How AtomicMemoryOps works
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        atomic_memory::AtomicMemoryOps,
        safe_memory::{SafeMemoryHandler, StdProvider},
        verification::VerificationLevel,
    };
-   use wrt_sync::mutex::WrtMutex;
+   use kiln_sync::mutex::WrtMutex;
    
    // What AtomicMemoryOps looks like internally
    pub struct AtomicMemoryOps<P: Provider> {
@@ -121,7 +121,7 @@ AtomicMemoryOps supports all verification levels:
    :caption: Different verification levels
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        atomic_memory::AtomicMemoryOps,
        safe_memory::{SafeMemoryHandler, NoStdProvider},
        verification::{VerificationLevel, Checksum},
@@ -188,7 +188,7 @@ Here's an example sensor data logger demonstrating atomic memory usage:
    :caption: Thread-safe sensor data logger
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        atomic_memory::{AtomicMemoryOps, AtomicMemoryExt},
        safe_memory::{SafeMemoryHandler, NoStdProvider},
        verification::VerificationLevel,
@@ -293,7 +293,7 @@ The ``AtomicMemoryExt`` trait provides convenient atomic operations:
    :caption: Using the AtomicMemoryExt trait
    :linenos:
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        atomic_memory::{AtomicMemoryOps, AtomicMemoryExt},
        safe_memory::{SafeMemoryHandler, NoStdProvider},
        verification::VerificationLevel,
@@ -424,15 +424,15 @@ Best Practices 🎯
    3. **Watch Memory Size**: Each operation locks the entire handler
    4. **Consider Alternatives**: Sometimes a simple mutex is clearer
 
-Integration with WRT Components 🧩
+Integration with Kiln Components 🧩
 ----------------------------------
 
-AtomicMemoryOps integrates seamlessly with other WRT components:
+AtomicMemoryOps integrates seamlessly with other Kiln components:
 
 .. code-block:: rust
    :caption: Complete system integration
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        atomic_memory::AtomicMemoryOps,
        bounded::{BoundedVec, BoundedString},
        safe_memory::{SafeMemoryHandler, NoStdProvider},

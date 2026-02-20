@@ -1,5 +1,5 @@
 [package]
-name = "wrt-component-fuzz"
+name = "kiln-component-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -18,9 +18,9 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-wrt-component = { path = ".." }
-wrt-format = { path = "../../wrt-format" }
-wrt-foundation = { path = "../../wrt-foundation" }
+kiln-component = { path = ".." }
+kiln-format = { path = "../../kiln-format" }
+kiln-foundation = { path = "../../kiln-foundation" }
 
 [[bin]]
 name = "fuzz_wit_parser"

@@ -20,13 +20,13 @@ The logging subsystem implements the WASI logging API and provides platform-spec
    The following sequence diagram illustrates how logging flows from a WebAssembly module through the runtime:
    
    .. uml:: ../../_static/logging_flow.puml
-      :alt: WRT Logging Flow
+      :alt: Kiln Logging Flow
       :width: 100%
    
    When a WebAssembly module calls a logging function, the following steps occur:
    
    1. WebAssembly module calls the WASI logging interface function (`log`, `logTrace`, etc.)
-   2. The WASI logging interface implementation in WRT converts the call to an engine operation
+   2. The WASI logging interface implementation in Kiln converts the call to an engine operation
    3. The StacklessEngine creates a LogOperation object with level, message, and optional component ID
    4. The operation is passed to the CallbackRegistry via handle_log()
    5. The CallbackRegistry invokes the registered log handler (if any)

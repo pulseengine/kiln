@@ -11,14 +11,14 @@ use wast::{
     WastArg, WastRet,
     core::{NanPattern, V128Pattern, WastArgCore, WastRetCore},
 };
-use wrt_foundation::values::{ExternRef, FloatBits32, FloatBits64, FuncRef, V128, Value};
+use kiln_foundation::values::{ExternRef, FloatBits32, FloatBits64, FuncRef, V128, Value};
 
-/// Convert WAST arguments to WRT values
+/// Convert WAST arguments to Kiln values
 pub fn convert_wast_args_to_values(args: &[WastArg]) -> Result<Vec<Value>> {
     args.iter().map(convert_wast_arg_to_value).collect()
 }
 
-/// Convert a single WAST argument to a WRT value
+/// Convert a single WAST argument to a Kiln value
 pub fn convert_wast_arg_to_value(arg: &WastArg) -> Result<Value> {
     match arg {
         WastArg::Core(core_arg) => convert_wast_arg_core_to_value(core_arg),
@@ -26,7 +26,7 @@ pub fn convert_wast_arg_to_value(arg: &WastArg) -> Result<Value> {
     }
 }
 
-/// Convert WAST core argument to WRT value
+/// Convert WAST core argument to Kiln value
 pub fn convert_wast_arg_core_to_value(arg: &WastArgCore) -> Result<Value> {
     match arg {
         WastArgCore::I32(x) => Ok(Value::I32(*x)),
@@ -54,12 +54,12 @@ pub fn convert_wast_arg_core_to_value(arg: &WastArgCore) -> Result<Value> {
     }
 }
 
-/// Convert WAST expected results to WRT values for comparison
+/// Convert WAST expected results to Kiln values for comparison
 pub fn convert_wast_results_to_values(results: &[WastRet]) -> Result<Vec<Value>> {
     results.iter().map(convert_wast_ret_to_value).collect()
 }
 
-/// Convert a single WAST return value to a WRT value
+/// Convert a single WAST return value to a Kiln value
 pub fn convert_wast_ret_to_value(ret: &WastRet) -> Result<Value> {
     match ret {
         WastRet::Core(core_ret) => convert_wast_ret_core_to_value(core_ret),
@@ -67,7 +67,7 @@ pub fn convert_wast_ret_to_value(ret: &WastRet) -> Result<Value> {
     }
 }
 
-/// Convert WAST core return value to WRT value
+/// Convert WAST core return value to Kiln value
 pub fn convert_wast_ret_core_to_value(ret: &WastRetCore) -> Result<Value> {
     match ret {
         WastRetCore::I32(x) => Ok(Value::I32(*x)),
@@ -329,8 +329,8 @@ mod tests {
     #[test]
     fn test_value_conversion() {
         let wast_arg = WastArg::Core(WastArgCore::I32(42));
-        let wrt_value = convert_wast_arg_to_value(&wast_arg).unwrap();
-        assert_eq!(wrt_value, Value::I32(42));
+        let kiln_value = convert_wast_arg_to_value(&wast_arg).unwrap();
+        assert_eq!(kiln_value, Value::I32(42));
     }
 
     #[test]

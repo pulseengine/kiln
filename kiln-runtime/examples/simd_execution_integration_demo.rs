@@ -10,13 +10,13 @@
 //! - Integration with execution statistics
 //! - Error handling and validation
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     values::V128,
     Value,
 };
-use wrt_instructions::simd_ops::SimdOp;
-use wrt_runtime::{
+use kiln_instructions::simd_ops::SimdOp;
+use kiln_runtime::{
     simd_execution_adapter::SimdExecutionAdapter,
     stackless::engine::StacklessEngine,
     ExecutionStats,

@@ -1,5 +1,5 @@
 @startuml deployment_architecture
-title Pulseengine (WRT Edition) - Deployment Architecture
+title Pulseengine (Kiln Edition) - Deployment Architecture
 
 skinparam node {
     BackgroundColor #E6F3FF
@@ -19,17 +19,17 @@ skinparam artifact {
 
 node "Server Environment\n(Linux/macOS)" as server {
     node "Docker Container\n(Optional)" as docker {
-        artifact "wrtd" as wrtd_server <<Rust Binary>> {
+        artifact "kilnd" as kilnd_server <<Rust Binary>> {
             note right: Full std features
         }
     }
-    artifact "wrt library" as wrt_lib_server <<Rust Library>> {
+    artifact "kiln library" as kiln_lib_server <<Rust Library>> {
         note right: Embedded in application
     }
 }
 
 node "Embedded Linux\n(Yocto/BuildRoot)" as embedded_linux {
-    artifact "wrt" as wrt_embedded_linux <<Static Library>> {
+    artifact "kiln" as kiln_embedded_linux <<Static Library>> {
         note right: no_std + alloc
     }
     component "User Application" as app_linux <<C/C++/Rust>> {
@@ -39,7 +39,7 @@ node "Embedded Linux\n(Yocto/BuildRoot)" as embedded_linux {
 
 node "QNX Neutrino\n(RTOS)" as qnx_system {
     node "QNX Partition\n(Protected)" as qnx_partition {
-        artifact "wrt" as wrt_qnx <<QNX Process>> {
+        artifact "kiln" as kiln_qnx <<QNX Process>> {
             note right: Memory partitioning
         }
         component "Safety App" as app_qnx <<C/C++>> {
@@ -50,7 +50,7 @@ node "QNX Neutrino\n(RTOS)" as qnx_system {
 
 node "Zephyr RTOS\n(MCU)" as zephyr_rtos {
     node "Zephyr Kernel Space" as zephyr_kernel {
-        artifact "wrt" as wrt_zephyr <<Zephyr Module>> {
+        artifact "kiln" as kiln_zephyr <<Zephyr Module>> {
             note right: no_std, no_alloc
         }
     }
@@ -60,7 +60,7 @@ node "Zephyr RTOS\n(MCU)" as zephyr_rtos {
 }
 
 node "Bare Metal\n(ARM Cortex-M/RISC-V)" as bare_metal {
-    artifact "wrt" as wrt_bare <<Static Library>> {
+    artifact "kiln" as kiln_bare <<Static Library>> {
         note right: no_std, fixed memory
     }
     component "Bootloader" as bootloader <<Assembly/C>> {
@@ -71,7 +71,7 @@ node "Bare Metal\n(ARM Cortex-M/RISC-V)" as bare_metal {
 ' Memory Models
 package "Memory Models" {
     component "Heap Allocator\n(std::alloc)" as heap_alloc
-    component "Custom Allocator\n(wrt-foundation)" as custom_alloc
+    component "Custom Allocator\n(kiln-foundation)" as custom_alloc
     component "Static Allocation\n(compile-time)" as static_alloc
 }
 
@@ -84,24 +84,24 @@ package "Hardware Security" {
 }
 
 ' Relationships
-wrtd_server ..> heap_alloc : "Uses"
-wrt_lib_server ..> heap_alloc : "Uses"
+kilnd_server ..> heap_alloc : "Uses"
+kiln_lib_server ..> heap_alloc : "Uses"
 
-wrt_embedded_linux ..> custom_alloc : "Uses"
-app_linux --> wrt_embedded_linux : "Links"
+kiln_embedded_linux ..> custom_alloc : "Uses"
+app_linux --> kiln_embedded_linux : "Links"
 
-wrt_qnx ..> custom_alloc : "Uses"
-wrt_qnx ..> qnx_secpol : "Protected by"
-app_qnx --> wrt_qnx : "IPC"
+kiln_qnx ..> custom_alloc : "Uses"
+kiln_qnx ..> qnx_secpol : "Protected by"
+app_qnx --> kiln_qnx : "IPC"
 
-wrt_zephyr ..> static_alloc : "Uses"
-app_zephyr --> wrt_zephyr : "Calls"
+kiln_zephyr ..> static_alloc : "Uses"
+app_zephyr --> kiln_zephyr : "Calls"
 
-wrt_bare ..> static_alloc : "Uses"
-bootloader --> wrt_bare : "Loads"
+kiln_bare ..> static_alloc : "Uses"
+bootloader --> kiln_bare : "Loads"
 
-wrt_embedded_linux ..> arm_mte : "Optional"
-wrt_lib_server ..> arm_pac : "When on ARM64"
-wrt_lib_server ..> intel_cet : "When on x86_64"
+kiln_embedded_linux ..> arm_mte : "Optional"
+kiln_lib_server ..> arm_pac : "When on ARM64"
+kiln_lib_server ..> intel_cet : "When on x86_64"
 
 @enduml

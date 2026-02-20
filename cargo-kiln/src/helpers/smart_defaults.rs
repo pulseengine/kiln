@@ -1,4 +1,4 @@
-//! Smart defaults and context detection for cargo-wrt
+//! Smart defaults and context detection for cargo-kiln
 //!
 //! Automatically detects project context and suggests appropriate
 //! default behaviors and command options.
@@ -25,10 +25,10 @@ pub struct ProjectContext {
 /// Type of project detected
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProjectType {
-    /// WRT workspace (full project)
-    WrtWorkspace,
-    /// Single WRT crate
-    WrtCrate { name: String },
+    /// Kiln workspace (full project)
+    KilnWorkspace,
+    /// Single Kiln crate
+    KilnCrate { name: String },
     /// Generic Rust workspace
     RustWorkspace,
     /// Single Rust crate
@@ -169,19 +169,19 @@ impl ContextDetector {
 
     /// Detect the type of project
     fn detect_project_type(&self) -> Result<ProjectType> {
-        // Check for WRT workspace
-        if self.workspace_root.join("wrt-foundation").exists()
-            && self.workspace_root.join("wrt-build-core").exists()
-            && self.workspace_root.join("cargo-wrt").exists()
+        // Check for Kiln workspace
+        if self.workspace_root.join("kiln-foundation").exists()
+            && self.workspace_root.join("kiln-build-core").exists()
+            && self.workspace_root.join("cargo-kiln").exists()
         {
-            return Ok(ProjectType::WrtWorkspace);
+            return Ok(ProjectType::KilnWorkspace);
         }
 
-        // Check for single WRT crate
+        // Check for single Kiln crate
         if let Ok(manifest) = fs::read_to_string(self.workspace_root.join("Cargo.toml")) {
-            if manifest.contains("wrt-") || manifest.contains("name = \"wrt") {
+            if manifest.contains("kiln-") || manifest.contains("name = \"kiln") {
                 if let Some(name) = self.extract_crate_name(&manifest) {
-                    return Ok(ProjectType::WrtCrate { name });
+                    return Ok(ProjectType::KilnCrate { name });
                 }
             }
         }
@@ -336,14 +336,14 @@ impl ContextDetector {
 
         // Project setup recommendations
         match project_type {
-            ProjectType::WrtWorkspace => {
+            ProjectType::KilnWorkspace => {
                 if !features.has_safety_verification {
                     recommendations.push(Recommendation {
                         category: RecommendationCategory::Setup,
                         title: "Initialize Safety Verification".to_string(),
                         description: "Set up safety verification framework for ASIL compliance"
                             .to_string(),
-                        command: Some("cargo-wrt init --wrt-requirements".to_string()),
+                        command: Some("cargo-kiln init --kiln-requirements".to_string()),
                         priority: RecommendationPriority::High,
                     });
                 }
@@ -352,9 +352,9 @@ impl ContextDetector {
                 recommendations.push(Recommendation {
                     category: RecommendationCategory::Setup,
                     title: "Project Setup".to_string(),
-                    description: "Initialize a new WRT project or navigate to existing project"
+                    description: "Initialize a new Kiln project or navigate to existing project"
                         .to_string(),
-                    command: Some("cargo-wrt init".to_string()),
+                    command: Some("cargo-kiln init".to_string()),
                     priority: RecommendationPriority::Critical,
                 });
             },
@@ -367,7 +367,7 @@ impl ContextDetector {
                 category: RecommendationCategory::Test,
                 title: "Add Tests".to_string(),
                 description: "Create test suite to ensure code quality and reliability".to_string(),
-                command: Some("cargo-wrt test --create-template".to_string()),
+                command: Some("cargo-kiln test --create-template".to_string()),
                 priority: RecommendationPriority::Medium,
             });
         }
@@ -378,7 +378,7 @@ impl ContextDetector {
                 category: RecommendationCategory::Documentation,
                 title: "Generate Documentation".to_string(),
                 description: "Create comprehensive API documentation".to_string(),
-                command: Some("cargo-wrt docs --open".to_string()),
+                command: Some("cargo-kiln docs --open".to_string()),
                 priority: RecommendationPriority::Low,
             });
         }
@@ -389,7 +389,7 @@ impl ContextDetector {
                 category: RecommendationCategory::Maintenance,
                 title: "Set Up Continuous Integration".to_string(),
                 description: "Add automated testing and verification workflows".to_string(),
-                command: Some("cargo-wrt setup --ci".to_string()),
+                command: Some("cargo-kiln setup --ci".to_string()),
                 priority: RecommendationPriority::Medium,
             });
         }
@@ -397,7 +397,7 @@ impl ContextDetector {
         // Performance recommendations
         if matches!(
             project_type,
-            ProjectType::WrtWorkspace | ProjectType::WrtCrate { .. }
+            ProjectType::KilnWorkspace | ProjectType::KilnCrate { .. }
         ) {
             if !features.has_benchmarks {
                 recommendations.push(Recommendation {
@@ -405,7 +405,7 @@ impl ContextDetector {
                     title: "Add Benchmarks".to_string(),
                     description: "Set up performance benchmarks to track runtime performance"
                         .to_string(),
-                    command: Some("cargo-wrt benchmark --init".to_string()),
+                    command: Some("cargo-kiln benchmark --init".to_string()),
                     priority: RecommendationPriority::Suggestion,
                 });
             }
@@ -446,8 +446,8 @@ impl SmartDefaults {
 
         // Default based on project type
         match &self.context.project_type {
-            ProjectType::WrtWorkspace => Some("build".to_string()),
-            ProjectType::WrtCrate { .. } => Some("test".to_string()),
+            ProjectType::KilnWorkspace => Some("build".to_string()),
+            ProjectType::KilnCrate { .. } => Some("test".to_string()),
             ProjectType::Unknown => Some("help".to_string()),
             _ => Some("build".to_string()),
         }
@@ -472,6 +472,6 @@ impl SmartDefaults {
             }
         }
 
-        matches!(self.context.project_type, ProjectType::WrtWorkspace)
+        matches!(self.context.project_type, ProjectType::KilnWorkspace)
     }
 }

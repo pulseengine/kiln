@@ -3,8 +3,8 @@
 //! Provides single-pass WASM validation with immediate limit checking against
 //! platform capabilities.
 
-use wrt_error::{Error, ErrorCategory, codes};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, codes};
+use kiln_foundation::{
     NoStdProvider,
     bounded::BoundedVec,
     traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
@@ -158,11 +158,11 @@ impl ToBytes for Section {
         }
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write section discriminant
         let discriminant = match self {
             Section::Custom => 0u8,
@@ -200,10 +200,10 @@ impl ToBytes for Section {
 }
 
 impl FromBytes for Section {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = reader.read_u8()?;
         Ok(match discriminant {
             0 => Section::Custom,
@@ -372,10 +372,10 @@ impl StreamingWasmValidator {
     fn parse_sections(
         &self,
         wasm_bytes: &[u8],
-    ) -> Result<BoundedVec<Section, 32, wrt_foundation::NoStdProvider<2048>>, Error> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+    ) -> Result<BoundedVec<Section, 32, kiln_foundation::NoStdProvider<2048>>, Error> {
+        let provider = kiln_foundation::safe_managed_alloc!(
             2048,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
         let mut sections = BoundedVec::new(provider)
             .map_err(|_| Error::runtime_execution_error("Failed to create section vector"))?;

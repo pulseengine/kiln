@@ -1,32 +1,32 @@
 [workspace]
 members = [
-    "wrtd",
-    "wrt-sync",
-    "wrt-error",
-    "wrt-format",
-    "wrt-foundation",
-    "wrt-decoder",
-    "wrt-debug",
-    "wrt-component",
-    "wrt-math",
-    "wrt-host",
-    "wrt-logging",
-    "wrt-runtime",
-    "wrt-instructions",
-    "wrt-intercept",
-    "wrt-platform",
-    "wrt-panic",
-    "wrt-build-core",
-    "cargo-wrt"]
+    "kilnd",
+    "kiln-sync",
+    "kiln-error",
+    "kiln-format",
+    "kiln-foundation",
+    "kiln-decoder",
+    "kiln-debug",
+    "kiln-component",
+    "kiln-math",
+    "kiln-host",
+    "kiln-logging",
+    "kiln-runtime",
+    "kiln-instructions",
+    "kiln-intercept",
+    "kiln-platform",
+    "kiln-panic",
+    "kiln-build-core",
+    "cargo-kiln"]
 exclude = ["examples/wasi-nn/inference_module"]
 resolver = "2"  # Use edition 2021 resolver
 
 [workspace.package]
-authors = ["The WRT Project Developers"]
+authors = ["The Kiln Project Developers"]
 edition = "2024"
 rust-version = "1.85.0"
 license = "MIT"
-repository = "https://github.com/pulseengine/wrt" # Updated repository URL
+repository = "https://github.com/pulseengine/kiln"
 version = "0.2.0" # Updated to 0.2.0 for consistency
 
 
@@ -35,24 +35,22 @@ anyhow = "1.0"
 wit-bindgen = "0.41.0"
 
 # Internal crate versions
-wrt-error = { path = "wrt-error", version = "0.2.0", default-features = false }
-wrt-error-ng = { path = "wrt-error-ng", version = "0.2.0", default-features = false }
-wrt-sync = { path = "wrt-sync", version = "0.2.0", default-features = false }
-wrt-format = { path = "wrt-format", version = "0.2.0", default-features = false }
-wrt-foundation = { path = "wrt-foundation", version = "0.2.0", default-features = false }
-wrt-decoder = { path = "wrt-decoder", version = "0.2.0", default-features = false, features = ["std"] }
-wrt-parser = { path = "wrt-parser", version = "0.2.0", default-features = false }
-wrt-debug = { path = "wrt-debug", version = "0.2.0", default-features = false }
-wrt-runtime = { path = "wrt-runtime", version = "0.2.0", default-features = false }
-wrt-logging = { path = "wrt-logging", version = "0.2.0", default-features = false }
-wrt-instructions = { path = "wrt-instructions", version = "0.2.0", default-features = false }
-wrt-component = { path = "wrt-component", version = "0.2.0", default-features = false }
-wrt-host = { path = "wrt-host", version = "0.2.0", default-features = false }
-wrt-intercept = { path = "wrt-intercept", version = "0.2.0", default-features = false }
-wrt-math = { path = "wrt-math", version = "0.2.0", default-features = false }
-wrt-platform = { path = "wrt-platform", version = "0.2.0", default-features = false }
-wrt-panic = { path = "wrt-panic", version = "0.2.0", default-features = false }
-wrt-wasi = { path = "wrt-wasi", version = "0.2.0", default-features = false }
+kiln-error = { path = "kiln-error", version = "0.2.0", default-features = false }
+kiln-sync = { path = "kiln-sync", version = "0.2.0", default-features = false }
+kiln-format = { path = "kiln-format", version = "0.2.0", default-features = false }
+kiln-foundation = { path = "kiln-foundation", version = "0.2.0", default-features = false }
+kiln-decoder = { path = "kiln-decoder", version = "0.2.0", default-features = false, features = ["std"] }
+kiln-debug = { path = "kiln-debug", version = "0.2.0", default-features = false }
+kiln-runtime = { path = "kiln-runtime", version = "0.2.0", default-features = false }
+kiln-logging = { path = "kiln-logging", version = "0.2.0", default-features = false }
+kiln-instructions = { path = "kiln-instructions", version = "0.2.0", default-features = false }
+kiln-component = { path = "kiln-component", version = "0.2.0", default-features = false }
+kiln-host = { path = "kiln-host", version = "0.2.0", default-features = false }
+kiln-intercept = { path = "kiln-intercept", version = "0.2.0", default-features = false }
+kiln-math = { path = "kiln-math", version = "0.2.0", default-features = false }
+kiln-platform = { path = "kiln-platform", version = "0.2.0", default-features = false }
+kiln-panic = { path = "kiln-panic", version = "0.2.0", default-features = false }
+kiln-wasi = { path = "kiln-wasi", version = "0.2.0", default-features = false }
 
 # Note: Safety level presets should be defined in individual crate Cargo.toml files
 # as workspace.features is not supported by Cargo
@@ -260,7 +258,7 @@ parallel = 4
 
 # Memory safety verification suite
 [[workspace.metadata.kani.package]]
-name = "wrt-foundation"
+name = "kiln-foundation"
 verification-enabled = true
 harnesses = [
     "verify_bounded_collections_memory_safety",
@@ -273,7 +271,7 @@ harnesses = [
 
 # Concurrency safety verification suite  
 [[workspace.metadata.kani.package]]
-name = "wrt-sync"
+name = "kiln-sync"
 verification-enabled = true
 harnesses = [
     "verify_mutex_no_data_races",
@@ -283,7 +281,7 @@ harnesses = [
 
 # Type safety verification suite
 [[workspace.metadata.kani.package]]
-name = "wrt-component"
+name = "kiln-component"
 verification-enabled = true
 harnesses = [
     "verify_component_type_safety",
@@ -293,7 +291,7 @@ harnesses = [
 
 # Error handling verification
 [[workspace.metadata.kani.package]]
-name = "wrt-error"
+name = "kiln-error"
 verification-enabled = true
 harnesses = [
     "verify_error_creation_safety",
@@ -302,7 +300,7 @@ harnesses = [
 
 # Runtime verification suite
 [[workspace.metadata.kani.package]]
-name = "wrt-runtime"
+name = "kiln-runtime"
 verification-enabled = true
 harnesses = [
     "verify_execution_stack_bounds",
@@ -312,7 +310,7 @@ harnesses = [
 
 # Platform abstraction verification
 [[workspace.metadata.kani.package]]
-name = "wrt-platform"
+name = "kiln-platform"
 verification-enabled = true
 harnesses = [
     "verify_platform_memory_operations",

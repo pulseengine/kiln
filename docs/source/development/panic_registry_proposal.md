@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document proposes an enhanced approach to tracking panics in the WRT codebase by:
+This document proposes an enhanced approach to tracking panics in the Kiln codebase by:
 
 1. Maintaining the existing CSV-based panic registry for easy reading and editing
 2. Adding a new RST-based representation using sphinx-needs for qualification documentation
@@ -12,18 +12,18 @@ This document proposes an enhanced approach to tracking panics in the WRT codeba
 
 ### 1. Enhanced `update_panic_registry.rs`
 
-The planned `cargo-wrt update-panic-registry` command will be extended to:
+The planned `cargo-kiln update-panic-registry` command will be extended to:
 
 - Continue to generate the CSV file as before
 - Additionally generate an RST file with sphinx-needs directives
 - Parse safety impact levels and categorize them (LOW/MEDIUM/HIGH)
-- Automatically create WRTQ-XXX tracking IDs for entries without them
+- Automatically create KILNQ-XXX tracking IDs for entries without them
 
 ### 2. sphinx-needs Configuration
 
 The `docs/source/conf.py` file has been updated with:
 
-- A new `panic` directive type with `WRTQ-` prefix
+- A new `panic` directive type with `KILNQ-` prefix
 - Additional option specs for panic-specific fields (safety_impact, status, handling_strategy)
 - Tags for filtering panic entries by safety impact level (low, medium, high)
 - A custom template for displaying panic entries
@@ -43,7 +43,7 @@ The `check_panics` command has been enhanced to:
 - Check for undocumented panics as before
 - Additionally validate that panic documentation includes required fields:
   - Safety impact: `LOW/MEDIUM/HIGH` - Brief explanation
-  - Tracking: `WRTQ-XXX` (qualification tracking ID)
+  - Tracking: `KILNQ-XXX` (qualification tracking ID)
 - Generate appropriate documentation templates when run with `--fix`
 
 ## Benefits
@@ -54,15 +54,15 @@ This approach provides several advantages:
 2. **Integration with Qualification**: Enables cross-referencing panic points in qualification documentation
 3. **Automated Validation**: Ensures consistent documentation of safety impact and tracking IDs
 4. **Improved Reporting**: Enables filtering and searching panic entries by various attributes
-5. **Traceability**: Links panic points to qualification requirements through the WRTQ-XXX IDs
+5. **Traceability**: Links panic points to qualification requirements through the KilnQ-XXX IDs
 
 ## Usage
 
 For developers:
 
 1. Document panics in Rust code following the established format
-2. Run `cargo-wrt check-panics --fix` to add templates for undocumented panics (planned)
-3. Run `cargo-wrt update-panic-registry` to update both CSV and RST files (planned)
+2. Run `cargo-kiln check-panics --fix` to add templates for undocumented panics (planned)
+3. Run `cargo-kiln update-panic-registry` to update both CSV and RST files (planned)
 
 For documentation readers:
 
@@ -78,7 +78,7 @@ For documentation readers:
 Panic Registry
 ==============
 
-This document contains all documented panic conditions in the WRT codebase.
+This document contains all documented panic conditions in the Kiln codebase.
 Each panic is tracked as a qualification requirement using sphinx-needs.
 
 .. contents:: Table of Contents
@@ -106,12 +106,12 @@ Panic Details
 ------------
 
 .. qual:: f32_nearest
-   :id: WRTQ-0001
+   :id: KILNQ-0001
    :status: Todo
    :implementation: 
    :tags: panic, medium
 
-   **File:** wrt/src/execution.rs
+   **File:** kiln/src/execution.rs
    **Line:** 389
    **Function:** f32_nearest
    **Safety Impact:** MEDIUM - Incorrect numerical results
@@ -126,4 +126,4 @@ Panic Details
 2. Update qualification documentation to reference panic points using sphinx-needs
 3. Begin filling in missing safety impact assessments and tracking IDs
 
-This implementation enables the WRT project to maintain better traceability between panic points and qualification requirements, while keeping the existing CSV format for ease of maintenance. 
+This implementation enables the Kiln project to maintain better traceability between panic points and qualification requirements, while keeping the existing CSV format for ease of maintenance. 

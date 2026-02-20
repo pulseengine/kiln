@@ -4,18 +4,18 @@
 //! into runtime-specific memory provider configurations, replacing all
 //! hardcoded memory sizes with platform-aware dynamic sizing.
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
 };
 #[cfg(any(feature = "std", feature = "alloc"))]
-use wrt_foundation::capabilities::{
+use kiln_foundation::capabilities::{
     factory::CapabilityGuardedProvider,
     MemoryCapabilityContext,
     MemoryFactory,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     capabilities::CapabilityAwareProvider,
     capability_context,
@@ -155,7 +155,7 @@ pub fn runtime_memory_config() -> &'static RuntimeMemoryConfig {
 
 /// Platform-aware type aliases that replace hardcoded sizes
 pub mod platform_types {
-    use wrt_foundation::{
+    use kiln_foundation::{
         bounded::*,
         safe_memory::NoStdProvider,
     };
@@ -166,9 +166,9 @@ pub mod platform_types {
     pub fn create_bounded_string() -> Result<BoundedString<512>> {
         let config = runtime_memory_config();
         // Use config-defined size, but macro requires compile-time constant
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Runtime
+            kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
 
         // Use from_str_truncate to create an empty string
@@ -184,15 +184,15 @@ pub mod platform_types {
             + core::fmt::Debug
             + PartialEq
             + Eq
-            + wrt_foundation::traits::Checksummable
-            + wrt_foundation::traits::ToBytes
-            + wrt_foundation::traits::FromBytes,
+            + kiln_foundation::traits::Checksummable
+            + kiln_foundation::traits::ToBytes
+            + kiln_foundation::traits::FromBytes,
     {
         let config = runtime_memory_config();
         // Use config-defined size, but macro requires compile-time constant
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             2048,
-            wrt_foundation::budget_aware_provider::CrateId::Runtime
+            kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
 
         // Create a new bounded vector with the provider
@@ -338,7 +338,7 @@ pub struct RuntimeMemoryStats {
 
 #[cfg(test)]
 mod tests {
-    use wrt_foundation::memory_init::MemoryInitializer;
+    use kiln_foundation::memory_init::MemoryInitializer;
 
     use super::*;
 

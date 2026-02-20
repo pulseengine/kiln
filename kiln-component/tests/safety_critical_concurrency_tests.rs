@@ -20,7 +20,7 @@ use std::sync::{Arc, Barrier, Mutex, RwLock};
 #[cfg(feature = "std")]
 use std::thread;
 
-use wrt_component::{
+use kiln_component::{
     bounded_component_infra::*,
     resource_management::ResourceTable,
     resources::{
@@ -28,13 +28,13 @@ use wrt_component::{
         resource_lifecycle::{Resource, ResourceHandle, ResourceState, ResourceType},
     },
 };
-use wrt_foundation::{
-    WrtError, budget_aware_provider::CrateId, collections::StaticVec as BoundedVec, managed_alloc,
+use kiln_foundation::{
+    KilnError, budget_aware_provider::CrateId, collections::StaticVec as BoundedVec, managed_alloc,
 };
 #[cfg(not(feature = "std"))]
-use wrt_platform::threading::{JoinHandle, spawn_bounded};
+use kiln_platform::threading::{JoinHandle, spawn_bounded};
 #[cfg(not(feature = "std"))]
-use wrt_sync::{Mutex, RwLock};
+use kiln_sync::{Mutex, RwLock};
 
 #[cfg(test)]
 mod concurrency_tests {
@@ -138,7 +138,7 @@ mod concurrency_tests {
 
                     match vec.try_push(value as u32) {
                         Ok(_) => successful_pushes += 1,
-                        Err(WrtError::CapacityExceeded) => {
+                        Err(KilnError::CapacityExceeded) => {
                             // Expected when near capacity
                         },
                         Err(e) => panic!("Unexpected error: {:?}", e),
@@ -216,7 +216,7 @@ mod concurrency_tests {
                         let mut map = map_clone.write().unwrap();
                         match map.try_insert(key_num, key_num) {
                             Ok(_) => successful_ops += 1,
-                            Err(WrtError::CapacityExceeded) => {
+                            Err(KilnError::CapacityExceeded) => {
                                 // Expected near capacity
                             },
                             Err(e) => panic!("Unexpected error: {:?}", e),
@@ -250,7 +250,7 @@ mod concurrency_tests {
     #[cfg(feature = "std")]
     #[test]
     fn test_resource_lifecycle_concurrent() {
-        use wrt_component::resources::resource_lifecycle::{
+        use kiln_component::resources::resource_lifecycle::{
             ResourceLifecycleManager, ResourceMetadata,
         };
 

@@ -2,7 +2,7 @@
 Workspace Improvements
 =====================
 
-This section documents recent improvements and ongoing efforts to enhance the WRT workspace structure and development experience.
+This section documents recent improvements and ongoing efforts to enhance the Kiln workspace structure and development experience.
 
 .. contents:: Table of Contents
    :local:
@@ -11,7 +11,7 @@ This section documents recent improvements and ongoing efforts to enhance the WR
 Recent Improvements Summary
 ---------------------------
 
-The WRT codebase has undergone significant improvements across multiple areas:
+The Kiln codebase has undergone significant improvements across multiple areas:
 
 Dependency Updates
 ~~~~~~~~~~~~~~~~~~
@@ -118,22 +118,22 @@ The workspace has been reorganized for better modularity:
 .. code-block:: text
 
     wrt2/
-    ├── wrt/                 # Main runtime
-    ├── wrt-platform/        # Platform abstraction
-    ├── wrt-foundation/      # Core types and traits
-    ├── wrt-error/          # Error handling
-    ├── wrt-sync/           # Synchronization primitives
-    ├── wrt-format/         # Binary format handling
-    ├── wrt-decoder/        # WASM decoding
-    ├── wrt-instructions/   # Instruction execution
-    ├── wrt-runtime/        # Execution engine
-    ├── wrt-component/      # Component model
-    ├── wrt-host/          # Host interface
-    ├── wrt-intercept/     # Interception layer
-    ├── wrt-logging/       # Logging infrastructure
-    ├── wrt-math/          # Math operations
-    ├── wrt-debug/         # Debug support
-    └── wrt-test-registry/ # Test infrastructure
+    ├── kiln/                 # Main runtime
+    ├── kiln-platform/        # Platform abstraction
+    ├── kiln-foundation/      # Core types and traits
+    ├── kiln-error/          # Error handling
+    ├── kiln-sync/           # Synchronization primitives
+    ├── kiln-format/         # Binary format handling
+    ├── kiln-decoder/        # WASM decoding
+    ├── kiln-instructions/   # Instruction execution
+    ├── kiln-runtime/        # Execution engine
+    ├── kiln-component/      # Component model
+    ├── kiln-host/          # Host interface
+    ├── kiln-intercept/     # Interception layer
+    ├── kiln-logging/       # Logging infrastructure
+    ├── kiln-math/          # Math operations
+    ├── kiln-debug/         # Debug support
+    └── kiln-test-registry/ # Test infrastructure
 
 Workspace Dependencies
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -141,7 +141,7 @@ Workspace Dependencies
 Centralized dependency management in root ``Cargo.toml``::
 
     [workspace]
-    members = ["wrt", "wrt-*", "xtask"]
+    members = ["kiln", "kiln-*", "xtask"]
     resolver = "2"
 
     [workspace.dependencies]
@@ -198,13 +198,13 @@ Implementation Requirements
 - No_std environments
 - Custom allocators
 
-WRT Reorganization Plan
+Kiln Reorganization Plan
 -----------------------
 
 Long-term Vision
 ~~~~~~~~~~~~~~~~
 
-The WRT reorganization aims to:
+The Kiln reorganization aims to:
 
 1. **Modularize** the codebase for better maintainability
 2. **Standardize** APIs across all components

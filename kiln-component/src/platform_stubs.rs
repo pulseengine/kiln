@@ -42,7 +42,7 @@ impl Default for ComprehensivePlatformLimits {
 pub trait ComprehensiveLimitProvider: Send + Sync {
     fn discover_limits(
         &self,
-    ) -> core::result::Result<ComprehensivePlatformLimits, wrt_error::Error>;
+    ) -> core::result::Result<ComprehensivePlatformLimits, kiln_error::Error>;
     fn platform_id(&self) -> PlatformId;
 }
 
@@ -51,7 +51,7 @@ pub struct DefaultLimitProvider;
 impl ComprehensiveLimitProvider for DefaultLimitProvider {
     fn discover_limits(
         &self,
-    ) -> core::result::Result<ComprehensivePlatformLimits, wrt_error::Error> {
+    ) -> core::result::Result<ComprehensivePlatformLimits, kiln_error::Error> {
         Ok(ComprehensivePlatformLimits::default())
     }
 

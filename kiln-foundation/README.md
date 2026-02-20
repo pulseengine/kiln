@@ -23,9 +23,9 @@ This crate was previously named `wrt-foundation`. See [WRT_FOUNDATION_MIGRATION.
 ### Safe Memory Operations
 
 ```rust
-use wrt_foundation::{safe_memory::SafeSlice, WrtResult};
+use wrt_foundation::{safe_memory::SafeSlice, KilnResult};
 
-fn safe_memory_example(buffer: &[u8]) -> WrtResult<u32> {
+fn safe_memory_example(buffer: &[u8]) -> KilnResult<u32> {
     // Create a safe view over the buffer with bounds checking
     let safe_buffer = SafeSlice::new(buffer);
     

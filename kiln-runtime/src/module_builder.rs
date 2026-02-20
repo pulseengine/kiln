@@ -1,11 +1,11 @@
 //! Module builder for WebAssembly runtime
 //!
 //! This module provides an implementation of the RuntimeModuleBuilder trait
-//! from wrt-decoder, allowing the conversion of decoder modules to runtime
+//! from kiln-decoder, allowing the conversion of decoder modules to runtime
 //! modules.
 
 // Decoder imports are optional during development
-// use wrt_decoder::{module::CodeSection,
+// use kiln_decoder::{module::CodeSection,
 // runtime_adapter::RuntimeModuleBuilder}; alloc is imported in lib.rs with
 // proper feature gates
 
@@ -19,32 +19,32 @@ use std::format;
 #[cfg(feature = "std")]
 use alloc::vec::Vec;
 
-use wrt_format::{
-    DataSegment as WrtDataSegment,
-    ElementSegment as WrtElementSegment,
+use kiln_format::{
+    DataSegment as KilnDataSegment,
+    ElementSegment as KilnElementSegment,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     types::{
-        CustomSection as WrtCustomSection,
+        CustomSection as KilnCustomSection,
         FuncType,
-        GlobalType as WrtGlobalType,
-        Limits as WrtLimits,
-        MemoryType as WrtMemoryType,
-        TableType as WrtTableType,
-        ValueType as WrtValueType,
+        GlobalType as KilnGlobalType,
+        Limits as KilnLimits,
+        MemoryType as KilnMemoryType,
+        TableType as KilnTableType,
+        ValueType as KilnValueType,
     },
-    values::Value as WrtValue,
+    values::Value as KilnValue,
 };
 
 // Add placeholder aliases for missing types
 use crate::module::{
-    Export as WrtExport,
+    Export as KilnExport,
     Function,
-    Import as WrtImport,
+    Import as KilnImport,
     LocalEntry,
-    WrtExpr,
+    KilnExpr,
 };
 use crate::{
     bounded_runtime_infra::create_runtime_provider,
@@ -58,7 +58,7 @@ use crate::{
 type String = alloc::string::String;
 #[cfg(not(feature = "std"))]
 type String =
-    wrt_foundation::bounded::BoundedString<256>;
+    kiln_foundation::bounded::BoundedString<256>;
 
 /// Trait for building WebAssembly runtime modules from decoder output.
 pub trait RuntimeModuleBuilder {
@@ -76,7 +76,7 @@ pub trait RuntimeModuleBuilder {
     /// Adds a function type to the module (alias for add_type).
     fn add_function_type(&mut self, func_type: FuncType) -> Result<u32>;
     /// Adds an import to the module.
-    fn add_import(&mut self, import: WrtImport) -> Result<u32>;
+    fn add_import(&mut self, import: KilnImport) -> Result<u32>;
     /// Adds a function declaration to the module.
     fn add_function(&mut self, type_idx: u32) -> Result<u32>;
     /// Adds a function body with bytecode to the module.
@@ -84,28 +84,28 @@ pub trait RuntimeModuleBuilder {
         &mut self,
         func_idx: u32,
         type_idx: u32,
-        body: wrt_foundation::bounded::BoundedVec<
+        body: kiln_foundation::bounded::BoundedVec<
             u8,
             4096,
             crate::bounded_runtime_infra::RuntimeProvider,
         >,
     ) -> Result<()>;
     /// Adds a memory declaration to the module.
-    fn add_memory(&mut self, memory_type: WrtMemoryType) -> Result<u32>;
+    fn add_memory(&mut self, memory_type: KilnMemoryType) -> Result<u32>;
     /// Adds a table declaration to the module.
-    fn add_table(&mut self, table_type: WrtTableType) -> Result<u32>;
+    fn add_table(&mut self, table_type: KilnTableType) -> Result<u32>;
     /// Adds a global variable to the module.
-    fn add_global(&mut self, global_type: WrtGlobalType) -> Result<u32>;
+    fn add_global(&mut self, global_type: KilnGlobalType) -> Result<u32>;
     /// Adds an export to the module.
-    fn add_export(&mut self, export: WrtExport) -> Result<()>;
+    fn add_export(&mut self, export: KilnExport) -> Result<()>;
     /// Adds an element segment to the module.
-    fn add_element(&mut self, element: WrtElementSegment) -> Result<u32>;
+    fn add_element(&mut self, element: KilnElementSegment) -> Result<u32>;
     /// Adds a data segment to the module.
-    fn add_data(&mut self, data: WrtDataSegment) -> Result<u32>;
+    fn add_data(&mut self, data: KilnDataSegment) -> Result<u32>;
     /// Adds a custom section to the module.
     fn add_custom_section(
         &mut self,
-        section: WrtCustomSection<crate::bounded_runtime_infra::RuntimeProvider>,
+        section: KilnCustomSection<crate::bounded_runtime_infra::RuntimeProvider>,
     ) -> Result<()>;
     /// Builds and returns the completed module.
     fn build(self) -> Result<Self::Module>;
@@ -130,17 +130,17 @@ impl RuntimeModuleBuilder for ModuleBuilder {
         #[cfg(feature = "std")]
         let module = Module {
             types: Vec::new(),
-            imports: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create imports"),
+            imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create imports"),
             import_order: Vec::new(),
             functions: Vec::new(),
             tables: Vec::new(),
             memories: Vec::new(),
-            globals: wrt_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create globals"),
+            globals: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create globals"),
             elements: Vec::new(),
             data: Vec::new(),
             start: None,
-            custom_sections: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create custom_sections"),
-            exports: wrt_foundation::direct_map::DirectMap::new(),
+            custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create custom_sections"),
+            exports: kiln_foundation::direct_map::DirectMap::new(),
             name: None,
             binary: None,
             validated: false,
@@ -152,17 +152,17 @@ impl RuntimeModuleBuilder for ModuleBuilder {
         #[cfg(not(feature = "std"))]
         let module = Module {
             types: Vec::new(),
-            imports: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create imports"),
-            import_order: wrt_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create import_order"),
+            imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create imports"),
+            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create import_order"),
             functions: Vec::new(),
-            tables: wrt_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create tables"),
+            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create tables"),
             memories: Vec::new(),
-            globals: wrt_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create globals"),
-            elements: wrt_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create elements"),
-            data: wrt_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create data"),
+            globals: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create globals"),
+            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create elements"),
+            data: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create data"),
             start: None,
-            custom_sections: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create custom_sections"),
-            exports: wrt_foundation::direct_map::DirectMap::new(),
+            custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create custom_sections"),
+            exports: kiln_foundation::direct_map::DirectMap::new(),
             name: None,
             binary: None,
             validated: false,
@@ -186,7 +186,7 @@ impl RuntimeModuleBuilder for ModuleBuilder {
         self.add_function_type(func_type)
     }
 
-    fn add_import(&mut self, _import: WrtImport) -> Result<u32> {
+    fn add_import(&mut self, _import: KilnImport) -> Result<u32> {
         // Import handling not implemented
         self.imported_func_count += 1;
         Ok(self.imported_func_count - 1)
@@ -197,24 +197,24 @@ impl RuntimeModuleBuilder for ModuleBuilder {
         Ok(0)
     }
 
-    fn add_export(&mut self, _export: WrtExport) -> Result<()> {
+    fn add_export(&mut self, _export: KilnExport) -> Result<()> {
         // Export handling not implemented
         Ok(())
     }
 
-    fn add_element(&mut self, _element: WrtElementSegment) -> Result<u32> {
+    fn add_element(&mut self, _element: KilnElementSegment) -> Result<u32> {
         // Element segment handling not implemented
         Ok(0)
     }
 
-    fn add_data(&mut self, _data: WrtDataSegment) -> Result<u32> {
+    fn add_data(&mut self, _data: KilnDataSegment) -> Result<u32> {
         // Data segment handling not implemented
         Ok(0)
     }
 
     fn add_custom_section(
         &mut self,
-        _section: WrtCustomSection<crate::bounded_runtime_infra::RuntimeProvider>,
+        _section: KilnCustomSection<crate::bounded_runtime_infra::RuntimeProvider>,
     ) -> Result<()> {
         // Custom section handling not implemented
         Ok(())
@@ -229,7 +229,7 @@ impl RuntimeModuleBuilder for ModuleBuilder {
         &mut self,
         func_idx: u32,
         type_idx: u32,
-        body: wrt_foundation::bounded::BoundedVec<
+        body: kiln_foundation::bounded::BoundedVec<
             u8,
             4096,
             crate::bounded_runtime_infra::RuntimeProvider,
@@ -239,7 +239,7 @@ impl RuntimeModuleBuilder for ModuleBuilder {
             instruction_parser::parse_instructions,
             module::{
                 Function,
-                WrtExpr,
+                KilnExpr,
             },
         };
 
@@ -253,17 +253,17 @@ impl RuntimeModuleBuilder for ModuleBuilder {
         #[cfg(not(feature = "std"))]
         let instructions = {
             let provider1 = create_runtime_provider()?;
-            wrt_foundation::bounded::BoundedVec::new(provider1)?
+            kiln_foundation::bounded::BoundedVec::new(provider1)?
         };
 
         let provider2 = create_runtime_provider()?;
-        let locals = wrt_foundation::bounded::BoundedVec::new(provider2)?;
+        let locals = kiln_foundation::bounded::BoundedVec::new(provider2)?;
 
         // Create the function with proper types
         let function = Function {
             type_idx,
             locals,
-            body: WrtExpr { instructions },
+            body: KilnExpr { instructions },
         };
 
         // Add to module's functions
@@ -273,17 +273,17 @@ impl RuntimeModuleBuilder for ModuleBuilder {
         Ok(())
     }
 
-    fn add_memory(&mut self, _memory_type: WrtMemoryType) -> Result<u32> {
+    fn add_memory(&mut self, _memory_type: KilnMemoryType) -> Result<u32> {
         // Memory addition not implemented
         Ok(0)
     }
 
-    fn add_table(&mut self, _table_type: WrtTableType) -> Result<u32> {
+    fn add_table(&mut self, _table_type: KilnTableType) -> Result<u32> {
         // Table addition not implemented
         Ok(0)
     }
 
-    fn add_global(&mut self, _global_type: WrtGlobalType) -> Result<u32> {
+    fn add_global(&mut self, _global_type: KilnGlobalType) -> Result<u32> {
         // Global addition not implemented
         Ok(0)
     }
@@ -300,13 +300,13 @@ impl RuntimeModuleBuilder for ModuleBuilder {
 fn parse_locals_from_body(
     bytecode: &[u8],
 ) -> Result<
-    wrt_foundation::bounded::BoundedVec<
-        wrt_foundation::types::LocalEntry,
+    kiln_foundation::bounded::BoundedVec<
+        kiln_foundation::types::LocalEntry,
         64,
         crate::bounded_runtime_infra::RuntimeProvider,
     >,
 > {
-    use wrt_foundation::{
+    use kiln_foundation::{
         bounded::BoundedVec,
         types::LocalEntry,
     };
@@ -344,10 +344,10 @@ fn parse_locals_from_body(
 
         // Read value type
         let value_type = match bytecode[offset] {
-            0x7F => wrt_foundation::types::ValueType::I32,
-            0x7E => wrt_foundation::types::ValueType::I64,
-            0x7D => wrt_foundation::types::ValueType::F32,
-            0x7C => wrt_foundation::types::ValueType::F64,
+            0x7F => kiln_foundation::types::ValueType::I32,
+            0x7E => kiln_foundation::types::ValueType::I64,
+            0x7D => kiln_foundation::types::ValueType::F32,
+            0x7C => kiln_foundation::types::ValueType::F64,
             _ => return Err(Error::parse_error("Invalid value type for local variable")),
         };
         offset += 1;
@@ -398,29 +398,29 @@ impl ModuleBuilder {
         let provider = crate::bounded_runtime_infra::create_runtime_provider()?;
         let module = Module {
             types: Vec::new(),
-            imports: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
             #[cfg(feature = "std")]
             import_order: Vec::new(),
             #[cfg(not(feature = "std"))]
-            import_order: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             functions: Vec::new(),
             #[cfg(feature = "std")]
             tables: Vec::new(),
             #[cfg(not(feature = "std"))]
-            tables: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
-            globals: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             elements: Vec::new(),
             #[cfg(not(feature = "std"))]
-            elements: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             data: Vec::new(),
             #[cfg(not(feature = "std"))]
-            data: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            data: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             start: None,
-            custom_sections: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            exports: wrt_foundation::direct_map::DirectMap::new(),
+            custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            exports: kiln_foundation::direct_map::DirectMap::new(),
             name: None,
             binary: None,
             validated: false,
@@ -451,12 +451,12 @@ pub fn load_module_from_binary(binary: &[u8]) -> Result<Module> {
     {
         // Enter runtime scope to cover both decoding and conversion
         // This ensures decoder's Vec allocations remain valid during conversion to BoundedVec
-        let _scope = wrt_foundation::capabilities::MemoryFactory::enter_module_scope(
-            wrt_foundation::budget_aware_provider::CrateId::Runtime,
+        let _scope = kiln_foundation::capabilities::MemoryFactory::enter_module_scope(
+            kiln_foundation::budget_aware_provider::CrateId::Runtime,
         )?;
 
-        let decoder_module = Box::new(wrt_decoder::decode_module(binary)?);
-        Module::from_wrt_module(&*decoder_module).map(|boxed| *boxed)  // Dereference Box
+        let decoder_module = Box::new(kiln_decoder::decode_module(binary)?);
+        Module::from_kiln_module(&*decoder_module).map(|boxed| *boxed)  // Dereference Box
         // Scope drops here, memory available for reuse
     }
     #[cfg(all(not(feature = "decoder"), feature = "std"))]

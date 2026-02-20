@@ -1,6 +1,6 @@
-//! WRTD No-Std Runtime Main Entry Point
+//! Kilnd No-Std Runtime Main Entry Point
 //! 
-//! This is the main entry point for the wrtd-nostd binary.
+//! This is the main entry point for the kilnd-nostd binary.
 //! SW-REQ-ID: REQ_FUNC_033
 
 #![no_std]

@@ -1,11 +1,11 @@
-//! Standardized command execution trait for cargo-wrt
+//! Standardized command execution trait for cargo-kiln
 //!
-//! Provides a consistent interface for all cargo-wrt commands,
+//! Provides a consistent interface for all cargo-kiln commands,
 //! ensuring standardized error handling, output formatting, and argument
 //! processing.
 
 use anyhow::Result;
-use wrt_build_core::BuildSystem;
+use kiln_build_core::BuildSystem;
 
 use super::GlobalArgs;
 
@@ -22,7 +22,7 @@ pub trait StandardCommand {
     fn name(&self) -> &'static str;
 
     /// Check if command supports the current output format
-    fn supports_output_format(&self, format: &wrt_build_core::formatters::OutputFormat) -> bool {
+    fn supports_output_format(&self, format: &kiln_build_core::formatters::OutputFormat) -> bool {
         // By default, all commands support all formats
         true
     }

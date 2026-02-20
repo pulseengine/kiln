@@ -23,12 +23,12 @@ use core::{
     time::Duration,
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_sync::WrtMutex;
+use kiln_sync::KilnMutex;
 
 /// IPC message types
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -208,7 +208,7 @@ pub trait IpcHandler: Send + Sync {
 pub struct IpcServer {
     channel: Box<dyn IpcChannel>,
     handler: Box<dyn IpcHandler>,
-    running: WrtMutex<bool>,
+    running: KilnMutex<bool>,
 }
 
 impl IpcServer {
@@ -217,7 +217,7 @@ impl IpcServer {
         Self {
             channel,
             handler,
-            running: WrtMutex::new(false),
+            running: KilnMutex::new(false),
         }
     }
 

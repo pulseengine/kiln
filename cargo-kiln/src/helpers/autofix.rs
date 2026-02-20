@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use wrt_build_core::diagnostics::{Diagnostic, DiagnosticCollection, Severity};
+use kiln_build_core::diagnostics::{Diagnostic, DiagnosticCollection, Severity};
 
 use super::OutputManager;
 

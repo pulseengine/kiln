@@ -5,7 +5,7 @@ use crate::{
     ComponentInstanceId, ResourceHandle, ValType,
 };
 use core::{fmt, time::Duration};
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec,
     bounded_collections::BoundedMap,
     component_value::ComponentValue,

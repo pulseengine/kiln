@@ -1,10 +1,10 @@
 //! Simple demonstration that ASIL-B features are working
 
-use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
-use wrt_foundation::bounded::BoundedVec;
+use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+use kiln_foundation::bounded::BoundedVec;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== WRT ASIL-B Functionality Test ===");
+    println!("=== Kiln ASIL-B Functionality Test ===");
     
     // Test 1: Safe memory allocation with budget tracking
     println!("\n1. Testing safe managed allocation...");

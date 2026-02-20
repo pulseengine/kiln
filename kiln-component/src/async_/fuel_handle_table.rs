@@ -5,7 +5,7 @@
 
 use core::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId, MemoryProvider,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     operations::{Type as OperationType, record_global_operation},
@@ -58,7 +58,7 @@ impl<T> HandleEntry<T> {
             data: Some(data),
             generation: 0,
             state: ResourceState::Available,
-            last_accessed: AtomicU64::new(wrt_foundation::operations::global_fuel_consumed()),
+            last_accessed: AtomicU64::new(kiln_foundation::operations::global_fuel_consumed()),
             access_count: AtomicU32::new(0),
         }
     }
@@ -66,7 +66,7 @@ impl<T> HandleEntry<T> {
     /// Update last accessed time
     pub fn touch(&self) {
         self.last_accessed.store(
-            wrt_foundation::operations::global_fuel_consumed(),
+            kiln_foundation::operations::global_fuel_consumed(),
             Ordering::Release,
         );
         self.access_count.fetch_add(1, Ordering::AcqRel);

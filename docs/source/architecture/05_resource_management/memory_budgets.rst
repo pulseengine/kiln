@@ -22,7 +22,7 @@ Total System Memory Budget
 
    * - Environment
      - Total RAM
-     - WRT Allocation
+     - Kiln Allocation
      - User Modules
      - Safety Margin
    * - Cloud/Server
@@ -56,7 +56,7 @@ Runtime Core Memory
 
 .. code-block:: rust
 
-   // From wrt-foundation/src/bounded.rs
+   // From kiln-foundation/src/bounded.rs
    pub const MAX_STACK_SIZE: usize = 1024;        // Stack frames
    pub const MAX_GLOBALS: usize = 1024;           // Global variables
    pub const MAX_FUNCTIONS: usize = 10000;        // Function definitions
@@ -93,7 +93,7 @@ WebAssembly Linear Memory
 
 .. code-block:: rust
 
-   // From wrt-runtime/src/memory.rs
+   // From kiln-runtime/src/memory.rs
    pub const WASM_PAGE_SIZE: usize = 65536;      // 64 KB per page
    pub const MAX_PAGES_32: usize = 65536;        // 4 GB max (32-bit)
    
@@ -111,7 +111,7 @@ Bounded Collections Sizing
 
 .. code-block:: rust
 
-   // Actual constants from wrt-foundation
+   // Actual constants from kiln-foundation
    pub const MAX_WASM_NAME_LENGTH: usize = 255;
    pub const MAX_BUFFER_SIZE: usize = 65536;
    pub const MAX_EXPORTS: usize = 1000;
@@ -146,7 +146,7 @@ Linux Memory Layout
 
 .. code-block:: rust
 
-   // From wrt-platform/src/linux_memory.rs
+   // From kiln-platform/src/linux_memory.rs
    pub struct LinuxAllocator {
        max_pages: usize,
        guard_pages: bool,
@@ -162,7 +162,7 @@ QNX Memory Partitioning
 
 .. code-block:: rust
 
-   // From wrt-platform/src/qnx_memory.rs  
+   // From kiln-platform/src/qnx_memory.rs  
    pub struct QnxPartition {
        name: &'static str,
        size: usize,
@@ -175,7 +175,7 @@ QNX Memory Partitioning
    * - Partition
      - Size
      - Purpose
-   * - wrt_runtime
+   * - kiln_runtime
      - 8 MB
      - Core runtime
    * - wasm_instances
@@ -196,13 +196,13 @@ For no_std + no_alloc environments:
 .. code-block:: rust
 
    // Memory layout for bare-metal
-   #[link_section = ".wrt_runtime"]
+   #[link_section = ".kiln_runtime"]
    static RUNTIME_MEMORY: [u8; 1024 * 1024] = [0; 1024 * 1024];  // 1 MB
    
-   #[link_section = ".wrt_instances"]  
+   #[link_section = ".kiln_instances"]  
    static INSTANCE_MEMORY: [u8; 4 * 1024 * 1024] = [0; 4 * 1024 * 1024];  // 4 MB
    
-   #[link_section = ".wrt_scratch"]
+   #[link_section = ".kiln_scratch"]
    static SCRATCH_MEMORY: [u8; 512 * 1024] = [0; 512 * 1024];  // 512 KB
 
 Memory Growth Policies
@@ -235,7 +235,7 @@ Memory Safety Verification
 
 .. code-block:: rust
 
-   // From wrt-foundation/src/verification.rs
+   // From kiln-foundation/src/verification.rs
    pub enum VerificationLevel {
        None,        // No checks (dangerous!)
        Minimal,     // Bounds only
@@ -257,7 +257,7 @@ Runtime memory tracking:
 
 .. code-block:: rust
 
-   // From wrt-runtime/src/memory.rs
+   // From kiln-runtime/src/memory.rs
    pub struct MemoryMetrics {
        peak_usage: AtomicUsize,
        current_usage: AtomicUsize,
@@ -270,4 +270,4 @@ Cross-References
 
 - **CPU Budgets**: See :doc:`cpu_budgets`
 - **Platform Details**: See :doc:`../platform_layer`
-- **Implementation**: ``wrt-platform/src/memory.rs``
+- **Implementation**: ``kiln-platform/src/memory.rs``

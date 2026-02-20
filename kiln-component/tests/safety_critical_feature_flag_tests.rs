@@ -13,9 +13,9 @@
 
 extern crate alloc;
 
-use wrt_component::bounded_component_infra::*;
-use wrt_foundation::{
-    WrtError, budget_aware_provider::CrateId, collections::StaticVec as BoundedVec, managed_alloc,
+use kiln_component::bounded_component_infra::*;
+use kiln_foundation::{
+    KilnError, budget_aware_provider::CrateId, collections::StaticVec as BoundedVec, managed_alloc,
     safe_managed_alloc,
 };
 
@@ -44,7 +44,7 @@ mod feature_flag_tests {
 
         // Verify we're using WRT allocator
         let guard_result = safe_managed_alloc!(1024, CrateId::Component);
-        assert!(guard_result.is_ok() || matches!(guard_result, Err(WrtError::OutOfMemory)));
+        assert!(guard_result.is_ok() || matches!(guard_result, Err(KilnError::OutOfMemory)));
 
         // Verify collections have fixed capacity
         let vec = new_component_vec::<u32>().unwrap();
@@ -91,7 +91,7 @@ mod feature_flag_tests {
     #[test]
     fn test_no_std_features() {
         // Test no_std specific behavior
-        use wrt_sync::Mutex;
+        use kiln_sync::Mutex;
 
         let vec = new_component_vec::<u32>().unwrap();
         let mutex = Mutex::new(vec);
@@ -126,7 +126,7 @@ mod feature_flag_tests {
         // No panic on overflow
         assert!(matches!(
             filled_vec.try_push(999),
-            Err(WrtError::CapacityExceeded)
+            Err(KilnError::CapacityExceeded)
         ));
     }
 
@@ -175,8 +175,8 @@ mod feature_flag_tests {
     /// Test that safety-critical APIs are consistent
     #[test]
     fn test_api_consistency() {
-        // All factory functions should return wrt_error::Result
-        fn assert_returns_result<T>(_: wrt_error::Result<T>) {}
+        // All factory functions should return kiln_error::Result
+        fn assert_returns_result<T>(_: kiln_error::Result<T>) {}
 
         assert_returns_result(new_component_vec::<u32>());
         assert_returns_result(new_export_vec::<u32>());

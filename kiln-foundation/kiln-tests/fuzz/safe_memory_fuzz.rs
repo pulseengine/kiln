@@ -4,7 +4,7 @@
 /// by covering the same operation patterns but with fixed test cases.
 
 use std::panic;
-use wrt_foundation::{
+use kiln_foundation::{
     safe_memory::{MemoryProvider, SafeSlice, StdMemoryProvider},
     verification::VerificationLevel,
 };

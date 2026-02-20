@@ -1,15 +1,15 @@
-// WRT - wrt-panic
-// Module: ISO 26262 Compliant Panic Handler for WRT
+// Kiln - kiln-panic
+// Module: ISO 26262 Compliant Panic Handler for Kiln
 // SW-REQ-ID: REQ_PANIC_001, REQ_SAFETY_ASIL_001, REQ_MEM_SAFETY_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![deny(unsafe_code)] // Allow specific unsafe blocks where necessary for panic handling
 
-//! ISO 26262 compliant panic handler for WRT WebAssembly runtime
+//! ISO 26262 compliant panic handler for Kiln WebAssembly runtime
 //!
 //! This crate provides safety-critical panic handlers designed to meet
 //! automotive safety standards ASIL-B and ASIL-D, with memory budget
@@ -20,13 +20,13 @@
 //! ### Basic Usage (ASIL-D default)
 //! ```toml
 //! [dependencies]
-//! wrt-panic = { path = "../wrt-panic", features = ["asil-d"] }
+//! kiln-panic = { path = "../kiln-panic", features = ["asil-d"] }
 //! ```
 //!
 //! ### Runtime Configuration
 //! ```rust
-//! use wrt_foundation::safety_system::AsilLevel;
-//! use wrt_panic::{
+//! use kiln_foundation::safety_system::AsilLevel;
+//! use kiln_panic::{
 //!     initialize_panic_handler,
 //!     PanicContextBuilder,
 //! };
@@ -121,7 +121,7 @@ pub const MAX_STACK_TRACE_ENTRIES: usize = 16;
 
 /// Panic information structure stored in memory for debugger access
 #[repr(C, packed)]
-pub struct WrtPanicInfo {
+pub struct KilnPanicInfo {
     /// Magic number for debugger recognition (0xDEADBEEF)
     pub magic:             u32,
     /// ASIL level at time of panic
@@ -249,7 +249,7 @@ fn store_panic_info(info: &core::panic::PanicInfo) {
     let _memory_budget = PANIC_MEMORY_BUDGET.load(Ordering::SeqCst) as usize;
 
     // Create panic info structure
-    let mut panic_info = WrtPanicInfo {
+    let mut panic_info = KilnPanicInfo {
         magic: PANIC_MAGIC,
         asil_level,
         reserved: [0; 3],
@@ -301,7 +301,7 @@ fn store_panic_info(info: &core::panic::PanicInfo) {
     panic_info.checksum = checksum;
 
     // Store in a static location that debuggers can easily find
-    static mut PANIC_INFO_STORAGE: WrtPanicInfo = WrtPanicInfo {
+    static mut PANIC_INFO_STORAGE: KilnPanicInfo = KilnPanicInfo {
         magic:             0,
         asil_level:        0,
         reserved:          [0; 3],
@@ -611,7 +611,7 @@ mod tests {
         use core::mem;
 
         // Ensure the panic info structure has expected size constraints
-        let size = mem::size_of::<WrtPanicInfo>();
+        let size = mem::size_of::<KilnPanicInfo>();
         assert!(size >= MIN_PANIC_INFO_SIZE);
         assert!(size <= DEFAULT_PANIC_MEMORY_BUDGET);
     }

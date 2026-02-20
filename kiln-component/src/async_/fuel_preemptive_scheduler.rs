@@ -9,14 +9,14 @@ use core::{
     time::Duration,
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     operations::{Type as OperationType, record_global_operation},
     safe_managed_alloc,
     verification::VerificationLevel,
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::TaskId;
@@ -120,29 +120,29 @@ impl PartialEq for TaskPriorityQueue {
 
 impl Eq for TaskPriorityQueue {}
 
-impl wrt_foundation::traits::Checksummable for TaskPriorityQueue {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for TaskPriorityQueue {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.priority.update_checksum(checksum);
         self.tasks.update_checksum(checksum);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for TaskPriorityQueue {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for TaskPriorityQueue {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.priority.to_bytes_with_provider(writer, provider)?;
         self.tasks.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_foundation::traits::FromBytes for TaskPriorityQueue {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for TaskPriorityQueue {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             priority: Priority::from_bytes_with_provider(reader, provider)?,
             tasks: BoundedVec::from_bytes_with_provider(reader, provider)?,
@@ -215,8 +215,8 @@ impl PartialEq for PreemptiveTaskInfo {
 
 impl Eq for PreemptiveTaskInfo {}
 
-impl wrt_foundation::traits::Checksummable for PreemptiveTaskInfo {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for PreemptiveTaskInfo {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.task_id.update_checksum(checksum);
         self.component_id.update_checksum(checksum);
         self.base_priority.update_checksum(checksum);
@@ -226,12 +226,12 @@ impl wrt_foundation::traits::Checksummable for PreemptiveTaskInfo {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for PreemptiveTaskInfo {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for PreemptiveTaskInfo {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.task_id.to_bytes_with_provider(writer, provider)?;
         self.component_id.to_bytes_with_provider(writer, provider)?;
         self.base_priority.to_bytes_with_provider(writer, provider)?;
@@ -241,11 +241,11 @@ impl wrt_foundation::traits::ToBytes for PreemptiveTaskInfo {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for PreemptiveTaskInfo {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for PreemptiveTaskInfo {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             task_id: TaskId::from_bytes_with_provider(reader, provider)?,
             component_id: ComponentInstanceId::from_bytes_with_provider(reader, provider)?,

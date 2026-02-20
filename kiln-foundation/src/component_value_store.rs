@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -16,7 +16,7 @@ extern crate alloc;
 use std::format;
 
 // External crate imports
-use wrt_error::{
+use kiln_error::{
     ErrorCategory,
     Result,
 };
@@ -152,7 +152,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentValueStore<P
         })?;
         let types = BoundedVec::new(provider.clone()).map_err(|_e| {
             Error::new(
-                wrt_error::ErrorCategory::Memory,
+                kiln_error::ErrorCategory::Memory,
                 codes::MEMORY_ALLOCATION_ERROR,
                 "Failed to allocate memory for value types",
             )
@@ -181,7 +181,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentValueStore<P
         let index = self.values.len() as u32;
         self.values.push(value).map_err(|_e| {
             Error::new(
-                wrt_error::ErrorCategory::Resource,
+                kiln_error::ErrorCategory::Resource,
                 codes::RESOURCE_LIMIT_EXCEEDED,
                 "Component value store capacity exceeded",
             )
@@ -213,7 +213,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentValueStore<P
     ///
     /// # Errors
     /// Returns an error if the handle is invalid or the value is not a string.
-    pub fn get_string<'a>(&'a self, val_ref: ValueRef) -> wrt_error::Result<&'a str> {
+    pub fn get_string<'a>(&'a self, val_ref: ValueRef) -> kiln_error::Result<&'a str> {
         match self.values.get(val_ref.index()).ok() {
             Some(ComponentValue::String(_s_name)) => {
                 // Temporarily disabled due to lifetime issues in no_std mode
@@ -354,7 +354,7 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentValueStore<P
                 })?;
             flag_values.push((name, val)).map_err(|_e| {
                 Error::new(
-                    wrt_error::ErrorCategory::Resource,
+                    kiln_error::ErrorCategory::Resource,
                     codes::RESOURCE_LIMIT_EXCEEDED,
                     "Flag values capacity exceeded",
                 )

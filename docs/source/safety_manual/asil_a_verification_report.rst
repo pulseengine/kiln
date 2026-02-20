@@ -7,7 +7,7 @@ ASIL-A Verification Report
    :align: right
    :alt: Verification Report Icon
 
-This document provides a comprehensive verification report demonstrating ASIL-A compliance for WRT foundation components according to ISO 26262:2018.
+This document provides a comprehensive verification report demonstrating ASIL-A compliance for Kiln foundation components according to ISO 26262:2018.
 
 .. contents:: Table of Contents
    :local:
@@ -19,7 +19,7 @@ Executive Summary
 Verification Status
 -------------------
 
-**VERIFICATION COMPLETE**: WRT foundation components have successfully completed ASIL-A verification activities.
+**VERIFICATION COMPLETE**: Kiln foundation components have successfully completed ASIL-A verification activities.
 
 **Overall Assessment**: ✅ **COMPLIANT** with ISO 26262:2018 ASIL-A requirements
 
@@ -58,7 +58,7 @@ Scope of Verification
 This verification covers:
 
 **In Scope**:
-- WRT foundation memory management system
+- Kiln foundation memory management system
 - Capability-based allocation mechanisms
 - Runtime safety monitoring system
 - Production telemetry infrastructure
@@ -505,7 +505,7 @@ Version Control
 
 **Configuration Baselines**:
 
-1. **ASIL-A Baseline v1.0**: Complete WRT foundation with ASIL-A safety features
+1. **ASIL-A Baseline v1.0**: Complete Kiln foundation with ASIL-A safety features
 2. **Documentation Baseline v1.0**: Complete safety manual and guides  
 3. **Verification Baseline v1.0**: All verification evidence and reports
 4. **Build Baseline v1.0**: ASIL-A compliant build configuration
@@ -585,7 +585,7 @@ Evidence Summary
 Verification Conclusion
 -----------------------
 
-**Conclusion**: WRT foundation components successfully demonstrate compliance with ISO 26262:2018 ASIL-A requirements.
+**Conclusion**: Kiln foundation components successfully demonstrate compliance with ISO 26262:2018 ASIL-A requirements.
 
 **Basis for Conclusion**:
 
@@ -597,7 +597,7 @@ Verification Conclusion
 
 **Limitations**:
 
-- Verification covers WRT foundation components only
+- Verification covers Kiln foundation components only
 - System-level integration requires additional verification by integrator
 - Application-specific WebAssembly modules require separate verification
 - Operational environment assumptions must be validated by integrator
@@ -609,4 +609,4 @@ Verification Conclusion
 3. **Periodic Review**: Establish periodic safety review process
 4. **Change Management**: Follow safety change management for updates
 
-This verification report demonstrates that WRT foundation components are ready for ASIL-A automotive deployment with appropriate system-level integration.
+This verification report demonstrates that Kiln foundation components are ready for ASIL-A automotive deployment with appropriate system-level integration.

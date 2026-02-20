@@ -2,7 +2,7 @@
 Debug Infrastructure Architecture
 =====================================
 
-This section documents the comprehensive debug infrastructure in WRT, providing DWARF debug information support, WIT-aware debugging, runtime breakpoint management, and advanced debugging capabilities for WebAssembly applications.
+This section documents the comprehensive debug infrastructure in Kiln, providing DWARF debug information support, WIT-aware debugging, runtime breakpoint management, and advanced debugging capabilities for WebAssembly applications.
 
 .. contents:: Table of Contents
    :local:
@@ -11,7 +11,7 @@ This section documents the comprehensive debug infrastructure in WRT, providing 
 Overview
 --------
 
-WRT implements a sophisticated debugging system that enables:
+Kiln implements a sophisticated debugging system that enables:
 
 1. **DWARF Debug Information** - Complete DWARF parsing and processing for WebAssembly modules
 2. **WIT-Aware Debugging** - Source-level debugging with WebAssembly Interface Types (WIT) integration
@@ -20,7 +20,7 @@ WRT implements a sophisticated debugging system that enables:
 5. **Memory Inspection** - Safe memory examination and variable inspection
 6. **Step-by-Step Execution** - Controlled execution with step-over, step-into, step-out capabilities
 
-The debug infrastructure operates in all WRT environments (std, no_std+alloc, no_std) with graceful degradation of features.
+The debug infrastructure operates in all Kiln environments (std, no_std+alloc, no_std) with graceful degradation of features.
 
 Architecture Overview
 ---------------------
@@ -31,11 +31,11 @@ Debug Infrastructure Ecosystem
 .. code-block:: text
 
     ┌─────────────────────────────────────────────────────────────────┐
-    │                    WRT DEBUG INFRASTRUCTURE                     │
+    │                    Kiln DEBUG INFRASTRUCTURE                     │
     ├─────────────────────────────────────────────────────────────────┤
     │                                                                 │
     │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │
-    │  │  Debug CLI  │    │   wrt-debug │    │ IDE/Editor  │        │
+    │  │  Debug CLI  │    │   kiln-debug │    │ IDE/Editor  │        │
     │  │             │    │             │    │             │        │
     │  │ • Interactive│    │ • DWARF     │    │ • LSP       │        │
     │  │   debugging │────│   parser    │────│   server    │        │
@@ -46,7 +46,7 @@ Debug Infrastructure Ecosystem
     │         └───────────────────┼───────────────────┘              │
     │                             │                                   │
     │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │
-    │  │wrt-runtime  │    │wrt-component│    │wrt-decoder  │        │
+    │  │kiln-runtime  │    │kiln-component│    │kiln-decoder  │        │
     │  │             │    │             │    │             │        │
     │  │ • Execution │    │ • Component │    │ • Debug     │        │
     │  │   control   │────│   debugging │────│   metadata  │        │
@@ -523,7 +523,7 @@ Integration with Runtime
 Runtime Debug API
 ~~~~~~~~~~~~~~~~~
 
-Integration with the WRT runtime for debugging support:
+Integration with the Kiln runtime for debugging support:
 
 **Debug Runtime Interface**::
 
@@ -714,7 +714,7 @@ Basic Debugging Session
 
 **Setting up a debug session**::
 
-    use wrt_debug::{DebugInfo, RuntimeDebugger};
+    use kiln_debug::{DebugInfo, RuntimeDebugger};
     
     // Load debug information from WASM module
     let debug_info = DebugInfo::from_wasm_module(&module_bytes)?;
@@ -759,7 +759,7 @@ Component Model Debugging
 
 **Debugging component interfaces**::
 
-    use wrt_debug::ComponentDebugger;
+    use kiln_debug::ComponentDebugger;
     
     let component_debugger = ComponentDebugger::new(component_instance)?;
     
@@ -814,7 +814,7 @@ Future Enhancements
 Conclusion
 ----------
 
-The WRT debug infrastructure provides:
+The Kiln debug infrastructure provides:
 
 - ✅ **Complete DWARF Support**: Full debug information parsing and processing
 - ✅ **WIT Integration**: Source-level debugging with interface awareness

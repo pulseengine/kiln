@@ -1,13 +1,13 @@
-//! WRT-Specific Memory System Implementation
+//! Kiln-Specific Memory System Implementation
 //!
-//! This module provides the WRT-specific implementation of the generic memory
+//! This module provides the Kiln-specific implementation of the generic memory
 //! system, using the generic components to create a complete solution.
 //!
 //! SW-REQ-ID: REQ_MEM_001 - Memory bounds checking
 //! SW-REQ-ID: REQ_MEM_002 - Budget enforcement
 //! SW-REQ-ID: REQ_MEM_003 - Automatic cleanup
 
-use wrt_error::{
+use kiln_error::{
     helpers::memory_limit_exceeded_error,
     Result,
 };
@@ -34,15 +34,15 @@ use crate::{
     ErrorCategory,
 };
 
-/// Maximum number of crates in the WRT system
-pub const WRT_MAX_CRATES: usize = 32;
+/// Maximum number of crates in the Kiln system
+pub const KILN_MAX_CRATES: usize = 32;
 
-/// WRT-specific memory coordinator
-pub type WrtMemoryCoordinator = GenericMemoryCoordinator<CrateId, WRT_MAX_CRATES>;
+/// Kiln-specific memory coordinator
+pub type KilnMemoryCoordinator = GenericMemoryCoordinator<CrateId, KILN_MAX_CRATES>;
 
-/// WRT-specific memory guard for NoStdProvider
-pub type WrtMemoryGuard<const N: usize> =
-    GenericMemoryGuard<NoStdProvider<N>, WrtMemoryCoordinator, CrateId>;
+/// Kiln-specific memory guard for NoStdProvider
+pub type KilnMemoryGuard<const N: usize> =
+    GenericMemoryGuard<NoStdProvider<N>, KilnMemoryCoordinator, CrateId>;
 
 // REMOVED: Legacy global memory coordinator eliminated in favor of
 // capability-based system Use MemoryCapabilityContext through
@@ -57,8 +57,8 @@ impl<const N: usize> ManagedMemoryProvider for NoStdProvider<N> {
     }
 }
 
-// Implement MemoryCoordinator trait for WrtMemoryCoordinator
-impl MemoryCoordinator<CrateId> for WrtMemoryCoordinator {
+// Implement MemoryCoordinator trait for KilnMemoryCoordinator
+impl MemoryCoordinator<CrateId> for KilnMemoryCoordinator {
     type AllocationId = AllocationId;
 
     fn register_allocation(&self, crate_id: CrateId, size: usize) -> Result<Self::AllocationId> {
@@ -104,19 +104,19 @@ impl<const N: usize> ProviderFactory for SizedNoStdProviderFactory<N> {
     }
 }
 
-/// WRT-specific budget-aware factory
-pub type WrtBudgetAwareFactory<const N: usize> =
-    GenericBudgetAwareFactory<SizedNoStdProviderFactory<N>, WrtMemoryCoordinator, CrateId>;
+/// Kiln-specific budget-aware factory
+pub type KilnBudgetAwareFactory<const N: usize> =
+    GenericBudgetAwareFactory<SizedNoStdProviderFactory<N>, KilnMemoryCoordinator, CrateId>;
 
-// Legacy WrtProviderFactory has been removed. Use CapabilityWrtFactory instead.
+// Legacy KilnProviderFactory has been removed. Use CapabilityKilnFactory instead.
 
-/// Modern capability-based factory for WRT memory providers
+/// Modern capability-based factory for Kiln memory providers
 ///
-/// This replaces the deprecated WrtProviderFactory with a capability-driven
+/// This replaces the deprecated KilnProviderFactory with a capability-driven
 /// approach that integrates with the MemoryCapabilityContext system.
-pub struct CapabilityWrtFactory;
+pub struct CapabilityKilnFactory;
 
-impl CapabilityWrtFactory {
+impl CapabilityKilnFactory {
     /// Create a capability-gated provider using the global capability context
     pub fn create_provider<const N: usize>(
         crate_id: CrateId,
@@ -137,11 +137,11 @@ impl CapabilityWrtFactory {
     }
 }
 
-/// Convenience macro for creating capability-gated WRT providers
+/// Convenience macro for creating capability-gated Kiln providers
 #[macro_export]
-macro_rules! wrt_provider {
+macro_rules! kiln_provider {
     ($size:expr, $crate_id:expr) => {
-        $crate::wrt_memory_system::CapabilityWrtFactory::create_provider::<$size>($crate_id)
+        $crate::kiln_memory_system::CapabilityKilnFactory::create_provider::<$size>($crate_id)
     };
 }
 

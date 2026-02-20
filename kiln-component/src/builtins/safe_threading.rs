@@ -1,17 +1,17 @@
 //! Safe threading built-ins using the new platform-aware architecture.
 //!
 //! This module provides WebAssembly threading built-ins that leverage the
-//! platform-specific thread pools and safety mechanisms from wrt-platform.
+//! platform-specific thread pools and safety mechanisms from kiln-platform.
 
 use std::{boxed::Box, string::ToString, sync::Arc, vec::Vec};
 
-use wrt_error::{Error, Result, kinds::ThreadingError};
+use kiln_error::{Error, Result, kinds::ThreadingError};
 #[cfg(feature = "std")]
-use wrt_foundation::{builtin::BuiltinType, component_value::ComponentValue};
-use wrt_platform::threading::{ThreadPoolConfig, ThreadPriority, ThreadingLimits};
+use kiln_foundation::{builtin::BuiltinType, component_value::ComponentValue};
+use kiln_platform::threading::{ThreadPoolConfig, ThreadPriority, ThreadingLimits};
 
 #[cfg(feature = "threading")]
-use wrt_platform::wasm_thread_manager::{WasmModuleInfo, WasmThreadManager};
+use kiln_platform::wasm_thread_manager::{WasmModuleInfo, WasmThreadManager};
 
 use super::BuiltinHandler;
 
@@ -76,7 +76,7 @@ impl BuiltinHandler for SafeThreadingSpawnHandler {
         };
 
         // Create spawn request
-        let request = wrt_platform::threading::ThreadSpawnRequest {
+        let request = kiln_platform::threading::ThreadSpawnRequest {
             module_id: self.module_id,
             function_id,
             args: function_args,
@@ -134,16 +134,16 @@ impl BuiltinHandler for SafeThreadingJoinHandler {
         // Join the thread
         match self.thread_manager.join_thread(thread_id) {
             Ok(result) => match result {
-                wrt_platform::wasm_thread_manager::ThreadExecutionResult::Success(values) => {
+                kiln_platform::wasm_thread_manager::ThreadExecutionResult::Success(values) => {
                     Ok(values)
                 },
-                wrt_platform::wasm_thread_manager::ThreadExecutionResult::Error(msg) => {
+                kiln_platform::wasm_thread_manager::ThreadExecutionResult::Error(msg) => {
                     Err(Error::component_thread_spawn_failed(&msg))
                 },
-                wrt_platform::wasm_thread_manager::ThreadExecutionResult::Cancelled => {
+                kiln_platform::wasm_thread_manager::ThreadExecutionResult::Cancelled => {
                     Err(Error::threading_error("Error occurred"))
                 },
-                wrt_platform::wasm_thread_manager::ThreadExecutionResult::Timeout => {
+                kiln_platform::wasm_thread_manager::ThreadExecutionResult::Timeout => {
                     Err(Error::threading_error("Error occurred"))
                 },
             },
@@ -238,11 +238,11 @@ impl BuiltinHandler for SafeThreadingStatusHandler {
                         for (thread_id, health) in results {
                             response.push(ComponentValue::U64(thread_id));
                             let health_code = match health {
-                                wrt_platform::threading::ThreadHealth::Healthy => 0,
-                                wrt_platform::threading::ThreadHealth::CpuQuotaExceeded => 1,
-                                wrt_platform::threading::ThreadHealth::LifetimeExceeded => 2,
-                                wrt_platform::threading::ThreadHealth::Deadlocked => 3,
-                                wrt_platform::threading::ThreadHealth::Unresponsive => 4,
+                                kiln_platform::threading::ThreadHealth::Healthy => 0,
+                                kiln_platform::threading::ThreadHealth::CpuQuotaExceeded => 1,
+                                kiln_platform::threading::ThreadHealth::LifetimeExceeded => 2,
+                                kiln_platform::threading::ThreadHealth::Deadlocked => 3,
+                                kiln_platform::threading::ThreadHealth::Unresponsive => 4,
                             };
                             response.push(ComponentValue::U32(health_code));
                         }

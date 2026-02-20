@@ -214,8 +214,8 @@ impl PureElementSegment {
 }
 
 // Trait implementations for PureDataMode
-impl wrt_foundation::traits::Checksummable for PureDataMode {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for PureDataMode {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             PureDataMode::Active {
                 memory_index,
@@ -232,7 +232,7 @@ impl wrt_foundation::traits::Checksummable for PureDataMode {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for PureDataMode {
+impl kiln_foundation::traits::ToBytes for PureDataMode {
     fn serialized_size(&self) -> usize {
         match self {
             PureDataMode::Active { .. } => 9, // 1 + 4 + 4
@@ -240,11 +240,11 @@ impl wrt_foundation::traits::ToBytes for PureDataMode {
         }
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             PureDataMode::Active {
                 memory_index,
@@ -262,11 +262,11 @@ impl wrt_foundation::traits::ToBytes for PureDataMode {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for PureDataMode {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for PureDataMode {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut disc_bytes = [0u8; 1];
         reader.read_exact(&mut disc_bytes)?;
         match disc_bytes[0] {
@@ -285,7 +285,7 @@ impl wrt_foundation::traits::FromBytes for PureDataMode {
                 })
             },
             1 => Ok(PureDataMode::Passive),
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Invalid PureDataMode discriminant",
             )),
         }
@@ -293,8 +293,8 @@ impl wrt_foundation::traits::FromBytes for PureDataMode {
 }
 
 // Trait implementations for PureElementMode
-impl wrt_foundation::traits::Checksummable for PureElementMode {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for PureElementMode {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             PureElementMode::Active {
                 table_index,
@@ -314,7 +314,7 @@ impl wrt_foundation::traits::Checksummable for PureElementMode {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for PureElementMode {
+impl kiln_foundation::traits::ToBytes for PureElementMode {
     fn serialized_size(&self) -> usize {
         match self {
             PureElementMode::Active { .. } => 9, // 1 + 4 + 4
@@ -322,11 +322,11 @@ impl wrt_foundation::traits::ToBytes for PureElementMode {
         }
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             PureElementMode::Active {
                 table_index,
@@ -347,11 +347,11 @@ impl wrt_foundation::traits::ToBytes for PureElementMode {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for PureElementMode {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for PureElementMode {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut disc_bytes = [0u8; 1];
         reader.read_exact(&mut disc_bytes)?;
         match disc_bytes[0] {
@@ -371,7 +371,7 @@ impl wrt_foundation::traits::FromBytes for PureElementMode {
             },
             1 => Ok(PureElementMode::Passive),
             2 => Ok(PureElementMode::Declared),
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Invalid PureElementMode discriminant",
             )),
         }
@@ -379,8 +379,8 @@ impl wrt_foundation::traits::FromBytes for PureElementMode {
 }
 
 // Trait implementations for PureElementInit
-impl wrt_foundation::traits::Checksummable for PureElementInit {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for PureElementInit {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             PureElementInit::FunctionIndices(indices) => {
                 checksum.update_slice(&[0u8]); // Discriminant
@@ -401,7 +401,7 @@ impl wrt_foundation::traits::Checksummable for PureElementInit {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for PureElementInit {
+impl kiln_foundation::traits::ToBytes for PureElementInit {
     fn serialized_size(&self) -> usize {
         match self {
             PureElementInit::FunctionIndices(indices) => 5 + indices.len() * 4, // 1 + 4 + len * 4
@@ -411,11 +411,11 @@ impl wrt_foundation::traits::ToBytes for PureElementInit {
         }
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             PureElementInit::FunctionIndices(indices) => {
                 writer.write_all(&[0u8])?;
@@ -437,11 +437,11 @@ impl wrt_foundation::traits::ToBytes for PureElementInit {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for PureElementInit {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for PureElementInit {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut disc_bytes = [0u8; 1];
         reader.read_exact(&mut disc_bytes)?;
         match disc_bytes[0] {
@@ -475,7 +475,7 @@ impl wrt_foundation::traits::FromBytes for PureElementInit {
                 }
                 Ok(PureElementInit::ExpressionBytes(exprs))
             },
-            _ => Err(wrt_error::Error::runtime_execution_error(
+            _ => Err(kiln_error::Error::runtime_execution_error(
                 "Invalid PureElementInit discriminant",
             )),
         }
@@ -483,8 +483,8 @@ impl wrt_foundation::traits::FromBytes for PureElementInit {
 }
 
 // Trait implementations for PureDataSegment
-impl wrt_foundation::traits::Checksummable for PureDataSegment {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for PureDataSegment {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.mode.update_checksum(checksum);
         checksum.update_slice(&(self.offset_expr_bytes.len() as u32).to_le_bytes());
         checksum.update_slice(&self.offset_expr_bytes);
@@ -493,16 +493,16 @@ impl wrt_foundation::traits::Checksummable for PureDataSegment {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for PureDataSegment {
+impl kiln_foundation::traits::ToBytes for PureDataSegment {
     fn serialized_size(&self) -> usize {
         self.mode.serialized_size() + 8 + self.offset_expr_bytes.len() + self.data_bytes.len()
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.mode.to_bytes_with_provider(writer, provider)?;
         writer.write_all(&(self.offset_expr_bytes.len() as u32).to_le_bytes())?;
         writer.write_all(&self.offset_expr_bytes)?;
@@ -512,11 +512,11 @@ impl wrt_foundation::traits::ToBytes for PureDataSegment {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for PureDataSegment {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for PureDataSegment {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mode = PureDataMode::from_bytes_with_provider(reader, provider)?;
 
         let mut offset_len_bytes = [0u8; 4];
@@ -542,8 +542,8 @@ impl wrt_foundation::traits::FromBytes for PureDataSegment {
 }
 
 // Trait implementations for PureElementSegment
-impl wrt_foundation::traits::Checksummable for PureElementSegment {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for PureElementSegment {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.element_type.update_checksum(checksum);
         self.mode.update_checksum(checksum);
         checksum.update_slice(&(self.offset_expr_bytes.len() as u32).to_le_bytes());
@@ -552,7 +552,7 @@ impl wrt_foundation::traits::Checksummable for PureElementSegment {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for PureElementSegment {
+impl kiln_foundation::traits::ToBytes for PureElementSegment {
     fn serialized_size(&self) -> usize {
         1 + self.mode.serialized_size()
             + 4
@@ -560,11 +560,11 @@ impl wrt_foundation::traits::ToBytes for PureElementSegment {
             + self.init_data.serialized_size()
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let element_type_byte = match self.element_type {
             crate::types::RefType::Funcref => 0u8,
             crate::types::RefType::Externref => 1u8,
@@ -578,18 +578,18 @@ impl wrt_foundation::traits::ToBytes for PureElementSegment {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for PureElementSegment {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for PureElementSegment {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut element_type_bytes = [0u8; 1];
         reader.read_exact(&mut element_type_bytes)?;
         let element_type = match element_type_bytes[0] {
             0 => crate::types::RefType::Funcref,
             1 => crate::types::RefType::Externref,
             _ => {
-                return Err(wrt_error::Error::runtime_execution_error(
+                return Err(kiln_error::Error::runtime_execution_error(
                     "Invalid element type",
                 ))
             },

@@ -3,7 +3,7 @@
 //! This example shows how to use the unified execution engine for various
 //! WebAssembly execution scenarios.
 
-use wrt_component::{
+use kiln_component::{
     AgentConfiguration, AgentCreationOptions, AgentRegistry, ExecutionMode, HybridModeFlags,
     PreferredAgentType, UnifiedExecutionAgent, UnifiedExecutionState, Value,
 };

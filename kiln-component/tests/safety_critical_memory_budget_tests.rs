@@ -13,9 +13,9 @@
 
 extern crate alloc;
 
-use wrt_component::bounded_component_infra::*;
-use wrt_foundation::{
-    WrtError,
+use kiln_component::bounded_component_infra::*;
+use kiln_foundation::{
+    KilnError,
     bounded::{BoundedString, BoundedVec},
     budget_aware_provider::CrateId,
     budget_provider::BudgetProvider,
@@ -23,10 +23,10 @@ use wrt_foundation::{
     safe_memory::NoStdProvider,
 };
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     safe_managed_alloc,
     {
-        WrtError,
+        KilnError,
         bounded::{BoundedString, BoundedVec},
         budget_aware_provider::CrateId,
         budget_provider::BudgetProvider,
@@ -65,7 +65,7 @@ mod memory_budget_tests {
                         panic!("Too many allocations without hitting budget");
                     }
                 },
-                Err(WrtError::OutOfMemory) => {
+                Err(KilnError::OutOfMemory) => {
                     // Expected when budget is exhausted
                     break;
                 },
@@ -105,7 +105,7 @@ mod memory_budget_tests {
 
             match result {
                 Ok(_) => allocation_count += 1,
-                Err(WrtError::OutOfMemory) => break,
+                Err(KilnError::OutOfMemory) => break,
                 Err(e) => panic!("Unexpected error: {:?}", e),
             }
 
@@ -137,7 +137,7 @@ mod memory_budget_tests {
                     }
                     vecs.push(vec);
                 },
-                Err(WrtError::OutOfMemory) => {
+                Err(KilnError::OutOfMemory) => {
                     // Budget exhausted
                     assert!(i > 0, "Should allocate at least one vector");
                     break;
@@ -169,7 +169,7 @@ mod memory_budget_tests {
 
             match map.try_insert(key, value) {
                 Ok(_) => successful_inserts += 1,
-                Err(WrtError::CapacityExceeded) => break,
+                Err(KilnError::CapacityExceeded) => break,
                 Err(e) => panic!("Unexpected error: {:?}", e),
             }
         }
@@ -190,7 +190,7 @@ mod memory_budget_tests {
             for i in 0..20 {
                 match new_resource_vec::<u64>() {
                     Ok(vec) => temp_vecs.push(vec),
-                    Err(WrtError::OutOfMemory) => break,
+                    Err(KilnError::OutOfMemory) => break,
                     Err(e) => panic!("Unexpected error in cycle {}: {:?}", cycle, e),
                 }
             }
@@ -220,7 +220,7 @@ mod memory_budget_tests {
         for i in 0..100 {
             match bounded_component_name_from_str(&format!("component_{}", i)) {
                 Ok(name) => strings.push(name),
-                Err(WrtError::OutOfMemory) => {
+                Err(KilnError::OutOfMemory) => {
                     // Budget exhausted
                     assert!(i > 0, "Should allocate at least one string");
                     break;
@@ -263,7 +263,7 @@ mod memory_budget_tests {
 
             match vec.try_push(data) {
                 Ok(_) => count += 1,
-                Err(WrtError::CapacityExceeded) => break,
+                Err(KilnError::CapacityExceeded) => break,
                 Err(e) => panic!("Unexpected error: {:?}", e),
             }
         }
@@ -283,7 +283,7 @@ mod memory_budget_tests {
         loop {
             match new_post_return_vec::<u8>() {
                 Ok(_) => small_allocs += 1,
-                Err(WrtError::OutOfMemory) => break,
+                Err(KilnError::OutOfMemory) => break,
                 Err(_) => break,
             }
             if small_allocs > 50 {
@@ -295,7 +295,7 @@ mod memory_budget_tests {
         loop {
             match new_locals_vec::<u64>() {
                 Ok(_) => medium_allocs += 1,
-                Err(WrtError::OutOfMemory) => break,
+                Err(KilnError::OutOfMemory) => break,
                 Err(_) => break,
             }
             if medium_allocs > 20 {
@@ -307,7 +307,7 @@ mod memory_budget_tests {
         loop {
             match new_resource_vec::<[u8; 1024]>() {
                 Ok(_) => large_allocs += 1,
-                Err(WrtError::OutOfMemory) => break,
+                Err(KilnError::OutOfMemory) => break,
                 Err(_) => break,
             }
             if large_allocs > 5 {
@@ -337,7 +337,7 @@ mod memory_budget_tests {
                         allocation_count += 1;
                         allocations.push(stack);
                     },
-                    Err(WrtError::OutOfMemory) => break,
+                    Err(KilnError::OutOfMemory) => break,
                     Err(e) => panic!("Unexpected error in iteration {}: {:?}", iteration, e),
                 }
 
@@ -376,7 +376,7 @@ mod memory_budget_tests {
                     }
                     maps.push(map);
                 },
-                Err(WrtError::OutOfMemory) => {
+                Err(KilnError::OutOfMemory) => {
                     // Budget exhausted
                     break;
                 },
@@ -420,7 +420,7 @@ mod safety_critical_budget_tests {
                 // Guard ensures memory is tracked
                 drop(guard);
             },
-            Err(WrtError::OutOfMemory) => {
+            Err(KilnError::OutOfMemory) => {
                 // Budget exhausted - expected in some cases
             },
             Err(e) => panic!("Unexpected error: {:?}", e),

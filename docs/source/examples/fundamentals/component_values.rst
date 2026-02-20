@@ -8,7 +8,7 @@ Component Values: Type-Safe Boundaries
    
    -- Unknown (but definitely talking about WebAssembly components)
 
-Moving data between the host and WebAssembly components isn't just about bytes - it's about types, safety, and making sure a u32 stays a u32. WRT's component value system handles the tricky business of type conversion so you don't have to worry about ABI mismatches or data corruption.
+Moving data between the host and WebAssembly components isn't just about bytes - it's about types, safety, and making sure a u32 stays a u32. Kiln's component value system handles the tricky business of type conversion so you don't have to worry about ABI mismatches or data corruption.
 
 .. admonition:: What You'll Learn
    :class: note
@@ -44,7 +44,7 @@ WebAssembly components speak in well-defined types, but the host world is messy:
    // }
    
    // How do we safely convert between these?
-   // WRT ComponentValue to the rescue!
+   // Kiln ComponentValue to the rescue!
 
 Enter ComponentValue: Your Type-Safe Bridge 🌉
 ----------------------------------------------
@@ -55,13 +55,13 @@ ComponentValue provides safe, efficient conversion between host and guest types:
    :caption: Basic ComponentValue usage
    :linenos:
 
-   use wrt_foundation::component_value::{ComponentValue, ComponentType};
-   use wrt_foundation::prelude::*;
+   use kiln_foundation::component_value::{ComponentValue, ComponentType};
+   use kiln_foundation::prelude::*;
    
    fn basic_value_conversion() {
        // Creating values from Rust types
        let number = ComponentValue::U32(42);
-       let text = ComponentValue::String("Hello, WRT!".to_string());
+       let text = ComponentValue::String("Hello, Kiln!".to_string());
        let flag = ComponentValue::Bool(true);
        
        // Extract values safely
@@ -89,7 +89,7 @@ Real applications need more than primitives:
    :caption: Complex type handling
    :linenos:
 
-   use wrt_foundation::component_value::{ComponentValue, Record, List};
+   use kiln_foundation::component_value::{ComponentValue, Record, List};
    use std::collections::HashMap;
    
    fn complex_type_example() {
@@ -136,8 +136,8 @@ For high-performance scenarios, use ValueStore:
    :caption: ValueStore for efficient operations
    :linenos:
 
-   use wrt_foundation::component_value_store::{ValueStore, ValueHandle};
-   use wrt_foundation::component_value::ComponentValue;
+   use kiln_foundation::component_value_store::{ValueStore, ValueHandle};
+   use kiln_foundation::component_value::ComponentValue;
    
    struct HighPerformanceProcessor {
        store: ValueStore,
@@ -219,8 +219,8 @@ Let's build an API gateway that handles different data formats:
    :caption: Component-based API gateway
    :linenos:
 
-   use wrt_foundation::component_value::{ComponentValue, Record, List};
-   use wrt_foundation::component_value_store::ValueStore;
+   use kiln_foundation::component_value::{ComponentValue, Record, List};
+   use kiln_foundation::component_value_store::ValueStore;
    use std::collections::HashMap;
    
    #[derive(Debug)]
@@ -383,7 +383,7 @@ For complex conversions, use the builder pattern:
 .. code-block:: rust
    :caption: Type conversion builder
 
-   use wrt_foundation::component_value::{ComponentValue, Record, ValueBuilder};
+   use kiln_foundation::component_value::{ComponentValue, Record, ValueBuilder};
    
    struct ConfigBuilder {
        builder: ValueBuilder,
@@ -435,8 +435,8 @@ For complex conversions, use the builder pattern:
    // Usage
    fn build_config_example() {
        let config = ConfigBuilder::new()
-           .with_database_config("localhost", 5432, "wrt_app")
-           .with_logging_config("info", Some("/var/log/wrt.log"))
+           .with_database_config("localhost", 5432, "kiln_app")
+           .with_logging_config("info", Some("/var/log/kiln.log"))
            .with_features(&["authentication", "metrics", "caching"])
            .build();
        
@@ -451,7 +451,7 @@ Built-in tools for debugging type issues:
 .. code-block:: rust
    :caption: Debugging helpers
 
-   use wrt_foundation::component_value::{ComponentValue, ValueDebugger};
+   use kiln_foundation::component_value::{ComponentValue, ValueDebugger};
    
    fn debug_value_conversion() {
        let complex_value = create_complex_value();
@@ -511,7 +511,7 @@ Robust error handling for production systems:
 .. code-block:: rust
    :caption: Comprehensive error handling
 
-   use wrt_foundation::component_value::{ComponentValue, ConversionError};
+   use kiln_foundation::component_value::{ComponentValue, ConversionError};
    
    #[derive(Debug)]
    enum ValueProcessingError {

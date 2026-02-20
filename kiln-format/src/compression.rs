@@ -10,11 +10,11 @@ use core::cmp;
 use std::cmp;
 
 #[cfg(feature = "std")]
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 #[cfg(not(any(feature = "std")))]
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 #[cfg(not(any(feature = "std")))]
-use wrt_foundation::MemoryProvider;
+use kiln_foundation::MemoryProvider;
 
 #[cfg(feature = "std")]
 use crate::Vec;

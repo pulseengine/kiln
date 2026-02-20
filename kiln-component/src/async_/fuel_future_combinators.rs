@@ -9,7 +9,7 @@ use core::{
     task::{Context, Poll},
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     operations::{Type as OperationType, record_global_operation},
     verification::VerificationLevel,
 };

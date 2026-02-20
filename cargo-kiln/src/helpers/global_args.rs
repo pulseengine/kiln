@@ -5,7 +5,7 @@
 
 use anyhow::Result;
 use atty::{self, Stream};
-use wrt_build_core::{
+use kiln_build_core::{
     config::BuildProfile,
     diagnostics::Severity,
     filtering::{FilterOptionsBuilder, GroupBy},
@@ -165,7 +165,7 @@ impl GlobalArgs {
 
     /// Get filter options (creates them lazily if needed)
     #[must_use]
-    pub fn build_filter_options(&mut self) -> Result<wrt_build_core::filtering::FilterOptions> {
+    pub fn build_filter_options(&mut self) -> Result<kiln_build_core::filtering::FilterOptions> {
         // Build filter options fresh each time
         let mut builder = FilterOptionsBuilder::new();
 
@@ -197,8 +197,8 @@ impl GlobalArgs {
 
         // Default sorting
         builder = builder.sort_by(
-            wrt_build_core::filtering::SortBy::File,
-            wrt_build_core::filtering::SortDirection::Ascending,
+            kiln_build_core::filtering::SortBy::File,
+            kiln_build_core::filtering::SortDirection::Ascending,
         );
 
         Ok(builder.build())
@@ -225,7 +225,7 @@ impl GlobalArgs {
                     std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."))
                 });
 
-            Some(workspace_root.join("target").join("wrt-cache").join("diagnostics.json"))
+            Some(workspace_root.join("target").join("kiln-cache").join("diagnostics.json"))
         } else {
             None
         }

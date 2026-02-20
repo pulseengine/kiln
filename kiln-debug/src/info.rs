@@ -11,8 +11,8 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::{
     bounded::{BoundedVec, MAX_DWARF_FILE_TABLE},
     budget_aware_provider::CrateId,
     safe_managed_alloc,

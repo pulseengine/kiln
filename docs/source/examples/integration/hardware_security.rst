@@ -8,12 +8,12 @@ Hardware Security Features
    
    -- Security engineer wisdom
 
-Modern CPUs provide powerful security features that WRT leverages to protect WebAssembly execution. The ``wrt-platform`` crate provides abstractions for these hardware capabilities, enabling defense-in-depth against sophisticated attacks.
+Modern CPUs provide powerful security features that Kiln leverages to protect WebAssembly execution. The ``kiln-platform`` crate provides abstractions for these hardware capabilities, enabling defense-in-depth against sophisticated attacks.
 
 .. admonition:: What You'll Learn
    :class: note
 
-   - Hardware security abstractions in WRT
+   - Hardware security abstractions in Kiln
    - ARM security features (PAC, MTE, BTI, TrustZone)
    - Intel security features (CET, MPK)
    - RISC-V security features (PMP, CFI)
@@ -24,13 +24,13 @@ Modern CPUs provide powerful security features that WRT leverages to protect Web
 Hardware Security Architecture 🏗️
 ---------------------------------
 
-WRT provides a unified abstraction for hardware security features across architectures:
+Kiln provides a unified abstraction for hardware security features across architectures:
 
 .. code-block:: rust
    :caption: Hardware optimization traits
    :linenos:
 
-   use wrt_platform::hardware_optimizations::{
+   use kiln_platform::hardware_optimizations::{
        HardwareOptimization,
        SecurityLevel,
        HardwareOptimizer
@@ -67,7 +67,7 @@ ARM PAC provides cryptographic protection for pointers:
    :caption: ARM Pointer Authentication abstraction
    :linenos:
 
-   use wrt_platform::hardware_optimizations::arm::PointerAuthentication;
+   use kiln_platform::hardware_optimizations::arm::PointerAuthentication;
    
    fn enable_pointer_authentication() -> Result<(), Error> {
        // Check compile-time availability
@@ -100,7 +100,7 @@ MTE provides hardware-accelerated memory safety:
    :caption: ARM MTE abstraction  
    :linenos:
 
-   use wrt_platform::hardware_optimizations::arm::{
+   use kiln_platform::hardware_optimizations::arm::{
        MemoryTagging,
        MteMode,
        TagStrategy
@@ -129,7 +129,7 @@ MTE provides hardware-accelerated memory safety:
    // Platform-specific allocator with MTE
    #[cfg(all(target_arch = "aarch64", feature = "linux-mte"))]
    fn create_mte_protected_allocator() -> Result<(), Error> {
-       use wrt_platform::{LinuxArm64MteAllocator, LinuxArm64MteAllocatorBuilder};
+       use kiln_platform::{LinuxArm64MteAllocator, LinuxArm64MteAllocatorBuilder};
        
        let allocator = LinuxArm64MteAllocatorBuilder::new()
            .with_mte_mode(MteMode::Synchronous)
@@ -151,7 +151,7 @@ BTI provides control flow integrity:
    :caption: ARM BTI abstraction
    :linenos:
 
-   use wrt_platform::hardware_optimizations::arm::{
+   use kiln_platform::hardware_optimizations::arm::{
        BranchTargetIdentification,
        BtiMode,
        BtiExceptionLevel
@@ -181,7 +181,7 @@ BTI provides control flow integrity:
    
    // BTI modes available
    fn demonstrate_bti_modes() {
-       use wrt_platform::hardware_optimizations::arm::BtiMode;
+       use kiln_platform::hardware_optimizations::arm::BtiMode;
        
        let modes = [
            BtiMode::Standard,     // Standard BTI (bti instruction)
@@ -200,7 +200,7 @@ TrustZone provides secure/non-secure world separation:
    :caption: ARM TrustZone abstraction
    :linenos:
 
-   use wrt_platform::hardware_optimizations::arm::TrustZone;
+   use kiln_platform::hardware_optimizations::arm::TrustZone;
    
    fn check_trustzone_support() -> Result<(), Error> {
        if !TrustZone::is_available() {
@@ -234,7 +234,7 @@ Intel CET provides shadow stack and indirect branch tracking:
    :caption: Intel CET abstraction
    :linenos:
 
-   use wrt_platform::hardware_optimizations::intel::ControlFlowEnforcement;
+   use kiln_platform::hardware_optimizations::intel::ControlFlowEnforcement;
    
    fn enable_intel_cet() -> Result<(), Error> {
        if !ControlFlowEnforcement::is_available() {
@@ -265,7 +265,7 @@ MPK provides fine-grained memory protection:
    :caption: Intel MPK abstraction
    :linenos:
 
-   use wrt_platform::hardware_optimizations::intel::{
+   use kiln_platform::hardware_optimizations::intel::{
        MemoryProtectionKeys,
        AccessRights
    };
@@ -292,7 +292,7 @@ MPK provides fine-grained memory protection:
    
    // Access rights structure
    fn demonstrate_access_rights() {
-       use wrt_platform::hardware_optimizations::intel::AccessRights;
+       use kiln_platform::hardware_optimizations::intel::AccessRights;
        
        let rights = AccessRights {
            read: true,
@@ -313,7 +313,7 @@ RISC-V PMP provides hardware memory access control:
    :caption: RISC-V PMP abstraction
    :linenos:
 
-   use wrt_platform::hardware_optimizations::riscv::PhysicalMemoryProtection;
+   use kiln_platform::hardware_optimizations::riscv::PhysicalMemoryProtection;
    
    fn enable_riscv_pmp() -> Result<(), Error> {
        if !PhysicalMemoryProtection::is_available() {
@@ -335,7 +335,7 @@ RISC-V PMP provides hardware memory access control:
    
    // PMP configuration structures
    fn demonstrate_pmp_config() {
-       use wrt_platform::hardware_optimizations::riscv::{
+       use kiln_platform::hardware_optimizations::riscv::{
            PmpEntry, PmpConfig, AddressMode
        };
        
@@ -359,7 +359,7 @@ RISC-V CFI extensions for control flow protection:
    :caption: RISC-V CFI abstraction
    :linenos:
 
-   use wrt_platform::hardware_optimizations::riscv::{
+   use kiln_platform::hardware_optimizations::riscv::{
        ControlFlowIntegrity,
        CfiExceptionMode
    };
@@ -396,7 +396,7 @@ Detect security features at compile time:
    :caption: Compile-time security detection
    :linenos:
 
-   use wrt_platform::hardware_optimizations::compile_time;
+   use kiln_platform::hardware_optimizations::compile_time;
    
    fn check_compile_time_security() {
        // Detect security level at compile time
@@ -421,13 +421,13 @@ Detect security features at compile time:
 Side-Channel Resistance 🕵️
 --------------------------
 
-WRT provides abstractions for side-channel resistant code:
+Kiln provides abstractions for side-channel resistant code:
 
 .. code-block:: rust
    :caption: Side-channel resistance levels
    :linenos:
 
-   use wrt_platform::side_channel_resistance::{
+   use kiln_platform::side_channel_resistance::{
        ResistanceLevel,
        AttackVector
    };
@@ -460,7 +460,7 @@ The constant_time module provides timing-safe operations:
    :caption: Constant-time utilities
    :linenos:
 
-   use wrt_platform::side_channel_resistance::constant_time;
+   use kiln_platform::side_channel_resistance::constant_time;
    
    fn use_constant_time_ops() -> Result<(), Error> {
        let secret_a = [1u8; 32];
@@ -488,7 +488,7 @@ Minimize cache-based information leakage:
    :caption: Cache-aware memory management
    :linenos:
 
-   use wrt_platform::side_channel_resistance::cache_aware_allocation;
+   use kiln_platform::side_channel_resistance::cache_aware_allocation;
    
    fn setup_cache_aware_memory() -> Result<(), Error> {
        // Allocate memory with cache-line alignment
@@ -510,7 +510,7 @@ Hide memory access patterns:
    :caption: Obfuscated access patterns
    :linenos:
 
-   use wrt_platform::side_channel_resistance::access_obfuscation;
+   use kiln_platform::side_channel_resistance::access_obfuscation;
    
    fn obfuscate_memory_access() -> Result<(), Error> {
        let data = vec![1u32; 256];
@@ -528,13 +528,13 @@ Hide memory access patterns:
 Formal Verification Support 🧮
 -----------------------------
 
-WRT includes formal verification annotations:
+Kiln includes formal verification annotations:
 
 .. code-block:: rust
    :caption: Formal verification integration
    :linenos:
 
-   use wrt_platform::formal_verification::annotations::*;
+   use kiln_platform::formal_verification::annotations::*;
    
    // Memory safety verification
    #[verified_memory_safe]
@@ -567,7 +567,7 @@ Integrate security features with platform abstractions:
    :caption: Security-aware platform configuration
    :linenos:
 
-   use wrt_platform::side_channel_resistance::platform_integration;
+   use kiln_platform::side_channel_resistance::platform_integration;
    
    fn create_secure_platform() -> Result<(), Error> {
        // Configure platform with security features
@@ -595,7 +595,7 @@ Combine multiple security features:
    :caption: Production security configuration
    :linenos:
 
-   use wrt_platform::{
+   use kiln_platform::{
        hardware_optimizations::HardwareOptimizer,
        side_channel_resistance::ResistanceLevel,
        platform_abstraction::paradigm,
@@ -658,7 +658,7 @@ Key Takeaways 🌟
 .. admonition:: Security Philosophy
    :class: warning
 
-   Hardware security features are powerful tools, but they're just one layer in a defense-in-depth strategy. The ``wrt-platform`` crate makes these features accessible while maintaining portability and performance.
+   Hardware security features are powerful tools, but they're just one layer in a defense-in-depth strategy. The ``kiln-platform`` crate makes these features accessible while maintaining portability and performance.
 
 Next Steps 🎯
 -------------

@@ -230,7 +230,7 @@ impl MatrixVerifier {
                 package: "wrtd".to_string(),
                 features: vec![
                     "safety-asil-d".to_string(),
-                    "wrt-execution".to_string(),
+                    "kiln-execution".to_string(),
                     "enable-panic-handler".to_string(),
                 ],
                 asil_level: AsilLevel::AsilD,
@@ -240,7 +240,7 @@ impl MatrixVerifier {
                 package: "wrtd".to_string(),
                 features: vec![
                     "safety-asil-c".to_string(),
-                    "wrt-execution".to_string(),
+                    "kiln-execution".to_string(),
                     "enable-panic-handler".to_string(),
                 ],
                 asil_level: AsilLevel::AsilC,
@@ -250,7 +250,7 @@ impl MatrixVerifier {
                 package: "wrtd".to_string(),
                 features: vec![
                     "safety-asil-b".to_string(),
-                    "wrt-execution".to_string(),
+                    "kiln-execution".to_string(),
                     "asil-b-panic".to_string(),
                 ],
                 asil_level: AsilLevel::AsilB,
@@ -260,7 +260,7 @@ impl MatrixVerifier {
                 package: "wrtd".to_string(),
                 features: vec![
                     "std".to_string(),
-                    "wrt-execution".to_string(),
+                    "kiln-execution".to_string(),
                     "dev-panic".to_string(),
                 ],
                 asil_level: AsilLevel::Development,
@@ -268,13 +268,13 @@ impl MatrixVerifier {
             BuildConfiguration {
                 name: "WRTD Server Runtime".to_string(),
                 package: "wrtd".to_string(),
-                features: vec!["std".to_string(), "wrt-execution".to_string()],
+                features: vec!["std".to_string(), "kiln-execution".to_string()],
                 asil_level: AsilLevel::Server,
             },
             // Component Model Tests
             BuildConfiguration {
                 name: "Component Model Core".to_string(),
-                package: "wrt-component".to_string(),
+                package: "kiln-component".to_string(),
                 features: vec![
                     "no_std".to_string(),
                     "alloc".to_string(),
@@ -284,7 +284,7 @@ impl MatrixVerifier {
             },
             BuildConfiguration {
                 name: "Component Model Full".to_string(),
-                package: "wrt-component".to_string(),
+                package: "kiln-component".to_string(),
                 features: vec!["std".to_string(), "component-model-all".to_string()],
                 asil_level: AsilLevel::Component,
             },

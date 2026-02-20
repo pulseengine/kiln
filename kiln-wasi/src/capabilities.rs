@@ -2,11 +2,11 @@
 //!
 //! This module provides fine-grained control over WASI capabilities, allowing
 //! host applications to specify exactly what system resources WASI modules
-//! can access. Built on WRT's bounded collections for memory safety.
+//! can access. Built on Kiln's bounded collections for memory safety.
 
 #[cfg(feature = "std")]
-use wrt_foundation::capabilities::CapabilityAwareProvider;
-use wrt_foundation::{
+use kiln_foundation::capabilities::CapabilityAwareProvider;
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     safe_memory::NoStdProvider,
@@ -47,10 +47,10 @@ fn create_provider() -> Result<PathProvider> {
     #[cfg(feature = "std")]
     {
         let base_provider = safe_managed_alloc!(8192, CrateId::Wasi)?;
-        let capability = Box::new(wrt_foundation::capabilities::DynamicMemoryCapability::new(
+        let capability = Box::new(kiln_foundation::capabilities::DynamicMemoryCapability::new(
             8192,
             WASI_CRATE_ID,
-            wrt_foundation::verification::VerificationLevel::Standard,
+            kiln_foundation::verification::VerificationLevel::Standard,
         ));
         Ok(CapabilityAwareProvider::new(
             base_provider,
@@ -634,7 +634,7 @@ pub struct WasiNeuralNetworkCapabilities {
     /// Allow only pre-approved models
     pub require_model_approval: bool,
     /// Verification level for NN operations
-    pub verification_level:     wrt_foundation::verification::VerificationLevel,
+    pub verification_level:     kiln_foundation::verification::VerificationLevel,
 }
 
 #[cfg(feature = "wasi-nn")]
@@ -646,7 +646,7 @@ impl WasiNeuralNetworkCapabilities {
             max_model_size:         0,
             max_tensor_memory:      0,
             require_model_approval: true,
-            verification_level:     wrt_foundation::verification::VerificationLevel::Standard,
+            verification_level:     kiln_foundation::verification::VerificationLevel::Standard,
         })
     }
 
@@ -657,7 +657,7 @@ impl WasiNeuralNetworkCapabilities {
             max_model_size:         10 * 1024 * 1024, // 10MB
             max_tensor_memory:      5 * 1024 * 1024,  // 5MB
             require_model_approval: false,
-            verification_level:     wrt_foundation::verification::VerificationLevel::Sampling,
+            verification_level:     kiln_foundation::verification::VerificationLevel::Sampling,
         })
     }
 
@@ -668,18 +668,18 @@ impl WasiNeuralNetworkCapabilities {
             max_model_size:         100 * 1024 * 1024, // 100MB
             max_tensor_memory:      50 * 1024 * 1024,  // 50MB
             require_model_approval: false,
-            verification_level:     wrt_foundation::verification::VerificationLevel::Standard,
+            verification_level:     kiln_foundation::verification::VerificationLevel::Standard,
         })
     }
 
     /// Create capability for specific verification level
     pub fn for_verification_level(
-        level: wrt_foundation::verification::VerificationLevel,
+        level: kiln_foundation::verification::VerificationLevel,
     ) -> Result<Self> {
         match level {
-            wrt_foundation::verification::VerificationLevel::Standard => Self::full_access(),
-            wrt_foundation::verification::VerificationLevel::Sampling => Self::sandboxed(),
-            wrt_foundation::verification::VerificationLevel::Full => Ok(Self {
+            kiln_foundation::verification::VerificationLevel::Standard => Self::full_access(),
+            kiln_foundation::verification::VerificationLevel::Sampling => Self::sandboxed(),
+            kiln_foundation::verification::VerificationLevel::Full => Ok(Self {
                 dynamic_loading:        false,
                 max_model_size:         20 * 1024 * 1024, // 20MB
                 max_tensor_memory:      10 * 1024 * 1024, // 10MB
@@ -687,7 +687,7 @@ impl WasiNeuralNetworkCapabilities {
                 verification_level:     level,
             }),
             _ => Err(Error::wasi_unsupported_operation(
-                "ASIL-C/D not supported in wrtd",
+                "ASIL-C/D not supported in kilnd",
             )),
         }
     }
@@ -696,7 +696,7 @@ impl WasiNeuralNetworkCapabilities {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use wrt_foundation::memory_init::MemoryInitializer;
+    use kiln_foundation::memory_init::MemoryInitializer;
 
     #[test]
     fn test_minimal_capabilities() -> Result<()> {

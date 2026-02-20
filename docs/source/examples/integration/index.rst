@@ -13,7 +13,7 @@ Platform Layer Examples
    
    -- Every embedded developer ever
 
-The ``wrt-platform`` crate is your gateway to running WebAssembly across wildly different platforms - from tiny microcontrollers to massive servers, from real-time systems to secure enclaves. One API, many targets, zero compromises on safety.
+The ``kiln-platform`` crate is your gateway to running WebAssembly across wildly different platforms - from tiny microcontrollers to massive servers, from real-time systems to secure enclaves. One API, many targets, zero compromises on safety.
 
 What's Platform Abstraction? 🌍
 --------------------------------
@@ -27,7 +27,7 @@ Picture this: You're writing a WebAssembly runtime that needs to work on:
 - **macOS** development machines with funky VM subsystems
 - **Tock OS** with hardware-enforced security boundaries
 
-Same code. Different worlds. That's what ``wrt-platform`` makes possible.
+Same code. Different worlds. That's what ``kiln-platform`` makes possible.
 
 .. contents:: Platform Examples
    :local:
@@ -128,10 +128,10 @@ Quick Start Examples 🚀
 .. code-block:: rust
    :caption: Let the platform layer choose for you
 
-   use wrt_platform::prelude::*;
-   use wrt_platform::platform_select;
+   use kiln_platform::prelude::*;
+   use kiln_platform::platform_select;
 
-   fn main() -> Result<(), wrt_error::Error> {
+   fn main() -> Result<(), kiln_error::Error> {
        // Automatically selects the best platform implementation
        let platform = platform_select::create_auto_platform();
        
@@ -150,8 +150,8 @@ Quick Start Examples 🚀
 .. code-block:: rust
    :caption: Choose your platform philosophy
 
-   use wrt_platform::prelude::*;
-   use wrt_platform::{paradigm, UnifiedPlatform, PlatformConfig};
+   use kiln_platform::prelude::*;
+   use kiln_platform::{paradigm, UnifiedPlatform, PlatformConfig};
 
    // For real-time systems
    let rt_config = PlatformConfig::<paradigm::RealTime>::new()
@@ -174,8 +174,8 @@ Modern CPUs aren't just fast - they're secure. We leverage:
 .. code-block:: rust
    :caption: Hardware security in action
 
-   use wrt_platform::hardware_optimizations::{HardwareOptimizer, SecurityLevel};
-   use wrt_platform::hardware_optimizations::arm::BranchTargetIdentification;
+   use kiln_platform::hardware_optimizations::{HardwareOptimizer, SecurityLevel};
+   use kiln_platform::hardware_optimizations::arm::BranchTargetIdentification;
 
    // Enable ARM BTI for control-flow integrity
    let optimizer = HardwareOptimizer::new();
@@ -218,4 +218,4 @@ Where are you deploying?
 
    Start with auto-platform selection and only specialize when you need specific features. The platform layer is smart enough to pick optimal implementations for most use cases.
 
-Remember: Write your WebAssembly runtime once, and let ``wrt-platform`` handle the messy platform details. That's the power of proper abstraction!
+Remember: Write your WebAssembly runtime once, and let ``kiln-platform`` handle the messy platform details. That's the power of proper abstraction!

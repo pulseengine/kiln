@@ -21,7 +21,7 @@ use core::{
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use wrt_error::{
+use kiln_error::{
     helpers::memory_limit_exceeded_error,
     Result,
 };

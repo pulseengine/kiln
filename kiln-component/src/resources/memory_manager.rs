@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 
 use crate::resources::{
     MemoryStrategy, ResourceId, ResourceManager, ResourceOperation, ResourceStrategy,

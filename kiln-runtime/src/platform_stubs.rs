@@ -1,8 +1,8 @@
-// WRT - wrt-runtime
+// Kiln - kiln-runtime
 // Module: Platform Abstraction Interface (PAI)
 // SW-REQ-ID: REQ_PLATFORM_ABSTRACTION_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
@@ -21,7 +21,7 @@
 #![forbid(unsafe_code)] // Platform abstractions must be safe
 
 use core::marker::PhantomData;
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 
 // Box for trait objects
 #[cfg(feature = "std")]
@@ -173,7 +173,7 @@ mod atomic_fallback {
 
 // Platform abstraction layer
 #[cfg(feature = "platform-sync")]
-pub use wrt_platform::sync::{AtomicU32, AtomicU64, AtomicUsize, Ordering as PlatformOrdering};
+pub use kiln_platform::sync::{AtomicU32, AtomicU64, AtomicUsize, Ordering as PlatformOrdering};
 
 #[cfg(not(feature = "platform-sync"))]
 pub use self::atomic_fallback::{AtomicU32, AtomicU64, AtomicUsize, Ordering as PlatformOrdering};
@@ -183,7 +183,7 @@ pub use self::atomic_fallback::{AtomicU32, AtomicU64, AtomicUsize, Ordering as P
 pub use std::time::Duration;
 
 #[cfg(all(not(feature = "std"), feature = "platform-sync"))]
-pub use wrt_platform::sync::Duration;
+pub use kiln_platform::sync::Duration;
 
 #[cfg(all(not(feature = "std"), not(feature = "platform-sync")))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -314,7 +314,7 @@ impl ComprehensivePlatformLimits {
 
 /// Platform limit provider trait stub
 pub trait ComprehensiveLimitProvider: Send + Sync {
-    fn discover_limits(&self) -> Result<ComprehensivePlatformLimits, wrt_error::Error>;
+    fn discover_limits(&self) -> Result<ComprehensivePlatformLimits, kiln_error::Error>;
     fn platform_id(&self) -> PlatformId;
 }
 
@@ -323,7 +323,7 @@ pub trait ComprehensiveLimitProvider: Send + Sync {
 pub struct DefaultLimitProvider;
 
 impl ComprehensiveLimitProvider for DefaultLimitProvider {
-    fn discover_limits(&self) -> Result<ComprehensivePlatformLimits, wrt_error::Error> {
+    fn discover_limits(&self) -> Result<ComprehensivePlatformLimits, kiln_error::Error> {
         Ok(ComprehensivePlatformLimits::default())
     }
     
@@ -336,7 +336,7 @@ impl ComprehensiveLimitProvider for DefaultLimitProvider {
 pub struct LinuxLimitProvider;
 
 impl ComprehensiveLimitProvider for LinuxLimitProvider {
-    fn discover_limits(&self) -> Result<ComprehensivePlatformLimits, wrt_error::Error> {
+    fn discover_limits(&self) -> Result<ComprehensivePlatformLimits, kiln_error::Error> {
         Ok(ComprehensivePlatformLimits {
             platform_id: PlatformId::Linux,
             max_total_memory: 8 * 1024 * 1024 * 1024, // 8GB
@@ -357,7 +357,7 @@ impl ComprehensiveLimitProvider for LinuxLimitProvider {
 pub struct QnxLimitProvider;
 
 impl ComprehensiveLimitProvider for QnxLimitProvider {
-    fn discover_limits(&self) -> Result<ComprehensivePlatformLimits, wrt_error::Error> {
+    fn discover_limits(&self) -> Result<ComprehensivePlatformLimits, kiln_error::Error> {
         Ok(ComprehensivePlatformLimits {
             platform_id: PlatformId::QNX,
             max_total_memory: 512 * 1024 * 1024, // 512MB
@@ -411,7 +411,7 @@ pub trait PlatformConfig: Send + Sync + 'static {}
 pub fn create_platform_interface() -> Result<Box<dyn PlatformInterface>> {
     #[cfg(feature = "platform-sync")]
     {
-        // Use full platform abstraction from wrt-platform
+        // Use full platform abstraction from kiln-platform
         create_full_platform_interface()
     }
     
@@ -473,7 +473,7 @@ impl PlatformInterface for MinimalPlatform {
 
 #[cfg(feature = "platform-sync")]
 fn create_full_platform_interface() -> Result<Box<dyn PlatformInterface>> {
-    // This would integrate with wrt-platform's full abstraction
+    // This would integrate with kiln-platform's full abstraction
     // For now, return error to indicate implementation needed
     Err(Error::not_implemented_error("Full platform interface integration pending"))
 }
@@ -508,7 +508,7 @@ pub fn current_time_ns() -> u64 {
     
     #[cfg(all(not(feature = "std"), feature = "platform-sync"))]
     {
-        wrt_platform::time::current_time_ns()
+        kiln_platform::time::current_time_ns()
     }
     
     #[cfg(all(not(feature = "std"), not(feature = "platform-sync")))]

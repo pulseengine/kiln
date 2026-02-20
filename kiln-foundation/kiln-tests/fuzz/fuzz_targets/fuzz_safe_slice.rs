@@ -8,7 +8,7 @@
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
 use std::panic;
-use wrt_foundation::{
+use kiln_foundation::{
     safe_memory::{MemoryProvider, SafeSlice, StdMemoryProvider},
     verification::VerificationLevel,
 };

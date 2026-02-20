@@ -37,8 +37,8 @@ pub use collector::{GcCollector, GcStats, RootSet};
 pub use heap::GcHeap;
 pub use object::{GcObject, GcObjectRef, ObjectHeader};
 
-use wrt_error::Result;
-use wrt_foundation::types::HeapType;
+use kiln_error::Result;
+use kiln_foundation::types::HeapType;
 
 /// Maximum size of the GC heap in bytes (1MB default)
 pub const DEFAULT_GC_HEAP_SIZE: usize = 1024 * 1024;

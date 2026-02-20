@@ -1,14 +1,14 @@
 use crate::prelude::*;
-use wrt_foundation::{
+use kiln_foundation::{
     safe_memory::{SafeStack, SafeSlice},
     Value, VerificationLevel,
 };
 
 // Type aliases with proper memory provider
-pub type ComponentType = wrt_foundation::component::ComponentType<wrt_foundation::safe_memory::NoStdProvider<1024>>;
-pub type ExternType = wrt_foundation::component::ExternType<wrt_foundation::safe_memory::NoStdProvider<1024>>;
-pub type SafeStackValue = wrt_foundation::safe_memory::SafeStack<Value, 64, wrt_foundation::safe_memory::NoStdProvider<1024>>;
-pub type FuncType = wrt_foundation::types::FuncType;
+pub type ComponentType = kiln_foundation::component::ComponentType<kiln_foundation::safe_memory::NoStdProvider<1024>>;
+pub type ExternType = kiln_foundation::component::ExternType<kiln_foundation::safe_memory::NoStdProvider<1024>>;
+pub type SafeStackValue = kiln_foundation::safe_memory::SafeStack<Value, 64, kiln_foundation::safe_memory::NoStdProvider<1024>>;
+pub type FuncType = kiln_foundation::types::FuncType;
 
 /// Represents a runtime component instance
 #[cfg(feature = "std")]
@@ -46,9 +46,9 @@ pub trait HostFunctionFactory {
     fn create_function(&self, name: &str, ty: &FuncType) -> Result<Box<dyn HostFunction>>;
 }
 
-// Re-export HostImportHandler from wrt-foundation for convenience
+// Re-export HostImportHandler from kiln-foundation for convenience
 #[cfg(feature = "std")]
-pub use wrt_foundation::HostImportHandler;
+pub use kiln_foundation::HostImportHandler;
 
 /// Represents a component runtime environment
 #[cfg(feature = "std")]
@@ -67,7 +67,7 @@ pub trait ComponentRuntime {
     /// Register a specific host function
     fn register_host_function<F>(&mut self, name: &str, ty: FuncType, function: F) -> Result<()>
     where
-        F: Fn(&[Value]) -> Result<wrt_foundation::bounded::BoundedVec<Value, 16, wrt_foundation::safe_memory::NoStdProvider<1024>>> + 'static + Send + Sync;
+        F: Fn(&[Value]) -> Result<kiln_foundation::bounded::BoundedVec<Value, 16, kiln_foundation::safe_memory::NoStdProvider<1024>>> + 'static + Send + Sync;
 
     /// Set the verification level for memory operations
     fn set_verification_level(&mut self, level: VerificationLevel) -> Result<()>;

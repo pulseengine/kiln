@@ -1,12 +1,12 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use wrt_component::{
+use kiln_component::{
     canonical_options::{CanonicalOptions, CanonicalOptionsBuilder},
     canonical_realloc::{ReallocManager, StringEncoding},
     ComponentInstanceId,
 };
-use wrt_foundation::component_value::ComponentValue;
+use kiln_foundation::component_value::ComponentValue;
 
 fuzz_target!(|data: &[u8]| {
     if data.is_empty() {

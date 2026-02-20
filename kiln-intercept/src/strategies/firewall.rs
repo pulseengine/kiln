@@ -12,7 +12,7 @@ use std::{
     },
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };

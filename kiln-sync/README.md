@@ -1,4 +1,4 @@
-# wrt-sync
+# kiln-sync
 
 > Synchronization primitives for WebAssembly runtime
 
@@ -8,9 +8,9 @@ Provides cross-platform synchronization primitives optimized for WebAssembly run
 
 ## Features
 
-- **🔒 WrtMutex**: Mutual exclusion primitive with transparent std/no_std adaptation
-- **📖 WrtRwLock**: Reader-writer lock for concurrent read access
-- **🔄 WrtOnce**: One-time initialization primitive
+- **🔒 KilnMutex**: Mutual exclusion primitive with transparent std/no_std adaptation
+- **📖 KilnRwLock**: Reader-writer lock for concurrent read access
+- **🔄 KilnOnce**: One-time initialization primitive
 - **🏷️ Cross-platform**: Consistent API across std and no_std environments
 - **⚡ Performance**: Optimized implementations for each environment
 - **🛡️ Safety**: Formal verification support via Kani
@@ -19,13 +19,13 @@ Provides cross-platform synchronization primitives optimized for WebAssembly run
 
 ```toml
 [dependencies]
-wrt-sync = "0.1"
+kiln-sync = "0.1"
 ```
 
 ### Basic Usage
 
 ```rust
-use wrt_sync::{Mutex, RwLock, Once};
+use kiln_sync::{Mutex, RwLock, Once};
 
 // Mutex for exclusive access
 let mutex = Mutex::new(42);
@@ -50,36 +50,36 @@ INIT.call_once(|| {
 
 ### Standard Library
 ```toml
-wrt-sync = { version = "0.1", features = ["std"] }
+kiln-sync = { version = "0.1", features = ["std"] }
 ```
 Uses `parking_lot` for high-performance synchronization.
 
 ### no_std + alloc
 ```toml
-wrt-sync = { version = "0.1", features = ["alloc"] }
+kiln-sync = { version = "0.1", features = ["alloc"] }
 ```
 Custom implementations with heap allocation.
 
 ### Pure no_std
 ```toml
-wrt-sync = { version = "0.1", default-features = false }
+kiln-sync = { version = "0.1", default-features = false }
 ```
 Spin-lock based implementations, no heap allocation.
 
 ## API Reference
 
-### WrtMutex
+### KilnMutex
 ```rust
-use wrt_sync::Mutex;
+use kiln_sync::Mutex;
 
 let mutex = Mutex::new(String::from("hello"));
 let guard = mutex.lock().unwrap();
 println!("{}", *guard);
 ```
 
-### WrtRwLock
+### KilnRwLock
 ```rust
-use wrt_sync::RwLock;
+use kiln_sync::RwLock;
 
 let lock = RwLock::new(5);
 
@@ -96,9 +96,9 @@ let mut w = lock.write().unwrap();
 *w = 10;
 ```
 
-### WrtOnce
+### KilnOnce
 ```rust
-use wrt_sync::Once;
+use kiln_sync::Once;
 
 static START: Once = Once::new();
 
@@ -118,6 +118,6 @@ START.call_once(|| {
 
 ## See Also
 
-- [API Documentation](https://docs.rs/wrt-sync)
+- [API Documentation](https://docs.rs/kiln-sync)
 - [Synchronization Guide](../docs/source/architecture/sync.rst)
-- [WRT Architecture](../docs/source/architecture/)
+- [Kiln Architecture](../docs/source/architecture/)

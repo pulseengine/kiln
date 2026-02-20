@@ -14,10 +14,10 @@ use core::{fmt, mem};
 #[cfg(feature = "std")]
 use std::{fmt, mem};
 
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 #[cfg(feature = "std")]
-use wrt_foundation::component_value::ComponentValue;
-use wrt_foundation::{
+use kiln_foundation::component_value::ComponentValue;
+use kiln_foundation::{
     budget_aware_provider::CrateId, collections::StaticVec as BoundedVec, safe_managed_alloc,
     safe_memory::NoStdProvider, traits::DefaultMemoryProvider, values::Value,
 };
@@ -397,10 +397,10 @@ impl PostReturnContext {
             ComponentValue::U32(v) => Ok(Value::I32(*v as i32)),
             ComponentValue::S64(v) => Ok(Value::I64(*v)),
             ComponentValue::U64(v) => Ok(Value::I64(*v as i64)),
-            ComponentValue::F32(v) => Ok(Value::F32(wrt_foundation::FloatBits32::from_bits(
+            ComponentValue::F32(v) => Ok(Value::F32(kiln_foundation::FloatBits32::from_bits(
                 v.to_bits(),
             ))),
-            ComponentValue::F64(v) => Ok(Value::F64(wrt_foundation::FloatBits64::from_bits(
+            ComponentValue::F64(v) => Ok(Value::F64(kiln_foundation::FloatBits64::from_bits(
                 v.to_bits(),
             ))),
             ComponentValue::String(s) => {
@@ -427,10 +427,10 @@ impl PostReturnContext {
             ComponentValue::U32(v) => Ok(Value::I32(*v as i32)),
             ComponentValue::S64(v) => Ok(Value::I64(*v)),
             ComponentValue::U64(v) => Ok(Value::I64(*v as i64)),
-            ComponentValue::F32(v) => Ok(Value::F32(wrt_foundation::FloatBits32::from_bits(
+            ComponentValue::F32(v) => Ok(Value::F32(kiln_foundation::FloatBits32::from_bits(
                 v.to_bits(),
             ))),
-            ComponentValue::F64(v) => Ok(Value::F64(wrt_foundation::FloatBits64::from_bits(
+            ComponentValue::F64(v) => Ok(Value::F64(kiln_foundation::FloatBits64::from_bits(
                 v.to_bits(),
             ))),
             #[cfg(feature = "std")]

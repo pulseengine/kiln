@@ -7,11 +7,11 @@
 //! These operations support the WebAssembly branch hinting proposal
 //! and work across std, `no_std+alloc`, and pure `no_std` environments.
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     types::{
         LabelIdx,
         ValueType,
@@ -233,7 +233,7 @@ impl Validate for BranchHintOp {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use wrt_foundation::values::{
+    use kiln_foundation::values::{
         ExternRef,
         FuncRef,
     };

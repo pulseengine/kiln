@@ -3,12 +3,12 @@
 //! This module provides the instance types for component instances.
 //! It supports both std and no_std environments.
 
-// WRT - wrt-component
+// WRT - kiln-component
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-use wrt_format::component::ComponentTypeDefinition;
+use kiln_format::component::ComponentTypeDefinition;
 
 use crate::export::Export;
 use crate::prelude::*;
@@ -21,7 +21,7 @@ use crate::prelude::*;
 mod std_impl {
     use std::{string::String, vec::Vec};
 
-    use wrt_format::component::ComponentTypeDefinition;
+    use kiln_format::component::ComponentTypeDefinition;
 
     use crate::export::Export;
 
@@ -65,9 +65,9 @@ mod std_impl {
 mod no_std_impl {
     extern crate alloc;
     use alloc::vec;
-    use wrt_error::Error;
-    use wrt_format::component::ComponentTypeDefinition;
-    use wrt_foundation::{
+    use kiln_error::Error;
+    use kiln_format::component::ComponentTypeDefinition;
+    use kiln_foundation::{
         MemoryProvider,
         bounded::{BoundedString, BoundedVec, MAX_WASM_NAME_LENGTH},
         budget_aware_provider::CrateId,
@@ -127,9 +127,9 @@ mod no_std_impl {
     impl ToBytes for InstanceValue {
         fn to_bytes_with_provider<'a, P: MemoryProvider>(
             &self,
-            writer: &mut wrt_foundation::traits::WriteStream<'a>,
+            writer: &mut kiln_foundation::traits::WriteStream<'a>,
             _provider: &P,
-        ) -> wrt_error::Result<()> {
+        ) -> kiln_error::Result<()> {
             // Simple stub implementation - just write the name length
             writer.write_u32_le(self.name.len() as u32)?;
             Ok(())
@@ -138,9 +138,9 @@ mod no_std_impl {
 
     impl FromBytes for InstanceValue {
         fn from_bytes_with_provider<'a, P: MemoryProvider>(
-            _reader: &mut wrt_foundation::traits::ReadStream<'a>,
+            _reader: &mut kiln_foundation::traits::ReadStream<'a>,
             _provider: &P,
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             Ok(Self::default())
         }
     }
@@ -151,7 +151,7 @@ mod no_std_impl {
             name: &str,
             ty: ComponentTypeDefinition,
             exports: &[Export],
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             let _name_provider = safe_managed_alloc!(512, CrateId::Component)?;
             let bounded_name = BoundedString::try_from_str(name)
                 .map_err(|_| Error::parameter_validation_error("Instance name too long"))?;
@@ -240,7 +240,7 @@ mod no_std_impl {
         }
 
         /// Builds the instance value
-        pub fn build(self) -> wrt_error::Result<InstanceValue> {
+        pub fn build(self) -> kiln_error::Result<InstanceValue> {
             let name = self
                 .name
                 .ok_or_else(|| Error::parameter_validation_error("Instance name is required"))?;
@@ -266,7 +266,7 @@ mod no_std_impl {
 
     impl InstanceCollection {
         /// Creates a new empty instance collection
-        pub fn new() -> wrt_error::Result<Self> {
+        pub fn new() -> kiln_error::Result<Self> {
             let provider = safe_managed_alloc!(65536, CrateId::Component)?;
             Ok(Self {
                 instances: BoundedVec::new(provider)?,
@@ -274,7 +274,7 @@ mod no_std_impl {
         }
 
         /// Adds an instance to the collection
-        pub fn add_instance(&mut self, instance: InstanceValue) -> wrt_error::Result<()> {
+        pub fn add_instance(&mut self, instance: InstanceValue) -> kiln_error::Result<()> {
             self.instances
                 .push(instance)
                 .map_err(|_| Error::capacity_exceeded("Maximum number of instances exceeded"))

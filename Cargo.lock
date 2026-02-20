@@ -258,7 +258,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
-name = "cargo-wrt"
+name = "cargo-kiln"
 version = "0.2.0"
 dependencies = [
  "anyhow",
@@ -269,6 +269,9 @@ dependencies = [
  "colored",
  "criterion 0.5.1",
  "glob",
+ "kiln-build-core",
+ "kiln-decoder",
+ "kiln-foundation",
  "num_cpus",
  "reqwest",
  "serde",
@@ -278,9 +281,6 @@ dependencies = [
  "tokio",
  "toml",
  "which",
- "wrt-build-core",
- "wrt-decoder",
- "wrt-foundation",
 ]
 
 [[package]]
@@ -1213,6 +1213,235 @@ dependencies = [
  "anyhow",
  "home",
  "os_info",
+]
+
+[[package]]
+name = "kiln-build-core"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "colored",
+ "fs_extra",
+ "kiln-decoder",
+ "kiln-error",
+ "kiln-format",
+ "kiln-foundation",
+ "kiln-runtime",
+ "md5",
+ "pathdiff",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "walkdir",
+ "wast 235.0.0",
+ "wat",
+]
+
+[[package]]
+name = "kiln-component"
+version = "0.2.0"
+dependencies = [
+ "criterion 0.5.1",
+ "kiln-decoder",
+ "kiln-error",
+ "kiln-format",
+ "kiln-foundation",
+ "kiln-host",
+ "kiln-intercept",
+ "kiln-platform",
+ "kiln-runtime",
+ "kiln-sync",
+ "log",
+]
+
+[[package]]
+name = "kiln-debug"
+version = "0.2.0"
+dependencies = [
+ "kiln-error",
+ "kiln-format",
+ "kiln-foundation",
+]
+
+[[package]]
+name = "kiln-decoder"
+version = "0.2.0"
+dependencies = [
+ "criterion 0.6.0",
+ "hex",
+ "kiln-error",
+ "kiln-format",
+ "kiln-foundation",
+ "log",
+ "proptest",
+ "serde",
+ "tempfile",
+ "toml",
+ "wat",
+]
+
+[[package]]
+name = "kiln-error"
+version = "0.2.0"
+
+[[package]]
+name = "kiln-format"
+version = "0.2.0"
+dependencies = [
+ "kani-verifier",
+ "kiln-error",
+ "kiln-foundation",
+ "proptest",
+]
+
+[[package]]
+name = "kiln-foundation"
+version = "0.2.0"
+dependencies = [
+ "criterion 0.6.0",
+ "hashbrown 0.15.4",
+ "kani-verifier",
+ "kiln-error",
+ "kiln-platform",
+ "kiln-sync",
+ "log",
+ "proptest",
+ "proptest-derive",
+ "tracing",
+ "tracing-core",
+]
+
+[[package]]
+name = "kiln-host"
+version = "0.2.0"
+dependencies = [
+ "kiln-error",
+ "kiln-foundation",
+ "kiln-intercept",
+ "kiln-sync",
+ "log",
+]
+
+[[package]]
+name = "kiln-instructions"
+version = "0.2.0"
+dependencies = [
+ "kiln-error",
+ "kiln-foundation",
+ "kiln-math",
+ "kiln-sync",
+ "log",
+ "proptest",
+]
+
+[[package]]
+name = "kiln-intercept"
+version = "0.2.0"
+dependencies = [
+ "chrono",
+ "kani-verifier",
+ "kiln-error",
+ "kiln-foundation",
+ "kiln-sync",
+ "log",
+ "pretty_assertions",
+]
+
+[[package]]
+name = "kiln-logging"
+version = "0.2.0"
+dependencies = [
+ "kiln-error",
+ "kiln-foundation",
+ "kiln-host",
+ "log",
+]
+
+[[package]]
+name = "kiln-math"
+version = "0.2.0"
+dependencies = [
+ "kiln-error",
+ "kiln-platform",
+ "libm",
+]
+
+[[package]]
+name = "kiln-panic"
+version = "0.2.0"
+
+[[package]]
+name = "kiln-platform"
+version = "0.2.0"
+dependencies = [
+ "criterion 0.6.0",
+ "kiln-error",
+ "kiln-panic",
+ "kiln-sync",
+]
+
+[[package]]
+name = "kiln-runtime"
+version = "0.2.0"
+dependencies = [
+ "kiln-debug",
+ "kiln-decoder",
+ "kiln-error",
+ "kiln-format",
+ "kiln-foundation",
+ "kiln-host",
+ "kiln-instructions",
+ "kiln-intercept",
+ "kiln-platform",
+ "kiln-sync",
+ "kiln-wasi",
+ "serial_test",
+]
+
+[[package]]
+name = "kiln-sync"
+version = "0.2.0"
+dependencies = [
+ "kani-verifier",
+ "kiln-error",
+ "parking_lot",
+]
+
+[[package]]
+name = "kiln-wasi"
+version = "0.2.0"
+dependencies = [
+ "kiln-error",
+ "kiln-format",
+ "kiln-foundation",
+ "kiln-host",
+ "kiln-platform",
+ "once_cell",
+ "tract-onnx",
+]
+
+[[package]]
+name = "kilnd"
+version = "0.2.0"
+dependencies = [
+ "kiln-component",
+ "kiln-debug",
+ "kiln-decoder",
+ "kiln-error",
+ "kiln-foundation",
+ "kiln-host",
+ "kiln-logging",
+ "kiln-panic",
+ "kiln-platform",
+ "kiln-runtime",
+ "kiln-wasi",
+ "linked_list_allocator",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3537,235 +3766,6 @@ name = "writeable"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea2f10b9bb0928dfb1b42b65e1f9e36f7f54dbdf08457afefb38afcdec4fa2bb"
-
-[[package]]
-name = "wrt-build-core"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "colored",
- "fs_extra",
- "md5",
- "pathdiff",
- "regex",
- "serde",
- "serde_json",
- "tempfile",
- "toml",
- "walkdir",
- "wast 235.0.0",
- "wat",
- "wrt-decoder",
- "wrt-error",
- "wrt-format",
- "wrt-foundation",
- "wrt-runtime",
-]
-
-[[package]]
-name = "wrt-component"
-version = "0.2.0"
-dependencies = [
- "criterion 0.5.1",
- "log",
- "wrt-decoder",
- "wrt-error",
- "wrt-format",
- "wrt-foundation",
- "wrt-host",
- "wrt-intercept",
- "wrt-platform",
- "wrt-runtime",
- "wrt-sync",
-]
-
-[[package]]
-name = "wrt-debug"
-version = "0.2.0"
-dependencies = [
- "wrt-error",
- "wrt-format",
- "wrt-foundation",
-]
-
-[[package]]
-name = "wrt-decoder"
-version = "0.2.0"
-dependencies = [
- "criterion 0.6.0",
- "hex",
- "log",
- "proptest",
- "serde",
- "tempfile",
- "toml",
- "wat",
- "wrt-error",
- "wrt-format",
- "wrt-foundation",
-]
-
-[[package]]
-name = "wrt-error"
-version = "0.2.0"
-
-[[package]]
-name = "wrt-format"
-version = "0.2.0"
-dependencies = [
- "kani-verifier",
- "proptest",
- "wrt-error",
- "wrt-foundation",
-]
-
-[[package]]
-name = "wrt-foundation"
-version = "0.2.0"
-dependencies = [
- "criterion 0.6.0",
- "hashbrown 0.15.4",
- "kani-verifier",
- "log",
- "proptest",
- "proptest-derive",
- "tracing",
- "tracing-core",
- "wrt-error",
- "wrt-platform",
- "wrt-sync",
-]
-
-[[package]]
-name = "wrt-host"
-version = "0.2.0"
-dependencies = [
- "log",
- "wrt-error",
- "wrt-foundation",
- "wrt-intercept",
- "wrt-sync",
-]
-
-[[package]]
-name = "wrt-instructions"
-version = "0.2.0"
-dependencies = [
- "log",
- "proptest",
- "wrt-error",
- "wrt-foundation",
- "wrt-math",
- "wrt-sync",
-]
-
-[[package]]
-name = "wrt-intercept"
-version = "0.2.0"
-dependencies = [
- "chrono",
- "kani-verifier",
- "log",
- "pretty_assertions",
- "wrt-error",
- "wrt-foundation",
- "wrt-sync",
-]
-
-[[package]]
-name = "wrt-logging"
-version = "0.2.0"
-dependencies = [
- "log",
- "wrt-error",
- "wrt-foundation",
- "wrt-host",
-]
-
-[[package]]
-name = "wrt-math"
-version = "0.2.0"
-dependencies = [
- "libm",
- "wrt-error",
- "wrt-platform",
-]
-
-[[package]]
-name = "wrt-panic"
-version = "0.2.0"
-
-[[package]]
-name = "wrt-platform"
-version = "0.2.0"
-dependencies = [
- "criterion 0.6.0",
- "wrt-error",
- "wrt-panic",
- "wrt-sync",
-]
-
-[[package]]
-name = "wrt-runtime"
-version = "0.2.0"
-dependencies = [
- "serial_test",
- "wrt-debug",
- "wrt-decoder",
- "wrt-error",
- "wrt-format",
- "wrt-foundation",
- "wrt-host",
- "wrt-instructions",
- "wrt-intercept",
- "wrt-platform",
- "wrt-sync",
- "wrt-wasi",
-]
-
-[[package]]
-name = "wrt-sync"
-version = "0.2.0"
-dependencies = [
- "kani-verifier",
- "parking_lot",
- "wrt-error",
-]
-
-[[package]]
-name = "wrt-wasi"
-version = "0.2.0"
-dependencies = [
- "once_cell",
- "tract-onnx",
- "wrt-error",
- "wrt-format",
- "wrt-foundation",
- "wrt-host",
- "wrt-platform",
-]
-
-[[package]]
-name = "wrtd"
-version = "0.2.0"
-dependencies = [
- "linked_list_allocator",
- "tracing",
- "tracing-subscriber",
- "wrt-component",
- "wrt-debug",
- "wrt-decoder",
- "wrt-error",
- "wrt-foundation",
- "wrt-host",
- "wrt-logging",
- "wrt-panic",
- "wrt-platform",
- "wrt-runtime",
- "wrt-wasi",
-]
 
 [[package]]
 name = "xattr"

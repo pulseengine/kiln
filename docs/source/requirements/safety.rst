@@ -7,7 +7,7 @@ Safety Requirements
    :align: right
    :alt: Safety Features Icon
 
-This document defines the safety, resource management, and verification requirements for the WRT runtime. It consolidates all safety-related requirements in one place for easier tracking and management.
+This document defines the safety, resource management, and verification requirements for the Kiln runtime. It consolidates all safety-related requirements in one place for easier tracking and management.
 
 .. contents:: On this page
    :local:

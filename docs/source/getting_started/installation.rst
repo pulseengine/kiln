@@ -2,7 +2,7 @@
 Installation
 ============
 
-This page provides installation instructions for PulseEngine (WRT Edition) development environment.
+This page provides installation instructions for PulseEngine (Kiln Edition) development environment.
 
 .. warning::
    **Development Status**: PulseEngine provides WebAssembly infrastructure and tooling, but the core execution engine is under development. 
@@ -45,7 +45,7 @@ All platforms require:
 1. **Rust Toolchain**: Version 1.86.0 or newer (stable)
 2. **Git**: Source code management
 
-The unified build tool (cargo-wrt) is included in the repository and installed automatically.
+The unified build tool (cargo-kiln) is included in the repository and installed automatically.
 
 Install Rust
 ~~~~~~~~~~~~~
@@ -67,41 +67,41 @@ Install Rust
 
       Download from the `official Rust website <https://forge.rust-lang.org/infra/channel-layout.html#archives>`_
 
-Install cargo-wrt
+Install cargo-kiln
 ~~~~~~~~~~~~~~~~~~
 
-The cargo-wrt unified build tool is installed from the repository:
+The cargo-kiln unified build tool is installed from the repository:
 
 .. code-block:: bash
 
    # After cloning the repository
-   cargo install --path cargo-wrt
+   cargo install --path cargo-kiln
 
 Verify installation:
 
 .. code-block:: bash
 
-   cargo-wrt --help
+   cargo-kiln --help
    rustc --version
 
 Development Tool Setup
 ~~~~~~~~~~~~~~~~~~~~~~
 
-After installing cargo-wrt, set up your development environment:
+After installing cargo-kiln, set up your development environment:
 
 .. code-block:: bash
 
    # Check all tool dependencies
-   cargo-wrt setup --check
+   cargo-kiln setup --check
 
    # Install optional development tools (kani, cargo-fuzz, etc.)
-   cargo-wrt setup --install
+   cargo-kiln setup --install
 
    # Complete setup (tools + git hooks)
-   cargo-wrt setup --all
+   cargo-kiln setup --all
 
    # Verify tool versions against requirements
-   cargo-wrt tool-versions check --verbose
+   cargo-kiln tool-versions check --verbose
 
 The build system includes sophisticated tool version management:
 
@@ -119,7 +119,7 @@ Optional development tools include:
 WebAssembly Targets
 ~~~~~~~~~~~~~~~~~~~
 
-WRT requires WebAssembly compilation targets:
+Kiln requires WebAssembly compilation targets:
 
 .. code-block:: bash
 
@@ -141,7 +141,7 @@ For full development workflow:
    cargo install wasm-tools
    
    # PulseEngine command-line interface (from source)
-   cargo install --path wrtd
+   cargo install --path kilnd
 
    # Code coverage (optional)
    cargo install cargo-llvm-cov
@@ -158,27 +158,27 @@ Source Installation
 
    .. code-block:: bash
 
-      git clone https://github.com/pulseengine/wrt
-      cd wrt
+      git clone https://github.com/pulseengine/kiln
+      cd kiln
 
 2. Install and build:
 
    .. code-block:: bash
 
-      cargo install --path cargo-wrt
-      cargo-wrt build
+      cargo install --path cargo-kiln
+      cargo-kiln build
 
 3. Run tests to verify:
 
    .. code-block:: bash
 
-      cargo-wrt test
+      cargo-kiln test
 
 4. (Optional) Install system-wide:
 
    .. code-block:: bash
 
-      cargo install --path wrtd
+      cargo install --path kilnd
 
 Binary Installation
 -------------------
@@ -211,17 +211,17 @@ The following environment variables are designed for the target runtime configur
 .. code-block:: bash
 
    # Target runtime configuration (execution engine under development)
-   export WRT_STACK_SIZE=1048576    # Stack size for PulseEngine runtime
-   export WRT_FUEL_LIMIT=1000000    # Fuel limit for PulseEngine execution
+   export KILN_STACK_SIZE=1048576    # Stack size for PulseEngine runtime
+   export KILN_FUEL_LIMIT=1000000    # Fuel limit for PulseEngine execution
 
    # Development options
-   export WRT_LOG_LEVEL=info
-   export WRT_DEBUG_MODE=1
+   export KILN_LOG_LEVEL=info
+   export KILN_DEBUG_MODE=1
 
 Build Configuration (Planned)
 ------------------------------
 
-The planned configuration system will use a ``.wrt/config.toml`` file:
+The planned configuration system will use a ``.kiln/config.toml`` file:
 
 .. code-block:: toml
 
@@ -245,17 +245,17 @@ Verify your development environment works correctly:
 
 .. code-block:: bash
 
-   # Check that wrtd builds (infrastructure verification)
-   cargo run --bin wrtd -- --help
+   # Check that kilnd builds (infrastructure verification)
+   cargo run --bin kilnd -- --help
 
    # Build all crates to verify dependencies
-   cargo-wrt build
+   cargo-kiln build
 
    # Run infrastructure tests
-   cargo-wrt test
+   cargo-kiln test
 
 .. note::
-   **Development Status**: The wrtd tool currently provides infrastructure and module validation. 
+   **Development Status**: The kilnd tool currently provides infrastructure and module validation. 
    Full WebAssembly execution is under development. Expected output shows successful build and infrastructure validation.
 
 Troubleshooting
@@ -281,15 +281,15 @@ Common Issues
 
 .. code-block:: bash
 
-   cargo-wrt clean
-   cargo-wrt build
+   cargo-kiln clean
+   cargo-kiln build
 
 **Permission errors:**
 
 .. code-block:: bash
 
    # Use cargo install without sudo
-   cargo install --path wrtd
+   cargo install --path kilnd
 
 Platform-Specific Notes
 =======================

@@ -4,7 +4,7 @@ Qualification Plan
 Overview
 --------
 
-This qualification plan outlines the activities needed to implement a comprehensive qualification framework for the WebAssembly Runtime (WRT) project. The plan identifies which qualification materials are already in place, which need to be implemented, and how to integrate them within the existing codebase structure.
+This qualification plan outlines the activities needed to implement a comprehensive qualification framework for the WebAssembly Runtime (Kiln) project. The plan identifies which qualification materials are already in place, which need to be implemented, and how to integrate them within the existing codebase structure.
 
 Qualification Materials Assessment
 ----------------------------------
@@ -189,35 +189,35 @@ Implementation Requirements
 Integration with Existing Tools
 -------------------------------
 
-cargo-wrt Integration
+cargo-kiln Integration
 ^^^^^^^^^^^^^^^^^^^^^
 
-The qualification process will be integrated with the unified cargo-wrt build system:
+The qualification process will be integrated with the unified cargo-kiln build system:
 
-* Add new cargo-wrt commands for qualification activities:
+* Add new cargo-kiln commands for qualification activities:
 
 .. code-block:: rust
 
-   // In cargo-wrt/src/main.rs
+   // In cargo-kiln/src/main.rs
    pub enum QualificationCommand {
        Traceability,
        SafetyAnalysis,
        Report,
    }
    
-   // Integrated into cargo-wrt subcommands
-   cargo-wrt qualification traceability
-   cargo-wrt qualification safety-analysis
-   cargo-wrt qualification report
+   // Integrated into cargo-kiln subcommands
+   cargo-kiln qualification traceability
+   cargo-kiln qualification safety-analysis
+   cargo-kiln qualification report
 
 * Implement traceability matrix generation:
 
 .. code-block:: rust
 
-   // In wrt-build-core/src/qualification.rs
+   // In kiln-build-core/src/qualification.rs
    pub fn generate_traceability_matrix() -> Result<()> {
        // Implementation to extract requirements and tests
-       // Integrated into cargo-wrt qualification commands
+       // Integrated into cargo-kiln qualification commands
                // and generate a traceability matrix
            })
    }
@@ -232,15 +232,15 @@ Add qualification-specific recipes to the justfile:
    # Generate qualification documentation
    qualification-docs: docs-common
        # Generate traceability matrix
-       cargo-wrt qualification traceability
+       cargo-kiln qualification traceability
        # Build qualification documentation
        {{sphinx_build}} -M html "{{sphinx_source}}" "{{sphinx_build_dir}}" {{sphinx_opts}}
    
    # Run qualification assessment
    qualification-assessment:
-       cargo-wrt qualification assess
+       cargo-kiln qualification assess
        # Report qualification status
-       cargo-wrt qualification report-status
+       cargo-kiln qualification report-status
 
 Implementation Schedule
 -----------------------
@@ -248,7 +248,7 @@ Implementation Schedule
 1. **Phase 1: Documentation Structure**
    
    * Create required RST files in docs/source/
-   * Implement cargo-wrt qualification commands
+   * Implement cargo-kiln qualification commands
    * Add justfile recipes
 
 2. **Phase 2: Traceability Implementation**
@@ -272,9 +272,9 @@ Implementation Schedule
 Crate-Specific Qualification Activities
 ---------------------------------------
 
-Each crate in the WRT ecosystem requires specific qualification activities:
+Each crate in the Kiln ecosystem requires specific qualification activities:
 
-wrt-runtime
+kiln-runtime
 ^^^^^^^^^^^
 
 Core functionality qualification:
@@ -283,7 +283,7 @@ Core functionality qualification:
 * Formal verification of critical algorithms
 * Performance bounds validation
 
-wrt-foundation
+kiln-foundation
 ^^^^^^^^^
 
 Type system qualification:
@@ -292,7 +292,7 @@ Type system qualification:
 * Boundary condition analysis
 * Formal verification of type conversions
 
-wrt-component
+kiln-component
 ^^^^^^^^^^^^^
 
 Component model qualification:
@@ -301,7 +301,7 @@ Component model qualification:
 * Resource lifetime validation
 * Interface mapping verification
 
-wrt-instructions
+kiln-instructions
 ^^^^^^^^^^^^^^^^
 
 Instruction qualification:
@@ -310,7 +310,7 @@ Instruction qualification:
 * Control flow validation
 * Stack manipulation verification
 
-wrt-sync
+kiln-sync
 ^^^^^^^^
 
 Synchronization qualification:
@@ -319,7 +319,7 @@ Synchronization qualification:
 * Deadlock prevention validation
 * Race condition testing
 
-wrt-logging
+kiln-logging
 ^^^^^^^^^^^
 
 Logging qualification:
@@ -328,7 +328,7 @@ Logging qualification:
 * Non-interference verification
 * Resource usage validation
 
-wrt-host
+kiln-host
 ^^^^^^^^
 
 Host interface qualification:
@@ -337,7 +337,7 @@ Host interface qualification:
 * Resource management verification
 * Error handling validation
 
-wrtd
+kilnd
 ^^^^
 
 Command-line interface qualification:

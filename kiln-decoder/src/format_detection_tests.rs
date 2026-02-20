@@ -3,8 +3,8 @@
 //! This module provides extensive testing for WebAssembly format detection,
 //! ensuring robust identification of Core Modules vs Component Model binaries.
 
-use wrt_error::Result;
-use wrt_foundation::{BoundedVec, CrateId, safe_managed_alloc, traits::BoundedCapacity};
+use kiln_error::Result;
+use kiln_foundation::{BoundedVec, CrateId, safe_managed_alloc, traits::BoundedCapacity};
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -22,7 +22,7 @@ use crate::{
 };
 
 // Type alias for test data - using a reasonably sized bounded vector
-type TestData = BoundedVec<u8, 256, wrt_foundation::NoStdProvider<1024>>;
+type TestData = BoundedVec<u8, 256, kiln_foundation::NoStdProvider<1024>>;
 
 // Helper function to convert BoundedVec to Vec for std mode tests
 #[cfg(feature = "std")]

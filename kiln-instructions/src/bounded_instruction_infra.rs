@@ -3,7 +3,7 @@
 //! This module provides bounded alternatives for instruction collections
 //! to ensure static memory allocation throughout instruction handling.
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{
         BoundedString,
         BoundedVec,
@@ -68,11 +68,11 @@ pub type BoundedLabelString = BoundedString<MAX_LABEL_LENGTH>;
 /// # Errors
 ///
 /// Returns an error if memory allocation fails
-pub fn new_instruction_vec<T>() -> wrt_error::Result<BoundedInstructionVec<T>>
+pub fn new_instruction_vec<T>() -> kiln_error::Result<BoundedInstructionVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -87,7 +87,7 @@ where
 /// # Errors
 ///
 /// Returns an error if memory allocation fails
-pub fn new_br_table_targets() -> wrt_error::Result<BoundedBrTableTargets> {
+pub fn new_br_table_targets() -> kiln_error::Result<BoundedBrTableTargets> {
     let provider = InstructionProvider::default();
     BoundedVec::new(provider)
 }
@@ -97,11 +97,11 @@ pub fn new_br_table_targets() -> wrt_error::Result<BoundedBrTableTargets> {
 /// # Errors
 ///
 /// Returns an error if memory allocation fails
-pub fn new_basic_block_vec<T>() -> wrt_error::Result<BoundedBasicBlockVec<T>>
+pub fn new_basic_block_vec<T>() -> kiln_error::Result<BoundedBasicBlockVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -116,11 +116,11 @@ where
 /// # Errors
 ///
 /// Returns an error if memory allocation fails
-pub fn new_local_vec<T>() -> wrt_error::Result<BoundedLocalVec<T>>
+pub fn new_local_vec<T>() -> kiln_error::Result<BoundedLocalVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -135,11 +135,11 @@ where
 /// # Errors
 ///
 /// Returns an error if memory allocation fails
-pub fn new_stack_vec<T>() -> wrt_error::Result<BoundedStackVec<T>>
+pub fn new_stack_vec<T>() -> kiln_error::Result<BoundedStackVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -154,11 +154,11 @@ where
 /// # Errors
 ///
 /// Returns an error if memory allocation fails
-pub fn new_control_frame_vec<T>() -> wrt_error::Result<BoundedControlFrameVec<T>>
+pub fn new_control_frame_vec<T>() -> kiln_error::Result<BoundedControlFrameVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -173,11 +173,11 @@ where
 /// # Errors
 ///
 /// Returns an error if memory allocation fails
-pub fn new_cfg_edge_vec<T>() -> wrt_error::Result<BoundedCfgEdgeVec<T>>
+pub fn new_cfg_edge_vec<T>() -> kiln_error::Result<BoundedCfgEdgeVec<T>>
 where
-    T: wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+    T: kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -192,7 +192,7 @@ where
 /// # Errors
 ///
 /// Returns an error if string creation fails
-pub fn new_label_string() -> wrt_error::Result<BoundedLabelString> {
+pub fn new_label_string() -> kiln_error::Result<BoundedLabelString> {
     Ok(BoundedString::from_str_truncate("")?)
 }
 
@@ -201,6 +201,6 @@ pub fn new_label_string() -> wrt_error::Result<BoundedLabelString> {
 /// # Errors
 ///
 /// Returns an error if string conversion fails
-pub fn bounded_label_from_str(s: &str) -> wrt_error::Result<BoundedLabelString> {
+pub fn bounded_label_from_str(s: &str) -> kiln_error::Result<BoundedLabelString> {
     Ok(BoundedString::try_from_str(s)?)
 }

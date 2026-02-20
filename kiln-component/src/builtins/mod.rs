@@ -13,19 +13,19 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 #[cfg(feature = "std")]
-use wrt_foundation::builtin::BuiltinType;
+use kiln_foundation::builtin::BuiltinType;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedString, budget_aware_provider::CrateId, collections::StaticVec as BoundedVec,
     safe_managed_alloc, safe_memory::NoStdProvider,
 };
 #[cfg(not(feature = "std"))]
-use wrt_sync::Mutex;
+use kiln_sync::Mutex;
 
 use crate::bounded_component_infra::ComponentProvider;
-use crate::prelude::{WrtComponentValue, *};
+use crate::prelude::{KilnComponentValue, *};
 #[cfg(not(feature = "std"))]
 use crate::types::Value;
 
@@ -109,8 +109,8 @@ pub enum BuiltinType {
     #[cfg(feature = "component-model-threading")]
     ThreadingSync,
 }
-// Commented out until wrt_intercept is properly available
-// use wrt_intercept::{BeforeBuiltinResult, BuiltinInterceptor,
+// Commented out until kiln_intercept is properly available
+// use kiln_intercept::{BeforeBuiltinResult, BuiltinInterceptor,
 // InterceptContext};
 
 // No_std stubs for interception (simplified)
@@ -138,8 +138,8 @@ impl InterceptContext {
 #[cfg(not(feature = "std"))]
 #[derive(Debug)]
 pub enum BeforeBuiltinResult {
-    Continue(BoundedVec<WrtComponentValue<ComponentProvider>, 16>),
-    Override(BoundedVec<WrtComponentValue<ComponentProvider>, 16>),
+    Continue(BoundedVec<KilnComponentValue<ComponentProvider>, 16>),
+    Override(BoundedVec<KilnComponentValue<ComponentProvider>, 16>),
     Deny,
 }
 
@@ -148,13 +148,13 @@ pub trait BuiltinInterceptor {
     fn before_builtin(
         &self,
         context: &InterceptContext,
-        args: &[WrtComponentValue<ComponentProvider>],
+        args: &[KilnComponentValue<ComponentProvider>],
     ) -> Result<BeforeBuiltinResult>;
 }
 
 // Import the real types for std
 #[cfg(feature = "std")]
-use wrt_intercept::{BeforeBuiltinResult, BuiltinInterceptor, InterceptContext};
+use kiln_intercept::{BeforeBuiltinResult, BuiltinInterceptor, InterceptContext};
 
 use crate::resources::ResourceManager;
 
@@ -197,8 +197,8 @@ pub trait BuiltinHandler: Send + Sync {
     /// A `Result` containing the function results or an error
     fn execute(
         &self,
-        args: &[WrtComponentValue<ComponentProvider>],
-    ) -> Result<Vec<WrtComponentValue<ComponentProvider>>>;
+        args: &[KilnComponentValue<ComponentProvider>],
+    ) -> Result<Vec<KilnComponentValue<ComponentProvider>>>;
 
     /// Clone this handler
     ///
@@ -216,8 +216,8 @@ pub trait BuiltinHandler {
     /// Execute the built-in function with the given arguments (no_std version)
     fn execute(
         &self,
-        args: &[WrtComponentValue<ComponentProvider>],
-    ) -> core::result::Result<BoundedVec<WrtComponentValue<ComponentProvider>, 16>, Error>;
+        args: &[KilnComponentValue<ComponentProvider>],
+    ) -> core::result::Result<BoundedVec<KilnComponentValue<ComponentProvider>, 16>, Error>;
 
     /// Clone this handler
     fn clone_handler(&self) -> Box<dyn BuiltinHandler>;
@@ -228,8 +228,8 @@ pub trait BuiltinHandler {
 pub type FunctionExecutor = Arc<
     dyn Fn(
             u32,
-            Vec<WrtComponentValue<ComponentProvider>>,
-        ) -> Result<Vec<WrtComponentValue<ComponentProvider>>>
+            Vec<KilnComponentValue<ComponentProvider>>,
+        ) -> Result<Vec<KilnComponentValue<ComponentProvider>>>
         + Send
         + Sync,
 >;
@@ -393,8 +393,8 @@ impl BuiltinRegistry {
     pub fn call(
         &self,
         builtin_type: BuiltinType,
-        args: &[WrtComponentValue<ComponentProvider>],
-    ) -> Result<Vec<WrtComponentValue<ComponentProvider>>> {
+        args: &[KilnComponentValue<ComponentProvider>],
+    ) -> Result<Vec<KilnComponentValue<ComponentProvider>>> {
         // Find the handler for this built-in
         let handler = self
             .handlers
@@ -420,8 +420,8 @@ impl BuiltinRegistry {
     pub fn call(
         &self,
         builtin_type: BuiltinType,
-        args: &[WrtComponentValue<ComponentProvider>],
-    ) -> Result<BoundedVec<WrtComponentValue<ComponentProvider>, 16>> {
+        args: &[KilnComponentValue<ComponentProvider>],
+    ) -> Result<BoundedVec<KilnComponentValue<ComponentProvider>, 16>> {
         // Find the handler for this built-in
         let handler = self
             .handlers

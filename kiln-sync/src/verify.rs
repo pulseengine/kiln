@@ -15,14 +15,14 @@ pub mod kani_verification {
         *,
     };
 
-    // --- WrtMutex Verification ---
+    // --- KilnMutex Verification ---
 
     /// Verify that mutex operations never cause data races
     #[cfg_attr(kani, kani::proof)]
     #[cfg_attr(kani, kani::unwind(5))]
     pub fn verify_mutex_no_data_races() {
         let initial_value: i32 = kani::any();
-        let m = WrtMutex::new(initial_value);
+        let m = KilnMutex::new(initial_value);
 
         // Simulate sequence of operations that could race
         let op_count: usize = kani::any();
@@ -63,7 +63,7 @@ pub mod kani_verification {
     #[cfg_attr(kani, kani::proof)]
     #[cfg_attr(kani, kani::unwind(3))]
     pub fn verify_mutex_new_lock_unlock() {
-        let m = WrtMutex::new(10);
+        let m = KilnMutex::new(10);
         {
             let mut guard = m.lock();
             *guard += 5;
@@ -80,7 +80,7 @@ pub mod kani_verification {
     #[cfg_attr(kani, kani::proof)]
     #[cfg_attr(kani, kani::unwind(3))]
     pub fn verify_mutex_guard_deref() {
-        let m = WrtMutex::new(42);
+        let m = KilnMutex::new(42);
         let guard = m.lock();
         assert_eq!(*guard, 42);
     }
@@ -89,7 +89,7 @@ pub mod kani_verification {
     #[cfg_attr(kani, kani::proof)]
     #[cfg_attr(kani, kani::unwind(3))]
     pub fn verify_mutex_guard_deref_mut() {
-        let m = WrtMutex::new(42);
+        let m = KilnMutex::new(42);
         {
             let mut guard = m.lock();
             assert_eq!(*guard, 42);
@@ -102,14 +102,14 @@ pub mod kani_verification {
         }
     }
 
-    // --- WrtRwLock Verification ---
+    // --- KilnRwLock Verification ---
 
     /// Verify that rwlock concurrent access maintains safety
     #[cfg_attr(kani, kani::proof)]
     #[cfg_attr(kani, kani::unwind(6))]
     pub fn verify_rwlock_concurrent_access() {
         let initial_value: i32 = kani::any();
-        let lock = WrtRwLock::new(initial_value);
+        let lock = KilnRwLock::new(initial_value);
 
         // Simulate concurrent reader/writer patterns
         let access_pattern: u8 = kani::any();
@@ -172,7 +172,7 @@ pub mod kani_verification {
     #[cfg_attr(kani, kani::proof)]
     #[cfg_attr(kani, kani::unwind(3))]
     pub fn verify_rwlock_new_write_read() {
-        let lock = WrtRwLock::new(0);
+        let lock = KilnRwLock::new(0);
         {
             let mut writer = lock.write();
             *writer = 100;
@@ -188,7 +188,7 @@ pub mod kani_verification {
     #[cfg_attr(kani, kani::proof)]
     #[cfg_attr(kani, kani::unwind(6))]
     pub fn verify_rwlock_new_read_read() {
-        let lock = WrtRwLock::new(55);
+        let lock = KilnRwLock::new(55);
         let r1 = lock.read();
         let r2 = lock.read();
         assert_eq!(*r1, 55);
@@ -211,7 +211,7 @@ pub mod kani_verification {
     #[cfg_attr(kani, kani::proof)]
     #[cfg_attr(kani, kani::unwind(3))]
     pub fn verify_rwlock_read_guard_deref() {
-        let lock = WrtRwLock::new(123);
+        let lock = KilnRwLock::new(123);
         let guard = lock.read();
         assert_eq!(*guard, 123);
     }
@@ -220,7 +220,7 @@ pub mod kani_verification {
     #[cfg_attr(kani, kani::proof)]
     #[cfg_attr(kani, kani::unwind(3))]
     pub fn verify_rwlock_write_guard_derefmut() {
-        let lock = WrtRwLock::new(123);
+        let lock = KilnRwLock::new(123);
         {
             let mut guard = lock.write();
             assert_eq!(*guard, 123);

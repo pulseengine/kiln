@@ -1,4 +1,4 @@
-// WRT - wrt-decoder
+// Kiln - kiln-decoder
 // Module: WebAssembly Binary Decoder
 // SW-REQ-ID: REQ_013
 // SW-REQ-ID: REQ_SAFETY_DECODE_001
@@ -9,13 +9,13 @@
 
 #![forbid(unsafe_code)] // Rule 2
 
-//! WebAssembly module decoder for wrt runtime
+//! WebAssembly module decoder for kiln runtime
 //!
 //! This crate provides a high-level API for decoding WebAssembly binary modules
-//! into structured representations that can be used by the wrt runtime.
+//! into structured representations that can be used by the kiln runtime.
 //!
 //! The decoder sits between the low-level binary format handling in
-//! `wrt-format` and the runtime execution in `wrt`. It properly converts
+//! `kiln-format` and the runtime execution in `kiln`. It properly converts
 //! between format types and runtime types, ensuring type consistency across the
 //! system.
 //!
@@ -136,11 +136,11 @@ pub use unified_loader::{
     ComponentInfo, ExportInfo, ExportType, ImportInfo, ImportType, ModuleInfo, WasmFormat,
     WasmInfo, load_wasm_unified,
 };
-pub use wrt_error::{Error, Result, codes, kinds};
+pub use kiln_error::{Error, Result, codes, kinds};
 // Essential re-exports only
 #[cfg(feature = "std")]
-pub use wrt_foundation::safe_memory::StdProvider as StdMemoryProvider;
-pub use wrt_foundation::safe_memory::{MemoryProvider, SafeSlice};
+pub use kiln_foundation::safe_memory::StdProvider as StdMemoryProvider;
+pub use kiln_foundation::safe_memory::{MemoryProvider, SafeSlice};
 
 /// Validate WebAssembly header
 ///
@@ -156,7 +156,7 @@ pub fn validate_header(bytes: &[u8]) -> Result<()> {
 }
 
 // Panic handler disabled to avoid conflicts with other crates
-// // Provide a panic handler only when wrt-decoder is being tested in isolation
+// // Provide a panic handler only when kiln-decoder is being tested in isolation
 // #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {

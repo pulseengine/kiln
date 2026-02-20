@@ -9,7 +9,7 @@ use std::sync::{
     OnceLock,
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     BoundedVec,

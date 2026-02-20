@@ -7,7 +7,7 @@ Qualification Requirements
    :align: right
    :alt: Qualification Requirements Icon
 
-This document defines the qualification requirements for PulseEngine (WRT Edition). These requirements specify how the system must be qualified for use in safety-critical applications.
+This document defines the qualification requirements for PulseEngine (Kiln Edition). These requirements specify how the system must be qualified for use in safety-critical applications.
 
 .. contents:: On this page
    :local:
@@ -59,7 +59,7 @@ The following table shows all documented panic points in the system:
 
 .. needtable::
    :columns: id;title;item_status;safety_impact
-   :filter: id.startswith("WRTQ-")
+   :filter: id.startswith("KILNQ-")
    :style: table
 
 Qualification Documentation

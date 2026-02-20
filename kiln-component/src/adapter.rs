@@ -13,13 +13,13 @@ use std::{boxed::Box, string::String, vec::Vec};
 #[cfg(feature = "std")]
 use std::{fmt, mem};
 
-use wrt_foundation::RefType;
-use wrt_foundation::collections::StaticVec as BoundedVec;
+use kiln_foundation::RefType;
+use kiln_foundation::collections::StaticVec as BoundedVec;
 #[cfg(feature = "std")]
-use wrt_foundation::component_value::ComponentValue;
-use wrt_foundation::types::FuncType as WrtFuncType;
+use kiln_foundation::component_value::ComponentValue;
+use kiln_foundation::types::FuncType as KilnFuncType;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedString, bounded::MAX_WASM_NAME_LENGTH, budget_aware_provider::CrateId,
     safe_managed_alloc, safe_memory::NoStdProvider,
 };
@@ -90,7 +90,7 @@ pub struct FunctionAdapter {
     /// Core function index
     pub core_index: u32,
     /// Component function signature
-    pub component_signature: WrtComponentType<ComponentProvider>,
+    pub component_signature: KilnComponentType<ComponentProvider>,
     /// Core function signature (WebAssembly types)
     pub core_signature: CoreFunctionSignature,
     /// Adaptation mode
@@ -233,7 +233,7 @@ impl CoreModuleAdapter {
         {
             self.functions
                 .push(adapter)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many function adapters"))
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many function adapters"))
         }
     }
 
@@ -248,7 +248,7 @@ impl CoreModuleAdapter {
         {
             self.memories
                 .push(adapter)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many memory adapters"))
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many memory adapters"))
         }
     }
 
@@ -263,7 +263,7 @@ impl CoreModuleAdapter {
         {
             self.tables
                 .push(adapter)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many table adapters"))
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many table adapters"))
         }
     }
 
@@ -278,7 +278,7 @@ impl CoreModuleAdapter {
         {
             self.globals
                 .push(adapter)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many global adapters"))
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many global adapters"))
         }
     }
 
@@ -306,7 +306,7 @@ impl CoreModuleAdapter {
     pub fn to_component(&self) -> Result<Component> {
         #[cfg(feature = "std")]
         let mut component =
-            Component::new(crate::components::component::WrtComponentType::default());
+            Component::new(crate::components::component::KilnComponentType::default());
         #[cfg(not(feature = "std"))]
         let mut component = Component::new()?;
 
@@ -322,12 +322,12 @@ impl CoreModuleAdapter {
 
             let export = Export {
                 name,
-                ty: wrt_format::component::ExternType::Function {
+                ty: kiln_format::component::ExternType::Function {
                     params: vec![],
                     results: vec![],
                 },
                 value: ExternValue::Function(FunctionValue {
-                    ty: wrt_foundation::types::FuncType::default(),
+                    ty: kiln_foundation::types::FuncType::default(),
                     export_name: {
                         let name_str = format!("func_{}", func_adapter.core_index);
                         #[cfg(feature = "std")]
@@ -350,9 +350,9 @@ impl CoreModuleAdapter {
         for mem_adapter in &self.memories {
             let export = Export {
                 name: format!("memory_{}", mem_adapter.core_index),
-                ty: wrt_format::component::ExternType::Type(mem_adapter.core_index),
-                value: ExternValue::Memory(MemoryValue::new(wrt_foundation::types::MemoryType {
-                    limits: wrt_foundation::types::Limits {
+                ty: kiln_format::component::ExternType::Type(mem_adapter.core_index),
+                value: ExternValue::Memory(MemoryValue::new(kiln_foundation::types::MemoryType {
+                    limits: kiln_foundation::types::Limits {
                         min: mem_adapter.limits.min,
                         max: mem_adapter.limits.max,
                     },
@@ -372,15 +372,15 @@ impl CoreModuleAdapter {
         for table_adapter in &self.tables {
             #[cfg(feature = "std")]
             let table_value = TableValue {
-                ty: wrt_foundation::types::TableType {
-                    limits: wrt_foundation::types::Limits {
+                ty: kiln_foundation::types::TableType {
+                    limits: kiln_foundation::types::Limits {
                         min: table_adapter.limits.min,
                         max: table_adapter.limits.max,
                     },
                     element_type: RefType::Funcref,
                 },
-                table: wrt_runtime::table::Table::new(wrt_foundation::types::TableType {
-                    limits: wrt_foundation::types::Limits {
+                table: kiln_runtime::table::Table::new(kiln_foundation::types::TableType {
+                    limits: kiln_foundation::types::Limits {
                         min: table_adapter.limits.min,
                         max: table_adapter.limits.max,
                     },
@@ -390,8 +390,8 @@ impl CoreModuleAdapter {
 
             #[cfg(not(feature = "std"))]
             let table_value = TableValue {
-                ty: wrt_foundation::types::TableType {
-                    limits: wrt_foundation::types::Limits {
+                ty: kiln_foundation::types::TableType {
+                    limits: kiln_foundation::types::Limits {
                         min: table_adapter.limits.min,
                         max: table_adapter.limits.max,
                     },
@@ -402,7 +402,7 @@ impl CoreModuleAdapter {
 
             let export = Export {
                 name: format!("table_{}", table_adapter.core_index),
-                ty: wrt_format::component::ExternType::Type(table_adapter.core_index),
+                ty: kiln_format::component::ExternType::Type(table_adapter.core_index),
                 value: ExternValue::Table(table_value),
                 kind: ExportKind::Value {
                     value_index: table_adapter.core_index,
@@ -417,29 +417,29 @@ impl CoreModuleAdapter {
         for global_adapter in &self.globals {
             #[cfg(feature = "std")]
             let global_value = GlobalValue {
-                ty: wrt_foundation::types::GlobalType {
+                ty: kiln_foundation::types::GlobalType {
                     mutable: global_adapter.mutable,
-                    value_type: wrt_foundation::types::ValueType::I32,
+                    value_type: kiln_foundation::types::ValueType::I32,
                 },
-                global: wrt_runtime::global::Global::new(
-                    wrt_foundation::types::ValueType::I32,
+                global: kiln_runtime::global::Global::new(
+                    kiln_foundation::types::ValueType::I32,
                     global_adapter.mutable,
-                    wrt_foundation::Value::I32(0),
+                    kiln_foundation::Value::I32(0),
                 )?,
             };
 
             #[cfg(not(feature = "std"))]
             let global_value = GlobalValue {
-                ty: wrt_foundation::types::GlobalType {
+                ty: kiln_foundation::types::GlobalType {
                     mutable: global_adapter.mutable,
-                    value_type: wrt_foundation::types::ValueType::I32,
+                    value_type: kiln_foundation::types::ValueType::I32,
                 },
-                value: wrt_foundation::Value::I32(0),
+                value: kiln_foundation::Value::I32(0),
             };
 
             let export = Export {
                 name: format!("global_{}", global_adapter.core_index),
-                ty: wrt_format::component::ExternType::Type(global_adapter.core_index),
+                ty: kiln_format::component::ExternType::Type(global_adapter.core_index),
                 value: ExternValue::Global(global_value),
                 kind: ExportKind::Value {
                     value_index: global_adapter.core_index,
@@ -457,19 +457,19 @@ impl CoreModuleAdapter {
     fn core_type_to_component_type(
         &self,
         core_type: CoreValType,
-    ) -> Result<WrtComponentType<ComponentProvider>> {
+    ) -> Result<KilnComponentType<ComponentProvider>> {
         // Create a provider for the component type
         let provider = safe_managed_alloc!(4096, CrateId::Component)?;
 
         // All core types map to Unit for this simplified implementation
         match core_type {
-            CoreValType::I32 => WrtComponentType::unit(provider),
-            CoreValType::I64 => WrtComponentType::unit(provider),
-            CoreValType::F32 => WrtComponentType::unit(provider),
-            CoreValType::F64 => WrtComponentType::unit(provider),
-            CoreValType::V128 => WrtComponentType::unit(provider),
-            CoreValType::FuncRef => WrtComponentType::unit(provider),
-            CoreValType::ExternRef => WrtComponentType::unit(provider),
+            CoreValType::I32 => KilnComponentType::unit(provider),
+            CoreValType::I64 => KilnComponentType::unit(provider),
+            CoreValType::F32 => KilnComponentType::unit(provider),
+            CoreValType::F64 => KilnComponentType::unit(provider),
+            CoreValType::V128 => KilnComponentType::unit(provider),
+            CoreValType::FuncRef => KilnComponentType::unit(provider),
+            CoreValType::ExternRef => KilnComponentType::unit(provider),
         }
     }
 
@@ -481,7 +481,7 @@ impl CoreModuleAdapter {
         engine: &mut ComponentExecutionEngine,
     ) -> Result<Value> {
         let adapter = self.get_function(func_index).ok_or_else(|| {
-            wrt_error::Error::runtime_function_not_found("Function adapter not found")
+            kiln_error::Error::runtime_function_not_found("Function adapter not found")
         })?;
 
         match adapter.mode {
@@ -552,7 +552,7 @@ impl CoreModuleAdapter {
     fn lift_result_to_component(
         &self,
         result: Value,
-        _component_signature: &WrtComponentType<ComponentProvider>,
+        _component_signature: &KilnComponentType<ComponentProvider>,
     ) -> Result<Value> {
         // Simplified lifting - in reality would use canonical ABI
         Ok(result)
@@ -563,7 +563,7 @@ impl FunctionAdapter {
     /// Create a new function adapter
     pub fn new(
         core_index: u32,
-        component_signature: WrtComponentType<ComponentProvider>,
+        component_signature: KilnComponentType<ComponentProvider>,
         core_signature: CoreFunctionSignature,
         mode: AdaptationMode,
     ) -> Self {
@@ -616,7 +616,7 @@ impl CoreFunctionSignature {
         {
             self.params
                 .push(param_type)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many parameters"))
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many parameters"))
         }
     }
 
@@ -631,7 +631,7 @@ impl CoreFunctionSignature {
         {
             self.results
                 .push(result_type)
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many results"))
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many results"))
         }
     }
 }
@@ -710,34 +710,34 @@ impl fmt::Display for AdaptationMode {
 }
 
 // Implement required traits for BoundedVec compatibility
-use wrt_foundation::traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream};
+use kiln_foundation::traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream};
 
 // Macro to implement basic traits for simple types
 macro_rules! impl_basic_traits {
     ($type:ty, $default_val:expr) => {
         impl Checksummable for $type {
-            fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+            fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
                 // Simple checksum without unsafe code
                 0u32.update_checksum(checksum);
             }
         }
 
         impl ToBytes for $type {
-            fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 &self,
                 writer: &mut WriteStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<()> {
+            ) -> kiln_error::Result<()> {
                 // Simple stub implementation
                 Ok(())
             }
         }
 
         impl FromBytes for $type {
-            fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+            fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
                 _reader: &mut ReadStream<'a>,
                 _provider: &PStream,
-            ) -> wrt_error::Result<Self> {
+            ) -> kiln_error::Result<Self> {
                 Ok($default_val)
             }
         }

@@ -3,7 +3,7 @@
 //! This module provides memory optimization strategies for cross-component
 //! communication in the WebAssembly Component Model.
 
-use wrt_error::kinds::{OutOfBoundsAccess, ResourceLimitExceeded};
+use kiln_error::kinds::{OutOfBoundsAccess, ResourceLimitExceeded};
 
 use crate::{
     prelude::*,

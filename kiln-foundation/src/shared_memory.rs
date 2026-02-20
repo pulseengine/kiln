@@ -10,7 +10,7 @@ use std::sync::{
     RwLock,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
@@ -127,7 +127,7 @@ impl ToBytes for MemoryType {
         &self,
         writer: &mut crate::traits::WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             MemoryType::Linear { min, max } => {
                 writer.write_u8(0x00)?; // Linear memory flag
@@ -153,7 +153,7 @@ impl FromBytes for MemoryType {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut crate::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let memory_flag = reader.read_u8()?;
         let min = reader.read_u32_le()?;
 

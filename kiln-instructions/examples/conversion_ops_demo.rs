@@ -8,13 +8,13 @@
 
 use std::vec::Vec;
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     FloatBits32,
     FloatBits64,
     Value,
 };
-use wrt_instructions::{
+use kiln_instructions::{
     ConversionContext,
     ConversionOp,
     PureInstruction,
@@ -42,7 +42,7 @@ impl ConversionContext for DemoContext {
     fn pop_conversion_value(&mut self) -> Result<Value> {
         self.stack
             .pop()
-            .ok_or_else(|| wrt_error::Error::runtime_error("Stack underflow"))
+            .ok_or_else(|| kiln_error::Error::runtime_error("Stack underflow"))
     }
 
     fn push_conversion_value(&mut self, value: Value) -> Result<()> {

@@ -3,7 +3,7 @@
 //! Implements a mark-and-sweep garbage collector for WebAssembly GC objects.
 //! Designed for no_std compatibility with fixed-size data structures.
 
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 
 use super::{
     heap::GcHeap,

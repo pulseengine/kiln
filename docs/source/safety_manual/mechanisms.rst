@@ -7,7 +7,7 @@ Safety Mechanisms
    :align: right
    :alt: Safety Mechanisms Icon
 
-This document consolidates all safety mechanisms implemented in PulseEngine (WRT Edition) to satisfy safety requirements and protect against systematic and random faults.
+This document consolidates all safety mechanisms implemented in PulseEngine (Kiln Edition) to satisfy safety requirements and protect against systematic and random faults.
 
 .. warning::
    **Implementation Note**: Safety mechanisms must be configured according to the 

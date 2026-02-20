@@ -1,8 +1,8 @@
 //! Component model provider for WASI integration
 //!
 //! This module provides the `ComponentModelProvider` that integrates WASI host
-//! functions with the WRT component model using proven patterns from wrt-host
-//! and wrt-component. Uses safety-aware allocation and respects configured
+//! functions with the Kiln component model using proven patterns from kiln-host
+//! and kiln-component. Uses safety-aware allocation and respects configured
 //! safety levels.
 
 #[cfg(not(feature = "std"))]
@@ -15,9 +15,9 @@ use std::string::String;
 use std::vec;
 
 #[cfg(feature = "std")]
-use wrt_format::component::ExternType;
+use kiln_format::component::ExternType;
 // Use foundation Value type for compatibility with host functions
-use wrt_host::HostFunctionHandler;
+use kiln_host::HostFunctionHandler;
 
 use crate::{
     capabilities::WasiCapabilities,
@@ -27,7 +27,7 @@ use crate::{
     HostFunction,
 };
 #[cfg(not(feature = "std"))]
-type WasiHostString = BoundedString<256, wrt_foundation::safe_memory::NoStdProvider<1024>>;
+type WasiHostString = BoundedString<256, kiln_foundation::safe_memory::NoStdProvider<1024>>;
 
 // Helper to create strings
 #[cfg(not(feature = "std"))]
@@ -44,10 +44,10 @@ fn convert_foundation_values_to_compat(args: FoundationValueVec) -> Result<Vec<c
     let mut converted = Vec::new();
     for arg in args {
         match arg {
-            wrt_foundation::values::Value::I32(v) => converted.push(crate::Value::S32(v)),
-            wrt_foundation::values::Value::I64(v) => converted.push(crate::Value::S64(v)),
-            wrt_foundation::values::Value::F32(v) => converted.push(crate::Value::F32(v.value())),
-            wrt_foundation::values::Value::F64(v) => converted.push(crate::Value::F64(v.value())),
+            kiln_foundation::values::Value::I32(v) => converted.push(crate::Value::S32(v)),
+            kiln_foundation::values::Value::I64(v) => converted.push(crate::Value::S64(v)),
+            kiln_foundation::values::Value::F32(v) => converted.push(crate::Value::F32(v.value())),
+            kiln_foundation::values::Value::F64(v) => converted.push(crate::Value::F64(v.value())),
             _ => {
                 return Err(Error::wasi_invalid_argument(
                     "Unsupported value type for conversion",
@@ -66,21 +66,21 @@ fn convert_compat_values_to_foundation(values: Vec<crate::Value>) -> Result<Foun
     for value in values {
         match value {
             crate::Value::Bool(v) => {
-                converted.push(wrt_foundation::values::Value::I32(i32::from(v)));
+                converted.push(kiln_foundation::values::Value::I32(i32::from(v)));
             },
-            crate::Value::U8(v) => converted.push(wrt_foundation::values::Value::I32(i32::from(v))),
-            crate::Value::U16(v) => converted.push(wrt_foundation::values::Value::I32(i32::from(v))),
-            crate::Value::U32(v) => converted.push(wrt_foundation::values::Value::I64(i64::from(v))),
-            crate::Value::U64(v) => converted.push(wrt_foundation::values::Value::I64(v as i64)),
-            crate::Value::S8(v) => converted.push(wrt_foundation::values::Value::I32(i32::from(v))),
-            crate::Value::S16(v) => converted.push(wrt_foundation::values::Value::I32(i32::from(v))),
-            crate::Value::S32(v) => converted.push(wrt_foundation::values::Value::I32(v)),
-            crate::Value::S64(v) => converted.push(wrt_foundation::values::Value::I64(v)),
-            crate::Value::F32(v) => converted.push(wrt_foundation::values::Value::F32(
-                wrt_foundation::values::FloatBits32::from_float(v),
+            crate::Value::U8(v) => converted.push(kiln_foundation::values::Value::I32(i32::from(v))),
+            crate::Value::U16(v) => converted.push(kiln_foundation::values::Value::I32(i32::from(v))),
+            crate::Value::U32(v) => converted.push(kiln_foundation::values::Value::I64(i64::from(v))),
+            crate::Value::U64(v) => converted.push(kiln_foundation::values::Value::I64(v as i64)),
+            crate::Value::S8(v) => converted.push(kiln_foundation::values::Value::I32(i32::from(v))),
+            crate::Value::S16(v) => converted.push(kiln_foundation::values::Value::I32(i32::from(v))),
+            crate::Value::S32(v) => converted.push(kiln_foundation::values::Value::I32(v)),
+            crate::Value::S64(v) => converted.push(kiln_foundation::values::Value::I64(v)),
+            crate::Value::F32(v) => converted.push(kiln_foundation::values::Value::F32(
+                kiln_foundation::values::FloatBits32::from_float(v),
             )),
-            crate::Value::F64(v) => converted.push(wrt_foundation::values::Value::F64(
-                wrt_foundation::values::FloatBits64::from_float(v),
+            crate::Value::F64(v) => converted.push(kiln_foundation::values::Value::F64(
+                kiln_foundation::values::FloatBits64::from_float(v),
             )),
             crate::Value::List(_list) => {
                 // For lists, we'll need to convert to an appropriate foundation type
@@ -109,15 +109,15 @@ fn make_string(s: &str) -> String {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExternType {
     Function {
-        params: wrt_foundation::BoundedVec<
+        params: kiln_foundation::BoundedVec<
             ValType,
             16,
-            wrt_foundation::safe_memory::NoStdProvider<1024>,
+            kiln_foundation::safe_memory::NoStdProvider<1024>,
         >,
-        results: wrt_foundation::BoundedVec<
+        results: kiln_foundation::BoundedVec<
             ValType,
             16,
-            wrt_foundation::safe_memory::NoStdProvider<1024>,
+            kiln_foundation::safe_memory::NoStdProvider<1024>,
         >,
     },
 }
@@ -141,39 +141,39 @@ impl Default for ValType {
 
 // Implement required traits for BoundedVec compatibility
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::Checksummable for ValType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ValType {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&[*self as u8]);
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::ToBytes for ValType {
+impl kiln_foundation::traits::ToBytes for ValType {
     fn serialized_size(&self) -> usize {
         1
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(*self as u8)
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::FromBytes for ValType {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for ValType {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         match reader.read_u8()? {
             0 => Ok(ValType::I32),
             1 => Ok(ValType::I64),
             2 => Ok(ValType::F32),
             3 => Ok(ValType::F64),
-            _ => Err(wrt_error::Error::parse_error(
+            _ => Err(kiln_error::Error::parse_error(
                 "Invalid ValType discriminant",
             )),
         }
@@ -182,8 +182,8 @@ impl wrt_foundation::traits::FromBytes for ValType {
 
 /// Component model provider for WASI Preview2
 ///
-/// This provider integrates WASI host functions with the WRT component model,
-/// using the same patterns as other WRT host providers.
+/// This provider integrates WASI host functions with the Kiln component model,
+/// using the same patterns as other Kiln host providers.
 #[derive(Debug)]
 pub struct ComponentModelProvider {
     /// WASI capabilities for this provider
@@ -202,7 +202,7 @@ pub struct ComponentModelProvider {
 
 // Helper function to create empty value vector
 #[cfg(not(feature = "std"))]
-fn empty_value_vec() -> wrt_error::Result<impl Iterator<Item = Value>> {
+fn empty_value_vec() -> kiln_error::Result<impl Iterator<Item = Value>> {
     // Return empty iterator for no_std mode
     let empty_slice: &[Value] = &[];
     Ok(empty_slice.iter().cloned())
@@ -210,7 +210,7 @@ fn empty_value_vec() -> wrt_error::Result<impl Iterator<Item = Value>> {
 
 // Helper function to create empty type vector
 #[cfg(not(feature = "std"))]
-fn empty_type_vec() -> wrt_error::Result<impl Iterator<Item = ValType>> {
+fn empty_type_vec() -> kiln_error::Result<impl Iterator<Item = ValType>> {
     // Return empty iterator for no_std mode
     let empty_slice: &[ValType] = &[];
     Ok(empty_slice.iter().cloned())
@@ -219,7 +219,7 @@ fn empty_type_vec() -> wrt_error::Result<impl Iterator<Item = ValType>> {
 // Type alias for Value vectors from foundation
 #[cfg(feature = "std")]
 #[allow(dead_code)]
-type FoundationValueVec = Vec<wrt_foundation::values::Value>;
+type FoundationValueVec = Vec<kiln_foundation::values::Value>;
 
 // Simplified no_std types - just use placeholder
 #[cfg(not(feature = "std"))]
@@ -295,7 +295,7 @@ impl ComponentModelProvider {
 
     /// Register all WASI functions with a callback registry
     ///
-    /// This follows the same pattern as other WRT host providers
+    /// This follows the same pattern as other Kiln host providers
     ///
     /// # Errors
     ///
@@ -672,13 +672,13 @@ impl ComponentModelProvider {
             name:        make_string("wasi:nn/inference.load"),
             handler:     HostFunctionHandler::new_with_args(
                 |target: &mut dyn Any, args: FoundationValueVec| {
-                    // Convert wrt_foundation::Value to crate::Value
+                    // Convert kiln_foundation::Value to crate::Value
                     let converted_args = convert_foundation_values_to_compat(args)?;
 
                     // Call the actual function
                     let result = wasi_nn_load(target, converted_args)?;
 
-                    // Convert back from crate::Value to wrt_foundation::Value
+                    // Convert back from crate::Value to kiln_foundation::Value
                     convert_compat_values_to_foundation(result)
                 },
             ),
@@ -693,13 +693,13 @@ impl ComponentModelProvider {
             name:        make_string("wasi:nn/inference.init-execution-context"),
             handler:     HostFunctionHandler::new_with_args(
                 |target: &mut dyn Any, args: FoundationValueVec| {
-                    // Convert wrt_foundation::Value to crate::Value
+                    // Convert kiln_foundation::Value to crate::Value
                     let converted_args = convert_foundation_values_to_compat(args)?;
 
                     // Call the actual function
                     let result = wasi_nn_init_execution_context(target, converted_args)?;
 
-                    // Convert back from crate::Value to wrt_foundation::Value
+                    // Convert back from crate::Value to kiln_foundation::Value
                     convert_compat_values_to_foundation(result)
                 },
             ),
@@ -714,13 +714,13 @@ impl ComponentModelProvider {
             name:        make_string("wasi:nn/inference.set-input"),
             handler:     HostFunctionHandler::new_with_args(
                 |target: &mut dyn Any, args: FoundationValueVec| {
-                    // Convert wrt_foundation::Value to crate::Value
+                    // Convert kiln_foundation::Value to crate::Value
                     let converted_args = convert_foundation_values_to_compat(args)?;
 
                     // Call the actual function
                     let result = wasi_nn_set_input(target, converted_args)?;
 
-                    // Convert back from crate::Value to wrt_foundation::Value
+                    // Convert back from crate::Value to kiln_foundation::Value
                     convert_compat_values_to_foundation(result)
                 },
             ),
@@ -735,13 +735,13 @@ impl ComponentModelProvider {
             name:        make_string("wasi:nn/inference.compute"),
             handler:     HostFunctionHandler::new_with_args(
                 |target: &mut dyn Any, args: FoundationValueVec| {
-                    // Convert wrt_foundation::Value to crate::Value
+                    // Convert kiln_foundation::Value to crate::Value
                     let converted_args = convert_foundation_values_to_compat(args)?;
 
                     // Call the actual function
                     let result = wasi_nn_compute(target, converted_args)?;
 
-                    // Convert back from crate::Value to wrt_foundation::Value
+                    // Convert back from crate::Value to kiln_foundation::Value
                     convert_compat_values_to_foundation(result)
                 },
             ),
@@ -756,13 +756,13 @@ impl ComponentModelProvider {
             name:        make_string("wasi:nn/inference.get-output"),
             handler:     HostFunctionHandler::new_with_args(
                 |target: &mut dyn Any, args: FoundationValueVec| {
-                    // Convert wrt_foundation::Value to crate::Value
+                    // Convert kiln_foundation::Value to crate::Value
                     let converted_args = convert_foundation_values_to_compat(args)?;
 
                     // Call the actual function
                     let result = wasi_nn_get_output(target, converted_args)?;
 
-                    // Convert back from crate::Value to wrt_foundation::Value
+                    // Convert back from crate::Value to kiln_foundation::Value
                     convert_compat_values_to_foundation(result)
                 },
             ),

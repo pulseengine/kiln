@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
-use wrt_component::{Component, ComponentType};
-use wrt_error::Result;
-use wrt_foundation::values::Value;
-use wrt_host::{CallbackRegistry, function::CloneableFn};
-use wrt_intercept::{
+use kiln_component::{Component, ComponentType};
+use kiln_error::Result;
+use kiln_foundation::values::Value;
+use kiln_host::{CallbackRegistry, function::CloneableFn};
+use kiln_intercept::{
     LinkInterceptor,
     strategies::{FirewallBuilder, LoggingStrategy, StatisticsStrategy},
 };
-use wrt_runtime::RuntimeInstance;
+use kiln_runtime::RuntimeInstance;
 
 fn main() -> Result<()> {
     // Create a mock component type

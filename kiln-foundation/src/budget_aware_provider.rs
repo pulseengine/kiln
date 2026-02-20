@@ -115,7 +115,7 @@ impl ToBytes for CrateId {
         &self,
         writer: &mut crate::traits::WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(self.as_index() as u8)
     }
 }
@@ -124,7 +124,7 @@ impl FromBytes for CrateId {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut crate::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = reader.read_u8()?;
         match byte {
             0 => Ok(CrateId::Foundation),

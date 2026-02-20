@@ -1,4 +1,4 @@
-// WRT - wrt-decoder
+// Kiln - kiln-decoder
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -7,7 +7,7 @@
 //!
 //! This module provides decoding capabilities for WebAssembly modules in
 //! environments without heap allocation. It uses bounded collections from
-//! wrt-foundation for all operations.
+//! kiln-foundation for all operations.
 //!
 //! # Safety requirements
 //!
@@ -22,8 +22,8 @@
 //! # Usage example
 //!
 //! ```ignore
-//! use wrt_decoder::decoder_no_alloc;
-//! use wrt_foundation::verification::VerificationLevel;
+//! use kiln_decoder::decoder_no_alloc;
+//! use kiln_foundation::verification::VerificationLevel;
 //!
 //! // Verify a WebAssembly module header
 //! let wasm_binary = [0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00]; // Magic + version
@@ -34,8 +34,8 @@
 //! }
 //! ```
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_foundation::{safe_memory::NoStdProvider, verification::VerificationLevel};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::{safe_memory::NoStdProvider, verification::VerificationLevel};
 
 use crate::prelude::*;
 
@@ -93,7 +93,7 @@ pub enum NoAllocErrorCode {
 }
 
 impl NoAllocErrorCode {
-    /// Converts a NoAllocErrorCode to a wrt_error code
+    /// Converts a NoAllocErrorCode to a kiln_error code
     pub fn to_error_code(&self) -> u16 {
         match self {
             NoAllocErrorCode::ModuleTooLarge => codes::CAPACITY_EXCEEDED,
@@ -194,7 +194,7 @@ pub fn create_memory_provider(
     let mut provider = NoStdProvider::<MAX_MODULE_SIZE>::default();
 
     // Write the bytes to the provider
-    use wrt_foundation::safe_memory::Provider;
+    use kiln_foundation::safe_memory::Provider;
     provider.write_data(0, bytes).map_err(|_| {
         create_error(
             NoAllocErrorCode::MemoryProviderError,

@@ -44,8 +44,8 @@ use std::hash::Hasher;
 ///
 /// # Example
 /// ```
-/// use wrt_foundation::direct_map::DirectMap;
-/// use wrt_foundation::bounded::BoundedString;
+/// use kiln_foundation::direct_map::DirectMap;
+/// use kiln_foundation::bounded::BoundedString;
 ///
 /// let mut map: DirectMap<BoundedString<32>, u32, 10> = DirectMap::new();
 /// let key = BoundedString::from_str_truncate("test").unwrap();
@@ -78,7 +78,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use wrt_foundation::direct_map::DirectMap;
+    /// use kiln_foundation::direct_map::DirectMap;
     /// let map: DirectMap<String, i32, 10> = DirectMap::new();
     /// assert!(map.is_empty());
     /// ```
@@ -108,7 +108,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use wrt_foundation::direct_map::DirectMap;
+    /// use kiln_foundation::direct_map::DirectMap;
     /// let mut map: DirectMap<i32, &str, 10> = DirectMap::new();
     /// assert_eq!(map.insert(1, "one").unwrap(), None);
     /// assert_eq!(map.insert(1, "ONE").unwrap(), Some("one"));
@@ -128,8 +128,8 @@ where
         // Add new entry if not full
         if self.entries.is_full() {
             return Err(Error::new(
-                wrt_error::ErrorCategory::Capacity,
-                wrt_error::codes::CAPACITY_EXCEEDED,
+                kiln_error::ErrorCategory::Capacity,
+                kiln_error::codes::CAPACITY_EXCEEDED,
                 "DirectMap capacity exceeded",
             ));
         }
@@ -149,7 +149,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use wrt_foundation::direct_map::DirectMap;
+    /// use kiln_foundation::direct_map::DirectMap;
     /// let mut map: DirectMap<i32, &str, 10> = DirectMap::new();
     /// map.insert(1, "one").unwrap();
     /// assert_eq!(map.get(&1), Some(&"one"));
@@ -188,7 +188,7 @@ where
     ///
     /// # Example
     /// ```
-    /// use wrt_foundation::direct_map::DirectMap;
+    /// use kiln_foundation::direct_map::DirectMap;
     /// let mut map: DirectMap<i32, &str, 10> = DirectMap::new();
     /// map.insert(1, "one").unwrap();
     /// assert!(map.contains_key(&1));
@@ -275,8 +275,8 @@ where
             if let Some(stored) = self.checksum {
                 if computed != stored {
                     return Err(Error::new(
-                        wrt_error::ErrorCategory::Safety,
-                        wrt_error::codes::CHECKSUM_MISMATCH,
+                        kiln_error::ErrorCategory::Safety,
+                        kiln_error::codes::CHECKSUM_MISMATCH,
                         "DirectMap checksum verification failed",
                     ));
                 }

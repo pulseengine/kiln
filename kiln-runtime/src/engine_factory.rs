@@ -17,11 +17,11 @@ use alloc::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::CrateId;
+use kiln_foundation::CrateId;
 
 use crate::prelude::*;
 
@@ -140,7 +140,7 @@ impl EngineFactory {
 
     /// Create a memory provider based on configuration
     fn create_memory_provider(provider_type: MemoryProviderType, _budget: usize) -> Result<()> {
-        use wrt_foundation::{
+        use kiln_foundation::{
             capabilities::MemoryFactory,
             CrateId,
         };
@@ -200,15 +200,15 @@ pub trait RuntimeEngine {
         &mut self,
         module: Option<&str>,
         function: &str,
-        args: &[wrt_foundation::Value],
-    ) -> Result<Vec<wrt_foundation::Value>>;
+        args: &[kiln_foundation::Value],
+    ) -> Result<Vec<kiln_foundation::Value>>;
 
     /// Get engine statistics
     fn get_statistics(&self) -> EngineStatistics;
 
     /// Set the host function registry for imported function calls
     #[cfg(feature = "std")]
-    fn set_host_registry(&mut self, registry: std::sync::Arc<wrt_host::CallbackRegistry>);
+    fn set_host_registry(&mut self, registry: std::sync::Arc<kiln_host::CallbackRegistry>);
 }
 
 // Implement RuntimeEngine for StacklessEngine
@@ -223,8 +223,8 @@ impl RuntimeEngine for crate::stackless::StacklessEngine {
         &mut self,
         module: Option<&str>,
         function: &str,
-        args: &[wrt_foundation::Value],
-    ) -> Result<Vec<wrt_foundation::Value>> {
+        args: &[kiln_foundation::Value],
+    ) -> Result<Vec<kiln_foundation::Value>> {
         // For now, return empty result - proper implementation would execute function
         let _ = (module, function, args);
         // Return empty result using bounded collection
@@ -234,12 +234,12 @@ impl RuntimeEngine for crate::stackless::StacklessEngine {
         }
         #[cfg(not(feature = "std"))]
         {
-            use wrt_foundation::bounded::BoundedVec;
-            let provider = wrt_foundation::safe_managed_alloc!(
+            use kiln_foundation::bounded::BoundedVec;
+            let provider = kiln_foundation::safe_managed_alloc!(
                 512,
-                wrt_foundation::budget_aware_provider::CrateId::Runtime
+                kiln_foundation::budget_aware_provider::CrateId::Runtime
             )?;
-            let bounded_vec = BoundedVec::<wrt_foundation::values::Value, 16, _>::new(provider)?;
+            let bounded_vec = BoundedVec::<kiln_foundation::values::Value, 16, _>::new(provider)?;
             Ok(bounded_vec.into_vec())
         }
     }
@@ -249,7 +249,7 @@ impl RuntimeEngine for crate::stackless::StacklessEngine {
     }
 
     #[cfg(feature = "std")]
-    fn set_host_registry(&mut self, registry: std::sync::Arc<wrt_host::CallbackRegistry>) {
+    fn set_host_registry(&mut self, registry: std::sync::Arc<kiln_host::CallbackRegistry>) {
         self.set_host_registry(registry);
     }
 }

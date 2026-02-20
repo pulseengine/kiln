@@ -14,19 +14,19 @@ use core::marker::PhantomData;
 use std::vec::Vec;
 
 #[cfg(not(any(feature = "std")))]
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
 };
 #[cfg(feature = "std")]
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
 };
 #[cfg(not(any(feature = "std")))]
-use wrt_foundation::{
+use kiln_foundation::{
     traits::BoundedCapacity,
     MemoryProvider,
     NoStdProvider,
@@ -364,7 +364,7 @@ impl<P: MemoryProvider + Clone + Default + Eq> Default for StreamingParser<P> {
 #[cfg(feature = "std")]
 impl StreamingParser {
     /// Create a new streaming parser
-    pub fn new<P: wrt_foundation::MemoryProvider + Clone + Default + Eq>(
+    pub fn new<P: kiln_foundation::MemoryProvider + Clone + Default + Eq>(
         _provider: P,
     ) -> core::result::Result<Self, Error> {
         Ok(Self {
@@ -407,7 +407,7 @@ pub struct SectionParser {
 #[cfg(feature = "std")]
 impl SectionParser {
     /// Create a new section parser
-    pub fn new<P: wrt_foundation::MemoryProvider + Clone + Default + Eq>(
+    pub fn new<P: kiln_foundation::MemoryProvider + Clone + Default + Eq>(
         _provider: P,
     ) -> core::result::Result<Self, Error> {
         Ok(Self {
@@ -517,15 +517,15 @@ impl<P: MemoryProvider + Clone + Default + Eq> SectionParser<P> {
 
 #[cfg(test)]
 mod tests {
-    use wrt_foundation::NoStdProvider;
+    use kiln_foundation::NoStdProvider;
 
     use super::*;
 
     #[test]
     fn test_streaming_parser_creation() {
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Format
+            kiln_foundation::budget_aware_provider::CrateId::Format
         )
         .unwrap();
         let parser = StreamingParser::new(provider);
@@ -538,9 +538,9 @@ mod tests {
 
     #[test]
     fn test_magic_bytes_processing() {
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Format
+            kiln_foundation::budget_aware_provider::CrateId::Format
         )
         .unwrap();
         let mut parser = StreamingParser::new(provider).unwrap();
@@ -553,9 +553,9 @@ mod tests {
 
     #[test]
     fn test_section_parser_creation() {
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Format
+            kiln_foundation::budget_aware_provider::CrateId::Format
         )
         .unwrap();
         let parser = SectionParser::new(provider);

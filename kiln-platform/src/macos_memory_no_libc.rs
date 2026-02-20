@@ -1,10 +1,10 @@
 #![allow(unsafe_code)]
 // Binary std/no_std choice
-// WRT - wrt-platform
+// Kiln - kiln-platform
 // Module: macOS Memory Management (No libc)
 // SW-REQ-ID: REQ_PLATFORM_001, REQ_MEMORY_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
@@ -16,7 +16,7 @@ use core::ptr::{
     NonNull,
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,

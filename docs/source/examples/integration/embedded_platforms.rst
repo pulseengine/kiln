@@ -8,7 +8,7 @@ Embedded Platform Support
    
    -- Not Bill Gates, but definitely an embedded developer
 
-Running WebAssembly on embedded systems is like fitting an elephant in a phone booth - it requires creativity, careful planning, and occasionally some magic. WRT supports two major embedded platforms: Zephyr RTOS and Tock OS, each with unique constraints and capabilities.
+Running WebAssembly on embedded systems is like fitting an elephant in a phone booth - it requires creativity, careful planning, and occasionally some magic. Kiln supports two major embedded platforms: Zephyr RTOS and Tock OS, each with unique constraints and capabilities.
 
 .. admonition:: What You'll Learn
    :class: note
@@ -32,7 +32,7 @@ On embedded systems, dynamic allocation is often forbidden:
    :caption: Static memory allocation
    :linenos:
 
-   use wrt_platform::prelude::*;
+   use kiln_platform::prelude::*;
    
    // Compile-time memory reservation
    #[link_section = ".wasm_memory"]
@@ -76,7 +76,7 @@ Use hardware MPU for isolation:
    :caption: MPU configuration
    :linenos:
 
-   use wrt_platform::embedded_mpu::{MpuRegion, AccessPermission};
+   use kiln_platform::embedded_mpu::{MpuRegion, AccessPermission};
    
    fn configure_mpu_for_wasm() -> Result<(), Error> {
        let mpu = MpuController::new()?;
@@ -129,7 +129,7 @@ Zephyr's memory domain system for isolation:
    :caption: Zephyr memory domains
    :linenos:
 
-   use wrt_platform::{
+   use kiln_platform::{
        ZephyrAllocator, 
        ZephyrAllocatorBuilder,
        ZephyrMemoryFlags
@@ -185,7 +185,7 @@ Kernel primitives for thread safety:
    :caption: Zephyr synchronization
    :linenos:
 
-   use wrt_platform::{ZephyrFutex, ZephyrSemaphoreFutex};
+   use kiln_platform::{ZephyrFutex, ZephyrSemaphoreFutex};
    
    fn create_zephyr_sync() -> Result<(), Error> {
        // Option 1: Semaphore-based futex (more efficient)
@@ -217,7 +217,7 @@ Integrate with Zephyr's power management:
    :caption: Power-aware WASM execution
    :linenos:
 
-   use wrt_platform::zephyr_power::{
+   use kiln_platform::zephyr_power::{
        PowerManager,
        PowerState,
        PowerConstraint
@@ -265,7 +265,7 @@ Tock's unique grant system for process isolation:
    :caption: Tock grant allocation
    :linenos:
 
-   use wrt_platform::{TockAllocator, TockAllocatorBuilder};
+   use kiln_platform::{TockAllocator, TockAllocatorBuilder};
    use tock_registers::interfaces::Readable;
    
    fn setup_tock_grants() -> Result<TockAllocator, Error> {
@@ -300,7 +300,7 @@ Tock's capability-based security:
    :caption: Tock process isolation
    :linenos:
 
-   use wrt_platform::tock_process::{
+   use kiln_platform::tock_process::{
        ProcessId,
        Capability,
        Syscall
@@ -348,7 +348,7 @@ Inter-process communication in Tock:
    :caption: Tock IPC
    :linenos:
 
-   use wrt_platform::{TockIpc, IpcService};
+   use kiln_platform::{TockIpc, IpcService};
    
    fn setup_wasm_ipc_service() -> Result<(), Error> {
        // Register IPC service
@@ -389,7 +389,7 @@ Handle WASM in interrupt contexts:
    :caption: ISR-safe WASM execution
    :linenos:
 
-   use wrt_platform::embedded_common::{InterruptGuard, CriticalSection};
+   use kiln_platform::embedded_common::{InterruptGuard, CriticalSection};
    
    fn interrupt_safe_wasm() -> Result<(), Error> {
        // Non-blocking execution check
@@ -432,7 +432,7 @@ Keep the watchdog happy during long WASM execution:
    :caption: Watchdog handling
    :linenos:
 
-   use wrt_platform::embedded_watchdog::{Watchdog, WatchdogConfig};
+   use kiln_platform::embedded_watchdog::{Watchdog, WatchdogConfig};
    
    fn wasm_with_watchdog() -> Result<(), Error> {
        let watchdog = Watchdog::init(WatchdogConfig {
@@ -475,7 +475,7 @@ Execute WASM directly from flash:
    :caption: XIP (Execute in Place)
    :linenos:
 
-   use wrt_platform::embedded_flash::{FlashRegion, XipConfig};
+   use kiln_platform::embedded_flash::{FlashRegion, XipConfig};
    
    fn setup_xip_wasm() -> Result<(), Error> {
        // Configure flash for XIP
@@ -513,7 +513,7 @@ Embedded Optimization Strategies:
    :caption: Resource optimization
    :linenos:
 
-   use wrt_platform::embedded_optimizations::*;
+   use kiln_platform::embedded_optimizations::*;
    
    fn optimize_for_embedded() -> Result<(), Error> {
        // 1. Disable features to save space

@@ -13,7 +13,7 @@ use crate::{
         CrateIdentifier,
         GenericMemoryCoordinator,
     },
-    wrt_memory_system::CapabilityWrtFactory,
+    kiln_memory_system::CapabilityKilnFactory,
     Error,
     Result,
 };

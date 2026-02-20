@@ -1,13 +1,13 @@
-//! # WRT Logging
+//! # Kiln Logging
 //!
-//! Logging infrastructure for the WebAssembly Runtime (WRT).
+//! Logging infrastructure for the WebAssembly Runtime (Kiln).
 //!
 //! This crate provides logging functionality for WebAssembly components,
 //! allowing components to log messages to the host environment. It extends
-//! the wrt-host crate with logging-specific capabilities and works in both
+//! the kiln-host crate with logging-specific capabilities and works in both
 //! standard and `no_std` environments.
 
-// WRT - wrt-logging
+// Kiln - kiln-logging
 // Module: Logging Infrastructure
 // SW-REQ-ID: REQ_017
 //
@@ -28,11 +28,11 @@ extern crate alloc;
 // Currently not needed at crate level - specific modules import as needed
 
 // Reexports for convenience
-pub use wrt_error::{
+pub use kiln_error::{
     Error,
     Result,
 };
-pub use wrt_host::CallbackRegistry;
+pub use kiln_host::CallbackRegistry;
 
 /// Logging handlers for processing log messages.
 ///
@@ -106,7 +106,7 @@ pub use operation::LogOperation;
 pub mod verify;
 
 // Panic handler disabled to avoid conflicts with other crates
-// // Provide a panic handler only when wrt-logging is being tested in isolation
+// // Provide a panic handler only when kiln-logging is being tested in isolation
 // #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {

@@ -10,7 +10,7 @@ use core::{
     marker::PhantomData,
     sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     collections::StaticMap as BoundedMap,
     collections::StaticVec as BoundedVec,
@@ -30,7 +30,7 @@ use alloc::{format, vec};
 use std::{string::String, vec::Vec};
 
 #[cfg(not(feature = "std"))]
-type String = wrt_foundation::BoundedString<256>;
+type String = kiln_foundation::BoundedString<256>;
 #[cfg(not(feature = "std"))]
 type Vec<T> = BoundedVec<T, 64>;
 
@@ -38,7 +38,7 @@ type Vec<T> = BoundedVec<T, 64>;
 #[cfg(not(feature = "std"))]
 fn error_msg(s: &str) -> String {
     let provider = NoStdProvider::<1024>::default();
-    wrt_foundation::BoundedString::from_str_truncate(s).unwrap_or_default()
+    kiln_foundation::BoundedString::from_str_truncate(s).unwrap_or_default()
 }
 
 #[cfg(feature = "std")]
@@ -90,10 +90,10 @@ impl fmt::Display for HandleRepresentationError {
 #[cfg(feature = "std")]
 impl std::error::Error for HandleRepresentationError {}
 
-// Conversion to wrt_error::Error for unified error handling
-impl From<HandleRepresentationError> for wrt_error::Error {
+// Conversion to kiln_error::Error for unified error handling
+impl From<HandleRepresentationError> for kiln_error::Error {
     fn from(err: HandleRepresentationError) -> Self {
-        use wrt_error::{ErrorCategory, codes};
+        use kiln_error::{ErrorCategory, codes};
         match err.kind {
             HandleRepresentationErrorKind::InvalidHandle => Self::new(
                 ErrorCategory::ComponentRuntime,
@@ -139,7 +139,7 @@ impl From<HandleRepresentationError> for wrt_error::Error {
     }
 }
 
-pub type HandleRepresentationResult<T> = wrt_error::Result<T>;
+pub type HandleRepresentationResult<T> = kiln_error::Result<T>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HandleRepresentation {

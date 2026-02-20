@@ -117,7 +117,7 @@ pub fn architectural_summary() -> ArchitecturalPattern {
         improvements: [
             "Clear separation of concerns",
             "Pure format types (PureDataMode, PureElementMode)",
-            "Runtime types moved to wrt-runtime",
+            "Runtime types moved to kiln-runtime",
             "Clean bridge interfaces",
             "ASIL-D compliant architecture",
         ]

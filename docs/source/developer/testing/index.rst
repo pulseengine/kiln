@@ -2,7 +2,7 @@
 Testing Documentation  
 =====================
 
-Comprehensive testing strategies and requirements for WRT development.
+Comprehensive testing strategies and requirements for Kiln development.
 
 .. toctree::
    :maxdepth: 2
@@ -18,7 +18,7 @@ Comprehensive testing strategies and requirements for WRT development.
 Testing Strategy
 ================
 
-WRT employs a multi-layered testing approach:
+Kiln employs a multi-layered testing approach:
 
 1. **Unit Tests**: Test individual components in isolation
 2. **Integration Tests**: Test component interactions
@@ -41,10 +41,10 @@ Run unit tests for all workspace crates:
    cargo test --workspace
 
    # Specific crate
-   cargo test -p wrt-runtime
+   cargo test -p kiln-runtime
 
    # Specific test
-   cargo test -p wrt-runtime test_name --nocapture
+   cargo test -p kiln-runtime test_name --nocapture
 
 Integration Tests
 -----------------
@@ -67,10 +67,10 @@ Official WebAssembly specification tests:
 .. code-block:: bash
 
    # Run spec tests
-   cargo test -p wrt -- wasm_testsuite
+   cargo test -p kiln -- wasm_testsuite
 
    # Run specific spec test
-   cargo test -p wrt spec_test_name
+   cargo test -p kiln spec_test_name
 
 Coverage Requirements
 ====================
@@ -88,8 +88,8 @@ Generate Coverage Reports
 
 .. code-block:: bash
 
-   # Generate coverage with cargo-wrt
-   cargo-wrt coverage --html
+   # Generate coverage with cargo-kiln
+   cargo-kiln coverage --html
 
    # Generate coverage directly
    cargo llvm-cov --html --output-dir coverage
@@ -108,16 +108,16 @@ KANI formal verification for mathematical proof of safety properties:
 .. code-block:: bash
 
    # Run all formal verification (29 properties)
-   cargo kani -p wrt-integration-tests --features kani
+   cargo kani -p kiln-integration-tests --features kani
 
    # Run with specific ASIL profile
-   cargo-wrt kani-verify --asil-profile c
+   cargo-kiln kani-verify --asil-profile c
 
    # Run specific proof harness
    cargo kani --harness kani_verify_memory_budget_never_exceeded
 
    # Simulate CI workflow locally
-   cargo-wrt simulate-ci
+   cargo-kiln simulate-ci
 
 For complete formal verification documentation, see :doc:`../../safety/formal_verification`.
 
@@ -201,13 +201,13 @@ Local CI Simulation
 .. code-block:: bash
 
    # Run main CI checks
-   cargo-wrt ci
+   cargo-kiln ci
 
    # Run full test suite
-   cargo-wrt test
+   cargo-kiln test
 
    # Run comprehensive verification
-   cargo-wrt verify-matrix --report
+   cargo-kiln verify-matrix --report
 
 Continuous Integration
 ----------------------
@@ -260,7 +260,7 @@ Profiling
 
    # Profile with perf
    cargo build --release
-   perf record target/release/wrtd module.wasm
+   perf record target/release/kilnd module.wasm
    perf report
 
 Best Practices

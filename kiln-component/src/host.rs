@@ -2,8 +2,8 @@
 //!
 //! This module provides the Host type for managing host functions.
 
-use wrt_format::component::ExternType;
-use wrt_host::callback::CallbackType;
+use kiln_format::component::ExternType;
+use kiln_host::callback::CallbackType;
 
 use crate::prelude::*;
 
@@ -65,7 +65,7 @@ impl Host {
                 let callback_type = CallbackType::Logging; // This should be properly implemented
 
                 // Note: Registry access needs to be correctly implemented with the proper type
-                registry.call_host_function(target, "wrt_component", callback_name, args)
+                registry.call_host_function(target, "kiln_component", callback_name, args)
             }
             HostFunctionImpl::Trap(message) => Err(Error::runtime_execution_error("Host function trap executed")),
         }

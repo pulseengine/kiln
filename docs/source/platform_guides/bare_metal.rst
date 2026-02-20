@@ -2,7 +2,7 @@
 Bare Metal Installation Guide
 ============================
 
-WRT supports bare-metal deployment for maximum performance and control in custom hardware platforms, embedded systems, and safety-critical applications.
+Kiln supports bare-metal deployment for maximum performance and control in custom hardware platforms, embedded systems, and safety-critical applications.
 
 .. contents:: On this page
    :local:
@@ -14,7 +14,7 @@ Bare Metal Overview
 What is Bare Metal?
 -------------------
 
-Bare-metal deployment means running WRT directly on hardware without an operating system, providing:
+Bare-metal deployment means running Kiln directly on hardware without an operating system, providing:
 
 * **Maximum performance** - No OS overhead
 * **Deterministic behavior** - Predictable timing
@@ -128,22 +128,22 @@ Create `.cargo/config.toml`:
    [build]
    target = "thumbv7em-none-eabihf"
 
-WRT Bare Metal Configuration
+Kiln Bare Metal Configuration
 ============================
 
 no_std Configuration
 -------------------
 
-WRT is designed to work in `no_std` environments:
+Kiln is designed to work in `no_std` environments:
 
 **Cargo.toml configuration:**
 
 .. code-block:: toml
 
    [dependencies]
-   wrt = { version = "0.1", default-features = false, features = ["bare-metal"] }
-   wrt-foundation = { version = "0.1", default-features = false }
-   wrt-runtime = { version = "0.1", default-features = false }
+   kiln = { version = "0.1", default-features = false, features = ["bare-metal"] }
+   kiln-foundation = { version = "0.1", default-features = false }
+   kiln-runtime = { version = "0.1", default-features = false }
 
    # Bare metal essentials
    cortex-m = "0.7"
@@ -159,14 +159,14 @@ WRT is designed to work in `no_std` environments:
 
    use panic_halt as _;
    use cortex_m_rt::entry;
-   use wrt::prelude::*;
+   use kiln::prelude::*;
 
    #[entry]
    fn main() -> ! {
        // Initialize hardware
        let dp = init_hardware();
        
-       // Initialize WRT runtime
+       // Initialize Kiln runtime
        let mut runtime = WrtRuntime::new();
        
        // Load WebAssembly module from flash
@@ -190,7 +190,7 @@ Memory Management
 .. code-block:: rust
 
    use heapless::pool::{Pool, Node};
-   use wrt_foundation::memory::MemoryProvider;
+   use kiln_foundation::memory::MemoryProvider;
 
    // Pre-allocated memory pool
    static mut MEMORY: [Node<[u8; 1024]>; 32] = [Node::new(); 32];
@@ -226,18 +226,18 @@ Create `memory.x`:
      RAM : ORIGIN = 0x20000000, LENGTH = 192K
    }
 
-   /* WRT-specific sections */
+   /* Kiln-specific sections */
    SECTIONS
    {
-     .wrt_modules : {
-       KEEP(*(.wrt_modules))
+     .kiln_modules : {
+       KEEP(*(.kiln_modules))
      } > FLASH
      
-     .wrt_heap : {
+     .kiln_heap : {
        . = ALIGN(8);
-       __wrt_heap_start = .;
+       __kiln_heap_start = .;
        . = . + 64K;
-       __wrt_heap_end = .;
+       __kiln_heap_end = .;
      } > RAM
    }
 
@@ -262,7 +262,7 @@ Platform Initialization
        let rcc = dp.RCC.constrain();
        let clocks = rcc.cfgr.sysclk(84.mhz()).freeze();
 
-       // Initialize WRT-required peripherals
+       // Initialize Kiln-required peripherals
        init_timer(&dp, &clocks);
        init_uart(&dp, &clocks);
        
@@ -284,8 +284,8 @@ Platform Initialization
            let mut counter = TIMER_COUNTER.borrow(cs).borrow_mut();
            *counter += 1;
            
-           // Signal WRT scheduler
-           wrt_scheduler_tick();
+           // Signal Kiln scheduler
+           kiln_scheduler_tick();
        });
    }
 
@@ -337,22 +337,22 @@ Real-Time Considerations
 Interrupt Handling
 ------------------
 
-**WRT interrupt integration:**
+**Kiln interrupt integration:**
 
 .. code-block:: rust
 
    use cortex_m::interrupt::{self, Mutex};
    use core::cell::RefCell;
 
-   // Interrupt-safe WRT operations
-   type WrtState = Mutex<RefCell<Option<WrtRuntime>>>;
-   static WRT_RUNTIME: WrtState = Mutex::new(RefCell::new(None));
+   // Interrupt-safe Kiln operations
+   type KilnState = Mutex<RefCell<Option<WrtRuntime>>>;
+   static KILN_RUNTIME: KilnState = Mutex::new(RefCell::new(None));
 
    #[interrupt]
    fn EXTI0() {
        interrupt::free(|cs| {
-           if let Some(ref mut runtime) = WRT_RUNTIME.borrow(cs).borrow_mut().as_mut() {
-               // Handle external event in WRT
+           if let Some(ref mut runtime) = KILN_RUNTIME.borrow(cs).borrow_mut().as_mut() {
+               // Handle external event in Kiln
                runtime.handle_interrupt_event();
            }
        });
@@ -364,7 +364,7 @@ Interrupt Handling
 
    use cortex_m::interrupt;
 
-   fn wrt_critical_section<F, R>(f: F) -> R 
+   fn kiln_critical_section<F, R>(f: F) -> R 
    where
        F: FnOnce() -> R,
    {
@@ -387,9 +387,9 @@ Deterministic Execution
 
    fn execute_with_timing(
        runtime: &mut WrtRuntime,
-       module: &WrtModule,
+       module: &KilnModule,
        constraints: &TimingConstraints
-   ) -> Result<(), WrtError> {
+   ) -> Result<(), KilnError> {
        let start = DWT::cycle_count();
        
        // Execute with cycle limit
@@ -400,7 +400,7 @@ Deterministic Execution
        let elapsed = end.wrapping_sub(start);
        
        if elapsed > constraints.deadline_cycles {
-           return Err(WrtError::DeadlineMissed);
+           return Err(KilnError::DeadlineMissed);
        }
        
        Ok(())
@@ -445,7 +445,7 @@ Low Power Integration
        }
    }
 
-**WRT power integration:**
+**Kiln power integration:**
 
 .. code-block:: rust
 
@@ -472,7 +472,7 @@ Flash Storage
    const APP_MODULE: &[u8] = include_bytes!("../modules/app.wasm");
    const SENSOR_MODULE: &[u8] = include_bytes!("../modules/sensor.wasm");
 
-   fn load_modules(runtime: &mut WrtRuntime) -> Result<(), WrtError> {
+   fn load_modules(runtime: &mut WrtRuntime) -> Result<(), KilnError> {
        let app = runtime.load_module(APP_MODULE)?;
        let sensor = runtime.load_module(SENSOR_MODULE)?;
        
@@ -493,7 +493,7 @@ Flash Storage
        spi: &mut SPI,
        address: u32,
        size: usize
-   ) -> Result<Vec<u8>, WrtError> 
+   ) -> Result<Vec<u8>, KilnError> 
    where
        SPI: SpiDevice
    {
@@ -521,7 +521,7 @@ Hardware Testing
        use super::*;
        
        #[test]
-       fn test_wrt_basic_execution() {
+       fn test_kiln_basic_execution() {
            let mut runtime = WrtRuntime::new();
            let module = runtime.load_module(SIMPLE_MODULE).unwrap();
            
@@ -566,7 +566,7 @@ Debugging Techniques
    #[entry]
    fn main() -> ! {
        rtt_init_print!();
-       rprintln!("WRT starting...");
+       rprintln!("Kiln starting...");
        
        // Your code here
    }
@@ -693,9 +693,9 @@ Production Considerations
        }
    }
 
-   fn wrt_main_loop() {
+   fn kiln_main_loop() {
        loop {
-           // Execute WRT tasks
+           // Execute Kiln tasks
            runtime.run_scheduled_tasks();
            
            // Pet the watchdog

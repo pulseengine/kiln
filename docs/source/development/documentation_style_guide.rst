@@ -2,7 +2,7 @@
 Documentation Style Guide
 ==========================
 
-This guide establishes consistent style and tone standards for all PulseEngine (WRT Edition) documentation.
+This guide establishes consistent style and tone standards for all PulseEngine (Kiln Edition) documentation.
 
 .. contents:: Table of Contents
    :local:
@@ -31,14 +31,14 @@ Naming Conventions
 Project Name
 ------------
 
-* **Official name**: PulseEngine (WRT Edition)
-* **Short forms**: PulseEngine or WRT
-* **Never use**: SentryPulse Engine, SPE_wrt, or other legacy names
+* **Official name**: PulseEngine (Kiln Edition)
+* **Short forms**: PulseEngine or Kiln
+* **Never use**: SentryPulse Engine, SPE_kiln, or other legacy names
 
 Component Names
 ---------------
 
-* Use exact crate names when referencing code: ``wrt-runtime``, ``wrt-component``
+* Use exact crate names when referencing code: ``kiln-runtime``, ``kiln-component``
 * Use descriptive names in prose: "the runtime", "the decoder"
 * Capitalize proper nouns: WebAssembly, Component Model
 
@@ -208,7 +208,7 @@ Don't Do This
 
 * ❌ "PulseEngine provides complete WebAssembly execution"
 * ❌ "Fully compliant with ISO 26262"
-* ❌ "Install from crates.io with ``cargo install wrt``"
+* ❌ "Install from crates.io with ``cargo install kiln``"
 * ❌ Using different project names in the same document
 * ❌ Copying boilerplate without updating details
 
@@ -218,7 +218,7 @@ Do This Instead
 * ✅ "PulseEngine provides WebAssembly infrastructure with execution engine under development"
 * ✅ "Designed to support ISO 26262 certification"
 * ✅ "Install from source (not yet published to crates.io)"
-* ✅ Consistent "PulseEngine (WRT Edition)" naming
+* ✅ Consistent "PulseEngine (Kiln Edition)" naming
 * ✅ Tailored, accurate content for each section
 
 Templates

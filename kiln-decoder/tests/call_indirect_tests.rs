@@ -1,5 +1,5 @@
-use wrt_decoder::instructions::{Instruction, encode_instruction, parse_instruction};
-use wrt_format::binary;
+use kiln_decoder::instructions::{Instruction, encode_instruction, parse_instruction};
+use kiln_format::binary;
 
 #[test]
 fn test_parse_encode_call_indirect_basic() {

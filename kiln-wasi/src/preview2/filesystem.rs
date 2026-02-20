@@ -1,6 +1,6 @@
 //! WASI filesystem interface implementation
 //!
-//! Implements the `wasi:filesystem` interface for file operations using WRT's
+//! Implements the `wasi:filesystem` interface for file operations using Kiln's
 //! resource management patterns and platform abstractions.
 
 use core::any::Any;

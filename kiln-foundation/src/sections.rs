@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: WebAssembly Section Definitions
 // SW-REQ-ID: REQ_018
 // SW-REQ-ID: REQ_WASM_001
@@ -10,7 +10,7 @@
 //! Module representing WASM module sections with built-in
 //! safety verification built in.
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,

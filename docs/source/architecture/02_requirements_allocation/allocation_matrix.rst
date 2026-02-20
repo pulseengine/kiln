@@ -80,7 +80,7 @@ no_std + alloc Environment
    :implements: REQ_NOSTD_001, REQ_ALLOC_001
 
 - No standard library but has allocator
-- Custom synchronization via ``wrt-sync``
+- Custom synchronization via ``kiln-sync``
 - Dynamic memory with ``alloc::vec::Vec``
 - No file I/O or OS services
 
@@ -97,7 +97,7 @@ no_std + no_alloc Environment
 
 .. code-block:: rust
 
-   // From wrt-foundation/src/bounded.rs
+   // From kiln-foundation/src/bounded.rs
    pub struct BoundedVec<T, const N_ELEMENTS: usize, P: MemoryProvider> {
        provider: P,
        len: usize,

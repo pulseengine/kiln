@@ -1,6 +1,6 @@
 //! WASI sockets interface implementation
 //!
-//! Implements the `wasi:sockets` interface for network operations using WRT's
+//! Implements the `wasi:sockets` interface for network operations using Kiln's
 //! platform abstractions and capability-based security model.
 //!
 //! This module provides TCP and UDP socket operations with proper sandboxing

@@ -15,12 +15,12 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{
         BoundedVec,
         WasmName,

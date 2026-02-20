@@ -1,7 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use wrt_format::wit_parser::WitParser;
+use kiln_format::wit_parser::WitParser;
 
 fuzz_target!(|data: &[u8]| {
     // Convert raw bytes to string

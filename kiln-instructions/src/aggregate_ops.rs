@@ -19,11 +19,11 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     traits::DefaultMemoryProvider,
     types::ValueType,
     values::{
@@ -618,7 +618,7 @@ impl Validate for AggregateOp {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
-    use wrt_foundation::values::V128;
+    use kiln_foundation::values::V128;
 
     use super::*;
 

@@ -11,9 +11,9 @@ Async Programming Examples
 
    "Async programming is like ordering coffee - you don't wait around for it to brew, you do other things and come back when it's ready."
    
-   -- WRT Async Team
+   -- Kiln Async Team
 
-The WRT async system lets you write asynchronous code that works seamlessly across std, no_std+alloc, and pure no_std environments. Whether you're running on a desktop or a microcontroller with 64KB of RAM, the same async patterns work everywhere.
+The Kiln async system lets you write asynchronous code that works seamlessly across std, no_std+alloc, and pure no_std environments. Whether you're running on a desktop or a microcontroller with 64KB of RAM, the same async patterns work everywhere.
 
 .. contents:: Async Examples
    :local:
@@ -29,7 +29,7 @@ Let's start with the simplest possible async example:
 
 .. code-block:: rust
 
-   use wrt_foundation::{with_async, ExecutorError};
+   use kiln_foundation::{with_async, ExecutorError};
    
    async fn greet(name: &str) -> String {
        format!("Hello, {}!", name)
@@ -37,8 +37,8 @@ Let's start with the simplest possible async example:
    
    fn main() -> Result<(), ExecutorError> {
        // Use the built-in fallback executor
-       let greeting = with_async(greet("WRT"))?;
-       println!("{}", greeting); // Prints: Hello, WRT!
+       let greeting = with_async(greet("Kiln"))?;
+       println!("{}", greeting); // Prints: Hello, Kiln!
        Ok(())
    }
 
@@ -56,7 +56,7 @@ Before diving into complex async code, it's good to know what executor you're us
 
 .. code-block:: rust
 
-   use wrt_foundation::{is_using_fallback, current_executor};
+   use kiln_foundation::{is_using_fallback, current_executor};
    
    fn main() {
        if is_using_fallback() {
@@ -80,7 +80,7 @@ Basic Runtime Usage
 
 .. code-block:: rust
 
-   use wrt_foundation::{AsyncRuntime, ExecutorError};
+   use kiln_foundation::{AsyncRuntime, ExecutorError};
    
    async fn fetch_data(id: u32) -> Result<String, &'static str> {
        // Simulate async work
@@ -118,7 +118,7 @@ The async system supports spawning tasks that run in the background:
 
 .. code-block:: rust
 
-   use wrt_foundation::{current_executor, ExecutorError};
+   use kiln_foundation::{current_executor, ExecutorError};
    use core::future::Future;
    use core::pin::Pin;
    
@@ -193,7 +193,7 @@ Sometimes you need to create your own futures for specific use cases:
    }
    
    // Usage
-   use wrt_foundation::with_async;
+   use kiln_foundation::with_async;
    
    fn main() -> Result<(), ExecutorError> {
        let countdown = CountdownFuture::new(3);
@@ -256,7 +256,7 @@ Here's how to create and register a simple custom executor:
 
 .. code-block:: rust
 
-   use wrt_foundation::{
+   use kiln_foundation::{
        WrtExecutor, ExecutorError, TaskHandle, BoxedFuture,
        register_executor, current_executor
    };
@@ -329,7 +329,7 @@ For embedded systems, you can integrate with Embassy:
 
    #[cfg(feature = "embassy")]
    mod embassy_integration {
-       use wrt_foundation::{WrtExecutor, ExecutorError, TaskHandle, BoxedFuture};
+       use kiln_foundation::{WrtExecutor, ExecutorError, TaskHandle, BoxedFuture};
        use embassy_executor::Executor;
        use core::future::Future;
        
@@ -368,7 +368,7 @@ For embedded systems, you can integrate with Embassy:
        
        pub fn setup_embassy(executor: &'static Executor) -> Result<(), ExecutorError> {
            let adapter = Box::new(EmbassyAdapter::new(executor));
-           wrt_foundation::register_executor(adapter)
+           kiln_foundation::register_executor(adapter)
        }
    }
 
@@ -384,7 +384,7 @@ Working with Component Futures
 
    #[cfg(all(feature = "async-api", feature = "component-model-async"))]
    mod component_async {
-       use wrt_foundation::{
+       use kiln_foundation::{
            ComponentFuture, ComponentFutureBridge, FutureHandle,
            AsyncRuntime, ValType
        };
@@ -422,7 +422,7 @@ Working with Component Streams
 
    #[cfg(all(feature = "async-api", feature = "component-model-async"))]
    mod component_streams {
-       use wrt_foundation::{
+       use kiln_foundation::{
            ComponentStream, ComponentStreamBridge, StreamHandle,
            ValType
        };
@@ -465,7 +465,7 @@ Always handle async errors gracefully:
 
 .. code-block:: rust
 
-   use wrt_foundation::{ExecutorError, with_async};
+   use kiln_foundation::{ExecutorError, with_async};
    
    async fn risky_operation(should_fail: bool) -> Result<&'static str, &'static str> {
        if should_fail {
@@ -556,8 +556,8 @@ Limit concurrent tasks to avoid resource exhaustion:
 
 .. code-block:: rust
 
-   use wrt_foundation::{current_executor, ExecutorError};
-   use wrt_foundation::bounded_collections::BoundedVec;
+   use kiln_foundation::{current_executor, ExecutorError};
+   use kiln_foundation::bounded_collections::BoundedVec;
    
    const MAX_CONCURRENT_TASKS: usize = 8;
    
@@ -608,7 +608,7 @@ Use bounded collections to manage memory usage:
 
 .. code-block:: rust
 
-   use wrt_foundation::bounded_collections::{BoundedVec, BoundedQueue};
+   use kiln_foundation::bounded_collections::{BoundedVec, BoundedQueue};
    
    const BUFFER_SIZE: usize = 32;
    
@@ -672,7 +672,7 @@ Performance Tips
 Memory Guidelines
 -----------------
 
-1. **No Hidden Allocations**: WRT async system never allocates secretly
+1. **No Hidden Allocations**: Kiln async system never allocates secretly
 2. **Bounded Everything**: Use bounded collections for task queues
 3. **Stack-First**: Prefer stack allocation over heap when possible
 4. **Measure Usage**: Monitor actual memory consumption
@@ -727,7 +727,7 @@ Add logging to track async execution:
 Next Steps
 ==========
 
-Now that you've learned the basics of WRT async programming:
+Now that you've learned the basics of Kiln async programming:
 
 1. **Experiment**: Try the examples with different executors
 2. **Build**: Create your own async functions and patterns

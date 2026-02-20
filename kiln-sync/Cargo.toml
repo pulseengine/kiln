@@ -1,22 +1,22 @@
 [package]
-name = "wrt-sync"
+name = "kiln-sync"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Synchronization primitives for WRT, supporting std and no_std environments."
+description = "Synchronization primitives for Kiln, supporting std and no_std environments."
 keywords = ["wasm", "webassembly", "sync", "mutex", "rwlock", "no_std"]
 categories = ["concurrency", "no-std", "wasm"]
 # documentation = "..." # Add docs URL later
 readme = "README.md"
 
 [lib]
-name = "wrt_sync"
+name = "kiln_sync"
 path = "src/lib.rs"
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false } # Ensure wrt-error is also alloc-free by default
+kiln-error = { workspace = true, default-features = false } # Ensure kiln-error is also alloc-free by default
 
 # Optional: parking_lot for std-based advanced mutexes/rwlocks
 parking_lot = { version = "0.12", optional = true }
@@ -30,7 +30,7 @@ kani-verifier = { version = "0.62.0", optional = true }
 [features]
 default = []
 
-# Core allocation strategies (aligned with wrt-foundation)
+# Core allocation strategies (aligned with kiln-foundation)
 dynamic-allocation = ["dep:parking_lot"]
 static-allocation = []
 verified-static-allocation = ["static-allocation"]

@@ -1,8 +1,8 @@
-//! Integration tests for the wrt-format crate.
+//! Integration tests for the kiln-format crate.
 //!
 //! This module contains tests for the format module functionality.
 
-use wrt_format::{
+use kiln_format::{
     CustomSection,
     Module,
 };

@@ -3,13 +3,13 @@
 //! The Component Model has its own async primitives that don't require
 //! the futures crate or Rust's async/await syntax.
 
-use wrt_component::{
+use kiln_component::{
     ComponentInstanceId, ValType,
     async_canonical::AsyncCanonicalAbi,
     async_types::{Future, FutureHandle, FutureState, Stream, StreamHandle, StreamState},
     task_manager::{TaskManager, TaskState},
 };
-use wrt_foundation::{bounded_collections::BoundedVec, component_value::ComponentValue};
+use kiln_foundation::{bounded_collections::BoundedVec, component_value::ComponentValue};
 
 fn main() {
     println!("=== WebAssembly Component Model Async Example ===\n");

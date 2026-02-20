@@ -7,7 +7,7 @@
 //! - Wait and notify operations
 //! - Memory fences
 
-use wrt_foundation::MemArg;
+use kiln_foundation::MemArg;
 
 use crate::prelude::{
     Debug,

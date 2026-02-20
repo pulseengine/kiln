@@ -9,12 +9,12 @@
 use std::vec::Vec;
 use std::vec::Vec;
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     FloatBits32,
     Value,
 };
-use wrt_instructions::{
+use kiln_instructions::{
     Block,
     BrTable,
     CallIndirect,
@@ -58,7 +58,7 @@ impl ControlContext for DemoContext {
     fn pop_control_value(&mut self) -> Result<Value> {
         self.stack
             .pop()
-            .ok_or_else(|| wrt_error::Error::runtime_error("Stack underflow"))
+            .ok_or_else(|| kiln_error::Error::runtime_error("Stack underflow"))
     }
 
     fn get_block_depth(&self) -> usize {
@@ -70,10 +70,10 @@ impl ControlContext for DemoContext {
     }
 
     fn exit_block(&mut self) -> Result<Block> {
-        Ok(Block::Block(wrt_foundation::BlockType::Value(None)))
+        Ok(Block::Block(kiln_foundation::BlockType::Value(None)))
     }
 
-    fn branch(&mut self, target: wrt_instructions::BranchTarget) -> Result<()> {
+    fn branch(&mut self, target: kiln_instructions::BranchTarget) -> Result<()> {
         self.branch_target = Some(target.label_idx);
         Ok(())
     }
@@ -94,7 +94,7 @@ impl ControlContext for DemoContext {
     }
 
     fn trap(&mut self, _message: &str) -> Result<()> {
-        Err(wrt_error::Error::runtime_error("Trap"))
+        Err(kiln_error::Error::runtime_error("Trap"))
     }
 
     fn get_current_block(&self) -> Option<&Block> {
@@ -117,7 +117,7 @@ impl ControlContext for DemoContext {
         func_idx: i32,
     ) -> Result<()> {
         if func_idx < 0 {
-            return Err(wrt_error::Error::runtime_error("Invalid function index"));
+            return Err(kiln_error::Error::runtime_error("Invalid function index"));
         }
 
         // Validate and execute indirect call
@@ -154,7 +154,7 @@ impl FunctionOperations for DemoContext {
         if actual_type == expected_type {
             Ok(())
         } else {
-            Err(wrt_error::Error::type_error("Function signature mismatch"))
+            Err(kiln_error::Error::type_error("Function signature mismatch"))
         }
     }
 

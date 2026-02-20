@@ -2,7 +2,7 @@
 Control Flow Integrity and Hardening
 =====================================
 
-This section describes the comprehensive Control Flow Integrity (CFI) implementation and hardening features in WRT, providing protection against Return-Oriented Programming (ROP) and Jump-Oriented Programming (JOP) attacks.
+This section describes the comprehensive Control Flow Integrity (CFI) implementation and hardening features in Kiln, providing protection against Return-Oriented Programming (ROP) and Jump-Oriented Programming (JOP) attacks.
 
 .. contents:: Table of Contents
    :local:
@@ -11,14 +11,14 @@ This section describes the comprehensive Control Flow Integrity (CFI) implementa
 Overview
 --------
 
-WRT implements a multi-layered CFI system that provides:
+Kiln implements a multi-layered CFI system that provides:
 
 1. **Hardware-assisted protection** using ARM BTI, RISC-V CFI, and Intel CET
 2. **Software CFI fallback** for platforms without hardware support
 3. **WebAssembly-specific protections** for indirect calls and returns
 4. **Real-time violation detection** with configurable response policies
 
-The CFI implementation spans the entire WRT ecosystem, from low-level platform support to high-level API integration.
+The CFI implementation spans the entire Kiln ecosystem, from low-level platform support to high-level API integration.
 
 Architecture
 ------------
@@ -29,11 +29,11 @@ CFI Ecosystem
 .. code-block:: text
 
     ┌─────────────────────────────────────────────────────────────────┐
-    │                    WRT CFI ECOSYSTEM                            │
+    │                    Kiln CFI ECOSYSTEM                            │
     ├─────────────────────────────────────────────────────────────────┤
     │                                                                 │
     │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │
-    │  │    wrtd     │    │     wrt     │    │ wrt-component│        │
+    │  │    kilnd     │    │     kiln    │    │ kiln-component│        │
     │  │             │    │             │    │             │        │
     │  │ • CLI CFI   │    │ • Public    │    │ • Component │        │
     │  │   options   │────│   CFI API   │────│   CFI       │        │
@@ -44,7 +44,7 @@ CFI Ecosystem
     │         └───────────────────┼───────────────────┘              │
     │                             │                                   │
     │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐        │
-    │  │wrt-runtime  │    │wrt-decoder  │    │wrt-instructions│      │
+    │  │kiln-runtime  │    │kiln-decoder  │    │kiln-instructions│      │
     │  │             │    │             │    │             │        │
     │  │ • CFI       │    │ • CFI       │    │ • CFI-aware │        │
     │  │   execution │────│   metadata  │────│   control   │        │
@@ -57,7 +57,7 @@ CFI Ecosystem
     │         └───────────────────┼───────────────────┘              │
     │                             │                                   │
     │  ┌─────────────────────────────────────────────────────────┐   │
-    │  │                 wrt-platform                            │   │
+    │  │                 kiln-platform                            │   │
     │  │                                                         │   │
     │  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │   │
     │  │  │    ARM      │  │   RISC-V    │  │  Software   │    │   │
@@ -77,7 +77,7 @@ CFI Execution Flow
 
 **Module Loading Phase**:
 
-1. WebAssembly module is parsed by ``wrt-decoder``
+1. WebAssembly module is parsed by ``kiln-decoder``
 2. CFI metadata is extracted for indirect calls and returns
 3. Landing pad instructions are injected at appropriate locations
 4. Control flow graph is built for validation
@@ -332,9 +332,9 @@ Enabling CFI
 Command-Line Options
 ~~~~~~~~~~~~~~~~~~~~
 
-The ``wrtd`` daemon supports CFI options::
+The ``kilnd`` daemon supports CFI options::
 
-    wrtd --enable-cfi --cfi-level=maximum --cfi-stats module.wasm
+    kilnd --enable-cfi --cfi-level=maximum --cfi-stats module.wasm
 
 Build Configuration
 ~~~~~~~~~~~~~~~~~~~
@@ -375,7 +375,7 @@ Test Execution
 
 **Hardware Simulation**::
 
-    WRT_TEST_BTI_AVAILABLE=1 ./cfi_test
+    KILN_TEST_BTI_AVAILABLE=1 ./cfi_test
 
 Performance Overhead
 ~~~~~~~~~~~~~~~~~~~~
@@ -431,7 +431,7 @@ Memory Tagging Extension (MTE)
 Platform Integration
 ~~~~~~~~~~~~~~~~~~~~
 
-- Leverages ``wrt-platform`` hardware optimization infrastructure
+- Leverages ``kiln-platform`` hardware optimization infrastructure
 - Auto-detects and enables available hardening features
 - Graceful degradation on platforms without hardware support
 
@@ -447,7 +447,7 @@ Future Enhancements
 Conclusion
 ----------
 
-The WRT CFI implementation provides:
+The Kiln CFI implementation provides:
 
 - ✅ **Complete Functionality**: All CFI components work correctly
 - ✅ **Cross-Platform Compatibility**: Hardware acceleration with software fallback
@@ -455,4 +455,4 @@ The WRT CFI implementation provides:
 - ✅ **Performance Acceptability**: Overhead within enterprise limits
 - ✅ **Production Readiness**: Robust error handling and configuration
 
-The CFI system represents a significant security enhancement to WRT, providing comprehensive protection against control flow attacks in WebAssembly execution environments.
+The CFI system represents a significant security enhancement to Kiln, providing comprehensive protection against control flow attacks in WebAssembly execution environments.

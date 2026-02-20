@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -10,7 +10,7 @@ use alloc::{boxed::Box, string::String};
 #[cfg(feature = "std")]
 use std::boxed::Box;
 
-use wrt_foundation::prelude::{Arc, Mutex};
+use kiln_foundation::prelude::{Arc, Mutex};
 
 use super::{MemoryStrategy, VerificationLevel};
 

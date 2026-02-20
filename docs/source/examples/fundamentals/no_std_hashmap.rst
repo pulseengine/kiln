@@ -8,7 +8,7 @@ No-Std HashMap: Hash Without the Heap
    
    -- Every embedded developer ever
 
-Who says you need a heap to hash? WRT's no-std HashMap gives you all the power of hash-based lookups in environments where every byte counts. Perfect for embedded systems, WebAssembly modules, and anywhere the standard library fears to tread.
+Who says you need a heap to hash? Kiln's no-std HashMap gives you all the power of hash-based lookups in environments where every byte counts. Perfect for embedded systems, WebAssembly modules, and anywhere the standard library fears to tread.
 
 .. admonition:: What You'll Learn
    :class: note
@@ -40,15 +40,15 @@ In embedded systems, these assumptions don't hold:
        map.insert("key", "value");   // ❌ Might trigger allocation
    }
 
-Enter WRT's no-std solution:
+Enter Kiln's no-std solution:
 
 .. code-block:: rust
-   :caption: The WRT way
+   :caption: The Kiln way
    :linenos:
 
    #![no_std]
-   use wrt_foundation::no_std_hashmap::NoStdHashMap;
-   use wrt_foundation::bounded::BoundedVec;
+   use kiln_foundation::no_std_hashmap::NoStdHashMap;
+   use kiln_foundation::bounded::BoundedVec;
    
    fn embed_friendly_lookup() {
        // Fixed capacity, no allocations!
@@ -76,7 +76,7 @@ Let's build a configuration system for an embedded device:
    :linenos:
 
    #![no_std]
-   use wrt_foundation::no_std_hashmap::NoStdHashMap;
+   use kiln_foundation::no_std_hashmap::NoStdHashMap;
    use core::fmt::Write;
    use heapless::String; // For no-std strings
    
@@ -131,7 +131,7 @@ Let's build a configuration system for an embedded device:
        fn set_default_values(&mut self) {
            let _ = self.set_int("sensor_interval_ms", 1000);
            let _ = self.set_bool("debug_enabled", false);
-           let _ = self.set_text("device_name", "WRT-Device-001");
+           let _ = self.set_text("device_name", "Kiln-Device-001");
            let _ = self.set_int("max_connections", 4);
            let _ = self.set_bool("auto_calibrate", true);
        }
@@ -258,8 +258,8 @@ Here's how you might use this for network packet classification:
    :linenos:
 
    #![no_std]
-   use wrt_foundation::no_std_hashmap::NoStdHashMap;
-   use wrt_foundation::bounded::BoundedVec;
+   use kiln_foundation::no_std_hashmap::NoStdHashMap;
+   use kiln_foundation::bounded::BoundedVec;
    
    const MAX_FLOWS: usize = 1024;
    const MAX_PACKET_BUFFER: usize = 64;
@@ -444,7 +444,7 @@ The no-std HashMap is designed for cache efficiency:
 .. code-block:: rust
    :caption: Understanding memory layout
 
-   use wrt_foundation::no_std_hashmap::NoStdHashMap;
+   use kiln_foundation::no_std_hashmap::NoStdHashMap;
    
    // All data is stored in a fixed array
    let map: NoStdHashMap<u32, u32, 64> = NoStdHashMap::new();

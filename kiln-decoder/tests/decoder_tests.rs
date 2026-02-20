@@ -1,10 +1,10 @@
-use wrt_error::{Error, ErrorCategory, codes};
+use kiln_error::{Error, ErrorCategory, codes};
 
 // Custom Result type for our tests
-type Result<T> = wrt_error::Result<T>;
+type Result<T> = kiln_error::Result<T>;
 
-// Helper function to convert wat::Error to wrt_error::Error
-fn wat_to_wrt_error(e: wat::Error) -> Error {
+// Helper function to convert wat::Error to kiln_error::Error
+fn wat_to_kiln_error(e: wat::Error) -> Error {
     Error::runtime_execution_error(&format!("WAT parse error: {}", e))
 }
 
@@ -35,10 +35,10 @@ fn test_basic_module_decoding() -> Result<()> {
         )
         "#,
     )
-    .map_err(wat_to_wrt_error)?;
+    .map_err(wat_to_kiln_error)?;
 
     // Decode the module
-    let module = wrt_decoder::wasm::decode(&wasm_bytes)?;
+    let module = kiln_decoder::wasm::decode(&wasm_bytes)?;
 
     // Verify that the module is properly decoded
     assert_eq!(module.functions.len(), 2); // One imported, one defined
@@ -93,10 +93,10 @@ fn test_complex_module_decoding() -> Result<()> {
         )
         "#,
     )
-    .map_err(wat_to_wrt_error)?;
+    .map_err(wat_to_kiln_error)?;
 
     // Decode the module
-    let module = wrt_decoder::wasm::decode(&wasm_bytes)?;
+    let module = kiln_decoder::wasm::decode(&wasm_bytes)?;
 
     // Verify module structure
     assert_eq!(module.functions.len(), 3); // 1 imported, 2 defined
@@ -118,7 +118,7 @@ fn test_invalid_module() {
     let invalid_bytes = vec![0x00, 0x61, 0x73];
 
     // Attempt to decode, should return an error
-    let result = wrt_decoder::wasm::decode(&invalid_bytes);
+    let result = kiln_decoder::wasm::decode(&invalid_bytes);
     assert!(result.is_err());
 
     // Test with truncated module
@@ -127,7 +127,7 @@ fn test_invalid_module() {
         0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, // Truncated type section
         0x01, 0x05, 0x01, 0x60,
     ];
-    let result = wrt_decoder::wasm::decode(&truncated);
+    let result = kiln_decoder::wasm::decode(&truncated);
     assert!(result.is_err());
 }
 
@@ -172,10 +172,10 @@ fn test_module_with_complex_instructions() -> Result<()> {
         )
         "#,
     )
-    .map_err(wat_to_wrt_error)?;
+    .map_err(wat_to_kiln_error)?;
 
     // Decode the module
-    let module = wrt_decoder::wasm::decode(&wasm_bytes)?;
+    let module = kiln_decoder::wasm::decode(&wasm_bytes)?;
 
     // Basic structure checks
     assert_eq!(module.functions.len(), 1);

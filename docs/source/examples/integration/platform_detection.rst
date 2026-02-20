@@ -28,7 +28,7 @@ Meet ``PlatformDetector`` - your runtime environment investigator:
    :caption: Basic platform detection
    :linenos:
 
-   use wrt_platform::runtime_detection::{
+   use kiln_platform::runtime_detection::{
        PlatformDetector, 
        PlatformCapabilities
    };
@@ -60,7 +60,7 @@ Understand your memory subsystem:
    :caption: Memory subsystem detection
    :linenos:
 
-   use wrt_platform::runtime_detection::MemoryCapabilities;
+   use kiln_platform::runtime_detection::MemoryCapabilities;
    
    fn analyze_memory(caps: &MemoryCapabilities) {
        println!("Memory Configuration:");
@@ -96,7 +96,7 @@ Discover available synchronization primitives:
    :caption: Synchronization feature detection
    :linenos:
 
-   use wrt_platform::runtime_detection::SyncCapabilities;
+   use kiln_platform::runtime_detection::SyncCapabilities;
    
    fn analyze_sync(caps: &SyncCapabilities) {
        println!("Synchronization Features:");
@@ -139,7 +139,7 @@ Check for hardware security features:
    :caption: Security feature detection
    :linenos:
 
-   use wrt_platform::runtime_detection::SecurityCapabilities;
+   use kiln_platform::runtime_detection::SecurityCapabilities;
    
    fn analyze_security(caps: &SecurityCapabilities) {
        println!("Security Features:");
@@ -188,7 +188,7 @@ For real-time systems:
    :caption: Real-time feature detection
    :linenos:
 
-   use wrt_platform::runtime_detection::RealtimeCapabilities;
+   use kiln_platform::runtime_detection::RealtimeCapabilities;
    
    fn analyze_realtime(caps: &RealtimeCapabilities) {
        println!("Real-Time Features:");
@@ -231,7 +231,7 @@ Linux-specific capability detection:
 
    #[cfg(target_os = "linux")]
    fn detect_linux_features() -> Result<LinuxFeatures, Error> {
-       use wrt_platform::linux_detection;
+       use kiln_platform::linux_detection;
        
        let features = linux_detection::detect_all()?;
        
@@ -272,7 +272,7 @@ CPU feature detection:
    :caption: CPU architecture detection
    :linenos:
 
-   use wrt_platform::hardware_optimizations::compile_time;
+   use kiln_platform::hardware_optimizations::compile_time;
    
    fn detect_cpu_features() {
        // ARM features
@@ -319,7 +319,7 @@ Select the best allocator based on detected features:
    :caption: Adaptive allocator selection
    :linenos:
 
-   use wrt_platform::prelude::*;
+   use kiln_platform::prelude::*;
    
    fn create_optimal_allocator() -> Result<Box<dyn PageAllocator>, Error> {
        let detector = PlatformDetector::new();
@@ -429,7 +429,7 @@ Rate platform suitability:
        
        // Recommendations
        if score.overall > 80 {
-           score.recommendation = "Excellent platform for WRT";
+           score.recommendation = "Excellent platform for Kiln";
        } else if score.overall > 60 {
            score.recommendation = "Good platform with some limitations";
        } else if score.overall > 40 {

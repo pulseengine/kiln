@@ -9,7 +9,7 @@ use core::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::{boxed::Box, collections::HashMap, sync::Arc};
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId, collections::StaticVec, prelude::*, safe_managed_alloc,
 };
 
@@ -209,7 +209,7 @@ impl AgentRegistry {
         {
             self.unified_agents
                 .push((agent_id, agent))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many agents"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many agents"))?;
         }
 
         self.stats.unified_agents_created += 1;
@@ -226,7 +226,7 @@ impl AgentRegistry {
                 if options.allow_legacy_fallback {
                     self.create_legacy_component_agent()
                 } else {
-                    Err(wrt_error::Error::validation_invalid_input(
+                    Err(kiln_error::Error::validation_invalid_input(
                         "Invalid agent type",
                     ))
                 }
@@ -236,7 +236,7 @@ impl AgentRegistry {
                 if options.allow_legacy_fallback {
                     self.create_legacy_async_agent()
                 } else {
-                    Err(wrt_error::Error::validation_invalid_input(
+                    Err(kiln_error::Error::validation_invalid_input(
                         "Async agent type not allowed",
                     ))
                 }
@@ -263,7 +263,7 @@ impl AgentRegistry {
         {
             self.legacy_agents
                 .push((agent_id, LegacyAgentType::Component(agent)))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many legacy agents"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many legacy agents"))?;
         }
 
         self.stats.legacy_agents_created += 1;
@@ -291,7 +291,7 @@ impl AgentRegistry {
         {
             self.legacy_agents
                 .push((agent_id, LegacyAgentType::Async(agent)))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many legacy agents"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many legacy agents"))?;
         }
 
         self.stats.legacy_agents_created += 1;
@@ -345,7 +345,7 @@ impl AgentRegistry {
                         #[cfg(feature = "async")]
                         LegacyAgentType::Async(_engine) => {
                             // Async execution would require different API
-                            Err(wrt_error::Error::runtime_error(
+                            Err(kiln_error::Error::runtime_error(
                                 "Async agent requires different API",
                             ))
                         },
@@ -354,7 +354,7 @@ impl AgentRegistry {
             }
         }
 
-        Err(wrt_error::Error::validation_invalid_input(
+        Err(kiln_error::Error::validation_invalid_input(
             "Agent not found",
         ))
     }
@@ -366,11 +366,11 @@ impl AgentRegistry {
         let migration_config = {
             if let Some(agent) = self.legacy_agents.get(&agent_id) {
                 if !agent.can_migrate() {
-                    return Err(wrt_error::Error::runtime_error("Agent cannot be migrated"));
+                    return Err(kiln_error::Error::runtime_error("Agent cannot be migrated"));
                 }
                 agent.migration_config()
             } else {
-                return Err(wrt_error::Error::validation_invalid_input(
+                return Err(kiln_error::Error::validation_invalid_input(
                     "Agent not found for migration",
                 ));
             }
@@ -400,7 +400,7 @@ impl AgentRegistry {
             }
 
             if !found {
-                return Err(wrt_error::Error::validation_invalid_input(
+                return Err(kiln_error::Error::validation_invalid_input(
                     "Agent not found in legacy agents",
                 ));
             }
@@ -423,7 +423,7 @@ impl AgentRegistry {
             // Add to unified agents
             self.unified_agents
                 .push((agent_id, unified_agent))
-                .map_err(|_| wrt_error::Error::resource_exhausted("Too many unified agents"))?;
+                .map_err(|_| kiln_error::Error::resource_exhausted("Too many unified agents"))?;
         }
 
         // Update migration tracking
@@ -536,7 +536,7 @@ impl AgentRegistry {
             self.stats.active_agents = self.stats.active_agents.saturating_sub(1);
             Ok(())
         } else {
-            Err(wrt_error::Error::validation_invalid_input(
+            Err(kiln_error::Error::validation_invalid_input(
                 "Agent not found",
             ))
         }
@@ -676,7 +676,7 @@ impl LegacyExecutionAgent for AsyncExecutionEngine {
         _args: &[Value],
     ) -> Result<Value> {
         // Async engines need different API - this is just a placeholder
-        Err(wrt_error::Error::runtime_error(
+        Err(kiln_error::Error::runtime_error(
             "Async agent requires different API",
         ))
     }

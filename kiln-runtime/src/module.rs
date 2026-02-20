@@ -17,40 +17,40 @@ use alloc::{
 
 // Import tracing utilities
 #[cfg(feature = "tracing")]
-use wrt_foundation::tracing::{debug, trace, warn, ModuleTrace, ImportTrace};
+use kiln_foundation::tracing::{debug, trace, warn, ModuleTrace, ImportTrace};
 
-use wrt_foundation::MemoryProvider;
-use wrt_format::{
+use kiln_foundation::MemoryProvider;
+use kiln_format::{
     module::{
         ExportKind as FormatExportKind,
         ImportDesc as FormatImportDesc,
     },
-    DataSegment as WrtDataSegment,
-    ElementSegment as WrtElementSegment,
+    DataSegment as KilnDataSegment,
+    ElementSegment as KilnElementSegment,
 };
 // Re-export for module_builder
-pub use wrt_foundation::types::LocalEntry;
-use wrt_foundation::{
+pub use kiln_foundation::types::LocalEntry;
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     types::{
-        CustomSection as WrtCustomSection,
-        DataMode as WrtDataMode,
-        ElementMode as WrtElementMode,
-        ExportDesc as WrtExportDesc,
-        FuncType as WrtFuncType,
-        GlobalType as WrtGlobalType,
-        ImportDesc as WrtImportDesc,
-        Limits as WrtLimits,
-        LocalEntry as WrtLocalEntry,
-        MemoryType as WrtMemoryType,
-        RefType as WrtRefType,
-        TableType as WrtTableType,
-        ValueType as WrtValueType,
+        CustomSection as KilnCustomSection,
+        DataMode as KilnDataMode,
+        ElementMode as KilnElementMode,
+        ExportDesc as KilnExportDesc,
+        FuncType as KilnFuncType,
+        GlobalType as KilnGlobalType,
+        ImportDesc as KilnImportDesc,
+        Limits as KilnLimits,
+        LocalEntry as KilnLocalEntry,
+        MemoryType as KilnMemoryType,
+        RefType as KilnRefType,
+        TableType as KilnTableType,
+        ValueType as KilnValueType,
         ValueType, // Also import without alias
     },
     values::{
-        Value as WrtValue,
+        Value as KilnValue,
         Value,
     }, // Also import without alias
 };
@@ -58,10 +58,10 @@ use wrt_foundation::{
 use crate::prelude::CoreMemoryType;
 
 // Type alias for the runtime ImportDesc
-pub type RuntimeImportDesc = WrtImportDesc<RuntimeProvider>;
+pub type RuntimeImportDesc = KilnImportDesc<RuntimeProvider>;
 
 // HashMap is not needed with clean architecture using BoundedMap
-use wrt_foundation::{
+use kiln_foundation::{
     bounded_collections::BoundedMap,
     traits::{
         BoundedCapacity,
@@ -92,7 +92,7 @@ use crate::{
 // ImportMap: stores imports per namespace
 // 128 max imports per namespace (increased from 32 for ML inference modules)
 type ImportMap = BoundedMap<
-    wrt_foundation::bounded::BoundedString<256>,
+    kiln_foundation::bounded::BoundedString<256>,
     Import,
     128,
     RuntimeProvider,
@@ -100,56 +100,56 @@ type ImportMap = BoundedMap<
 // ModuleImports: maps namespace to ImportMap
 // 256 max namespaces (increased for large component models)
 type ModuleImports = BoundedMap<
-    wrt_foundation::bounded::BoundedString<256>,
+    kiln_foundation::bounded::BoundedString<256>,
     ImportMap,
     256,
     RuntimeProvider,
 >;
 type CustomSections = BoundedMap<
-    wrt_foundation::bounded::BoundedString<256>,
-    wrt_foundation::bounded::BoundedVec<u8, 4096, RuntimeProvider>,
+    kiln_foundation::bounded::BoundedString<256>,
+    kiln_foundation::bounded::BoundedVec<u8, 4096, RuntimeProvider>,
     16,
     RuntimeProvider,
 >;
-type ExportMap = wrt_foundation::direct_map::DirectMap<
-    wrt_foundation::bounded::BoundedString<256>,
+type ExportMap = kiln_foundation::direct_map::DirectMap<
+    kiln_foundation::bounded::BoundedString<256>,
     Export,
     256, // Increased from 64 to handle TinyGo modules with many exports
 >;
 
 // Additional type aliases for struct fields to use unified RuntimeProvider
-type BoundedExportName = wrt_foundation::bounded::BoundedString<128>;
-type BoundedImportName = wrt_foundation::bounded::BoundedString<128>;
-type BoundedModuleName = wrt_foundation::bounded::BoundedString<128>;
-type BoundedLocalsVec = wrt_foundation::bounded::BoundedVec<WrtLocalEntry, 256, RuntimeProvider>;
-type BoundedElementItems = wrt_foundation::bounded::BoundedVec<u32, 4096, RuntimeProvider>;
+type BoundedExportName = kiln_foundation::bounded::BoundedString<128>;
+type BoundedImportName = kiln_foundation::bounded::BoundedString<128>;
+type BoundedModuleName = kiln_foundation::bounded::BoundedString<128>;
+type BoundedLocalsVec = kiln_foundation::bounded::BoundedVec<KilnLocalEntry, 256, RuntimeProvider>;
+type BoundedElementItems = kiln_foundation::bounded::BoundedVec<u32, 4096, RuntimeProvider>;
 // Data init storage: Vec in std mode for large segments, BoundedVec in no_std
 #[cfg(feature = "std")]
 type BoundedDataInit = Vec<u8>;
 #[cfg(not(feature = "std"))]
-type BoundedDataInit = wrt_foundation::bounded::BoundedVec<u8, 16384, RuntimeProvider>;
+type BoundedDataInit = kiln_foundation::bounded::BoundedVec<u8, 16384, RuntimeProvider>;
 // Module types: 512 for ML modules with many tensor operation signatures
 type BoundedModuleTypes =
-    wrt_foundation::bounded::BoundedVec<WrtFuncType, 512, RuntimeProvider>;
+    kiln_foundation::bounded::BoundedVec<KilnFuncType, 512, RuntimeProvider>;
 // Function limit: 8192 for large ML/inference modules
-type BoundedFunctionVec = wrt_foundation::bounded::BoundedVec<Function, 8192, RuntimeProvider>;
-type BoundedTableVec = wrt_foundation::bounded::BoundedVec<TableWrapper, 64, RuntimeProvider>;
-type BoundedMemoryVec = wrt_foundation::bounded::BoundedVec<MemoryWrapper, 64, RuntimeProvider>;
+type BoundedFunctionVec = kiln_foundation::bounded::BoundedVec<Function, 8192, RuntimeProvider>;
+type BoundedTableVec = kiln_foundation::bounded::BoundedVec<TableWrapper, 64, RuntimeProvider>;
+type BoundedMemoryVec = kiln_foundation::bounded::BoundedVec<MemoryWrapper, 64, RuntimeProvider>;
 // Globals limit: 512 for modules with many constants
-type BoundedGlobalVec = wrt_foundation::bounded::BoundedVec<GlobalWrapper, 512, RuntimeProvider>;
+type BoundedGlobalVec = kiln_foundation::bounded::BoundedVec<GlobalWrapper, 512, RuntimeProvider>;
 // Elements limit: 512 for indirect function tables
-type BoundedElementVec = wrt_foundation::bounded::BoundedVec<Element, 512, RuntimeProvider>;
+type BoundedElementVec = kiln_foundation::bounded::BoundedVec<Element, 512, RuntimeProvider>;
 // Data segments limit: 512 for modules with embedded data
-type BoundedDataVec = wrt_foundation::bounded::BoundedVec<Data, 512, RuntimeProvider>;
+type BoundedDataVec = kiln_foundation::bounded::BoundedVec<Data, 512, RuntimeProvider>;
 
 // Binary storage: Vec in std mode for large modules, BoundedVec in no_std
 #[cfg(feature = "std")]
 type BoundedBinary = Vec<u8>;
 #[cfg(not(feature = "std"))]
-type BoundedBinary = wrt_foundation::bounded::BoundedVec<u8, 65536, RuntimeProvider>;
+type BoundedBinary = kiln_foundation::bounded::BoundedVec<u8, 65536, RuntimeProvider>;
 
 /// Convert MemoryType to CoreMemoryType
-fn to_core_memory_type(memory_type: WrtMemoryType) -> CoreMemoryType {
+fn to_core_memory_type(memory_type: KilnMemoryType) -> CoreMemoryType {
     CoreMemoryType {
         limits: memory_type.limits,
         shared: memory_type.shared,
@@ -158,20 +158,20 @@ fn to_core_memory_type(memory_type: WrtMemoryType) -> CoreMemoryType {
 
 /// A WebAssembly expression (sequence of instructions)
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct WrtExpr {
+pub struct KilnExpr {
     /// Parsed instructions (simplified representation)
     /// In std mode, use Vec to avoid serialization issues with Instruction enum
     #[cfg(feature = "std")]
-    pub instructions: Vec<wrt_foundation::types::Instruction<RuntimeProvider>>,
+    pub instructions: Vec<kiln_foundation::types::Instruction<RuntimeProvider>>,
     #[cfg(not(feature = "std"))]
-    pub instructions: wrt_foundation::bounded::BoundedVec<
-        wrt_foundation::types::Instruction<RuntimeProvider>,
+    pub instructions: kiln_foundation::bounded::BoundedVec<
+        kiln_foundation::types::Instruction<RuntimeProvider>,
         1024,
         RuntimeProvider,
     >,
 }
 
-impl WrtExpr {
+impl KilnExpr {
     /// Returns the length of the instruction sequence
     pub fn len(&self) -> usize {
         self.instructions.len()
@@ -214,7 +214,7 @@ impl Export {
     /// Creates a new export
     pub fn new(name: &str, kind: ExportKind, index: u32) -> Result<Self> {
         let bounded_name =
-            wrt_foundation::bounded::BoundedString::from_str_truncate(name)?;
+            kiln_foundation::bounded::BoundedString::from_str_truncate(name)?;
         Ok(Self {
             name: bounded_name,
             kind,
@@ -223,23 +223,23 @@ impl Export {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for Export {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Export {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.name.update_checksum(checksum);
         checksum.update_slice(&(self.kind as u8).to_le_bytes());
         checksum.update_slice(&self.index.to_le_bytes());
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Export {
+impl kiln_foundation::traits::ToBytes for Export {
     fn serialized_size(&self) -> usize {
         self.name.serialized_size() + 1 + 4 // name + kind (1 byte) + index (4
                                             // bytes)
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         provider: &P,
     ) -> Result<()> {
         self.name.to_bytes_with_provider(writer, provider)?;
@@ -248,13 +248,13 @@ impl wrt_foundation::traits::ToBytes for Export {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Export {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Export {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         provider: &P,
     ) -> Result<Self> {
         let name =
-            wrt_foundation::bounded::BoundedString::from_bytes_with_provider(reader, provider)?;
+            kiln_foundation::bounded::BoundedString::from_bytes_with_provider(reader, provider)?;
 
         let mut kind_bytes = [0u8; 1];
         reader.read_exact(&mut kind_bytes)?;
@@ -296,9 +296,9 @@ impl Import {
         desc: RuntimeImportDesc,
     ) -> Result<Self> {
         let bounded_module =
-            wrt_foundation::bounded::BoundedString::from_str_truncate(module)?;
+            kiln_foundation::bounded::BoundedString::from_str_truncate(module)?;
         let bounded_name =
-            wrt_foundation::bounded::BoundedString::from_str_truncate(name)?;
+            kiln_foundation::bounded::BoundedString::from_str_truncate(name)?;
         Ok(Self {
             module: bounded_module,
             name: bounded_name,
@@ -311,9 +311,9 @@ impl Import {
 impl Default for Import {
     fn default() -> Self {
         Self {
-            module: wrt_foundation::bounded::BoundedString::from_str_truncate("")
+            module: kiln_foundation::bounded::BoundedString::from_str_truncate("")
                 .unwrap(),
-            name:   wrt_foundation::bounded::BoundedString::from_str_truncate("")
+            name:   kiln_foundation::bounded::BoundedString::from_str_truncate("")
                 .unwrap(),
             ty:     ExternType::default(),
             desc:   RuntimeImportDesc::Function(0),
@@ -329,21 +329,21 @@ impl PartialEq for Import {
 
 impl Eq for Import {}
 
-impl wrt_foundation::traits::Checksummable for Import {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Import {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.module.update_checksum(checksum);
         self.name.update_checksum(checksum);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Import {
+impl kiln_foundation::traits::ToBytes for Import {
     fn serialized_size(&self) -> usize {
         self.module.serialized_size() + self.name.serialized_size() + 4 // simplified
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         provider: &P,
     ) -> Result<()> {
         self.module.to_bytes_with_provider(writer, provider)?;
@@ -351,15 +351,15 @@ impl wrt_foundation::traits::ToBytes for Import {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Import {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Import {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         provider: &P,
     ) -> Result<Self> {
         let module =
-            wrt_foundation::bounded::BoundedString::from_bytes_with_provider(reader, provider)?;
+            kiln_foundation::bounded::BoundedString::from_bytes_with_provider(reader, provider)?;
         let name =
-            wrt_foundation::bounded::BoundedString::from_bytes_with_provider(reader, provider)?;
+            kiln_foundation::bounded::BoundedString::from_bytes_with_provider(reader, provider)?;
         Ok(Self {
             module,
             name,
@@ -377,7 +377,7 @@ pub struct Function {
     /// The parsed local variable declarations
     pub locals:   BoundedLocalsVec,
     /// The parsed instructions that make up the function body
-    pub body:     WrtExpr,
+    pub body:     KilnExpr,
 }
 
 impl Default for Function {
@@ -386,7 +386,7 @@ impl Default for Function {
         Self {
             type_idx: 0,
             locals:   BoundedLocalsVec::new(provider).unwrap(),
-            body:     WrtExpr::default(),
+            body:     KilnExpr::default(),
         }
     }
 }
@@ -399,41 +399,41 @@ impl PartialEq for Function {
 
 impl Eq for Function {}
 
-impl wrt_foundation::traits::Checksummable for Function {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Function {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.type_idx.to_le_bytes());
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Function {
+impl kiln_foundation::traits::ToBytes for Function {
     fn serialized_size(&self) -> usize {
         8 // simplified
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         writer.write_all(&self.type_idx.to_le_bytes())
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Function {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Function {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         let mut bytes = [0u8; 4];
         reader.read_exact(&mut bytes)?;
         let type_idx = u32::from_le_bytes(bytes);
         let provider = create_runtime_provider().map_err(|_| {
-            wrt_error::Error::memory_error("Failed to allocate provider for function locals")
+            kiln_error::Error::memory_error("Failed to allocate provider for function locals")
         })?;
         Ok(Self {
             type_idx,
             locals: BoundedLocalsVec::new(provider).unwrap(),
-            body: WrtExpr::default(),
+            body: KilnExpr::default(),
         })
     }
 }
@@ -455,26 +455,26 @@ pub enum ExportItem {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Element {
     /// Element segment mode (active, passive, or declarative)
-    pub mode:         WrtElementMode,
+    pub mode:         KilnElementMode,
     /// Index of the target table (for active elements)
     pub table_idx:    Option<u32>,
     /// Offset expression for element placement
-    pub offset_expr:  Option<WrtExpr>,
+    pub offset_expr:  Option<KilnExpr>,
     /// Type of elements in this segment
-    pub element_type: WrtRefType,
+    pub element_type: KilnRefType,
     /// Element items (function indices or expressions)
     pub items:        BoundedElementItems,
     /// Deferred item expressions that need global evaluation (e.g., global.get $gf)
     #[cfg(feature = "std")]
-    pub item_exprs:   Vec<(u32, WrtExpr)>, // (item_index, expression)
+    pub item_exprs:   Vec<(u32, KilnExpr)>, // (item_index, expression)
 }
 
-impl wrt_foundation::traits::Checksummable for Element {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Element {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let mode_byte = match &self.mode {
-            WrtElementMode::Active { .. } => 0u8,
-            WrtElementMode::Passive => 1u8,
-            WrtElementMode::Declarative => 2u8,
+            KilnElementMode::Active { .. } => 0u8,
+            KilnElementMode::Passive => 1u8,
+            KilnElementMode::Declarative => 2u8,
         };
         checksum.update_slice(&mode_byte.to_le_bytes());
         if let Some(table_idx) = self.table_idx {
@@ -483,22 +483,22 @@ impl wrt_foundation::traits::Checksummable for Element {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Element {
+impl kiln_foundation::traits::ToBytes for Element {
     fn serialized_size(&self) -> usize {
         // 1 (mode) + 4 (table_index) + 4 (offset) + 4 (items count) + items.len() * 4
         1 + 4 + 4 + 4 + self.items.len() * 4
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         // Serialize mode with offset
         let (mode_byte, table_idx, offset) = match &self.mode {
-            WrtElementMode::Active { table_index, offset } => (0u8, *table_index, *offset),
-            WrtElementMode::Passive => (1u8, 0, 0),
-            WrtElementMode::Declarative => (2u8, 0, 0),
+            KilnElementMode::Active { table_index, offset } => (0u8, *table_index, *offset),
+            KilnElementMode::Passive => (1u8, 0, 0),
+            KilnElementMode::Declarative => (2u8, 0, 0),
         };
         writer.write_all(&mode_byte.to_le_bytes())?;
         writer.write_all(&table_idx.to_le_bytes())?;
@@ -516,9 +516,9 @@ impl wrt_foundation::traits::ToBytes for Element {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Element {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Element {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         // Read mode byte
@@ -536,12 +536,12 @@ impl wrt_foundation::traits::FromBytes for Element {
         let offset = u32::from_le_bytes(offset_bytes);
 
         let mode = match mode_byte[0] {
-            0 => WrtElementMode::Active {
+            0 => KilnElementMode::Active {
                 table_index,
                 offset,
             },
-            1 => WrtElementMode::Passive,
-            _ => WrtElementMode::Declarative,
+            1 => KilnElementMode::Passive,
+            _ => KilnElementMode::Declarative,
         };
 
         // Read items count
@@ -563,7 +563,7 @@ impl wrt_foundation::traits::FromBytes for Element {
             mode,
             table_idx: if table_index > 0 || mode_byte[0] == 0 { Some(table_index) } else { None },
             offset_expr: None,
-            element_type: WrtRefType::Funcref,
+            element_type: KilnRefType::Funcref,
             items,
             #[cfg(feature = "std")]
             item_exprs: Vec::new(),
@@ -575,20 +575,20 @@ impl wrt_foundation::traits::FromBytes for Element {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Data {
     /// Data segment mode (active or passive)
-    pub mode:        WrtDataMode,
+    pub mode:        KilnDataMode,
     /// Index of the target memory (for active data)
     pub memory_idx:  Option<u32>,
     /// Offset expression for data placement
-    pub offset_expr: Option<WrtExpr>,
+    pub offset_expr: Option<KilnExpr>,
     /// Initialization data bytes
     pub init:        BoundedDataInit,
 }
 
-impl wrt_foundation::traits::Checksummable for Data {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Data {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let mode_byte = match &self.mode {
-            WrtDataMode::Active { .. } => 0u8,
-            WrtDataMode::Passive => 1u8,
+            KilnDataMode::Active { .. } => 0u8,
+            KilnDataMode::Passive => 1u8,
         };
         checksum.update_slice(&mode_byte.to_le_bytes());
         if let Some(memory_idx) = self.memory_idx {
@@ -598,19 +598,19 @@ impl wrt_foundation::traits::Checksummable for Data {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Data {
+impl kiln_foundation::traits::ToBytes for Data {
     fn serialized_size(&self) -> usize {
         16 + self.init.len() // simplified
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         let mode_byte = match &self.mode {
-            WrtDataMode::Active { .. } => 0u8,
-            WrtDataMode::Passive => 1u8,
+            KilnDataMode::Active { .. } => 0u8,
+            KilnDataMode::Passive => 1u8,
         };
         writer.write_all(&mode_byte.to_le_bytes())?;
         writer.write_all(&self.memory_idx.unwrap_or(0).to_le_bytes())?;
@@ -618,19 +618,19 @@ impl wrt_foundation::traits::ToBytes for Data {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Data {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Data {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         let mut bytes = [0u8; 1];
         reader.read_exact(&mut bytes)?;
         let mode = match bytes[0] {
-            0 => WrtDataMode::Active {
+            0 => KilnDataMode::Active {
                 memory_index: 0,
                 offset:       0,
             },
-            _ => WrtDataMode::Passive,
+            _ => KilnDataMode::Passive,
         };
 
         let mut idx_bytes = [0u8; 4];
@@ -645,7 +645,7 @@ impl wrt_foundation::traits::FromBytes for Data {
 
         #[cfg(not(feature = "std"))]
         let init = BoundedDataInit::new(create_runtime_provider().map_err(|_| {
-            wrt_error::Error::memory_error("Failed to allocate provider for data init")
+            kiln_error::Error::memory_error("Failed to allocate provider for data init")
         })?)?;
 
         Ok(Self {
@@ -675,10 +675,10 @@ impl Data {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
     /// Module types (function signatures)
-    /// In std mode, use Vec since WrtFuncType has variable size
+    /// In std mode, use Vec since KilnFuncType has variable size
     /// BoundedVec requires fixed-size items but FuncType size varies with params/results
     #[cfg(feature = "std")]
-    pub types:           Vec<WrtFuncType>,
+    pub types:           Vec<KilnFuncType>,
     #[cfg(not(feature = "std"))]
     pub types:           BoundedModuleTypes,
     /// Imported functions, tables, memories, and globals
@@ -687,7 +687,7 @@ pub struct Module {
     #[cfg(feature = "std")]
     pub import_order:    Vec<(String, String)>,
     #[cfg(not(feature = "std"))]
-    pub import_order:    wrt_foundation::bounded::BoundedVec<(BoundedImportName, BoundedImportName), 256, RuntimeProvider>,
+    pub import_order:    kiln_foundation::bounded::BoundedVec<(BoundedImportName, BoundedImportName), 256, RuntimeProvider>,
     /// Function definitions
     /// In std mode, use Vec since Function has variable size (contains BoundedVecs for locals/instructions)
     #[cfg(feature = "std")]
@@ -710,9 +710,9 @@ pub struct Module {
     pub globals:         BoundedGlobalVec,
     /// Exception tag definitions (exception handling proposal)
     #[cfg(feature = "std")]
-    pub tags:            Vec<wrt_foundation::types::TagType>,
+    pub tags:            Vec<kiln_foundation::types::TagType>,
     #[cfg(not(feature = "std"))]
-    pub tags:            wrt_foundation::bounded::BoundedVec<wrt_foundation::types::TagType, 64, RuntimeProvider>,
+    pub tags:            kiln_foundation::bounded::BoundedVec<kiln_foundation::types::TagType, 64, RuntimeProvider>,
     /// Element segments for tables
     /// In std mode, use Vec since Element has variable-size items (BoundedVec)
     /// and BoundedVec requires fixed-size serialization
@@ -743,11 +743,11 @@ pub struct Module {
     /// Types of imported globals (for creating placeholders during instantiation)
     /// This bypasses the broken nested BoundedMap serialization issue
     #[cfg(feature = "std")]
-    pub global_import_types: Vec<wrt_foundation::types::GlobalType>,
+    pub global_import_types: Vec<kiln_foundation::types::GlobalType>,
     /// Raw init expression bytes for defined globals (for deferred evaluation)
     /// Stored as (global_type, init_bytes) for each defined global
     #[cfg(feature = "std")]
-    pub deferred_global_inits: Vec<(wrt_foundation::types::GlobalType, Vec<u8>)>,
+    pub deferred_global_inits: Vec<(kiln_foundation::types::GlobalType, Vec<u8>)>,
     /// Types of imports in order (parallels import_order)
     /// This provides fast lookup for import kind detection during linking
     #[cfg(feature = "std")]
@@ -779,7 +779,7 @@ impl Module {
     /// - Indices 0..N-1 are imported tags
     /// - Indices N+ are defined tags
     #[cfg(feature = "std")]
-    pub fn get_tag_type(&self, tag_idx: u32) -> Option<&wrt_foundation::types::TagType> {
+    pub fn get_tag_type(&self, tag_idx: u32) -> Option<&kiln_foundation::types::TagType> {
         let num_tag_imports = self.count_tag_imports();
         if (tag_idx as usize) < num_tag_imports {
             // This is an imported tag - find it in import_types
@@ -807,11 +807,11 @@ impl Module {
     fn evaluate_const_expr(
         init_bytes: &[u8],
         num_global_imports: usize,
-        global_import_types: &[wrt_foundation::types::GlobalType],
+        global_import_types: &[kiln_foundation::types::GlobalType],
         defined_globals: &BoundedGlobalVec,
         current_global_idx: usize,
-    ) -> Result<wrt_foundation::values::Value> {
-        use wrt_foundation::values::{Value, FloatBits32, FloatBits64};
+    ) -> Result<kiln_foundation::values::Value> {
+        use kiln_foundation::values::{Value, FloatBits32, FloatBits64};
 
         let mut stack: Vec<Value> = Vec::new();
         let mut pos = 0;
@@ -871,13 +871,13 @@ impl Module {
                         if ref_idx < global_import_types.len() {
                             let global_type = &global_import_types[ref_idx];
                             let placeholder = match global_type.value_type {
-                                wrt_foundation::types::ValueType::I32 => Value::I32(0),
-                                wrt_foundation::types::ValueType::I64 => Value::I64(0),
-                                wrt_foundation::types::ValueType::F32 => Value::F32(FloatBits32(0)),
-                                wrt_foundation::types::ValueType::F64 => Value::F64(FloatBits64(0)),
-                                wrt_foundation::types::ValueType::FuncRef => Value::FuncRef(None),
-                                wrt_foundation::types::ValueType::ExternRef => Value::ExternRef(None),
-                                wrt_foundation::types::ValueType::V128 => Value::V128(wrt_foundation::values::V128 { bytes: [0; 16] }),
+                                kiln_foundation::types::ValueType::I32 => Value::I32(0),
+                                kiln_foundation::types::ValueType::I64 => Value::I64(0),
+                                kiln_foundation::types::ValueType::F32 => Value::F32(FloatBits32(0)),
+                                kiln_foundation::types::ValueType::F64 => Value::F64(FloatBits64(0)),
+                                kiln_foundation::types::ValueType::FuncRef => Value::FuncRef(None),
+                                kiln_foundation::types::ValueType::ExternRef => Value::ExternRef(None),
+                                kiln_foundation::types::ValueType::V128 => Value::V128(kiln_foundation::values::V128 { bytes: [0; 16] }),
                                 // Unsupported types for now
                                 _ => return Err(Error::not_supported_unsupported_operation(
                                     "Unsupported global import type for constant expression",
@@ -946,7 +946,7 @@ impl Module {
                     let (func_idx, consumed) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
                     pos += consumed;
                     // ref.func creates a FuncRef with the function index
-                    stack.push(Value::FuncRef(Some(wrt_foundation::values::FuncRef { index: func_idx })));
+                    stack.push(Value::FuncRef(Some(kiln_foundation::values::FuncRef { index: func_idx })));
                 }
                 // i32.add
                 0x6A => {
@@ -1023,8 +1023,8 @@ impl Module {
     pub fn reevaluate_deferred_globals(
         &self,
         instance_globals: &[GlobalWrapper],
-    ) -> Result<Vec<(usize, wrt_foundation::values::Value)>> {
-        use wrt_foundation::values::Value;
+    ) -> Result<Vec<(usize, kiln_foundation::values::Value)>> {
+        use kiln_foundation::values::Value;
 
         let mut updates = Vec::new();
 
@@ -1072,8 +1072,8 @@ impl Module {
         init_bytes: &[u8],
         num_global_imports: usize,
         instance_globals: &[GlobalWrapper],
-    ) -> Result<wrt_foundation::values::Value> {
-        use wrt_foundation::values::{Value, FloatBits32, FloatBits64};
+    ) -> Result<kiln_foundation::values::Value> {
+        use kiln_foundation::values::{Value, FloatBits32, FloatBits64};
 
         let mut stack: Vec<Value> = Vec::new();
         let mut pos = 0;
@@ -1205,7 +1205,7 @@ impl Module {
                     // ref.func
                     let (func_idx, consumed) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
                     pos += consumed;
-                    stack.push(Value::FuncRef(Some(wrt_foundation::values::FuncRef { index: func_idx })));
+                    stack.push(Value::FuncRef(Some(kiln_foundation::values::FuncRef { index: func_idx })));
                 }
                 0xD0 => {
                     // ref.null
@@ -1231,7 +1231,7 @@ impl Module {
 
     /// REMOVED: All Module::empty(), try_empty(), bootstrap_empty(), etc.
     /// These functions used the old NoStdProvider system which causes stack overflow
-    /// Use Module::new_empty() or Module::from_wrt_module() with proper initialization instead
+    /// Use Module::new_empty() or Module::from_kiln_module() with proper initialization instead
 
     /// Creates an empty module using the unified memory system (create_runtime_provider)
     /// This replaces the old Module::new() and Module::empty() functions
@@ -1239,33 +1239,33 @@ impl Module {
         let provider = crate::bounded_runtime_infra::create_runtime_provider()?;
         Ok(Self {
             types: Vec::new(),
-            imports: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
             #[cfg(feature = "std")]
             import_order: Vec::new(),
             #[cfg(not(feature = "std"))]
-            import_order: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             functions: Vec::new(),
             #[cfg(feature = "std")]
             tables: Vec::new(),
             #[cfg(not(feature = "std"))]
-            tables: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
-            globals: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             tags: Vec::new(),
             #[cfg(not(feature = "std"))]
-            tags: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            tags: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             elements: Vec::new(),
             #[cfg(not(feature = "std"))]
-            elements: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             data: Vec::new(),
             #[cfg(not(feature = "std"))]
-            data: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            data: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             start: None,
-            custom_sections: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            exports: wrt_foundation::direct_map::DirectMap::new(),
+            custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            exports: kiln_foundation::direct_map::DirectMap::new(),
             name: None,
             binary: None,
             validated: false,
@@ -1279,20 +1279,20 @@ impl Module {
         })
     }
 
-    /// Creates a runtime Module from a `wrt_format::module::Module`.
+    /// Creates a runtime Module from a `kiln_format::module::Module`.
     /// This is the primary constructor after decoding.
     #[cfg(feature = "std")]
-    pub fn from_wrt_module(wrt_module: &wrt_format::module::Module) -> Result<Box<Self>> {
+    pub fn from_kiln_module(kiln_module: &kiln_format::module::Module) -> Result<Box<Self>> {
         // Ensure memory system is initialized before creating providers
-        wrt_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
 
         // Use create_runtime_provider (wraps safe_managed_alloc with proper types)
         let shared_provider = crate::bounded_runtime_infra::create_runtime_provider()?;
 
         // Create initial empty module with proper providers
-        let imports_map = wrt_foundation::bounded_collections::BoundedMap::new(shared_provider.clone())?;
-        let globals_vec = wrt_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
-        let custom_sections_map = wrt_foundation::bounded_collections::BoundedMap::new(shared_provider.clone())?;
+        let imports_map = kiln_foundation::bounded_collections::BoundedMap::new(shared_provider.clone())?;
+        let globals_vec = kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
+        let custom_sections_map = kiln_foundation::bounded_collections::BoundedMap::new(shared_provider.clone())?;
         let mut runtime_module = Self {
             types: Vec::new(),
             imports: imports_map,
@@ -1304,9 +1304,9 @@ impl Module {
             tags: Vec::new(), // Exception tags (exception handling proposal)
             elements: Vec::new(), // Vec in std mode for variable-size Element items
             data: Vec::new(), // Vec in std mode for large data segments
-            start: wrt_module.start,
+            start: kiln_module.start,
             custom_sections: custom_sections_map,
-            exports: wrt_foundation::direct_map::DirectMap::new(),
+            exports: kiln_foundation::direct_map::DirectMap::new(),
             name: None,
             binary: None,
             validated: false,
@@ -1318,23 +1318,23 @@ impl Module {
 
         // Convert types
         #[cfg(feature = "tracing")]
-        debug!(type_count = wrt_module.types.len(), "Converting types from wrt_module");
+        debug!(type_count = kiln_module.types.len(), "Converting types from kiln_module");
 
-        for (i, func_type) in wrt_module.types.iter().enumerate() {
+        for (i, func_type) in kiln_module.types.iter().enumerate() {
             #[cfg(feature = "tracing")]
             trace!(type_idx = i, params_len = func_type.params.len(), results_len = func_type.results.len(), "Converting type");
 
             let param_types: Vec<_> = func_type.params.to_vec();
             let result_types: Vec<_> = func_type.results.to_vec();
 
-            let wrt_func_type = WrtFuncType::new(param_types, result_types)?;
+            let kiln_func_type = KilnFuncType::new(param_types, result_types)?;
 
             // In std mode, Vec::push doesn't return Result
             #[cfg(feature = "std")]
-            runtime_module.types.push(wrt_func_type);
+            runtime_module.types.push(kiln_func_type);
 
             #[cfg(not(feature = "std"))]
-            runtime_module.types.push(wrt_func_type)?;
+            runtime_module.types.push(kiln_func_type)?;
 
             #[cfg(feature = "tracing")]
             trace!(type_idx = i, total_types = runtime_module.types.len(), "Pushed type");
@@ -1345,21 +1345,21 @@ impl Module {
 
         // Convert imports
         #[cfg(feature = "tracing")]
-        let import_span = ImportTrace::registering("", "", wrt_module.imports.len()).entered();
+        let import_span = ImportTrace::registering("", "", kiln_module.imports.len()).entered();
         #[cfg(feature = "tracing")]
-        debug!(import_count = wrt_module.imports.len(), data_count = wrt_module.data.len(), "Processing imports from wrt_module");
+        debug!(import_count = kiln_module.imports.len(), data_count = kiln_module.data.len(), "Processing imports from kiln_module");
 
-        use wrt_format::module::ImportDesc as FormatImportDesc;
+        use kiln_format::module::ImportDesc as FormatImportDesc;
 
         let mut global_import_count = 0usize;
-        for import in &wrt_module.imports {
+        for import in &kiln_module.imports {
             let desc = match &import.desc {
                 FormatImportDesc::Function(type_idx) => RuntimeImportDesc::Function(*type_idx),
                 FormatImportDesc::Table(tt) => RuntimeImportDesc::Table(tt.clone()),
                 FormatImportDesc::Memory(mt) => RuntimeImportDesc::Memory(*mt),
                 FormatImportDesc::Global(gt) => {
                     global_import_count += 1;
-                    let global_type = wrt_foundation::types::GlobalType {
+                    let global_type = kiln_foundation::types::GlobalType {
                         value_type: gt.value_type,
                         mutable:    gt.mutable,
                     };
@@ -1370,7 +1370,7 @@ impl Module {
                 },
                 FormatImportDesc::Tag(type_idx) => {
                     // Handle Tag import - convert to appropriate runtime representation
-                    RuntimeImportDesc::Tag(wrt_foundation::types::TagType {
+                    RuntimeImportDesc::Tag(kiln_foundation::types::TagType {
                         attribute: 0, // Exception tag attribute
                         type_idx: *type_idx,
                     })
@@ -1379,23 +1379,23 @@ impl Module {
 
             // Convert string to BoundedString - need different sizes for different use cases
             // 128-char strings for Import struct fields
-            let bounded_module_128 = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module_128 = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &import.module
             )?;
             let bounded_name_128 =
-                wrt_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
+                kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
 
             // 256-char strings for map keys
-            let bounded_module_256 = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module_256 = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &import.module
             )?;
             let bounded_name_256 =
-                wrt_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
+                kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
 
             let import_entry = Import {
                 module: bounded_module_128,
                 name: bounded_name_128,
-                ty: wrt_foundation::component::ExternType::default(),
+                ty: kiln_foundation::component::ExternType::default(),
                 desc,
             };
 
@@ -1420,11 +1420,11 @@ impl Module {
                     FormatImportDesc::Function(type_idx) => RuntimeImportDesc::Function(*type_idx),
                     FormatImportDesc::Table(tt) => RuntimeImportDesc::Table(tt.clone()),
                     FormatImportDesc::Memory(mt) => RuntimeImportDesc::Memory(*mt),
-                    FormatImportDesc::Global(gt) => RuntimeImportDesc::Global(wrt_foundation::types::GlobalType {
+                    FormatImportDesc::Global(gt) => RuntimeImportDesc::Global(kiln_foundation::types::GlobalType {
                         value_type: gt.value_type,
                         mutable: gt.mutable,
                     }),
-                    FormatImportDesc::Tag(type_idx) => RuntimeImportDesc::Tag(wrt_foundation::types::TagType {
+                    FormatImportDesc::Tag(type_idx) => RuntimeImportDesc::Tag(kiln_foundation::types::TagType {
                         attribute: 0,
                         type_idx: *type_idx,
                     }),
@@ -1433,8 +1433,8 @@ impl Module {
             }
             #[cfg(not(feature = "std"))]
             {
-                let order_module = wrt_foundation::bounded::BoundedString::from_str_truncate(&import.module)?;
-                let order_name = wrt_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
+                let order_module = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.module)?;
+                let order_name = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
                 runtime_module.import_order.push((order_module, order_name))?;
             }
 
@@ -1450,8 +1450,8 @@ impl Module {
 
         // Convert functions
         #[cfg(feature = "tracing")]
-        debug!(function_count = wrt_module.functions.len(), "Converting functions from wrt_module");
-        for (func_idx, func) in wrt_module.functions.iter().enumerate() {
+        debug!(function_count = kiln_module.functions.len(), "Converting functions from kiln_module");
+        for (func_idx, func) in kiln_module.functions.iter().enumerate() {
             #[cfg(feature = "tracing")]
             trace!(func_idx = func_idx, type_idx = func.type_idx, locals_len = func.locals.len(), code_len = func.code.len(), "Processing function");
 
@@ -1466,8 +1466,8 @@ impl Module {
                 #[cfg(feature = "std")]
                 let empty_instructions = Vec::new();
                 #[cfg(not(feature = "std"))]
-                let empty_instructions = wrt_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
-                (empty_locals, WrtExpr { instructions: empty_instructions })
+                let empty_instructions = kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
+                (empty_locals, KilnExpr { instructions: empty_instructions })
             } else {
                 // Local function: convert locals and parse code
                 #[cfg(feature = "tracing")]
@@ -1490,7 +1490,7 @@ impl Module {
                 #[cfg(feature = "tracing")]
                 trace!(func_idx = func_idx, instruction_count = instructions.len(), "Parsed instructions for function");
 
-                (locals, WrtExpr { instructions })
+                (locals, KilnExpr { instructions })
             };
 
             #[cfg(feature = "tracing")]
@@ -1541,13 +1541,13 @@ impl Module {
 
         // Convert exports
         #[cfg(feature = "tracing")]
-        debug!(export_count = wrt_module.exports.len(), "Converting exports from wrt_module");
-        for export in &wrt_module.exports {
+        debug!(export_count = kiln_module.exports.len(), "Converting exports from kiln_module");
+        for export in &kiln_module.exports {
             #[cfg(feature = "tracing")]
             trace!(name = %export.name, kind = ?export.kind, index = export.index, "Processing export");
 
             // Create the export name with correct provider size (8192)
-            let name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let name = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &export.name
             )?;
 
@@ -1556,7 +1556,7 @@ impl Module {
 
             // Create key with correct type for ExportMap (BoundedString<256,
             // RuntimeProvider>)
-            let map_key = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let map_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &export.name
             )?;
 
@@ -1592,8 +1592,8 @@ impl Module {
 
         // Convert tables - CRITICAL for call_indirect!
         #[cfg(feature = "tracing")]
-        debug!(table_count = wrt_module.tables.len(), "Converting tables from wrt_module");
-        for (idx, table_type) in wrt_module.tables.iter().enumerate() {
+        debug!(table_count = kiln_module.tables.len(), "Converting tables from kiln_module");
+        for (idx, table_type) in kiln_module.tables.iter().enumerate() {
             #[cfg(feature = "tracing")]
             trace!(table_idx = idx, table_type = ?table_type, "Creating table");
 
@@ -1626,8 +1626,8 @@ impl Module {
 
         // Convert memories - NOW ENABLED (stack overflow fixed)
         #[cfg(feature = "tracing")]
-        debug!(memory_count = wrt_module.memories.len(), "Converting memories from wrt_module");
-        for (mem_idx, memory) in wrt_module.memories.iter().enumerate() {
+        debug!(memory_count = kiln_module.memories.len(), "Converting memories from kiln_module");
+        for (mem_idx, memory) in kiln_module.memories.iter().enumerate() {
             #[cfg(feature = "tracing")]
             trace!(mem_idx = mem_idx, "Converting memory type");
 
@@ -1661,8 +1661,8 @@ impl Module {
 
         // Convert globals - NOW ENABLED (stack overflow fixed)
         #[cfg(feature = "tracing")]
-        debug!(global_count = wrt_module.globals.len(), "Converting globals from wrt_module");
-        for (global_idx, global) in wrt_module.globals.iter().enumerate() {
+        debug!(global_count = kiln_module.globals.len(), "Converting globals from kiln_module");
+        for (global_idx, global) in kiln_module.globals.iter().enumerate() {
             #[cfg(feature = "tracing")]
             trace!(global_idx = global_idx, "Processing global");
             // Parse the init expression to get the actual initial value
@@ -1675,7 +1675,7 @@ impl Module {
 
             // Store init bytes for potential deferred evaluation
             // This is needed when globals use global.get of imported globals
-            let global_type = wrt_foundation::types::GlobalType {
+            let global_type = kiln_foundation::types::GlobalType {
                 value_type: global.global_type.value_type,
                 mutable: global.global_type.mutable,
             };
@@ -1702,7 +1702,7 @@ impl Module {
                 global_idx = global_idx,
                 value_type = ?global.global_type.value_type,
                 mutable = global.global_type.mutable,
-                "Global from wrt_format"
+                "Global from kiln_format"
             );
             let new_global = Global::new(
                 global.global_type.value_type,
@@ -1714,19 +1714,19 @@ impl Module {
 
         // Convert tags (exception handling proposal)
         #[cfg(feature = "tracing")]
-        debug!(tag_count = wrt_module.tags.len(), "Converting tags from wrt_module");
-        for tag_type in &wrt_module.tags {
+        debug!(tag_count = kiln_module.tags.len(), "Converting tags from kiln_module");
+        for tag_type in &kiln_module.tags {
             runtime_module.tags.push(tag_type.clone());
         }
 
         // Convert data segments - CRITICAL for memory initialization!
         #[cfg(feature = "tracing")]
-        debug!(data_count = wrt_module.data.len(), "Converting data segments from wrt_module");
-        for (data_idx, data_seg) in wrt_module.data.iter().enumerate() {
+        debug!(data_count = kiln_module.data.len(), "Converting data segments from kiln_module");
+        for (data_idx, data_seg) in kiln_module.data.iter().enumerate() {
             #[cfg(feature = "tracing")]
             trace!(data_idx = data_idx, "Processing data segment");
             // Convert PureDataSegment to runtime Data
-            use wrt_format::pure_format_types::PureDataMode;
+            use kiln_format::pure_format_types::PureDataMode;
 
             // Parse offset from the offset_expr_bytes
             let (mode, memory_idx, offset_expr) = match &data_seg.mode {
@@ -1753,22 +1753,22 @@ impl Module {
                         #[cfg(feature = "std")]
                         { Vec::new().into() }
                         #[cfg(not(feature = "std"))]
-                        { wrt_foundation::bounded::BoundedVec::new(shared_provider.clone())? }
+                        { kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())? }
                     };
 
                     (
-                        WrtDataMode::Active {
+                        KilnDataMode::Active {
                             memory_index: *memory_index,
                             offset,
                         },
                         Some(*memory_index),
-                        Some(WrtExpr { instructions })
+                        Some(KilnExpr { instructions })
                     )
                 },
                 PureDataMode::Passive => {
                     #[cfg(feature = "tracing")]
                     debug!(data_idx = data_idx, "Data segment is passive");
-                    (WrtDataMode::Passive, None, None)
+                    (KilnDataMode::Passive, None, None)
                 },
             };
 
@@ -1784,7 +1784,7 @@ impl Module {
             #[cfg(not(feature = "std"))]
             let init = {
                 let data_provider = crate::bounded_runtime_infra::create_runtime_provider()?;
-                let mut bounded_init = wrt_foundation::bounded::BoundedVec::<u8, 16384, RuntimeProvider>::new(data_provider)?;
+                let mut bounded_init = kiln_foundation::bounded::BoundedVec::<u8, 16384, RuntimeProvider>::new(data_provider)?;
                 for (byte_idx, byte) in init_bytes.iter().take(16384).enumerate() {
                     bounded_init.push(*byte).map_err(|e| {
                         Error::capacity_limit_exceeded("Data segment init too large")
@@ -1824,10 +1824,10 @@ impl Module {
 
         // Convert element segments - CRITICAL for call_indirect and table initialization!
         #[cfg(feature = "tracing")]
-        debug!(element_count = wrt_module.elements.len(), "Converting element segments from wrt_module");
+        debug!(element_count = kiln_module.elements.len(), "Converting element segments from kiln_module");
 
-        for (elem_idx, elem_seg) in wrt_module.elements.iter().enumerate() {
-            use wrt_format::pure_format_types::{PureElementInit, PureElementMode};
+        for (elem_idx, elem_seg) in kiln_module.elements.iter().enumerate() {
+            use kiln_format::pure_format_types::{PureElementInit, PureElementMode};
 
             // Parse offset from the offset_expr_bytes
             let (mode, table_idx, offset_value) = match &elem_seg.mode {
@@ -1845,7 +1845,7 @@ impl Module {
                     trace!(elem_idx = elem_idx, table_index = table_index, offset = offset, "Element segment is active");
 
                     (
-                        WrtElementMode::Active {
+                        KilnElementMode::Active {
                             table_index: *table_index,
                             offset,
                         },
@@ -1856,12 +1856,12 @@ impl Module {
                 PureElementMode::Passive => {
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, "Element segment is passive");
-                    (WrtElementMode::Passive, None, 0)
+                    (KilnElementMode::Passive, None, 0)
                 },
                 PureElementMode::Declared => {
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, "Element segment is declared");
-                    (WrtElementMode::Declarative, None, 0)
+                    (KilnElementMode::Declarative, None, 0)
                 },
             };
 
@@ -1869,7 +1869,7 @@ impl Module {
             let provider = crate::bounded_runtime_infra::create_runtime_provider()?;
             let mut items = BoundedElementItems::new(provider)?;
             #[cfg(feature = "std")]
-            let mut deferred_item_exprs: Vec<(u32, WrtExpr)> = Vec::new();
+            let mut deferred_item_exprs: Vec<(u32, KilnExpr)> = Vec::new();
 
             match &elem_seg.init_data {
                 PureElementInit::FunctionIndices(func_indices) => {
@@ -1925,7 +1925,7 @@ impl Module {
                                         expr.as_slice(),
                                         shared_provider.clone()
                                     )?;
-                                    deferred_item_exprs.push((i as u32, WrtExpr { instructions: expr_insts }));
+                                    deferred_item_exprs.push((i as u32, KilnExpr { instructions: expr_insts }));
                                     // Push placeholder for deferred item
                                     items.push(u32::MAX - 1)?;  // Sentinel for deferred evaluation
                                 }
@@ -1947,7 +1947,7 @@ impl Module {
                     elem_seg.offset_expr_bytes.as_slice(),
                     shared_provider.clone()
                 )?;
-                Some(WrtExpr { instructions })
+                Some(KilnExpr { instructions })
             } else {
                 None
             };
@@ -1994,36 +1994,36 @@ impl Module {
         Ok(Box::new(runtime_module))
     }
 
-    /// Creates a runtime Module from a `wrt_format::module::Module` in no_std
+    /// Creates a runtime Module from a `kiln_format::module::Module` in no_std
     /// environments. This handles the generic provider type from the
     /// decoder.
     #[cfg(not(feature = "std"))]
-    pub fn from_wrt_module_nostd(wrt_module: &wrt_format::module::Module) -> Result<Self> {
+    pub fn from_kiln_module_nostd(kiln_module: &kiln_format::module::Module) -> Result<Self> {
         // Ensure memory system is initialized before creating providers
-        wrt_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
+        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
 
         // Use empty() instead of new() to avoid memory allocation during initialization
         let mut runtime_module = Self::empty();
 
         // Map start function if present
-        runtime_module.start = wrt_module.start;
+        runtime_module.start = kiln_module.start;
 
         // Convert types
         #[cfg(feature = "tracing")]
-        debug!(type_count = wrt_module.types.len(), "Module::from_format: Converting types");
+        debug!(type_count = kiln_module.types.len(), "Module::from_format: Converting types");
 
-        for (i, func_type) in wrt_module.types.iter().enumerate() {
+        for (i, func_type) in kiln_module.types.iter().enumerate() {
             let _provider = create_runtime_provider()?;
 
             #[cfg(feature = "tracing")]
             trace!(type_idx = i, params_len = func_type.params.len(), results_len = func_type.results.len(), "Module::from_format: Converting type");
 
-            let wrt_func_type = WrtFuncType::new(
+            let kiln_func_type = KilnFuncType::new(
                 func_type.params.iter().copied(),
                 func_type.results.iter().copied()
             )?;
 
-            runtime_module.types.push(wrt_func_type)?;
+            runtime_module.types.push(kiln_func_type)?;
 
             #[cfg(feature = "tracing")]
             trace!(type_idx = i, total_types = runtime_module.types.len(), "Module::from_format: Pushed type");
@@ -2034,17 +2034,17 @@ impl Module {
 
         // Convert imports
         #[cfg(feature = "tracing")]
-        debug!(import_count = wrt_module.imports.len(), "Processing imports from wrt_module");
+        debug!(import_count = kiln_module.imports.len(), "Processing imports from kiln_module");
 
         let mut global_import_count = 0usize;
-        for import in &wrt_module.imports {
+        for import in &kiln_module.imports {
             let desc = match &import.desc {
                 FormatImportDesc::Function(type_idx) => RuntimeImportDesc::Function(*type_idx),
                 FormatImportDesc::Table(tt) => RuntimeImportDesc::Table(tt.clone()),
                 FormatImportDesc::Memory(mt) => RuntimeImportDesc::Memory(*mt),
                 FormatImportDesc::Global(gt) => {
                     global_import_count += 1;
-                    RuntimeImportDesc::Global(wrt_foundation::types::GlobalType {
+                    RuntimeImportDesc::Global(kiln_foundation::types::GlobalType {
                         value_type: gt.value_type,
                         mutable:    gt.mutable,
                     })
@@ -2058,23 +2058,23 @@ impl Module {
             // Convert string to BoundedString - need different sizes for different use
             // cases
             // 128-char strings for Import struct fields
-            let bounded_module_128 = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module_128 = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &import.module
             )?;
             let bounded_name_128 =
-                wrt_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
+                kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
 
             // 256-char strings for map keys
-            let bounded_module_256 = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module_256 = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &import.module
             )?;
             let bounded_name_256 =
-                wrt_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
+                kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
 
             let import_entry = Import {
                 module: bounded_module_128,
                 name: bounded_name_128,
-                ty: wrt_foundation::component::ExternType::default(),
+                ty: kiln_foundation::component::ExternType::default(),
                 desc,
             };
 
@@ -2095,8 +2095,8 @@ impl Module {
             runtime_module.import_order.push((import.module.to_string(), import.name.to_string()));
             #[cfg(not(feature = "std"))]
             {
-                let order_module = wrt_foundation::bounded::BoundedString::from_str_truncate(&import.module)?;
-                let order_name = wrt_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
+                let order_module = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.module)?;
+                let order_name = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
                 runtime_module.import_order.push((order_module, order_name))?;
             }
 
@@ -2108,19 +2108,19 @@ impl Module {
         runtime_module.num_global_imports = global_import_count;
 
         // Convert functions
-        for function in &wrt_module.functions {
+        for function in &kiln_module.functions {
             runtime_module.push_function(Function {
                 type_idx: function.type_idx,
                 locals:   crate::type_conversion::convert_locals_to_bounded(&function.locals)?,
                 // Body conversion would happen here
-                body:     WrtExpr::default(),
+                body:     KilnExpr::default(),
             })?;
         }
 
         // Convert tables
         #[cfg(feature = "tracing")]
-        debug!(table_count = wrt_module.tables.len(), "Converting tables from wrt_module");
-        for (idx, table) in wrt_module.tables.iter().enumerate() {
+        debug!(table_count = kiln_module.tables.len(), "Converting tables from kiln_module");
+        for (idx, table) in kiln_module.tables.iter().enumerate() {
             #[cfg(feature = "tracing")]
             trace!(table_idx = idx, table_type = ?table, "Creating table");
             let wrapper = TableWrapper::new(Table::new(table.clone())?);
@@ -2133,7 +2133,7 @@ impl Module {
         debug!(total_tables = runtime_module.tables.len(), "Tables converted");
 
         // Convert memories
-        for memory in &wrt_module.memories {
+        for memory in &kiln_module.memories {
             runtime_module
                 .memories
                 .push(MemoryWrapper::new(Memory::new(to_core_memory_type(
@@ -2142,16 +2142,16 @@ impl Module {
         }
 
         // Convert globals
-        for global in &wrt_module.globals {
+        for global in &kiln_module.globals {
             // For now, use a default initial value based on type
             let initial_value = match global.global_type.value_type {
-                wrt_foundation::types::ValueType::I32 => wrt_foundation::values::Value::I32(0),
-                wrt_foundation::types::ValueType::I64 => wrt_foundation::values::Value::I64(0),
-                wrt_foundation::types::ValueType::F32 => wrt_foundation::values::Value::F32(
-                    wrt_foundation::values::FloatBits32::from_bits(0),
+                kiln_foundation::types::ValueType::I32 => kiln_foundation::values::Value::I32(0),
+                kiln_foundation::types::ValueType::I64 => kiln_foundation::values::Value::I64(0),
+                kiln_foundation::types::ValueType::F32 => kiln_foundation::values::Value::F32(
+                    kiln_foundation::values::FloatBits32::from_bits(0),
                 ),
-                wrt_foundation::types::ValueType::F64 => wrt_foundation::values::Value::F64(
-                    wrt_foundation::values::FloatBits64::from_bits(0),
+                kiln_foundation::types::ValueType::F64 => kiln_foundation::values::Value::F64(
+                    kiln_foundation::values::FloatBits64::from_bits(0),
                 ),
                 _ => {
                     return Err(Error::not_supported_unsupported_operation(
@@ -2170,8 +2170,8 @@ impl Module {
 
         // Convert tags (exception handling proposal)
         #[cfg(feature = "tracing")]
-        debug!(tag_count = wrt_module.tags.len(), "Converting tags from wrt_module (nostd)");
-        for tag_type in &wrt_module.tags {
+        debug!(tag_count = kiln_module.tags.len(), "Converting tags from kiln_module (nostd)");
+        for tag_type in &kiln_module.tags {
             #[cfg(feature = "std")]
             runtime_module.tags.push(tag_type.clone());
             #[cfg(not(feature = "std"))]
@@ -2179,7 +2179,7 @@ impl Module {
         }
 
         // Convert exports
-        for export in &wrt_module.exports {
+        for export in &kiln_module.exports {
             let kind = match export.kind {
                 FormatExportKind::Function => ExportKind::Function,
                 FormatExportKind::Table => ExportKind::Table,
@@ -2190,7 +2190,7 @@ impl Module {
 
             // Create the export name with runtime provider
             let export_name =
-                wrt_foundation::bounded::BoundedString::from_str_truncate(&export.name)?;
+                kiln_foundation::bounded::BoundedString::from_str_truncate(&export.name)?;
 
             let export_obj = Export {
                 name: export_name.clone(),
@@ -2200,35 +2200,35 @@ impl Module {
 
             // Insert into the exports map using the export name as key
             let map_key =
-                wrt_foundation::bounded::BoundedString::from_str_truncate(&export.name)?;
+                kiln_foundation::bounded::BoundedString::from_str_truncate(&export.name)?;
             runtime_module.exports.insert(map_key, export_obj)?;
         }
 
         Ok(Box::new(runtime_module))
     }
 
-    /// Creates a runtime Module from a `wrt_foundation::types::Module`.
+    /// Creates a runtime Module from a `kiln_foundation::types::Module`.
     /// This is the primary constructor after decoding for no_std.
     #[cfg(not(feature = "std"))]
-    pub fn from_wrt_foundation_module(
-        wrt_module: &wrt_foundation::types::Module<RuntimeProvider>,
+    pub fn from_kiln_foundation_module(
+        kiln_module: &kiln_foundation::types::Module<RuntimeProvider>,
     ) -> Result<Self> {
         let mut runtime_module = Self::new()?;
 
-        // TODO: wrt_module doesn't have a name field currently
-        // if let Some(name) = &wrt_module.name {
+        // TODO: kiln_module doesn't have a name field currently
+        // if let Some(name) = &kiln_module.name {
         //     runtime_module.name = Some(name.clone());
         // }
         // Map start function if present
-        runtime_module.start = wrt_module.start_func;
+        runtime_module.start = kiln_module.start_func;
 
-        for type_def in &wrt_module.types {
+        for type_def in &kiln_module.types {
             runtime_module.types.push(type_def.clone())?;
         }
 
-        for import_def in &wrt_module.imports {
+        for import_def in &kiln_module.imports {
             let extern_ty = match &import_def.desc {
-                WrtImportDesc::Function(type_idx) => {
+                KilnImportDesc::Function(type_idx) => {
                     let ft = runtime_module
                         .types
                         .get(*type_idx as usize)
@@ -2240,20 +2240,20 @@ impl Module {
                         .clone();
                     ExternType::Func(ft)
                 },
-                WrtImportDesc::Table(tt) => ExternType::Table(tt.clone()),
-                WrtImportDesc::Memory(mt) => ExternType::Memory(*mt),
-                WrtImportDesc::Global(gt) => {
-                    ExternType::Global(wrt_foundation::types::GlobalType {
+                KilnImportDesc::Table(tt) => ExternType::Table(tt.clone()),
+                KilnImportDesc::Memory(mt) => ExternType::Memory(*mt),
+                KilnImportDesc::Global(gt) => {
+                    ExternType::Global(kiln_foundation::types::GlobalType {
                         value_type: gt.value_type,
                         mutable:    gt.mutable,
                     })
                 },
-                WrtImportDesc::Extern(_) => {
+                KilnImportDesc::Extern(_) => {
                     return Err(Error::not_supported_unsupported_operation(
                         "Extern imports not supported",
                     ))
                 },
-                WrtImportDesc::Resource(_) => {
+                KilnImportDesc::Resource(_) => {
                     return Err(Error::not_supported_unsupported_operation(
                         "Resource imports not supported",
                     ))
@@ -2267,20 +2267,20 @@ impl Module {
             // Create bounded strings for the import - avoid as_str() which is broken in
             // no_std For now, use empty strings as placeholders since as_str()
             // is broken
-            let module_key_256: wrt_foundation::bounded::BoundedString<256> =
-                wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let module_key_256: kiln_foundation::bounded::BoundedString<256> =
+                kiln_foundation::bounded::BoundedString::from_str_truncate(
                     "" // TODO: copy from import_def.module_name when as_str() is fixed
                 )?;
-            let module_key_128: wrt_foundation::bounded::BoundedString<128> =
-                wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let module_key_128: kiln_foundation::bounded::BoundedString<128> =
+                kiln_foundation::bounded::BoundedString::from_str_truncate(
                     "" // TODO: copy from import_def.module_name when as_str() is fixed
                 )?;
-            let name_key_256: wrt_foundation::bounded::BoundedString<256> =
-                wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let name_key_256: kiln_foundation::bounded::BoundedString<256> =
+                kiln_foundation::bounded::BoundedString::from_str_truncate(
                     "" // TODO: copy from import_def.item_name when as_str() is fixed
                 )?;
-            let name_key_128: wrt_foundation::bounded::BoundedString<128> =
-                wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let name_key_128: kiln_foundation::bounded::BoundedString<128> =
+                kiln_foundation::bounded::BoundedString::from_str_truncate(
                     "" // TODO: copy from import_def.item_name when as_str() is fixed
                 )?;
 
@@ -2313,32 +2313,32 @@ impl Module {
         }
 
         // Binary std/no_std choice
-        // The actual bodies are filled by wrt_module.code_entries
+        // The actual bodies are filled by kiln_module.code_entries
         // Clear existing functions and prepare for new ones
-        for code_entry in &wrt_module.func_bodies {
-            // Find the corresponding type_idx from wrt_module.functions.
-            // This assumes wrt_module.functions has the type indices for functions defined
-            // in this module, and wrt_module.code_entries aligns with this.
-            // A direct link or combined struct in wrt_foundation::Module would be better.
+        for code_entry in &kiln_module.func_bodies {
+            // Find the corresponding type_idx from kiln_module.functions.
+            // This assumes kiln_module.functions has the type indices for functions defined
+            // in this module, and kiln_module.code_entries aligns with this.
+            // A direct link or combined struct in kiln_foundation::Module would be better.
             // For now, we assume that the i-th code_entry corresponds to the i-th func type
-            // index in wrt_module.functions (after accounting for imported
-            // functions). This needs clarification in wrt_foundation::Module structure.
-            // Let's assume wrt_module.functions contains type indices for *defined*
+            // index in kiln_module.functions (after accounting for imported
+            // functions). This needs clarification in kiln_foundation::Module structure.
+            // Let's assume kiln_module.functions contains type indices for *defined*
             // functions and code_entries matches this.
             let func_idx_in_defined_funcs = runtime_module.functions.len(); // 0-indexed among defined functions
-            if func_idx_in_defined_funcs >= wrt_module.functions.len() {
+            if func_idx_in_defined_funcs >= kiln_module.functions.len() {
                 return Err(Error::validation_error(
                     "Mismatch between code entries and function type declarations",
                 ));
             }
-            let type_idx = wrt_module.functions.get(func_idx_in_defined_funcs).map_err(|_| {
+            let type_idx = kiln_module.functions.get(func_idx_in_defined_funcs).map_err(|_| {
                 Error::validation_function_not_found("Function index out of bounds")
             })?;
 
             // Convert locals from foundation format to runtime format
             let provider = create_runtime_provider()?;
             let mut runtime_locals =
-                wrt_foundation::bounded::BoundedVec::<WrtLocalEntry, 256, RuntimeProvider>::new(
+                kiln_foundation::bounded::BoundedVec::<KilnLocalEntry, 256, RuntimeProvider>::new(
                     provider,
                 )?;
             for local in &code_entry.locals {
@@ -2349,10 +2349,10 @@ impl Module {
                 }
             }
 
-            // Convert body to WrtExpr
+            // Convert body to KilnExpr
             // For now, just use the default empty expression
             // TODO: Properly convert the instruction sequence
-            let runtime_body = WrtExpr::default();
+            let runtime_body = KilnExpr::default();
 
             runtime_module.push_function(Function {
                 type_idx,
@@ -2361,10 +2361,10 @@ impl Module {
             })?;
         }
 
-        for table_def in &wrt_module.tables {
+        for table_def in &kiln_module.tables {
             // For now, runtime tables are created empty and populated by element segments
             // or host. This assumes runtime::table::Table::new can take
-            // WrtTableType.
+            // KilnTableType.
             let wrapper = TableWrapper::new(Table::new(table_def.clone())?);
             #[cfg(feature = "std")]
             runtime_module.tables.push(wrapper);
@@ -2372,7 +2372,7 @@ impl Module {
             runtime_module.tables.push(wrapper)?;
         }
 
-        for memory_def in &wrt_module.memories {
+        for memory_def in &kiln_module.memories {
             runtime_module
                 .memories
                 .push(MemoryWrapper::new(Memory::new(to_core_memory_type(
@@ -2380,14 +2380,14 @@ impl Module {
                 ))?))?;
         }
 
-        for global_def in &wrt_module.globals {
+        for global_def in &kiln_module.globals {
             // GlobalType only has value_type and mutable, no initial_value
             // For now, create a default initial value based on the type
             let default_value = match global_def.value_type {
                 ValueType::I32 => Value::I32(0),
                 ValueType::I64 => Value::I64(0),
-                ValueType::F32 => Value::F32(wrt_foundation::FloatBits32::from_float(0.0)),
-                ValueType::F64 => Value::F64(wrt_foundation::FloatBits64::from_float(0.0)),
+                ValueType::F32 => Value::F32(kiln_foundation::FloatBits32::from_float(0.0)),
+                ValueType::F64 => Value::F64(kiln_foundation::FloatBits64::from_float(0.0)),
                 ValueType::FuncRef => Value::FuncRef(None),
                 ValueType::ExternRef => Value::ExternRef(None),
                 ValueType::V128 => {
@@ -2420,29 +2420,29 @@ impl Module {
         }
 
         // Convert tags (exception handling proposal)
-        // Note: wrt_foundation Module doesn't have tags yet, so this is a placeholder
-        // Tags would be added when wrt_foundation::types::Module gets a tags field
+        // Note: kiln_foundation Module doesn't have tags yet, so this is a placeholder
+        // Tags would be added when kiln_foundation::types::Module gets a tags field
 
-        for export_def in &wrt_module.exports {
+        for export_def in &kiln_module.exports {
             let (kind, index) = match &export_def.ty {
-                wrt_foundation::component::ExternType::Func(_) => {
+                kiln_foundation::component::ExternType::Func(_) => {
                     // For functions, we need to find the index in the function list
                     // This is a simplified approach - in practice we'd need proper index tracking
                     (ExportKind::Function, 0) // TODO: proper function index
                                               // tracking
                 },
-                wrt_foundation::component::ExternType::Table(_) => {
+                kiln_foundation::component::ExternType::Table(_) => {
                     (ExportKind::Table, 0) // TODO: proper table index tracking
                 },
-                wrt_foundation::component::ExternType::Memory(_) => {
+                kiln_foundation::component::ExternType::Memory(_) => {
                     (ExportKind::Memory, 0) // TODO: proper memory index
                                             // tracking
                 },
-                wrt_foundation::component::ExternType::Global(_) => {
+                kiln_foundation::component::ExternType::Global(_) => {
                     (ExportKind::Global, 0) // TODO: proper global index
                                             // tracking
                 },
-                wrt_foundation::component::ExternType::Tag(_) => {
+                kiln_foundation::component::ExternType::Tag(_) => {
                     return Err(Error::not_supported_unsupported_operation(
                         "Tag exports not supported",
                     ))
@@ -2453,23 +2453,23 @@ impl Module {
                     ))
                 },
             };
-            let name_key = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let name_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 export_def.name.as_str()?,
             )?;
             let export = crate::module::Export::new(name_key.as_str()?, kind, index)?;
             runtime_module.exports.insert(name_key, export)?;
         }
 
-        // TODO: Element segments are not yet available in wrt_foundation Module
+        // TODO: Element segments are not yet available in kiln_foundation Module
         // This will need to be implemented once element segments are added to the
         // Module struct
 
-        // TODO: Data segments are not yet available in wrt_foundation Module
+        // TODO: Data segments are not yet available in kiln_foundation Module
         // This will need to be implemented once data segments are added to the Module
         // struct
 
-        for custom_def in &wrt_module.custom_sections {
-            let name_key = wrt_foundation::bounded::BoundedString::from_str_truncate(
+        for custom_def in &kiln_module.custom_sections {
+            let name_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 custom_def.name.as_str()?,
             )?;
             runtime_module.custom_sections.insert(name_key, custom_def.data.clone())?;
@@ -2482,8 +2482,8 @@ impl Module {
     pub fn get_export(&self, name: &str) -> Option<Export> {
         // TODO: BoundedMap doesn't support iteration, so we'll use get with a
         // RuntimeString key
-        let runtime_key: wrt_foundation::bounded::BoundedString<256> =
-            wrt_foundation::bounded::BoundedString::from_str_truncate(name).ok()?;
+        let runtime_key: kiln_foundation::bounded::BoundedString<256> =
+            kiln_foundation::bounded::BoundedString::from_str_truncate(name).ok()?;
         self.exports.get(&runtime_key).cloned()
     }
 
@@ -2510,7 +2510,7 @@ impl Module {
     }
 
     /// Gets a function type by index
-    pub fn get_function_type(&self, idx: u32) -> Option<WrtFuncType> {
+    pub fn get_function_type(&self, idx: u32) -> Option<KilnFuncType> {
         if idx as usize >= self.types.len() {
             return None;
         }
@@ -2537,7 +2537,7 @@ impl Module {
         self.memories.get(idx).ok_or_else(|| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::MEMORY_NOT_FOUND,
+                kiln_error::codes::MEMORY_NOT_FOUND,
                 "Memory index out of bounds",
             )
         })
@@ -2548,7 +2548,7 @@ impl Module {
         self.memories.get(idx).map_err(|_| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::MEMORY_NOT_FOUND,
+                kiln_error::codes::MEMORY_NOT_FOUND,
                 "Memory index out of bounds",
             )
         })
@@ -2576,13 +2576,13 @@ impl Module {
         let export = Export::new(name, ExportKind::Function, index)?;
         #[cfg(feature = "std")]
         {
-            let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 name)?;
             self.exports.insert(bounded_name, export)?;
         }
         #[cfg(not(feature = "std"))]
         {
-            let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &name)?;
             self.exports.insert(bounded_name, export)?;
         }
@@ -2594,13 +2594,13 @@ impl Module {
         let export = Export::new(name, ExportKind::Table, index)?;
         #[cfg(feature = "std")]
         {
-            let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 name)?;
             self.exports.insert(bounded_name, export)?;
         }
         #[cfg(not(feature = "std"))]
         {
-            let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &name)?;
             self.exports.insert(bounded_name, export)?;
         }
@@ -2612,13 +2612,13 @@ impl Module {
         let export = Export::new(name, ExportKind::Memory, index)?;
         #[cfg(feature = "std")]
         {
-            let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 name)?;
             self.exports.insert(bounded_name, export)?;
         }
         #[cfg(not(feature = "std"))]
         {
-            let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &name)?;
             self.exports.insert(bounded_name, export)?;
         }
@@ -2630,34 +2630,34 @@ impl Module {
         let export = Export::new(name, ExportKind::Global, index)?;
         #[cfg(feature = "std")]
         {
-            let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 name)?;
             self.exports.insert(bounded_name, export)?;
         }
         #[cfg(not(feature = "std"))]
         {
-            let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &name)?;
             self.exports.insert(bounded_name, export)?;
         }
         Ok(())
     }
 
-    /// Adds an export to the module from a `wrt_format::module::Export`
-    pub fn add_export(&mut self, format_export: wrt_format::module::Export) -> Result<()> {
+    /// Adds an export to the module from a `kiln_format::module::Export`
+    pub fn add_export(&mut self, format_export: kiln_format::module::Export) -> Result<()> {
         let runtime_export_kind = match format_export.kind {
-            wrt_format::module::ExportKind::Function => ExportKind::Function,
-            wrt_format::module::ExportKind::Table => ExportKind::Table,
-            wrt_format::module::ExportKind::Memory => ExportKind::Memory,
-            wrt_format::module::ExportKind::Global => ExportKind::Global,
-            wrt_format::module::ExportKind::Tag => ExportKind::Tag,
+            kiln_format::module::ExportKind::Function => ExportKind::Function,
+            kiln_format::module::ExportKind::Table => ExportKind::Table,
+            kiln_format::module::ExportKind::Memory => ExportKind::Memory,
+            kiln_format::module::ExportKind::Global => ExportKind::Global,
+            kiln_format::module::ExportKind::Tag => ExportKind::Tag,
         };
         // Convert BoundedString to String - use default empty string if conversion
         // fails
         let export_name_string = "export"; // Use a placeholder name
         let runtime_export =
             Export::new(export_name_string, runtime_export_kind, format_export.index)?;
-        let name_key = wrt_foundation::bounded::BoundedString::from_str_truncate(
+        let name_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
             runtime_export
                 .name
                 .as_str()
@@ -2669,7 +2669,7 @@ impl Module {
 
     /// Set the name of the module
     pub fn set_name(&mut self, name: &str) -> Result<()> {
-        let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+        let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
             name)?;
         self.name = Some(bounded_name);
         Ok(())
@@ -2682,7 +2682,7 @@ impl Module {
     }
 
     /// Add a function type to the module
-    pub fn add_type(&mut self, ty: WrtFuncType) -> Result<()> {
+    pub fn add_type(&mut self, ty: KilnFuncType) -> Result<()> {
         // In std mode, Vec::push doesn't return Result
         #[cfg(feature = "std")]
         {
@@ -2732,9 +2732,9 @@ impl Module {
         #[cfg(feature = "std")]
         {
             // Convert to bounded strings
-            let bounded_module = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 module_name)?;
-            let bounded_item = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 item_name)?;
 
             // For BoundedMap, we need to handle the nested map differently
@@ -2752,9 +2752,9 @@ impl Module {
         }
         #[cfg(not(feature = "std"))]
         {
-            let bounded_module = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 module_name)?;
-            let bounded_item = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 item_name)?;
             // BoundedMap doesn't support get_mut, so we'll use a simpler approach
             let provider = create_runtime_provider()?;
@@ -2770,7 +2770,7 @@ impl Module {
         &mut self,
         module_name: &str,
         item_name: &str,
-        table_type: WrtTableType,
+        table_type: KilnTableType,
     ) -> Result<()> {
         let import_struct = crate::module::Import::new(
             module_name,
@@ -2781,9 +2781,9 @@ impl Module {
         #[cfg(feature = "std")]
         {
             // Convert to bounded strings
-            let bounded_module = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 module_name)?;
-            let bounded_item = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 item_name)?;
 
             // For BoundedMap, we need to handle the nested map differently
@@ -2801,9 +2801,9 @@ impl Module {
         }
         #[cfg(not(feature = "std"))]
         {
-            let bounded_module = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 module_name)?;
-            let bounded_item = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 item_name)?;
             // BoundedMap doesn't support get_mut, so we'll use a simpler approach
             let provider = create_runtime_provider()?;
@@ -2819,7 +2819,7 @@ impl Module {
         &mut self,
         module_name: &str,
         item_name: &str,
-        memory_type: WrtMemoryType,
+        memory_type: KilnMemoryType,
     ) -> Result<()> {
         let import_struct = crate::module::Import::new(
             module_name,
@@ -2830,9 +2830,9 @@ impl Module {
         #[cfg(feature = "std")]
         {
             // Convert to bounded strings
-            let bounded_module = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 module_name)?;
-            let bounded_item = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 item_name)?;
 
             // For BoundedMap, we need to handle the nested map differently
@@ -2850,9 +2850,9 @@ impl Module {
         }
         #[cfg(not(feature = "std"))]
         {
-            let bounded_module = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 module_name)?;
-            let bounded_item = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 item_name)?;
             // BoundedMap doesn't support get_mut, so we'll use a simpler approach
             let provider = create_runtime_provider()?;
@@ -2868,9 +2868,9 @@ impl Module {
         &mut self,
         module_name: &str,
         item_name: &str,
-        format_global: wrt_format::module::Global,
+        format_global: kiln_format::module::Global,
     ) -> Result<()> {
-        let component_global_type = wrt_foundation::types::GlobalType {
+        let component_global_type = kiln_foundation::types::GlobalType {
             value_type: format_global.global_type.value_type,
             mutable:    format_global.global_type.mutable,
         };
@@ -2882,9 +2882,9 @@ impl Module {
             RuntimeImportDesc::Global(component_global_type),
         )?;
 
-        let module_key = wrt_foundation::bounded::BoundedString::from_str_truncate(
+        let module_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
             module_name)?;
-        let item_key = wrt_foundation::bounded::BoundedString::from_str_truncate(
+        let item_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
             item_name)?;
         let provider = create_runtime_provider()?;
         let mut inner_map = BoundedMap::new(provider)?;
@@ -2904,8 +2904,8 @@ impl Module {
         let provider = create_runtime_provider()?;
         let function = Function {
             type_idx,
-            locals: wrt_foundation::bounded::BoundedVec::new(provider)?,
-            body: WrtExpr::default(),
+            locals: kiln_foundation::bounded::BoundedVec::new(provider)?,
+            body: KilnExpr::default(),
         };
 
         self.push_function(function)?;
@@ -2913,7 +2913,7 @@ impl Module {
     }
 
     /// Add a table to the module
-    pub fn add_table(&mut self, table_type: WrtTableType) -> Result<()> {
+    pub fn add_table(&mut self, table_type: KilnTableType) -> Result<()> {
         let wrapper = TableWrapper::new(Table::new(table_type)?);
         #[cfg(feature = "std")]
         self.tables.push(wrapper);
@@ -2923,7 +2923,7 @@ impl Module {
     }
 
     /// Add a memory to the module
-    pub fn add_memory(&mut self, memory_type: WrtMemoryType) -> Result<()> {
+    pub fn add_memory(&mut self, memory_type: KilnMemoryType) -> Result<()> {
         self.push_memory(MemoryWrapper::new(Memory::new(to_core_memory_type(
             memory_type,
         ))?))?;
@@ -2931,7 +2931,7 @@ impl Module {
     }
 
     /// Add a global to the module
-    pub fn add_global(&mut self, global_type: WrtGlobalType, init: WrtValue) -> Result<()> {
+    pub fn add_global(&mut self, global_type: KilnGlobalType, init: KilnValue) -> Result<()> {
         let global = Global::new(global_type.value_type, global_type.mutable, init)?;
         self.globals.push(GlobalWrapper::new(global))?;
         Ok(())
@@ -2945,7 +2945,7 @@ impl Module {
             ));
         }
 
-        let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+        let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
             name)?;
         let export = Export::new(name, ExportKind::Function, index)?;
         self.exports.insert(bounded_name, export)?;
@@ -2958,7 +2958,7 @@ impl Module {
             return Err(Error::validation_error("Export table index out of bounds"));
         }
 
-        let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+        let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
             name)?;
         let export = Export::new(bounded_name.as_str()?, ExportKind::Table, index)?;
         self.exports.insert(bounded_name, export)?;
@@ -2973,7 +2973,7 @@ impl Module {
 
         let export = Export::new(name, ExportKind::Memory, index)?;
 
-        let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+        let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
             name)?;
         self.exports.insert(bounded_name, export)?;
         Ok(())
@@ -2987,40 +2987,40 @@ impl Module {
 
         let export = Export::new(name, ExportKind::Global, index)?;
 
-        let bounded_name = wrt_foundation::bounded::BoundedString::from_str_truncate(
+        let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
             name)?;
         self.exports.insert(bounded_name, export)?;
         Ok(())
     }
 
     /// Add an element segment to the module
-    pub fn add_element(&mut self, element: wrt_format::module::Element) -> Result<()> {
+    pub fn add_element(&mut self, element: kiln_format::module::Element) -> Result<()> {
         // Convert format element to runtime element
         let items = match &element.init {
-            wrt_format::module::ElementInit::FuncIndices(func_indices) => {
+            kiln_format::module::ElementInit::FuncIndices(func_indices) => {
                 // For function indices, copy them
                 let provider = create_runtime_provider()?;
-                let mut bounded_items = wrt_foundation::bounded::BoundedVec::new(provider)?;
+                let mut bounded_items = kiln_foundation::bounded::BoundedVec::new(provider)?;
                 for idx in func_indices.iter() {
                     bounded_items.push(*idx)?;
                 }
                 bounded_items
             },
-            wrt_format::module::ElementInit::Expressions(_expressions) => {
+            kiln_format::module::ElementInit::Expressions(_expressions) => {
                 // For expressions, create empty items list for now (TODO: process expressions)
                 let provider = create_runtime_provider()?;
-                wrt_foundation::bounded::BoundedVec::new(provider)?
+                kiln_foundation::bounded::BoundedVec::new(provider)?
             },
         };
 
         // Extract table index from mode if available
         let table_idx = match &element.mode {
-            wrt_format::pure_format_types::PureElementMode::Active { table_index, .. } => Some(*table_index),
+            kiln_format::pure_format_types::PureElementMode::Active { table_index, .. } => Some(*table_index),
             _ => None,
         };
 
         let runtime_element = crate::module::Element {
-            mode: WrtElementMode::Active {
+            mode: KilnElementMode::Active {
                 table_index: 0,
                 offset:      0,
             }, // Default mode, should be determined from element.mode
@@ -3045,8 +3045,8 @@ impl Module {
         &mut self,
         func_idx: u32,
         type_idx: u32,
-        locals: Vec<WrtLocalEntry>,
-        body: WrtExpr,
+        locals: Vec<KilnLocalEntry>,
+        body: KilnExpr,
     ) -> Result<()> {
         if func_idx as usize > self.functions.len() {
             // Allow appending
@@ -3055,10 +3055,10 @@ impl Module {
             ));
         }
 
-        // Convert Vec<WrtLocalEntry> to BoundedVec
+        // Convert Vec<KilnLocalEntry> to BoundedVec
         let provider = create_runtime_provider()?;
         let mut bounded_locals =
-            wrt_foundation::bounded::BoundedVec::<WrtLocalEntry, 256, RuntimeProvider>::new(
+            kiln_foundation::bounded::BoundedVec::<KilnLocalEntry, 256, RuntimeProvider>::new(
                 provider,
             )?;
         for local in locals {
@@ -3092,7 +3092,7 @@ impl Module {
     }
 
     /// Add a data segment to the module
-    pub fn add_data(&mut self, data: wrt_format::pure_format_types::PureDataSegment) -> Result<()> {
+    pub fn add_data(&mut self, data: kiln_format::pure_format_types::PureDataSegment) -> Result<()> {
         // Convert format data to runtime data
         #[cfg(feature = "std")]
         let init_vec: Vec<u8> = data.data_bytes.clone();
@@ -3100,7 +3100,7 @@ impl Module {
         #[cfg(not(feature = "std"))]
         let init_vec = {
             let provider = create_runtime_provider()?;
-            let mut bounded_vec = wrt_foundation::bounded::BoundedVec::<u8, 16384, RuntimeProvider>::new(provider)?;
+            let mut bounded_vec = kiln_foundation::bounded::BoundedVec::<u8, 16384, RuntimeProvider>::new(provider)?;
             // Copy data from the format's data_bytes
             for byte in data.data_bytes.iter().take(16384) {
                 bounded_vec.push(*byte)?;
@@ -3109,7 +3109,7 @@ impl Module {
         };
 
         let runtime_data = crate::module::Data {
-            mode:        WrtDataMode::Active {
+            mode:        KilnDataMode::Active {
                 memory_index: 0,
                 offset:       0,
             }, // Default mode
@@ -3129,10 +3129,10 @@ impl Module {
     #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn add_custom_section(&mut self, name: &str, data: Vec<u8>) -> Result<()> {
         let name_key =
-            wrt_foundation::bounded::BoundedString::from_str_truncate(name)?;
+            kiln_foundation::bounded::BoundedString::from_str_truncate(name)?;
         let provider_data = create_runtime_provider()?;
         let mut bounded_data =
-            wrt_foundation::bounded::BoundedVec::<u8, 4096, RuntimeProvider>::new(provider_data)?;
+            kiln_foundation::bounded::BoundedVec::<u8, 4096, RuntimeProvider>::new(provider_data)?;
         for byte in data {
             bounded_data.push(byte)?;
         }
@@ -3152,7 +3152,7 @@ impl Module {
         {
             let provider = create_runtime_provider()?;
             let mut bounded_binary =
-                wrt_foundation::bounded::BoundedVec::<u8, 65536, RuntimeProvider>::new(provider)?;
+                kiln_foundation::bounded::BoundedVec::<u8, 65536, RuntimeProvider>::new(provider)?;
             for byte in binary {
                 bounded_binary.push(byte)?;
             }
@@ -3177,9 +3177,9 @@ impl Module {
         &mut self,
         module_name: &str,
         item_name: &str,
-        global_type: WrtGlobalType,
+        global_type: KilnGlobalType,
     ) -> Result<()> {
-        let component_global_type = wrt_foundation::types::GlobalType {
+        let component_global_type = kiln_foundation::types::GlobalType {
             value_type: global_type.value_type,
             mutable:    global_type.mutable,
         };
@@ -3192,9 +3192,9 @@ impl Module {
         #[cfg(feature = "std")]
         {
             // Convert to bounded strings
-            let bounded_module = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 module_name)?;
-            let bounded_item = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 item_name)?;
 
             // For BoundedMap, we need to handle the nested map differently
@@ -3212,9 +3212,9 @@ impl Module {
         }
         #[cfg(not(feature = "std"))]
         {
-            let bounded_module = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 module_name)?;
-            let bounded_item = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 item_name)?;
             // BoundedMap doesn't support get_mut, so we'll use a simpler approach
             let provider = create_runtime_provider()?;
@@ -3226,43 +3226,43 @@ impl Module {
     }
 
     /// Add a runtime export to the module
-    pub fn add_runtime_export(&mut self, name: &str, export_desc: WrtExportDesc) -> Result<()> {
+    pub fn add_runtime_export(&mut self, name: &str, export_desc: KilnExportDesc) -> Result<()> {
         let (kind, index) = match export_desc {
-            WrtExportDesc::Func(idx) => (ExportKind::Function, idx),
-            WrtExportDesc::Table(idx) => (ExportKind::Table, idx),
-            WrtExportDesc::Mem(idx) => (ExportKind::Memory, idx),
-            WrtExportDesc::Global(idx) => (ExportKind::Global, idx),
-            WrtExportDesc::Tag(_) => {
+            KilnExportDesc::Func(idx) => (ExportKind::Function, idx),
+            KilnExportDesc::Table(idx) => (ExportKind::Table, idx),
+            KilnExportDesc::Mem(idx) => (ExportKind::Memory, idx),
+            KilnExportDesc::Global(idx) => (ExportKind::Global, idx),
+            KilnExportDesc::Tag(_) => {
                 return Err(Error::not_supported_unsupported_operation(
                     "Tag exports not supported",
                 ))
             },
         };
         let runtime_export = crate::module::Export::new(name, kind, index)?;
-        let name_key = wrt_foundation::bounded::BoundedString::from_str_truncate(name)?;
+        let name_key = kiln_foundation::bounded::BoundedString::from_str_truncate(name)?;
         self.exports.insert(name_key, runtime_export)?;
         Ok(())
     }
 
     /// Add a runtime element to the module
-    pub fn add_runtime_element(&mut self, element_segment: WrtElementSegment) -> Result<()> {
+    pub fn add_runtime_element(&mut self, element_segment: KilnElementSegment) -> Result<()> {
         // TODO: Resolve element_segment.items expressions if they are not direct
         // indices. This is a placeholder and assumes items can be derived or
         // handled during instantiation.
         // TODO: ElementItems type not available yet, using empty items for now
         let provider = create_runtime_provider()?;
-        let items_resolved = wrt_foundation::bounded::BoundedVec::new(provider)?;
+        let items_resolved = kiln_foundation::bounded::BoundedVec::new(provider)?;
 
-        // Convert element mode from PureElementMode to WrtElementMode
+        // Convert element mode from PureElementMode to KilnElementMode
         let runtime_mode = match &element_segment.mode {
-            wrt_format::pure_format_types::PureElementMode::Active { table_index, .. } => {
-                WrtElementMode::Active {
+            kiln_format::pure_format_types::PureElementMode::Active { table_index, .. } => {
+                KilnElementMode::Active {
                     table_index: *table_index,
                     offset:      0, // Simplified - would need to evaluate offset_expr_bytes
                 }
             },
-            wrt_format::pure_format_types::PureElementMode::Passive => WrtElementMode::Passive,
-            wrt_format::pure_format_types::PureElementMode::Declared => WrtElementMode::Declarative,
+            kiln_format::pure_format_types::PureElementMode::Passive => KilnElementMode::Passive,
+            kiln_format::pure_format_types::PureElementMode::Declared => KilnElementMode::Declarative,
         };
 
         #[cfg(feature = "std")]
@@ -3286,20 +3286,20 @@ impl Module {
     }
 
     /// Add a runtime data segment to the module  
-    pub fn add_runtime_data(&mut self, data_segment: WrtDataSegment) -> Result<()> {
-        // WrtDataSegment is actually PureDataSegment
-        // Convert data mode from PureDataMode to WrtDataMode
+    pub fn add_runtime_data(&mut self, data_segment: KilnDataSegment) -> Result<()> {
+        // KilnDataSegment is actually PureDataSegment
+        // Convert data mode from PureDataMode to KilnDataMode
         let (runtime_mode, memory_idx) = match &data_segment.mode {
-            wrt_format::pure_format_types::PureDataMode::Active { memory_index, .. } => {
+            kiln_format::pure_format_types::PureDataMode::Active { memory_index, .. } => {
                 (
-                    WrtDataMode::Active {
+                    KilnDataMode::Active {
                         memory_index: *memory_index,
                         offset:       0, // Simplified - would need to evaluate offset_expr_bytes
                     },
                     Some(*memory_index),
                 )
             },
-            wrt_format::pure_format_types::PureDataMode::Passive => (WrtDataMode::Passive, None),
+            kiln_format::pure_format_types::PureDataMode::Passive => (KilnDataMode::Passive, None),
         };
 
         // Convert data_segment.data_bytes - Vec in std mode, BoundedVec in no_std
@@ -3310,7 +3310,7 @@ impl Module {
         let runtime_init = {
             let provider = create_runtime_provider()?;
             let mut bounded_init =
-                wrt_foundation::bounded::BoundedVec::<u8, 16384, RuntimeProvider>::new(provider)?;
+                kiln_foundation::bounded::BoundedVec::<u8, 16384, RuntimeProvider>::new(provider)?;
             for byte in data_segment.data_bytes.iter().take(16384) {
                 bounded_init.push(*byte)?;
             }
@@ -3337,15 +3337,15 @@ impl Module {
     /// Add a custom section to the module
     pub fn add_custom_section_runtime(
         &mut self,
-        section: WrtCustomSection<RuntimeProvider>,
+        section: KilnCustomSection<RuntimeProvider>,
     ) -> Result<()> {
-        let name_key = wrt_foundation::bounded::BoundedString::from_str_truncate(
+        let name_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
             section.name.as_str()?
         )?;
         // Convert section.data to the expected type
         let provider_data = create_runtime_provider()?;
         let mut bounded_data =
-            wrt_foundation::bounded::BoundedVec::<u8, 4096, RuntimeProvider>::new(provider_data)?;
+            kiln_foundation::bounded::BoundedVec::<u8, 4096, RuntimeProvider>::new(provider_data)?;
         for i in 0..section.data.len() {
             bounded_data.push(section.data.get(i)?)?;
         }
@@ -3365,7 +3365,7 @@ impl Module {
         {
             let provider = create_runtime_provider()?;
             let mut bounded_binary =
-                wrt_foundation::bounded::BoundedVec::<u8, 65536, RuntimeProvider>::new(provider)?;
+                kiln_foundation::bounded::BoundedVec::<u8, 65536, RuntimeProvider>::new(provider)?;
             for byte in binary {
                 bounded_binary.push(byte)?;
             }
@@ -3380,8 +3380,8 @@ impl Module {
     /// The binary is processed section by section without loading
     /// the entire module into intermediate data structures.
     pub fn load_from_binary(&mut self, binary: &[u8]) -> Result<Self> {
-        // Use wrt-decoder's unified loader for efficient parsing
-        use wrt_decoder::{
+        // Use kiln-decoder's unified loader for efficient parsing
+        use kiln_decoder::{
             load_wasm_unified,
             WasmFormat,
         };
@@ -3416,7 +3416,7 @@ impl Module {
         #[cfg(not(feature = "std"))]
         let bounded_binary = {
             let provider = create_runtime_provider()?;
-            let mut vec = wrt_foundation::bounded::BoundedVec::<u8, 65536, RuntimeProvider>::new(provider)?;
+            let mut vec = kiln_foundation::bounded::BoundedVec::<u8, 65536, RuntimeProvider>::new(provider)?;
             for byte in binary {
                 vec.push(*byte)?;
             }
@@ -3431,38 +3431,38 @@ impl Module {
     }
 
     /// Create runtime Module from unified API ModuleInfo
-    fn from_module_info(module_info: &wrt_decoder::ModuleInfo, binary: &[u8]) -> Result<Self> {
+    fn from_module_info(module_info: &kiln_decoder::ModuleInfo, binary: &[u8]) -> Result<Self> {
         // Create module directly using create_runtime_provider
         let provider = crate::bounded_runtime_infra::create_runtime_provider()?;
         let mut runtime_module = Self {
             types: Vec::new(),
-            imports: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
             #[cfg(feature = "std")]
             import_order: Vec::new(),
             #[cfg(not(feature = "std"))]
-            import_order: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             functions: Vec::new(),
             #[cfg(feature = "std")]
             tables: Vec::new(),
             #[cfg(not(feature = "std"))]
-            tables: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
-            globals: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             tags: Vec::new(),
             #[cfg(not(feature = "std"))]
-            tags: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            tags: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             elements: Vec::new(),
             #[cfg(not(feature = "std"))]
-            elements: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             data: Vec::new(),
             #[cfg(not(feature = "std"))]
-            data: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            data: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             start: None,
-            custom_sections: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            exports: wrt_foundation::direct_map::DirectMap::new(),
+            custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            exports: kiln_foundation::direct_map::DirectMap::new(),
             name: None,
             binary: None,
             validated: false,
@@ -3481,39 +3481,39 @@ impl Module {
         // Process imports
         for import in &module_info.imports {
             let extern_type = match &import.import_type {
-                wrt_decoder::ImportType::Function(type_idx) => {
+                kiln_decoder::ImportType::Function(type_idx) => {
                     // For now, create a simple function type
                     // In a full implementation, we'd look up the actual type
-                    let func_type = WrtFuncType::new(
-                        core::iter::empty::<WrtValueType>(), // empty params
-                        core::iter::empty::<WrtValueType>(), // empty results
+                    let func_type = KilnFuncType::new(
+                        core::iter::empty::<KilnValueType>(), // empty params
+                        core::iter::empty::<KilnValueType>(), // empty results
                     )?;
                     ExternType::Func(func_type)
                 },
-                wrt_decoder::ImportType::Table => {
+                kiln_decoder::ImportType::Table => {
                     // Create default table type
-                    let table_type = WrtTableType {
-                        element_type: WrtRefType::Funcref,
-                        limits:       WrtLimits { min: 0, max: None },
+                    let table_type = KilnTableType {
+                        element_type: KilnRefType::Funcref,
+                        limits:       KilnLimits { min: 0, max: None },
                     };
                     ExternType::Table(table_type)
                 },
-                wrt_decoder::ImportType::Memory => {
+                kiln_decoder::ImportType::Memory => {
                     // CRITICAL: Memory imports in Component Model should NOT have hardcoded limits
                     // The actual memory specifications come from the provider module (Module 0 with 2 pages)
                     // For shared-everything dynamic linking, all modules share the same linear memory
                     // Temporarily use min:0 to indicate this needs to be resolved via linking
-                    let memory_type = WrtMemoryType {
-                        limits: WrtLimits { min: 0, max: None },  // Will be resolved via linking
+                    let memory_type = KilnMemoryType {
+                        limits: KilnLimits { min: 0, max: None },  // Will be resolved via linking
                         shared: true,  // Component Model uses shared memory
                         memory64: false,
                     };
                     ExternType::Memory(memory_type)
                 },
-                wrt_decoder::ImportType::Global => {
+                kiln_decoder::ImportType::Global => {
                     // Create default global type
-                    let global_type = wrt_foundation::types::GlobalType {
-                        value_type: WrtValueType::I32,
+                    let global_type = kiln_foundation::types::GlobalType {
+                        value_type: KilnValueType::I32,
                         mutable:    false,
                     };
                     ExternType::Global(global_type)
@@ -3546,7 +3546,7 @@ impl Module {
             // Add to imports map
             #[cfg(feature = "tracing")]
             trace!(module = %import.module, "Creating module_key");
-            let module_key = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let module_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &import.module)
                 .map_err(|e| {
                     #[cfg(feature = "tracing")]
@@ -3555,7 +3555,7 @@ impl Module {
                 })?;
             #[cfg(feature = "tracing")]
             trace!(name = %import.name, "Creating item_key");
-            let item_key = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let item_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &import.name)
                 .map_err(|e| {
                     #[cfg(feature = "tracing")]
@@ -3596,8 +3596,8 @@ impl Module {
             runtime_module.import_order.push((import.module.clone(), import.name.clone()));
             #[cfg(not(feature = "std"))]
             {
-                let order_module = wrt_foundation::bounded::BoundedString::from_str_truncate(&import.module)?;
-                let order_name = wrt_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
+                let order_module = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.module)?;
+                let order_name = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
                 runtime_module.import_order.push((order_module, order_name))?;
             }
 
@@ -3608,22 +3608,22 @@ impl Module {
         // Process exports
         for export in &module_info.exports {
             let export_kind = match export.export_type {
-                wrt_decoder::ExportType::Function => ExportKind::Function,
-                wrt_decoder::ExportType::Table => ExportKind::Table,
-                wrt_decoder::ExportType::Memory => ExportKind::Memory,
-                wrt_decoder::ExportType::Global => ExportKind::Global,
+                kiln_decoder::ExportType::Function => ExportKind::Function,
+                kiln_decoder::ExportType::Table => ExportKind::Table,
+                kiln_decoder::ExportType::Memory => ExportKind::Memory,
+                kiln_decoder::ExportType::Global => ExportKind::Global,
             };
 
             let runtime_export = Export::new(&export.name, export_kind, export.index)?;
-            let name_key = wrt_foundation::bounded::BoundedString::from_str_truncate(
+            let name_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
                 &export.name)?;
             runtime_module.exports.insert(name_key, runtime_export)?;
         }
 
         // Set memory info if present
         if let Some((min_pages, max_pages)) = module_info.memory_pages {
-            let memory_type = WrtMemoryType {
-                limits: WrtLimits {
+            let memory_type = KilnMemoryType {
+                limits: KilnLimits {
                     min: min_pages,
                     max: max_pages,
                 },
@@ -3640,14 +3640,14 @@ impl Module {
         // This ensures compatibility while leveraging the unified API for basic info
         if !module_info.function_types.is_empty() {
             // Fall back to full parsing for complex cases
-            use wrt_decoder::decoder;
+            use kiln_decoder::decoder;
             let decoded_module = Box::new(decoder::decode_module(binary)?);
 
-            // decoded_module is wrt_format::Module, so we need the format-compatible method
+            // decoded_module is kiln_format::Module, so we need the format-compatible method
             #[cfg(feature = "std")]
-            let full_runtime_module = *Module::from_wrt_module(&*decoded_module)?;
+            let full_runtime_module = *Module::from_kiln_module(&*decoded_module)?;
             #[cfg(not(feature = "std"))]
-            let full_runtime_module = Module::from_wrt_module_nostd(&*decoded_module)?;
+            let full_runtime_module = Module::from_kiln_module_nostd(&*decoded_module)?;
 
             return Ok(full_runtime_module);
         }
@@ -3661,7 +3661,7 @@ impl Module {
         trace!(name = name, exports_len = self.exports.len(), "[FIND_FUNC] Looking up export");
 
         let bounded_name =
-            wrt_foundation::bounded::BoundedString::from_str_truncate(name).ok()?;
+            kiln_foundation::bounded::BoundedString::from_str_truncate(name).ok()?;
 
         if let Some(export) = self.exports.get(&bounded_name) {
             #[cfg(feature = "tracing")]
@@ -3677,7 +3677,7 @@ impl Module {
     }
 
     /// Get function signature by function index
-    pub fn get_function_signature(&self, func_idx: u32) -> Option<WrtFuncType> {
+    pub fn get_function_signature(&self, func_idx: u32) -> Option<KilnFuncType> {
         let function = self.get_function(func_idx)?;
         self.get_function_type(function.type_idx)
     }
@@ -3750,7 +3750,7 @@ impl Module {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OtherExport {
     /// Export name
-    pub name:  wrt_foundation::bounded::BoundedString<128>,
+    pub name:  kiln_foundation::bounded::BoundedString<128>,
     /// Export kind
     pub kind:  ExportKind,
     /// Export index
@@ -3763,44 +3763,44 @@ pub enum ImportedItem {
     /// An imported function
     Function {
         /// The module name
-        module: wrt_foundation::bounded::BoundedString<128>,
+        module: kiln_foundation::bounded::BoundedString<128>,
         /// The function name
-        name:   wrt_foundation::bounded::BoundedString<128>,
+        name:   kiln_foundation::bounded::BoundedString<128>,
         /// The function type
-        ty:     WrtFuncType,
+        ty:     KilnFuncType,
     },
     /// An imported table
     Table {
         /// The module name
-        module: wrt_foundation::bounded::BoundedString<128>,
+        module: kiln_foundation::bounded::BoundedString<128>,
         /// The table name
-        name:   wrt_foundation::bounded::BoundedString<128>,
+        name:   kiln_foundation::bounded::BoundedString<128>,
         /// The table type
-        ty:     WrtTableType,
+        ty:     KilnTableType,
     },
     /// An imported memory
     Memory {
         /// The module name
-        module: wrt_foundation::bounded::BoundedString<128>,
+        module: kiln_foundation::bounded::BoundedString<128>,
         /// The memory name
-        name:   wrt_foundation::bounded::BoundedString<128>,
+        name:   kiln_foundation::bounded::BoundedString<128>,
         /// The memory type
-        ty:     WrtMemoryType,
+        ty:     KilnMemoryType,
     },
     /// An imported global
     Global {
         /// The module name
-        module: wrt_foundation::bounded::BoundedString<128>,
+        module: kiln_foundation::bounded::BoundedString<128>,
         /// The global name
-        name:   wrt_foundation::bounded::BoundedString<128>,
+        name:   kiln_foundation::bounded::BoundedString<128>,
         /// The global type
-        ty:     WrtGlobalType,
+        ty:     KilnGlobalType,
     },
 }
 
 // Trait implementations for Module
-impl wrt_foundation::traits::Checksummable for Module {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Module {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         // Use module name (if available) and validation status for checksum
         if let Some(ref name) = self.name {
             if let Ok(name_str) = name.as_str() {
@@ -3816,7 +3816,7 @@ impl wrt_foundation::traits::Checksummable for Module {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Module {
+impl kiln_foundation::traits::ToBytes for Module {
     fn serialized_size(&self) -> usize {
         // Simple size calculation for module metadata
         let name_size = self.name.as_ref().map_or(0, |n| n.len());
@@ -3825,9 +3825,9 @@ impl wrt_foundation::traits::ToBytes for Module {
                                   // functions_len(4)
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         _provider: &PStream,
     ) -> Result<()> {
         // Write a magic number to identify this as a module
@@ -3856,16 +3856,16 @@ impl wrt_foundation::traits::ToBytes for Module {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Module {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for Module {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
     ) -> Result<Self> {
         // Read and verify magic number
         let mut magic = [0u8; 4];
         reader.read_exact(&mut magic)?;
         if u32::from_le_bytes(magic) != 0x6D6F6475 {
-            return Err(wrt_error::Error::runtime_error(
+            return Err(kiln_error::Error::runtime_error(
                 "Invalid module magic number",
             ));
         }
@@ -3880,8 +3880,8 @@ impl wrt_foundation::traits::FromBytes for Module {
             let mut name_bytes = [0u8; 128];
             reader.read_exact(&mut name_bytes[..name_len as usize])?;
             let name_str = core::str::from_utf8(&name_bytes[..name_len as usize])
-                .map_err(|_| wrt_error::Error::runtime_error("Invalid module name UTF-8"))?;
-            Some(wrt_foundation::bounded::BoundedString::try_from_str(
+                .map_err(|_| kiln_error::Error::runtime_error("Invalid module name UTF-8"))?;
+            Some(kiln_foundation::bounded::BoundedString::try_from_str(
                 name_str
             )?)
         } else {
@@ -3901,33 +3901,33 @@ impl wrt_foundation::traits::FromBytes for Module {
         let provider = crate::bounded_runtime_infra::create_runtime_provider()?;
         let module = Module {
             types: Vec::new(),
-            imports: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
             #[cfg(feature = "std")]
             import_order: Vec::new(),
             #[cfg(not(feature = "std"))]
-            import_order: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             functions: Vec::new(),
             #[cfg(feature = "std")]
             tables: Vec::new(),
             #[cfg(not(feature = "std"))]
-            tables: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
-            globals: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             tags: Vec::new(),
             #[cfg(not(feature = "std"))]
-            tags: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            tags: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             elements: Vec::new(),
             #[cfg(not(feature = "std"))]
-            elements: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             data: Vec::new(),
             #[cfg(not(feature = "std"))]
-            data: wrt_foundation::bounded::BoundedVec::new(provider.clone())?,
+            data: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             start: None,
-            custom_sections: wrt_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            exports: wrt_foundation::direct_map::DirectMap::new(),
+            custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
+            exports: kiln_foundation::direct_map::DirectMap::new(),
             name,
             binary: None,
             validated,
@@ -3946,12 +3946,12 @@ impl wrt_foundation::traits::FromBytes for Module {
 
 // HashMap is already imported above, no need to re-import
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::component::ExternType; // For error handling
+use kiln_foundation::component::ExternType; // For error handling
 
 // Newtype wrappers to solve orphan rules issue
 // These allow us to implement external traits on types containing Arc<T>
@@ -3962,7 +3962,7 @@ pub struct TableWrapper(pub Arc<Table>);
 
 impl Default for TableWrapper {
     fn default() -> Self {
-        use wrt_foundation::types::{
+        use kiln_foundation::types::{
             Limits,
             RefType,
             TableType,
@@ -4003,28 +4003,28 @@ impl TableWrapper {
     }
 
     /// Get table element
-    pub fn get(&self, idx: u32) -> Result<Option<WrtValue>> {
+    pub fn get(&self, idx: u32) -> Result<Option<KilnValue>> {
         self.0.get(idx)
     }
 
     /// Set table element using interior mutability
-    pub fn set(&self, idx: u32, value: Option<WrtValue>) -> Result<()> {
+    pub fn set(&self, idx: u32, value: Option<KilnValue>) -> Result<()> {
         // Use set_shared which uses the internal Mutex for interior mutability
         self.0.set_shared(idx, value)
     }
 
     /// Grow table using interior mutability
-    pub fn grow(&self, delta: u32, init_value: WrtValue) -> Result<u32> {
+    pub fn grow(&self, delta: u32, init_value: KilnValue) -> Result<u32> {
         self.0.grow_shared(delta, init_value)
     }
 
     /// Initialize table using interior mutability
-    pub fn init(&self, offset: u32, init_data: &[Option<WrtValue>]) -> Result<()> {
+    pub fn init(&self, offset: u32, init_data: &[Option<KilnValue>]) -> Result<()> {
         self.0.init_shared(offset, init_data)
     }
 
     /// Fill a range of table elements with a value
-    pub fn fill(&self, offset: u32, len: u32, value: Option<WrtValue>) -> Result<()> {
+    pub fn fill(&self, offset: u32, len: u32, value: Option<KilnValue>) -> Result<()> {
         self.0.fill_elements_shared(offset as usize, value, len as usize)
     }
 
@@ -4034,7 +4034,7 @@ impl TableWrapper {
     }
 
     /// Get the table element type
-    pub fn element_type(&self) -> wrt_foundation::types::RefType {
+    pub fn element_type(&self) -> kiln_foundation::types::RefType {
         self.0.ty.element_type
     }
 }
@@ -4144,7 +4144,7 @@ impl MemoryWrapper {
         // For now, we'll return an error
         Err(Error::new(
             ErrorCategory::Runtime,
-            wrt_error::codes::MEMORY_ACCESS_DENIED,
+            kiln_error::codes::MEMORY_ACCESS_DENIED,
             "Cannot write to memory through Arc<Memory>",
         ))
     }
@@ -4216,7 +4216,7 @@ impl MemoryWrapper {
         // For now, we'll return an error
         Err(Error::new(
             ErrorCategory::Runtime,
-            wrt_error::codes::MEMORY_ACCESS_DENIED,
+            kiln_error::codes::MEMORY_ACCESS_DENIED,
             "Cannot fill memory through Arc<Memory>",
         ))
     }
@@ -4245,7 +4245,7 @@ impl Eq for GlobalWrapper {}
 
 impl Default for GlobalWrapper {
     fn default() -> Self {
-        use wrt_foundation::{
+        use kiln_foundation::{
             types::ValueType,
             values::Value,
         };
@@ -4266,7 +4266,7 @@ impl GlobalWrapper {
     }
 
     /// Get the global value
-    pub fn get(&self) -> Result<WrtValue> {
+    pub fn get(&self) -> Result<KilnValue> {
         #[cfg(feature = "std")]
         {
             let guard = self.0.read().map_err(|_| {
@@ -4282,7 +4282,7 @@ impl GlobalWrapper {
     }
 
     /// Set the global value
-    pub fn set(&self, value: WrtValue) -> Result<()> {
+    pub fn set(&self, value: KilnValue) -> Result<()> {
         #[cfg(feature = "std")]
         {
             let mut guard = self.0.write().map_err(|_| {
@@ -4291,7 +4291,7 @@ impl GlobalWrapper {
 
             #[cfg(feature = "tracing")]
             {
-                use wrt_foundation::tracing::debug;
+                use kiln_foundation::tracing::debug;
                 let global_type = guard.global_type_descriptor();
                 debug!(
                     "GlobalWrapper::set - global is mutable: {}, value_type: {:?}, new_value: {:?}",
@@ -4315,7 +4315,7 @@ impl GlobalWrapper {
     }
 
     /// Get global value (returns a clone of the value)
-    pub fn get_value(&self) -> WrtValue {
+    pub fn get_value(&self) -> KilnValue {
         #[cfg(feature = "std")]
         {
             let guard = self.0.read().unwrap_or_else(|e| e.into_inner());
@@ -4329,7 +4329,7 @@ impl GlobalWrapper {
     }
 
     /// Set global value (requires mutable access)
-    pub fn set_value(&self, new_value: &WrtValue) -> Result<()> {
+    pub fn set_value(&self, new_value: &KilnValue) -> Result<()> {
         #[cfg(feature = "std")]
         {
             let mut guard = self.0.write().map_err(|_| {
@@ -4346,7 +4346,7 @@ impl GlobalWrapper {
 
     /// Get global value type
     #[must_use]
-    pub fn value_type(&self) -> WrtValueType {
+    pub fn value_type(&self) -> KilnValueType {
         #[cfg(feature = "std")]
         {
             let guard = self.0.read().unwrap_or_else(|e| e.into_inner());
@@ -4376,7 +4376,7 @@ impl GlobalWrapper {
 }
 
 // Implement foundation traits for wrapper types
-use wrt_foundation::{
+use kiln_foundation::{
     traits::{
         ReadStream,
         WriteStream,
@@ -4398,7 +4398,7 @@ impl ToBytes for TableWrapper {
         12 // table type (4) + size (4) + limits (4)
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream,
         _provider: &P,
@@ -4411,7 +4411,7 @@ impl ToBytes for TableWrapper {
 }
 
 impl FromBytes for TableWrapper {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
@@ -4419,7 +4419,7 @@ impl FromBytes for TableWrapper {
         reader.read_exact(&mut bytes)?;
 
         // Create a default table (simplified implementation)
-        use wrt_foundation::types::{
+        use kiln_foundation::types::{
             Limits,
             RefType,
             TableType,
@@ -4433,7 +4433,7 @@ impl FromBytes for TableWrapper {
         };
 
         let table = Table::new(table_type).map_err(|_| {
-            wrt_error::Error::runtime_execution_error(
+            kiln_error::Error::runtime_execution_error(
                 "Runtime execution error: Failed to create table from bytes",
             )
         })?;
@@ -4444,7 +4444,7 @@ impl FromBytes for TableWrapper {
 
 // MemoryWrapper trait implementations
 // EMERGENCY FIX: Implement StaticSerializedSize to avoid recursion
-impl wrt_foundation::traits::StaticSerializedSize for MemoryWrapper {
+impl kiln_foundation::traits::StaticSerializedSize for MemoryWrapper {
     const SERIALIZED_SIZE: usize = 12; // size (4) + limits min (4) + limits max (4)
 }
 
@@ -4462,10 +4462,10 @@ impl ToBytes for MemoryWrapper {
     fn serialized_size(&self) -> usize {
         // Use static size to avoid recursion in Default::default().serialized_size()
         // calls
-        <Self as wrt_foundation::traits::StaticSerializedSize>::SERIALIZED_SIZE
+        <Self as kiln_foundation::traits::StaticSerializedSize>::SERIALIZED_SIZE
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream,
         _provider: &P,
@@ -4479,7 +4479,7 @@ impl ToBytes for MemoryWrapper {
 }
 
 impl FromBytes for MemoryWrapper {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
@@ -4498,22 +4498,22 @@ impl FromBytes for MemoryWrapper {
 }
 
 // Helper function to convert ValueType to u8
-fn value_type_to_u8(vt: WrtValueType) -> u8 {
+fn value_type_to_u8(vt: KilnValueType) -> u8 {
     match vt {
-        WrtValueType::I32 => 0,
-        WrtValueType::I64 => 1,
-        WrtValueType::F32 => 2,
-        WrtValueType::F64 => 3,
-        WrtValueType::FuncRef => 4,
-        WrtValueType::ExternRef => 5,
-        WrtValueType::V128 => 6,
-        WrtValueType::I16x8 => 7,
-        WrtValueType::StructRef(_) => 8,
-        WrtValueType::ArrayRef(_) => 9,
-        WrtValueType::ExnRef => 10,
-        WrtValueType::I31Ref => 11,
-        WrtValueType::AnyRef => 12,
-        WrtValueType::EqRef => 13,
+        KilnValueType::I32 => 0,
+        KilnValueType::I64 => 1,
+        KilnValueType::F32 => 2,
+        KilnValueType::F64 => 3,
+        KilnValueType::FuncRef => 4,
+        KilnValueType::ExternRef => 5,
+        KilnValueType::V128 => 6,
+        KilnValueType::I16x8 => 7,
+        KilnValueType::StructRef(_) => 8,
+        KilnValueType::ArrayRef(_) => 9,
+        KilnValueType::ExnRef => 10,
+        KilnValueType::I31Ref => 11,
+        KilnValueType::AnyRef => 12,
+        KilnValueType::EqRef => 13,
         _ => 255, // fallback for other types
     }
 }
@@ -4539,14 +4539,14 @@ impl ToBytes for GlobalWrapper {
         12 // value type (1) + mutable flag (1) + padding (2) + value (8)
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream,
         _provider: &P,
     ) -> Result<()> {
         #[cfg(feature = "std")]
         let guard = self.0.read().map_err(|_| {
-            wrt_error::Error::runtime_execution_error("Failed to acquire read lock on global")
+            kiln_error::Error::runtime_execution_error("Failed to acquire read lock on global")
         })?;
         #[cfg(not(feature = "std"))]
         let guard = self.0.read();
@@ -4564,21 +4564,21 @@ impl ToBytes for GlobalWrapper {
         // Write value (8 bytes)
         let value = guard.get();
         match value {
-            WrtValue::I32(v) => {
+            KilnValue::I32(v) => {
                 writer.write_all(&(*v as u32).to_le_bytes())?;
                 writer.write_all(&0u32.to_le_bytes())?;
             },
-            WrtValue::I64(v) => {
+            KilnValue::I64(v) => {
                 writer.write_all(&(*v as u64).to_le_bytes())?;
             },
-            WrtValue::F32(wrt_foundation::values::FloatBits32(bits)) => {
+            KilnValue::F32(kiln_foundation::values::FloatBits32(bits)) => {
                 writer.write_all(&bits.to_le_bytes())?;
                 writer.write_all(&0u32.to_le_bytes())?;
             },
-            WrtValue::F64(wrt_foundation::values::FloatBits64(bits)) => {
+            KilnValue::F64(kiln_foundation::values::FloatBits64(bits)) => {
                 writer.write_all(&bits.to_le_bytes())?;
             },
-            WrtValue::FuncRef(ref_opt) => {
+            KilnValue::FuncRef(ref_opt) => {
                 // FuncRef: store 0xFFFFFFFF for None, or the index for Some
                 let value = match ref_opt {
                     Some(func_ref) => func_ref.index,
@@ -4587,7 +4587,7 @@ impl ToBytes for GlobalWrapper {
                 writer.write_all(&value.to_le_bytes())?;
                 writer.write_all(&0u32.to_le_bytes())?;
             },
-            WrtValue::ExternRef(ref_opt) => {
+            KilnValue::ExternRef(ref_opt) => {
                 // ExternRef: store 0xFFFFFFFF for None, or the index for Some
                 let value = match ref_opt {
                     Some(extern_ref) => extern_ref.index,
@@ -4596,7 +4596,7 @@ impl ToBytes for GlobalWrapper {
                 writer.write_all(&value.to_le_bytes())?;
                 writer.write_all(&0u32.to_le_bytes())?;
             },
-            WrtValue::ExnRef(ref_opt) => {
+            KilnValue::ExnRef(ref_opt) => {
                 // ExnRef: store 0xFFFFFFFF for None, or the index for Some
                 let value = match ref_opt {
                     Some(exn_ref) => *exn_ref as u32,
@@ -4605,7 +4605,7 @@ impl ToBytes for GlobalWrapper {
                 writer.write_all(&value.to_le_bytes())?;
                 writer.write_all(&0u32.to_le_bytes())?;
             },
-            WrtValue::I31Ref(ref_opt) => {
+            KilnValue::I31Ref(ref_opt) => {
                 // I31Ref: store 0xFFFFFFFF for None, or the value for Some
                 let value = match ref_opt {
                     Some(i31_ref) => *i31_ref as u32,
@@ -4614,7 +4614,7 @@ impl ToBytes for GlobalWrapper {
                 writer.write_all(&value.to_le_bytes())?;
                 writer.write_all(&0u32.to_le_bytes())?;
             },
-            WrtValue::StructRef(ref_opt) => {
+            KilnValue::StructRef(ref_opt) => {
                 // StructRef: store 0xFFFFFFFF for None, or the type_index for Some
                 let value = match ref_opt {
                     Some(struct_ref) => struct_ref.type_index,
@@ -4623,7 +4623,7 @@ impl ToBytes for GlobalWrapper {
                 writer.write_all(&value.to_le_bytes())?;
                 writer.write_all(&0u32.to_le_bytes())?;
             },
-            WrtValue::ArrayRef(ref_opt) => {
+            KilnValue::ArrayRef(ref_opt) => {
                 // ArrayRef: store 0xFFFFFFFF for None, or the type_index for Some
                 let value = match ref_opt {
                     Some(array_ref) => array_ref.type_index,
@@ -4642,12 +4642,12 @@ impl ToBytes for GlobalWrapper {
 }
 
 impl FromBytes for GlobalWrapper {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         // Deserialize the global data properly
-        use wrt_foundation::{
+        use kiln_foundation::{
             types::ValueType,
             values::Value,
         };
@@ -4688,17 +4688,17 @@ impl FromBytes for GlobalWrapper {
                 let v = ((value_high as i64) << 32) | (value_low as i64);
                 Value::I64(v)
             },
-            ValueType::F32 => Value::F32(wrt_foundation::values::FloatBits32(value_low)),
+            ValueType::F32 => Value::F32(kiln_foundation::values::FloatBits32(value_low)),
             ValueType::F64 => {
                 let v = ((value_high as u64) << 32) | (value_low as u64);
-                Value::F64(wrt_foundation::values::FloatBits64(v))
+                Value::F64(kiln_foundation::values::FloatBits64(v))
             },
             ValueType::FuncRef => {
                 // 0xFFFFFFFF means None, otherwise it's an index
                 if value_low == 0xFFFFFFFF {
                     Value::FuncRef(None)
                 } else {
-                    Value::FuncRef(Some(wrt_foundation::values::FuncRef { index: value_low }))
+                    Value::FuncRef(Some(kiln_foundation::values::FuncRef { index: value_low }))
                 }
             },
             ValueType::ExternRef => {
@@ -4706,7 +4706,7 @@ impl FromBytes for GlobalWrapper {
                 if value_low == 0xFFFFFFFF {
                     Value::ExternRef(None)
                 } else {
-                    Value::ExternRef(Some(wrt_foundation::values::ExternRef { index: value_low }))
+                    Value::ExternRef(Some(kiln_foundation::values::ExternRef { index: value_low }))
                 }
             },
             ValueType::ExnRef => {
@@ -4742,14 +4742,14 @@ impl FromBytes for GlobalWrapper {
                 if value_low == 0xFFFFFFFF {
                     Value::ExternRef(None)
                 } else {
-                    Value::ExternRef(Some(wrt_foundation::values::ExternRef { index: value_low }))
+                    Value::ExternRef(Some(kiln_foundation::values::ExternRef { index: value_low }))
                 }
             },
             _ => Value::I32(value_low as i32),
         };
 
         let global = Global::new(value_type, mutable, value).map_err(|_| {
-            wrt_error::Error::runtime_execution_error("Failed to create global from bytes")
+            kiln_error::Error::runtime_execution_error("Failed to create global from bytes")
         })?;
 
         Ok(GlobalWrapper::new(global))

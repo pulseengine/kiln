@@ -1,18 +1,18 @@
-//! Integration tests for cargo-wrt
+//! Integration tests for cargo-kiln
 //!
-//! Comprehensive tests for all cargo-wrt functionality including
+//! Comprehensive tests for all cargo-kiln functionality including
 //! command execution, helper modules, and workflow scenarios.
 
 use std::time::Duration;
 
-use cargo_wrt::testing::{ProjectFeature, TestConfig, TestContext, TestValidator, WorkspaceType};
+use cargo_kiln::testing::{ProjectFeature, TestConfig, TestContext, TestValidator, WorkspaceType};
 use tempfile::TempDir;
-use wrt_build_core::formatters::OutputFormat;
+use kiln_build_core::formatters::OutputFormat;
 
 /// Test helper module functionality
 #[cfg(test)]
 mod helper_tests {
-    use cargo_wrt::helpers::{
+    use cargo_kiln::helpers::{
         CategorizedError, CommandSuggestionEngine, ContextDetector, ErrorCategory, OutputManager,
         PerformanceOptimizer, ProgressIndicator,
     };
@@ -112,9 +112,9 @@ mod context_detection_tests {
     use super::*;
 
     #[test]
-    fn test_wrt_workspace_detection() -> anyhow::Result<()> {
+    fn test_kiln_workspace_detection() -> anyhow::Result<()> {
         let config = TestConfig {
-            workspace_type: WorkspaceType::WrtWorkspace,
+            workspace_type: WorkspaceType::KilnWorkspace,
             project_features: vec![
                 ProjectFeature::Tests,
                 ProjectFeature::Documentation,
@@ -129,7 +129,7 @@ mod context_detection_tests {
 
         assert!(matches!(
             project_context.project_type,
-            cargo_wrt::helpers::ProjectType::WrtWorkspace
+            cargo_kiln::helpers::ProjectType::KilnWorkspace
         ));
         assert!(project_context.features.has_tests);
         assert!(project_context.features.has_docs);
@@ -151,7 +151,7 @@ mod context_detection_tests {
 
         assert!(matches!(
             project_context.project_type,
-            cargo_wrt::helpers::ProjectType::RustCrate
+            cargo_kiln::helpers::ProjectType::RustCrate
         ));
 
         Ok(())
@@ -170,7 +170,7 @@ mod context_detection_tests {
 
         assert!(matches!(
             project_context.project_type,
-            cargo_wrt::helpers::ProjectType::Unknown
+            cargo_kiln::helpers::ProjectType::Unknown
         ));
 
         Ok(())
@@ -185,7 +185,7 @@ mod validation_tests {
     #[test]
     fn test_comprehensive_validation() -> anyhow::Result<()> {
         let config = TestConfig {
-            workspace_type: WorkspaceType::WrtWorkspace,
+            workspace_type: WorkspaceType::KilnWorkspace,
             project_features: vec![ProjectFeature::Tests, ProjectFeature::CI],
             output_format: OutputFormat::Human,
             use_colors: false,
@@ -225,7 +225,7 @@ mod validation_tests {
 
     #[test]
     fn test_validation_report_formatting() {
-        let mut report = cargo_wrt::testing::ValidationReport::new("Test Report");
+        let mut report = cargo_kiln::testing::ValidationReport::new("Test Report");
         report.add_success("Test passed");
         report.add_failure("Test failed");
         report.add_warning("Test warning");
@@ -247,9 +247,9 @@ mod workspace_tests {
     use super::*;
 
     #[test]
-    fn test_wrt_workspace_creation() -> anyhow::Result<()> {
+    fn test_kiln_workspace_creation() -> anyhow::Result<()> {
         let config = TestConfig {
-            workspace_type: WorkspaceType::WrtWorkspace,
+            workspace_type: WorkspaceType::KilnWorkspace,
             project_features: vec![
                 ProjectFeature::Tests,
                 ProjectFeature::Documentation,
@@ -263,9 +263,9 @@ mod workspace_tests {
 
         // Verify workspace structure
         assert!(context.file_exists("Cargo.toml"));
-        assert!(context.file_exists("wrt-foundation/Cargo.toml"));
-        assert!(context.file_exists("wrt-build-core/Cargo.toml"));
-        assert!(context.file_exists("cargo-wrt/Cargo.toml"));
+        assert!(context.file_exists("kiln-foundation/Cargo.toml"));
+        assert!(context.file_exists("kiln-build-core/Cargo.toml"));
+        assert!(context.file_exists("cargo-kiln/Cargo.toml"));
 
         // Verify features
         assert!(context.file_exists("tests/integration.rs"));
@@ -288,8 +288,8 @@ mod workspace_tests {
     #[test]
     fn test_single_crate_creation() -> anyhow::Result<()> {
         let config = TestConfig {
-            workspace_type: WorkspaceType::WrtCrate {
-                name: "test-wrt-crate".to_string(),
+            workspace_type: WorkspaceType::KilnCrate {
+                name: "test-kiln-crate".to_string(),
             },
             project_features: vec![ProjectFeature::Benchmarks],
             ..Default::default()
@@ -303,11 +303,11 @@ mod workspace_tests {
         assert!(context.file_exists("benches/benchmark.rs"));
 
         // Verify it's not a workspace
-        assert!(!context.file_exists("wrt-foundation/Cargo.toml"));
+        assert!(!context.file_exists("kiln-foundation/Cargo.toml"));
 
         // Verify crate name in manifest
         let manifest = context.read_file("Cargo.toml")?;
-        assert!(manifest.contains("test-wrt-crate"));
+        assert!(manifest.contains("test-kiln-crate"));
 
         Ok(())
     }
@@ -316,7 +316,7 @@ mod workspace_tests {
 /// Test mock build system
 #[cfg(test)]
 mod mock_build_tests {
-    use cargo_wrt::testing::MockBuildResult;
+    use cargo_kiln::testing::MockBuildResult;
 
     use super::*;
 
@@ -368,7 +368,7 @@ mod performance_tests {
     #[test]
     fn test_large_workspace_handling() -> anyhow::Result<()> {
         let config = TestConfig {
-            workspace_type: WorkspaceType::WrtWorkspace,
+            workspace_type: WorkspaceType::KilnWorkspace,
             project_features: vec![
                 ProjectFeature::Tests,
                 ProjectFeature::Benchmarks,
@@ -450,7 +450,7 @@ mod error_handling_tests {
             Ok(context) => {
                 assert!(matches!(
                     context.project_type,
-                    cargo_wrt::helpers::ProjectType::Unknown
+                    cargo_kiln::helpers::ProjectType::Unknown
                 ));
             },
             Err(_) => {

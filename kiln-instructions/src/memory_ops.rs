@@ -18,7 +18,7 @@
 //! - `MemoryStore`: Handles all WebAssembly store operations with various data
 //!   types and widths
 //!
-//! Both structures work with the `Memory` implementation from the `wrt-runtime`
+//! Both structures work with the `Memory` implementation from the `kiln-runtime`
 //! crate.
 //!
 //! # Features
@@ -38,15 +38,15 @@
 //! # Usage
 //!
 //! ```no_run
-//! use wrt_foundation::types::Limits;
-//! use wrt_instructions::{
+//! use kiln_foundation::types::Limits;
+//! use kiln_instructions::{
 //!     memory_ops::{
 //!         MemoryLoad,
 //!         MemoryStore,
 //!     },
 //!     Value,
 //! };
-//! use wrt_runtime::Memory;
+//! use kiln_runtime::Memory;
 //!
 //! // Create a memory instance
 //! let mem_type = MemoryType {
@@ -114,7 +114,7 @@ pub trait MemoryOperations {
         &self,
         offset: u64,
         len: u64,
-    ) -> Result<wrt_foundation::BoundedVec<u8, 65_536, wrt_foundation::NoStdProvider<65_536>>>;
+    ) -> Result<kiln_foundation::BoundedVec<u8, 65_536, kiln_foundation::NoStdProvider<65_536>>>;
 
     /// Write bytes to memory
     ///
@@ -505,7 +505,7 @@ impl MemoryLoad {
                     }
                     f32::from_le_bytes(arr)
                 };
-                Ok(Value::F32(wrt_foundation::FloatBits32::from_float(value)))
+                Ok(Value::F32(kiln_foundation::FloatBits32::from_float(value)))
             },
             (ValueType::F64, 64) => {
                 let bytes = memory.read_bytes(effective_addr, 8)?;
@@ -525,7 +525,7 @@ impl MemoryLoad {
                     }
                     f64::from_le_bytes(arr)
                 };
-                Ok(Value::F64(wrt_foundation::FloatBits64::from_float(value)))
+                Ok(Value::F64(kiln_foundation::FloatBits64::from_float(value)))
             },
             (ValueType::I32, 8) => {
                 let bytes = memory.read_bytes(effective_addr, 1)?;
@@ -972,7 +972,7 @@ pub trait DataSegmentOperations {
     fn get_data_segment(
         &self,
         data_index: u32,
-    ) -> Result<Option<wrt_foundation::BoundedVec<u8, 65_536, wrt_foundation::NoStdProvider<65_536>>>>;
+    ) -> Result<Option<kiln_foundation::BoundedVec<u8, 65_536, kiln_foundation::NoStdProvider<65_536>>>>;
 
     /// Drop (mark as unavailable) a data segment
     ///

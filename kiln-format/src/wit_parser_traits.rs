@@ -1,13 +1,13 @@
 //! Trait implementations for WIT parser types
 
 use super::wit_parser_types::*;
-use wrt_foundation::{
+use kiln_foundation::{
     traits::{Checksummable, FromBytes, ToBytes, ReadStream, WriteStream},
     verification::Checksum,
     MemoryProvider, BoundedVec,
 };
-use wrt_error::Result;
-use wrt_error::{Error, ErrorCategory};
+use kiln_error::Result;
+use kiln_error::{Error, ErrorCategory};
 use core::default::Default;
 
 // ===== Default implementations =====
@@ -950,7 +950,7 @@ impl FromBytes for WitValue {
         match tag {
             0 => Ok(WitValue::Type(WitType::from_bytes_with_provider(reader, provider)?)),
             1 => Ok(WitValue::Instance(WitBoundedString::from_bytes_with_provider(reader, provider)?)),
-            _ => Err(Error::new(ErrorCategory::Parse, wrt_error::codes::PARSE_ERROR, ")),
+            _ => Err(Error::new(ErrorCategory::Parse, kiln_error::codes::PARSE_ERROR, ")),
         }
     }
 }

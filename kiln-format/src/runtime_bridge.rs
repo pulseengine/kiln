@@ -2,7 +2,7 @@
 //!
 //! This module provides clean interfaces for converting between pure format
 //! representations and runtime types. It establishes the boundary between
-//! the format layer (wrt-format) and the runtime layer (wrt-runtime).
+//! the format layer (kiln-format) and the runtime layer (kiln-runtime).
 
 #![allow(clippy::needless_borrow)] // Many false positives in iterator patterns
 
@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     traits::BoundedCapacity,
@@ -40,30 +40,30 @@ type ElementInitVec = Vec<(usize, ElementInitializationHint)>;
 // For no_std, use bounded vectors
 #[cfg(not(feature = "std"))]
 type OffsetExprBytes =
-    wrt_foundation::bounded::BoundedVec<u8, 1024, wrt_foundation::NoStdProvider<8192>>;
+    kiln_foundation::bounded::BoundedVec<u8, 1024, kiln_foundation::NoStdProvider<8192>>;
 #[cfg(not(feature = "std"))]
-type DataExtractionVec = wrt_foundation::bounded::BoundedVec<
+type DataExtractionVec = kiln_foundation::bounded::BoundedVec<
     RuntimeDataExtraction,
     512,
-    wrt_foundation::NoStdProvider<8192>,
+    kiln_foundation::NoStdProvider<8192>,
 >;
 #[cfg(not(feature = "std"))]
-type ElementExtractionVec = wrt_foundation::bounded::BoundedVec<
+type ElementExtractionVec = kiln_foundation::bounded::BoundedVec<
     RuntimeElementExtraction,
     512,
-    wrt_foundation::NoStdProvider<8192>,
+    kiln_foundation::NoStdProvider<8192>,
 >;
 #[cfg(not(feature = "std"))]
-type DataInitVec = wrt_foundation::bounded::BoundedVec<
+type DataInitVec = kiln_foundation::bounded::BoundedVec<
     (usize, DataInitializationHint),
     512,
-    wrt_foundation::NoStdProvider<8192>,
+    kiln_foundation::NoStdProvider<8192>,
 >;
 #[cfg(not(feature = "std"))]
-type ElementInitVec = wrt_foundation::bounded::BoundedVec<
+type ElementInitVec = kiln_foundation::bounded::BoundedVec<
     (usize, ElementInitializationHint),
     512,
-    wrt_foundation::NoStdProvider<8192>,
+    kiln_foundation::NoStdProvider<8192>,
 >;
 
 // Helper functions to reduce deprecation warnings by centralizing pattern
@@ -297,8 +297,8 @@ pub struct ElementInitializationHint {
     pub element_count:            usize,
 }
 
-impl wrt_foundation::traits::Checksummable for ElementSegmentType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ElementSegmentType {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let value = match self {
             ElementSegmentType::Active => 0u8,
             ElementSegmentType::Passive => 1u8,
@@ -308,16 +308,16 @@ impl wrt_foundation::traits::Checksummable for ElementSegmentType {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ElementSegmentType {
+impl kiln_foundation::traits::ToBytes for ElementSegmentType {
     fn serialized_size(&self) -> usize {
         1
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let value = match self {
             ElementSegmentType::Active => 0u8,
             ElementSegmentType::Passive => 1u8,
@@ -328,11 +328,11 @@ impl wrt_foundation::traits::ToBytes for ElementSegmentType {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ElementSegmentType {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for ElementSegmentType {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut bytes = [0u8; 1];
         reader.read_exact(&mut bytes)?;
         match bytes[0] {
@@ -346,8 +346,8 @@ impl wrt_foundation::traits::FromBytes for ElementSegmentType {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for ElementInitializationHint {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ElementInitializationHint {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.segment_type.update_checksum(checksum);
         if let Some(target) = self.table_target {
             checksum.update_slice(&target.to_le_bytes());
@@ -357,16 +357,16 @@ impl wrt_foundation::traits::Checksummable for ElementInitializationHint {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ElementInitializationHint {
+impl kiln_foundation::traits::ToBytes for ElementInitializationHint {
     fn serialized_size(&self) -> usize {
         16 // Simplified size
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.segment_type.to_bytes_with_provider(writer, provider)?;
         writer.write_all(&self.table_target.unwrap_or(0).to_le_bytes())?;
         writer.write_all(&[self.offset_evaluation_needed as u8])?;
@@ -375,11 +375,11 @@ impl wrt_foundation::traits::ToBytes for ElementInitializationHint {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ElementInitializationHint {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for ElementInitializationHint {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let segment_type = ElementSegmentType::from_bytes_with_provider(reader, provider)?;
 
         let mut target_bytes = [0u8; 4];
@@ -625,8 +625,8 @@ fn calculate_initialization_steps(module: &crate::module::Module) -> usize {
 }
 
 /// Add missing trait implementations for DataSegmentType
-impl wrt_foundation::traits::Checksummable for DataSegmentType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for DataSegmentType {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let value = match self {
             DataSegmentType::Active => 0u8,
             DataSegmentType::Passive => 1u8,
@@ -635,16 +635,16 @@ impl wrt_foundation::traits::Checksummable for DataSegmentType {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for DataSegmentType {
+impl kiln_foundation::traits::ToBytes for DataSegmentType {
     fn serialized_size(&self) -> usize {
         1
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let value = match self {
             DataSegmentType::Active => 0u8,
             DataSegmentType::Passive => 1u8,
@@ -654,11 +654,11 @@ impl wrt_foundation::traits::ToBytes for DataSegmentType {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for DataSegmentType {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for DataSegmentType {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut bytes = [0u8; 1];
         reader.read_exact(&mut bytes)?;
         match bytes[0] {
@@ -672,24 +672,24 @@ impl wrt_foundation::traits::FromBytes for DataSegmentType {
 }
 
 /// Add missing trait implementations for DataBytesReference
-impl wrt_foundation::traits::Checksummable for DataBytesReference {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for DataBytesReference {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.start_offset.to_le_bytes());
         checksum.update_slice(&self.length.to_le_bytes());
         checksum.update_slice(&[self.requires_copy as u8]);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for DataBytesReference {
+impl kiln_foundation::traits::ToBytes for DataBytesReference {
     fn serialized_size(&self) -> usize {
         17 // 8 + 8 + 1
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_all(&self.start_offset.to_le_bytes())?;
         writer.write_all(&self.length.to_le_bytes())?;
         writer.write_all(&[self.requires_copy as u8])?;
@@ -697,11 +697,11 @@ impl wrt_foundation::traits::ToBytes for DataBytesReference {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for DataBytesReference {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for DataBytesReference {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut offset_bytes = [0u8; 8];
         reader.read_exact(&mut offset_bytes)?;
         let start_offset = usize::from_le_bytes(offset_bytes);
@@ -723,8 +723,8 @@ impl wrt_foundation::traits::FromBytes for DataBytesReference {
 }
 
 /// Add missing trait implementations for DataInitializationHint
-impl wrt_foundation::traits::Checksummable for DataInitializationHint {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for DataInitializationHint {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.segment_type.update_checksum(checksum);
         if let Some(target) = self.memory_target {
             checksum.update_slice(&target.to_le_bytes());
@@ -734,16 +734,16 @@ impl wrt_foundation::traits::Checksummable for DataInitializationHint {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for DataInitializationHint {
+impl kiln_foundation::traits::ToBytes for DataInitializationHint {
     fn serialized_size(&self) -> usize {
         22 // Simplified size: 1 + 4 + 1 + 17 = 23, rounded down
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.segment_type.to_bytes_with_provider(writer, provider)?;
         writer.write_all(&self.memory_target.unwrap_or(0).to_le_bytes())?;
         writer.write_all(&[self.offset_evaluation_needed as u8])?;
@@ -752,11 +752,11 @@ impl wrt_foundation::traits::ToBytes for DataInitializationHint {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for DataInitializationHint {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for DataInitializationHint {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let segment_type = DataSegmentType::from_bytes_with_provider(reader, provider)?;
 
         let mut target_bytes = [0u8; 4];
@@ -780,8 +780,8 @@ impl wrt_foundation::traits::FromBytes for DataInitializationHint {
 }
 
 /// Add missing trait implementations for ElementInitType
-impl wrt_foundation::traits::Checksummable for ElementInitType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ElementInitType {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let value = match self {
             ElementInitType::FunctionIndices => 0u8,
             ElementInitType::ExpressionBytes => 1u8,
@@ -790,16 +790,16 @@ impl wrt_foundation::traits::Checksummable for ElementInitType {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ElementInitType {
+impl kiln_foundation::traits::ToBytes for ElementInitType {
     fn serialized_size(&self) -> usize {
         1
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let value = match self {
             ElementInitType::FunctionIndices => 0u8,
             ElementInitType::ExpressionBytes => 1u8,
@@ -809,11 +809,11 @@ impl wrt_foundation::traits::ToBytes for ElementInitType {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ElementInitType {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for ElementInitType {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut bytes = [0u8; 1];
         reader.read_exact(&mut bytes)?;
         match bytes[0] {
@@ -829,8 +829,8 @@ impl wrt_foundation::traits::FromBytes for ElementInitType {
 }
 
 /// Add minimal trait implementations for RuntimeDataExtraction
-impl wrt_foundation::traits::Checksummable for RuntimeDataExtraction {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for RuntimeDataExtraction {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&[self.is_active as u8]);
         if let Some(index) = self.memory_index {
             checksum.update_slice(&index.to_le_bytes());
@@ -840,16 +840,16 @@ impl wrt_foundation::traits::Checksummable for RuntimeDataExtraction {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for RuntimeDataExtraction {
+impl kiln_foundation::traits::ToBytes for RuntimeDataExtraction {
     fn serialized_size(&self) -> usize {
         16 // Simplified
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_all(&[self.is_active as u8])?;
         writer.write_all(&self.memory_index.unwrap_or(0).to_le_bytes())?;
         writer.write_all(&self.data_size.to_le_bytes())?;
@@ -858,11 +858,11 @@ impl wrt_foundation::traits::ToBytes for RuntimeDataExtraction {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for RuntimeDataExtraction {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for RuntimeDataExtraction {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut bool_bytes = [0u8; 1];
         reader.read_exact(&mut bool_bytes)?;
         let is_active = bool_bytes[0] != 0;
@@ -899,8 +899,8 @@ impl wrt_foundation::traits::FromBytes for RuntimeDataExtraction {
 }
 
 /// Add minimal trait implementations for RuntimeElementExtraction
-impl wrt_foundation::traits::Checksummable for RuntimeElementExtraction {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for RuntimeElementExtraction {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&[self.is_active as u8]);
         if let Some(index) = self.table_index {
             checksum.update_slice(&index.to_le_bytes());
@@ -910,16 +910,16 @@ impl wrt_foundation::traits::Checksummable for RuntimeElementExtraction {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for RuntimeElementExtraction {
+impl kiln_foundation::traits::ToBytes for RuntimeElementExtraction {
     fn serialized_size(&self) -> usize {
         16 // Simplified
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_all(&[self.is_active as u8])?;
         writer.write_all(&self.table_index.unwrap_or(0).to_le_bytes())?;
         self.init_data_type.to_bytes_with_provider(writer, provider)?;
@@ -928,11 +928,11 @@ impl wrt_foundation::traits::ToBytes for RuntimeElementExtraction {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for RuntimeElementExtraction {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for RuntimeElementExtraction {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut bool_bytes = [0u8; 1];
         reader.read_exact(&mut bool_bytes)?;
         let is_active = bool_bytes[0] != 0;

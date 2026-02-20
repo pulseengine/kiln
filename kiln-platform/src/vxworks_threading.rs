@@ -1,6 +1,6 @@
 use core::ffi::c_void;
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorKind,
 };

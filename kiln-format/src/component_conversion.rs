@@ -3,8 +3,8 @@
 // This module provides direct conversion between binary format types and
 // runtime types without requiring intermediate conversions.
 
-use wrt_error::Result;
-use wrt_foundation::ValueType;
+use kiln_error::Result;
+use kiln_foundation::ValueType;
 
 // Import the properly re-exported ValType
 use crate::component::FormatValType;
@@ -69,12 +69,12 @@ pub fn value_type_to_format_val_type(value_type: &ValueType) -> Result<FormatVal
         ValueType::I64 => Ok(FormatValType::S64),
         ValueType::F32 => Ok(FormatValType::F32),
         ValueType::F64 => Ok(FormatValType::F64),
-        ValueType::V128 => Err(wrt_error::Error::runtime_execution_error(
+        ValueType::V128 => Err(kiln_error::Error::runtime_execution_error(
             "V128 type not supported in component model",
         )),
-        ValueType::I16x8 => Err(wrt_error::Error::new(
-            wrt_error::ErrorCategory::Parse,
-            wrt_error::codes::UNIMPLEMENTED,
+        ValueType::I16x8 => Err(kiln_error::Error::new(
+            kiln_error::ErrorCategory::Parse,
+            kiln_error::codes::UNIMPLEMENTED,
             "I16x8 type not supported in component model",
         )),
         ValueType::FuncRef => Ok(FormatValType::Own(0)), // Map to handle
@@ -98,18 +98,18 @@ pub fn value_type_to_format_val_type(value_type: &ValueType) -> Result<ValueType
 
 // Map a core WebAssembly ValueType to a Component Model ValType
 #[cfg(any(feature = "std", feature = "alloc"))]
-pub fn map_wasm_type_to_component(ty: ValueType) -> wrt_error::Result<FormatValType> {
+pub fn map_wasm_type_to_component(ty: ValueType) -> kiln_error::Result<FormatValType> {
     match ty {
         ValueType::I32 => Ok(FormatValType::S32),
         ValueType::I64 => Ok(FormatValType::S64),
         ValueType::F32 => Ok(FormatValType::F32),
         ValueType::F64 => Ok(FormatValType::F64),
-        ValueType::V128 => Err(wrt_error::Error::runtime_execution_error(
+        ValueType::V128 => Err(kiln_error::Error::runtime_execution_error(
             "V128 type not supported in component model",
         )),
-        ValueType::I16x8 => Err(wrt_error::Error::new(
-            wrt_error::ErrorCategory::Parse,
-            wrt_error::codes::UNIMPLEMENTED,
+        ValueType::I16x8 => Err(kiln_error::Error::new(
+            kiln_error::ErrorCategory::Parse,
+            kiln_error::codes::UNIMPLEMENTED,
             "I16x8 type not supported in component model",
         )),
         ValueType::FuncRef => Ok(FormatValType::Own(0)), // Map to handle
@@ -127,21 +127,21 @@ pub fn map_wasm_type_to_component(ty: ValueType) -> wrt_error::Result<FormatValT
 
 #[cfg(not(any(feature = "std")))]
 pub fn map_wasm_type_to_component<
-    P: wrt_foundation::MemoryProvider + Default + Clone + PartialEq + Eq,
+    P: kiln_foundation::MemoryProvider + Default + Clone + PartialEq + Eq,
 >(
     ty: ValueType,
-) -> Result<FormatValType<P>, wrt_error::Error> {
+) -> Result<FormatValType<P>, kiln_error::Error> {
     match ty {
         ValueType::I32 => Ok(FormatValType::S32),
         ValueType::I64 => Ok(FormatValType::S64),
         ValueType::F32 => Ok(FormatValType::F32),
         ValueType::F64 => Ok(FormatValType::F64),
-        ValueType::V128 => Err(wrt_error::Error::runtime_execution_error(
+        ValueType::V128 => Err(kiln_error::Error::runtime_execution_error(
             "V128 type not supported in component model",
         )),
-        ValueType::I16x8 => Err(wrt_error::Error::new(
-            wrt_error::ErrorCategory::Parse,
-            wrt_error::codes::UNIMPLEMENTED,
+        ValueType::I16x8 => Err(kiln_error::Error::new(
+            kiln_error::ErrorCategory::Parse,
+            kiln_error::codes::UNIMPLEMENTED,
             "I16x8 type not supported in component model",
         )),
         ValueType::FuncRef => Ok(FormatValType::Own(0)), // Map to handle

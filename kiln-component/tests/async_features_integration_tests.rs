@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Integration tests for async Component Model features
 // SW-REQ-ID: REQ_ASYNC_INTEGRATION_TESTS_001
 //
@@ -18,8 +18,8 @@
 
 #![cfg(test)]
 
-use wrt_component::*;
-use wrt_foundation::{component_value::ComponentValue, types::ValueType};
+use kiln_component::*;
+use kiln_foundation::{component_value::ComponentValue, types::ValueType};
 
 #[cfg(feature = "std")]
 mod async_context_tests {
@@ -821,7 +821,7 @@ mod test_helpers {
         }
     }
 
-    pub fn create_test_error_context(message: &str) -> Result<ErrorContextId, wrt_error::Error> {
+    pub fn create_test_error_context(message: &str) -> Result<ErrorContextId, kiln_error::Error> {
         ErrorContextBuiltins::error_context_new(message.to_string(), ErrorSeverity::Error)
     }
 

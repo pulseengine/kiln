@@ -16,7 +16,7 @@ skinparam class {
 }
 
 package "Foundation Layer" <<Crate>> {
-    package "wrt-foundation" {
+    package "kiln-foundation" {
         class SafeMemory <<module>> {
             + MemoryProvider trait
             + MemoryValidator
@@ -45,9 +45,9 @@ package "Foundation Layer" <<Crate>> {
         }
     }
     
-    package "wrt-error" {
+    package "kiln-error" {
         class ErrorTypes <<module>> {
-            + WrtError enum
+            + KilnError enum
             + ErrorKind enum
             + ErrorContext
             --
@@ -56,7 +56,7 @@ package "Foundation Layer" <<Crate>> {
         }
     }
     
-    package "wrt-sync" {
+    package "kiln-sync" {
         class Synchronization <<module>> {
             + Mutex<T>
             + RwLock<T>
@@ -68,7 +68,7 @@ package "Foundation Layer" <<Crate>> {
 }
 
 package "Execution Layer" <<Crate>> {
-    package "wrt-runtime" {
+    package "kiln-runtime" {
         class ModuleInstance <<module>> {
             + memories: Vec<Memory>
             + tables: Vec<Table>
@@ -98,7 +98,7 @@ package "Execution Layer" <<Crate>> {
         }
     }
     
-    package "wrt-instructions" {
+    package "kiln-instructions" {
         class Instructions <<module>> {
             + Instruction enum
             + ExecutionContext
@@ -124,7 +124,7 @@ package "Execution Layer" <<Crate>> {
 }
 
 package "Component Model" <<Crate>> {
-    package "wrt-component" {
+    package "kiln-component" {
         class ComponentInstance <<module>> {
             + imports: ImportMap
             + exports: ExportMap
@@ -154,7 +154,7 @@ package "Component Model" <<Crate>> {
 }
 
 package "Platform Layer" <<Crate>> {
-    package "wrt-platform" {
+    package "kiln-platform" {
         interface PlatformMemory <<interface>> {
             + allocate()
             + deallocate()

@@ -11,7 +11,7 @@ use std::{boxed::Box, collections::BTreeMap, vec::Vec};
 #[cfg(feature = "std")]
 use std::{fmt, mem};
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId, collections::StaticVec as BoundedVec,
     component_value::ComponentValue, safe_managed_alloc, safe_memory::NoStdProvider,
 };
@@ -206,7 +206,7 @@ pub enum TaskResult {
 
 impl TaskManager {
     /// Create a new task manager
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             tasks: BTreeMap::new(),
@@ -214,7 +214,7 @@ impl TaskManager {
             tasks: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 BoundedVec::new()
-                    .map_err(|_| wrt_error::Error::runtime_execution_error("Error occurred"))?
+                    .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?
             },
             #[cfg(feature = "std")]
             ready_queue: Vec::new(),
@@ -222,7 +222,7 @@ impl TaskManager {
             ready_queue: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 BoundedVec::new()
-                    .map_err(|_| wrt_error::Error::runtime_execution_error("Error occurred"))?
+                    .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?
             },
             current_task: None,
             next_task_id: 0,
@@ -242,7 +242,7 @@ impl TaskManager {
         task_type: TaskType,
         component_instance: u32,
         function_index: Option<u32>,
-    ) -> wrt_error::Result<TaskId> {
+    ) -> kiln_error::Result<TaskId> {
         // Check task limit
         if self.tasks.len() >= self.max_concurrent_tasks {
             return Err(Error::runtime_execution_error("Error occurred"));
@@ -262,7 +262,7 @@ impl TaskManager {
             subtasks: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 BoundedVec::new()
-                    .map_err(|_| wrt_error::Error::runtime_execution_error("Error occurred"))?
+                    .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?
             },
             #[cfg(feature = "std")]
             borrowed_handles: Vec::new(),
@@ -270,7 +270,7 @@ impl TaskManager {
             borrowed_handles: {
                 let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                 BoundedVec::new()
-                    .map_err(|_| wrt_error::Error::runtime_execution_error("Error occurred"))?
+                    .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?
             },
             context: TaskContext {
                 component_instance,
@@ -281,7 +281,7 @@ impl TaskManager {
                 call_stack: {
                     let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                     BoundedVec::new()
-                        .map_err(|_| wrt_error::Error::runtime_execution_error("Error occurred"))?
+                        .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?
                 },
                 #[cfg(feature = "std")]
                 storage: BTreeMap::new(),
@@ -289,7 +289,7 @@ impl TaskManager {
                 storage: {
                     let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                     BoundedVec::new()
-                        .map_err(|_| wrt_error::Error::runtime_execution_error("Error occurred"))?
+                        .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?
                 },
                 created_at: self.get_current_time(),
                 deadline: None,
@@ -322,7 +322,7 @@ impl TaskManager {
         {
             self.tasks
                 .push((task_id, task))
-                .map_err(|_| wrt_error::Error::runtime_execution_error("Error occurred"))?
+                .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?
         }
 
         // Mark as ready
@@ -356,7 +356,7 @@ impl TaskManager {
     }
 
     /// Make a task ready to run
-    pub fn make_ready(&mut self, task_id: TaskId) -> wrt_error::Result<()> {
+    pub fn make_ready(&mut self, task_id: TaskId) -> kiln_error::Result<()> {
         if let Some(task) = self.get_task_mut(task_id) {
             if task.state == TaskState::Starting || task.state == TaskState::Waiting {
                 task.state = TaskState::Ready;
@@ -369,7 +369,7 @@ impl TaskManager {
                 {
                     self.ready_queue
                         .push(task_id)
-                        .map_err(|_| wrt_error::Error::runtime_execution_error("Error occurred"))?
+                        .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?
                 }
             }
         }
@@ -403,26 +403,26 @@ impl TaskManager {
     }
 
     /// Switch to a task (make it current)
-    pub fn switch_to_task(&mut self, task_id: TaskId) -> wrt_error::Result<()> {
+    pub fn switch_to_task(&mut self, task_id: TaskId) -> kiln_error::Result<()> {
         if let Some(task) = self.get_task_mut(task_id) {
             if task.state == TaskState::Ready {
                 task.state = TaskState::Running;
                 self.current_task = Some(task_id);
                 Ok(())
             } else {
-                Err(wrt_error::Error::runtime_execution_error("Error occurred"))
+                Err(kiln_error::Error::runtime_execution_error("Error occurred"))
             }
         } else {
-            Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Validation,
-                wrt_error::errors::codes::INVALID_INPUT,
+            Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Validation,
+                kiln_error::errors::codes::INVALID_INPUT,
                 "Error message needed",
             ))
         }
     }
 
     /// Complete current task with return values
-    pub fn task_return(&mut self, values: Vec<Value>) -> wrt_error::Result<()> {
+    pub fn task_return(&mut self, values: Vec<Value>) -> kiln_error::Result<()> {
         if let Some(task_id) = self.current_task {
             if let Some(task) = self.get_task_mut(task_id) {
                 task.state = TaskState::Completed;
@@ -434,10 +434,10 @@ impl TaskManager {
                 {
                     let provider = safe_managed_alloc!(65536, CrateId::Component)?;
                     let mut bounded_values = BoundedVec::new()
-                        .map_err(|_| wrt_error::Error::runtime_execution_error("Error occurred"))?;
+                        .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?;
                     for value in values {
                         bounded_values.push(value).map_err(|_| {
-                            wrt_error::Error::runtime_execution_error("Error occurred")
+                            kiln_error::Error::runtime_execution_error("Error occurred")
                         })?
                     }
                     task.return_values = Some(bounded_values);
@@ -449,19 +449,19 @@ impl TaskManager {
                 self.current_task = task.parent;
                 Ok(())
             } else {
-                Err(wrt_error::Error::new(
-                    wrt_error::ErrorCategory::Validation,
-                    wrt_error::errors::codes::INVALID_INPUT,
+                Err(kiln_error::Error::new(
+                    kiln_error::ErrorCategory::Validation,
+                    kiln_error::errors::codes::INVALID_INPUT,
                     "Error message needed",
                 ))
             }
         } else {
-            Err(wrt_error::Error::runtime_execution_error("Error occurred"))
+            Err(kiln_error::Error::runtime_execution_error("Error occurred"))
         }
     }
 
     /// Wait for waitables
-    pub fn task_wait(&mut self, waitables: WaitableSet) -> wrt_error::Result<u32> {
+    pub fn task_wait(&mut self, waitables: WaitableSet) -> kiln_error::Result<u32> {
         if let Some(task_id) = self.current_task {
             // Check if any waitables are immediately ready
             if let Some(ready_index) = waitables.first_ready() {
@@ -478,17 +478,17 @@ impl TaskManager {
                 Ok(u32::MAX) // Convention: MAX means "waiting"
             }
         } else {
-            Err(wrt_error::Error::runtime_execution_error("Error occurred"))
+            Err(kiln_error::Error::runtime_execution_error("Error occurred"))
         }
     }
 
     /// Poll waitables without blocking
-    pub fn task_poll(&self, waitables: &WaitableSet) -> wrt_error::Result<Option<u32>> {
+    pub fn task_poll(&self, waitables: &WaitableSet) -> kiln_error::Result<Option<u32>> {
         Ok(waitables.first_ready())
     }
 
     /// Yield current task voluntarily
-    pub fn task_yield(&mut self) -> wrt_error::Result<()> {
+    pub fn task_yield(&mut self) -> kiln_error::Result<()> {
         if let Some(task_id) = self.current_task {
             if let Some(task) = self.get_task_mut(task_id) {
                 task.state = TaskState::Ready;
@@ -506,19 +506,19 @@ impl TaskManager {
                 self.current_task = task.parent;
                 Ok(())
             } else {
-                Err(wrt_error::Error::runtime_execution_error("Error occurred"))
+                Err(kiln_error::Error::runtime_execution_error("Error occurred"))
             }
         } else {
-            Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Validation,
-                wrt_error::errors::codes::INVALID_INPUT,
+            Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Validation,
+                kiln_error::errors::codes::INVALID_INPUT,
                 "Error message needed",
             ))
         }
     }
 
     /// Cancel a task
-    pub fn task_cancel(&mut self, task_id: TaskId) -> wrt_error::Result<()> {
+    pub fn task_cancel(&mut self, task_id: TaskId) -> kiln_error::Result<()> {
         if let Some(task) = self.get_task_mut(task_id) {
             if task.state != TaskState::Completed && task.state != TaskState::Failed {
                 task.state = TaskState::Cancelled;
@@ -542,13 +542,13 @@ impl TaskManager {
     }
 
     /// Handle backpressure for a task
-    pub fn task_backpressure(&mut self) -> wrt_error::Result<()> {
+    pub fn task_backpressure(&mut self) -> kiln_error::Result<()> {
         // Simple backpressure: yield current task
         self.task_yield()
     }
 
     /// Update waitable states and wake waiting tasks
-    pub fn update_waitables(&mut self) -> wrt_error::Result<()> {
+    pub fn update_waitables(&mut self) -> kiln_error::Result<()> {
         let mut tasks_to_wake = Vec::new();
 
         // Check all waiting tasks
@@ -586,7 +586,7 @@ impl TaskManager {
     }
 
     /// Clean up resources owned by a task
-    fn cleanup_task_resources(&mut self, task_id: TaskId) -> wrt_error::Result<()> {
+    fn cleanup_task_resources(&mut self, task_id: TaskId) -> kiln_error::Result<()> {
         if let Some(task) = self.get_task(task_id) {
             // Drop borrowed resources
             for handle in &task.borrowed_handles {

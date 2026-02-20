@@ -5,7 +5,7 @@
 //!
 //! **REQUIRES**: Allocation support - async channels need heap allocation for Arc/Weak
 
-// In no_std mode, we rely on the alloc crate which is always available in wrt-component
+// In no_std mode, we rely on the alloc crate which is always available in kiln-component
 // The alloc crate provides Arc, Weak, Box, and other heap types
 extern crate alloc;
 
@@ -26,14 +26,14 @@ use core::{
     task::{Context, Poll, Waker},
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     Arc, CrateId, Mutex,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     component_value::ComponentValue,
     safe_managed_alloc,
     traits::{Checksummable, FromBytes, ToBytes},
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::TaskId;
@@ -84,26 +84,26 @@ pub struct OptimizedAsyncChannels {
 pub struct ChannelId(u64);
 
 impl Checksummable for ChannelId {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
 impl ToBytes for ChannelId {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
 impl FromBytes for ChannelId {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u64::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -164,7 +164,7 @@ impl Default for ChannelType {
 }
 
 impl Checksummable for ChannelType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             ChannelType::Unbounded => 0u8.update_checksum(checksum),
             ChannelType::Bounded(cap) => {
@@ -182,11 +182,11 @@ impl Checksummable for ChannelType {
 }
 
 impl ToBytes for ChannelType {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             ChannelType::Unbounded => 0u8.to_bytes_with_provider(writer, provider),
             ChannelType::Bounded(cap) => {
@@ -204,10 +204,10 @@ impl ToBytes for ChannelType {
 }
 
 impl FromBytes for ChannelType {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = u8::from_bytes_with_provider(reader, provider)?;
         match discriminant {
             0 => Ok(ChannelType::Unbounded),
@@ -221,7 +221,7 @@ impl FromBytes for ChannelType {
                 Ok(ChannelType::Broadcast(cap))
             },
             4 => Ok(ChannelType::Priority),
-            _ => Err(wrt_error::Error::runtime_error(
+            _ => Err(kiln_error::Error::runtime_error(
                 "Invalid ChannelType discriminant",
             )),
         }
@@ -274,7 +274,7 @@ impl PartialEq for ChannelMessage {
 impl Eq for ChannelMessage {}
 
 impl Checksummable for ChannelMessage {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.value.update_checksum(checksum);
         self.sender_id.update_checksum(checksum);
         self.sent_at.update_checksum(checksum);
@@ -283,11 +283,11 @@ impl Checksummable for ChannelMessage {
 }
 
 impl ToBytes for ChannelMessage {
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream,
+        writer: &mut kiln_foundation::traits::WriteStream,
         provider: &P,
-    ) -> core::result::Result<(), wrt_error::Error> {
+    ) -> core::result::Result<(), kiln_error::Error> {
         self.value.to_bytes_with_provider(writer, provider)?;
         self.sender_id.to_bytes_with_provider(writer, provider)?;
         self.sent_at.to_bytes_with_provider(writer, provider)?;
@@ -297,10 +297,10 @@ impl ToBytes for ChannelMessage {
 }
 
 impl FromBytes for ChannelMessage {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         provider: &P,
-    ) -> core::result::Result<Self, wrt_error::Error> {
+    ) -> core::result::Result<Self, kiln_error::Error> {
         let value = ComponentValue::from_bytes_with_provider(reader, provider)?;
         let sender_id = ComponentInstanceId::from_bytes_with_provider(reader, provider)?;
         let sent_at = u64::from_bytes_with_provider(reader, provider)?;
@@ -342,18 +342,18 @@ impl PartialEq for PriorityMessage {
 impl Eq for PriorityMessage {}
 
 impl Checksummable for PriorityMessage {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.message.update_checksum(checksum);
         self.priority.update_checksum(checksum);
     }
 }
 
 impl ToBytes for PriorityMessage {
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream,
+        writer: &mut kiln_foundation::traits::WriteStream,
         provider: &P,
-    ) -> core::result::Result<(), wrt_error::Error> {
+    ) -> core::result::Result<(), kiln_error::Error> {
         self.message.to_bytes_with_provider(writer, provider)?;
         self.priority.to_bytes_with_provider(writer, provider)?;
         Ok(())
@@ -361,10 +361,10 @@ impl ToBytes for PriorityMessage {
 }
 
 impl FromBytes for PriorityMessage {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         provider: &P,
-    ) -> core::result::Result<Self, wrt_error::Error> {
+    ) -> core::result::Result<Self, kiln_error::Error> {
         let message = ChannelMessage::from_bytes_with_provider(reader, provider)?;
         let priority = u8::from_bytes_with_provider(reader, provider)?;
         Ok(Self { message, priority })
@@ -915,7 +915,7 @@ impl Default for SendResult {
 }
 
 impl Checksummable for SendResult {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
             SendResult::Sent => 0u8,
             SendResult::WouldBlock => 1u8,
@@ -927,11 +927,11 @@ impl Checksummable for SendResult {
 }
 
 impl ToBytes for SendResult {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         let discriminant = match self {
             SendResult::Sent => 0u8,
             SendResult::WouldBlock => 1u8,
@@ -943,17 +943,17 @@ impl ToBytes for SendResult {
 }
 
 impl FromBytes for SendResult {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let discriminant = u8::from_bytes_with_provider(reader, provider)?;
         match discriminant {
             0 => Ok(SendResult::Sent),
             1 => Ok(SendResult::WouldBlock),
             2 => Ok(SendResult::Full),
             3 => Ok(SendResult::Closed),
-            _ => Err(wrt_error::Error::runtime_error(
+            _ => Err(kiln_error::Error::runtime_error(
                 "Invalid SendResult discriminant",
             )),
         }

@@ -1,8 +1,8 @@
-// WRT - wrt-platform
+// Kiln - kiln-platform
 // Module: Advanced Synchronization Primitives
 // SW-REQ-ID: REQ_PLATFORM_SYNC_ADV_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
@@ -49,7 +49,7 @@ use core::{
     },
 };
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 /// Priority levels for real-time scheduling
 pub type Priority = u8;
@@ -217,8 +217,8 @@ impl LockFreeAllocator {
         let total_blocks = pool_size / block_size;
         if total_blocks == 0 {
             return Err(Error::new(
-                wrt_error::ErrorCategory::Validation,
-                wrt_error::codes::VALIDATION_ERROR,
+                kiln_error::ErrorCategory::Validation,
+                kiln_error::codes::VALIDATION_ERROR,
                 "Pool size too small",
             ));
         }

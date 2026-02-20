@@ -1,12 +1,12 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-use wrt_error::Result;
+use kiln_error::Result;
 
 #[cfg(feature = "std")]
-use wrt_foundation::resource::ResourceOperation as FormatResourceOperation;
+use kiln_foundation::resource::ResourceOperation as FormatResourceOperation;
 
 #[cfg(feature = "std")]
 use super::Resource;

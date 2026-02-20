@@ -6,7 +6,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-use wrt_error::{Error, ErrorCategory};
+use kiln_error::{Error, ErrorCategory};
 
 use crate::prelude::*;
 

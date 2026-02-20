@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Module: Task Management Built-ins
 // SW-REQ-ID: REQ_TASK_BUILTINS_001
 //
@@ -22,12 +22,12 @@ use core::cell::RefCell as AtomicRefCell;
 #[cfg(feature = "std")]
 use std::{boxed::Box, collections::HashMap, vec::Vec};
 
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 #[cfg(feature = "std")]
-use wrt_foundation::component_value::ComponentValue;
-use wrt_foundation::{BoundedMap, types::ValueType};
+use kiln_foundation::component_value::ComponentValue;
+use kiln_foundation::{BoundedMap, types::ValueType};
 #[cfg(not(any(feature = "std",)))]
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedString, BoundedVec, budget_aware_provider::CrateId, safe_managed_alloc,
     safe_memory::NoStdProvider,
 };
@@ -231,7 +231,7 @@ impl Task {
         self.metadata.insert(bounded_key, value).map_err(|_| {
             Error::new(
                 ErrorCategory::Memory,
-                wrt_error::codes::MEMORY_ALLOCATION_FAILED,
+                kiln_error::codes::MEMORY_ALLOCATION_FAILED,
                 "Error message needed",
             )
         })?;
@@ -365,7 +365,7 @@ impl TaskBuiltins {
         let registry_ref = TASK_REGISTRY.try_borrow().map_err(|_| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::INVALID_STATE,
+                kiln_error::codes::INVALID_STATE,
                 "Error message needed",
             )
         })?;
@@ -383,7 +383,7 @@ impl TaskBuiltins {
         let mut registry_ref = TASK_REGISTRY.try_borrow_mut().map_err(|_| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::INVALID_STATE,
+                kiln_error::codes::INVALID_STATE,
                 "Error message needed",
             )
         })?;
@@ -417,7 +417,7 @@ impl TaskBuiltins {
             } else {
                 Err(Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::RESOURCE_INVALID_HANDLE,
+                    kiln_error::codes::RESOURCE_INVALID_HANDLE,
                     "Error message needed",
                 ))
             }

@@ -5,9 +5,9 @@
 // Import core traits
 use core::default::Default;
 
-// Re-export the main component types from wrt-format for convenience
+// Re-export the main component types from kiln-format for convenience
 #[cfg(feature = "std")]
-pub use wrt_format::component::{
+pub use kiln_format::component::{
     Component, ComponentType, CoreExternType, CoreInstance, CoreType, Export, ExternType, Import,
     Instance, Start, ValType,
 };
@@ -15,7 +15,7 @@ pub use wrt_format::component::{
 // No_std bounded alternatives following functional safety guidelines
 #[cfg(not(feature = "std"))]
 mod no_std_types {
-    use wrt_foundation::{
+    use kiln_foundation::{
         BoundedMap, BoundedString, BoundedVec, NoStdProvider, budget_aware_provider::CrateId,
         safe_managed_alloc,
     };
@@ -43,7 +43,7 @@ mod no_std_types {
     }
 
     impl Component {
-        pub fn new() -> wrt_error::Result<Self> {
+        pub fn new() -> kiln_error::Result<Self> {
             let exports_provider = safe_managed_alloc!(4096, CrateId::Decoder)?;
             let imports_provider = safe_managed_alloc!(4096, CrateId::Decoder)?;
             Ok(Self {
@@ -148,29 +148,29 @@ mod no_std_types {
     }
 
     // Implement required traits for Export
-    impl wrt_foundation::traits::ToBytes for Export {
+    impl kiln_foundation::traits::ToBytes for Export {
         fn serialized_size(&self) -> usize {
             // ComponentString size + enum + u32
-            wrt_foundation::traits::ToBytes::serialized_size(&self.name) + 1 + 4
+            kiln_foundation::traits::ToBytes::serialized_size(&self.name) + 1 + 4
         }
 
-        fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+        fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
             &self,
-            writer: &mut wrt_foundation::traits::WriteStream,
+            writer: &mut kiln_foundation::traits::WriteStream,
             provider: &PStream,
-        ) -> wrt_error::Result<()> {
-            wrt_foundation::traits::ToBytes::to_bytes_with_provider(&self.name, writer, provider)?;
+        ) -> kiln_error::Result<()> {
+            kiln_foundation::traits::ToBytes::to_bytes_with_provider(&self.name, writer, provider)?;
             writer.write_u8(self.kind as u8)?;
             writer.write_u32_le(self.index)?;
             Ok(())
         }
     }
 
-    impl wrt_foundation::traits::FromBytes for Export {
-        fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-            reader: &mut wrt_foundation::traits::ReadStream,
+    impl kiln_foundation::traits::FromBytes for Export {
+        fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+            reader: &mut kiln_foundation::traits::ReadStream,
             provider: &PStream,
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             let name = <crate::prelude::DecoderString as crate::prelude::DecoderStringExt>::from_bytes_with_provider(reader, provider)?;
             let kind_byte = reader.read_u8()?;
             let kind = match kind_byte {
@@ -187,44 +187,44 @@ mod no_std_types {
         }
     }
 
-    impl wrt_foundation::traits::Checksummable for Export {
-        fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-            wrt_foundation::traits::Checksummable::update_checksum(&self.name, checksum);
+    impl kiln_foundation::traits::Checksummable for Export {
+        fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+            kiln_foundation::traits::Checksummable::update_checksum(&self.name, checksum);
             checksum.update_slice(&[self.kind as u8]);
             checksum.update_slice(&self.index.to_le_bytes());
         }
     }
 
     // Implement required traits for Import
-    impl wrt_foundation::traits::ToBytes for Import {
+    impl kiln_foundation::traits::ToBytes for Import {
         fn serialized_size(&self) -> usize {
             // Two ComponentString sizes + enum
-            wrt_foundation::traits::ToBytes::serialized_size(&self.module)
-                + wrt_foundation::traits::ToBytes::serialized_size(&self.name)
+            kiln_foundation::traits::ToBytes::serialized_size(&self.module)
+                + kiln_foundation::traits::ToBytes::serialized_size(&self.name)
                 + 1
         }
 
-        fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+        fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
             &self,
-            writer: &mut wrt_foundation::traits::WriteStream,
+            writer: &mut kiln_foundation::traits::WriteStream,
             provider: &PStream,
-        ) -> wrt_error::Result<()> {
-            wrt_foundation::traits::ToBytes::to_bytes_with_provider(
+        ) -> kiln_error::Result<()> {
+            kiln_foundation::traits::ToBytes::to_bytes_with_provider(
                 &self.module,
                 writer,
                 provider,
             )?;
-            wrt_foundation::traits::ToBytes::to_bytes_with_provider(&self.name, writer, provider)?;
+            kiln_foundation::traits::ToBytes::to_bytes_with_provider(&self.name, writer, provider)?;
             writer.write_u8(self.kind as u8)?;
             Ok(())
         }
     }
 
-    impl wrt_foundation::traits::FromBytes for Import {
-        fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-            reader: &mut wrt_foundation::traits::ReadStream,
+    impl kiln_foundation::traits::FromBytes for Import {
+        fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+            reader: &mut kiln_foundation::traits::ReadStream,
             provider: &PStream,
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             let module = <crate::prelude::DecoderString as crate::prelude::DecoderStringExt>::from_bytes_with_provider(reader, provider)?;
             let name = <crate::prelude::DecoderString as crate::prelude::DecoderStringExt>::from_bytes_with_provider(reader, provider)?;
             let kind_byte = reader.read_u8()?;
@@ -241,11 +241,11 @@ mod no_std_types {
         }
     }
 
-    impl wrt_foundation::traits::Checksummable for Import {
-        fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
-            use wrt_foundation::traits::Checksummable;
-            wrt_foundation::traits::Checksummable::update_checksum(&self.module, checksum);
-            wrt_foundation::traits::Checksummable::update_checksum(&self.name, checksum);
+    impl kiln_foundation::traits::Checksummable for Import {
+        fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
+            use kiln_foundation::traits::Checksummable;
+            kiln_foundation::traits::Checksummable::update_checksum(&self.module, checksum);
+            kiln_foundation::traits::Checksummable::update_checksum(&self.name, checksum);
             checksum.update_slice(&[self.kind as u8]);
         }
     }
@@ -259,7 +259,7 @@ use crate::prelude::*;
 /// Trait for component analysis capabilities
 pub trait ComponentAnalyzer {
     /// Create a summary of a component's structure
-    fn analyze(&self) -> wrt_error::Result<crate::component::analysis::ComponentSummary>;
+    fn analyze(&self) -> kiln_error::Result<crate::component::analysis::ComponentSummary>;
 
     /// Get embedded modules from a component
     #[cfg(feature = "std")]
@@ -269,11 +269,11 @@ pub trait ComponentAnalyzer {
     #[cfg(not(feature = "std"))]
     fn get_embedded_modules(
         &self,
-    ) -> wrt_error::Result<
+    ) -> kiln_error::Result<
         BoundedVec<
-            BoundedVec<u8, 1024, wrt_foundation::safe_memory::NoStdProvider<65536>>,
+            BoundedVec<u8, 1024, kiln_foundation::safe_memory::NoStdProvider<65536>>,
             16,
-            wrt_foundation::safe_memory::NoStdProvider<8192>,
+            kiln_foundation::safe_memory::NoStdProvider<8192>,
         >,
     >;
 
@@ -288,8 +288,8 @@ pub trait ComponentAnalyzer {
     #[cfg(not(feature = "std"))]
     fn get_export_info(
         &self,
-    ) -> wrt_error::Result<
-        BoundedVec<ExportInfo, 64, wrt_foundation::safe_memory::NoStdProvider<8192>>,
+    ) -> kiln_error::Result<
+        BoundedVec<ExportInfo, 64, kiln_foundation::safe_memory::NoStdProvider<8192>>,
     >;
 
     /// Get information about imports
@@ -300,8 +300,8 @@ pub trait ComponentAnalyzer {
     #[cfg(not(feature = "std"))]
     fn get_import_info(
         &self,
-    ) -> wrt_error::Result<
-        BoundedVec<ImportInfo, 64, wrt_foundation::safe_memory::NoStdProvider<8192>>,
+    ) -> kiln_error::Result<
+        BoundedVec<ImportInfo, 64, kiln_foundation::safe_memory::NoStdProvider<8192>>,
     >;
 }
 
@@ -329,7 +329,7 @@ pub struct ExportInfo {
 
 impl ExportInfo {
     /// Create a new ExportInfo with managed memory allocation
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         #[cfg(feature = "std")]
         return Ok(Self {
             name: alloc::string::String::new(),
@@ -341,11 +341,11 @@ impl ExportInfo {
         {
             Ok(Self {
                 name: crate::prelude::DecoderString::try_from_str("")
-                    .map_err(|_| wrt_error::Error::parse_error("Failed to create string"))?,
+                    .map_err(|_| kiln_error::Error::parse_error("Failed to create string"))?,
                 kind: crate::prelude::DecoderString::try_from_str("")
-                    .map_err(|_| wrt_error::Error::parse_error("Failed to create string"))?,
+                    .map_err(|_| kiln_error::Error::parse_error("Failed to create string"))?,
                 type_info: crate::prelude::DecoderString::try_from_str("")
-                    .map_err(|_| wrt_error::Error::parse_error("Failed to create string"))?,
+                    .map_err(|_| kiln_error::Error::parse_error("Failed to create string"))?,
             })
         }
     }
@@ -381,7 +381,7 @@ pub struct ImportInfo {
 
 impl ImportInfo {
     /// Create a new ImportInfo with managed memory allocation
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         #[cfg(feature = "std")]
         return Ok(Self {
             module: alloc::string::String::new(),
@@ -394,13 +394,13 @@ impl ImportInfo {
         {
             Ok(Self {
                 module: crate::prelude::DecoderString::try_from_str("")
-                    .map_err(|_| wrt_error::Error::parse_error("Failed to create string"))?,
+                    .map_err(|_| kiln_error::Error::parse_error("Failed to create string"))?,
                 name: crate::prelude::DecoderString::try_from_str("")
-                    .map_err(|_| wrt_error::Error::parse_error("Failed to create string"))?,
+                    .map_err(|_| kiln_error::Error::parse_error("Failed to create string"))?,
                 kind: crate::prelude::DecoderString::try_from_str("")
-                    .map_err(|_| wrt_error::Error::parse_error("Failed to create string"))?,
+                    .map_err(|_| kiln_error::Error::parse_error("Failed to create string"))?,
                 type_info: crate::prelude::DecoderString::try_from_str("")
-                    .map_err(|_| wrt_error::Error::parse_error("Failed to create string"))?,
+                    .map_err(|_| kiln_error::Error::parse_error("Failed to create string"))?,
             })
         }
     }
@@ -448,7 +448,7 @@ pub struct ModuleInfo {
 /// Implementation of ComponentAnalyzer for Component
 #[cfg(feature = "std")]
 impl ComponentAnalyzer for Component {
-    fn analyze(&self) -> wrt_error::Result<crate::component::analysis::ComponentSummary> {
+    fn analyze(&self) -> kiln_error::Result<crate::component::analysis::ComponentSummary> {
         // Create a basic summary directly from the component
         Ok(crate::component::analysis::ComponentSummary {
             name: String::new(), /* Keep as std String for now as this is used
@@ -489,18 +489,18 @@ impl ComponentAnalyzer for Component {
 
 #[cfg(not(feature = "std"))]
 impl ComponentAnalyzer for Component {
-    fn analyze(&self) -> wrt_error::Result<crate::component::analysis::ComponentSummary> {
+    fn analyze(&self) -> kiln_error::Result<crate::component::analysis::ComponentSummary> {
         // Create a basic summary directly from the component (simplified for no_std)
         Ok(crate::component::analysis::ComponentSummary {
             name: "",
             core_modules_count: 0,   // No modules field in no_std Component
             core_instances_count: 0, // No core_instances field in no_std Component
-            imports_count: wrt_foundation::traits::BoundedCapacity::len(&self.imports) as u32,
-            exports_count: wrt_foundation::traits::BoundedCapacity::len(&self.exports) as u32,
+            imports_count: kiln_foundation::traits::BoundedCapacity::len(&self.imports) as u32,
+            exports_count: kiln_foundation::traits::BoundedCapacity::len(&self.exports) as u32,
             aliases_count: 0, // No aliases field in no_std Component
-            module_info: wrt_foundation::BoundedVec::new(wrt_foundation::safe_managed_alloc!(
+            module_info: kiln_foundation::BoundedVec::new(kiln_foundation::safe_managed_alloc!(
                 4096,
-                wrt_foundation::budget_aware_provider::CrateId::Decoder
+                kiln_foundation::budget_aware_provider::CrateId::Decoder
             )?)?,
             export_info: (),
             import_info: (),
@@ -510,21 +510,21 @@ impl ComponentAnalyzer for Component {
     #[cfg(not(feature = "std"))]
     fn get_embedded_modules(
         &self,
-    ) -> wrt_error::Result<
+    ) -> kiln_error::Result<
         BoundedVec<
-            BoundedVec<u8, 1024, wrt_foundation::safe_memory::NoStdProvider<65536>>,
+            BoundedVec<u8, 1024, kiln_foundation::safe_memory::NoStdProvider<65536>>,
             16,
-            wrt_foundation::safe_memory::NoStdProvider<8192>,
+            kiln_foundation::safe_memory::NoStdProvider<8192>,
         >,
     > {
         // This will be implemented in the analysis module
-        use wrt_foundation::safe_memory::NoStdProvider;
-        let provider = wrt_foundation::safe_managed_alloc!(
+        use kiln_foundation::safe_memory::NoStdProvider;
+        let provider = kiln_foundation::safe_managed_alloc!(
             8192,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
         BoundedVec::new(provider).map_err(|_| {
-            wrt_error::helpers::memory_allocation_failed_error(
+            kiln_error::helpers::memory_allocation_failed_error(
                 "Failed to create embedded modules vector",
             )
         })
@@ -538,17 +538,17 @@ impl ComponentAnalyzer for Component {
     #[cfg(not(feature = "std"))]
     fn get_export_info(
         &self,
-    ) -> wrt_error::Result<
-        BoundedVec<ExportInfo, 64, wrt_foundation::safe_memory::NoStdProvider<8192>>,
+    ) -> kiln_error::Result<
+        BoundedVec<ExportInfo, 64, kiln_foundation::safe_memory::NoStdProvider<8192>>,
     > {
         // This will be implemented in the analysis module
-        use wrt_foundation::safe_memory::NoStdProvider;
-        let provider = wrt_foundation::safe_managed_alloc!(
+        use kiln_foundation::safe_memory::NoStdProvider;
+        let provider = kiln_foundation::safe_managed_alloc!(
             8192,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
         BoundedVec::new(provider).map_err(|_| {
-            wrt_error::helpers::memory_allocation_failed_error(
+            kiln_error::helpers::memory_allocation_failed_error(
                 "Failed to create export info vector",
             )
         })
@@ -557,17 +557,17 @@ impl ComponentAnalyzer for Component {
     #[cfg(not(feature = "std"))]
     fn get_import_info(
         &self,
-    ) -> wrt_error::Result<
-        BoundedVec<ImportInfo, 64, wrt_foundation::safe_memory::NoStdProvider<8192>>,
+    ) -> kiln_error::Result<
+        BoundedVec<ImportInfo, 64, kiln_foundation::safe_memory::NoStdProvider<8192>>,
     > {
         // This will be implemented in the analysis module
-        use wrt_foundation::safe_memory::NoStdProvider;
-        let provider = wrt_foundation::safe_managed_alloc!(
+        use kiln_foundation::safe_memory::NoStdProvider;
+        let provider = kiln_foundation::safe_managed_alloc!(
             8192,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
         BoundedVec::new(provider).map_err(|_| {
-            wrt_error::helpers::memory_allocation_failed_error(
+            kiln_error::helpers::memory_allocation_failed_error(
                 "Failed to create import info vector",
             )
         })
@@ -575,16 +575,16 @@ impl ComponentAnalyzer for Component {
 }
 
 // Implement required traits for ExportInfo
-impl wrt_foundation::traits::ToBytes for ExportInfo {
+impl kiln_foundation::traits::ToBytes for ExportInfo {
     fn serialized_size(&self) -> usize {
         self.name.len() + self.kind.len() + self.type_info.len() + 3 // 3 separators
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream,
+        writer: &mut kiln_foundation::traits::WriteStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             writer.write_all(self.name.as_bytes())?;
@@ -611,11 +611,11 @@ impl wrt_foundation::traits::ToBytes for ExportInfo {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ExportInfo {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+impl kiln_foundation::traits::FromBytes for ExportInfo {
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         #[cfg(feature = "std")]
         {
             let mut bytes = Vec::new();
@@ -643,8 +643,8 @@ impl wrt_foundation::traits::FromBytes for ExportInfo {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for ExportInfo {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ExportInfo {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         #[cfg(feature = "std")]
         {
             checksum.update_slice(self.name.as_bytes());
@@ -667,17 +667,17 @@ impl wrt_foundation::traits::Checksummable for ExportInfo {
 }
 
 // Implement required traits for ImportInfo
-impl wrt_foundation::traits::ToBytes for ImportInfo {
+impl kiln_foundation::traits::ToBytes for ImportInfo {
     fn serialized_size(&self) -> usize {
         self.module.len() + self.name.len() + self.kind.len() + self.type_info.len() + 4
         // 4 separators
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream,
+        writer: &mut kiln_foundation::traits::WriteStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         writer.write_all(self.module.as_bytes())?;
         #[cfg(not(feature = "std"))]
@@ -713,11 +713,11 @@ impl wrt_foundation::traits::ToBytes for ImportInfo {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ImportInfo {
-    fn from_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream,
+impl kiln_foundation::traits::FromBytes for ImportInfo {
+    fn from_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         #[cfg(feature = "std")]
         {
             let mut bytes = Vec::new();
@@ -746,8 +746,8 @@ impl wrt_foundation::traits::FromBytes for ImportInfo {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for ImportInfo {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ImportInfo {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         #[cfg(feature = "std")]
         {
             checksum.update_slice(self.module.as_bytes());

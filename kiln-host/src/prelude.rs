@@ -2,11 +2,11 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Prelude module for wrt-host
+//! Prelude module for kiln-host
 //!
 //! This module provides a unified set of imports for both std and `no_std`
 //! environments. It re-exports commonly used types and traits to ensure
-//! consistency across all crates in the WRT project and simplify imports in
+//! consistency across all crates in the Kiln project and simplify imports in
 //! individual modules.
 
 // Binary std/no_std choice - conditional imports only
@@ -17,7 +17,7 @@
 pub use core::fmt::Write as FmtWrite;
 
 #[cfg(not(feature = "std"))]
-pub use wrt_foundation::{
+pub use kiln_foundation::{
     bounded::{
         BoundedString as String,
         BoundedVec as Vec,
@@ -147,8 +147,8 @@ pub use std::{
     },
 };
 
-// Re-export from wrt-error
-pub use wrt_error::{
+// Re-export from kiln-error
+pub use kiln_error::{
     codes,
     kinds,
     Error,
@@ -157,9 +157,9 @@ pub use wrt_error::{
 };
 // Binary std/no_std choice
 #[cfg(feature = "std")]
-pub use wrt_foundation::component_value::ComponentValue;
-// Re-export from wrt-foundation
-pub use wrt_foundation::{
+pub use kiln_foundation::component_value::ComponentValue;
+// Re-export from kiln-foundation
+pub use kiln_foundation::{
     // Builtin types
     builtin::BuiltinType,
     // Memory allocation
@@ -187,7 +187,7 @@ pub use wrt_foundation::{
 };
 // Binary std/no_std choice
 #[cfg(feature = "std")]
-pub use wrt_intercept::{
+pub use kiln_intercept::{
     BeforeBuiltinResult,
     BuiltinInterceptor,
     InterceptContext,
@@ -196,7 +196,7 @@ pub use wrt_intercept::{
 };
 // Import synchronization primitives for no_std
 #[cfg(not(feature = "std"))]
-pub use wrt_sync::{
+pub use kiln_sync::{
     Mutex,
     RwLock,
 };

@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -12,7 +12,7 @@
 
 // ToOwned is now imported from the prelude
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
@@ -1187,7 +1187,7 @@ where
                 offset += bytes_read;
             },
             Err(e) => {
-                // Convert SerializationError to wrt_error::Error
+                // Convert SerializationError to kiln_error::Error
                 return Err(Error::runtime_execution_error(
                     "Failed to deserialize component value",
                 ));

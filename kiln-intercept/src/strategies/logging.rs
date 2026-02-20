@@ -12,7 +12,7 @@ use std::{
     time::Instant,
 };
 
-use wrt_error::Result;
+use kiln_error::Result;
 
 // Import the prelude for unified access to standard types
 use crate::prelude::{

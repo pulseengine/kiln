@@ -12,12 +12,12 @@ use alloc::boxed::Box;
 #[cfg(feature = "std")]
 use alloc::boxed::Box;
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     component::{
         ComponentType,
         ExternType,
@@ -177,11 +177,11 @@ impl<Provider> Eq for UnifiedComponentInstance<Provider> where
 // because creating a default instance requires memory allocation which can fail.
 // Use UnifiedComponentInstance::new_default() which returns Result<Self> instead.
 
-impl<Provider> wrt_foundation::traits::Checksummable for UnifiedComponentInstance<Provider>
+impl<Provider> kiln_foundation::traits::Checksummable for UnifiedComponentInstance<Provider>
 where
     Provider: MemoryProvider + Default + Clone + PartialEq + Eq,
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.id.as_u32().to_le_bytes());
         self.component_type.update_checksum(checksum);
         self.exports.update_checksum(checksum);
@@ -189,7 +189,7 @@ where
     }
 }
 
-impl<Provider> wrt_foundation::traits::ToBytes for UnifiedComponentInstance<Provider>
+impl<Provider> kiln_foundation::traits::ToBytes for UnifiedComponentInstance<Provider>
 where
     Provider: MemoryProvider + Default + Clone + PartialEq + Eq,
 {
@@ -200,9 +200,9 @@ where
             + 8
     }
 
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
     ) -> Result<()> {
         writer.write_all(&self.id.as_u32().to_le_bytes())?;
@@ -213,12 +213,12 @@ where
     }
 }
 
-impl<Provider> wrt_foundation::traits::FromBytes for UnifiedComponentInstance<Provider>
+impl<Provider> kiln_foundation::traits::FromBytes for UnifiedComponentInstance<Provider>
 where
     Provider: MemoryProvider + Default + Clone + PartialEq + Eq,
 {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
     ) -> Result<Self> {
         let mut id_bytes = [0u8; 4];
@@ -363,7 +363,7 @@ where
 
     /// Platform-specific limits and configuration
     #[cfg(feature = "comprehensive-limits")]
-    platform_limits: wrt_platform::ComprehensivePlatformLimits,
+    platform_limits: kiln_platform::ComprehensivePlatformLimits,
 
     /// Memory budget for component operations
     memory_budget: ComponentMemoryBudget,
@@ -383,8 +383,8 @@ where
     /// Create a new unified component runtime
     #[cfg(feature = "comprehensive-limits")]
     pub fn new(
-        limits: wrt_platform::ComprehensivePlatformLimits,
-    ) -> core::result::Result<Self, wrt_error::Error> {
+        limits: kiln_platform::ComprehensivePlatformLimits,
+    ) -> core::result::Result<Self, kiln_error::Error> {
         let memory_budget = ComponentMemoryBudget::calculate_from_limits(&limits)?;
         let global_memory_adapter = PlatformMemoryAdapter::new(64 * 1024 * 1024)
             .map_err(|_| Error::memory_error("Failed to create memory adapter"))?;
@@ -402,7 +402,7 @@ where
 
     /// Create a new unified component runtime with default limits
     #[cfg(not(feature = "comprehensive-limits"))]
-    pub fn new_default() -> core::result::Result<Self, wrt_error::Error> {
+    pub fn new_default() -> core::result::Result<Self, kiln_error::Error> {
         let memory_budget = ComponentMemoryBudget::default();
         let global_memory_adapter = PlatformMemoryAdapter::new(64 * 1024 * 1024)
             .map_err(|_| Error::memory_error("Failed to create memory adapter"))?; // 64MB default
@@ -421,12 +421,12 @@ where
     pub fn instantiate_component(
         &mut self,
         component_bytes: &[u8],
-    ) -> core::result::Result<ComponentId, wrt_error::Error> {
+    ) -> core::result::Result<ComponentId, kiln_error::Error> {
         // Validate component against platform limits
         #[cfg(feature = "comprehensive-limits")]
         {
             let validator =
-                wrt_decoder::ComprehensiveWasmValidator::new(self.platform_limits.clone())?;
+                kiln_decoder::ComprehensiveWasmValidator::new(self.platform_limits.clone())?;
             let config =
                 validator.validate_comprehensive_single_pass(component_bytes, None, None)?;
 
@@ -539,8 +539,8 @@ impl ComponentMemoryBudget {
     /// Calculate memory budget from platform limits
     #[cfg(feature = "comprehensive-limits")]
     pub fn calculate_from_limits(
-        limits: &wrt_platform::ComprehensivePlatformLimits,
-    ) -> core::result::Result<Self, wrt_error::Error> {
+        limits: &kiln_platform::ComprehensivePlatformLimits,
+    ) -> core::result::Result<Self, kiln_error::Error> {
         let total_memory = limits.max_total_memory;
         let wasm_linear_memory = limits.max_wasm_linear_memory;
         let component_overhead = limits.estimated_component_overhead;

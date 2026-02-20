@@ -1,8 +1,8 @@
 #[cfg(test)]
 #[cfg(feature = "std")]
 mod tests {
-    use wrt_error::Result;
-    use wrt_foundation::{
+    use kiln_error::Result;
+    use kiln_foundation::{
         safe_memory::NoStdProvider,
         types::{FuncType as FoundationFuncType, ValueType},
         Value,
@@ -71,7 +71,7 @@ mod tests {
                 let a = match args[0] {
                     Value::I32(val) => val,
                     _ => {
-                        return Err(wrt_error::Error::runtime_execution_error(
+                        return Err(kiln_error::Error::runtime_execution_error(
                             "Runtime execution error",
                         ));
                     },
@@ -80,8 +80,8 @@ mod tests {
                 let b = match args[1] {
                     Value::I32(val) => val,
                     _ => {
-                        return Err(wrt_error::Error::new(
-                            wrt_error::ErrorCategory::Type,
+                        return Err(kiln_error::Error::new(
+                            kiln_error::ErrorCategory::Type,
                             0,
                             "Invalid argument type for add function",
                         ))

@@ -1,15 +1,15 @@
 // Copyright (c) 2025 R T
 // SPDX-License-Identifier: MIT
-// Project: WRT
-// Module: wrt-math::traits (SW-REQ-ID-TBD)
+// Project: Kiln
+// Module: kiln-math::traits (SW-REQ-ID-TBD)
 
-//! Common traits used within the wrt-math crate.
+//! Common traits used within the kiln-math crate.
 
-use crate::prelude::Result; // Specific import for WrtMathResult (aliased wrt_error::Result)
+use crate::prelude::Result; // Specific import for KilnMathResult (aliased kiln_error::Result)
 
 /// Trait for types that can be converted to/from little-endian byte
-/// representation. TODO: This trait is also defined in wrt-foundation.
-/// Consolidate to a common `wrt-traits` crate.
+/// representation. TODO: This trait is also defined in kiln-foundation.
+/// Consolidate to a common `kiln-traits` crate.
 pub trait LittleEndian: Sized {
     /// Creates an instance from little-endian bytes.
     /// Returns an error if the byte slice has incorrect length or content.

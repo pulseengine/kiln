@@ -1,4 +1,4 @@
-//! Test configuration file support for cargo-wrt
+//! Test configuration file support for cargo-kiln
 //!
 //! This module provides support for loading test configuration from TOML files,
 //! allowing users to customize test execution without command-line arguments.
@@ -7,11 +7,11 @@ use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use wrt_build_core::config::AsilLevel;
+use kiln_build_core::config::AsilLevel;
 
 /// Main test configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WrtTestConfig {
+pub struct KilnTestConfig {
     /// Default ASIL level for testing
     #[serde(default = "default_asil_level")]
     pub default_asil: AsilLevel,
@@ -117,7 +117,7 @@ impl Default for GlobalTestSettings {
     }
 }
 
-impl Default for WrtTestConfig {
+impl Default for KilnTestConfig {
     fn default() -> Self {
         Self {
             default_asil: default_asil_level(),
@@ -128,13 +128,13 @@ impl Default for WrtTestConfig {
     }
 }
 
-impl WrtTestConfig {
+impl KilnTestConfig {
     /// Load configuration from a TOML file
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content =
             fs::read_to_string(path.as_ref()).context("Failed to read test configuration file")?;
 
-        let config: WrtTestConfig =
+        let config: KilnTestConfig =
             toml::from_str(&content).context("Failed to parse test configuration TOML")?;
 
         config.validate().context("Test configuration validation failed")?;
@@ -194,11 +194,11 @@ impl WrtTestConfig {
                 },
                 AsilLevel::B => AsilTestConfig {
                     required_packages: vec![
-                        "wrt-error".to_string(),
-                        "wrt-foundation".to_string(),
-                        "wrt-platform".to_string(),
+                        "kiln-error".to_string(),
+                        "kiln-foundation".to_string(),
+                        "kiln-platform".to_string(),
                     ],
-                    optional_packages: vec!["wrt-runtime".to_string()],
+                    optional_packages: vec!["kiln-runtime".to_string()],
                     include_patterns: vec![],
                     exclude_patterns: vec!["*integration*".to_string()],
                     require_no_std: true,
@@ -206,10 +206,10 @@ impl WrtTestConfig {
                 },
                 AsilLevel::D => AsilTestConfig {
                     required_packages: vec![
-                        "wrt-error".to_string(),
-                        "wrt-foundation".to_string(),
-                        "wrt-platform".to_string(),
-                        "wrt-sync".to_string(),
+                        "kiln-error".to_string(),
+                        "kiln-foundation".to_string(),
+                        "kiln-platform".to_string(),
+                        "kiln-sync".to_string(),
                     ],
                     optional_packages: vec![],
                     include_patterns: vec!["*safety*".to_string(), "*verification*".to_string()],
@@ -218,7 +218,7 @@ impl WrtTestConfig {
                     min_coverage: Some(95.0),
                 },
                 _ => AsilTestConfig {
-                    required_packages: vec!["wrt-error".to_string(), "wrt-foundation".to_string()],
+                    required_packages: vec!["kiln-error".to_string(), "kiln-foundation".to_string()],
                     optional_packages: vec![],
                     include_patterns: vec![],
                     exclude_patterns: vec![],
@@ -234,12 +234,12 @@ impl WrtTestConfig {
         self.packages.get(package).cloned().unwrap_or_else(|| {
             // Provide sensible defaults based on package name
             PackageTestConfig {
-                supports_no_std: !package.contains("wrtd") && !package.contains("std"),
+                supports_no_std: !package.contains("kilnd") && !package.contains("std"),
                 asil_levels: match package {
-                    p if p.starts_with("wrt-error") || p.starts_with("wrt-foundation") => {
+                    p if p.starts_with("kiln-error") || p.starts_with("kiln-foundation") => {
                         vec![AsilLevel::QM, AsilLevel::B, AsilLevel::D]
                     },
-                    p if p.starts_with("wrt-platform") || p.starts_with("wrt-sync") => {
+                    p if p.starts_with("kiln-platform") || p.starts_with("kiln-sync") => {
                         vec![AsilLevel::B, AsilLevel::D]
                     },
                     _ => vec![AsilLevel::QM],
@@ -260,11 +260,11 @@ impl WrtTestConfig {
             AsilLevel::D,
             AsilTestConfig {
                 required_packages: vec![
-                    "wrt-error".to_string(),
-                    "wrt-foundation".to_string(),
-                    "wrt-platform".to_string(),
+                    "kiln-error".to_string(),
+                    "kiln-foundation".to_string(),
+                    "kiln-platform".to_string(),
                 ],
-                optional_packages: vec!["wrt-sync".to_string()],
+                optional_packages: vec!["kiln-sync".to_string()],
                 include_patterns: vec!["*safety*".to_string()],
                 exclude_patterns: vec!["*integration*".to_string()],
                 require_no_std: true,
@@ -274,7 +274,7 @@ impl WrtTestConfig {
 
         // Add example package configurations
         config.packages.insert(
-            "wrt-foundation".to_string(),
+            "kiln-foundation".to_string(),
             PackageTestConfig {
                 supports_no_std: true,
                 asil_levels: vec![AsilLevel::QM, AsilLevel::B, AsilLevel::D],
@@ -317,7 +317,7 @@ mod tests {
 
     #[test]
     fn test_default_config() {
-        let config = WrtTestConfig::default();
+        let config = KilnTestConfig::default();
         assert_eq!(config.default_asil, AsilLevel::QM);
         assert!(config.global.parallel);
         assert!(config.asil.is_empty());
@@ -325,11 +325,11 @@ mod tests {
 
     #[test]
     fn test_config_serialization() {
-        let config = WrtTestConfig::example_config();
+        let config = KilnTestConfig::example_config();
         let toml_str = toml::to_string_pretty(&config).unwrap();
 
         // Should be able to round-trip
-        let parsed: WrtTestConfig = toml::from_str(&toml_str).unwrap();
+        let parsed: KilnTestConfig = toml::from_str(&toml_str).unwrap();
         assert_eq!(parsed.default_asil, config.default_asil);
     }
 
@@ -338,16 +338,16 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("test-config.toml");
 
-        let config = WrtTestConfig::example_config();
+        let config = KilnTestConfig::example_config();
         config.save_to_file(&config_path).unwrap();
 
-        let loaded_config = WrtTestConfig::load_from_file(&config_path).unwrap();
+        let loaded_config = KilnTestConfig::load_from_file(&config_path).unwrap();
         assert_eq!(loaded_config.default_asil, config.default_asil);
     }
 
     #[test]
     fn test_asil_level_defaults() {
-        let config = WrtTestConfig::default();
+        let config = KilnTestConfig::default();
 
         let d_config = config.get_asil_config(AsilLevel::D);
         assert!(d_config.require_no_std);

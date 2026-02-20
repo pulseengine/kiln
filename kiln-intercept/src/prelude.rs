@@ -1,8 +1,8 @@
-//! Prelude module for wrt-intercept
+//! Prelude module for kiln-intercept
 //!
 //! This module provides a unified set of imports for both std and `no_std`
 //! environments. It re-exports commonly used types and traits to ensure
-//! consistency across all crates in the WRT project and simplify imports in
+//! consistency across all crates in the Kiln project and simplify imports in
 //! individual modules.
 
 // Binary std/no_std choice
@@ -54,8 +54,8 @@ pub use std::{
     vec::Vec,
 };
 
-// Re-export from wrt-error
-pub use wrt_error::{
+// Re-export from kiln-error
+pub use kiln_error::{
     codes,
     kinds,
     Error,
@@ -63,16 +63,16 @@ pub use wrt_error::{
     Result,
 };
 #[cfg(feature = "std")]
-pub use wrt_foundation::component_value::ComponentValue;
-// Re-export from wrt-foundation (for component model)
+pub use kiln_foundation::component_value::ComponentValue;
+// Re-export from kiln-foundation (for component model)
 #[cfg(feature = "std")]
-pub use wrt_foundation::component_value::ValType;
+pub use kiln_foundation::component_value::ValType;
 // Binary std/no_std choice
 // BoundedVec already imported above
 #[cfg(not(feature = "std"))]
-pub use wrt_foundation::BoundedMap as BoundedHashMap;
-// Re-export from wrt-foundation
-pub use wrt_foundation::{
+pub use kiln_foundation::BoundedMap as BoundedHashMap;
+// Re-export from kiln-foundation
+pub use kiln_foundation::{
     builtin::BuiltinType,
     resource::ResourceCanonicalOperation,
     // SafeMemory types
@@ -86,14 +86,14 @@ pub use wrt_foundation::{
 };
 // no_std alternatives using bounded collections
 #[cfg(not(feature = "std"))]
-pub use wrt_foundation::{
+pub use kiln_foundation::{
     BoundedCapacity,
     BoundedString,
     BoundedVec,
 };
 // Import synchronization primitives for no_std
 #[cfg(not(feature = "std"))]
-pub use wrt_sync::{
+pub use kiln_sync::{
     Mutex,
     RwLock,
 };

@@ -1,9 +1,9 @@
-// WRT - wrt-platform
+// Kiln - kiln-platform
 // Module: Hardware-Specific Optimizations
 // SW-REQ-ID: REQ_PLATFORM_HW_OPT_001
 // SW-REQ-ID: REQ_PERF_010
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
@@ -43,7 +43,7 @@
 
 use core::marker::PhantomData;
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 /// Hardware security capability levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

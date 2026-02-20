@@ -178,13 +178,13 @@ Rust Memory Management Evolution
 
 **Current Limitations**: Standard ``rustc`` compiler not qualified for safety standards, requiring specialized toolchains like Ferrocene.
 
-WRT Static Memory Architecture
+Kiln Static Memory Architecture
 ------------------------------
 
-WRT Implementation Approach
+Kiln Implementation Approach
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-WRT implements a **hybrid static allocation system** that combines compile-time verification with runtime safety guarantees:
+Kiln implements a **hybrid static allocation system** that combines compile-time verification with runtime safety guarantees:
 
 **Core Principles**:
 
@@ -272,7 +272,7 @@ Memory Provider Architecture
    impl CapabilityWrtFactory {
        pub fn create_provider<const SIZE: usize>(
            crate_id: CrateId
-       ) -> WrtResult<NoStdProvider<SIZE>> {
+       ) -> KilnResult<NoStdProvider<SIZE>> {
            // Validate against budget with capability verification
            let context = get_global_capability_context()?;
            context.verify_allocation(crate_id, SIZE)?;
@@ -310,7 +310,7 @@ Safety Guarantees Comparison
      - C++ PMR
      - Ada
      - Rust/Ferrocene
-     - WRT
+     - Kiln
    * - Compile-time bounds checking
      - Manual
      - Limited
@@ -360,7 +360,7 @@ Determinism Analysis
      - C++ PMR
      - Ada
      - Rust/Ferrocene
-     - WRT
+     - Kiln
    * - Allocation time complexity
      - O(1)
      - Configurable
@@ -398,7 +398,7 @@ Certification Readiness
      - C++ PMR
      - Ada
      - Rust/Ferrocene
-     - WRT
+     - Kiln
    * - Automotive (26262)
      - Established
      - Limited
@@ -424,10 +424,10 @@ Certification Readiness
      - **Qualified**
      - Ready
 
-WRT Advantages and Limitations
+Kiln Advantages and Limitations
 ------------------------------
 
-Strengths of WRT Approach
+Strengths of Kiln Approach
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 **Unique Advantages**:
@@ -516,7 +516,7 @@ Future Directions
 - Growing importance of formal verification in certification processes
 - Need for WebAssembly in automotive and embedded applications
 
-**WRT Evolution**:
+**Kiln Evolution**:
 - Enhanced platform-specific optimizations
 - Extended formal verification coverage
 - Integration with automotive-specific standards and tools
@@ -524,23 +524,23 @@ Future Directions
 Conclusion
 ----------
 
-WRT's memory safety approach represents a significant advancement in functional safety methodology by:
+Kiln's memory safety approach represents a significant advancement in functional safety methodology by:
 
 1. **Eliminating Runtime Memory Failures**: Through comprehensive compile-time verification
 2. **Providing Mathematical Guarantees**: Via formal verification integration
 3. **Maintaining Performance**: With zero-cost safety abstractions
 4. **Enabling Certification**: Through systematic safety evidence generation
 
-While other approaches have their merits in specific contexts, WRT's hybrid approach addresses many limitations of traditional methods while introducing novel safety guarantees suitable for the most demanding safety-critical applications.
+While other approaches have their merits in specific contexts, Kiln's hybrid approach addresses many limitations of traditional methods while introducing novel safety guarantees suitable for the most demanding safety-critical applications.
 
-The architectural decisions in WRT prioritize **provable safety over flexibility**, making it particularly suitable for applications where safety is paramount and resource constraints are well-defined at design time.
+The architectural decisions in Kiln prioritize **provable safety over flexibility**, making it particularly suitable for applications where safety is paramount and resource constraints are well-defined at design time.
 
-**Neutral Assessment**: Each approach has domain-specific advantages. WRT excels in scenarios requiring mathematical safety proofs and deterministic behavior, while traditional approaches may be more suitable for legacy integration or specific performance requirements.
+**Neutral Assessment**: Each approach has domain-specific advantages. Kiln excels in scenarios requiring mathematical safety proofs and deterministic behavior, while traditional approaches may be more suitable for legacy integration or specific performance requirements.
 
 See Also
 --------
 
-- :doc:`../memory_model` - Detailed WRT memory model documentation
+- :doc:`../memory_model` - Detailed Kiln memory model documentation
 - :doc:`../safety/formal_verification` - Mathematical verification details
 - :doc:`../safety/iso26262_compliance` - Automotive safety compliance
 - :doc:`../05_resource_management/memory_budgets` - Memory budget implementation

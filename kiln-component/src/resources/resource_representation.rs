@@ -11,7 +11,7 @@ use std::{fmt, mem, any::TypeId};
 #[cfg(feature = "std")]
 use std::{boxed::Box, vec::Vec, collections::HashMap};
 
-use wrt_foundation::{
+use kiln_foundation::{
     collections::StaticVec,
     bounded::BoundedString,
     prelude::*,
@@ -23,7 +23,7 @@ use crate::{
     types::{ValType, Value},
 };
 
-use wrt_error::{Error, ErrorCategory, Result};
+use kiln_error::{Error, ErrorCategory, Result};
 
 /// Maximum number of resource representations in no_std
 const MAX_RESOURCE_REPRESENTATIONS: usize = 256;
@@ -255,7 +255,7 @@ pub enum ConnectionState {
 
 impl ResourceRepresentationManager {
     /// Create new resource representation manager
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             representations: HashMap::new(),
@@ -273,7 +273,7 @@ impl ResourceRepresentationManager {
     }
     
     /// Create with common built-in representations
-    pub fn with_builtin_representations() -> wrt_error::Result<Self> {
+    pub fn with_builtin_representations() -> kiln_error::Result<Self> {
         let mut manager = Self::new()?;
         
         // Register built-in representations
@@ -368,7 +368,7 @@ impl ResourceRepresentationManager {
                 .ok_or_else(|| {
                     Error::new(
                         ErrorCategory::Runtime,
-                        wrt_error::codes::EXECUTION_ERROR,
+                        kiln_error::codes::EXECUTION_ERROR,
                         ")
                 })?;
             
@@ -437,7 +437,7 @@ impl ResourceRepresentationManager {
                 repr_entry.1.representation.handle_values.push((handle, value.clone())).map_err(|_| {
                     Error::new(
                         ErrorCategory::Resource,
-                        wrt_error::codes::RESOURCE_EXHAUSTED,
+                        kiln_error::codes::RESOURCE_EXHAUSTED,
                         ")
                 })?;
             }
@@ -586,7 +586,7 @@ impl ResourceRepresentationManager {
 
 impl FileHandleRepresentation {
     /// Create new file handle representation
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             file_descriptors: HashMap::new(),
@@ -630,7 +630,7 @@ impl ResourceRepresentation for FileHandleRepresentation {
             RepresentationValue::U32(fd) => fd as i32,
             _ => return Err(Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::EXECUTION_ERROR,
+                kiln_error::codes::EXECUTION_ERROR,
                 "Error message needed")),
         };
         
@@ -676,7 +676,7 @@ impl ResourceRepresentation for FileHandleRepresentation {
 
 impl MemoryBufferRepresentation {
     /// Create new memory buffer representation
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             buffers: HashMap::new(),
@@ -714,7 +714,7 @@ impl ResourceRepresentation for MemoryBufferRepresentation {
                 })?;
                 })?;
             
-            use wrt_foundation::budget_aware_provider::CrateId;
+            use kiln_foundation::budget_aware_provider::CrateId;
             use crate::bounded_component_infra::ComponentProvider;
             let mut fields = StaticVec::new();
             fields.push(("), RepresentationValue::U64(ptr as u64))).unwrap();
@@ -786,7 +786,7 @@ impl ResourceRepresentation for MemoryBufferRepresentation {
 
 impl NetworkConnectionRepresentation {
     /// Create new network connection representation
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             connections: HashMap::new(),
@@ -826,7 +826,7 @@ impl ResourceRepresentation for NetworkConnectionRepresentation {
                 })?;
                 })?;
             
-            use wrt_foundation::budget_aware_provider::CrateId;
+            use kiln_foundation::budget_aware_provider::CrateId;
             use crate::bounded_component_infra::ComponentProvider;
             let mut fields = StaticVec::new();
             fields.push(("), RepresentationValue::U32(conn.socket_fd as u32))).unwrap();

@@ -1,11 +1,11 @@
 [package]
-name = "wrt-logging"
+name = "kiln-logging"
 version.workspace = true
 edition.workspace = true
-description = "Logging infrastructure for the WebAssembly Runtime (WRT)"
+description = "Logging infrastructure for the WebAssembly Runtime (Kiln)"
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/wrt-logging"
+documentation = "https://docs.rs/kiln-logging"
 keywords = ["wasm", "webassembly", "runtime", "logging", "component-model"]
 categories = ["wasm", "no-std", "development-tools::debugging"]
 
@@ -13,9 +13,9 @@ categories = ["wasm", "no-std", "development-tools::debugging"]
 workspace = true
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false }
-wrt-host = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false }
+kiln-error = { workspace = true, default-features = false }
+kiln-host = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false }
 # No-std support (removed invalid alloc dependency)
 
 # Optional dependencies
@@ -24,21 +24,21 @@ log = { version = "0.4", optional = true }
 [features]
 default = []
 # Binary choice: std OR no_std (no alloc middle ground)
-std = ["wrt-host/std", "wrt-foundation/std", "log"]
+std = ["kiln-host/std", "kiln-foundation/std", "log"]
 # For compatibility with verification script
 # This is a no-op since the crate is no_std by default
 no_std = []
 
 # Allocation support for no_std environments
-alloc = ["wrt-foundation/alloc", "wrt-host/alloc"]
-kani = ["wrt-host/kani"]
+alloc = ["kiln-foundation/alloc", "kiln-host/alloc"]
+kani = ["kiln-host/kani"]
 
 # Safety level presets using capability-based features
-qm = ["wrt-foundation/dynamic-allocation"]
-asil-a = ["wrt-foundation/bounded-collections"]
-asil-b = ["wrt-foundation/bounded-collections"]
-asil-c = ["wrt-foundation/static-memory-safety"]
-asil-d = ["wrt-foundation/asil-d"]
+qm = ["kiln-foundation/dynamic-allocation"]
+asil-a = ["kiln-foundation/bounded-collections"]
+asil-b = ["kiln-foundation/bounded-collections"]
+asil-c = ["kiln-foundation/static-memory-safety"]
+asil-d = ["kiln-foundation/asil-d"]
 
 # Legacy compatibility features
 safe-memory = ["asil-b"]

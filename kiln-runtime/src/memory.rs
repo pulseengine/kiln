@@ -70,8 +70,8 @@
 //! # Usage
 //!
 //! ```no_run
-//! use wrt_foundation::types::Limits;
-//! use wrt_runtime::{
+//! use kiln_foundation::types::Limits;
+//! use kiln_runtime::{
 //!     Memory,
 //!     MemoryType,
 //! };
@@ -126,25 +126,25 @@ use core::borrow::BorrowMut;
 use alloc::vec;
 
 // External crates
-use wrt_foundation::safe_memory::{
+use kiln_foundation::safe_memory::{
     MemoryProvider,
     SafeMemoryHandler,
     SafeSlice,
     SliceMut as SafeSliceMut,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     types::MemoryType,
     MemoryStats,
 };
 #[cfg(feature = "std")]
-use wrt_foundation::MemoryAccessor;
+use kiln_foundation::MemoryAccessor;
 // Import atomic operations trait
-use wrt_instructions::atomic_ops::AtomicOperations;
-// Import the MemoryOperations trait from wrt-instructions
-use wrt_instructions::memory_ops::MemoryOperations;
+use kiln_instructions::atomic_ops::AtomicOperations;
+// Import the MemoryOperations trait from kiln-instructions
+use kiln_instructions::memory_ops::MemoryOperations;
 #[cfg(not(feature = "std"))]
-use wrt_sync::WrtRwLock as RwLock;
+use kiln_sync::KilnRwLock as RwLock;
 
 #[cfg(not(feature = "std"))]
 use crate::prelude::vec_with_capacity;
@@ -171,12 +171,12 @@ use crate::prelude::{
 // For std mode: Use StdProvider which uses Vec<u8> for dynamically-sized memory
 // For no_std mode: Use NoStdProvider with fixed size (limited to compile-time constant)
 #[cfg(feature = "std")]
-type LargeMemoryProvider = wrt_foundation::safe_memory::StdProvider;
+type LargeMemoryProvider = kiln_foundation::safe_memory::StdProvider;
 #[cfg(not(feature = "std"))]
-type LargeMemoryProvider = wrt_foundation::safe_memory::NoStdProvider<524288>; // 512KB (8 pages) for no_std
+type LargeMemoryProvider = kiln_foundation::safe_memory::NoStdProvider<524288>; // 512KB (8 pages) for no_std
 
-type SmallMemoryProvider = wrt_foundation::safe_memory::NoStdProvider<4096>; // 4KB for small objects
-type MediumMemoryProvider = wrt_foundation::safe_memory::NoStdProvider<65536>; // 64KB for medium objects
+type SmallMemoryProvider = kiln_foundation::safe_memory::NoStdProvider<4096>; // 4KB for small objects
+type MediumMemoryProvider = kiln_foundation::safe_memory::NoStdProvider<65536>; // 64KB for medium objects
 
 /// WebAssembly page size (64KB)
 pub const PAGE_SIZE: usize = 65536;
@@ -347,7 +347,7 @@ pub struct Memory {
     /// Current number of pages
     pub current_pages:      core::sync::atomic::AtomicU32,
     /// Optional name for debugging
-    pub debug_name: Option<wrt_foundation::bounded::BoundedString<128>>,
+    pub debug_name: Option<kiln_foundation::bounded::BoundedString<128>>,
     /// Memory metrics for tracking access
     #[cfg(feature = "std")]
     pub metrics:            MemoryMetrics,
@@ -370,7 +370,7 @@ impl Clone for Memory {
         // In std mode, use StdProvider with proper size allocation
         #[cfg(feature = "std")]
         let new_data = {
-            use wrt_foundation::safe_memory::StdProvider;
+            use kiln_foundation::safe_memory::StdProvider;
             // Create provider with data directly (StdProvider::new takes Vec<u8>)
             let new_provider = StdProvider::new(current_bytes.clone());
             let new_handler = SafeMemoryHandler::new(new_provider);
@@ -469,8 +469,8 @@ impl Eq for Memory {}
 // Additionally, the fallback logic that created "minimal" memory with 0 pages
 // was even worse - it would hide critical memory configuration errors.
 
-impl wrt_foundation::traits::Checksummable for Memory {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for Memory {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.ty.limits.min.to_le_bytes());
         if let Some(max) = self.ty.limits.max {
             checksum.update_slice(&max.to_le_bytes());
@@ -478,14 +478,14 @@ impl wrt_foundation::traits::Checksummable for Memory {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for Memory {
+impl kiln_foundation::traits::ToBytes for Memory {
     fn serialized_size(&self) -> usize {
         16 // simplified
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         writer.write_all(&self.ty.limits.min.to_le_bytes())?;
@@ -494,9 +494,9 @@ impl wrt_foundation::traits::ToBytes for Memory {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for Memory {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for Memory {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         let mut min_bytes = [0u8; 4];
@@ -507,7 +507,7 @@ impl wrt_foundation::traits::FromBytes for Memory {
         reader.read_exact(&mut max_bytes)?;
         let max = u32::from_le_bytes(max_bytes);
 
-        use wrt_foundation::types::{
+        use kiln_foundation::types::{
             Limits,
             MemoryType,
         };
@@ -544,7 +544,7 @@ impl Memory {
         // DEBUG: Log the memory type being used
         #[cfg(feature = "tracing")]
         {
-            use wrt_foundation::tracing::info;
+            use kiln_foundation::tracing::info;
             info!("Creating memory with initial_pages={}, max_pages={:?} from CoreMemoryType",
                   initial_pages, maximum_pages_opt);
         }
@@ -556,9 +556,9 @@ impl Memory {
         let verification_level = VerificationLevel::Standard; // Or from config
 
         // Choose and instantiate the PageAllocator
-        // The cfg attributes here depend on features enabled for the wrt-platform
+        // The cfg attributes here depend on features enabled for the kiln-platform
         // crate. It's assumed the build system/top-level crate configures these
-        // features for wrt-platform.
+        // features for kiln-platform.
 
         // It's better to create a Box<dyn PageAllocator> or use an enum
         // Binary std/no_std choice
@@ -575,7 +575,7 @@ impl Memory {
         // In no_std mode, use NoStdProvider with fixed compile-time size
         #[cfg(feature = "std")]
         let provider = {
-            use wrt_foundation::safe_memory::StdProvider;
+            use kiln_foundation::safe_memory::StdProvider;
             // Create a StdProvider with Vec pre-allocated and pre-filled to the required size
             // This ensures memory is available immediately for WebAssembly to use
             let mut provider = StdProvider::with_capacity(current_size_bytes);
@@ -621,7 +621,7 @@ impl Memory {
     pub fn new_with_name(ty: CoreMemoryType, name: &str) -> Result<Self> {
         let mut memory = *Self::new(ty)?;  // Dereference Box<Memory>
         memory.debug_name = Some(
-            wrt_foundation::bounded::BoundedString::try_from_str(name)
+            kiln_foundation::bounded::BoundedString::try_from_str(name)
                 .map_err(|_| Error::memory_error("Debug name too long"))?,
         );
         Ok(memory)
@@ -630,10 +630,10 @@ impl Memory {
     /// Sets a debug name for this memory instance
     pub fn set_debug_name(&mut self, name: &str) {
         self.debug_name = Some(
-            wrt_foundation::bounded::BoundedString::try_from_str(name)
+            kiln_foundation::bounded::BoundedString::try_from_str(name)
                 .unwrap_or_else(|_| {
                     // If name is too long, truncate it
-                    wrt_foundation::bounded::BoundedString::from_str_truncate(name)
+                    kiln_foundation::bounded::BoundedString::from_str_truncate(name)
                     .unwrap()
                 }),
         );
@@ -710,7 +710,7 @@ impl Memory {
 
         #[cfg(not(feature = "std"))]
         {
-            // Use read() method with WrtRwLock
+            // Use read() method with KilnRwLock
             let metrics = self.metrics.read();
             metrics.peak_usage
         }
@@ -725,7 +725,7 @@ impl Memory {
 
         #[cfg(not(feature = "std"))]
         {
-            // Use read() method with WrtRwLock
+            // Use read() method with KilnRwLock
             let metrics = self.metrics.read();
             metrics.access_count
         }
@@ -743,7 +743,7 @@ impl Memory {
 
         #[cfg(not(feature = "std"))]
         {
-            // Use write() method with WrtRwLock
+            // Use write() method with KilnRwLock
             let mut metrics = self.metrics.write();
             metrics.access_count += 1;
             metrics.max_access_size = metrics.max_access_size.max(len);
@@ -774,7 +774,7 @@ impl Memory {
 
         #[cfg(not(feature = "std"))]
         {
-            // Use write() method with WrtRwLock
+            // Use write() method with KilnRwLock
             let mut metrics = self.metrics.write();
             metrics.peak_usage = metrics.peak_usage.max(current_size);
         }
@@ -789,7 +789,7 @@ impl Memory {
 
         #[cfg(not(feature = "std"))]
         {
-            // Use read() method with WrtRwLock
+            // Use read() method with KilnRwLock
             let metrics = self.metrics.read();
             metrics.max_access_size
         }
@@ -804,7 +804,7 @@ impl Memory {
 
         #[cfg(not(feature = "std"))]
         {
-            // Use read() method with WrtRwLock
+            // Use read() method with KilnRwLock
             let metrics = self.metrics.read();
             metrics.unique_regions
         }
@@ -819,7 +819,7 @@ impl Memory {
 
         #[cfg(not(feature = "std"))]
         {
-            // Use read() method with WrtRwLock
+            // Use read() method with KilnRwLock
             let metrics = self.metrics.read();
             metrics.last_access_offset
         }
@@ -834,7 +834,7 @@ impl Memory {
 
         #[cfg(not(feature = "std"))]
         {
-            // Use read() method with WrtRwLock
+            // Use read() method with KilnRwLock
             let metrics = self.metrics.read();
             metrics.last_access_length
         }
@@ -992,7 +992,7 @@ impl Memory {
             if offset_usize >= 0x1074a0 && offset_usize <= 0x1074b0 && size >= 4 {
                 let val = u32::from_le_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
                 let mutex_ptr = &*self.data as *const _;
-                wrt_foundation::tracing::trace!(
+                kiln_foundation::tracing::trace!(
                     offset = format!("{:#x}", offset_usize),
                     value = format!("{:#x}", val),
                     mutex = format!("{:p}", mutex_ptr),
@@ -1093,7 +1093,7 @@ impl Memory {
         let mem_size = self.size_in_bytes();
         #[cfg(feature = "tracing")]
         {
-            use wrt_foundation::tracing::debug;
+            use kiln_foundation::tracing::debug;
             debug!("write_shared: offset={}, size={}, end={}, mem_size={}, pages={}",
                    offset_usize, size, end, mem_size, self.current_pages.load(Ordering::Relaxed));
         }
@@ -1101,7 +1101,7 @@ impl Memory {
         if end > mem_size {
             #[cfg(feature = "tracing")]
             {
-                use wrt_foundation::tracing::error;
+                use kiln_foundation::tracing::error;
                 error!("write_shared bounds check FAILED: end {} > mem_size {}", end, mem_size);
             }
             return Err(Error::memory_out_of_bounds("Memory write out of bounds"));
@@ -1259,8 +1259,8 @@ impl Memory {
     /// # Example
     ///
     /// ```no_run
-    /// # use wrt_runtime::Memory;
-    /// # use wrt_error::Result;
+    /// # use kiln_runtime::Memory;
+    /// # use kiln_error::Result;
     /// # fn example(memory: &Memory) -> Result<()> {
     /// // Get a safe slice from memory
     /// let slice = memory.get_safe_slice(0, 10)?;
@@ -1282,7 +1282,7 @@ impl Memory {
         &'a self,
         addr: u32,
         len: usize,
-    ) -> Result<wrt_foundation::safe_memory::SafeSlice<'a>> {
+    ) -> Result<kiln_foundation::safe_memory::SafeSlice<'a>> {
         Err(Error::runtime_execution_error("get_safe_slice disabled for ASIL-B compliance - use read() instead"))
     }
 
@@ -1510,8 +1510,8 @@ impl Memory {
             let fill_buffer = vec![val; chunk_size];
             #[cfg(all(not(feature = "std"), not(feature = "std")))]
             let fill_buffer = {
-                let mut buffer: wrt_foundation::bounded::BoundedVec<u8, 4096, SmallMemoryProvider> =
-                    wrt_foundation::bounded::BoundedVec::new(SmallMemoryProvider::default())
+                let mut buffer: kiln_foundation::bounded::BoundedVec<u8, 4096, SmallMemoryProvider> =
+                    kiln_foundation::bounded::BoundedVec::new(SmallMemoryProvider::default())
                         .unwrap();
                 for _ in 0..chunk_size {
                     buffer.push(val).unwrap();
@@ -2120,7 +2120,7 @@ impl Memory {
 
         #[cfg(not(feature = "std"))]
         {
-            // Use write() method with WrtRwLock
+            // Use write() method with KilnRwLock
             let mut metrics = self.metrics.write();
             metrics.max_access_size = metrics.max_access_size.max(len);
             metrics.last_access_offset = offset;
@@ -2151,9 +2151,9 @@ impl Memory {
     #[cfg(not(feature = "std"))]
     pub fn safety_stats(&self) -> Result<crate::prelude::RuntimeString> {
         use crate::prelude::RuntimeString;
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Runtime
+            kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
         Ok(RuntimeString::from_str_truncate("Memory Safety Stats: [Runtime memory]")
             .unwrap_or_else(|_| RuntimeString::from_str_truncate("").unwrap()))
@@ -2175,7 +2175,7 @@ impl Memory {
     /// # ASIL-B Note
     /// This method has been disabled for ASIL-B compliance due to complex lifetime
     /// interactions with Mutex. Use read() method instead for thread-safe access.
-    pub fn as_safe_slice<'a>(&'a self) -> Result<wrt_foundation::safe_memory::SafeSlice<'a>> {
+    pub fn as_safe_slice<'a>(&'a self) -> Result<kiln_foundation::safe_memory::SafeSlice<'a>> {
         Err(Error::runtime_execution_error("as_safe_slice disabled for ASIL-B compliance - use read() instead"))
     }
 
@@ -2200,7 +2200,7 @@ impl Memory {
         if new_size_pages > MAX_PAGES {
             return Err(Error::new(
                 ErrorCategory::Memory,
-                wrt_error::codes::MEMORY_GROW_ERROR,
+                kiln_error::codes::MEMORY_GROW_ERROR,
                 "Memory grow exceeds maximum pages",
             ));
         }
@@ -2256,7 +2256,7 @@ impl MemoryAccessor for Memory {
 // }
 
 // MemorySafety trait implementation removed as it doesn't exist in
-// wrt-foundation
+// kiln-foundation
 
 /// Helper to convert u64 offset to usize, checking for overflow on 32-bit platforms
 #[inline]
@@ -2290,7 +2290,7 @@ impl MemoryOperations for Memory {
         let mut buffer = vec![0u8; len_usize];
         #[cfg(all(not(feature = "std"), not(feature = "std")))]
         let mut buffer = {
-            let mut buf = wrt_foundation::bounded::BoundedVec::new();
+            let mut buf = kiln_foundation::bounded::BoundedVec::new();
             for _ in 0..len_usize {
                 buf.push(0u8).unwrap();
             }
@@ -2308,11 +2308,11 @@ impl MemoryOperations for Memory {
         &self,
         offset: u64,
         len: u64,
-    ) -> Result<wrt_foundation::BoundedVec<u8, 65536, MediumMemoryProvider>> {
+    ) -> Result<kiln_foundation::BoundedVec<u8, 65536, MediumMemoryProvider>> {
         // Handle zero-length reads
         if len == 0 {
             let provider = MediumMemoryProvider::default();
-            return wrt_foundation::BoundedVec::new(provider);
+            return kiln_foundation::BoundedVec::new(provider);
         }
 
         // Convert to usize and check for overflow
@@ -2329,7 +2329,7 @@ impl MemoryOperations for Memory {
         }
 
         // Create a bounded vector and fill it
-        let mut result = wrt_foundation::BoundedVec::<u8, 65536, MediumMemoryProvider>::new(
+        let mut result = kiln_foundation::BoundedVec::<u8, 65536, MediumMemoryProvider>::new(
             MediumMemoryProvider::default(),
         )?;
 
@@ -2461,10 +2461,10 @@ impl AtomicOperations for Memory {
         // - It always times out even if notified early
         //
         // Per CLAUDE.md: Return an error rather than masking with broken fallback.
-        // To use atomic.wait, integrate with wrt-platform's futex infrastructure.
+        // To use atomic.wait, integrate with kiln-platform's futex infrastructure.
         let _ = timeout_ns; // Acknowledge parameter to avoid warning
         Err(Error::runtime_unsupported_operation(
-            "atomic.wait32 requires platform futex support - integrate wrt-platform crate"
+            "atomic.wait32 requires platform futex support - integrate kiln-platform crate"
         ))
     }
 
@@ -2482,7 +2482,7 @@ impl AtomicOperations for Memory {
         // See atomic_wait32 for detailed explanation.
         let _ = timeout_ns; // Acknowledge parameter to avoid warning
         Err(Error::runtime_unsupported_operation(
-            "atomic.wait64 requires platform futex support - integrate wrt-platform crate"
+            "atomic.wait64 requires platform futex support - integrate kiln-platform crate"
         ))
     }
 
@@ -2499,7 +2499,7 @@ impl AtomicOperations for Memory {
         // no threads are actually blocked via atomic.wait (which now returns error),
         // but we should be explicit about the limitation.
         //
-        // When atomic.wait is properly implemented via wrt-platform futex,
+        // When atomic.wait is properly implemented via kiln-platform futex,
         // this function should also use the same futex infrastructure to wake waiters.
         let _ = count; // Acknowledge parameter
         Ok(0) // Correct: no waiters since atomic.wait returns error

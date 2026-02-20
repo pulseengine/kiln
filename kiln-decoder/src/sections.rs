@@ -6,26 +6,26 @@
 //!
 //! This module contains parsers for various sections in WebAssembly modules.
 
-use wrt_error::{Error, ErrorCategory, ErrorSource, Result, codes};
-use wrt_format::{
+use kiln_error::{Error, ErrorCategory, ErrorSource, Result, codes};
+use kiln_format::{
     binary::{self},
     types::ValueType as FormatValueType,
 };
-// Note: These functions should be available if they're exported by wrt_format
+// Note: These functions should be available if they're exported by kiln_format
 // If not, we'll need to implement alternatives or define them locally
-use wrt_foundation::NoStdProvider;
-use wrt_foundation::types::{
-    FuncType, GlobalType as WrtGlobalType, Import as WrtImport, MemoryType as WrtMemoryType,
-    TableType as WrtTableType,
+use kiln_foundation::NoStdProvider;
+use kiln_foundation::types::{
+    FuncType, GlobalType as KilnGlobalType, Import as KilnImport, MemoryType as KilnMemoryType,
+    TableType as KilnTableType,
 };
 
 // Type aliases with result types for error propagation
-type WrtFuncType = FuncType;
-type WrtFoundationImport = WrtImport<wrt_foundation::NoStdProvider<65536>>;
+type KilnFuncType = FuncType;
+type KilnFoundationImport = KilnImport<kiln_foundation::NoStdProvider<65536>>;
 
-// Import segment types from wrt-format
-use wrt_format::{
-    DataSegment as WrtDataSegment, ElementSegment as WrtElementSegment, module::Export as WrtExport,
+// Import segment types from kiln-format
+use kiln_format::{
+    DataSegment as KilnDataSegment, ElementSegment as KilnElementSegment, module::Export as KilnExport,
 };
 
 use crate::{
@@ -36,42 +36,42 @@ use crate::{
 #[cfg(feature = "std")]
 type SectionVec<T> = alloc::vec::Vec<T>;
 #[cfg(not(feature = "std"))]
-type SectionVec<T> = wrt_foundation::BoundedVec<T, 256, wrt_foundation::NoStdProvider<4096>>;
+type SectionVec<T> = kiln_foundation::BoundedVec<T, 256, kiln_foundation::NoStdProvider<4096>>;
 
 #[cfg(feature = "std")]
 type SectionString = alloc::string::String;
 #[cfg(not(feature = "std"))]
-type SectionString = wrt_foundation::BoundedString<256>;
+type SectionString = kiln_foundation::BoundedString<256>;
 
 /// WebAssembly section representation
 #[derive(Debug, Clone)]
 pub enum Section {
     /// Type section containing function signatures
-    Type(SectionVec<WrtFuncType>),
+    Type(SectionVec<KilnFuncType>),
     /// Import section
-    Import(SectionVec<WrtFoundationImport>),
+    Import(SectionVec<KilnFoundationImport>),
     /// Function section (function indices)
     Function(SectionVec<u32>),
     /// Table section
-    Table(SectionVec<WrtTableType>),
+    Table(SectionVec<KilnTableType>),
     /// Memory section
-    Memory(SectionVec<WrtMemoryType>),
+    Memory(SectionVec<KilnMemoryType>),
     /// Global section
-    Global(SectionVec<WrtGlobalType>),
+    Global(SectionVec<KilnGlobalType>),
     /// Export section
-    Export(SectionVec<WrtExport>),
+    Export(SectionVec<KilnExport>),
     /// Start section (function index)
     Start(u32),
     /// Element section
-    Element(SectionVec<WrtElementSegment>),
+    Element(SectionVec<KilnElementSegment>),
     /// Code section (function bodies)
     Code(
         SectionVec<
-            wrt_foundation::bounded::BoundedVec<u8, 65536, wrt_foundation::NoStdProvider<65536>>,
+            kiln_foundation::bounded::BoundedVec<u8, 65536, kiln_foundation::NoStdProvider<65536>>,
         >,
     ),
     /// Data section
-    Data(SectionVec<WrtDataSegment>),
+    Data(SectionVec<KilnDataSegment>),
     /// Data count section
     DataCount(u32),
     /// Custom section
@@ -79,7 +79,7 @@ pub enum Section {
         /// Section name
         name: SectionString,
         /// Section data
-        data: wrt_foundation::bounded::BoundedVec<u8, 65536, wrt_foundation::NoStdProvider<65536>>,
+        data: kiln_foundation::bounded::BoundedVec<u8, 65536, kiln_foundation::NoStdProvider<65536>>,
     },
 }
 
@@ -87,14 +87,14 @@ pub enum Section {
 fn parse_element_segment(
     bytes: &[u8],
     offset: usize,
-) -> Result<(wrt_format::pure_format_types::PureElementSegment, usize)> {
+) -> Result<(kiln_format::pure_format_types::PureElementSegment, usize)> {
     // For both std and no_std, implement basic element parsing
     // This is a simplified version that creates passive elements
-    let pure_element = wrt_format::pure_format_types::PureElementSegment {
-        element_type: wrt_format::types::RefType::Funcref,
-        mode: wrt_format::pure_format_types::PureElementMode::Passive,
+    let pure_element = kiln_format::pure_format_types::PureElementSegment {
+        element_type: kiln_format::types::RefType::Funcref,
+        mode: kiln_format::pure_format_types::PureElementMode::Passive,
         offset_expr_bytes: Vec::new(),
-        init_data: wrt_format::pure_format_types::PureElementInit::FunctionIndices(Vec::new()),
+        init_data: kiln_format::pure_format_types::PureElementInit::FunctionIndices(Vec::new()),
     };
     Ok((pure_element, offset + 1))
 }
@@ -102,8 +102,8 @@ fn parse_element_segment(
 fn parse_data(
     bytes: &[u8],
     offset: usize,
-) -> Result<(wrt_format::pure_format_types::PureDataSegment, usize)> {
-    use wrt_format::pure_format_types::{PureDataMode, PureDataSegment};
+) -> Result<(kiln_format::pure_format_types::PureDataSegment, usize)> {
+    use kiln_format::pure_format_types::{PureDataMode, PureDataSegment};
 
     if offset >= bytes.len() {
         return Err(Error::parse_error(
@@ -290,7 +290,7 @@ fn parse_data(
     }
 }
 
-fn parse_limits(bytes: &[u8], offset: usize) -> Result<(wrt_format::types::Limits, usize)> {
+fn parse_limits(bytes: &[u8], offset: usize) -> Result<(kiln_format::types::Limits, usize)> {
     if offset >= bytes.len() {
         return Err(Error::parse_error("Unexpected end while parsing limits"));
     }
@@ -330,7 +330,7 @@ fn parse_limits(bytes: &[u8], offset: usize) -> Result<(wrt_format::types::Limit
     let shared = flags & 0x02 != 0;
 
     Ok((
-        wrt_format::types::Limits {
+        kiln_format::types::Limits {
             min,
             max,
             shared,
@@ -345,7 +345,7 @@ pub mod parsers {
     use super::*;
 
     /// Parse a type section with memory optimization
-    pub fn parse_type_section(bytes: &[u8]) -> Result<Vec<WrtFuncType>> {
+    pub fn parse_type_section(bytes: &[u8]) -> Result<Vec<KilnFuncType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         // Binary std/no_std choice
@@ -378,8 +378,8 @@ pub mod parsers {
                 }
 
                 let val_type_byte = bytes[offset];
-                let format_val_type = wrt_format::conversion::parse_value_type(val_type_byte)
-                    .map_err(|_e: wrt_error::Error| {
+                let format_val_type = kiln_format::conversion::parse_value_type(val_type_byte)
+                    .map_err(|_e: kiln_error::Error| {
                         Error::runtime_execution_error("Parse error")
                     })?;
                 params.push(format_val_type);
@@ -401,22 +401,22 @@ pub mod parsers {
                 }
 
                 let val_type_byte = bytes[offset];
-                let format_val_type = wrt_format::conversion::parse_value_type(val_type_byte)
-                    .map_err(|_e: wrt_error::Error| {
+                let format_val_type = kiln_format::conversion::parse_value_type(val_type_byte)
+                    .map_err(|_e: kiln_error::Error| {
                         Error::runtime_execution_error("Parse error")
                     })?;
                 results.push(format_val_type);
                 offset += 1;
             }
 
-            let provider = wrt_foundation::safe_managed_alloc!(
+            let provider = kiln_foundation::safe_managed_alloc!(
                 65536,
-                wrt_foundation::budget_aware_provider::CrateId::Decoder
+                kiln_foundation::budget_aware_provider::CrateId::Decoder
             )?;
-            format_func_types.push(wrt_format::types::FuncType::new(params, results)?);
+            format_func_types.push(kiln_format::types::FuncType::new(params, results)?);
         }
 
-        // Since wrt_format::types::FuncType is re-exported from wrt_foundation,
+        // Since kiln_format::types::FuncType is re-exported from kiln_foundation,
         // we can return the vector directly
         Ok(format_func_types)
     }
@@ -436,7 +436,7 @@ pub mod parsers {
     }
 
     /// Parse an import section with memory optimization
-    pub fn parse_import_section(bytes: &[u8]) -> Result<Vec<WrtFoundationImport>> {
+    pub fn parse_import_section(bytes: &[u8]) -> Result<Vec<KilnFoundationImport>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         // Binary std/no_std choice
@@ -462,87 +462,87 @@ pub mod parsers {
             let kind_byte = bytes[offset];
             offset += 1;
 
-            // Parse into wrt_format::module::ImportDesc first
+            // Parse into kiln_format::module::ImportDesc first
             let format_desc = match kind_byte {
                 0x00 => {
                     // Function import
                     let (type_idx, new_offset) = binary::read_leb128_u32(bytes, offset)?;
                     offset = new_offset;
-                    wrt_format::module::ImportDesc::Function(type_idx)
+                    kiln_format::module::ImportDesc::Function(type_idx)
                 },
                 0x01 => {
                     // Table import
                     let (format_table, new_offset) = parse_format_module_table(bytes, offset)?;
                     offset = new_offset;
-                    wrt_format::module::ImportDesc::Table(format_table)
+                    kiln_format::module::ImportDesc::Table(format_table)
                 },
                 0x02 => {
                     // Memory import
                     let (format_memory, new_offset) = parse_format_module_memory(bytes, offset)?;
                     offset = new_offset;
-                    wrt_format::module::ImportDesc::Memory(format_memory)
+                    kiln_format::module::ImportDesc::Memory(format_memory)
                 },
                 0x03 => {
                     // Global import
                     let (format_global_type, new_offset) = parse_format_global_type(bytes, offset)?;
                     offset = new_offset;
-                    wrt_format::module::ImportDesc::Global(format_global_type)
+                    kiln_format::module::ImportDesc::Global(format_global_type)
                 },
-                // TODO: Handle 0x04 Tag import if/when supported by wrt_format
+                // TODO: Handle 0x04 Tag import if/when supported by kiln_format
                 _ => {
                     return Err(Error::parse_error("Invalid import description kind"));
                 },
             };
 
-            format_imports.push(wrt_format::module::Import {
+            format_imports.push(kiln_format::module::Import {
                 module: module_string,
                 name: field_string,
                 desc: format_desc,
             });
         }
 
-        // Convert wrt_format::Import to wrt_foundation::Import
+        // Convert kiln_format::Import to kiln_foundation::Import
         // Since Table and Memory are now type aliases to foundation types, this should
         // work directly
         let mut wrt_imports = Vec::with_capacity(format_imports.len());
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             65536,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
 
         for format_import in format_imports {
             let module_name =
-                wrt_foundation::bounded::WasmName::try_from_str(&format_import.module)
+                kiln_foundation::bounded::WasmName::try_from_str(&format_import.module)
                     .map_err(|_| Error::parse_error("Module name too long for bounded string"))?;
 
-            let item_name = wrt_foundation::bounded::WasmName::try_from_str(&format_import.name)
+            let item_name = kiln_foundation::bounded::WasmName::try_from_str(&format_import.name)
                 .map_err(|_| Error::parse_error("Item name too long for bounded string"))?;
 
             let wrt_desc = match format_import.desc {
-                wrt_format::module::ImportDesc::Function(type_idx) => {
-                    wrt_foundation::types::ImportDesc::Function(type_idx)
+                kiln_format::module::ImportDesc::Function(type_idx) => {
+                    kiln_foundation::types::ImportDesc::Function(type_idx)
                 },
-                wrt_format::module::ImportDesc::Table(table) => {
-                    wrt_foundation::types::ImportDesc::Table(table)
+                kiln_format::module::ImportDesc::Table(table) => {
+                    kiln_foundation::types::ImportDesc::Table(table)
                 },
-                wrt_format::module::ImportDesc::Memory(memory) => {
-                    wrt_foundation::types::ImportDesc::Memory(memory)
+                kiln_format::module::ImportDesc::Memory(memory) => {
+                    kiln_foundation::types::ImportDesc::Memory(memory)
                 },
-                wrt_format::module::ImportDesc::Global(format_global) => {
-                    // Convert FormatGlobalType to wrt_foundation::GlobalType
-                    let global_type = wrt_foundation::GlobalType::new(
+                kiln_format::module::ImportDesc::Global(format_global) => {
+                    // Convert FormatGlobalType to kiln_foundation::GlobalType
+                    let global_type = kiln_foundation::GlobalType::new(
                         format_global.value_type,
                         format_global.mutable,
                     );
-                    wrt_foundation::types::ImportDesc::Global(global_type)
+                    kiln_foundation::types::ImportDesc::Global(global_type)
                 },
-                wrt_format::module::ImportDesc::Tag(type_idx) => {
+                kiln_format::module::ImportDesc::Tag(type_idx) => {
                     // Tag is not available in ImportDesc, map to Function for now
-                    wrt_foundation::types::ImportDesc::Function(type_idx)
+                    kiln_foundation::types::ImportDesc::Function(type_idx)
                 },
             };
 
-            wrt_imports.push(WrtFoundationImport {
+            wrt_imports.push(KilnFoundationImport {
                 module_name,
                 item_name,
                 desc: wrt_desc,
@@ -553,7 +553,7 @@ pub mod parsers {
     }
 
     /// Parse a table section
-    pub fn parse_table_section(bytes: &[u8]) -> Result<Vec<WrtTableType>> {
+    pub fn parse_table_section(bytes: &[u8]) -> Result<Vec<KilnTableType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
         let mut wrt_tables = Vec::with_capacity(count as usize);
 
@@ -562,8 +562,8 @@ pub mod parsers {
             let (format_table, new_offset) = parse_format_module_table(bytes, offset)?;
             offset = new_offset;
 
-            // Since wrt_format::module::Table is now a type alias to
-            // wrt_foundation::TableType, we can use it directly
+            // Since kiln_format::module::Table is now a type alias to
+            // kiln_foundation::TableType, we can use it directly
             wrt_tables.push(format_table);
         }
 
@@ -573,7 +573,7 @@ pub mod parsers {
     fn parse_format_module_table(
         bytes: &[u8],
         mut offset: usize,
-    ) -> Result<(wrt_foundation::TableType, usize)> {
+    ) -> Result<(kiln_foundation::TableType, usize)> {
         if offset >= bytes.len() {
             return Err(Error::parse_error(
                 "Unexpected end of table entry (element type byte)",
@@ -582,7 +582,7 @@ pub mod parsers {
         let element_type_byte = bytes[offset];
         offset += 1;
 
-        let element_type = wrt_format::conversion::parse_value_type(element_type_byte)
+        let element_type = kiln_format::conversion::parse_value_type(element_type_byte)
             .map_err(|_e| Error::runtime_execution_error("Parse error"))?;
 
         if element_type != FormatValueType::FuncRef && element_type != FormatValueType::ExternRef {
@@ -598,21 +598,21 @@ pub mod parsers {
 
         // Convert ValueType to RefType for table element_type
         let ref_type = match element_type {
-            FormatValueType::FuncRef => wrt_foundation::RefType::Funcref,
-            FormatValueType::ExternRef => wrt_foundation::RefType::Externref,
+            FormatValueType::FuncRef => kiln_foundation::RefType::Funcref,
+            FormatValueType::ExternRef => kiln_foundation::RefType::Externref,
             _ => {
                 return Err(Error::runtime_execution_error("Invalid table element type"));
             },
         };
 
-        // Convert wrt_format::Limits to wrt_foundation::Limits
-        let foundation_limits = wrt_foundation::Limits::new(
+        // Convert kiln_format::Limits to kiln_foundation::Limits
+        let foundation_limits = kiln_foundation::Limits::new(
             limits.min as u32, // Convert u64 to u32
             limits.max.map(|m| m as u32),
         );
 
         Ok((
-            wrt_foundation::TableType {
+            kiln_foundation::TableType {
                 element_type: ref_type,
                 limits: foundation_limits,
             },
@@ -621,7 +621,7 @@ pub mod parsers {
     }
 
     /// Parse a memory section
-    pub fn parse_memory_section(bytes: &[u8]) -> Result<Vec<WrtMemoryType>> {
+    pub fn parse_memory_section(bytes: &[u8]) -> Result<Vec<KilnMemoryType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
         let mut wrt_memories = Vec::with_capacity(count as usize);
 
@@ -630,8 +630,8 @@ pub mod parsers {
             let (format_memory, new_offset) = parse_format_module_memory(bytes, offset)?;
             offset = new_offset;
 
-            // Since wrt_format::module::Memory is now a type alias to
-            // wrt_foundation::MemoryType, we can use it directly
+            // Since kiln_format::module::Memory is now a type alias to
+            // kiln_foundation::MemoryType, we can use it directly
             wrt_memories.push(format_memory);
         }
 
@@ -641,17 +641,17 @@ pub mod parsers {
     fn parse_format_module_memory(
         bytes: &[u8],
         offset: usize,
-    ) -> Result<(wrt_foundation::MemoryType, usize)> {
+    ) -> Result<(kiln_foundation::MemoryType, usize)> {
         let (limits, new_offset) = parse_limits(bytes, offset)?;
 
-        // Convert wrt_format::Limits to wrt_foundation::Limits
-        let foundation_limits = wrt_foundation::Limits::new(
+        // Convert kiln_format::Limits to kiln_foundation::Limits
+        let foundation_limits = kiln_foundation::Limits::new(
             limits.min as u32, // Convert u64 to u32
             limits.max.map(|m| m as u32),
         );
 
         Ok((
-            wrt_foundation::MemoryType::new_with_memory64(foundation_limits, limits.shared, limits.memory64),
+            kiln_foundation::MemoryType::new_with_memory64(foundation_limits, limits.shared, limits.memory64),
             new_offset,
         ))
     }
@@ -659,7 +659,7 @@ pub mod parsers {
     fn parse_format_global_type(
         bytes: &[u8],
         mut offset: usize,
-    ) -> Result<(wrt_format::types::FormatGlobalType, usize)> {
+    ) -> Result<(kiln_format::types::FormatGlobalType, usize)> {
         if offset + 1 >= bytes.len() {
             // Need valtype + mutability byte
             return Err(Error::parse_error("Unexpected end of global type"));
@@ -669,7 +669,7 @@ pub mod parsers {
         let mutability_byte = bytes[offset];
         offset += 1;
 
-        let value_type = wrt_format::conversion::parse_value_type(val_type_byte)
+        let value_type = kiln_format::conversion::parse_value_type(val_type_byte)
             .map_err(|_e| Error::runtime_execution_error("Parse error"))?;
 
         let mutable = match mutability_byte {
@@ -679,7 +679,7 @@ pub mod parsers {
         };
 
         Ok((
-            wrt_format::types::FormatGlobalType {
+            kiln_format::types::FormatGlobalType {
                 value_type,
                 mutable,
             },
@@ -688,7 +688,7 @@ pub mod parsers {
     }
 
     /// Parse a global section
-    pub fn parse_global_section(bytes: &[u8]) -> Result<Vec<WrtGlobalType>> {
+    pub fn parse_global_section(bytes: &[u8]) -> Result<Vec<KilnGlobalType>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
         let mut wrt_globals = Vec::with_capacity(count as usize);
 
@@ -738,14 +738,14 @@ pub mod parsers {
             let init_expr_bytes = &bytes[init_expr_start..end_idx + 1]; // Slice includes the END opcode
             offset = end_idx + 1; // Update main offset to after the init_expr
 
-            let _format_global = wrt_format::module::Global {
+            let _format_global = kiln_format::module::Global {
                 global_type: format_global_type,
                 init: init_expr_bytes.to_vec(),
             };
 
-            // Convert FormatGlobalType to wrt_foundation::GlobalType
+            // Convert FormatGlobalType to kiln_foundation::GlobalType
             // Both types have the same structure (value_type and mutable)
-            let wrt_global = WrtGlobalType {
+            let wrt_global = KilnGlobalType {
                 value_type: format_global_type.value_type,
                 mutable: format_global_type.mutable,
             };
@@ -756,7 +756,7 @@ pub mod parsers {
     }
 
     /// Parse an export section with memory optimization
-    pub fn parse_export_section(bytes: &[u8]) -> Result<Vec<WrtExport>> {
+    pub fn parse_export_section(bytes: &[u8]) -> Result<Vec<KilnExport>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
 
         // Binary std/no_std choice
@@ -777,29 +777,29 @@ pub mod parsers {
             offset += 1;
 
             let format_kind = match kind_byte {
-                0x00 => wrt_format::module::ExportKind::Function,
-                0x01 => wrt_format::module::ExportKind::Table,
-                0x02 => wrt_format::module::ExportKind::Memory,
-                0x03 => wrt_format::module::ExportKind::Global,
-                // TODO: Handle 0x04 Tag if/when supported by wrt_format
+                0x00 => kiln_format::module::ExportKind::Function,
+                0x01 => kiln_format::module::ExportKind::Table,
+                0x02 => kiln_format::module::ExportKind::Memory,
+                0x03 => kiln_format::module::ExportKind::Global,
+                // TODO: Handle 0x04 Tag if/when supported by kiln_format
                 _ => return Err(Error::parse_error("Invalid export kind byte")),
             };
 
             let (index, new_offset) = binary::read_leb128_u32(bytes, offset)?;
             offset = new_offset;
 
-            format_exports.push(wrt_format::module::Export {
+            format_exports.push(kiln_format::module::Export {
                 name: export_name,
                 kind: format_kind,
                 index,
             });
         }
-        // Return the format_exports since wrt_format::module::Export is what's expected
+        // Return the format_exports since kiln_format::module::Export is what's expected
         Ok(format_exports)
     }
 
     /// Parse an element section
-    pub fn parse_element_section(bytes: &[u8]) -> Result<Vec<WrtElementSegment>> {
+    pub fn parse_element_section(bytes: &[u8]) -> Result<Vec<KilnElementSegment>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
         let mut wrt_elements = Vec::with_capacity(count as usize);
 
@@ -852,7 +852,7 @@ pub mod parsers {
     }
 
     /// Parse a data section
-    pub fn parse_data_section(bytes: &[u8]) -> Result<Vec<WrtDataSegment>> {
+    pub fn parse_data_section(bytes: &[u8]) -> Result<Vec<KilnDataSegment>> {
         let (count, mut offset) = binary::read_leb128_u32(bytes, 0)?;
         let mut wrt_data_segments = Vec::with_capacity(count as usize);
 

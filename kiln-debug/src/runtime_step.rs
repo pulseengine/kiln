@@ -1,6 +1,6 @@
 #![cfg(feature = "runtime-stepping")]
 
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId, NoStdProvider,
     bounded::{BoundedStack, BoundedVec, MAX_DWARF_FILE_TABLE},
     managed_alloc, safe_managed_alloc,

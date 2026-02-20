@@ -18,7 +18,7 @@ pub mod example {
     /// is mathematically undefined.
     ///
     /// Safety impact: MEDIUM
-    /// Tracking: WRTQ-500
+    /// Tracking: KILNQ-500
     pub fn divide(a: i32, b: i32) -> i32 {
         a / b  // Will panic if b is 0
     }
@@ -59,7 +59,7 @@ pub mod example {
     /// 2. If the resulting doubled value overflows an i32
     ///
     /// Safety impact: HIGH
-    /// Tracking: WRTQ-501
+    /// Tracking: KILNQ-501
     pub fn get_and_double(values: &[i32], index: usize) -> i32 {
         let value = values[index]; // Will panic if index is out of bounds
         value.checked_mul(2).expect("Overflow when doubling value") // Will panic on overflow

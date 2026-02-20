@@ -263,7 +263,7 @@ fn test_extract_dwarf_sections() {
 #[test]
 #[cfg(feature = "std")]
 fn test_dwarf_line_number_resolution() {
-    use wrt_debug::DwarfDebugInfo;
+    use kiln_debug::DwarfDebugInfo;
 
     // Load calculator.wasm
     let wasm_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -311,7 +311,7 @@ fn test_dwarf_line_number_resolution() {
 #[test]
 #[cfg(feature = "std")]
 fn test_simulated_source_level_debug() {
-    use wrt_debug::{DwarfDebugInfo, LineInfo};
+    use kiln_debug::{DwarfDebugInfo, LineInfo};
 
     println!("\n=== Source-Level Debugging Simulation ===\n");
 
@@ -381,7 +381,7 @@ fn test_simulated_source_level_debug() {
 fn test_debugger_callback_simulation() {
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
-    use wrt_debug::runtime_traits::{
+    use kiln_debug::runtime_traits::{
         Breakpoint, BreakpointId, DebugAction, RuntimeDebugger, RuntimeState,
     };
 
@@ -519,7 +519,7 @@ fn test_full_integration_demo() {
     println!("     DWARF SOURCE-LEVEL DEBUGGING INTEGRATION DEMO");
     println!("═══════════════════════════════════════════════════════════\n");
 
-    use wrt_debug::DwarfDebugInfo;
+    use kiln_debug::DwarfDebugInfo;
 
     let wasm_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()

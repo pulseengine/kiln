@@ -17,10 +17,10 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_foundation::component_value::ComponentValue;
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::component_value::ComponentValue;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{collections::StaticVec as BoundedVec, safe_memory::NoStdProvider};
+use kiln_foundation::{collections::StaticVec as BoundedVec, safe_memory::NoStdProvider};
 
 // Define a stub BuiltinType for no_std
 #[cfg(not(feature = "std"))]
@@ -31,7 +31,7 @@ pub enum BuiltinType {
 }
 
 #[cfg(feature = "std")]
-use wrt_foundation::builtin::BuiltinType;
+use kiln_foundation::builtin::BuiltinType;
 
 use super::BuiltinHandler;
 

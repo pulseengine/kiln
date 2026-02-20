@@ -3,11 +3,11 @@
 //! This module validates that all 240+ WebAssembly instructions consume
 //! the correct amount of fuel based on their complexity and verification level.
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     operations::{
         global_fuel_consumed,
         reset_global_operations,
@@ -18,7 +18,7 @@ use wrt_foundation::{
     FloatBits64,
     Value,
 };
-use wrt_runtime::stackless::engine::{
+use kiln_runtime::stackless::engine::{
     InstructionFuelType,
     StacklessEngine,
 };

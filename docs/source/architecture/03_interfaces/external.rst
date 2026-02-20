@@ -3,7 +3,7 @@
 External Interfaces
 ===================
 
-This section documents the external interfaces of Pulseengine (WRT Edition), defining how
+This section documents the external interfaces of Pulseengine (Kiln Edition), defining how
 external systems and users interact with the runtime across different environments.
 
 .. arch_interface:: ARCH_IF_EXT_001
@@ -21,7 +21,7 @@ Primary Runtime Interface
 Core Runtime API
 ~~~~~~~~~~~~~~~~
 
-The main external interface is provided through ``wrt/src/lib.rs``:
+The main external interface is provided through ``kiln/src/lib.rs``:
 
 .. code-block:: rust
 
@@ -72,7 +72,7 @@ The main external interface is provided through ``wrt/src/lib.rs``:
 Component Interface
 ~~~~~~~~~~~~~~~~~~~
 
-Component loading interface from ``wrt-component/src/lib.rs``:
+Component loading interface from ``kiln-component/src/lib.rs``:
 
 .. code-block:: rust
 
@@ -124,15 +124,15 @@ Command Line Interface
 
    Command-line interface for development, testing, and production deployment.
 
-WRTD CLI Tool
+KILND CLI Tool
 ~~~~~~~~~~~~~
 
-The ``wrtd`` binary provides external command-line access (``wrtd/src/main.rs:34-89``):
+The ``kilnd`` binary provides external command-line access (``kilnd/src/main.rs:34-89``):
 
 .. code-block:: rust
 
    #[derive(Debug, Parser)]
-   #[command(name = "wrtd", about = "Pulseengine (WRT Edition) CLI")]
+   #[command(name = "kilnd", about = "Pulseengine (Kiln Edition) CLI")]
    pub struct Cli {
        #[command(subcommand)]
        pub command: Commands,
@@ -175,16 +175,16 @@ The ``wrtd`` binary provides external command-line access (``wrtd/src/main.rs:34
 .. code-block:: bash
 
    # Standard execution
-   wrtd run --file module.wasm --function main
+   kilnd run --file module.wasm --function main
    
    # Bounded execution (no heap allocation)
-   wrtd run --file module.wasm --function main --bounded
+   kilnd run --file module.wasm --function main --bounded
    
    # Module inspection
-   wrtd inspect --file module.wasm
+   kilnd inspect --file module.wasm
    
    # Module validation
-   wrtd validate --file module.wasm
+   kilnd validate --file module.wasm
 
 Host Function Interface
 -----------------------
@@ -200,7 +200,7 @@ Host Function Interface
 Host Function Registration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-host/src/host.rs:67-123``:
+From ``kiln-host/src/host.rs:67-123``:
 
 .. code-block:: rust
 
@@ -261,7 +261,7 @@ Memory Interface
 Memory Access API
 ~~~~~~~~~~~~~~~~~
 
-From ``wrt-foundation/src/safe_memory.rs:178-234``:
+From ``kiln-foundation/src/safe_memory.rs:178-234``:
 
 .. code-block:: rust
 
@@ -316,13 +316,13 @@ Error Interface
 Error Types and Handling
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-error/src/errors.rs:45-123``:
+From ``kiln-error/src/errors.rs:45-123``:
 
 .. code-block:: rust
 
    /// Primary error type for external consumers
    #[derive(Debug, Clone, PartialEq, Eq)]
-   pub enum WrtError {
+   pub enum KilnError {
        /// Component-related errors
        Component(ComponentError),
        /// Runtime execution errors  
@@ -335,7 +335,7 @@ From ``wrt-error/src/errors.rs:45-123``:
        Validation(ValidationError),
    }
 
-   impl core::fmt::Display for WrtError {
+   impl core::fmt::Display for KilnError {
        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
            match self {
                Self::Component(e) => write!(f, "Component error: {}", e),
@@ -349,7 +349,7 @@ From ``wrt-error/src/errors.rs:45-123``:
 
    // std environment support
    #[cfg(feature = "std")]
-   impl std::error::Error for WrtError {
+   impl std::error::Error for KilnError {
        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
            match self {
                Self::Component(e) => Some(e),
@@ -375,7 +375,7 @@ Platform Integration Interface
 Platform Abstraction
 ~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-platform/src/platform_abstraction.rs:67-134``:
+From ``kiln-platform/src/platform_abstraction.rs:67-134``:
 
 .. code-block:: rust
 
@@ -467,7 +467,7 @@ Complete External Usage Example
 
 .. code-block:: rust
 
-   use wrt::{Runtime, Value, ComponentError};
+   use kiln::{Runtime, Value, ComponentError};
    
    fn main() -> Result<(), ComponentError> {
        // Works in all environments

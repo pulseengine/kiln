@@ -1,8 +1,8 @@
 [package]
-name = "wrt-format"
+name = "kiln-format"
 version.workspace = true
 edition.workspace = true
-description = "WebAssembly format handling for WRT"
+description = "WebAssembly format handling for Kiln"
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
@@ -10,8 +10,8 @@ keywords = ["wasm", "webassembly", "format", "binary", "no-std"]
 categories = ["wasm", "parsing", "data-structures", "no-std", "embedded"]
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false }
+kiln-error = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false }
 
 [dev-dependencies]
 # For property testing
@@ -25,20 +25,20 @@ optional = true
 [features]
 default = []
 # Binary choice: std OR no_std (no alloc middle ground)
-std = ["wrt-foundation/std", "wrt-foundation/wrt-allocator"]
+std = ["kiln-foundation/std", "kiln-foundation/kiln-allocator"]
 # This crate is no_std by default, this feature is a no-op for compatibility
 no_std = []
 
 # Allocation support for no_std environments
-alloc = ["wrt-foundation/alloc"]
-optimize = ["wrt-foundation/optimize"]
+alloc = ["kiln-foundation/alloc"]
+optimize = ["kiln-foundation/optimize"]
 
 # Safety level presets using capability-based features
-qm = ["wrt-foundation/dynamic-allocation"]
-asil-a = ["wrt-foundation/bounded-collections"]
-asil-b = ["wrt-foundation/bounded-collections"]
-asil-c = ["wrt-foundation/static-memory-safety"]
-asil-d = ["wrt-foundation/asil-d"]
+qm = ["kiln-foundation/dynamic-allocation"]
+asil-a = ["kiln-foundation/bounded-collections"]
+asil-b = ["kiln-foundation/bounded-collections"]
+asil-c = ["kiln-foundation/static-memory-safety"]
+asil-d = ["kiln-foundation/asil-d"]
 
 # Legacy compatibility features
 safe-memory = ["asil-b"]
@@ -50,15 +50,15 @@ safety-asil-d = ["asil-d"]
 kani = ["dep:kani-verifier"]
 
 # Component Model features
-component-model-core = ["wrt-foundation/component-model-core"]
-component-model-values = ["wrt-foundation/component-model-values"]
-component-model-resources = ["wrt-foundation/component-model-resources"]
+component-model-core = ["kiln-foundation/component-model-core"]
+component-model-values = ["kiln-foundation/component-model-values"]
+component-model-resources = ["kiln-foundation/component-model-resources"]
 component-model-canonical = []
-component-model-fixed-lists = ["wrt-foundation/component-model-fixed-lists"]
-component-model-error-context = ["wrt-foundation/component-model-error-context"]
-component-model-async = ["wrt-foundation/component-model-async"]
-component-model-threading = ["wrt-foundation/component-model-threading"]
-component-model-namespaces = ["wrt-foundation/component-model-namespaces"]
+component-model-fixed-lists = ["kiln-foundation/component-model-fixed-lists"]
+component-model-error-context = ["kiln-foundation/component-model-error-context"]
+component-model-async = ["kiln-foundation/component-model-async"]
+component-model-threading = ["kiln-foundation/component-model-threading"]
+component-model-namespaces = ["kiln-foundation/component-model-namespaces"]
 
 # Grouped features
 component-model-all = [

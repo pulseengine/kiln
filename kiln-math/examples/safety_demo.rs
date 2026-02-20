@@ -1,11 +1,11 @@
 // Copyright (c) 2025 R T
 // SPDX-License-Identifier: MIT
-// Project: WRT
-// Module: wrt-math examples
+// Project: Kiln
+// Module: kiln-math examples
 
 //! Demonstration of ASIL-specific safety features for mathematical operations.
 
-use wrt_math::{
+use kiln_math::{
     check_simd_bounds,
     RoundingMode,
     SafeArithmetic,
@@ -14,7 +14,7 @@ use wrt_math::{
 };
 
 fn main() {
-    println!("WRT Math Safety Features Demo");
+    println!("Kiln Math Safety Features Demo");
     println!("=============================\n");
 
     // Integer arithmetic safety

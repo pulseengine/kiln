@@ -7,7 +7,7 @@ extern crate alloc;
 
 use core::any::Any;
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     capabilities::MemoryOperation,
     memory_init::get_global_capability_context,
@@ -310,7 +310,7 @@ pub fn wasi_get_initial_cwd_bridge(target: &mut dyn Any, args: Vec<Value>) -> Re
 
 #[cfg(test)]
 mod tests {
-    use wrt_foundation::memory_init::MemoryInitializer;
+    use kiln_foundation::memory_init::MemoryInitializer;
 
     use super::*;
 

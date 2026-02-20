@@ -10,17 +10,17 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 #[cfg(feature = "tracing")]
-use wrt_foundation::tracing::trace;
+use kiln_foundation::tracing::trace;
 
 // Platform-specific limits for bounded allocation
-use wrt_foundation::limits;
+use kiln_foundation::limits;
 
 // Allocation tracing for understanding memory patterns
 #[cfg(feature = "allocation-tracing")]
-use wrt_foundation::{AllocationPhase, trace_alloc};
+use kiln_foundation::{AllocationPhase, trace_alloc};
 
-use wrt_format::module::{Function, Module as WrtModule};
-use wrt_foundation::{bounded::BoundedVec, safe_memory::NoStdProvider, types::TagType};
+use kiln_format::module::{Function, Module as KilnModule};
+use kiln_foundation::{bounded::BoundedVec, safe_memory::NoStdProvider, types::TagType};
 
 use crate::{
     prelude::*,
@@ -161,17 +161,17 @@ pub struct StreamingDecoder<'a> {
     data_section_count: Option<u32>,
     /// The module being built (std version)
     #[cfg(feature = "std")]
-    module: WrtModule,
+    module: KilnModule,
     /// The module being built (no_std version)
     #[cfg(not(feature = "std"))]
-    module: WrtModule<NoStdProvider<8192>>,
+    module: KilnModule<NoStdProvider<8192>>,
 }
 
 impl<'a> StreamingDecoder<'a> {
     /// Create a new streaming decoder (std version)
     #[cfg(feature = "std")]
     pub fn new(binary: &'a [u8]) -> Result<Self> {
-        let module = WrtModule::default();
+        let module = KilnModule::default();
 
         Ok(Self {
             binary,
@@ -190,11 +190,11 @@ impl<'a> StreamingDecoder<'a> {
     /// Create a new streaming decoder (no_std version)
     #[cfg(not(feature = "std"))]
     pub fn new(binary: &'a [u8]) -> Result<Self> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             8192,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
-        let module = WrtModule::default();
+        let module = KilnModule::default();
 
         Ok(Self {
             binary,
@@ -298,11 +298,11 @@ impl<'a> StreamingDecoder<'a> {
     /// - 0x50 = sub (subtype declaration)
     /// - 0x4F = sub final (final subtype declaration)
     fn process_type_section(&mut self, data: &[u8]) -> Result<usize> {
-        use wrt_format::binary::{
+        use kiln_format::binary::{
             COMPOSITE_TYPE_ARRAY, COMPOSITE_TYPE_FUNC, COMPOSITE_TYPE_REC, COMPOSITE_TYPE_STRUCT,
             COMPOSITE_TYPE_SUB, COMPOSITE_TYPE_SUB_FINAL, read_leb128_u32,
         };
-        use wrt_foundation::types::ValueType;
+        use kiln_foundation::types::ValueType;
 
         let mut offset = 0;
         let (count, bytes_read) = read_leb128_u32(data, offset)?;
@@ -380,7 +380,7 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Parse a subtype entry (sub, sub final, or bare composite type)
     fn parse_subtype_entry(&mut self, data: &[u8], mut offset: usize) -> Result<usize> {
-        use wrt_format::binary::{
+        use kiln_format::binary::{
             COMPOSITE_TYPE_ARRAY, COMPOSITE_TYPE_FUNC, COMPOSITE_TYPE_STRUCT, COMPOSITE_TYPE_SUB,
             COMPOSITE_TYPE_SUB_FINAL, read_leb128_u32,
         };
@@ -421,10 +421,10 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Parse a composite type (func, struct, or array)
     fn parse_composite_type(&mut self, data: &[u8], mut offset: usize) -> Result<usize> {
-        use wrt_format::binary::{
+        use kiln_format::binary::{
             COMPOSITE_TYPE_ARRAY, COMPOSITE_TYPE_FUNC, COMPOSITE_TYPE_STRUCT, read_leb128_u32,
         };
-        use wrt_foundation::types::ValueType;
+        use kiln_foundation::types::ValueType;
 
         if offset >= data.len() {
             return Err(Error::parse_error("Unexpected end of composite type"));
@@ -497,14 +497,14 @@ impl<'a> StreamingDecoder<'a> {
                 // Store function type
                 #[cfg(feature = "std")]
                 {
-                    use wrt_foundation::CleanCoreFuncType;
+                    use kiln_foundation::CleanCoreFuncType;
                     let func_type = CleanCoreFuncType { params, results };
                     self.module.types.push(func_type);
                 }
 
                 #[cfg(not(feature = "std"))]
                 {
-                    use wrt_foundation::types::FuncType;
+                    use kiln_foundation::types::FuncType;
                     let func_type = FuncType::new(params.into_iter(), results.into_iter())?;
                     let _ = self.module.types.push(func_type);
                 }
@@ -534,7 +534,7 @@ impl<'a> StreamingDecoder<'a> {
                 // For now, we add a placeholder func type to maintain index alignment
                 #[cfg(feature = "std")]
                 {
-                    use wrt_foundation::CleanCoreFuncType;
+                    use kiln_foundation::CleanCoreFuncType;
                     let placeholder = CleanCoreFuncType {
                         params: Vec::new(),
                         results: Vec::new(),
@@ -544,7 +544,7 @@ impl<'a> StreamingDecoder<'a> {
 
                 #[cfg(not(feature = "std"))]
                 {
-                    use wrt_foundation::types::FuncType;
+                    use kiln_foundation::types::FuncType;
                     let placeholder = FuncType::new(core::iter::empty(), core::iter::empty())?;
                     let _ = self.module.types.push(placeholder);
                 }
@@ -567,7 +567,7 @@ impl<'a> StreamingDecoder<'a> {
                 // For now, we add a placeholder func type to maintain index alignment
                 #[cfg(feature = "std")]
                 {
-                    use wrt_foundation::CleanCoreFuncType;
+                    use kiln_foundation::CleanCoreFuncType;
                     let placeholder = CleanCoreFuncType {
                         params: Vec::new(),
                         results: Vec::new(),
@@ -577,7 +577,7 @@ impl<'a> StreamingDecoder<'a> {
 
                 #[cfg(not(feature = "std"))]
                 {
-                    use wrt_foundation::types::FuncType;
+                    use kiln_foundation::types::FuncType;
                     let placeholder = FuncType::new(core::iter::empty(), core::iter::empty())?;
                     let _ = self.module.types.push(placeholder);
                 }
@@ -592,7 +592,7 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Parse a storage type (value type or packed type)
     fn parse_storage_type(&self, data: &[u8], mut offset: usize) -> Result<(u8, usize)> {
-        use wrt_format::binary::read_leb128_u32;
+        use kiln_format::binary::read_leb128_u32;
 
         if offset >= data.len() {
             return Err(Error::parse_error("Unexpected end of storage type"));
@@ -615,9 +615,9 @@ impl<'a> StreamingDecoder<'a> {
         &self,
         data: &[u8],
         mut offset: usize,
-    ) -> Result<(wrt_foundation::types::ValueType, usize)> {
-        use wrt_format::binary::{REF_TYPE_NON_NULLABLE, REF_TYPE_NULLABLE};
-        use wrt_foundation::types::ValueType;
+    ) -> Result<(kiln_foundation::types::ValueType, usize)> {
+        use kiln_format::binary::{REF_TYPE_NON_NULLABLE, REF_TYPE_NULLABLE};
+        use kiln_foundation::types::ValueType;
 
         if offset >= data.len() {
             return Err(Error::parse_error("Unexpected end of value type"));
@@ -705,7 +705,7 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Parse a heap type (for GC reference types)
     fn parse_heap_type(&self, data: &[u8], offset: usize) -> Result<(i64, usize)> {
-        use wrt_format::binary::read_leb128_i64;
+        use kiln_format::binary::read_leb128_i64;
 
         // Heap type is encoded as s33 (signed 33-bit LEB128)
         // We use i64 reading since it can handle the s33 range.
@@ -788,7 +788,7 @@ impl<'a> StreamingDecoder<'a> {
                     // Store the import in module.imports for runtime resolution
                     #[cfg(feature = "std")]
                     {
-                        use wrt_format::module::{Import, ImportDesc};
+                        use kiln_format::module::{Import, ImportDesc};
                         let import = Import {
                             module: module_name.to_string(),
                             name: field_name.to_string(),
@@ -835,8 +835,8 @@ impl<'a> StreamingDecoder<'a> {
                     // Store the table import in module.imports for runtime resolution
                     #[cfg(feature = "std")]
                     {
-                        use wrt_format::module::{Import, ImportDesc};
-                        use wrt_foundation::types::{Limits, RefType, TableType};
+                        use kiln_format::module::{Import, ImportDesc};
+                        use kiln_foundation::types::{Limits, RefType, TableType};
 
                         // Convert ref_type byte to RefType
                         let ref_type = match ref_type_byte {
@@ -862,7 +862,7 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 0x02 => {
                     // Memory import - need to parse limits
-                    use wrt_format::binary::read_leb128_u64;
+                    use kiln_format::binary::read_leb128_u64;
 
                     if offset >= data.len() {
                         return Err(Error::parse_error("Unexpected end of memory import"));
@@ -938,8 +938,8 @@ impl<'a> StreamingDecoder<'a> {
                     // Store the memory import in module.imports for runtime resolution
                     #[cfg(feature = "std")]
                     {
-                        use wrt_format::module::{Import, ImportDesc};
-                        use wrt_foundation::types::{Limits, MemoryType};
+                        use kiln_format::module::{Import, ImportDesc};
+                        use kiln_foundation::types::{Limits, MemoryType};
 
                         let limits = Limits { min, max };
 
@@ -978,14 +978,14 @@ impl<'a> StreamingDecoder<'a> {
 
                     // Parse value type
                     let value_type = match value_type_byte {
-                        0x7F => wrt_foundation::ValueType::I32,
-                        0x7E => wrt_foundation::ValueType::I64,
-                        0x7D => wrt_foundation::ValueType::F32,
-                        0x7C => wrt_foundation::ValueType::F64,
-                        0x7B => wrt_foundation::ValueType::V128,
-                        0x70 => wrt_foundation::ValueType::FuncRef,
-                        0x6F => wrt_foundation::ValueType::ExternRef,
-                        0x69 => wrt_foundation::ValueType::ExnRef,
+                        0x7F => kiln_foundation::ValueType::I32,
+                        0x7E => kiln_foundation::ValueType::I64,
+                        0x7D => kiln_foundation::ValueType::F32,
+                        0x7C => kiln_foundation::ValueType::F64,
+                        0x7B => kiln_foundation::ValueType::V128,
+                        0x70 => kiln_foundation::ValueType::FuncRef,
+                        0x6F => kiln_foundation::ValueType::ExternRef,
+                        0x69 => kiln_foundation::ValueType::ExnRef,
                         _ => return Err(Error::parse_error("Invalid global import value type")),
                     };
 
@@ -995,8 +995,8 @@ impl<'a> StreamingDecoder<'a> {
                     // Store the global import in module.imports for runtime resolution
                     #[cfg(feature = "std")]
                     {
-                        use wrt_format::module::{Import, ImportDesc};
-                        use wrt_format::types::FormatGlobalType;
+                        use kiln_format::module::{Import, ImportDesc};
+                        use kiln_format::types::FormatGlobalType;
                         let global_type = FormatGlobalType {
                             value_type,
                             mutable: mutability_byte != 0,
@@ -1037,7 +1037,7 @@ impl<'a> StreamingDecoder<'a> {
                     // Store tag import in module.imports for runtime resolution
                     #[cfg(feature = "std")]
                     {
-                        use wrt_format::module::{Import, ImportDesc};
+                        use kiln_format::module::{Import, ImportDesc};
 
                         let import = Import {
                             module: module_name.to_string(),
@@ -1114,8 +1114,8 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Process table section
     fn process_table_section(&mut self, data: &[u8]) -> Result<usize> {
-        use wrt_format::binary::read_leb128_u32;
-        use wrt_foundation::types::{Limits, RefType, TableType};
+        use kiln_format::binary::read_leb128_u32;
+        use kiln_foundation::types::{Limits, RefType, TableType};
 
         let mut offset = 0;
         let (count, bytes_read) = read_leb128_u32(data, offset)?;
@@ -1184,7 +1184,7 @@ impl<'a> StreamingDecoder<'a> {
             // Parse and validate init expression if present (ends with 0x0B)
             if has_init_expr {
                 // Count global imports - at table section time, only imported globals exist
-                use wrt_format::module::ImportDesc;
+                use kiln_format::module::ImportDesc;
                 let num_global_imports = self
                     .module
                     .imports
@@ -1280,7 +1280,7 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Process memory section
     fn process_memory_section(&mut self, data: &[u8]) -> Result<usize> {
-        use wrt_format::{read_leb128_u32, read_leb128_u64};
+        use kiln_format::{read_leb128_u32, read_leb128_u64};
 
         let mut offset = 0;
         let (count, bytes_read) = read_leb128_u32(data, offset)?;
@@ -1378,8 +1378,8 @@ impl<'a> StreamingDecoder<'a> {
             }
 
             // Create memory type
-            let memory_type = wrt_foundation::types::MemoryType {
-                limits: wrt_foundation::types::Limits { min, max },
+            let memory_type = kiln_foundation::types::MemoryType {
+                limits: kiln_foundation::types::Limits { min, max },
                 shared,
                 memory64: is_memory64,
             };
@@ -1400,10 +1400,10 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Process global section
     fn process_global_section(&mut self, data: &[u8]) -> Result<usize> {
-        use wrt_format::binary::read_leb128_u32;
-        use wrt_format::module::Global;
-        use wrt_format::types::FormatGlobalType;
-        use wrt_foundation::types::ValueType;
+        use kiln_format::binary::read_leb128_u32;
+        use kiln_format::module::Global;
+        use kiln_format::types::FormatGlobalType;
+        use kiln_foundation::types::ValueType;
 
         let (count, mut offset) = read_leb128_u32(data, 0)?;
 
@@ -1460,12 +1460,12 @@ impl<'a> StreamingDecoder<'a> {
                     },
                     0x41 => {
                         // i32.const - followed by LEB128 i32
-                        let (_, bytes_read) = wrt_format::binary::read_leb128_i32(data, offset)?;
+                        let (_, bytes_read) = kiln_format::binary::read_leb128_i32(data, offset)?;
                         offset += bytes_read;
                     },
                     0x42 => {
                         // i64.const - followed by LEB128 i64
-                        let (_, bytes_read) = wrt_format::binary::read_leb128_i64(data, offset)?;
+                        let (_, bytes_read) = kiln_format::binary::read_leb128_i64(data, offset)?;
                         offset += bytes_read;
                     },
                     0x43 => {
@@ -1478,7 +1478,7 @@ impl<'a> StreamingDecoder<'a> {
                     },
                     0x23 => {
                         // global.get - followed by LEB128 global index
-                        let (_, bytes_read) = wrt_format::binary::read_leb128_u32(data, offset)?;
+                        let (_, bytes_read) = kiln_format::binary::read_leb128_u32(data, offset)?;
                         offset += bytes_read;
                     },
                     0xd0 => {
@@ -1489,7 +1489,7 @@ impl<'a> StreamingDecoder<'a> {
                     },
                     0xd2 => {
                         // ref.func - followed by LEB128 func index
-                        let (_, bytes_read) = wrt_format::binary::read_leb128_u32(data, offset)?;
+                        let (_, bytes_read) = kiln_format::binary::read_leb128_u32(data, offset)?;
                         offset += bytes_read;
                     },
                     _ => {
@@ -1511,8 +1511,8 @@ impl<'a> StreamingDecoder<'a> {
             let init_bytes = data[init_start..offset].to_vec();
             #[cfg(not(feature = "std"))]
             let init_bytes = {
-                use wrt_foundation::safe_memory::NoStdProvider;
-                let mut bounded = wrt_foundation::BoundedVec::<u8, 1024, NoStdProvider<8192>>::new(
+                use kiln_foundation::safe_memory::NoStdProvider;
+                let mut bounded = kiln_foundation::BoundedVec::<u8, 1024, NoStdProvider<8192>>::new(
                     NoStdProvider::default(),
                 )
                 .map_err(|_| Error::parse_error("Failed to allocate init expression"))?;
@@ -1545,7 +1545,7 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Process export section
     fn process_export_section(&mut self, data: &[u8]) -> Result<usize> {
-        use wrt_format::binary::read_leb128_u32;
+        use kiln_format::binary::read_leb128_u32;
 
         use crate::optimized_string::validate_utf8_name;
 
@@ -1597,11 +1597,11 @@ impl<'a> StreamingDecoder<'a> {
                 "export kind parsed"
             );
             let kind = match kind_byte {
-                0x00 => wrt_format::module::ExportKind::Function,
-                0x01 => wrt_format::module::ExportKind::Table,
-                0x02 => wrt_format::module::ExportKind::Memory,
-                0x03 => wrt_format::module::ExportKind::Global,
-                0x04 => wrt_format::module::ExportKind::Tag,
+                0x00 => kiln_format::module::ExportKind::Function,
+                0x01 => kiln_format::module::ExportKind::Table,
+                0x02 => kiln_format::module::ExportKind::Memory,
+                0x03 => kiln_format::module::ExportKind::Global,
+                0x04 => kiln_format::module::ExportKind::Tag,
                 _ => {
                     #[cfg(feature = "tracing")]
                     trace!(kind_byte = kind_byte, "invalid export kind");
@@ -1624,7 +1624,7 @@ impl<'a> StreamingDecoder<'a> {
             // Add export to module
             #[cfg(feature = "std")]
             {
-                self.module.exports.push(wrt_format::module::Export {
+                self.module.exports.push(kiln_format::module::Export {
                     name: String::from(export_name_str),
                     kind,
                     index,
@@ -1632,12 +1632,12 @@ impl<'a> StreamingDecoder<'a> {
             }
             #[cfg(not(feature = "std"))]
             {
-                use wrt_foundation::BoundedString;
+                use kiln_foundation::BoundedString;
 
                 let name = BoundedString::<1024>::try_from_str(export_name_str)
-                    .map_err(|_| wrt_error::Error::parse_error("Export name too long"))?;
+                    .map_err(|_| kiln_error::Error::parse_error("Export name too long"))?;
 
-                let _ = self.module.exports.push(wrt_format::module::Export { name, kind, index });
+                let _ = self.module.exports.push(kiln_format::module::Export { name, kind, index });
             }
         }
 
@@ -1653,7 +1653,7 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Process element section
     fn process_element_section(&mut self, data: &[u8]) -> Result<usize> {
-        use wrt_format::pure_format_types::{PureElementInit, PureElementMode, PureElementSegment};
+        use kiln_format::pure_format_types::{PureElementInit, PureElementMode, PureElementSegment};
 
         let mut offset = 0;
         let (count, bytes_read) = read_leb128_u32(data, offset)?;
@@ -1703,7 +1703,7 @@ impl<'a> StreamingDecoder<'a> {
                             offset_expr_len: offset_expr_bytes.len() as u32,
                         },
                         offset_expr_bytes,
-                        wrt_format::types::RefType::Funcref,
+                        kiln_format::types::RefType::Funcref,
                     )
                 },
                 1 => {
@@ -1711,9 +1711,9 @@ impl<'a> StreamingDecoder<'a> {
                     let elem_type = data[offset];
                     offset += 1;
                     let ref_type = match elem_type {
-                        0x70 => wrt_format::types::RefType::Funcref,
-                        0x6F => wrt_format::types::RefType::Externref,
-                        _ => wrt_format::types::RefType::Funcref,
+                        0x70 => kiln_format::types::RefType::Funcref,
+                        0x6F => kiln_format::types::RefType::Externref,
+                        _ => kiln_format::types::RefType::Funcref,
                     };
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: passive");
@@ -1750,7 +1750,7 @@ impl<'a> StreamingDecoder<'a> {
                             offset_expr_len: offset_expr_bytes.len() as u32,
                         },
                         offset_expr_bytes,
-                        wrt_format::types::RefType::Funcref,
+                        kiln_format::types::RefType::Funcref,
                     )
                 },
                 3 => {
@@ -1758,9 +1758,9 @@ impl<'a> StreamingDecoder<'a> {
                     let elem_type = data[offset];
                     offset += 1;
                     let ref_type = match elem_type {
-                        0x70 => wrt_format::types::RefType::Funcref,
-                        0x6F => wrt_format::types::RefType::Externref,
-                        _ => wrt_format::types::RefType::Funcref,
+                        0x70 => kiln_format::types::RefType::Funcref,
+                        0x6F => kiln_format::types::RefType::Externref,
+                        _ => kiln_format::types::RefType::Funcref,
                     };
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: declarative");
@@ -1786,7 +1786,7 @@ impl<'a> StreamingDecoder<'a> {
                             offset_expr_len: offset_expr_bytes.len() as u32,
                         },
                         offset_expr_bytes,
-                        wrt_format::types::RefType::Funcref,
+                        kiln_format::types::RefType::Funcref,
                     )
                 },
                 5 => {
@@ -1794,9 +1794,9 @@ impl<'a> StreamingDecoder<'a> {
                     let ref_type_byte = data[offset];
                     offset += 1;
                     let ref_type = match ref_type_byte {
-                        0x70 => wrt_format::types::RefType::Funcref,
-                        0x6F => wrt_format::types::RefType::Externref,
-                        _ => wrt_format::types::RefType::Funcref,
+                        0x70 => kiln_format::types::RefType::Funcref,
+                        0x6F => kiln_format::types::RefType::Externref,
+                        _ => kiln_format::types::RefType::Funcref,
                     };
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: passive with type");
@@ -1822,9 +1822,9 @@ impl<'a> StreamingDecoder<'a> {
                     let ref_type_byte = data[offset];
                     offset += 1;
                     let ref_type = match ref_type_byte {
-                        0x70 => wrt_format::types::RefType::Funcref,
-                        0x6F => wrt_format::types::RefType::Externref,
-                        _ => wrt_format::types::RefType::Funcref,
+                        0x70 => kiln_format::types::RefType::Funcref,
+                        0x6F => kiln_format::types::RefType::Externref,
+                        _ => kiln_format::types::RefType::Funcref,
                     };
 
                     #[cfg(feature = "tracing")]
@@ -1844,9 +1844,9 @@ impl<'a> StreamingDecoder<'a> {
                     let ref_type_byte = data[offset];
                     offset += 1;
                     let ref_type = match ref_type_byte {
-                        0x70 => wrt_format::types::RefType::Funcref,
-                        0x6F => wrt_format::types::RefType::Externref,
-                        _ => wrt_format::types::RefType::Funcref,
+                        0x70 => kiln_format::types::RefType::Funcref,
+                        0x6F => kiln_format::types::RefType::Externref,
+                        _ => kiln_format::types::RefType::Funcref,
                     };
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: declarative with type");
@@ -2031,14 +2031,14 @@ impl<'a> StreamingDecoder<'a> {
 
                     // Convert to ValueType and add to locals
                     let vt = match value_type {
-                        0x7F => wrt_foundation::types::ValueType::I32,
-                        0x7E => wrt_foundation::types::ValueType::I64,
-                        0x7D => wrt_foundation::types::ValueType::F32,
-                        0x7C => wrt_foundation::types::ValueType::F64,
-                        0x7B => wrt_foundation::types::ValueType::V128,
-                        0x70 => wrt_foundation::types::ValueType::FuncRef,
-                        0x6F => wrt_foundation::types::ValueType::ExternRef,
-                        0x69 => wrt_foundation::types::ValueType::ExnRef,
+                        0x7F => kiln_foundation::types::ValueType::I32,
+                        0x7E => kiln_foundation::types::ValueType::I64,
+                        0x7D => kiln_foundation::types::ValueType::F32,
+                        0x7C => kiln_foundation::types::ValueType::F64,
+                        0x7B => kiln_foundation::types::ValueType::V128,
+                        0x70 => kiln_foundation::types::ValueType::FuncRef,
+                        0x6F => kiln_foundation::types::ValueType::ExternRef,
+                        0x69 => kiln_foundation::types::ValueType::ExnRef,
                         _ => return Err(Error::parse_error("Invalid local type")),
                     };
 
@@ -2095,7 +2095,7 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Process data section
     fn process_data_section(&mut self, data: &[u8]) -> Result<usize> {
-        use wrt_format::pure_format_types::{PureDataMode, PureDataSegment};
+        use kiln_format::pure_format_types::{PureDataMode, PureDataSegment};
 
         let mut offset = 0;
         let (count, bytes_read) = read_leb128_u32(data, offset)?;
@@ -2309,7 +2309,7 @@ impl<'a> StreamingDecoder<'a> {
     /// Process tag section (exception handling proposal)
     /// Tag section ID is 13 (0x0D)
     fn process_tag_section(&mut self, data: &[u8]) -> Result<usize> {
-        use wrt_format::binary::read_leb128_u32;
+        use kiln_format::binary::read_leb128_u32;
 
         let mut offset = 0;
         let (count, bytes_read) = read_leb128_u32(data, offset)?;
@@ -2427,7 +2427,7 @@ impl<'a> StreamingDecoder<'a> {
     /// Finish decoding and return the module
     /// Finish decoding and return the module (std version)
     #[cfg(feature = "std")]
-    pub fn finish(self) -> Result<WrtModule> {
+    pub fn finish(self) -> Result<KilnModule> {
         // Perform cross-section validation
         self.validate_cross_section_counts()?;
 
@@ -2441,7 +2441,7 @@ impl<'a> StreamingDecoder<'a> {
 
     /// Finish decoding and return the module (no_std version)
     #[cfg(not(feature = "std"))]
-    pub fn finish(self) -> Result<WrtModule<NoStdProvider<8192>>> {
+    pub fn finish(self) -> Result<KilnModule<NoStdProvider<8192>>> {
         // Perform cross-section validation
         self.validate_cross_section_counts()?;
 
@@ -2451,10 +2451,10 @@ impl<'a> StreamingDecoder<'a> {
 
 /// Decode a WebAssembly module using streaming processing (std version)
 #[cfg(feature = "std")]
-pub fn decode_module_streaming(binary: &[u8]) -> Result<WrtModule> {
+pub fn decode_module_streaming(binary: &[u8]) -> Result<KilnModule> {
     // Enter module scope for bump allocator - all Vec allocations will be tracked
-    let _scope = wrt_foundation::capabilities::MemoryFactory::enter_module_scope(
-        wrt_foundation::budget_aware_provider::CrateId::Decoder,
+    let _scope = kiln_foundation::capabilities::MemoryFactory::enter_module_scope(
+        kiln_foundation::budget_aware_provider::CrateId::Decoder,
     )?;
 
     let mut decoder = StreamingDecoder::new(binary)?;
@@ -2471,7 +2471,7 @@ pub fn decode_module_streaming(binary: &[u8]) -> Result<WrtModule> {
 
 /// Decode a WebAssembly module using streaming processing (no_std version)
 #[cfg(not(feature = "std"))]
-pub fn decode_module_streaming(binary: &[u8]) -> Result<WrtModule<NoStdProvider<8192>>> {
+pub fn decode_module_streaming(binary: &[u8]) -> Result<KilnModule<NoStdProvider<8192>>> {
     let mut decoder = StreamingDecoder::new(binary)?;
 
     // First validate and decode the header

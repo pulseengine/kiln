@@ -3,7 +3,7 @@
 //! Provides debug capabilities that adapt to platform limitations and
 //! resources.
 
-use wrt_error::Error;
+use kiln_error::Error;
 
 // Stub imports for platform limits - will be replaced during integration
 mod platform_stubs {

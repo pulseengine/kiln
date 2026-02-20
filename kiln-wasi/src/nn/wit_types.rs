@@ -33,7 +33,7 @@ pub enum ErrorCode {
 
 impl From<Error> for ErrorCode {
     fn from(err: Error) -> Self {
-        use wrt_error::codes;
+        use kiln_error::codes;
         match err.code {
             codes::INVALID_ARGUMENT | codes::WASI_INVALID_ARGUMENT => ErrorCode::InvalidArgument,
             codes::UNSUPPORTED => ErrorCode::UnsupportedOperation,

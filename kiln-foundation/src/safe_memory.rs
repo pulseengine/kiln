@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Safe Memory Abstractions
 // SW-REQ-ID: REQ_MEM_SAFETY_001
 
@@ -634,7 +634,7 @@ pub trait Provider: Send + Sync + fmt::Debug + Clone + Default + PartialEq + Eq 
     fn ensure_used_up_to(&mut self, byte_offset: usize) -> Result<()>;
 
     /// Binary std/no_std choice
-    fn acquire_memory(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8>;
+    fn acquire_memory(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8>;
 
     /// Releases a previously acquired block of memory to the provider's
     /// Binary std/no_std choice
@@ -643,7 +643,7 @@ pub trait Provider: Send + Sync + fmt::Debug + Clone + Default + PartialEq + Eq 
     /// This method encapsulates unsafe operations internally.
     /// Binary std/no_std choice
     /// `acquire_memory` with the same `layout`, and not yet released.
-    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> wrt_error::Result<()>;
+    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> kiln_error::Result<()>;
 
     /// Binary std/no_std choice
     fn get_allocator(&self) -> &Self::Allocator;
@@ -1074,12 +1074,12 @@ impl Provider for StdProvider {
         self // Since Self implements Allocator
     }
 
-    fn acquire_memory(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8> {
+    fn acquire_memory(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
         // Delegate to its own Allocator implementation
         self.allocate(layout)
     }
 
-    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> wrt_error::Result<()> {
+    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> kiln_error::Result<()> {
         // Delegate to its own Allocator implementation
         self.deallocate(ptr, layout)
     }
@@ -1099,7 +1099,7 @@ impl Provider for StdProvider {
 
 #[cfg(feature = "std")]
 impl Allocator for StdProvider {
-    fn allocate(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8> {
+    fn allocate(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
         // Binary std/no_std choice
         // This would require unsafe code and proper memory management
         Err(Error::memory_error(
@@ -1107,7 +1107,7 @@ impl Allocator for StdProvider {
         ))
     }
 
-    fn deallocate(&self, _ptr: *mut u8, _layout: core::alloc::Layout) -> wrt_error::Result<()> {
+    fn deallocate(&self, _ptr: *mut u8, _layout: core::alloc::Layout) -> kiln_error::Result<()> {
         // Binary std/no_std choice
         Err(Error::memory_error(
             "StdProvider does not support raw deallocation",
@@ -1570,7 +1570,7 @@ impl<const N: usize> Provider for NoStdProvider<N> {
         self
     }
 
-    fn acquire_memory(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8> {
+    fn acquire_memory(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
         // Binary std/no_std choice
         // It has a fixed buffer. This is more for trait compatibility.
         // We could return a pointer into self.data if layout fits and is unused,
@@ -1579,7 +1579,7 @@ impl<const N: usize> Provider for NoStdProvider<N> {
         Allocator::allocate(self, layout)
     }
 
-    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> wrt_error::Result<()> {
+    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> kiln_error::Result<()> {
         // Mirror the existing Allocator impl for NoStdProvider
         // Safety: This encapsulates the unsafe operation internally
         Allocator::deallocate(self, ptr, layout)
@@ -1653,7 +1653,7 @@ pub trait Allocator: fmt::Debug + Send + Sync {
     /// Allocates a block of memory with the given layout.
     /// # Errors
     /// Binary std/no_std choice
-    fn allocate(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8>;
+    fn allocate(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8>;
 
     /// Binary std/no_std choice
     ///
@@ -1665,11 +1665,11 @@ pub trait Allocator: fmt::Debug + Send + Sync {
     /// # Errors
     /// Binary std/no_std choice
     /// succeed or panic).
-    fn deallocate(&self, ptr: *mut u8, layout: core::alloc::Layout) -> wrt_error::Result<()>;
+    fn deallocate(&self, ptr: *mut u8, layout: core::alloc::Layout) -> kiln_error::Result<()>;
 }
 
 impl<const N: usize> Allocator for NoStdProvider<N> {
-    fn allocate(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8> {
+    fn allocate(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
         // Binary std/no_std choice
         // general sense. It could potentially return a pointer into its *own*
         // buffer if N is large enough and it had a mechanism to manage
@@ -1692,7 +1692,7 @@ impl<const N: usize> Allocator for NoStdProvider<N> {
         ))
     }
 
-    fn deallocate(&self, _ptr: *mut u8, _layout: core::alloc::Layout) -> wrt_error::Result<()> {
+    fn deallocate(&self, _ptr: *mut u8, _layout: core::alloc::Layout) -> kiln_error::Result<()> {
         // Binary std/no_std choice
         // Binary std/no_std choice
         // effectively a no-op that returns Ok.
@@ -1807,8 +1807,8 @@ impl<P: Provider> SafeMemoryHandler<P> {
     /// # Examples
     ///
     /// ```
-    /// # use wrt_foundation::safe_memory::{SafeMemoryHandler, NoStdProvider};
-    /// # use wrt_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
+    /// # use kiln_foundation::safe_memory::{SafeMemoryHandler, NoStdProvider};
+    /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let handler = SafeMemoryHandler::new(provider);
@@ -1836,7 +1836,7 @@ impl<P: Provider> SafeMemoryHandler<P> {
     ) -> Result<crate::bounded::BoundedVec<u8, 4096, crate::safe_memory::NoStdProvider<4096>>> {
         use crate::budget_aware_provider::CrateId;
         #[allow(deprecated)]
-        use crate::wrt_memory_system::CapabilityWrtFactory;
+        use crate::kiln_memory_system::CapabilityKilnFactory;
 
         let size = self.provider.size();
         if size == 0 {

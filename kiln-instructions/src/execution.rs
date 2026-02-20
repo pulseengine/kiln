@@ -60,9 +60,9 @@ pub trait PureExecutionContext {
 /// # Examples
 ///
 /// ```
-/// use wrt_instructions::execution::ExecutionContext;
-/// use wrt_instructions::execution::PureExecutionContext;
-/// use wrt_foundation::values::Value;
+/// use kiln_instructions::execution::ExecutionContext;
+/// use kiln_instructions::execution::PureExecutionContext;
+/// use kiln_foundation::values::Value;
 ///
 /// let mut context = ExecutionContext::new();
 /// context.push_value(Value::I32(42)).unwrap();
@@ -71,7 +71,7 @@ pub trait PureExecutionContext {
 /// ```
 pub struct ExecutionContext {
     #[cfg(feature = "safety")]
-    stack: BoundedVec<Value, 1024, wrt_foundation::safe_memory::DefaultNoStdProvider>, // Using a reasonably large size for WASM stack
+    stack: BoundedVec<Value, 1024, kiln_foundation::safe_memory::DefaultNoStdProvider>, // Using a reasonably large size for WASM stack
     #[cfg(not(feature = "safety"))]
     stack: crate::types::ValueStack,
 }
@@ -171,7 +171,7 @@ impl ComparisonContext for ExecutionContext {
 #[cfg(test)]
 pub struct TestExecutionContext {
     #[cfg(feature = "safety")]
-    stack: BoundedVec<Value, 1024, wrt_foundation::safe_memory::DefaultNoStdProvider>,
+    stack: BoundedVec<Value, 1024, kiln_foundation::safe_memory::DefaultNoStdProvider>,
     #[cfg(not(feature = "safety"))]
     stack: crate::types::ValueStack,
 }

@@ -1,7 +1,7 @@
 //! Format bridge interface
 //!
 //! This module provides clean interfaces for receiving format data from
-//! wrt-format and converting it to runtime representations. It establishes
+//! kiln-format and converting it to runtime representations. It establishes
 //! the runtime side of the boundary between format and runtime layers.
 
 // alloc is imported in lib.rs with proper feature gates
@@ -11,7 +11,7 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use alloc::vec::Vec;
 
-use wrt_foundation::{
+use kiln_foundation::{
     traits::{
         Checksummable,
         FromBytes,
@@ -25,7 +25,7 @@ use wrt_foundation::{
 use crate::prelude::*;
 // For no_std without alloc, use type aliases with concrete providers
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-type Vec<T> = wrt_foundation::BoundedVec<T, 16, wrt_foundation::NoStdProvider<1024>>;
+type Vec<T> = kiln_foundation::BoundedVec<T, 16, kiln_foundation::NoStdProvider<1024>>;
 
 /// Trait for types that can be initialized from format representations
 pub trait FromFormatBridge<FormatData> {
@@ -62,7 +62,7 @@ pub struct RuntimeMemoryProvider {
 }
 
 impl Checksummable for RuntimeMemoryProvider {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.index.update_checksum(checksum);
         self.current_size.update_checksum(checksum);
         self.max_size.update_checksum(checksum);
@@ -116,7 +116,7 @@ pub struct RuntimeTableProvider {
 }
 
 impl Checksummable for RuntimeTableProvider {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.index.update_checksum(checksum);
         self.current_size.update_checksum(checksum);
         self.max_size.update_checksum(checksum);
@@ -169,7 +169,7 @@ pub enum RuntimeRefType {
 
 
 impl Checksummable for RuntimeRefType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
             RuntimeRefType::FuncRef => 0u8,
             RuntimeRefType::ExternRef => 1u8,
@@ -263,7 +263,7 @@ impl Default for RuntimeDataSegment {
                 }
                 #[cfg(not(any(feature = "std", feature = "alloc")))]
                 {
-                    wrt_foundation::BoundedVec::new(wrt_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
+                    kiln_foundation::BoundedVec::new(kiln_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
                 }
             },
             initialization_state: InitializationState::Pending,
@@ -273,7 +273,7 @@ impl Default for RuntimeDataSegment {
 }
 
 impl Checksummable for RuntimeDataSegment {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.index.update_checksum(checksum);
         self.memory_index.update_checksum(checksum);
         self.evaluated_offset.update_checksum(checksum);
@@ -336,8 +336,8 @@ impl FromBytes for RuntimeDataSegment {
             }
             #[cfg(not(any(feature = "std", feature = "alloc")))]
             {
-                let data_provider = wrt_foundation::NoStdProvider::<1024>::default();
-                let mut vec = wrt_foundation::BoundedVec::new(data_provider)
+                let data_provider = kiln_foundation::NoStdProvider::<1024>::default();
+                let mut vec = kiln_foundation::BoundedVec::new(data_provider)
                     .map_err(|_| Error::parse_error("Failed to create data vector"))?;
                 for _ in 0..data_len {
                     vec.push(reader.read_u8()?).map_err(|_| {
@@ -392,7 +392,7 @@ impl Default for RuntimeElementSegment {
                 }
                 #[cfg(not(any(feature = "std", feature = "alloc")))]
                 {
-                    wrt_foundation::BoundedVec::new(wrt_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
+                    kiln_foundation::BoundedVec::new(kiln_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
                 }
             },
             initialization_state: InitializationState::Pending,
@@ -402,7 +402,7 @@ impl Default for RuntimeElementSegment {
 }
 
 impl Checksummable for RuntimeElementSegment {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.index.update_checksum(checksum);
         self.table_index.update_checksum(checksum);
         self.evaluated_offset.update_checksum(checksum);
@@ -455,8 +455,8 @@ impl FromBytes for RuntimeElementSegment {
             }
             #[cfg(not(any(feature = "std", feature = "alloc")))]
             {
-                let elements_provider = wrt_foundation::NoStdProvider::<1024>::default();
-                let mut vec = wrt_foundation::BoundedVec::new(elements_provider)
+                let elements_provider = kiln_foundation::NoStdProvider::<1024>::default();
+                let mut vec = kiln_foundation::BoundedVec::new(elements_provider)
                     .map_err(|_| Error::parse_error("Failed to create elements vector"))?;
                 for _ in 0..elements_len {
                     vec.push(RuntimeElement::from_bytes_with_provider(reader, provider)?).map_err(
@@ -497,7 +497,7 @@ impl Default for RuntimeElement {
 }
 
 impl Checksummable for RuntimeElement {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
             RuntimeElement::FunctionIndex(_) => 0u8,
             RuntimeElement::EvaluatedRef(_) => 1u8,
@@ -561,7 +561,7 @@ pub struct RuntimeReference {
 }
 
 impl Checksummable for RuntimeReference {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.ref_type.update_checksum(checksum);
         self.handle.update_checksum(checksum);
     }
@@ -604,7 +604,7 @@ pub enum InitializationState {
 }
 
 impl Checksummable for InitializationState {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
             InitializationState::Pending => 0u8,
             InitializationState::InProgress => 1u8,
@@ -683,12 +683,12 @@ impl RuntimeModuleInitializer {
         }
         #[cfg(not(any(feature = "std", feature = "alloc")))]
         {
-            let provider = wrt_foundation::NoStdProvider::<1024>::default();
+            let provider = kiln_foundation::NoStdProvider::<1024>::default();
             Self {
                 context,
-                data_segments: wrt_foundation::BoundedVec::new(provider.clone())
+                data_segments: kiln_foundation::BoundedVec::new(provider.clone())
                     .unwrap_or_default(),
-                element_segments: wrt_foundation::BoundedVec::new(provider).unwrap_or_default(),
+                element_segments: kiln_foundation::BoundedVec::new(provider).unwrap_or_default(),
                 start_function: None,
                 current_step: 0,
                 total_steps: 0,
@@ -732,7 +732,7 @@ impl RuntimeModuleInitializer {
         let mut active_indices = Vec::new();
         #[cfg(not(any(feature = "std", feature = "alloc")))]
         let mut active_indices = {
-            let provider = wrt_foundation::NoStdProvider::<1024>::default();
+            let provider = kiln_foundation::NoStdProvider::<1024>::default();
             Vec::new(provider).map_err(|_| {
                 Error::runtime_execution_error("Failed to create active indices vector")
             })?
@@ -761,7 +761,7 @@ impl RuntimeModuleInitializer {
         let mut active_element_indices = Vec::new();
         #[cfg(not(any(feature = "std", feature = "alloc")))]
         let mut active_element_indices = {
-            let provider = wrt_foundation::NoStdProvider::<1024>::default();
+            let provider = kiln_foundation::NoStdProvider::<1024>::default();
             Vec::new(provider).map_err(|_| {
                 Error::runtime_execution_error("Failed to create active element indices vector")
             })?
@@ -835,7 +835,7 @@ impl RuntimeModuleInitializer {
                 }
                 #[cfg(not(any(feature = "std", feature = "alloc")))]
                 {
-                    wrt_foundation::BoundedVec::new(wrt_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
+                    kiln_foundation::BoundedVec::new(kiln_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
                 }
             },
             initialization_state: InitializationState::Pending,
@@ -860,7 +860,7 @@ impl RuntimeModuleInitializer {
                 }
                 #[cfg(not(any(feature = "std", feature = "alloc")))]
                 {
-                    wrt_foundation::BoundedVec::new(wrt_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
+                    kiln_foundation::BoundedVec::new(kiln_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
                 }
             },
             initialization_state: InitializationState::Pending,
@@ -914,7 +914,7 @@ impl RuntimeModuleInitializer {
     }
 }
 
-/// Format module runtime data (received from wrt-format bridge)
+/// Format module runtime data (received from kiln-format bridge)
 #[derive(Debug, Clone)]
 pub struct FormatModuleRuntimeData {
     /// Start function index
@@ -927,7 +927,7 @@ pub struct FormatModuleRuntimeData {
     pub estimated_initialization_steps: usize,
 }
 
-/// Format data extraction (received from wrt-format bridge)
+/// Format data extraction (received from kiln-format bridge)
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[derive(Default)]
 pub struct FormatDataExtraction {
@@ -943,7 +943,7 @@ pub struct FormatDataExtraction {
 
 
 impl Checksummable for FormatDataExtraction {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.memory_index.update_checksum(checksum);
         (self.offset_expr_bytes.len() as u32).update_checksum(checksum);
         for byte in &self.offset_expr_bytes {
@@ -993,8 +993,8 @@ impl FromBytes for FormatDataExtraction {
             }
             #[cfg(not(any(feature = "std", feature = "alloc")))]
             {
-                let bytes_provider = wrt_foundation::NoStdProvider::<1024>::default();
-                let mut vec = wrt_foundation::BoundedVec::new(bytes_provider)
+                let bytes_provider = kiln_foundation::NoStdProvider::<1024>::default();
+                let mut vec = kiln_foundation::BoundedVec::new(bytes_provider)
                     .map_err(|_| Error::parse_error("Failed to create offset bytes vector"))?;
                 for _ in 0..bytes_len {
                     vec.push(reader.read_u8()?).map_err(|_| {
@@ -1017,7 +1017,7 @@ impl FromBytes for FormatDataExtraction {
     }
 }
 
-/// Format element extraction (received from wrt-format bridge)
+/// Format element extraction (received from kiln-format bridge)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatElementExtraction {
     /// Table index for active segments
@@ -1041,7 +1041,7 @@ impl Default for FormatElementExtraction {
                 }
                 #[cfg(not(any(feature = "std", feature = "alloc")))]
                 {
-                    wrt_foundation::BoundedVec::new(wrt_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
+                    kiln_foundation::BoundedVec::new(kiln_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
                 }
             },
             init_data_type:          FormatElementInitType::FunctionIndices,
@@ -1051,7 +1051,7 @@ impl Default for FormatElementExtraction {
 }
 
 impl Checksummable for FormatElementExtraction {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.table_index.update_checksum(checksum);
         (self.offset_expr_bytes.len() as u32).update_checksum(checksum);
         for byte in &self.offset_expr_bytes {
@@ -1101,8 +1101,8 @@ impl FromBytes for FormatElementExtraction {
             }
             #[cfg(not(any(feature = "std", feature = "alloc")))]
             {
-                let bytes_provider = wrt_foundation::NoStdProvider::<1024>::default();
-                let mut vec = wrt_foundation::BoundedVec::new(bytes_provider)
+                let bytes_provider = kiln_foundation::NoStdProvider::<1024>::default();
+                let mut vec = kiln_foundation::BoundedVec::new(bytes_provider)
                     .map_err(|_| Error::parse_error("Failed to create offset bytes vector"))?;
                 for _ in 0..bytes_len {
                     vec.push(reader.read_u8()?).map_err(|_| {
@@ -1135,7 +1135,7 @@ pub enum FormatElementInitType {
 }
 
 impl Checksummable for FormatElementInitType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
             FormatElementInitType::FunctionIndices => 0u8,
             FormatElementInitType::ExpressionBytes => 1u8,
@@ -1188,11 +1188,11 @@ impl Default for RuntimeContext {
         }
         #[cfg(not(any(feature = "std", feature = "alloc")))]
         {
-            let provider = wrt_foundation::NoStdProvider::<1024>::default();
+            let provider = kiln_foundation::NoStdProvider::<1024>::default();
             Self {
-                memory_providers:         wrt_foundation::BoundedVec::new(provider.clone())
+                memory_providers:         kiln_foundation::BoundedVec::new(provider.clone())
                     .unwrap_or_default(),
-                table_providers:          wrt_foundation::BoundedVec::new(provider)
+                table_providers:          kiln_foundation::BoundedVec::new(provider)
                     .unwrap_or_default(),
                 max_initialization_steps: 1000,
                 asil_constraints:         ASILConstraints::default(),

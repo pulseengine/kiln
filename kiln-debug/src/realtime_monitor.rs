@@ -14,8 +14,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use wrt_error::{Error, Result};
-use wrt_foundation::budget_aware_provider::CrateId;
+use kiln_error::{Error, Result};
+use kiln_foundation::budget_aware_provider::CrateId;
 
 /// Real-time monitoring configuration
 #[derive(Debug, Clone)]
@@ -223,7 +223,7 @@ impl RealtimeMonitor {
         // This requires injecting a MemoryCapabilityContext that can provide
         // aggregated statistics across all capabilities
 
-        use wrt_foundation::monitoring::MEMORY_MONITOR;
+        use kiln_foundation::monitoring::MEMORY_MONITOR;
 
         let monitor_stats = MEMORY_MONITOR.get_statistics();
         let total_allocated = 0; // TODO: Get from capability context
@@ -279,7 +279,7 @@ impl RealtimeMonitor {
     #[allow(dead_code)]
     fn check_alerts(sample: &MemorySample, config: &MonitorConfig) -> Option<MemoryAlert> {
         // Check global memory health
-        // Note: Memory analysis features will be restored when wrt_foundation
+        // Note: Memory analysis features will be restored when kiln_foundation
         // memory_analysis module is available
 
         // Check per-crate utilization

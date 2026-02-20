@@ -1,13 +1,13 @@
 //! Demonstration of the WRT internal compile-time allocator system
 //!
 //! This example shows how the allocator system is now integrated directly
-//! into wrt-foundation without external dependencies.
+//! into kiln-foundation without external dependencies.
 
-use wrt_foundation::allocator::{
+use kiln_foundation::allocator::{
     CapacityError,
     CrateId,
-    WrtHashMap,
-    WrtVec,
+    KilnHashMap,
+    KilnVec,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,9 +31,9 @@ fn demo_internal_collections() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n📊 1. Internal Compile-Time Verified Collections");
     println!("------------------------------------------------");
 
-    // These are now part of wrt-foundation, not external crates
-    let mut foundation_vec: WrtVec<i32, { CrateId::Foundation as u8 }, 1000> = WrtVec::new();
-    let mut component_vec: WrtVec<String, { CrateId::Component as u8 }, 500> = WrtVec::new();
+    // These are now part of kiln-foundation, not external crates
+    let mut foundation_vec: KilnVec<i32, { CrateId::Foundation as u8 }, 1000> = KilnVec::new();
+    let mut component_vec: KilnVec<String, { CrateId::Component as u8 }, 500> = KilnVec::new();
 
     println!(
         "✓ Foundation Vec (internal): {} items",
@@ -55,9 +55,9 @@ fn demo_foundation_integration() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n🔗 2. Foundation Integration");
     println!("-----------------------------");
 
-    // The allocator is now seamlessly integrated into wrt-foundation
-    let mut runtime_map: WrtHashMap<String, i32, { CrateId::Runtime as u8 }, 256> =
-        WrtHashMap::new();
+    // The allocator is now seamlessly integrated into kiln-foundation
+    let mut runtime_map: KilnHashMap<String, i32, { CrateId::Runtime as u8 }, 256> =
+        KilnHashMap::new();
 
     // Works exactly like standard collections
     runtime_map.insert("runtime_key".to_string(), 100)?;
@@ -70,7 +70,7 @@ fn demo_foundation_integration() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Demonstrate capacity limits
-    let mut small_vec: WrtVec<i32, { CrateId::Host as u8 }, 3> = WrtVec::new();
+    let mut small_vec: KilnVec<i32, { CrateId::Host as u8 }, 3> = KilnVec::new();
     small_vec.push(1)?;
     small_vec.push(2)?;
     small_vec.push(3)?;
@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn test_internal_allocator() {
         // Test that the internal allocator system works
-        let mut vec: WrtVec<i32, { CrateId::Foundation as u8 }, 100> = WrtVec::new();
+        let mut vec: KilnVec<i32, { CrateId::Foundation as u8 }, 100> = KilnVec::new();
 
         assert!(vec.push(1).is_ok());
         assert!(vec.push(2).is_ok());
@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn test_capacity_enforcement() {
-        let mut vec: WrtVec<i32, { CrateId::Foundation as u8 }, 2> = WrtVec::new();
+        let mut vec: KilnVec<i32, { CrateId::Foundation as u8 }, 2> = KilnVec::new();
 
         assert!(vec.push(1).is_ok());
         assert!(vec.push(2).is_ok());

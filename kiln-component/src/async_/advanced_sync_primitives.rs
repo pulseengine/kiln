@@ -33,14 +33,14 @@ use core::{
     time::Duration,
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId, Mutex,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     component_value::ComponentValue,
     safe_managed_alloc,
     safe_memory::NoStdProvider,
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::TaskId;

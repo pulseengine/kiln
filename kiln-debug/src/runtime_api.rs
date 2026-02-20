@@ -5,7 +5,7 @@ use alloc::boxed::Box;
 #[cfg(feature = "std")]
 use std::boxed::Box;
 
-use wrt_foundation::{
+use kiln_foundation::{
     NoStdProvider,
     bounded::{BoundedVec, MAX_DWARF_FILE_TABLE},
 };
@@ -262,12 +262,12 @@ pub enum DebugError {
     NotSupported,
 }
 
-/// Example integration for WRT interpreter
+/// Example integration for Kiln interpreter
 #[cfg(feature = "example-integration")]
 mod integration_example {
     use super::*;
 
-    /// Example: How WRT interpreter would implement RuntimeState
+    /// Example: How Kiln interpreter would implement RuntimeState
     struct InterpreterState<'a> {
         pc: u32,
         sp: u32,

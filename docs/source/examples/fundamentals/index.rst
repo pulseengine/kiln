@@ -2,7 +2,7 @@
 Safety Classification Examples
 =========================
 
-This section provides practical examples of using WRT's unified safety classification system for cross-standard compatibility and compile-time safety verification.
+This section provides practical examples of using Kiln's unified safety classification system for cross-standard compatibility and compile-time safety verification.
 
 .. contents:: On this page
    :local:
@@ -16,7 +16,7 @@ Comparing Safety Levels
 
 .. code-block:: rust
 
-   use wrt_safety::SafetyIntegrityLevel;
+   use kiln_safety::SafetyIntegrityLevel;
 
    fn compare_safety_levels() {
        // Automotive ASIL C and Industrial SIL 3 both have severity 750
@@ -46,7 +46,7 @@ Cross-Domain System Integration
 
 .. code-block:: rust
 
-   use wrt_safety::SafetyIntegrityLevel;
+   use kiln_safety::SafetyIntegrityLevel;
 
    struct SystemComponent {
        name: String,
@@ -102,7 +102,7 @@ Using Safety Classifications in Functions
 
 .. code-block:: rust
 
-   use wrt_safety::{safety_classified, SafetyIntegrityLevel, static_safety_assert};
+   use kiln_safety::{safety_classified, SafetyIntegrityLevel, static_safety_assert};
 
    // Function requires ASIL B or higher safety level
    #[safety_classified(SafetyIntegrityLevel::ASIL_B)]
@@ -142,7 +142,7 @@ Safety Level Hierarchies
 
 .. code-block:: rust
 
-   use wrt_safety::SafetyIntegrityLevel;
+   use kiln_safety::SafetyIntegrityLevel;
 
    fn demonstrate_safety_hierarchies() {
        // Automotive hierarchy
@@ -178,7 +178,7 @@ Dynamic Safety Context
 
 .. code-block:: rust
 
-   use wrt_safety::{SafetyIntegrityLevel, SafetyContext, VerificationLevel};
+   use kiln_safety::{SafetyIntegrityLevel, SafetyContext, VerificationLevel};
 
    struct SafeOperationContext {
        required_level: SafetyIntegrityLevel,
@@ -258,7 +258,7 @@ Agricultural Safety Example
 
 .. code-block:: rust
 
-   use wrt_safety::SafetyIntegrityLevel;
+   use kiln_safety::SafetyIntegrityLevel;
 
    struct AgriculturalMachine {
        name: String,
@@ -314,7 +314,7 @@ Standards Compliance Checking
 
 .. code-block:: rust
 
-   use wrt_safety::{SafetyIntegrityLevel, SafetyStandard};
+   use kiln_safety::{SafetyIntegrityLevel, SafetyStandard};
 
    struct ComplianceChecker {
        required_standards: Vec<(SafetyStandard, SafetyIntegrityLevel)>,

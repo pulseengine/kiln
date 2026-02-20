@@ -10,15 +10,15 @@ Simple Test Diagram
 
    @startuml
    actor User
-   participant "WRT Runtime" as WRT
+   participant "Kiln Runtime" as Kiln
    database "WASM Module" as WASM
    
-   User -> WRT: Execute module
-   WRT -> WASM: Load binary
-   WASM --> WRT: Module loaded
-   WRT -> WRT: Validate
-   WRT -> WRT: Instantiate
-   WRT --> User: Execution result
+   User -> Kiln: Execute module
+   Kiln -> WASM: Load binary
+   WASM --> Kiln: Module loaded
+   Kiln -> Kiln: Validate
+   Kiln -> Kiln: Instantiate
+   Kiln --> User: Execution result
    @enduml
 
 Component Test

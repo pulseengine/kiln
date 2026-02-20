@@ -1,11 +1,11 @@
-//! A detailed WebAssembly analyzer using wrt ecosystem
+//! A detailed WebAssembly analyzer using kiln ecosystem
 //!
-//! This example demonstrates how to use wrt-decoder, wrt-component, and
-//! wrt-format to analyze WebAssembly modules and components in depth.
+//! This example demonstrates how to use kiln-decoder, kiln-component, and
+//! kiln-format to analyze WebAssembly modules and components in depth.
 
 use std::{env, fs, path::Path, str};
 
-use wrt_decoder::{
+use kiln_decoder::{
     Module,
     component::{
         ComponentAnalyzer, ComponentSummary, ExtendedExportInfo, ExtendedImportInfo,
@@ -13,8 +13,8 @@ use wrt_decoder::{
         extract_embedded_modules, is_valid_module,
     },
 };
-use wrt_error::Result;
-use wrt_format::{binary, wasmparser::SectionId};
+use kiln_error::Result;
+use kiln_format::{binary, wasmparser::SectionId};
 
 /// Displays a hexadecimal dump of a portion of a binary slice.
 fn hex_dump(data: &[u8], offset: usize, len: usize) {
@@ -413,10 +413,10 @@ fn analyze_memory_usage(module: &Module) -> Result<()> {
         );
 
         match &data.offset {
-            wrt_decoder::DataSegmentOffset::Active(expr) => {
+            kiln_decoder::DataSegmentOffset::Active(expr) => {
                 println!("    mode: active, offset expression: {:?}", expr);
             },
-            wrt_decoder::DataSegmentOffset::Passive => {
+            kiln_decoder::DataSegmentOffset::Passive => {
                 println!("    mode: passive");
             },
         }
@@ -631,23 +631,23 @@ fn main() -> Result<()> {
     println!("\n=== File Header Hexdump ===");
     hex_dump(&binary, 0, 64);
 
-    // Analyze binary format using wrt-format
+    // Analyze binary format using kiln-format
     analyze_binary_format(&binary)?;
 
     // Check if it's a component
-    let is_component = wrt_decoder::component::utils::is_component(&binary).unwrap_or(false);
+    let is_component = kiln_decoder::component::utils::is_component(&binary).unwrap_or(false);
 
     if is_component {
         // Analyze as a component
         analyze_component(&binary)?;
 
         // Extract and analyze the first embedded module
-        if let Ok(modules) = wrt_decoder::component::extract_embedded_modules(&binary) {
+        if let Ok(modules) = kiln_decoder::component::extract_embedded_modules(&binary) {
             if !modules.is_empty() {
                 let module_binary = &modules[0];
 
                 // Analyze the module
-                if let Ok(module) = wrt_decoder::decode(module_binary) {
+                if let Ok(module) = kiln_decoder::decode(module_binary) {
                     analyze_module(module_binary)?;
                     parse_name_section(&module)?;
                     analyze_memory_usage(&module)?;
@@ -656,7 +656,7 @@ fn main() -> Result<()> {
         }
     } else {
         // Try to analyze as a module
-        match wrt_decoder::decode(&binary) {
+        match kiln_decoder::decode(&binary) {
             Ok(module) => {
                 analyze_module(&binary)?;
                 parse_name_section(&module)?;

@@ -1,11 +1,11 @@
-//! Direct WASM execution example using lower-level WRT APIs
+//! Direct WASM execution example using lower-level Kiln APIs
 //! This bypasses the component system to demonstrate actual execution
 
-use wrt_format::module::Module;
-use wrt_runtime::module::Module as RuntimeModule;
-use wrt_runtime::module_instance::ModuleInstance;
-use wrt_runtime::value::Value;
-use wrt_error::Result;
+use kiln_format::module::Module;
+use kiln_runtime::module::Module as RuntimeModule;
+use kiln_runtime::module_instance::ModuleInstance;
+use kiln_runtime::value::Value;
+use kiln_error::Result;
 
 fn main() -> Result<()> {
     println!("=== Direct WASM Execution Demo ===\n");
@@ -23,7 +23,7 @@ fn main() -> Result<()> {
     println!("1. Parsing WASM module ({} bytes)...", wasm_bytes.len());
     
     // Parse WASM format using the decoder  
-    let format_module = wrt_decoder::decode_module(wasm_bytes)?;
+    let format_module = kiln_decoder::decode_module(wasm_bytes)?;
     println!("✓ Module parsed successfully");
     println!("  - {} function types", format_module.types.len();
     println!("  - {} functions", format_module.functions.len();
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
     
     // Convert to runtime module
     println!("\n2. Converting to runtime module...");
-    let runtime_module = RuntimeModule::from_wrt_module(&format_module)?;
+    let runtime_module = RuntimeModule::from_kiln_module(&format_module)?;
     println!("✓ Runtime module created");
     
     // Create module instance
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
         .iter()
         .find(|(name, _)| name.as_str() == Ok("add"))
         .map(|(_, export)| export.index)
-        .ok_or_else(|| wrt_error::Error::runtime_function_not_found("add function not found"))?;
+        .ok_or_else(|| kiln_error::Error::runtime_function_not_found("add function not found"))?;
     
     println!("✓ Found 'add' function at index {}", add_func_idx);
     
@@ -56,7 +56,7 @@ fn main() -> Result<()> {
     
     // This would be actual execution if the runtime was fully working
     println!("\nNOTE: Actual execution would happen here, but requires:");
-    println!("- Fixing all 88 compilation errors in wrt-runtime");
+    println!("- Fixing all 88 compilation errors in kiln-runtime");
     println!("- Implementing the execution engine");
     println!("- Handling the instruction interpreter");
     

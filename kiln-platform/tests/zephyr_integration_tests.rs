@@ -6,7 +6,7 @@
 
 #[cfg(feature = "platform-zephyr")]
 mod zephyr_tests {
-    use wrt_platform::{
+    use kiln_platform::{
         ZephyrAllocator,
         ZephyrAllocatorBuilder,
         ZephyrFutex,
@@ -101,7 +101,7 @@ fn test_zephyr_platform_compilation() {
     #[cfg(feature = "platform-zephyr")]
     {
         // The modules should be available for import
-        use wrt_platform::*;
+        use kiln_platform::*;
 
         // Basic verification that types exist
         let _ = core::mem::size_of::<NoStdProvider<1024>>();

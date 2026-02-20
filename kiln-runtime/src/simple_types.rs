@@ -1,9 +1,9 @@
-//! Simplified Type System for WRT Runtime - COMPILATION FIX
+//! Simplified Type System for Kiln Runtime - COMPILATION FIX
 //!
 //! This module provides a simplified unified type system to resolve compilation
 //! errors. It focuses on concrete types rather than generic type aliases.
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{
         BoundedString,
         BoundedVec,
@@ -20,7 +20,7 @@ use wrt_foundation::{
         ToBytes,
     },
 };
-use wrt_instructions::Value;
+use kiln_instructions::Value;
 
 use crate::bounded_runtime_infra::RuntimeProvider;
 

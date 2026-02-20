@@ -30,11 +30,11 @@ use alloc::vec::Vec;
 use std::collections::HashMap;
 
 // External crates
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_format::binary::{read_leb128_u32, read_u8};
-use wrt_foundation::traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_format::binary::{read_leb128_u32, read_u8};
+use kiln_foundation::traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream};
 // NoStdProvider import removed - not used
-use wrt_foundation::verification::Checksum;
+use kiln_foundation::verification::Checksum;
 
 // Internal modules
 use crate::prelude::*;
@@ -94,11 +94,11 @@ impl Checksummable for BranchHintValue {
 }
 
 impl ToBytes for BranchHintValue {
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(self.to_byte())
     }
 
@@ -108,15 +108,15 @@ impl ToBytes for BranchHintValue {
 }
 
 impl FromBytes for BranchHintValue {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = reader.read_u8()?;
         Self::from_byte(byte).map_err(|_e| {
-            wrt_error::Error::new(
-                wrt_error::ErrorCategory::Parse,
-                wrt_error::codes::INVALID_VALUE_TYPE,
+            kiln_error::Error::new(
+                kiln_error::ErrorCategory::Parse,
+                kiln_error::codes::INVALID_VALUE_TYPE,
                 "Invalid branch hint byte",
             )
         })

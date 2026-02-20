@@ -1,4 +1,4 @@
-//! Log operation for the WebAssembly Runtime.
+//! Log operation for the Kiln WebAssembly Runtime.
 //!
 //! This module provides types for representing log operations in component
 //! logging.
@@ -33,9 +33,9 @@ pub struct LogOperation {
     /// Log level
     pub level:        LogLevel,
     /// Log message
-    pub message:      wrt_foundation::BoundedString<256>,
+    pub message:      kiln_foundation::BoundedString<256>,
     /// Component ID (optional)
-    pub component_id: Option<wrt_foundation::BoundedString<64>>,
+    pub component_id: Option<kiln_foundation::BoundedString<64>>,
 }
 
 // Binary std/no_std choice
@@ -69,9 +69,9 @@ impl LogOperation {
 #[cfg(all(not(feature = "std"), not(feature = "std")))]
 impl LogOperation {
     /// Create a new log operation
-    pub fn new(level: LogLevel, message: &str) -> wrt_error::Result<Self> {
-        let bounded_message = wrt_foundation::BoundedString::try_from_str(message)
-            .map_err(|_| wrt_error::Error::runtime_execution_error("Log message too long"))?;
+    pub fn new(level: LogLevel, message: &str) -> kiln_error::Result<Self> {
+        let bounded_message = kiln_foundation::BoundedString::try_from_str(message)
+            .map_err(|_| kiln_error::Error::runtime_execution_error("Log message too long"))?;
         Ok(Self {
             level,
             message: bounded_message,
@@ -84,11 +84,11 @@ impl LogOperation {
         level: LogLevel,
         message: &str,
         component_id: &str,
-    ) -> wrt_error::Result<Self> {
-        let bounded_message = wrt_foundation::BoundedString::try_from_str(message)
-            .map_err(|_| wrt_error::Error::runtime_execution_error("Log message too long"))?;
-        let bounded_component_id = wrt_foundation::BoundedString::try_from_str(component_id)
-            .map_err(|_| wrt_error::Error::runtime_execution_error("Component ID too long"))?;
+    ) -> kiln_error::Result<Self> {
+        let bounded_message = kiln_foundation::BoundedString::try_from_str(message)
+            .map_err(|_| kiln_error::Error::runtime_execution_error("Log message too long"))?;
+        let bounded_component_id = kiln_foundation::BoundedString::try_from_str(component_id)
+            .map_err(|_| kiln_error::Error::runtime_execution_error("Component ID too long"))?;
         Ok(Self {
             level,
             message: bounded_message,
@@ -108,7 +108,7 @@ mod tests {
     use crate::level::LogLevel;
 
     #[test]
-    fn test_log_operation_creation() -> wrt_error::Result<()> {
+    fn test_log_operation_creation() -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         {
             // Test basic creation
@@ -136,7 +136,7 @@ mod tests {
 
         #[cfg(not(feature = "std"))]
         {
-            use wrt_foundation::{
+            use kiln_foundation::{
                 budget_aware_provider::CrateId,
                 safe_managed_alloc,
             };

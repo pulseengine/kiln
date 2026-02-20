@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Atomic Memory Operations
 // SW-REQ-ID: REQ_MEM_SAFETY_004
 
@@ -10,8 +10,8 @@
 //! memory safety guarantees, protecting against bit flips between write and
 //! checksum operations.
 
-// Import WrtMutex from wrt-sync
-use wrt_sync::mutex::WrtMutex;
+// Import KilnMutex from kiln-sync
+use kiln_sync::mutex::KilnMutex;
 
 #[cfg(feature = "std")]
 use crate::prelude::Vec;
@@ -44,7 +44,7 @@ use crate::{
 #[derive(Debug)]
 pub struct AtomicMemoryOps<P: Provider> {
     /// The underlying memory handler wrapped in a mutex for atomic operations
-    handler:            WrtMutex<SafeMemoryHandler<P>>,
+    handler:            KilnMutex<SafeMemoryHandler<P>>,
     /// Verification level for memory operations
     verification_level: VerificationLevel,
 }
@@ -52,7 +52,7 @@ pub struct AtomicMemoryOps<P: Provider> {
 impl<P: Provider + Clone> Clone for AtomicMemoryOps<P> {
     fn clone(&self) -> Self {
         Self {
-            handler:            WrtMutex::new(self.handler.lock().clone()),
+            handler:            KilnMutex::new(self.handler.lock().clone()),
             verification_level: self.verification_level,
         }
     }
@@ -76,7 +76,7 @@ impl<P: Provider> AtomicMemoryOps<P> {
     pub fn new(handler: SafeMemoryHandler<P>) -> Self {
         let verification_level = handler.verification_level();
         Self {
-            handler: WrtMutex::new(handler),
+            handler: KilnMutex::new(handler),
             verification_level,
         }
     }
@@ -92,7 +92,7 @@ impl<P: Provider> AtomicMemoryOps<P> {
         let handler = SafeMemoryHandler::new(provider);
         let verification_level = handler.verification_level();
         Ok(Self {
-            handler: WrtMutex::new(handler),
+            handler: KilnMutex::new(handler),
             verification_level,
         })
     }
@@ -250,7 +250,7 @@ impl<P: Provider> AtomicMemoryOps<P> {
     /// Only use this method when you know that no concurrent access to the
     /// memory will occur, or when you need to perform multiple operations
     /// atomically within a single critical section.
-    pub fn get_handler_mut(&mut self) -> &mut WrtMutex<SafeMemoryHandler<P>> {
+    pub fn get_handler_mut(&mut self) -> &mut KilnMutex<SafeMemoryHandler<P>> {
         &mut self.handler
     }
 

@@ -2,12 +2,12 @@
 Architectural Overview
 ==========================
 
-.. image:: ../../_static/icons/wrt_architecture.svg
+.. image:: ../../_static/icons/kiln_architecture.svg
    :width: 64px
    :align: right
    :alt: Architecture Icon
 
-**Teaching Point**: This overview shows how PulseEngine (WRT Edition) is decomposed into manageable, testable components that work together to execute WebAssembly safely.
+**Teaching Point**: This overview shows how PulseEngine (Kiln Edition) is decomposed into manageable, testable components that work together to execute WebAssembly safely.
 
 .. warning::
    **Implementation Status**: This document describes the target architecture. Core WebAssembly 
@@ -16,12 +16,12 @@ Architectural Overview
 System Context
 --------------
 
-.. arch_component:: WRT System
+.. arch_component:: Kiln System
    :id: ARCH_COMP_SYSTEM
    :type: system
    :tags: core
 
-PulseEngine (WRT Edition) is WebAssembly infrastructure designed for safety-critical systems. It provides:
+PulseEngine (Kiln Edition) is WebAssembly infrastructure designed for safety-critical systems. It provides:
 
 - **Implemented**: WebAssembly memory operations and type system
 - **Implemented**: Safety-critical memory allocation strategies
@@ -151,25 +151,25 @@ The implementation consists of 24 specialized crates:
      - Crates
      - Purpose
    * - Foundation
-     - ``wrt-error``, ``wrt-foundation``, ``wrt-format``, ``wrt-sync``
+     - ``kiln-error``, ``kiln-foundation``, ``kiln-format``, ``kiln-sync``
      - Core types, error handling, memory safety
    * - Decoding
-     - ``wrt-decoder``
+     - ``kiln-decoder``
      - WebAssembly binary parsing
    * - Execution
-     - ``wrt-runtime``, ``wrt-instructions``
+     - ``kiln-runtime``, ``kiln-instructions``
      - Instruction execution and runtime
    * - Component Model
-     - ``wrt-component``
+     - ``kiln-component``
      - Component Model implementation
    * - Platform
-     - ``wrt-platform``
+     - ``kiln-platform``
      - OS abstraction layer
    * - Integration
-     - ``wrt-host``, ``wrt-intercept``, ``wrt-logging``
+     - ``kiln-host``, ``kiln-intercept``, ``kiln-logging``
      - Host integration and monitoring
    * - Applications
-     - ``wrt``, ``wrtd``
+     - ``kiln``, ``kilnd``
      - Library facade and CLI daemon
 
 Environment Support Strategy
@@ -213,7 +213,7 @@ Environment Support Strategy
    .. code-block:: rust
    
       #![no_std]
-      use wrt_foundation::bounded::{BoundedVec, BoundedString};
+      use kiln_foundation::bounded::{BoundedVec, BoundedString};
       
       // Fixed capacity, no heap allocation
       let mut vec: BoundedVec<u32, 100> = BoundedVec::new();
@@ -257,8 +257,8 @@ Component Interaction Model
 .. code-block:: rust
 
    // Example: How the decoder interacts with the runtime
-   let module = wrt_decoder::decode_module(&wasm_bytes)?;
-   let instance = wrt_runtime::instantiate(module, imports)?;
+   let module = kiln_decoder::decode_module(&wasm_bytes)?;
+   let instance = kiln_runtime::instantiate(module, imports)?;
    let result = instance.invoke("function_name", &args)?;
 
 Cross-References

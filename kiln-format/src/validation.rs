@@ -7,10 +7,10 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use wrt_error::Result;
+use kiln_error::Result;
 // For pure no_std mode, we'll make validation work with bounded collections
 #[cfg(not(any(feature = "std")))]
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedCapacity,
     BoundedVec,
 };
@@ -47,14 +47,14 @@ impl<T: Validatable> Validatable for Vec<T> {
 impl<T, const N: usize, P> Validatable for BoundedVec<T, N, P>
 where
     T: Validatable
-        + wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+        + kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
         + Eq,
-    P: wrt_foundation::MemoryProvider + Clone + PartialEq + Eq,
+    P: kiln_foundation::MemoryProvider + Clone + PartialEq + Eq,
 {
     fn validate(&self) -> Result<()> {
         // For BoundedVec, we need to iterate through valid elements

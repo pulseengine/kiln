@@ -1,4 +1,4 @@
-//! Enhanced progress indicators and user feedback for cargo-wrt
+//! Enhanced progress indicators and user feedback for cargo-kiln
 //!
 //! Provides interactive progress bars, spinners, and status indicators
 //! to improve user experience during long-running operations.
@@ -9,7 +9,7 @@ use std::{
 };
 
 use colored::Colorize;
-use wrt_build_core::formatters::OutputFormat;
+use kiln_build_core::formatters::OutputFormat;
 
 /// Progress indicator types
 #[derive(Debug, Clone)]

@@ -2,7 +2,7 @@
 Platform Guides
 ================
 
-Platform-specific guides for running WRT on different operating systems and environments.
+Platform-specific guides for running Kiln on different operating systems and environments.
 
 .. toctree::
    :maxdepth: 2
@@ -17,7 +17,7 @@ Platform-specific guides for running WRT on different operating systems and envi
 Linux
 -----
 
-Running WRT on Linux distributions with platform-specific optimizations.
+Running Kiln on Linux distributions with platform-specific optimizations.
 
 macOS
 -----

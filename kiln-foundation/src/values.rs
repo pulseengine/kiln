@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -18,7 +18,7 @@ use core::fmt;
 use std::fmt;
 
 // Core imports
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
@@ -73,13 +73,13 @@ pub struct StructRef<
 
 impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> StructRef<P> {
     /// Create a new struct reference
-    pub fn new(type_index: u32, provider: P) -> wrt_error::Result<Self> {
+    pub fn new(type_index: u32, provider: P) -> kiln_error::Result<Self> {
         let fields = BoundedVec::new(provider).map_err(Error::from)?;
         Ok(Self { type_index, fields })
     }
 
     /// Set a field value
-    pub fn set_field(&mut self, index: usize, value: Value) -> wrt_error::Result<()> {
+    pub fn set_field(&mut self, index: usize, value: Value) -> kiln_error::Result<()> {
         if index < self.fields.len() {
             self.fields.set(index, value).map_err(Error::from).map(|_| ())
         } else {
@@ -88,12 +88,12 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> St
     }
 
     /// Get a field value
-    pub fn get_field(&self, index: usize) -> wrt_error::Result<Value> {
+    pub fn get_field(&self, index: usize) -> kiln_error::Result<Value> {
         self.fields.get(index).map_err(Error::from)
     }
 
     /// Add a field value
-    pub fn add_field(&mut self, value: Value) -> wrt_error::Result<()> {
+    pub fn add_field(&mut self, value: Value) -> kiln_error::Result<()> {
         self.fields.push(value).map_err(Error::from)
     }
 }
@@ -120,7 +120,7 @@ pub struct ArrayRef<
 
 impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> ArrayRef<P> {
     /// Create a new array reference
-    pub fn new(type_index: u32, provider: P) -> wrt_error::Result<Self> {
+    pub fn new(type_index: u32, provider: P) -> kiln_error::Result<Self> {
         let elements = BoundedVec::new(provider).map_err(Error::from)?;
         Ok(Self {
             type_index,
@@ -134,7 +134,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Ar
         size: usize,
         init_value: Value,
         provider: P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut elements = BoundedVec::new(provider).map_err(Error::from)?;
         for _ in 0..size {
             elements.push(init_value.clone()).map_err(Error::from)?;
@@ -156,12 +156,12 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Ar
     }
 
     /// Get element at index
-    pub fn get(&self, index: usize) -> wrt_error::Result<Value> {
+    pub fn get(&self, index: usize) -> kiln_error::Result<Value> {
         self.elements.get(index).map_err(Error::from)
     }
 
     /// Set element at index
-    pub fn set(&mut self, index: usize, value: Value) -> wrt_error::Result<()> {
+    pub fn set(&mut self, index: usize, value: Value) -> kiln_error::Result<()> {
         if index < self.elements.len() {
             self.elements.set(index, value).map_err(Error::from).map(|_| ())
         } else {
@@ -170,7 +170,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Ar
     }
 
     /// Push element to array
-    pub fn push(&mut self, value: Value) -> wrt_error::Result<()> {
+    pub fn push(&mut self, value: Value) -> kiln_error::Result<()> {
         self.elements.push(value).map_err(Error::from)
     }
 }
@@ -445,7 +445,7 @@ impl Value {
 
     /// Tries to convert the `Value` into an `i32`.
     /// Returns an error if the value is not an `I32`.
-    pub fn into_i32(self) -> wrt_error::Result<i32> {
+    pub fn into_i32(self) -> kiln_error::Result<i32> {
         match self {
             Value::I32(v) => Ok(v),
             _ => Err(Error::type_error("Value is not an i32")),
@@ -621,7 +621,7 @@ impl Value {
     }
 
     /// Attempts to extract the bytes of a V128 value.
-    pub fn as_v128(&self) -> wrt_error::Result<[u8; 16]> {
+    pub fn as_v128(&self) -> kiln_error::Result<[u8; 16]> {
         match self {
             Self::V128(v) => Ok(v.bytes),
             Self::I16x8(v) => Ok(v.bytes), // I16x8 is also V128 internally
@@ -683,7 +683,7 @@ impl Value {
 
     /// Tries to convert the `Value` into an `i32` after truncating from `f32`.
     /// Returns an error if the value is not an `F32` or if truncation fails.
-    pub fn into_i32_from_f32(self) -> wrt_error::Result<i32> {
+    pub fn into_i32_from_f32(self) -> kiln_error::Result<i32> {
         match self {
             Value::F32(f_val) => {
                 let f = f_val.value();
@@ -703,7 +703,7 @@ impl Value {
 
     /// Tries to convert the `Value` into an `i64` after truncating from `f64`.
     /// Returns an error if the value is not an `F64` or if truncation fails.
-    pub fn into_i64_from_f64(self) -> wrt_error::Result<i64> {
+    pub fn into_i64_from_f64(self) -> kiln_error::Result<i64> {
         match self {
             Value::F64(f_val) => {
                 let f = f_val.value();
@@ -731,7 +731,7 @@ impl Value {
     }
 
     /// Writes the `Value` to the given writer in little-endian format.
-    pub fn write_le_bytes<W: BytesWriter>(&self, writer: &mut W) -> wrt_error::Result<()> {
+    pub fn write_le_bytes<W: BytesWriter>(&self, writer: &mut W) -> kiln_error::Result<()> {
         match self {
             Value::I32(val) => writer.write_all(&val.to_le_bytes()),
             Value::I64(val) => writer.write_all(&val.to_le_bytes()),
@@ -780,7 +780,7 @@ impl Value {
     }
 
     /// Reads a `Value` from the given byte slice in little-endian format.
-    pub fn from_le_bytes(bytes: &[u8], ty: &ValueType) -> wrt_error::Result<Self> {
+    pub fn from_le_bytes(bytes: &[u8], ty: &ValueType) -> kiln_error::Result<Self> {
         match ty {
             ValueType::I32 => {
                 if bytes.len() < 4 {
@@ -979,7 +979,7 @@ impl AsRef<[u8]> for Value {
 
 // Implement LittleEndian for V128 here as V128 is defined in this module.
 impl LittleEndian for V128 {
-    fn from_le_bytes(bytes: &[u8]) -> wrt_error::Result<Self> {
+    fn from_le_bytes(bytes: &[u8]) -> kiln_error::Result<Self> {
         if bytes.len() != 16 {
             return Err(Error::runtime_execution_error(
                 "V128 requires exactly 16 bytes",
@@ -995,7 +995,7 @@ impl LittleEndian for V128 {
         Ok(V128 { bytes: arr })
     }
 
-    fn write_le_bytes<W: BytesWriter>(&self, writer: &mut W) -> wrt_error::Result<()> {
+    fn write_le_bytes<W: BytesWriter>(&self, writer: &mut W) -> kiln_error::Result<()> {
         writer.write_all(&self.bytes)
     }
 }
@@ -1011,7 +1011,7 @@ impl ToBytes for V128 {
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream, // Provider not typically needed for simple types
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write the bytes directly to the stream
         writer.write_all(&self.bytes)
     }
@@ -1022,7 +1022,7 @@ impl FromBytes for V128 {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         _provider: &PStream, // Provider not typically needed for simple types
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read exactly 16 bytes for V128
         let mut arr = [0u8; 16];
         reader.read_exact(&mut arr)?;
@@ -1042,7 +1042,7 @@ impl ToBytes for FuncRef {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Delegate to the u32 implementation
         self.index.to_bytes_with_provider(writer, provider)
     }
@@ -1053,7 +1053,7 @@ impl FromBytes for FuncRef {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Delegate to the u32 implementation
         let index = u32::from_bytes_with_provider(reader, provider)?;
         Ok(FuncRef { index })
@@ -1072,7 +1072,7 @@ impl ToBytes for ExternRef {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Delegate to the u32 implementation
         self.index.to_bytes_with_provider(writer, provider)
     }
@@ -1083,7 +1083,7 @@ impl FromBytes for ExternRef {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Delegate to the u32 implementation
         let index = u32::from_bytes_with_provider(reader, provider)?;
         Ok(ExternRef { index })
@@ -1242,7 +1242,7 @@ impl ToBytes for Value {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write discriminant byte
         let discriminant = match self {
             Value::I32(_) => 0u8,
@@ -1372,7 +1372,7 @@ impl FromBytes for Value {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read discriminant byte
         let discriminant = reader.read_u8()?;
 
@@ -1522,7 +1522,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> To
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write type index
         self.type_index.to_bytes_with_provider(writer, provider)?;
         // Write field count
@@ -1541,7 +1541,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Fr
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read type index
         let type_index = u32::from_bytes_with_provider(reader, provider)?;
         // Read field count
@@ -1573,7 +1573,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> To
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write type index
         self.type_index.to_bytes_with_provider(writer, provider)?;
         // Write element count
@@ -1592,7 +1592,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Fr
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read type index
         let type_index = u32::from_bytes_with_provider(reader, provider)?;
         // Read element count

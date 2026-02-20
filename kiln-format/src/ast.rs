@@ -10,13 +10,13 @@ use std::fmt;
 #[cfg(not(feature = "std"))]
 use core::fmt;
 
-use wrt_foundation::{
+use kiln_foundation::{
     BoundedVec,
     prelude::*,
 };
 
 // Platform-aware memory provider for AST collections
-type AstProvider = wrt_foundation::safe_memory::NoStdProvider<4096>;  // 4KB for AST data
+type AstProvider = kiln_foundation::safe_memory::NoStdProvider<4096>;  // 4KB for AST data
 
 use crate::wit_parser::{WitBoundedString, WitBoundedStringSmall};
 

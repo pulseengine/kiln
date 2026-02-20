@@ -1,4 +1,4 @@
-/* Custom CSS for WRT documentation */
+/* Custom CSS for Kiln documentation */
 
 :root {
     /* Clean, professional color scheme */
@@ -11,24 +11,24 @@
     --color-background-secondary: #f8f9fa;
     
     /* Legacy color variables for compatibility */
-    --wrt-bg-color: var(--color-background);
-    --wrt-text-color: var(--color-content-primary);
-    --wrt-heading-color: #2c3e50;
-    --wrt-primary-accent-color: var(--color-brand-primary);
-    --wrt-secondary-accent-color: var(--color-brand-secondary);
-    --wrt-border-color: var(--color-border);
+    --kiln-bg-color: var(--color-background);
+    --kiln-text-color: var(--color-content-primary);
+    --kiln-heading-color: #2c3e50;
+    --kiln-primary-accent-color: var(--color-brand-primary);
+    --kiln-secondary-accent-color: var(--color-brand-secondary);
+    --kiln-border-color: var(--color-border);
     
-    --wrt-code-bg-color: var(--color-background-secondary);
-    --wrt-code-text-color: var(--color-content-primary);
-    --wrt-inline-code-bg-color: #e9ecef;
-    --wrt-inline-code-text-color: #d6336c;
+    --kiln-code-bg-color: var(--color-background-secondary);
+    --kiln-code-text-color: var(--color-content-primary);
+    --kiln-inline-code-bg-color: #e9ecef;
+    --kiln-inline-code-text-color: #d6336c;
     
-    --wrt-note-bg-color: #f3e8ff;
-    --wrt-note-border-color: var(--color-brand-primary);
-    --wrt-warning-bg-color: #fff9c4;
-    --wrt-warning-border-color: #ffc107;
-    --wrt-danger-bg-color: #ffebee;
-    --wrt-danger-border-color: #f44336;
+    --kiln-note-bg-color: #f3e8ff;
+    --kiln-note-border-color: var(--color-brand-primary);
+    --kiln-warning-bg-color: #fff9c4;
+    --kiln-warning-border-color: #ffc107;
+    --kiln-danger-bg-color: #ffebee;
+    --kiln-danger-border-color: #f44336;
 }
 
 /* Dark mode support */
@@ -39,14 +39,14 @@ html[data-theme="dark"] {
     --color-content-secondary: #8b949e;
     --color-border: #30363d;
     
-    --wrt-bg-color: var(--color-background);
-    --wrt-text-color: var(--color-content-primary);
-    --wrt-code-bg-color: var(--color-background-secondary);
-    --wrt-inline-code-bg-color: #3d3d3d;
+    --kiln-bg-color: var(--color-background);
+    --kiln-text-color: var(--color-content-primary);
+    --kiln-code-bg-color: var(--color-background-secondary);
+    --kiln-inline-code-bg-color: #3d3d3d;
     
-    --wrt-note-bg-color: #2a1b3d;
-    --wrt-warning-bg-color: #3d3a1b;
-    --wrt-danger-bg-color: #3d1b1b;
+    --kiln-note-bg-color: #2a1b3d;
+    --kiln-warning-bg-color: #3d3a1b;
+    --kiln-danger-bg-color: #3d1b1b;
 }
 
 /* Landing page styles */
@@ -71,7 +71,7 @@ html[data-theme="dark"] {
     font-size: 2rem;
     font-weight: 600;
     margin-bottom: 1rem;
-    color: var(--wrt-heading-color);
+    color: var(--kiln-heading-color);
 }
 
 .section > h2 {
@@ -206,18 +206,18 @@ html[data-theme="dark"] {
 }
 
 .admonition.note {
-    background-color: var(--wrt-note-bg-color);
-    border-color: var(--wrt-note-border-color);
+    background-color: var(--kiln-note-bg-color);
+    border-color: var(--kiln-note-border-color);
 }
 
 .admonition.warning {
-    background-color: var(--wrt-warning-bg-color);
-    border-color: var(--wrt-warning-border-color);
+    background-color: var(--kiln-warning-bg-color);
+    border-color: var(--kiln-warning-border-color);
 }
 
 .admonition.danger {
-    background-color: var(--wrt-danger-bg-color);
-    border-color: var(--wrt-danger-border-color);
+    background-color: var(--kiln-danger-bg-color);
+    border-color: var(--kiln-danger-border-color);
 }
 
 .admonition-title {
@@ -227,21 +227,21 @@ html[data-theme="dark"] {
 
 /* Clean code blocks */
 pre {
-    background-color: var(--wrt-code-bg-color);
+    background-color: var(--kiln-code-bg-color);
     border: 1px solid var(--color-border);
     border-radius: 4px;
     padding: 1em;
     margin: 1em 0;
     overflow: auto;
-    color: var(--wrt-code-text-color);
+    color: var(--kiln-code-text-color);
 }
 
 code {
-    background-color: var(--wrt-inline-code-bg-color);
+    background-color: var(--kiln-inline-code-bg-color);
     border-radius: 3px;
     padding: 0.2em 0.4em;
     font-size: 0.9em;
-    color: var(--wrt-inline-code-text-color);
+    color: var(--kiln-inline-code-text-color);
 }
 
 /* Clean tables */
@@ -261,7 +261,7 @@ th, td {
 th {
     background-color: var(--color-background-secondary);
     font-weight: bold;
-    color: var(--wrt-heading-color);
+    color: var(--kiln-heading-color);
 }
 
 /* Font definitions - Atkinson Hyperlegible Next (body text) */

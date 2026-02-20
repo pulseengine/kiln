@@ -9,8 +9,8 @@
 // Component value type encoding is only available with std feature
 #[cfg(feature = "std")]
 mod component_val_type {
-    use wrt_error::{Error, ErrorCategory, Result, codes};
-    use wrt_format::component::FormatValType;
+    use kiln_error::{Error, ErrorCategory, Result, codes};
+    use kiln_format::component::FormatValType;
 
     use crate::prelude::*;
 
@@ -129,7 +129,7 @@ pub use component_val_type::encode_val_type;
 // No-std stub implementations
 #[cfg(not(feature = "std"))]
 pub mod no_std_stubs {
-    use wrt_error::{Error, ErrorCategory, Result, codes};
+    use kiln_error::{Error, ErrorCategory, Result, codes};
 
     /// Stub value type for no_std encoding
     #[derive(Debug, Clone)]
@@ -137,7 +137,7 @@ pub mod no_std_stubs {
 
     /// Encode value type (no_std stub)  
     pub fn encode_val_type(
-        _result: &mut wrt_foundation::BoundedVec<u8, 1024, wrt_foundation::NoStdProvider<2048>>,
+        _result: &mut kiln_foundation::BoundedVec<u8, 1024, kiln_foundation::NoStdProvider<2048>>,
         _val_type: &FormatValType,
     ) -> Result<()> {
         Err(Error::runtime_execution_error(

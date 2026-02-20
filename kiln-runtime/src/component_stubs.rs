@@ -1,7 +1,7 @@
-// WRT - wrt-runtime
+// Kiln - kiln-runtime
 // Module: Component Type Stubs
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
@@ -77,7 +77,7 @@ pub struct ComponentMemoryBudget {
 }
 
 impl ComponentMemoryBudget {
-    pub fn calculate(limits: &wrt_foundation::PlatformLimits) -> Result<Self, wrt_error::Error> {
+    pub fn calculate(limits: &kiln_foundation::PlatformLimits) -> Result<Self, kiln_error::Error> {
         let component_overhead = limits.max_memory / 100; // 1% overhead
         let available_memory = limits.max_memory.saturating_sub(component_overhead);
 

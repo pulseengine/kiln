@@ -22,15 +22,15 @@ use core::{
     time::Duration,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_sync::{
-    WrtMutex,
-    WrtRwLock,
+use kiln_sync::{
+    KilnMutex,
+    KilnRwLock,
 };
 
 use crate::threading::{
@@ -52,7 +52,7 @@ struct GenericThreadHandle {
     /// Running flag
     running: Arc<AtomicBool>,
     /// Thread statistics
-    stats:   Arc<WrtMutex<ThreadStats>>,
+    stats:   Arc<KilnMutex<ThreadStats>>,
 }
 
 #[cfg(feature = "std")]
@@ -100,9 +100,9 @@ pub struct GenericThreadPool {
     /// Configuration
     config:         ThreadPoolConfig,
     /// Active threads
-    active_threads: Arc<WrtRwLock<BTreeMap<u64, Box<dyn PlatformThreadHandle>>>>,
+    active_threads: Arc<KilnRwLock<BTreeMap<u64, Box<dyn PlatformThreadHandle>>>>,
     /// Thread statistics
-    stats:          Arc<WrtMutex<ThreadPoolStats>>,
+    stats:          Arc<KilnMutex<ThreadPoolStats>>,
     /// Next thread ID
     next_thread_id: AtomicU64,
     /// Shutdown flag
@@ -120,8 +120,8 @@ impl GenericThreadPool {
 
         Ok(Self {
             config,
-            active_threads: Arc::new(WrtRwLock::new(BTreeMap::new())),
-            stats: Arc::new(WrtMutex::new(ThreadPoolStats::default())),
+            active_threads: Arc::new(KilnRwLock::new(BTreeMap::new())),
+            stats: Arc::new(KilnMutex::new(ThreadPoolStats::default())),
             next_thread_id: AtomicU64::new(1),
             shutdown: AtomicBool::new(false),
             executor,
@@ -167,7 +167,7 @@ impl PlatformThreadPool for GenericThreadPool {
 
         // Create shared state
         let running = Arc::new(AtomicBool::new(false));
-        let stats = Arc::new(WrtMutex::new(ThreadStats::default()));
+        let stats = Arc::new(KilnMutex::new(ThreadStats::default()));
 
         // Clone for thread
         let task_clone = task.clone();

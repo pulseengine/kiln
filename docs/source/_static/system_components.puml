@@ -1,9 +1,9 @@
 @startuml System Components
 
-package "WRT System" {
-  [WRTD CLI] as CLI
+package "Kiln System" {
+  [KILND CLI] as CLI
 
-  package "WRT Core Libraries" {
+  package "Kiln Core Libraries" {
     package "Core Runtime" {
       [Stackless Engine] as StacklessEngine
       [Module] as Module 

@@ -2,7 +2,7 @@
 
 #![cfg(all(feature = "wasi-nn", feature = "tract"))]
 
-use wrt_wasi::nn::{
+use kiln_wasi::nn::{
     backend::{
         BackendProvider,
         NeuralNetworkBackend,

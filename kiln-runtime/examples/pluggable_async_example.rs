@@ -17,7 +17,7 @@ use core::{
 };
 
 #[cfg(feature = "async-api")]
-use wrt_foundation::{
+use kiln_foundation::{
     is_using_fallback,
     with_async,
     AsyncRuntime,

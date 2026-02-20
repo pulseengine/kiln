@@ -16,7 +16,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use wrt_foundation::limits;
+//! use kiln_foundation::limits;
 //!
 //! // Check before allocation
 //! if param_count > limits::MAX_FUNCTION_PARAMS {

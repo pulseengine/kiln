@@ -8,14 +8,14 @@ use core::{
     time::Duration,
 };
 
-use wrt_foundation::{
+use kiln_foundation::{
     CrateId,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     operations::{Type as OperationType, record_global_operation},
     safe_managed_alloc,
     verification::VerificationLevel,
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::TaskId;
@@ -71,27 +71,27 @@ impl ResourceId {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for ResourceId {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for ResourceId {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for ResourceId {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for ResourceId {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
-impl wrt_foundation::traits::FromBytes for ResourceId {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for ResourceId {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u64::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -156,8 +156,8 @@ impl Clone for InheritanceChain {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for InheritanceChain {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for InheritanceChain {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.resource_id.update_checksum(checksum);
         self.holder.update_checksum(checksum);
         self.inherited_priority.update_checksum(checksum);
@@ -165,12 +165,12 @@ impl wrt_foundation::traits::Checksummable for InheritanceChain {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for InheritanceChain {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for InheritanceChain {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.resource_id.to_bytes_with_provider(writer, provider)?;
         self.holder.to_bytes_with_provider(writer, provider)?;
         self.inherited_priority.to_bytes_with_provider(writer, provider)?;
@@ -178,11 +178,11 @@ impl wrt_foundation::traits::ToBytes for InheritanceChain {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for InheritanceChain {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for InheritanceChain {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             resource_id: ResourceId::from_bytes_with_provider(reader, provider)?,
             holder: TaskId::from_bytes_with_provider(reader, provider)?,
@@ -250,8 +250,8 @@ impl Clone for PriorityDonation {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for PriorityDonation {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for PriorityDonation {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.recipient.update_checksum(checksum);
         self.donor.update_checksum(checksum);
         self.donated_priority.update_checksum(checksum);
@@ -260,12 +260,12 @@ impl wrt_foundation::traits::Checksummable for PriorityDonation {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for PriorityDonation {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for PriorityDonation {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.recipient.to_bytes_with_provider(writer, provider)?;
         self.donor.to_bytes_with_provider(writer, provider)?;
         self.donated_priority.to_bytes_with_provider(writer, provider)?;
@@ -274,11 +274,11 @@ impl wrt_foundation::traits::ToBytes for PriorityDonation {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for PriorityDonation {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for PriorityDonation {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             recipient: TaskId::from_bytes_with_provider(reader, provider)?,
             donor: TaskId::from_bytes_with_provider(reader, provider)?,
@@ -345,8 +345,8 @@ impl Clone for BlockingInfo {
     }
 }
 
-impl wrt_foundation::traits::Checksummable for BlockingInfo {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for BlockingInfo {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.blocked_task.update_checksum(checksum);
         self.blocked_on_resource.update_checksum(checksum);
         if let Some(task) = self.blocked_by_task {
@@ -356,12 +356,12 @@ impl wrt_foundation::traits::Checksummable for BlockingInfo {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for BlockingInfo {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+impl kiln_foundation::traits::ToBytes for BlockingInfo {
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.blocked_task.to_bytes_with_provider(writer, provider)?;
         self.blocked_on_resource.to_bytes_with_provider(writer, provider)?;
         self.blocked_by_task.to_bytes_with_provider(writer, provider)?;
@@ -369,11 +369,11 @@ impl wrt_foundation::traits::ToBytes for BlockingInfo {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for BlockingInfo {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for BlockingInfo {
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             blocked_task: TaskId::from_bytes_with_provider(reader, provider)?,
             blocked_on_resource: ResourceId::from_bytes_with_provider(reader, provider)?,

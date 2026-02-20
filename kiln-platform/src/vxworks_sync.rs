@@ -6,7 +6,7 @@ use core::{
     time::Duration,
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorKind,
 };

@@ -1,8 +1,8 @@
-// WRT - wrt-math
+// Kiln - kiln-math
 // Module: SIMD Operations
 // SW-REQ-ID: REQ_SIMD_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
@@ -11,10 +11,10 @@
 //!
 //! This module provides a high-level mathematical interface for WebAssembly
 //! SIMD operations, delegating the actual implementation to the
-//! platform-specific SIMD providers in wrt-platform.
+//! platform-specific SIMD providers in kiln-platform.
 
-use wrt_error::Result;
-use wrt_platform::simd::SimdRuntime;
+use kiln_error::Result;
+use kiln_platform::simd::SimdRuntime;
 
 /// SIMD operation executor that uses the best available SIMD provider
 pub struct SimdOperations {

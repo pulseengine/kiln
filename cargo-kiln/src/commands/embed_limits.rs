@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use clap::Args;
-use wrt_decoder::{
+use kiln_decoder::{
     resource_limits_section::RESOURCE_LIMITS_SECTION_NAME,
     toml_config::{TomlQualification, TomlResourceLimits},
 };

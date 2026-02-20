@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Module: Fixed-Length List Type System Support
 // SW-REQ-ID: REQ_FIXED_LENGTH_LISTS_001
 //
@@ -21,8 +21,8 @@ use std::{boxed::Box, vec::Vec};
 #[cfg(feature = "std")]
 use std::{boxed::Box, vec::Vec};
 
-use wrt_error::{Error, ErrorCategory, Result};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_foundation::{
     collections::StaticVec as BoundedVec,
     component_value::ComponentValue,
     types::ValueType,
@@ -31,7 +31,7 @@ use wrt_foundation::{
 };
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{BoundedString};
+use kiln_foundation::{BoundedString};
 
 // Constants for no_std environments
 #[cfg(not(feature = "std"))]

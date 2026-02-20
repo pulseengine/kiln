@@ -26,7 +26,7 @@ type ValueVec = Vec<Value>;
 use crate::bounded_host_infra::HostProvider;
 
 #[cfg(not(feature = "std"))]
-type ValueVec = wrt_foundation::BoundedVec<Value, 16, HostProvider>;
+type ValueVec = kiln_foundation::BoundedVec<Value, 16, HostProvider>;
 
 /// A trait for functions that can be cloned and operate on value vectors.
 /// This is used for storing host functions that can be called by the Wasm
@@ -189,7 +189,7 @@ impl CloneableFn {
     pub fn call(&self, _target: &mut dyn Any, _args: ValueVec) -> Result<ValueVec> {
         Err(Error::new(
             ErrorCategory::Runtime,
-            wrt_error::codes::NOT_IMPLEMENTED,
+            kiln_error::codes::NOT_IMPLEMENTED,
             "Dynamic function calls not supported in pure no_std mode",
         ))
     }
@@ -225,41 +225,41 @@ pub type HostFunctionHandler = CloneableFn;
 // Implement required traits for CloneableFn to work with BoundedMap in no_std
 // mode
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::Checksummable for CloneableFn {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CloneableFn {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         // Function pointers can't be meaningfully checksummed, use a placeholder
         checksum.update_slice(b"cloneable_fn");
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::ToBytes for CloneableFn {
+impl kiln_foundation::traits::ToBytes for CloneableFn {
     fn serialized_size(&self) -> usize {
         // Function pointers can't be serialized, return 0
         0
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        _writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        _writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Function pointers can't be serialized
         Ok(())
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::FromBytes for CloneableFn {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        _reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for CloneableFn {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        _reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Function pointers can't be deserialized, return a dummy function
         Ok(CloneableFn::new(|_| {
-            Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Runtime,
-                wrt_error::codes::RUNTIME_ERROR,
+            Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Runtime,
+                kiln_error::codes::RUNTIME_ERROR,
                 "Deserialized function not implemented",
             ))
         }))
@@ -270,9 +270,9 @@ impl wrt_foundation::traits::FromBytes for CloneableFn {
 impl Default for CloneableFn {
     fn default() -> Self {
         CloneableFn::new(|_| {
-            Err(wrt_error::Error::new(
-                wrt_error::ErrorCategory::Runtime,
-                wrt_error::codes::RUNTIME_ERROR,
+            Err(kiln_error::Error::new(
+                kiln_error::ErrorCategory::Runtime,
+                kiln_error::codes::RUNTIME_ERROR,
                 "Default function not implemented",
             ))
         })
@@ -286,7 +286,7 @@ mod tests {
     #[cfg(not(feature = "std"))]
     use alloc::vec;
 
-    use wrt_foundation::{
+    use kiln_foundation::{
         allocator::CrateId,
         safe_managed_alloc,
         safe_memory::NoStdProvider,

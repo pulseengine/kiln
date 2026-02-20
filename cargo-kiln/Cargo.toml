@@ -1,30 +1,30 @@
 [package]
-name = "cargo-wrt"
+name = "cargo-kiln"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 version.workspace = true
-description = "WRT build system CLI - the new unified build tool for WebAssembly Runtime"
-documentation = "https://docs.rs/cargo-wrt"
+description = "Kiln build system CLI - the unified build tool for Kiln WebAssembly Runtime"
+documentation = "https://docs.rs/cargo-kiln"
 readme = "README.md"
-homepage = "https://github.com/pulseengine/wrt"
+homepage = "https://github.com/pulseengine/kiln"
 categories = ["development-tools", "embedded", "wasm"]
 keywords = ["webassembly", "wasm", "runtime", "build-tool", "safety-critical"]
 
 [[bin]]
-name = "cargo-wrt"
+name = "cargo-kiln"
 path = "src/main.rs"
 
 [features]
 default = ["std"]
-std = ["wrt-build-core/std"]
+std = ["kiln-build-core/std"]
 
 [dependencies]
 # Core build system
-wrt-build-core = { path = "../wrt-build-core" }
-wrt-decoder = { path = "../wrt-decoder" }
-wrt-foundation = { path = "../wrt-foundation" }
+kiln-build-core = { path = "../kiln-build-core" }
+kiln-decoder = { path = "../kiln-decoder" }
+kiln-foundation = { path = "../kiln-foundation" }
 
 # CLI framework
 clap = { version = "4.5.39", features = ["derive", "env"] }

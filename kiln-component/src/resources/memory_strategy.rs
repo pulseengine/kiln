@@ -1,12 +1,12 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-use wrt_error::{Error, Result};
+use kiln_error::{Error, Result};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::safe_memory::NoStdProvider;
-use wrt_foundation::{bounded::MAX_BUFFER_SIZE, collections::StaticVec as BoundedVec};
+use kiln_foundation::safe_memory::NoStdProvider;
+use kiln_foundation::{bounded::MAX_BUFFER_SIZE, collections::StaticVec as BoundedVec};
 
 #[cfg(feature = "std")]
 use super::resource_table::MemoryStrategy;
@@ -14,7 +14,7 @@ use super::resource_table::MemoryStrategy;
 use super::resource_table_no_std::MemoryStrategy;
 
 use super::resource_strategy::ResourceStrategy;
-use wrt_foundation::resource::ResourceOperation;
+use kiln_foundation::resource::ResourceOperation;
 
 #[cfg(feature = "std")]
 use std::vec::Vec;
@@ -73,21 +73,21 @@ impl ResourceStrategy for MemoryStrategy {
         data: &[u8],
         operation: ResourceOperation,
     ) -> core::result::Result<
-        wrt_foundation::bounded::BoundedVec<
+        kiln_foundation::bounded::BoundedVec<
             u8,
             MAX_BUFFER_SIZE,
             NoStdProvider<{ MAX_BUFFER_SIZE }>,
         >,
-        wrt_error::Error,
+        kiln_error::Error,
     > {
-        use wrt_foundation::{CrateId, safe_managed_alloc};
+        use kiln_foundation::{CrateId, safe_managed_alloc};
         let provider = safe_managed_alloc!(MAX_BUFFER_SIZE, CrateId::Component)?;
 
         match self {
             // Zero-copy strategy - returns a view without copying for reads, a copy for writes
             MemoryStrategy::ZeroCopy => match operation {
                 ResourceOperation::Read => {
-                    let mut result = wrt_foundation::bounded::BoundedVec::new(provider)?;
+                    let mut result = kiln_foundation::bounded::BoundedVec::new(provider)?;
 
                     for &byte in data {
                         result
@@ -97,7 +97,7 @@ impl ResourceStrategy for MemoryStrategy {
                     Ok(result)
                 },
                 ResourceOperation::Write => {
-                    let mut result = wrt_foundation::bounded::BoundedVec::new(provider)?;
+                    let mut result = kiln_foundation::bounded::BoundedVec::new(provider)?;
 
                     for &byte in data {
                         result
@@ -111,7 +111,7 @@ impl ResourceStrategy for MemoryStrategy {
 
             // Bounded-copy strategy - always copies but reuses buffers
             MemoryStrategy::BoundedCopy => {
-                let mut result = wrt_foundation::bounded::BoundedVec::new(provider)?;
+                let mut result = kiln_foundation::bounded::BoundedVec::new(provider)?;
 
                 for &byte in data {
                     result.push(byte).map_err(|e| Error::component_not_found("Error occurred"))?;
@@ -126,7 +126,7 @@ impl ResourceStrategy for MemoryStrategy {
             | MemoryStrategy::FullIsolation
             | MemoryStrategy::FixedBuffer
             | MemoryStrategy::BoundedCollections => {
-                let mut result = wrt_foundation::bounded::BoundedVec::new(provider)?;
+                let mut result = kiln_foundation::bounded::BoundedVec::new(provider)?;
 
                 for &byte in data {
                     result.push(byte).map_err(|e| Error::component_not_found("Error occurred"))?;

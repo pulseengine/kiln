@@ -1,4 +1,4 @@
-// WRT - wrt-decoder
+// WRT - kiln-decoder
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -8,7 +8,7 @@
 //! This module provides type definitions for WebAssembly Component Model
 //! sections and common structures used in component binary parsing.
 
-use wrt_foundation::{
+use kiln_foundation::{
     MemoryProvider, NoStdProvider,
     bounded::{BoundedString, MAX_WASM_NAME_LENGTH},
     traits::{Checksummable, FromBytes, ReadStream, ToBytes, WriteStream},
@@ -17,7 +17,7 @@ use wrt_foundation::{
 
 /// Binary std/no_std choice
 ///
-/// A simplified version of the wrt-foundation component::Export for
+/// A simplified version of the kiln-foundation component::Export for
 /// use in memory-constrained environments.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ComponentExport {
@@ -31,7 +31,7 @@ pub struct ComponentExport {
 
 /// Binary std/no_std choice
 ///
-/// A simplified version of the wrt-foundation component::Import for
+/// A simplified version of the kiln-foundation component::Import for
 /// use in memory-constrained environments.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ComponentImport {
@@ -104,7 +104,7 @@ impl ToBytes for ComponentExport {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.name.to_bytes_with_provider(writer, provider)?;
         self.type_index.to_bytes_with_provider(writer, provider)?;
         self.kind.to_bytes_with_provider(writer, provider)?;
@@ -116,7 +116,7 @@ impl FromBytes for ComponentExport {
     fn from_bytes_with_provider<'a, PStream: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             name: BoundedString::from_bytes_with_provider(reader, provider)?,
             type_index: u32::from_bytes_with_provider(reader, provider)?,
@@ -138,7 +138,7 @@ impl ToBytes for ComponentImport {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.name.to_bytes_with_provider(writer, provider)?;
         self.type_index.to_bytes_with_provider(writer, provider)?;
         Ok(())
@@ -149,7 +149,7 @@ impl FromBytes for ComponentImport {
     fn from_bytes_with_provider<'a, PStream: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             name: BoundedString::from_bytes_with_provider(reader, provider)?,
             type_index: u32::from_bytes_with_provider(reader, provider)?,
@@ -171,7 +171,7 @@ impl ToBytes for ComponentSection {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.id.to_bytes_with_provider(writer, provider)?;
         self.size.to_bytes_with_provider(writer, provider)?;
         (self.offset as u32).to_bytes_with_provider(writer, provider)?;
@@ -183,7 +183,7 @@ impl FromBytes for ComponentSection {
     fn from_bytes_with_provider<'a, PStream: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             id: u8::from_bytes_with_provider(reader, provider)?,
             size: u32::from_bytes_with_provider(reader, provider)?,
@@ -204,7 +204,7 @@ impl ToBytes for ComponentType {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.form.to_bytes_with_provider(writer, provider)
     }
 }
@@ -213,7 +213,7 @@ impl FromBytes for ComponentType {
     fn from_bytes_with_provider<'a, PStream: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             form: u8::from_bytes_with_provider(reader, provider)?,
         })
@@ -232,7 +232,7 @@ impl ToBytes for ComponentInstance {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.type_index.to_bytes_with_provider(writer, provider)
     }
 }
@@ -241,7 +241,7 @@ impl FromBytes for ComponentInstance {
     fn from_bytes_with_provider<'a, PStream: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             type_index: u32::from_bytes_with_provider(reader, provider)?,
         })
@@ -266,7 +266,7 @@ impl ToBytes for ComponentValueType {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         (*self as u8).to_bytes_with_provider(writer, provider)
     }
 }
@@ -275,7 +275,7 @@ impl FromBytes for ComponentValueType {
     fn from_bytes_with_provider<'a, PStream: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let byte = u8::from_bytes_with_provider(reader, provider)?;
         Ok(Self::from(byte))
     }

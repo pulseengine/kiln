@@ -8,13 +8,13 @@
 extern crate alloc;
 
 use crate::{export::Export, prelude::*};
-use wrt_foundation::{
+use kiln_foundation::{
     collections::StaticMap as BoundedMap,
     bounded::BoundedString,
 };
-use wrt_foundation::budget_aware_provider::CrateId;
-use wrt_foundation::capabilities::{CapabilityAwareProvider, MemoryCapabilityContext};
-use wrt_error::{Error, ErrorCategory, codes};
+use kiln_foundation::budget_aware_provider::CrateId;
+use kiln_foundation::capabilities::{CapabilityAwareProvider, MemoryCapabilityContext};
+use kiln_error::{Error, ErrorCategory, codes};
 
 /// Maximum number of exports in a component
 const MAX_EXPORTS: usize = 512;
@@ -23,8 +23,8 @@ const MAX_EXPORTS: usize = 512;
 const MAX_EXPORT_NAME_LEN: usize = 128;
 
 /// Helper function to create component provider using capability-driven design
-fn create_component_provider() -> Result<impl wrt_foundation::MemoryProvider> {
-    use wrt_foundation::memory_init::get_global_capability_context;
+fn create_component_provider() -> Result<impl kiln_foundation::MemoryProvider> {
+    use kiln_foundation::memory_init::get_global_capability_context;
     
     let context = get_global_capability_context()
         .map_err(|_| Error::initialization_error("Failed to get global capability context for component provider"))?
@@ -56,7 +56,7 @@ impl<P: MemoryProvider + Default + Clone> Default for ExportMap<P> {
 #[derive(Debug)]
 pub struct SafeExportMap {
     /// Name-to-export mapping with safe memory guarantees
-    exports: wrt_foundation::safe_memory::SafeStack<(String, Arc<Export>)>,
+    exports: kiln_foundation::safe_memory::SafeStack<(String, Arc<Export>)>,
 }
 
 impl<P: MemoryProvider + Default + Clone> ExportMap<P> {
@@ -135,7 +135,7 @@ impl<P: MemoryProvider + Default + Clone> ExportMap<P> {
 impl SafeExportMap {
     /// Create a new empty export map
     pub fn new() -> Self {
-        Self { exports: wrt_foundation::safe_memory::SafeStack::new() }
+        Self { exports: kiln_foundation::safe_memory::SafeStack::new() }
     }
 
     /// Add an export to the map
@@ -252,6 +252,6 @@ impl SafeExportMap {
     /// Set the verification level for memory operations
     pub fn set_verification_level(
         &mut self,
-        level: wrt_foundation::verification::VerificationLevel,
+        level: kiln_foundation::verification::VerificationLevel,
     ) {
         self.exports.set_verification_level(level;

@@ -28,15 +28,15 @@ use std::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_sync::{
-    WrtMutex,
-    WrtRwLock,
+use kiln_sync::{
+    KilnMutex,
+    KilnRwLock,
 };
 
 use crate::threading::{
@@ -244,13 +244,13 @@ struct LinuxThreadHandle {
     /// Thread ID
     tid:     ffi::pthread_t,
     /// Task being executed
-    task:    Arc<WrtMutex<Option<WasmTask>>>,
+    task:    Arc<KilnMutex<Option<WasmTask>>>,
     /// `Result` storage
-    result:  Arc<WrtMutex<Option<Result<Vec<u8>>>>>,
+    result:  Arc<KilnMutex<Option<Result<Vec<u8>>>>>,
     /// Running flag
     running: Arc<AtomicBool>,
     /// Thread statistics
-    stats:   Arc<WrtMutex<ThreadStats>>,
+    stats:   Arc<KilnMutex<ThreadStats>>,
     /// Cgroup controller
     cgroup:  Option<Arc<CgroupController>>,
 }
@@ -294,11 +294,11 @@ struct ThreadContext {
     /// Task to execute
     task:     WasmTask,
     /// `Result` storage
-    result:   Arc<WrtMutex<Option<Result<Vec<u8>>>>>,
+    result:   Arc<KilnMutex<Option<Result<Vec<u8>>>>>,
     /// Running flag
     running:  Arc<AtomicBool>,
     /// Stats
-    stats:    Arc<WrtMutex<ThreadStats>>,
+    stats:    Arc<KilnMutex<ThreadStats>>,
     /// Executor function
     executor: Arc<dyn Fn(WasmTask) -> Result<Vec<u8>> + Send + Sync>,
     /// Cgroup controller
@@ -312,9 +312,9 @@ pub struct LinuxThreadPool {
     /// Base cgroup for the pool
     base_cgroup:    Option<CgroupController>,
     /// Active threads
-    active_threads: Arc<WrtRwLock<BTreeMap<u64, Box<dyn PlatformThreadHandle>>>>,
+    active_threads: Arc<KilnRwLock<BTreeMap<u64, Box<dyn PlatformThreadHandle>>>>,
     /// Thread statistics
-    stats:          Arc<WrtMutex<ThreadPoolStats>>,
+    stats:          Arc<KilnMutex<ThreadPoolStats>>,
     /// Next thread ID
     next_thread_id: AtomicU64,
     /// Shutdown flag
@@ -349,8 +349,8 @@ impl LinuxThreadPool {
         Ok(Self {
             config,
             base_cgroup,
-            active_threads: Arc::new(WrtRwLock::new(BTreeMap::new())),
-            stats: Arc::new(WrtMutex::new(ThreadPoolStats::default())),
+            active_threads: Arc::new(KilnRwLock::new(BTreeMap::new())),
+            stats: Arc::new(KilnMutex::new(ThreadPoolStats::default())),
             next_thread_id: AtomicU64::new(1),
             shutdown: AtomicBool::new(false),
             executor,
@@ -513,9 +513,9 @@ impl PlatformThreadPool for LinuxThreadPool {
         };
 
         // Create thread context
-        let result = Arc::new(WrtMutex::new(None));
+        let result = Arc::new(KilnMutex::new(None));
         let running = Arc::new(AtomicBool::new(false));
-        let stats = Arc::new(WrtMutex::new(ThreadStats::default()));
+        let stats = Arc::new(KilnMutex::new(ThreadStats::default()));
 
         let context = Box::new(ThreadContext {
             task,
@@ -550,7 +550,7 @@ impl PlatformThreadPool for LinuxThreadPool {
         // Create handle
         let handle = Box::new(LinuxThreadHandle {
             tid,
-            task: Arc::new(WrtMutex::new(None)),
+            task: Arc::new(KilnMutex::new(None)),
             result,
             running,
             stats,

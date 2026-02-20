@@ -6,7 +6,7 @@
 #[cfg(test)]
 mod tests {
     #[cfg(any(feature = "std", feature = "alloc"))]
-    use wrt_runtime::engine::{
+    use kiln_runtime::engine::{
         CapabilityAwareEngine,
         EnginePreset,
     };
@@ -47,7 +47,7 @@ mod tests {
     #[test]
     #[cfg(any(feature = "std", feature = "alloc"))]
     fn test_engine_handle_types() {
-        use wrt_runtime::engine::{
+        use kiln_runtime::engine::{
             InstanceHandle,
             ModuleHandle,
         };
@@ -72,7 +72,7 @@ mod tests {
     #[test]
     #[cfg(any(feature = "std", feature = "alloc"))]
     fn test_preset_enum() {
-        use wrt_runtime::engine::EnginePreset;
+        use kiln_runtime::engine::EnginePreset;
 
         // Test that all variants can be created
         let _qm = EnginePreset::QM;

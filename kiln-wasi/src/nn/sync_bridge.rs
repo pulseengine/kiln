@@ -697,7 +697,7 @@ fn get_current_time_us() -> u64 {
     }
     #[cfg(not(feature = "std"))]
     {
-        wrt_platform::time::PlatformTime::get_monotonic_time_us()
+        kiln_platform::time::PlatformTime::get_monotonic_time_us()
     }
 }
 

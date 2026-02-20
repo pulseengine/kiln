@@ -1,7 +1,7 @@
 //! TOML configuration parser for resource limits
 //!
 //! This module provides TOML-based configuration for resource limits,
-//! primarily used by tooling (cargo-wrt) which can use std features.
+//! primarily used by tooling (cargo-kiln) which can use std features.
 //! The parsed configuration is then converted to ASIL-D compatible
 //! binary format for embedding in WebAssembly modules.
 
@@ -14,8 +14,8 @@ use std::path::Path;
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
-use wrt_error::{Error, ErrorCategory, codes};
-use wrt_foundation::{BoundedString, CrateId, NoStdProvider, safe_managed_alloc};
+use kiln_error::{Error, ErrorCategory, codes};
+use kiln_foundation::{BoundedString, CrateId, NoStdProvider, safe_managed_alloc};
 
 use crate::resource_limits_section::{
     MAX_ASIL_STRING_LEN, MAX_CUSTOM_LIMITS_PER_TYPE, MAX_RESOURCE_NAME_LEN, MAX_RESOURCE_TYPES,

@@ -20,7 +20,7 @@ use std::{
 
 // Import the prelude for conditional imports
 #[cfg(not(any(feature = "std")))]
-use wrt_foundation::{
+use kiln_foundation::{
     traits::BoundedCapacity,
     MemoryProvider,
     NoStdProvider,
@@ -183,8 +183,8 @@ impl Default for CustomSection {
 
 // Implement Checksummable for CustomSection - clean version
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::Checksummable for CustomSection {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CustomSection {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(self.name.as_bytes());
         checksum.update_slice(&self.data);
     }
@@ -192,16 +192,16 @@ impl wrt_foundation::traits::Checksummable for CustomSection {
 
 // Implement ToBytes for CustomSection - clean version
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::ToBytes for CustomSection {
+impl kiln_foundation::traits::ToBytes for CustomSection {
     fn serialized_size(&self) -> usize {
         self.name.len() + self.data.len() + 8 // 4 bytes each for lengths
     }
 
-    fn to_bytes_with_provider<PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<PStream: kiln_foundation::MemoryProvider>(
         &self,
-        stream: &mut wrt_foundation::traits::WriteStream,
+        stream: &mut kiln_foundation::traits::WriteStream,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write name length and name
         stream.write_all(&(self.name.len() as u32).to_le_bytes())?;
         stream.write_all(self.name.as_bytes())?;
@@ -214,17 +214,17 @@ impl wrt_foundation::traits::ToBytes for CustomSection {
 
 // Implement FromBytes for CustomSection - no_std version
 #[cfg(not(any(feature = "std")))]
-impl wrt_foundation::traits::FromBytes for CustomSection {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+impl kiln_foundation::traits::FromBytes for CustomSection {
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read name length
         let name_len = reader.read_u32_le()?;
         let mut name_bytes = alloc::vec![0u8; name_len as usize];
         reader.read_exact(&mut name_bytes)?;
         let name = alloc::string::String::from_utf8(name_bytes)
-            .map_err(|_| wrt_error::Error::parse_error("Invalid UTF-8 in custom section name"))?;
+            .map_err(|_| kiln_error::Error::parse_error("Invalid UTF-8 in custom section name"))?;
 
         // Read data length
         let data_len = reader.read_u32_le()?;
@@ -272,7 +272,7 @@ impl CustomSection {
 
     /// Serialize the custom section to binary
     #[cfg(feature = "std")]
-    pub fn to_binary(&self) -> core::result::Result<Vec<u8>, wrt_error::Error> {
+    pub fn to_binary(&self) -> core::result::Result<Vec<u8>, kiln_error::Error> {
         let mut section_data = Vec::new();
 
         // Add name as encoded string (name length + name bytes)
@@ -289,7 +289,7 @@ impl CustomSection {
 
     /// Get access to the section data as a safe slice
     #[cfg(feature = "std")]
-    pub fn get_data(&self) -> core::result::Result<&[u8], wrt_error::Error> {
+    pub fn get_data(&self) -> core::result::Result<&[u8], kiln_error::Error> {
         Ok(&self.data)
     }
 }
@@ -393,16 +393,16 @@ pub struct ComponentSectionHeader {
 pub fn parse_component_section_header(
     bytes: &[u8],
     pos: usize,
-) -> wrt_error::Result<(ComponentSectionHeader, usize)> {
+) -> kiln_error::Result<(ComponentSectionHeader, usize)> {
     if pos >= bytes.len() {
-        return Err(wrt_error::Error::validation_error(
+        return Err(kiln_error::Error::validation_error(
             "Unexpected end of input",
         ));
     }
 
     let section_id = bytes[pos];
     let section_type = ComponentSectionType::from_u8(section_id)
-        .ok_or_else(|| wrt_error::Error::validation_error("Invalid section ID"))?;
+        .ok_or_else(|| kiln_error::Error::validation_error("Invalid section ID"))?;
 
     let (size, new_pos) = crate::binary::read_leb128_u32(bytes, pos + 1)?;
 
@@ -452,7 +452,7 @@ mod tests {
     #[cfg(feature = "std")]
     use std::vec;
 
-    use wrt_foundation::safe_memory::SafeSlice;
+    use kiln_foundation::safe_memory::SafeSlice;
 
     use super::*;
 

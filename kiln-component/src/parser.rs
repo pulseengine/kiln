@@ -1,15 +1,15 @@
-//! WebAssembly module parser using wrt-decoder
+//! WebAssembly module parser using kiln-decoder
 //!
 //! This module provides functionality to parse WebAssembly modules
-//! using the project's own wrt-decoder implementation.
+//! using the project's own kiln-decoder implementation.
 
 #[cfg(not(feature = "std"))]
 use alloc::collections::BTreeSet as HashSet;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
 
-use wrt_error::kinds::DecodingError;
-use wrt_foundation::builtin::BuiltinType;
+use kiln_error::kinds::DecodingError;
+use kiln_foundation::builtin::BuiltinType;
 
 use crate::prelude::*;
 
@@ -28,7 +28,7 @@ use crate::prelude::*;
 pub fn scan_for_builtins(binary: &[u8]) -> Result<Vec<String>> {
     #[cfg(feature = "decoder")]
     {
-        use wrt_decoder::load_wasm_unified;
+        use kiln_decoder::load_wasm_unified;
         // Try to use unified API with caching first
         match load_wasm_unified(binary) {
             Ok(wasm_info) => {
@@ -52,7 +52,7 @@ pub fn scan_for_builtins(binary: &[u8]) -> Result<Vec<String>> {
 ///
 /// This is used when the unified API fails or for compatibility
 fn scan_for_builtins_fallback(binary: &[u8]) -> Result<Vec<String>> {
-    use wrt_format::binary;
+    use kiln_format::binary;
 
     // Validate WebAssembly magic number and version
     if binary.len() < 8 {

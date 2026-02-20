@@ -7,9 +7,9 @@
 #[cfg(feature = "std")]
 use std::{sync::Arc, thread, vec::Vec};
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_foundation::types::Value;
-use wrt_runtime::{ThreadConfig, ThreadId, ThreadManager};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::types::Value;
+use kiln_runtime::{ThreadConfig, ThreadId, ThreadManager};
 
 use crate::prelude::*;
 
@@ -132,7 +132,7 @@ impl ThreadBuiltins {
         let context = self.thread_manager.get_thread_context_mut(thread_id)?;
 
         // Update thread state to indicate it's detached
-        context.update_state(wrt_runtime::ThreadState::Running);
+        context.update_state(kiln_runtime::ThreadState::Running);
 
         Ok(())
     }
@@ -331,7 +331,7 @@ impl ThreadBuiltins {
         let context = self.thread_manager.get_thread_context(thread_id)?;
 
         // Check if thread has completed
-        if context.info.state != wrt_runtime::thread_manager::ThreadState::Terminated {
+        if context.info.state != kiln_runtime::thread_manager::ThreadState::Terminated {
             return Err(Error::invalid_state_error("Error occurred"));
         }
 
@@ -488,7 +488,7 @@ pub struct ThreadJoinResult {
     /// Return values from the thread
     pub return_values: Vec<Value>,
     /// Thread execution statistics
-    pub execution_stats: wrt_runtime::ThreadExecutionStats,
+    pub execution_stats: kiln_runtime::ThreadExecutionStats,
 }
 
 /// Thread error types for component model

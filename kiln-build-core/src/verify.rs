@@ -556,7 +556,7 @@ impl BuildSystem {
                         ),
                         Severity::Error,
                         format!("Unsafe code detected: {}", search_match.line_content.trim()),
-                        "wrt-verify".to_string(),
+                        "kiln-verify".to_string(),
                     )
                     .with_code("SAFETY001".to_string()),
                 );
@@ -586,7 +586,7 @@ impl BuildSystem {
                         ),
                         Severity::Warning,
                         format!("Panic macro detected: {}", search_match.line_content.trim()),
-                        "wrt-verify".to_string(),
+                        "kiln-verify".to_string(),
                     )
                     .with_code("SAFETY002".to_string()),
                 );
@@ -619,7 +619,7 @@ impl BuildSystem {
                             "Unwrap usage detected: {}",
                             search_match.line_content.trim()
                         ),
-                        "wrt-verify".to_string(),
+                        "kiln-verify".to_string(),
                     )
                     .with_code("SAFETY003".to_string()),
                 );
@@ -637,7 +637,7 @@ impl BuildSystem {
             Range::entire_line(0),
             Severity::Info,
             "Memory budget compliance verified".to_string(),
-            "wrt-verify".to_string(),
+            "kiln-verify".to_string(),
         )])
     }
 

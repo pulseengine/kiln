@@ -1,12 +1,12 @@
 Runtime Debug Features Guide
 ============================
 
-This guide explains how to use the new runtime debugging features in wrt-debug.
+This guide explains how to use the new runtime debugging features in kiln-debug.
 
 Overview
 --------
 
-The runtime debug features extend wrt-debug beyond static analysis to provide full interactive debugging capabilities when integrated with a WebAssembly runtime.
+The runtime debug features extend kiln-debug beyond static analysis to provide full interactive debugging capabilities when integrated with a WebAssembly runtime.
 
 Feature Structure
 -----------------
@@ -26,7 +26,7 @@ Feature Structure
     runtime-stepping = ["runtime-control"]        # Step debugging
     runtime-debug = ["runtime-variables", "runtime-memory", "runtime-breakpoints", "runtime-stepping"]
 
-Integration with WRT Runtime
+Integration with Kiln Runtime
 ----------------------------
 
 1. Implement Runtime Interfaces
@@ -36,7 +36,7 @@ Your runtime must implement these traits:
 
 .. code-block:: rust
 
-    use wrt_debug::{RuntimeState, DebugMemory};
+    use kiln_debug::{RuntimeState, DebugMemory};
 
     impl RuntimeState for YourRuntime {
         fn pc(&self) -> u32 { /* current program counter */ }
@@ -61,7 +61,7 @@ Your runtime must implement these traits:
 
 .. code-block:: rust
 
-    use wrt_debug::{DebuggableRuntime, DefaultDebugger};
+    use kiln_debug::{DebuggableRuntime, DefaultDebugger};
 
     impl DebuggableRuntime for YourRuntime {
         fn attach_debugger(&mut self, debugger: Box<dyn RuntimeDebugger>) {
@@ -105,7 +105,7 @@ Variable Inspection
 
 .. code-block:: rust
 
-    use wrt_debug::{VariableInspector, VariableDefinition, DwarfLocation};
+    use kiln_debug::{VariableInspector, VariableDefinition, DwarfLocation};
 
     // Create inspector
     let mut inspector = VariableInspector::new();
@@ -140,7 +140,7 @@ Memory Inspection
 
 .. code-block:: rust
 
-    use wrt_debug::{MemoryInspector, MemoryRegion, MemoryRegionType};
+    use kiln_debug::{MemoryInspector, MemoryRegion, MemoryRegionType};
 
     let mut inspector = MemoryInspector::new();
     inspector.attach(&runtime_memory);
@@ -176,7 +176,7 @@ Breakpoint Management
 
 .. code-block:: rust
 
-    use wrt_debug::{BreakpointManager, BreakpointCondition};
+    use kiln_debug::{BreakpointManager, BreakpointCondition};
 
     let mut bp_manager = BreakpointManager::new();
 
@@ -204,7 +204,7 @@ Stepping Control
 
 .. code-block:: rust
 
-    use wrt_debug::{SteppingDebugger, StepMode};
+    use kiln_debug::{SteppingDebugger, StepMode};
 
     let mut stepper = SteppingDebugger::new();
 

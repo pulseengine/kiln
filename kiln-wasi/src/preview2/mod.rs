@@ -1,7 +1,7 @@
 //! WASI Preview2 interface implementations
 //!
 //! This module contains implementations of all WASI Preview2 interfaces,
-//! built on WRT's proven patterns for maximum code reuse and reliability.
+//! built on Kiln's proven patterns for maximum code reuse and reliability.
 
 #[cfg(feature = "wasi-filesystem")]
 pub mod filesystem;

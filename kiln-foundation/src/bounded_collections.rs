@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: Additional Bounded Collections
 // SW-REQ-ID: REQ_RESOURCE_002
 //
@@ -95,7 +95,7 @@ where
     P: Default + Clone,
 {
     /// Creates a new `BoundedQueue` with the given memory provider.
-    pub fn new(provider_arg: P) -> wrt_error::Result<Self> {
+    pub fn new(provider_arg: P) -> kiln_error::Result<Self> {
         Self::with_verification_level(provider_arg, VerificationLevel::default())
     }
 
@@ -103,7 +103,7 @@ where
     pub fn with_verification_level(
         provider_arg: P,
         level: VerificationLevel,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let item_serialized_size = T::default().serialized_size();
         if item_serialized_size == 0 && N_ELEMENTS > 0 {
             return Err(Error::new_static(
@@ -401,7 +401,7 @@ where
     P: Default + Clone + PartialEq + Eq,
 {
     /// Creates a new `BoundedMap` with the given memory provider.
-    pub fn new(provider_arg: P) -> wrt_error::Result<Self> {
+    pub fn new(provider_arg: P) -> kiln_error::Result<Self> {
         Self::with_verification_level(provider_arg, VerificationLevel::default())
     }
 
@@ -409,7 +409,7 @@ where
     pub fn with_verification_level(
         provider_arg: P,
         level: VerificationLevel,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let entries = BoundedVec::with_verification_level(provider_arg, level)?;
 
         Ok(Self {
@@ -667,7 +667,7 @@ where
     P: Default + Clone + PartialEq + Eq,
 {
     /// Creates a new `BoundedSet` with the given memory provider.
-    pub fn new(provider_arg: P) -> wrt_error::Result<Self> {
+    pub fn new(provider_arg: P) -> kiln_error::Result<Self> {
         Self::with_verification_level(provider_arg, VerificationLevel::default())
     }
 
@@ -675,7 +675,7 @@ where
     pub fn with_verification_level(
         provider_arg: P,
         level: VerificationLevel,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let elements = BoundedVec::with_verification_level(provider_arg, level)?;
 
         Ok(Self {
@@ -812,7 +812,7 @@ where
     P: Default + Clone,
 {
     /// Creates a new `BoundedDeque` with the given memory provider.
-    pub fn new(provider_arg: P) -> wrt_error::Result<Self> {
+    pub fn new(provider_arg: P) -> kiln_error::Result<Self> {
         Self::with_verification_level(provider_arg, VerificationLevel::default())
     }
 
@@ -820,7 +820,7 @@ where
     pub fn with_verification_level(
         provider_arg: P,
         level: VerificationLevel,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let item_serialized_size = T::default().serialized_size();
         if item_serialized_size == 0 && N_ELEMENTS > 0 {
             return Err(Error::new_static(
@@ -1610,7 +1610,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut a = BoundedBitSet::<8>::new();
     /// a.set(0).unwrap();
@@ -1662,7 +1662,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut a = BoundedBitSet::<8>::new();
     /// a.set(0).unwrap();
@@ -1711,7 +1711,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut a = BoundedBitSet::<8>::new();
     /// a.set(0).unwrap();
@@ -1760,7 +1760,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<8>::new();
     /// bitset.set(1).unwrap();
@@ -1813,7 +1813,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// assert_eq!(bitset.first_set_bit(), None);
@@ -1849,7 +1849,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// bitset.set(10).unwrap();
@@ -1906,7 +1906,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// bitset.set_all(); // Set all bits to 1
@@ -1944,7 +1944,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// bitset.set_all(); // Set all bits to 1
@@ -1967,7 +1967,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// let indices = [10, 20, 30, 20]; // Note: 20 appears twice
@@ -2041,7 +2041,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// bitset.set_all(); // Set all bits to 1
@@ -2118,7 +2118,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     ///
@@ -2231,7 +2231,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// bitset.set(10).unwrap();
@@ -2282,7 +2282,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// bitset.set(10).unwrap();
@@ -2367,7 +2367,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// assert_eq!(bitset.trailing_zeros(), 100); // All bits are 0
@@ -2411,7 +2411,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// assert_eq!(bitset.leading_zeros(), 100); // All bits are 0
@@ -2465,7 +2465,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// bitset.set(0).unwrap();
@@ -2531,7 +2531,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<8>::new();
     /// bitset.set(1).unwrap();
@@ -2603,7 +2603,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// bitset.set(10).unwrap();
@@ -2679,7 +2679,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut a = BoundedBitSet::<100>::new();
     /// a.set(10).unwrap();
@@ -2707,7 +2707,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut a = BoundedBitSet::<100>::new();
     /// a.set(10).unwrap();
@@ -2744,7 +2744,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<100>::new();
     /// bitset.set(10).unwrap();
@@ -2766,7 +2766,7 @@ impl<const N_BITS: usize> BoundedBitSet<N_BITS> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::BoundedBitSet;
+    /// use kiln_foundation::BoundedBitSet;
     ///
     /// let mut bitset = BoundedBitSet::<5>::new();
     /// bitset.set(1).unwrap();
@@ -3026,7 +3026,7 @@ impl<const N_BITS: usize> ToBytes for BoundedBitSet<N_BITS> {
         &self,
         writer: &mut WriteStream<'a>,
         stream_provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write the number of bits in the set (count)
         writer.write_u32_le(self.count as u32)?;
 
@@ -3045,7 +3045,7 @@ impl<const N_BITS: usize> ToBytes for BoundedBitSet<N_BITS> {
     }
 
     #[cfg(feature = "default-provider")]
-    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> wrt_error::Result<()> {
+    fn to_bytes<'a>(&self, writer: &mut WriteStream<'a>) -> kiln_error::Result<()> {
         let default_provider = DefaultMemoryProvider::default();
         self.to_bytes_with_provider(writer, &default_provider)
     }
@@ -3057,7 +3057,7 @@ impl<const N_BITS: usize> FromBytes for BoundedBitSet<N_BITS> {
     fn from_bytes_with_provider<'a, P: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         stream_provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read the number of bits in the set (count)
         let count = reader.read_u32_le()? as usize;
 
@@ -3118,7 +3118,7 @@ impl<const N_BITS: usize> FromBytes for BoundedBitSet<N_BITS> {
     }
 
     #[cfg(feature = "default-provider")]
-    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> wrt_error::Result<Self> {
+    fn from_bytes<'a>(reader: &mut ReadStream<'a>) -> kiln_error::Result<Self> {
         let default_provider = DefaultMemoryProvider::default();
         Self::from_bytes_with_provider(reader, &default_provider)
     }
@@ -3475,7 +3475,7 @@ where
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PROV,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_all(&(self.len() as u32).to_le_bytes())?;
         for i in 0..self.entries.len() {
             if let Ok((k, v)) = self.entries.get(i) {
@@ -3496,7 +3496,7 @@ where
     fn from_bytes_with_provider<'a, PROV: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PROV,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let mut len_bytes = [0u8; 4];
         reader.read_exact(&mut len_bytes)?;
         let len = u32::from_le_bytes(len_bytes) as usize;

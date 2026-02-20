@@ -28,10 +28,10 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec};
 
-use wrt_error::{Error, ErrorCategory, Result};
-use wrt_foundation::{bounded::BoundedString, collections::StaticVec as BoundedVec};
+use kiln_error::{Error, ErrorCategory, Result};
+use kiln_foundation::{bounded::BoundedString, collections::StaticVec as BoundedVec};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
+use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::task_manager::{Task, TaskContext, TaskId, TaskState};
@@ -546,7 +546,7 @@ impl AsyncExecutionEngine {
         self.executions.iter().position(|e| e.id == execution_id).ok_or_else(|| {
             Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::EXECUTION_ERROR,
+                kiln_error::codes::EXECUTION_ERROR,
                 "Execution not found",
             )
         })
@@ -629,7 +629,7 @@ impl AsyncExecutionEngine {
             self.executions[execution_index].context.call_stack.push(frame).map_err(|_| {
                 Error::new(
                     ErrorCategory::Runtime,
-                    wrt_error::codes::EXECUTION_ERROR,
+                    kiln_error::codes::EXECUTION_ERROR,
                     "Failed to push call frame",
                 )
             })?;

@@ -15,7 +15,7 @@ extern crate alloc;
 #[cfg(not(feature = "std"))]
 use alloc::boxed::Box;
 
-use wrt_error::helpers::memory_limit_exceeded_error;
+use kiln_error::helpers::memory_limit_exceeded_error;
 
 use super::{
     dynamic::DynamicMemoryCapability,

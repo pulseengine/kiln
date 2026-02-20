@@ -13,10 +13,10 @@ use alloc::{string::String, vec::Vec};
 #[cfg(all(feature = "std", not(feature = "safety-critical")))]
 use std::collections::HashMap;
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 // Conditional imports for WRT allocator
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use wrt_foundation::allocator::{CrateId, WrtHashMap};
+use kiln_foundation::allocator::{CrateId, KilnHashMap};
 
 use crate::{
     branch_hint_section::{BRANCH_HINT_SECTION_NAME, BranchHintSection, parse_branch_hint_section},
@@ -37,7 +37,7 @@ pub enum CustomSection {
         module_name: Option<String>,
         /// Function names
         #[cfg(all(feature = "std", feature = "safety-critical"))]
-        function_names: WrtHashMap<u32, String, { CrateId::Decoder as u8 }, 256>,
+        function_names: KilnHashMap<u32, String, { CrateId::Decoder as u8 }, 256>,
         #[cfg(all(feature = "std", not(feature = "safety-critical")))]
         function_names: HashMap<u32, String>,
         #[cfg(not(feature = "std"))]
@@ -57,7 +57,7 @@ pub enum CustomSection {
 pub struct CustomSectionHandler {
     /// Parsed custom sections by name
     #[cfg(all(feature = "std", feature = "safety-critical"))]
-    sections: WrtHashMap<String, CustomSection, { CrateId::Decoder as u8 }, 64>,
+    sections: KilnHashMap<String, CustomSection, { CrateId::Decoder as u8 }, 64>,
     #[cfg(all(feature = "std", not(feature = "safety-critical")))]
     sections: HashMap<String, CustomSection>,
     #[cfg(not(feature = "std"))]
@@ -69,7 +69,7 @@ impl CustomSectionHandler {
     pub fn new() -> Self {
         Self {
             #[cfg(all(feature = "std", feature = "safety-critical"))]
-            sections: WrtHashMap::with_capacity(0),
+            sections: KilnHashMap::with_capacity(0),
             #[cfg(all(feature = "std", not(feature = "safety-critical")))]
             sections: HashMap::with_capacity(0),
             #[cfg(not(feature = "std"))]
@@ -203,7 +203,7 @@ fn parse_name_section(_data: &[u8]) -> Result<CustomSection> {
     Ok(CustomSection::Name {
         module_name: None,
         #[cfg(all(feature = "std", feature = "safety-critical"))]
-        function_names: WrtHashMap::with_capacity(0),
+        function_names: KilnHashMap::with_capacity(0),
         #[cfg(all(feature = "std", not(feature = "safety-critical")))]
         function_names: HashMap::with_capacity(0),
         #[cfg(not(feature = "std"))]
@@ -223,7 +223,7 @@ impl Default for CustomSection {
 /// Utility function to extract custom section name and data from a complete
 /// custom section
 pub fn extract_custom_section(section_data: &[u8]) -> Result<(String, &[u8])> {
-    use wrt_format::binary::read_leb128_u32;
+    use kiln_format::binary::read_leb128_u32;
 
     // Read name length
     let (name_len, mut offset) = read_leb128_u32(section_data, 0)?;

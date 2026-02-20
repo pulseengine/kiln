@@ -1,9 +1,9 @@
 //! Fuzz Testing Module
 //!
-//! This module consolidates all fuzzing tests for the WRT project,
+//! This module consolidates all fuzzing tests for the Kiln project,
 //! providing property-based testing for critical components.
 
-use wrt_test_registry::prelude::*;
+use kiln_test_registry::prelude::*;
 
 mod bounded_collections_fuzz;
 mod memory_adapter_fuzz; 

@@ -11,7 +11,7 @@ use core::marker::PhantomData;
 use crate::{
     bounded::{BoundedString, BoundedVec},
     safe_memory::{NoStdProvider, DefaultNoStdProvider},
-    Error, wrt_error::Result,
+    Error, kiln_error::Result,
 };
 
 /// Platform capacity configuration for unified types
@@ -107,25 +107,25 @@ pub type SafetyCriticalTypes = UnifiedTypes<32, 256, 8192>;
 
 /// Helper trait for creating unified type collections
 pub trait UnifiedTypeFactory<const SMALL: usize, const MEDIUM: usize, const LARGE: usize> {
-    fn create_small_vec<T>() -> wrt_error::Result<BoundedVec<T, SMALL, DefaultNoStdProvider>>
+    fn create_small_vec<T>() -> kiln_error::Result<BoundedVec<T, SMALL, DefaultNoStdProvider>>
     where
         T: Clone + core::fmt::Debug + Default + PartialEq + Eq + crate::traits::Checksummable + crate::traits::ToBytes + crate::traits::FromBytes;
 
-    fn create_medium_vec<T>() -> wrt_error::Result<BoundedVec<T, MEDIUM, DefaultNoStdProvider>>
+    fn create_medium_vec<T>() -> kiln_error::Result<BoundedVec<T, MEDIUM, DefaultNoStdProvider>>
     where
         T: Clone + core::fmt::Debug + Default + PartialEq + Eq + crate::traits::Checksummable + crate::traits::ToBytes + crate::traits::FromBytes;
 
-    fn create_large_vec<T>() -> wrt_error::Result<BoundedVec<T, LARGE, DefaultNoStdProvider>>
+    fn create_large_vec<T>() -> kiln_error::Result<BoundedVec<T, LARGE, DefaultNoStdProvider>>
     where
         T: Clone + core::fmt::Debug + Default + PartialEq + Eq + crate::traits::Checksummable + crate::traits::ToBytes + crate::traits::FromBytes;
 
-    fn create_runtime_string() -> wrt_error::Result<BoundedString<MEDIUM, DefaultNoStdProvider>>;
+    fn create_runtime_string() -> kiln_error::Result<BoundedString<MEDIUM, DefaultNoStdProvider>>;
 }
 
 impl<const SMALL: usize, const MEDIUM: usize, const LARGE: usize> 
     UnifiedTypeFactory<SMALL, MEDIUM, LARGE> for UnifiedTypes<SMALL, MEDIUM, LARGE>
 {
-    fn create_small_vec<T>() -> wrt_error::Result<BoundedVec<T, SMALL, DefaultNoStdProvider>>
+    fn create_small_vec<T>() -> kiln_error::Result<BoundedVec<T, SMALL, DefaultNoStdProvider>>
     where
         T: Clone + core::fmt::Debug + Default + PartialEq + Eq + crate::traits::Checksummable + crate::traits::ToBytes + crate::traits::FromBytes,
     {
@@ -133,7 +133,7 @@ impl<const SMALL: usize, const MEDIUM: usize, const LARGE: usize>
         BoundedVec::new(provider)
     }
 
-    fn create_medium_vec<T>() -> wrt_error::Result<BoundedVec<T, MEDIUM, DefaultNoStdProvider>>
+    fn create_medium_vec<T>() -> kiln_error::Result<BoundedVec<T, MEDIUM, DefaultNoStdProvider>>
     where
         T: Clone + core::fmt::Debug + Default + PartialEq + Eq + crate::traits::Checksummable + crate::traits::ToBytes + crate::traits::FromBytes,
     {
@@ -141,7 +141,7 @@ impl<const SMALL: usize, const MEDIUM: usize, const LARGE: usize>
         BoundedVec::new(provider)
     }
 
-    fn create_large_vec<T>() -> wrt_error::Result<BoundedVec<T, LARGE, DefaultNoStdProvider>>
+    fn create_large_vec<T>() -> kiln_error::Result<BoundedVec<T, LARGE, DefaultNoStdProvider>>
     where
         T: Clone + core::fmt::Debug + Default + PartialEq + Eq + crate::traits::Checksummable + crate::traits::ToBytes + crate::traits::FromBytes,
     {
@@ -149,7 +149,7 @@ impl<const SMALL: usize, const MEDIUM: usize, const LARGE: usize>
         BoundedVec::new(provider)
     }
 
-    fn create_runtime_string() -> wrt_error::Result<BoundedString<MEDIUM, DefaultNoStdProvider>> {
+    fn create_runtime_string() -> kiln_error::Result<BoundedString<MEDIUM, DefaultNoStdProvider>> {
         let provider = safe_managed_alloc!(MEDIUM, CrateId::Foundation)?;
         BoundedString::try_from_str("", provider).map_err(|_| Error::runtime_execution_error("Failed to create runtime string"))
     }

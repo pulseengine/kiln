@@ -2,7 +2,7 @@
 Zephyr RTOS Installation Guide
 ==========================
 
-WRT provides comprehensive support for Zephyr RTOS, enabling WebAssembly execution in resource-constrained embedded systems and IoT devices.
+Kiln provides comprehensive support for Zephyr RTOS, enabling WebAssembly execution in resource-constrained embedded systems and IoT devices.
 
 .. contents:: On this page
    :local:
@@ -37,7 +37,7 @@ Prerequisites
 Development Environment Setup
 -----------------------------
 
-Based on the justfile configuration, WRT includes Zephyr targets. Let's set up the environment:
+Based on the justfile configuration, Kiln includes Zephyr targets. Let's set up the environment:
 
 **Install Zephyr dependencies:**
 
@@ -71,10 +71,10 @@ Based on the justfile configuration, WRT includes Zephyr targets. Let's set up t
    west --version
    cmake --version
 
-WRT Zephyr Integration
+Kiln Zephyr Integration
 ======================
 
-According to the justfile, WRT has pre-configured Zephyr targets:
+According to the justfile, Kiln has pre-configured Zephyr targets:
 
 .. code-block:: bash
 
@@ -85,7 +85,7 @@ According to the justfile, WRT has pre-configured Zephyr targets:
    just zephyr-build           # Build applications
    just zephyr-run             # Run applications
 
-Build WRT for Zephyr
+Build Kiln for Zephyr
 ---------------------
 
 **Configure for embedded targets:**
@@ -97,7 +97,7 @@ Build WRT for Zephyr
    rustup target add thumbv8m.main-none-eabi  # ARM Cortex-M33
    rustup target add riscv32imc-unknown-none-elf # RISC-V
 
-**Build WRT with no_std:**
+**Build Kiln with no_std:**
 
 .. code-block:: bash
 
@@ -113,33 +113,33 @@ Platform Configuration
 Zephyr Integration Layer
 ------------------------
 
-WRT provides Zephyr-specific integration through the platform layer:
+Kiln provides Zephyr-specific integration through the platform layer:
 
-**Create Zephyr application with WRT:**
+**Create Zephyr application with Kiln:**
 
 .. code-block:: c
 
    // main.c - Zephyr application
    #include <zephyr/kernel.h>
    #include <zephyr/device.h>
-   #include <wrt_zephyr.h>
+   #include <kiln_zephyr.h>
 
    void main(void) {
-       printk("Starting WRT on Zephyr\\n");
+       printk("Starting Kiln on Zephyr\\n");
        
-       // Initialize WRT runtime
-       wrt_runtime_t* runtime = wrt_init();
+       // Initialize Kiln runtime
+       kiln_runtime_t* runtime = kiln_init();
        
        // Load WebAssembly module
        const uint8_t* module_bytes = get_wasm_module();
        size_t module_size = get_wasm_module_size();
        
-       wrt_module_t* module = wrt_load_module(runtime, module_bytes, module_size);
+       kiln_module_t* module = kiln_load_module(runtime, module_bytes, module_size);
        if (module) {
-           wrt_execute(module, "main", NULL, 0);
+           kiln_execute(module, "main", NULL, 0);
        }
        
-       wrt_cleanup(runtime);
+       kiln_cleanup(runtime);
    }
 
 **CMakeLists.txt configuration:**
@@ -149,12 +149,12 @@ WRT provides Zephyr-specific integration through the platform layer:
    # CMakeLists.txt
    cmake_minimum_required(VERSION 3.20.0)
    find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
-   project(wrt_zephyr_app)
+   project(kiln_zephyr_app)
 
    target_sources(app PRIVATE src/main.c)
    
-   # Add WRT library
-   target_link_libraries(app PRIVATE wrt)
+   # Add Kiln library
+   target_link_libraries(app PRIVATE kiln)
    target_include_directories(app PRIVATE include)
 
 **prj.conf (Zephyr configuration):**
@@ -201,16 +201,16 @@ Memory Management
 
 .. code-block:: c
 
-   // Configure WRT memory pool for Zephyr
-   #define WRT_HEAP_SIZE (32 * 1024)  // 32KB heap
-   K_HEAP_DEFINE(wrt_heap, WRT_HEAP_SIZE);
+   // Configure Kiln memory pool for Zephyr
+   #define KILN_HEAP_SIZE (32 * 1024)  // 32KB heap
+   K_HEAP_DEFINE(kiln_heap, KILN_HEAP_SIZE);
 
-   void* wrt_malloc(size_t size) {
-       return k_heap_alloc(&wrt_heap, size, K_NO_WAIT);
+   void* kiln_malloc(size_t size) {
+       return k_heap_alloc(&kiln_heap, size, K_NO_WAIT);
    }
 
-   void wrt_free(void* ptr) {
-       k_heap_free(&wrt_heap, ptr);
+   void kiln_free(void* ptr) {
+       k_heap_free(&kiln_heap, ptr);
    }
 
 Board-Specific Configuration
@@ -265,8 +265,8 @@ ARM Cortex-M (Production)
    #include <st/f4/stm32f407Xg.dtsi>
 
    / {
-       model = "Custom WRT Board";
-       compatible = "custom,wrt-board", "st,stm32f407";
+       model = "Custom Kiln Board";
+       compatible = "custom,kiln-board", "st,stm32f407";
 
        chosen {
            zephyr,sram = &sram0;
@@ -300,37 +300,37 @@ Real-Time Configuration
 Thread Configuration
 --------------------
 
-**Configure WRT threads for real-time:**
+**Configure Kiln threads for real-time:**
 
 .. code-block:: c
 
    // Thread priorities for real-time operation
-   #define WRT_MAIN_THREAD_PRIORITY    5
-   #define WRT_WORKER_THREAD_PRIORITY  7
-   #define WRT_GC_THREAD_PRIORITY      10
+   #define KILN_MAIN_THREAD_PRIORITY    5
+   #define KILN_WORKER_THREAD_PRIORITY  7
+   #define KILN_GC_THREAD_PRIORITY      10
 
    // Stack sizes
-   #define WRT_MAIN_STACK_SIZE    4096
-   #define WRT_WORKER_STACK_SIZE  2048
+   #define KILN_MAIN_STACK_SIZE    4096
+   #define KILN_WORKER_STACK_SIZE  2048
 
-   K_THREAD_DEFINE(wrt_main_thread, WRT_MAIN_STACK_SIZE,
-                   wrt_main_thread_entry, NULL, NULL, NULL,
-                   WRT_MAIN_THREAD_PRIORITY, 0, 0);
+   K_THREAD_DEFINE(kiln_main_thread, KILN_MAIN_STACK_SIZE,
+                   kiln_main_thread_entry, NULL, NULL, NULL,
+                   KILN_MAIN_THREAD_PRIORITY, 0, 0);
 
 Interrupt Handling
 -----------------
 
-**WRT interrupt integration:**
+**Kiln interrupt integration:**
 
 .. code-block:: c
 
-   // Interrupt-safe WRT operations
+   // Interrupt-safe Kiln operations
    void timer_isr(const struct device* dev) {
-       // Signal WRT runtime from interrupt context
-       wrt_signal_from_isr();
+       // Signal Kiln runtime from interrupt context
+       kiln_signal_from_isr();
    }
 
-   // Configure timer for WRT scheduling
+   // Configure timer for Kiln scheduling
    static const struct device* timer_dev = DEVICE_DT_GET(DT_ALIAS(timer0));
    irq_connect_dynamic(DT_IRQN(DT_ALIAS(timer0)), 0, timer_isr, NULL, 0);
 
@@ -349,20 +349,20 @@ Low Power Integration
    CONFIG_PM_DEVICE=y
    CONFIG_PM_DEVICE_RUNTIME=y
 
-**WRT power awareness:**
+**Kiln power awareness:**
 
 .. code-block:: c
 
-   // Power-aware WRT execution
-   void wrt_idle_hook(void) {
-       // Enter low power state when WRT is idle
+   // Power-aware Kiln execution
+   void kiln_idle_hook(void) {
+       // Enter low power state when Kiln is idle
        pm_state_set(PM_STATE_SUSPEND_TO_IDLE);
    }
 
-   // Configure WRT for power efficiency
-   wrt_config_t config = {
-       .power_mode = WRT_POWER_LOW,
-       .idle_callback = wrt_idle_hook,
+   // Configure Kiln for power efficiency
+   kiln_config_t config = {
+       .power_mode = KILN_POWER_LOW,
+       .idle_callback = kiln_idle_hook,
        .sleep_threshold_ms = 10
    };
 
@@ -383,14 +383,14 @@ Network Stack Configuration
    CONFIG_NET_TCP=y
    CONFIG_NET_SOCKETS=y
 
-**WRT network interface:**
+**Kiln network interface:**
 
 .. code-block:: c
 
-   // Network-enabled WRT module
+   // Network-enabled Kiln module
    #include <zephyr/net/socket.h>
 
-   int wrt_network_handler(wrt_call_t* call) {
+   int kiln_network_handler(kiln_call_t* call) {
        int sock = socket(AF_INET, SOCK_STREAM, 0);
        // Handle network operations from WebAssembly
        return 0;
@@ -433,14 +433,14 @@ Debugging on Zephyr
 Performance Testing
 -------------------
 
-**Benchmark WRT on Zephyr:**
+**Benchmark Kiln on Zephyr:**
 
 .. code-block:: c
 
    // Performance measurement
    #include <zephyr/timing/timing.h>
 
-   void benchmark_wrt(void) {
+   void benchmark_kiln(void) {
        timing_t start, end;
        uint64_t cycles;
 
@@ -448,7 +448,7 @@ Performance Testing
        start = timing_counter_get();
        
        // Execute WebAssembly module
-       wrt_execute(module, "benchmark", NULL, 0);
+       kiln_execute(module, "benchmark", NULL, 0);
        
        end = timing_counter_get();
        cycles = timing_cycles_get(&start, &end);
@@ -466,7 +466,7 @@ Production Deployment
 
 .. code-block:: dts
 
-   // Optimized flash layout for WRT
+   // Optimized flash layout for Kiln
    &flash0 {
        partitions {
            compatible = "fixed-partitions";
@@ -495,9 +495,9 @@ Production Deployment
 .. code-block:: c
 
    // OTA update for WebAssembly modules
-   int wrt_ota_update(const uint8_t* new_module, size_t size) {
+   int kiln_ota_update(const uint8_t* new_module, size_t size) {
        // Validate module
-       if (!wrt_validate_module(new_module, size)) {
+       if (!kiln_validate_module(new_module, size)) {
            return -EINVAL;
        }
        
@@ -505,7 +505,7 @@ Production Deployment
        flash_write(flash_dev, WASM_STORAGE_OFFSET, new_module, size);
        
        // Reload runtime
-       wrt_reload_module();
+       kiln_reload_module();
        return 0;
    }
 

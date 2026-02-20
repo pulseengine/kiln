@@ -330,7 +330,7 @@ impl CiSimulator {
         // Check workspace KANI config
         if let Ok(cargo_toml) = fs::read_to_string(self.workspace_root.join("Cargo.toml")) {
             if cargo_toml.contains("workspace.metadata.kani") {
-                let packages = cargo_toml.matches("name.*=.*\"wrt-").count();
+                let packages = cargo_toml.matches("name.*=.*\"kiln-").count();
                 results.workspace_kani_config = true;
                 results.kani_packages = packages;
                 println!(
@@ -345,7 +345,7 @@ impl CiSimulator {
 
         // Check integration Kani.toml
         let integration_kani =
-            self.workspace_root.join("wrt-tests").join("integration").join("Kani.toml");
+            self.workspace_root.join("kiln-tests").join("integration").join("Kani.toml");
         if integration_kani.exists() {
             results.integration_kani_toml = true;
             println!("  {} Integration Kani.toml present", "✓".bright_green());
@@ -421,7 +421,7 @@ impl CiSimulator {
         let start = Instant::now();
 
         if *kani_available {
-            println!("  Running: cargo kani -p wrt-integration-tests --features kani");
+            println!("  Running: cargo kani -p kiln-integration-tests --features kani");
             println!("  {} Quick verification would run", "✓".bright_green());
 
             Ok(VerificationResult {
@@ -431,10 +431,10 @@ impl CiSimulator {
                 error: None,
             })
         } else {
-            println!("  Fallback: cargo test -p wrt-integration-tests --features kani");
+            println!("  Fallback: cargo test -p kiln-integration-tests --features kani");
 
             let output = Command::new("cargo")
-                .args(["test", "-p", "wrt-integration-tests", "--features", "kani"])
+                .args(["test", "-p", "kiln-integration-tests", "--features", "kani"])
                 .current_dir(&self.workspace_root)
                 .output();
 
@@ -475,10 +475,10 @@ impl CiSimulator {
         println!("{} Matrix verification simulation...", "7️⃣".bright_yellow());
 
         let packages = vec![
-            "wrt-foundation".to_string(),
-            "wrt-component".to_string(),
-            "wrt-sync".to_string(),
-            "wrt-integration-tests".to_string(),
+            "kiln-foundation".to_string(),
+            "kiln-component".to_string(),
+            "kiln-sync".to_string(),
+            "kiln-integration-tests".to_string(),
         ];
 
         let asil_levels = vec!["asil-b".to_string(), "asil-c".to_string()];

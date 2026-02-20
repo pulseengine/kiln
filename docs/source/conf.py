@@ -7,9 +7,9 @@ import pathlib
 import re
 sys.path.insert(0, os.path.abspath('../..'))
 
-project = 'WRT (WebAssembly Runtime)'
-copyright = '2025, WRT Contributors'
-author = 'WRT Contributors'
+project = 'Kiln (WebAssembly Runtime)'
+copyright = '2025, Kiln Contributors'
+author = 'Kiln Contributors'
 # release = '0.1.0' # This will be set dynamically
 
 # Version configuration
@@ -197,7 +197,7 @@ needs_types = [
     dict(directive="safety", title="Safety", prefix="SAFETY_", color="#FF5D73", style="node"),
     dict(directive="qual", title="Qualification", prefix="QUAL_", color="#9370DB", style="node"),
     dict(directive="constraint", title="Constraint", prefix="CNST_", color="#4682B4", style="node"),
-    dict(directive="panic", title="Panic", prefix="WRTQ_", color="#E74C3C", style="node"),
+    dict(directive="panic", title="Panic", prefix="KILNQ_", color="#E74C3C", style="node"),
     dict(directive="src",  title="Source file",  prefix="SRC_", color="#C6C6FF", style="node"),
     # Architecture-specific types
     dict(directive="arch_component", title="Architectural Component", prefix="ARCH_COMP_", color="#FF6B6B", style="node"),
@@ -320,7 +320,7 @@ def extract_reqs(app, need, needs, *args, **kwargs):
 
     # Construct the absolute path to the source file.
     # app.confdir is the directory of conf.py (e.g., /path/to/workspace/docs/source)
-    # relative_file_path_from_doc_source is like '../../wrt/src/some_file.rs'
+    # relative_file_path_from_doc_source is like '../../kiln/src/some_file.rs'
     # So, Path(app.confdir) / relative_file_path_from_doc_source gives the absolute path.
     absolute_src_file_path = (pathlib.Path(app.confdir) / relative_file_path_from_doc_source).resolve()
     
@@ -347,7 +347,7 @@ needs_string_links = {
     # Link file paths in :file: option to GitHub
     "source_file_link": {
         "regex": r"^(?P<value>(?:\.\.\/)*[a-zA-Z0-9_\-\/]+\.rs)$",
-        "link_url": "https://github.com/pulseengine/wrt/blob/main/{{value.replace('../../', '')}}",
+        "link_url": "https://github.com/pulseengine/kiln/blob/main/{{value.replace('../../', '')}}",
         "link_name": "{{value}}",
         "options": ["file"],
     }
@@ -356,33 +356,33 @@ needs_string_links = {
 # Rust documentation configuration
 # Start with core working crates first
 rust_crates = {
-    "wrt-error": "/wrt/wrt-error",
-    "wrt-foundation": "/wrt/wrt-foundation",
-    "wrt-sync": "/wrt/wrt-sync",
-    "wrt-logging": "/wrt/wrt-logging",
-    "wrt-math": "/wrt/wrt-math",
-    "wrt-format": "/wrt/wrt-format",
-    "wrt-decoder": "/wrt/wrt-decoder",
-    "wrt-host": "/wrt/wrt-host",
-    "wrt-intercept": "/wrt/wrt-intercept",
+    "kiln-error": "/kiln/kiln-error",
+    "kiln-foundation": "/kiln/kiln-foundation",
+    "kiln-sync": "/kiln/kiln-sync",
+    "kiln-logging": "/kiln/kiln-logging",
+    "kiln-math": "/kiln/kiln-math",
+    "kiln-format": "/kiln/kiln-format",
+    "kiln-decoder": "/kiln/kiln-decoder",
+    "kiln-host": "/kiln/kiln-host",
+    "kiln-intercept": "/kiln/kiln-intercept",
     # Test one by one:
-    # "wrt-instructions": "/wrt/wrt-instructions",
-    # "wrt-platform": "/wrt/wrt-platform",
+    # "kiln-instructions": "/kiln/kiln-instructions",
+    # "kiln-platform": "/kiln/kiln-platform",
     # Temporarily disable complex crates that might have build issues:
-    # "wrt-foundation": "/wrt/wrt-foundation", 
-    # "wrt-format": "/wrt/wrt-format",
-    # "wrt-decoder": "/wrt/wrt-decoder",
-    # "wrt-host": "/wrt/wrt-host",
-    # "wrt-intercept": "/wrt/wrt-intercept",
-    # "wrt-instructions": "/wrt/wrt-instructions",
-    # "wrt-platform": "/wrt/wrt-platform",
-    # "wrt-runtime": "/wrt/wrt-runtime",
-    # "wrt-component": "/wrt/wrt-component",
-    # "wrt": "/wrt/wrt",
-    # "wrtd": "/wrt/wrtd",
-    # "wrt-debug": "/wrt/wrt-debug",
-    # "wrt-verification-tool": "/wrt/wrt-verification-tool",
-    # "wrt-test-registry": "/wrt/wrt-test-registry",
+    # "kiln-foundation": "/kiln/kiln-foundation", 
+    # "kiln-format": "/kiln/kiln-format",
+    # "kiln-decoder": "/kiln/kiln-decoder",
+    # "kiln-host": "/kiln/kiln-host",
+    # "kiln-intercept": "/kiln/kiln-intercept",
+    # "kiln-instructions": "/kiln/kiln-instructions",
+    # "kiln-platform": "/kiln/kiln-platform",
+    # "kiln-runtime": "/kiln/kiln-runtime",
+    # "kiln-component": "/kiln/kiln-component",
+    # "kiln": "/kiln/kiln",
+    # "kilnd": "/kiln/kilnd",
+    # "kiln-debug": "/kiln/kiln-debug",
+    # "kiln-verification-tool": "/kiln/kiln-verification-tool",
+    # "kiln-test-registry": "/kiln/kiln-test-registry",
 }
 
 # Directory where sphinx-rustdocgen will place generated .md files.

@@ -1,4 +1,4 @@
-//! Memory adapter for wrt-runtime
+//! Memory adapter for kiln-runtime
 //!
 //! This adapter provides safe, bounded memory access
 //! with integrated memory safety features for WebAssembly memory instances.
@@ -110,18 +110,18 @@ pub struct StdMemoryProvider {
     verification_level: VerificationLevel,
 }
 
-impl wrt_foundation::MemoryProvider for StdMemoryProvider {
+impl kiln_foundation::MemoryProvider for StdMemoryProvider {
     type Allocator = Self;
 
     fn borrow_slice(
         &self,
         _offset: usize,
         _len: usize,
-    ) -> Result<wrt_foundation::safe_memory::Slice<'_>> {
+    ) -> Result<kiln_foundation::safe_memory::Slice<'_>> {
         // StdMemoryProvider doesn't manage its own memory buffer
         // It's used as a provider for BoundedVec operations
         // Return an error indicating this operation is not supported
-        Err(wrt_error::Error::runtime_execution_error(
+        Err(kiln_error::Error::runtime_execution_error(
             "Memory read not supported for StdMemoryProvider ",
         ))
     }
@@ -149,26 +149,26 @@ impl wrt_foundation::MemoryProvider for StdMemoryProvider {
         Ok(())
     }
 
-    fn set_verification_level(&mut self, level: wrt_foundation::verification::VerificationLevel) {
+    fn set_verification_level(&mut self, level: kiln_foundation::verification::VerificationLevel) {
         self.verification_level = level;
     }
 
-    fn verification_level(&self) -> wrt_foundation::verification::VerificationLevel {
+    fn verification_level(&self) -> kiln_foundation::verification::VerificationLevel {
         self.verification_level
     }
 
-    fn memory_stats(&self) -> wrt_foundation::MemoryStats {
-        wrt_foundation::MemoryStats::default()
+    fn memory_stats(&self) -> kiln_foundation::MemoryStats {
+        kiln_foundation::MemoryStats::default()
     }
 
     fn get_slice_mut(
         &mut self,
         _offset: usize,
         _len: usize,
-    ) -> Result<wrt_foundation::safe_memory::SliceMut<'_>> {
-        Err(wrt_error::Error::new(
-            wrt_error::ErrorCategory::Memory,
-            wrt_error::codes::NOT_IMPLEMENTED,
+    ) -> Result<kiln_foundation::safe_memory::SliceMut<'_>> {
+        Err(kiln_error::Error::new(
+            kiln_error::ErrorCategory::Memory,
+            kiln_error::codes::NOT_IMPLEMENTED,
             "Not implemented",
         ))
     }
@@ -182,7 +182,7 @@ impl wrt_foundation::MemoryProvider for StdMemoryProvider {
     }
 
     fn acquire_memory(&self, _layout: core::alloc::Layout) -> Result<*mut u8> {
-        Err(wrt_error::Error::runtime_execution_error(
+        Err(kiln_error::Error::runtime_execution_error(
             "Memory acquisition unsupported ",
         ))
     }
@@ -195,21 +195,21 @@ impl wrt_foundation::MemoryProvider for StdMemoryProvider {
         self
     }
 
-    fn new_handler(&self) -> Result<wrt_foundation::safe_memory::SafeMemoryHandler<Self>>
+    fn new_handler(&self) -> Result<kiln_foundation::safe_memory::SafeMemoryHandler<Self>>
     where
         Self: Clone,
     {
-        Ok(wrt_foundation::safe_memory::SafeMemoryHandler::new(
+        Ok(kiln_foundation::safe_memory::SafeMemoryHandler::new(
             self.clone(),
         ))
     }
 }
 
-impl wrt_foundation::safe_memory::Allocator for StdMemoryProvider {
+impl kiln_foundation::safe_memory::Allocator for StdMemoryProvider {
     fn allocate(&self, _layout: core::alloc::Layout) -> Result<*mut u8> {
-        Err(wrt_error::Error::new(
-            wrt_error::ErrorCategory::Memory,
-            wrt_error::codes::NOT_IMPLEMENTED,
+        Err(kiln_error::Error::new(
+            kiln_error::ErrorCategory::Memory,
+            kiln_error::codes::NOT_IMPLEMENTED,
             "Not implemented",
         ))
     }
@@ -296,7 +296,7 @@ impl SafeMemoryAdapter {
 
 // Implement the MemorySafety trait for SafeMemoryAdapter
 // MemorySafety trait implementation removed as it doesn't exist in
-// wrt-foundation
+// kiln-foundation
 
 // Implement the MemoryAdapter trait for SafeMemoryAdapter
 impl MemoryAdapter for SafeMemoryAdapter {
@@ -334,7 +334,7 @@ impl MemoryAdapter for SafeMemoryAdapter {
 
     fn write_all(&self, offset: u32, bytes: &[u8]) -> Result<()> {
         #[cfg(feature = "tracing")]
-        use wrt_foundation::tracing::{debug, trace};
+        use kiln_foundation::tracing::{debug, trace};
 
         // Check that the range is valid
         self.check_range(offset, bytes.len() as u32)?;
@@ -356,7 +356,7 @@ impl MemoryAdapter for SafeMemoryAdapter {
 
     fn grow(&self, pages: u32) -> Result<u32> {
         #[cfg(feature = "tracing")]
-        use wrt_foundation::tracing::warn;
+        use kiln_foundation::tracing::warn;
 
         // Get the current size
         let result = self.memory.size();

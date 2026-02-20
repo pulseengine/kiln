@@ -23,8 +23,8 @@ use core::{
     time::Duration,
 };
 
-use wrt_error::Result;
-use wrt_sync::WrtRwLock;
+use kiln_error::Result;
+use kiln_sync::KilnRwLock;
 
 /// Thread priority levels for platform-agnostic use
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -353,11 +353,11 @@ pub struct ThreadSpawnRequest {
 #[derive(Debug)]
 pub struct ResourceTracker {
     /// Threads per module
-    threads_per_module: Arc<WrtRwLock<BTreeMap<u64, AtomicUsize>>>,
+    threads_per_module: Arc<KilnRwLock<BTreeMap<u64, AtomicUsize>>>,
     /// Total active threads
     total_threads:      AtomicUsize,
     /// Memory usage per module
-    memory_per_module:  Arc<WrtRwLock<BTreeMap<u64, AtomicUsize>>>,
+    memory_per_module:  Arc<KilnRwLock<BTreeMap<u64, AtomicUsize>>>,
     /// Limits
     limits:             ThreadingLimits,
 }
@@ -366,9 +366,9 @@ impl ResourceTracker {
     /// Create new resource tracker
     pub fn new(limits: ThreadingLimits) -> Self {
         Self {
-            threads_per_module: Arc::new(WrtRwLock::new(BTreeMap::new())),
+            threads_per_module: Arc::new(KilnRwLock::new(BTreeMap::new())),
             total_threads: AtomicUsize::new(0),
-            memory_per_module: Arc::new(WrtRwLock::new(BTreeMap::new())),
+            memory_per_module: Arc::new(KilnRwLock::new(BTreeMap::new())),
             limits,
         }
     }
@@ -481,7 +481,7 @@ pub fn create_thread_pool(_config: &ThreadPoolConfig) -> Result<Box<dyn Platform
 
     #[cfg(not(any(target_os = "nto", target_os = "linux", feature = "threading")))]
     {
-        Err(wrt_error::Error::runtime_execution_error(
+        Err(kiln_error::Error::runtime_execution_error(
             "Threading not supported on this platform",
         ))
     }
@@ -593,7 +593,7 @@ where
         .spawn(move || {
             let _ = task;
         })
-        .map_err(|_e| wrt_error::Error::runtime_execution_error("Failed to spawn thread"))?;
+        .map_err(|_e| kiln_error::Error::runtime_execution_error("Failed to spawn thread"))?;
 
     // Create a simplified thread handle
     // This is a minimal implementation for compilation purposes
@@ -633,7 +633,7 @@ where
     F: FnOnce() -> Result<()> + Send + 'static,
 {
     // For no_std, we can't create actual threads, so return an error immediately
-    Err(wrt_error::Error::runtime_not_implemented(
+    Err(kiln_error::Error::runtime_not_implemented(
         "Thread spawning not supported in no_std environment",
     ))
 }

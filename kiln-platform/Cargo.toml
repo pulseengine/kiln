@@ -1,4 +1,4 @@
-# WRT - wrt-platform
+# Kiln - kiln-platform
 # Module: Cargo Configuration
 # SW-REQ-ID: REQ_PLATFORM_001
 #
@@ -7,13 +7,13 @@
 # SPDX-License-Identifier: MIT
 
 [package]
-name = "wrt-platform"
+name = "kiln-platform"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Platform Abstraction Layer (Memory, Synchronization) for WRT."
+description = "Platform Abstraction Layer (Memory, Synchronization) for Kiln."
 readme = "README.md"
 # repository = "..." # Add repository URL later
 # homepage = "..." # Add homepage URL later
@@ -25,11 +25,11 @@ categories = ["wasm", "os"]
 workspace = true
 
 [dependencies]
-wrt-error = { workspace = true } # Assuming wrt-error is in workspace.dependencies
-wrt-sync = { workspace = true } # Add wrt-sync for synchronization primitives
-wrt-panic = { workspace = true, optional = true } # Dedicated panic handler
-# wrt-format = { workspace = true, optional = true } # For AST allocator - temporarily disabled to fix cyclic dependency
-# wrt-foundation = { workspace = true, optional = true } # For bounded collections - temporarily disabled to fix cyclic dependency
+kiln-error = { workspace = true } # Assuming kiln-error is in workspace.dependencies
+kiln-sync = { workspace = true } # Add kiln-sync for synchronization primitives
+kiln-panic = { workspace = true, optional = true } # Dedicated panic handler
+# kiln-format = { workspace = true, optional = true } # For AST allocator - temporarily disabled to fix cyclic dependency
+# kiln-foundation = { workspace = true, optional = true } # For bounded collections - temporarily disabled to fix cyclic dependency
 # libc dependency removed - using direct syscalls instead
 
 [dev-dependencies]
@@ -40,13 +40,13 @@ default = [] # No panic handler by default - libraries should provide their own
 # Binary choice: std OR no_std (no alloc middle ground)
 
 # Binary choice: std OR no_std (no alloc middle ground)
-std = ["wrt-error/std", "wrt-sync/std"]
+std = ["kiln-error/std", "kiln-sync/std"]
 no_std = []
 
 # All memory allocation uses NoStdProvider pattern
 
 # Feature for threading support (requires std)
-threading = ["std"] # , "wrt-foundation"]
+threading = ["std"] # , "kiln-foundation"]
 
 # Test utilities (for testing random number generation, etc.)
 test-utils = []
@@ -64,11 +64,11 @@ platform-vxworks = [] # VxWorks RTOS support (LKM and RTP)
 # platform-baremetal = []
 # arm-hardening = [] # If any platform code depends on this
 helper-mode = [] # Added for C-ABI runtime
-enable-panic-handler = ["dep:wrt-panic", "wrt-panic/default-panic-handler"] # Enable basic panic handler for standalone no_std builds
-dev-panic-handler = ["dep:wrt-panic", "wrt-panic/dev", "wrt-panic/default-panic-handler"] # Development panic handler with debugging
-asil-b-panic-handler = ["dep:wrt-panic", "wrt-panic/asil-b", "wrt-panic/default-panic-handler"] # ASIL-B compliant panic handler
-asil-d-panic-handler = ["dep:wrt-panic", "wrt-panic/asil-d", "wrt-panic/default-panic-handler"] # ASIL-D compliant panic handler
-# Core allocation strategies (aligned with wrt-foundation)
+enable-panic-handler = ["dep:kiln-panic", "kiln-panic/default-panic-handler"] # Enable basic panic handler for standalone no_std builds
+dev-panic-handler = ["dep:kiln-panic", "kiln-panic/dev", "kiln-panic/default-panic-handler"] # Development panic handler with debugging
+asil-b-panic-handler = ["dep:kiln-panic", "kiln-panic/asil-b", "kiln-panic/default-panic-handler"] # ASIL-B compliant panic handler
+asil-d-panic-handler = ["dep:kiln-panic", "kiln-panic/asil-d", "kiln-panic/default-panic-handler"] # ASIL-D compliant panic handler
+# Core allocation strategies (aligned with kiln-foundation)
 dynamic-allocation = []
 static-allocation = []
 verified-static-allocation = ["static-allocation"]

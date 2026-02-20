@@ -1,11 +1,11 @@
 [package]
-name = "wrt-runtime"
+name = "kiln-runtime"
 version.workspace = true
 edition.workspace = true
-description = "WebAssembly Component Model Runtime for WRT"
+description = "WebAssembly Component Model Runtime for Kiln"
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/wrt-runtime"
+documentation = "https://docs.rs/kiln-runtime"
 readme = "README.md"
 keywords = ["wasm", "webassembly", "runtime", "component-model"]
 categories = ["wasm", "no-std"]
@@ -101,17 +101,17 @@ unnecessary_map_or = "allow"
 manual_unwrap_or_default = "allow"
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false }
-wrt-format = { workspace = true, default-features = false }
-wrt-sync = { workspace = true, default-features = false }
-wrt-decoder = { workspace = true, default-features = false }
-wrt-instructions = { workspace = true, default-features = false }
-wrt-host = { workspace = true, default-features = false, optional = true }
-wrt-intercept = { workspace = true, default-features = false }
-wrt-platform = { workspace = true, default-features = false, optional = true }
-wrt-debug = { workspace = true, default-features = false, optional = true }
-wrt-wasi = { workspace = true, default-features = false, optional = true }
+kiln-error = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false }
+kiln-format = { workspace = true, default-features = false }
+kiln-sync = { workspace = true, default-features = false }
+kiln-decoder = { workspace = true, default-features = false }
+kiln-instructions = { workspace = true, default-features = false }
+kiln-host = { workspace = true, default-features = false, optional = true }
+kiln-intercept = { workspace = true, default-features = false }
+kiln-platform = { workspace = true, default-features = false, optional = true }
+kiln-debug = { workspace = true, default-features = false, optional = true }
+kiln-wasi = { workspace = true, default-features = false, optional = true }
 
 # No-std support (removed invalid alloc dependency)
 
@@ -119,102 +119,102 @@ wrt-wasi = { workspace = true, default-features = false, optional = true }
 default = ["std"] # Enable std by default for platform compatibility
 # Binary choice: std OR no_std (no alloc middle ground)
 std = [
-    "wrt-decoder/std",
-    "wrt-format/std",
-    "dep:wrt-host",
-    "wrt-host?/std",
-    "wrt-instructions/std",
-    "wrt-intercept/std",
-    "dep:wrt-platform",
-    "wrt-sync/std",
-    "wrt-foundation/std",
-    "wrt-foundation/platform-memory",
-    "wrt-foundation/tracing"]
+    "kiln-decoder/std",
+    "kiln-format/std",
+    "dep:kiln-host",
+    "kiln-host?/std",
+    "kiln-instructions/std",
+    "kiln-intercept/std",
+    "dep:kiln-platform",
+    "kiln-sync/std",
+    "kiln-foundation/std",
+    "kiln-foundation/platform-memory",
+    "kiln-foundation/tracing"]
 
 # Tracing support for debugging complex execution flows
-tracing = ["wrt-foundation/tracing"]
+tracing = ["kiln-foundation/tracing"]
 
-# WASI support - uses wrt-wasi for WASI host function implementations
-wasi = ["std", "dep:wrt-wasi", "wrt-wasi?/std", "wrt-wasi?/preview2", "wrt-wasi?/wasi-clocks", "wrt-wasi?/wasi-io", "wrt-wasi?/wasi-cli"]
+# WASI support - uses kiln-wasi for WASI host function implementations
+wasi = ["std", "dep:kiln-wasi", "kiln-wasi?/std", "kiln-wasi?/preview2", "kiln-wasi?/wasi-clocks", "kiln-wasi?/wasi-io", "kiln-wasi?/wasi-cli"]
 
 # Allocation support for no_std environments (DEPRECATED - use bounded-allocation instead)
 alloc = [
-    "wrt-foundation/bounded-allocation",
-    "wrt-format/alloc",
-    "wrt-host?/alloc",
-    "wrt-instructions/alloc",
-    "wrt-intercept/alloc"]
+    "kiln-foundation/bounded-allocation",
+    "kiln-format/alloc",
+    "kiln-host?/alloc",
+    "kiln-instructions/alloc",
+    "kiln-intercept/alloc"]
 # Debug support features
-debug = ["dep:wrt-debug", "wrt-debug/line-info"]
+debug = ["dep:kiln-debug", "kiln-debug/line-info"]
 # Debugger callback support - enables profiling and debugging via RuntimeDebugger trait
-debugger = ["std", "dep:wrt-debug", "wrt-debug/runtime-traits"]
+debugger = ["std", "dep:kiln-debug", "kiln-debug/runtime-traits"]
 # For compatibility with verification script
 # This is a no-op since the crate is no_std by default
 no_std = []
 optimize = [
-    "wrt-foundation/optimize",
-    # "wrt-decoder/optimize",
-    "wrt-instructions/optimize",
-    "wrt-host?/optimize",
-    "wrt-intercept/optimize"]
+    "kiln-foundation/optimize",
+    # "kiln-decoder/optimize",
+    "kiln-instructions/optimize",
+    "kiln-host?/optimize",
+    "kiln-intercept/optimize"]
 
 # ============================================================================
 # Four-Layer Safety Architecture Feature Propagation
 # ============================================================================
 
 # Layer 1: Memory Management Strategy (mutually exclusive)
-static-allocation = ["wrt-foundation/static-allocation"]
-bounded-allocation = ["wrt-foundation/bounded-allocation"]
-managed-allocation = ["wrt-foundation/managed-allocation"]
-std-allocation = ["wrt-foundation/std-allocation"]
+static-allocation = ["kiln-foundation/static-allocation"]
+bounded-allocation = ["kiln-foundation/bounded-allocation"]
+managed-allocation = ["kiln-foundation/managed-allocation"]
+std-allocation = ["kiln-foundation/std-allocation"]
 
 # Layer 3: Safety Standards (mutually exclusive within project)
-iso-26262 = ["wrt-foundation/iso-26262"]
-do-178c = ["wrt-foundation/do-178c"]
-iec-61508 = ["wrt-foundation/iec-61508"]
-iec-62304 = ["wrt-foundation/iec-62304"]
-en-50128 = ["wrt-foundation/en-50128"]
-iso-25119 = ["wrt-foundation/iso-25119"]
+iso-26262 = ["kiln-foundation/iso-26262"]
+do-178c = ["kiln-foundation/do-178c"]
+iec-61508 = ["kiln-foundation/iec-61508"]
+iec-62304 = ["kiln-foundation/iec-62304"]
+en-50128 = ["kiln-foundation/en-50128"]
+iso-25119 = ["kiln-foundation/iso-25119"]
 
 # Layer 4: Safety Integrity Levels (dependent on standard)
 # ISO 26262 - Automotive
-qm = ["wrt-foundation/qm"]
-asil-a = ["wrt-foundation/asil-a"]
-asil-b = ["wrt-foundation/asil-b"]
-asil-c = ["wrt-foundation/asil-c"]
-asil-d = ["wrt-foundation/asil-d"]
+qm = ["kiln-foundation/qm"]
+asil-a = ["kiln-foundation/asil-a"]
+asil-b = ["kiln-foundation/asil-b"]
+asil-c = ["kiln-foundation/asil-c"]
+asil-d = ["kiln-foundation/asil-d"]
 
 # DO-178C - Aerospace
-dal-e = ["wrt-foundation/dal-e"]
-dal-d = ["wrt-foundation/dal-d"]
-dal-c = ["wrt-foundation/dal-c"]
-dal-b = ["wrt-foundation/dal-b"]
-dal-a = ["wrt-foundation/dal-a"]
+dal-e = ["kiln-foundation/dal-e"]
+dal-d = ["kiln-foundation/dal-d"]
+dal-c = ["kiln-foundation/dal-c"]
+dal-b = ["kiln-foundation/dal-b"]
+dal-a = ["kiln-foundation/dal-a"]
 
 # IEC 61508 - Industrial
-sil-1 = ["wrt-foundation/sil-1"]
-sil-2 = ["wrt-foundation/sil-2"]
-sil-3 = ["wrt-foundation/sil-3"]
-sil-4 = ["wrt-foundation/sil-4"]
+sil-1 = ["kiln-foundation/sil-1"]
+sil-2 = ["kiln-foundation/sil-2"]
+sil-3 = ["kiln-foundation/sil-3"]
+sil-4 = ["kiln-foundation/sil-4"]
 
 # IEC 62304 - Medical
-class-a = ["wrt-foundation/class-a"]
-class-b = ["wrt-foundation/class-b"]
-class-c = ["wrt-foundation/class-c"]
+class-a = ["kiln-foundation/class-a"]
+class-b = ["kiln-foundation/class-b"]
+class-c = ["kiln-foundation/class-c"]
 
 # EN 50128 - Railway
-railway-sil-0 = ["wrt-foundation/railway-sil-0"]
-railway-sil-1 = ["wrt-foundation/railway-sil-1"]
-railway-sil-2 = ["wrt-foundation/railway-sil-2"]
-railway-sil-3 = ["wrt-foundation/railway-sil-3"]
-railway-sil-4 = ["wrt-foundation/railway-sil-4"]
+railway-sil-0 = ["kiln-foundation/railway-sil-0"]
+railway-sil-1 = ["kiln-foundation/railway-sil-1"]
+railway-sil-2 = ["kiln-foundation/railway-sil-2"]
+railway-sil-3 = ["kiln-foundation/railway-sil-3"]
+railway-sil-4 = ["kiln-foundation/railway-sil-4"]
 
 # ISO 25119 - Agricultural
-agpl-a = ["wrt-foundation/agpl-a"]
-agpl-b = ["wrt-foundation/agpl-b"]
-agpl-c = ["wrt-foundation/agpl-c"]
-agpl-d = ["wrt-foundation/agpl-d"]
-agpl-e = ["wrt-foundation/agpl-e"]
+agpl-a = ["kiln-foundation/agpl-a"]
+agpl-b = ["kiln-foundation/agpl-b"]
+agpl-c = ["kiln-foundation/agpl-c"]
+agpl-d = ["kiln-foundation/agpl-d"]
+agpl-e = ["kiln-foundation/agpl-e"]
 
 # Legacy compatibility features (DEPRECATED - use four-layer architecture above)
 safe-memory = ["iso-26262", "asil-b"]
@@ -224,13 +224,13 @@ safety-asil-d = ["iso-26262", "asil-d"]
 
 # Platform features - properly abstracted for ASIL compliance
 # Platform sync enables native platform synchronization primitives
-platform-sync = ["dep:wrt-platform", "wrt-platform?/std"]
+platform-sync = ["dep:kiln-platform", "kiln-platform?/std"]
 # Specific platform support (requires platform-sync)
-platform-macos = ["platform-sync", "wrt-platform?/platform-macos"]
-platform-linux = ["platform-sync", "wrt-platform?/platform-linux"]
-platform-qnx = ["platform-sync", "wrt-platform?/platform-qnx"]
-platform-embedded = ["dep:wrt-platform"] # Minimal platform support
-helper-mode = ["dep:wrt-platform", "wrt-platform?/helper-mode"]
+platform-macos = ["platform-sync", "kiln-platform?/platform-macos"]
+platform-linux = ["platform-sync", "kiln-platform?/platform-linux"]
+platform-qnx = ["platform-sync", "kiln-platform?/platform-qnx"]
+platform-embedded = ["dep:kiln-platform"] # Minimal platform support
+helper-mode = ["dep:kiln-platform", "kiln-platform?/helper-mode"]
 
 # Verification features
 kani = []

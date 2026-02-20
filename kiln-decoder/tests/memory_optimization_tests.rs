@@ -3,8 +3,8 @@
 #[cfg(feature = "std")]
 #[test]
 fn test_memory_optimized_parsing() {
-    use wrt_decoder::optimized_module::decode_module_with_provider;
-    use wrt_foundation::NoStdProvider;
+    use kiln_decoder::optimized_module::decode_module_with_provider;
+    use kiln_foundation::NoStdProvider;
 
     // Minimal valid WASM module
     let wasm_bytes = [
@@ -26,7 +26,7 @@ fn test_memory_optimized_parsing() {
 #[cfg(feature = "std")]
 #[test]
 fn test_memory_optimized_parsing_std() {
-    use wrt_decoder::from_binary;
+    use kiln_decoder::from_binary;
 
     // Minimal valid WASM module
     let wasm_bytes = [

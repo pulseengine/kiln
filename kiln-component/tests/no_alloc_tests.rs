@@ -1,4 +1,4 @@
-//! Test for the no_alloc module of wrt-component
+//! Test for the no_alloc module of kiln-component
 //!
 //! This file validates that the no_alloc module works correctly in all
 //! environments, particularly in pure no_std without allocation.
@@ -8,14 +8,14 @@
 // Binary std/no_std choice
 #[cfg(test)]
 mod no_alloc_tests {
-    // Import from wrt-foundation that is available in all environments
+    // Import from kiln-foundation that is available in all environments
     // Binary std/no_std choice
-    use wrt_component::no_alloc::{
+    use kiln_component::no_alloc::{
         COMPONENT_MAGIC, ComponentHeader, ComponentSectionId, ComponentSectionInfo,
         MinimalComponent, ValidationLevel, validate_component_no_alloc,
         validate_component_with_level,
     };
-    use wrt_foundation::verification::VerificationLevel;
+    use kiln_foundation::verification::VerificationLevel;
 
     // Constants for testing
     // Minimal valid WebAssembly Component - just magic number and version

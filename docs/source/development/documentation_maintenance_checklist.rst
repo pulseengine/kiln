@@ -180,7 +180,7 @@ Search for common problems::
    
    # Find outdated project names
    grep -r "SentryPulse" docs/
-   grep -r "SPE_wrt" docs/
+   grep -r "SPE_kiln" docs/
    
    # Find missing status warnings
    grep -r "\.rst:" docs/ | xargs grep -L "Implementation Status\|Development Status"
@@ -190,7 +190,7 @@ Search for common problems::
 
    # Check for crates.io references
    grep -r "crates\.io" docs/
-   grep -r "cargo install wrt" docs/
+   grep -r "cargo install kiln" docs/
 
 Documentation Health Metrics
 ============================

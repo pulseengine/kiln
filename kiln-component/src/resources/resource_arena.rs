@@ -7,7 +7,7 @@
 //! This module supports both std and no_std environments with appropriate
 //! implementations for each.
 
-// WRT - wrt-component
+// WRT - kiln-component
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
@@ -23,8 +23,8 @@ use crate::prelude::*;
 mod std_impl {
     use std::sync::Mutex;
 
-    use wrt_error::Error;
-    use wrt_sync::WrtMutex;
+    use kiln_error::Error;
+    use kiln_sync::KilnMutex;
 
     use super::*;
 
@@ -113,7 +113,7 @@ mod std_impl {
         }
 
         /// Get access to a resource
-        pub fn get_resource(&self, handle: u32) -> Result<Arc<WrtMutex<super::super::Resource>>> {
+        pub fn get_resource(&self, handle: u32) -> Result<Arc<KilnMutex<super::super::Resource>>> {
             let table =
                 self.table.lock().map_err(|_| Error::runtime_poisoned_lock("Error occurred"))?;
 
@@ -234,7 +234,7 @@ mod std_impl {
 
 #[cfg(not(feature = "std"))]
 mod no_std_impl {
-    use wrt_foundation::collections::StaticVec as BoundedVec;
+    use kiln_foundation::collections::StaticVec as BoundedVec;
 
     use super::*;
 

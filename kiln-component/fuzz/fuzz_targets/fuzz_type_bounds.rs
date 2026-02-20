@@ -1,7 +1,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use wrt_component::{
+use kiln_component::{
     type_bounds::{TypeBoundsChecker, TypeBound, TypeBoundKind},
     generative_types::{GenerativeTypeRegistry, BoundKind},
     ComponentInstanceId, TypeId,

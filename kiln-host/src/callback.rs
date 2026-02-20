@@ -57,7 +57,7 @@ type CallbackMap = HashMap<CallbackType, CallbackData, 32, HostProvider>;
 type ValueVec = Vec<Value>;
 
 #[cfg(not(feature = "std"))]
-type ValueVec = wrt_foundation::BoundedVec<Value, 16, HostProvider>;
+type ValueVec = kiln_foundation::BoundedVec<Value, 16, HostProvider>;
 
 // String vectors for registry queries
 #[cfg(feature = "std")]
@@ -65,8 +65,8 @@ type ValueVec = wrt_foundation::BoundedVec<Value, 16, HostProvider>;
 type StringVec = Vec<String>;
 
 #[cfg(not(feature = "std"))]
-type StringVec = wrt_foundation::BoundedVec<
-    wrt_foundation::bounded::BoundedString<64>,
+type StringVec = kiln_foundation::BoundedVec<
+    kiln_foundation::bounded::BoundedString<64>,
     32,
     HostProvider,
 >;
@@ -91,33 +91,33 @@ pub struct HostFunctionsNoStd {
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::Checksummable for HostFunctionsNoStd {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for HostFunctionsNoStd {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&[u8::from(self._has_functions)]);
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::ToBytes for HostFunctionsNoStd {
+impl kiln_foundation::traits::ToBytes for HostFunctionsNoStd {
     fn serialized_size(&self) -> usize {
         1
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(u8::from(self._has_functions))
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::FromBytes for HostFunctionsNoStd {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for HostFunctionsNoStd {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let has_functions = reader.read_u8()? != 0;
         Ok(HostFunctionsNoStd {
             _has_functions: has_functions,
@@ -144,31 +144,31 @@ pub enum CallbackType {
 }
 
 // Implement required traits for BoundedMap compatibility
-impl wrt_foundation::traits::Checksummable for CallbackType {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CallbackType {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&[*self as u8]);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for CallbackType {
+impl kiln_foundation::traits::ToBytes for CallbackType {
     fn serialized_size(&self) -> usize {
         1
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_u8(*self as u8)
     }
 }
 
-impl wrt_foundation::traits::FromBytes for CallbackType {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for CallbackType {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         match reader.read_u8()? {
             0 => Ok(CallbackType::Setup),
             1 => Ok(CallbackType::Cleanup),
@@ -176,7 +176,7 @@ impl wrt_foundation::traits::FromBytes for CallbackType {
             3 => Ok(CallbackType::Deallocate),
             4 => Ok(CallbackType::Intercept),
             5 => Ok(CallbackType::Logging),
-            _ => Err(wrt_error::Error::parse_error(
+            _ => Err(kiln_error::Error::parse_error(
                 "Invalid CallbackType discriminant",
             )),
         }
@@ -186,33 +186,33 @@ impl wrt_foundation::traits::FromBytes for CallbackType {
 // Implement required traits for CallbackData to work with BoundedMap in no_std
 // mode
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::Checksummable for CallbackData {
-    fn update_checksum(&self, _checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for CallbackData {
+    fn update_checksum(&self, _checksum: &mut kiln_foundation::verification::Checksum) {
         // CallbackData has no content to checksum
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::ToBytes for CallbackData {
+impl kiln_foundation::traits::ToBytes for CallbackData {
     fn serialized_size(&self) -> usize {
         0
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        _writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        _writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         Ok(())
     }
 }
 
 #[cfg(not(feature = "std"))]
-impl wrt_foundation::traits::FromBytes for CallbackData {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        _reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for CallbackData {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        _reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(CallbackData::default())
     }
 }
@@ -546,14 +546,14 @@ impl CallbackRegistry {
     #[cfg(not(feature = "std"))]
     pub fn get_available_builtins(
         &self,
-    ) -> wrt_foundation::BoundedSet<BuiltinType, 32, HostProvider> {
+    ) -> kiln_foundation::BoundedSet<BuiltinType, 32, HostProvider> {
         // In no_std mode, we can't dynamically track built-ins
         use crate::bounded_host_infra::create_host_provider;
         let provider = create_host_provider().expect("Failed to create host provider");
-        wrt_foundation::BoundedSet::new(provider).unwrap_or_else(|_| {
+        kiln_foundation::BoundedSet::new(provider).unwrap_or_else(|_| {
             let fallback_provider =
                 create_host_provider().expect("Failed to create fallback host provider");
-            wrt_foundation::BoundedSet::new(fallback_provider)
+            kiln_foundation::BoundedSet::new(fallback_provider)
                 .expect("Failed to create bounded set")
         })
     }
@@ -640,7 +640,7 @@ mod tests {
     #[cfg(not(feature = "std"))]
     use alloc::vec;
 
-    use wrt_foundation::{
+    use kiln_foundation::{
         builtin::BuiltinType,
         values::Value,
     };

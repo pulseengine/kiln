@@ -93,7 +93,7 @@ mod debug_info_analysis {
 
     #[test]
     fn analyze_complete_debug_capabilities() {
-        println!("\n=== WRT Debug Information Analysis ===");
+        println!("\n=== Kiln Debug Information Analysis ===");
 
         // Test our cursor implementation
         let cursor_data = &MOCK_DEBUG_LINE[0..8];

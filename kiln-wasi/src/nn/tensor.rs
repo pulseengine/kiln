@@ -6,7 +6,7 @@
 
 use core::fmt;
 
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     safe_memory::NoStdProvider,
@@ -232,7 +232,7 @@ impl Tensor {
             },
             _ => {
                 return Err(Error::wasi_unsupported_operation(
-                    "Higher verification levels not supported in wrtd",
+                    "Higher verification levels not supported in kilnd",
                 ));
             },
         };

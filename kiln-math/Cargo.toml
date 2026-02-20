@@ -1,12 +1,12 @@
 [package]
-name = "wrt-math"
+name = "kiln-math"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
-description = "Mathematical operations for the WRT runtime, supporting WebAssembly standards."
+description = "Mathematical operations for the Kiln runtime, supporting WebAssembly standards."
 license.workspace = true
 repository.workspace = true
-documentation = "https://docs.rs/wrt-math" # TODO: Update if incorrect
+documentation = "https://docs.rs/kiln-math" # TODO: Update if incorrect
 readme = "README.md"
 keywords = ["webassembly", "wasm", "math", "no_std"]
 categories = ["wasm", "no-std"]
@@ -18,7 +18,7 @@ workspace = true
 default = []
 # Binary choice: std OR no_std (no alloc middle ground)
 # Standard library support - enables use of std::f32/f64 math functions
-std = ["wrt-platform/std", "dynamic-allocation"]
+std = ["kiln-platform/std", "dynamic-allocation"]
 # Allocator support (implicitly enabled by std)
 # This crate is no_std by default, this feature is a no-op for compatibility
 no_std = []
@@ -26,9 +26,9 @@ no_std = []
 # Allocation support for no_std environments
 alloc = []
 # Platform feature enables SIMD operations
-platform = ["wrt-platform", "std"]
+platform = ["kiln-platform", "std"]
 
-# Core allocation strategies (aligned with wrt-foundation)
+# Core allocation strategies (aligned with kiln-foundation)
 dynamic-allocation = []
 static-allocation = []
 verified-static-allocation = ["static-allocation"]
@@ -58,8 +58,8 @@ safety-asil-d = ["asil-d"]
 
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false }
-wrt-platform = { workspace = true, optional = true }
+kiln-error = { workspace = true, default-features = false }
+kiln-platform = { workspace = true, optional = true }
 libm = { version = "0.2", default-features = false }
 
 # Note: alloc support is provided through cfg(feature = "std") in source code

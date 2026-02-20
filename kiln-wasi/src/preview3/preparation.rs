@@ -263,7 +263,7 @@ pub mod error_extensions {
 
     /// Preview3-specific error kinds
     pub mod kinds {
-        // Remove ErrorKind usage - not defined in wrt_error
+        // Remove ErrorKind usage - not defined in kiln_error
 
         /// Threading error
         #[derive(Debug, Clone, PartialEq, Eq)]

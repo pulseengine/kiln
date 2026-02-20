@@ -25,37 +25,37 @@ WebAssembly Core Features
      - Implementation Details
    * - **Memory Operations**
      - ✅ IMPLEMENTED
-     - Provides complete load/store, bounds checking, memory management (wrt-runtime/src/memory.rs)
+     - Provides complete load/store, bounds checking, memory management (kiln-runtime/src/memory.rs)
    * - **Arithmetic Instructions**
      - ✅ IMPLEMENTED
-     - Implements all i32/i64/f32/f64 operations with wrt_math integration (wrt-instructions/src/arithmetic_ops.rs)
+     - Implements all i32/i64/f32/f64 operations with kiln_math integration (kiln-instructions/src/arithmetic_ops.rs)
    * - **Comparison Operations**
      - ✅ IMPLEMENTED
-     - Implements complete comparison operations for all numeric types (wrt-instructions/src/comparison_ops.rs)
+     - Implements complete comparison operations for all numeric types (kiln-instructions/src/comparison_ops.rs)
    * - **Value Types & Type System**
      - ✅ IMPLEMENTED
-     - Provides WebAssembly Value enum and type validation (wrt-foundation/src/values.rs)
+     - Provides WebAssembly Value enum and type validation (kiln-foundation/src/values.rs)
    * - **Instruction Execution Engine**
      - 🚧 PARTIAL (15%)
-     - Framework exists with main dispatch loop containing TODO markers (wrt-runtime/src/stackless/frame.rs:334-500)
+     - Framework exists with main dispatch loop containing TODO markers (kiln-runtime/src/stackless/frame.rs:334-500)
    * - **Control Flow (blocks, loops, if)**
      - 🚧 PARTIAL (40%)
-     - Implements Block/Loop start, termination logic remains incomplete (wrt-runtime/src/stackless/frame.rs:480,487)
+     - Implements Block/Loop start, termination logic remains incomplete (kiln-runtime/src/stackless/frame.rs:480,487)
    * - **Function Calls**
      - 🚧 PARTIAL (30%)
-     - Provides call interface, execution logic remains incomplete (wrt-runtime/src/stackless/engine.rs:359-408)
+     - Provides call interface, execution logic remains incomplete (kiln-runtime/src/stackless/engine.rs:359-408)
    * - **Module Loading & Parsing**
      - 🚧 PARTIAL (50%)
-     - Type sections function correctly, element/data segments not implemented (wrt-decoder/src/sections.rs:41-55)
+     - Type sections function correctly, element/data segments not implemented (kiln-decoder/src/sections.rs:41-55)
    * - **Module Instantiation**
      - 🚧 STUB (25%)
-     - Provides data structures, instantiation process remains incomplete (wrt-runtime/src/module_instance.rs)
+     - Provides data structures, instantiation process remains incomplete (kiln-runtime/src/module_instance.rs)
    * - **Import/Export Handling**
      - 🚧 STUB (20%)
-     - Provides type definitions, resolution logic not implemented (wrt-runtime/src/module.rs)
+     - Provides type definitions, resolution logic not implemented (kiln-runtime/src/module.rs)
    * - **Table Operations**
      - 🚧 PARTIAL (60%)
-     - Basic get/set functions work, advanced operations remain incomplete (wrt-instructions/src/table_ops.rs)
+     - Basic get/set functions work, advanced operations remain incomplete (kiln-instructions/src/table_ops.rs)
    * - **Global Variables**
      - 🚧 PARTIAL (60%)
      - Basic global access implemented
@@ -75,7 +75,7 @@ Component Model Features
      - Implementation Details
    * - **Component Type System**
      - 🚧 PARTIAL (40%)
-     - Type definitions exist, parsing framework partial (wrt-decoder/src/component/parse.rs)
+     - Type definitions exist, parsing framework partial (kiln-decoder/src/component/parse.rs)
    * - **Component Parsing**
      - 🚧 PARTIAL (30%)
      - Core module parsing works, component-specific sections incomplete
@@ -164,6 +164,6 @@ Legend
 
 .. note::
    **Development Priority**: The main development focus should be completing the instruction execution engine
-   in wrt-runtime/src/stackless/ to enable actual WebAssembly module execution.
+   in kiln-runtime/src/stackless/ to enable actual WebAssembly module execution.
 
 See :doc:`../architecture/index` for architectural details and :doc:`../overview/features` for feature descriptions.

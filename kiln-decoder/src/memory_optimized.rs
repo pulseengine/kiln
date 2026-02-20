@@ -1,4 +1,4 @@
-// WRT - wrt-decoder
+// Kiln - kiln-decoder
 // Module: Memory-Optimized Parsing Utilities
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
@@ -11,8 +11,8 @@
 
 use core::str;
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_foundation::safe_memory::{MemoryProvider, SafeSlice};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::safe_memory::{MemoryProvider, SafeSlice};
 
 use crate::prelude::read_leb128_u32;
 

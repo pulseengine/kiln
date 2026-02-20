@@ -1,4 +1,4 @@
-// Standalone compilation test for wrt-debug runtime features
+// Standalone compilation test for kiln-debug runtime features
 // This verifies our code is syntactically correct
 
 // Mock the dependencies that are failing
@@ -157,6 +157,6 @@ mod tests {
 }
 
 fn main() {
-    println!("wrt-debug runtime features compile successfully!");
+    println!("kiln-debug runtime features compile successfully!");
     println!("The build failures are in dependencies, not our code.");
 }

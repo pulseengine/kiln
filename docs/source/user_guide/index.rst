@@ -1,8 +1,8 @@
 ================
-WRT User Guide
+Kiln User Guide
 ================
 
-This guide covers the essential concepts and workflows for using WRT in your applications.
+This guide covers the essential concepts and workflows for using Kiln in your applications.
 
 .. toctree::
    :maxdepth: 2
@@ -20,7 +20,7 @@ Understanding WebAssembly Runtime fundamentals and core concepts for effective u
 Running Modules
 ---------------
 
-Step-by-step instructions for loading and executing WebAssembly modules with WRT.
+Step-by-step instructions for loading and executing WebAssembly modules with Kiln.
 
 Configuration
 -------------

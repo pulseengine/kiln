@@ -1,4 +1,4 @@
-// WRT - wrt-foundation
+// Kiln - kiln-foundation
 // Module: StaticVec - Inline-storage vector
 // SW-REQ-ID: REQ_RESOURCE_001, REQ_MEM_SAFETY_001, REQ_TEMPORAL_001
 //
@@ -33,7 +33,7 @@
 use core::marker::PhantomData;
 use core::mem::MaybeUninit;
 
-use wrt_error::Result;
+use kiln_error::Result;
 
 use crate::traits::{Checksummable, ToBytes, FromBytes, WriteStream, ReadStream};
 use crate::verification::Checksum;
@@ -57,7 +57,7 @@ use crate::verification::Checksum;
 /// # Examples
 ///
 /// ```
-/// use wrt_foundation::collections::StaticVec;
+/// use kiln_foundation::collections::StaticVec;
 ///
 /// let mut vec = StaticVec::<u32, 10>::new();
 /// vec.push(42)?;
@@ -68,7 +68,7 @@ use crate::verification::Checksum;
 ///
 /// vec.pop();
 /// assert_eq!(vec.len(), 1);
-/// # Ok::<(), wrt_error::Error>(())
+/// # Ok::<(), kiln_error::Error>(())
 /// ```
 #[derive(Debug)]
 pub struct StaticVec<T, const N: usize> {
@@ -96,7 +96,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let vec = StaticVec::<u32, 10>::new();
     /// assert_eq!(vec.len(), 0);
@@ -128,18 +128,18 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 2>::new();
     /// assert!(vec.push(1).is_ok());
     /// assert!(vec.push(2).is_ok());
     /// assert!(vec.push(3).is_err()); // Capacity exceeded
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     pub fn push(&mut self, value: T) -> Result<()> {
         if self.len >= N {
-            return Err(wrt_error::Error::foundation_bounded_capacity_exceeded(
+            return Err(kiln_error::Error::foundation_bounded_capacity_exceeded(
                 "StaticVec capacity exceeded",
             ));
         }
@@ -160,14 +160,14 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(42)?;
     ///
     /// assert_eq!(vec.pop(), Some(42));
     /// assert_eq!(vec.pop(), None);
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     pub fn pop(&mut self) -> Option<T> {
@@ -191,14 +191,14 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(42)?;
     ///
     /// assert_eq!(vec.get(0), Some(&42));
     /// assert_eq!(vec.get(1), None);
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -220,14 +220,14 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(42)?;
     ///
     /// *vec.get_mut(0).unwrap() = 100;
     /// assert_eq!(vec.get(0), Some(&100));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -285,13 +285,13 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
-    /// use wrt_error::Error;
+    /// use kiln_foundation::collections::StaticVec;
+    /// use kiln_error::Error;
     ///
     /// let vec = StaticVec::<u32, 10>::new();
     /// let result = vec.map_err(|| Error::runtime_error("Never happens"))?;
     /// assert_eq!(result.len(), 0);
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     pub fn map_err<E, F>(self, _f: F) -> core::result::Result<Self, E>
@@ -308,7 +308,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let vec = StaticVec::<u32, 10>::new();
     /// let result: Result<StaticVec<u32, 10>, &str> = vec.ok_or("error");
@@ -326,7 +326,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(42).unwrap();
@@ -348,7 +348,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(1)?;
@@ -356,7 +356,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     ///
     /// vec.clear();
     /// assert_eq!(vec.len(), 0);
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn clear(&mut self) {
         while self.len > 0 {
@@ -373,7 +373,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(1)?;
@@ -382,7 +382,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     ///
     /// let sum: u32 = vec.iter().sum();
     /// assert_eq!(sum, 6);
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -412,7 +412,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(1)?;
@@ -420,7 +420,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     ///
     /// assert!(vec.contains(&1));
     /// assert!(!vec.contains(&3));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -443,7 +443,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// assert_eq!(vec.first(), None);
@@ -451,7 +451,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// vec.push(1)?;
     /// vec.push(2)?;
     /// assert_eq!(vec.first(), Some(&1));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -469,7 +469,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// assert_eq!(vec.last(), None);
@@ -477,7 +477,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// vec.push(1)?;
     /// vec.push(2)?;
     /// assert_eq!(vec.last(), Some(&2));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -495,7 +495,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(1)?;
@@ -503,7 +503,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     ///
     /// *vec.last_mut().unwrap() = 10;
     /// assert_eq!(vec.last(), Some(&10));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -526,7 +526,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(1)?;
@@ -534,7 +534,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     ///
     /// let slice = vec.as_slice();
     /// assert_eq!(slice, &[1, 2]);
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -557,7 +557,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(1)?;
@@ -566,7 +566,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// let slice = vec.as_mut_slice();
     /// slice[0] = 10;
     /// assert_eq!(vec.get(0), Some(&10));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -589,7 +589,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(1)?;
@@ -600,7 +600,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// assert_eq!(vec.get(0), Some(&3));
     /// assert_eq!(vec.get(1), Some(&2));
     /// assert_eq!(vec.get(2), Some(&1));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn reverse(&mut self) {
         let mid = self.len / 2;
@@ -621,7 +621,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<i32, 10>::new();
     /// vec.push(1)?;
@@ -631,7 +631,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// assert_eq!(vec.remove(1), 2);
     /// assert_eq!(vec.len(), 2);
     /// assert_eq!(vec.get(1), Some(&3));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     ///
     /// # Panics
@@ -665,7 +665,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<i32, 10>::new();
     /// vec.push(1)?;
@@ -676,7 +676,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// assert_eq!(vec.len(), 2);
     /// // Note: element at index 1 is now 3 (swapped from end)
     /// assert_eq!(vec.get(1), Some(&3));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     ///
     /// # Panics
@@ -709,7 +709,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<i32, 10>::new();
     /// vec.push(1)?;
@@ -721,7 +721,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// assert_eq!(vec.len(), 2);
     /// assert_eq!(vec.get(0), Some(&2));
     /// assert_eq!(vec.get(1), Some(&4));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn retain<F>(&mut self, mut f: F)
     where
@@ -763,20 +763,20 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let slice = &[1, 2, 3, 4, 5];
     /// let vec = StaticVec::<i32, 10>::from_slice(slice)?;
     /// assert_eq!(vec.len(), 5);
     /// assert_eq!(vec.get(0), Some(&1));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn from_slice(slice: &[T]) -> Result<Self>
     where
         T: Clone,
     {
         if slice.len() > N {
-            return Err(wrt_error::Error::foundation_bounded_capacity_exceeded(
+            return Err(kiln_error::Error::foundation_bounded_capacity_exceeded(
                 "Slice length exceeds StaticVec capacity",
             ));
         }
@@ -800,7 +800,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(1)?;
@@ -810,14 +810,14 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// assert_eq!(vec.get(0), Some(&1));
     /// assert_eq!(vec.get(1), Some(&42));
     /// assert_eq!(vec.get(2), Some(&42));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn resize(&mut self, new_len: usize, value: T) -> Result<()>
     where
         T: Clone,
     {
         if new_len > N {
-            return Err(wrt_error::Error::foundation_bounded_capacity_exceeded(
+            return Err(kiln_error::Error::foundation_bounded_capacity_exceeded(
                 "Resize length exceeds StaticVec capacity",
             ));
         }
@@ -847,14 +847,14 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(1)?;
     ///
     /// vec.extend([2, 3, 4].iter().cloned())?;
     /// assert_eq!(vec.len(), 4);
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn extend<I>(&mut self, iter: I) -> Result<()>
     where
@@ -874,7 +874,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let vec = StaticVec::<u32, 10>::new();
     /// let vec = vec.expect("This never fails");
@@ -893,7 +893,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// assert_eq!(vec.peek(), None);
@@ -901,7 +901,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// vec.push(1)?;
     /// vec.push(2)?;
     /// assert_eq!(vec.peek(), Some(&1));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
     #[must_use]
@@ -917,7 +917,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// # Examples
     ///
     /// ```
-    /// use wrt_foundation::collections::StaticVec;
+    /// use kiln_foundation::collections::StaticVec;
     ///
     /// let mut vec = StaticVec::<u32, 10>::new();
     /// vec.push(5)?;
@@ -930,7 +930,7 @@ impl<T, const N: usize> StaticVec<T, N> {
     /// assert_eq!(vec.get(1), Some(&2));
     /// assert_eq!(vec.get(2), Some(&5));
     /// assert_eq!(vec.get(3), Some(&8));
-    /// # Ok::<(), wrt_error::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn sort_by<F>(&mut self, mut compare: F)
     where
@@ -1050,7 +1050,7 @@ impl<T: ToBytes, const N: usize> ToBytes for StaticVec<T, N> {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write length first
         self.len.to_bytes_with_provider(writer, provider)?;
         // Write each element
@@ -1066,7 +1066,7 @@ impl<T: FromBytes, const N: usize> FromBytes for StaticVec<T, N> {
     fn from_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read length
         let len = usize::from_bytes_with_provider(reader, provider)?;
 

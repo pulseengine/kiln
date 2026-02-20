@@ -1,4 +1,4 @@
-// WRT - wrt-host
+// Kiln - kiln-host
 // Module: Enhanced Host Integration with Memory Constraints
 // SW-REQ-ID: REQ_HOST_BOUNDED_001, REQ_HOST_LIMITS_001, REQ_HOST_SAFETY_001
 //
@@ -46,7 +46,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use wrt_host::bounded_host_integration::*;
+//! use kiln_host::bounded_host_integration::*;
 //!
 //! // Create manager with embedded system limits
 //! let limits = HostIntegrationLimits::embedded);
@@ -68,11 +68,11 @@
 //!
 //! # Cross-References
 //!
-//! - [`wrt_foundation::safety_system`]: Safety level definitions and
+//! - [`kiln_foundation::safety_system`]: Safety level definitions and
 //!   verification
-//! - `wrt_component::bounded_resource_management`: Component resource
+//! - `kiln_component::bounded_resource_management`: Component resource
 //!   management
-//! - [`wrt_foundation::memory_system`]: Memory provider integration
+//! - [`kiln_foundation::memory_system`]: Memory provider integration
 //!
 //! # REQ Traceability
 //!
@@ -95,7 +95,7 @@ use alloc::{
     vec::Vec,
 };
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };

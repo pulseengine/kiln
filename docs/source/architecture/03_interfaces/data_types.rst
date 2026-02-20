@@ -3,7 +3,7 @@
 Data Types and Structures
 ==========================
 
-This section documents the core data types and structures used throughout Pulseengine (WRT Edition),
+This section documents the core data types and structures used throughout Pulseengine (Kiln Edition),
 with specific focus on how types adapt to different runtime environments (std, no_std+alloc, no_std+no_alloc).
 
 .. arch_interface:: ARCH_IF_TYPES_001
@@ -21,7 +21,7 @@ Core Value Types
 WebAssembly Value Representation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-foundation/src/types.rs:45-89``:
+From ``kiln-foundation/src/types.rs:45-89``:
 
 .. code-block:: rust
 
@@ -76,7 +76,7 @@ From ``wrt-foundation/src/types.rs:45-89``:
 Component Model Types
 ~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-foundation/src/component_value.rs:67-156``:
+From ``kiln-foundation/src/component_value.rs:67-156``:
 
 .. code-block:: rust
 
@@ -136,7 +136,7 @@ Environment-Adaptive Collections
 Bounded Collections System
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The core of the multi-environment type system (``wrt-foundation/src/bounded_collections.rs:15-89``):
+The core of the multi-environment type system (``kiln-foundation/src/bounded_collections.rs:15-89``):
 
 .. code-block:: rust
 
@@ -203,7 +203,7 @@ Memory Types
 Safe Memory Abstraction
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-foundation/src/safe_memory.rs:89-178``:
+From ``kiln-foundation/src/safe_memory.rs:89-178``:
 
 .. code-block:: rust
 
@@ -274,7 +274,7 @@ Component Types
 Component Metadata Types
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/types.rs:78-145``:
+From ``kiln-component/src/types.rs:78-145``:
 
 .. code-block:: rust
 
@@ -329,7 +329,7 @@ From ``wrt-component/src/types.rs:78-145``:
 Resource Management Types
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/resources/resource_operation.rs:45-123``:
+From ``kiln-component/src/resources/resource_operation.rs:45-123``:
 
 .. code-block:: rust
 
@@ -384,13 +384,13 @@ Error Types
 Hierarchical Error System
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-error/src/errors.rs:67-156``:
+From ``kiln-error/src/errors.rs:67-156``:
 
 .. code-block:: rust
 
    /// Top-level error type
    #[derive(Debug, Clone, PartialEq, Eq)]
-   pub enum WrtError {
+   pub enum KilnError {
        Component(ComponentError),
        Runtime(RuntimeError),
        Memory(MemoryError),
@@ -461,7 +461,7 @@ Platform Types
 Platform Abstraction Types
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-platform/src/platform_abstraction.rs:89-156``:
+From ``kiln-platform/src/platform_abstraction.rs:89-156``:
 
 .. code-block:: rust
 
@@ -504,7 +504,7 @@ Instruction Types
 WebAssembly Instruction Representation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-instructions/src/lib.rs:45-123``:
+From ``kiln-instructions/src/lib.rs:45-123``:
 
 .. code-block:: rust
 
@@ -585,7 +585,7 @@ Type Conversion System
 Environment-Safe Conversions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-foundation/src/conversion.rs:78-145``:
+From ``kiln-foundation/src/conversion.rs:78-145``:
 
 .. code-block:: rust
 
@@ -681,7 +681,7 @@ The type system ensures safety through compile-time verification:
 Runtime Type Validation
 ~~~~~~~~~~~~~~~~~~~~~~
 
-From ``wrt-component/src/validation.rs:123-189``:
+From ``kiln-component/src/validation.rs:123-189``:
 
 .. code-block:: rust
 
@@ -725,9 +725,9 @@ Cross-Environment Type Usage
 .. code-block:: rust
 
    // Example showing type usage across environments
-   use wrt_foundation::{BoundedVec, BoundedString, ComponentValue};
+   use kiln_foundation::{BoundedVec, BoundedString, ComponentValue};
    
-   fn process_component_data() -> Result<(), WrtError> {
+   fn process_component_data() -> Result<(), KilnError> {
        // These types work identically across all environments
        let mut values = BoundedVec::new();
        

@@ -5,7 +5,7 @@ Build System
 .. note::
    This documentation has been moved and updated. Please see the current build system documentation at :doc:`../developer/build_system/index`.
 
-The WRT build system has been completely redesigned around the unified cargo-wrt tool.
+The Kiln build system has been completely redesigned around the unified cargo-kiln tool.
 
 Quick Reference
 ---------------
@@ -15,26 +15,26 @@ Quick Reference
 .. code-block:: bash
 
    # Install the build tool
-   cargo install --path cargo-wrt
+   cargo install --path cargo-kiln
 
    # Core development commands
-   cargo-wrt build        # Build all components
-   cargo-wrt test         # Run tests
-   cargo-wrt check        # Static analysis and formatting
-   cargo-wrt ci           # Full CI pipeline
+   cargo-kiln build        # Build all components
+   cargo-kiln test         # Run tests
+   cargo-kiln check        # Static analysis and formatting
+   cargo-kiln ci           # Full CI pipeline
 
    # Safety verification
-   cargo-wrt verify --asil d           # ASIL-D verification
-   cargo-wrt kani-verify --asil-profile d  # Formal verification
-   cargo-wrt verify-matrix --report    # Comprehensive verification
+   cargo-kiln verify --asil d           # ASIL-D verification
+   cargo-kiln kani-verify --asil-profile d  # Formal verification
+   cargo-kiln verify-matrix --report    # Comprehensive verification
 
    # Documentation and coverage
-   cargo-wrt docs --open               # Generate and open docs
-   cargo-wrt coverage --html           # Coverage analysis
+   cargo-kiln docs --open               # Generate and open docs
+   cargo-kiln coverage --html           # Coverage analysis
 
 **Migration from Legacy Commands:**
 
-.. list-table:: Legacy to cargo-wrt Command Mapping
+.. list-table:: Legacy to cargo-kiln Command Mapping
    :widths: 40 40 20
    :header-rows: 1
 
@@ -42,22 +42,22 @@ Quick Reference
      - New Command
      - Status
    * - ``just build``
-     - ``cargo-wrt build``
+     - ``cargo-kiln build``
      - ✅ Available
    * - ``just ci-test``
-     - ``cargo-wrt test``
+     - ``cargo-kiln test``
      - ✅ Available
    * - ``just ci-main``
-     - ``cargo-wrt ci``
+     - ``cargo-kiln ci``
      - ✅ Available
    * - ``cargo xtask coverage``
-     - ``cargo-wrt coverage --html``
+     - ``cargo-kiln coverage --html``
      - ✅ Available
    * - ``./scripts/kani-verify.sh``
-     - ``cargo-wrt kani-verify``
+     - ``cargo-kiln kani-verify``
      - ✅ Available
    * - ``just verify-build-matrix``
-     - ``cargo-wrt verify-matrix --report``
+     - ``cargo-kiln verify-matrix --report``
      - ✅ Available
 
 For complete documentation, see :doc:`../developer/build_system/index`.

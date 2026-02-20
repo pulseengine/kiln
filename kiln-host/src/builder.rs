@@ -40,7 +40,7 @@ use crate::bounded_host_infra::{
 };
 
 #[cfg(not(feature = "std"))]
-type ValueVec = wrt_foundation::BoundedVec<Value, 16, HostProvider>;
+type ValueVec = kiln_foundation::BoundedVec<Value, 16, HostProvider>;
 
 /// Builder for configuring and creating instances of `CallbackRegistry` with
 /// built-in support.
@@ -58,7 +58,7 @@ pub struct HostBuilder {
 
     /// Built-in types that are required by the component (`no_std` version)
     #[cfg(not(feature = "std"))]
-    required_builtins: wrt_foundation::BoundedSet<BuiltinType, 32, HostProvider>,
+    required_builtins: kiln_foundation::BoundedSet<BuiltinType, 32, HostProvider>,
 
     /// Built-in interceptor
     #[cfg(feature = "std")]
@@ -108,10 +108,10 @@ impl Default for HostBuilder {
             let provider = create_host_provider().expect("Failed to create host provider");
             Self {
                 registry:          CallbackRegistry::new(),
-                required_builtins: wrt_foundation::BoundedSet::new(provider).unwrap_or_else(|_| {
+                required_builtins: kiln_foundation::BoundedSet::new(provider).unwrap_or_else(|_| {
                     let fallback_provider =
                         create_host_provider().expect("Failed to create fallback host provider");
-                    wrt_foundation::BoundedSet::new(fallback_provider)
+                    kiln_foundation::BoundedSet::new(fallback_provider)
                         .expect("Failed to create bounded set")
                 }),
                 strict_validation: false,
@@ -407,7 +407,7 @@ impl HostBuilder {
 
 #[cfg(test)]
 mod tests {
-    use wrt_foundation::values::Value;
+    use kiln_foundation::values::Value;
 
     use super::*;
 
@@ -484,8 +484,8 @@ mod tests {
         // Creating a simple mock interceptor for testing
         use std::sync::Arc;
 
-        use wrt_foundation::values::Value;
-        use wrt_intercept::{
+        use kiln_foundation::values::Value;
+        use kiln_intercept::{
             LinkInterceptor,
             LinkInterceptorStrategy,
         };
@@ -578,8 +578,8 @@ mod tests {
         #[cfg(not(feature = "std"))]
         use std::sync::Arc;
 
-        use wrt_foundation::component_value::ComponentValue;
-        use wrt_intercept::{
+        use kiln_foundation::component_value::ComponentValue;
+        use kiln_intercept::{
             BeforeBuiltinResult,
             BuiltinInterceptor,
             InterceptContext,
@@ -591,33 +591,33 @@ mod tests {
             fn before_builtin(
                 &self,
                 _context: &InterceptContext,
-                _args: &[wrt_foundation::component_value::ComponentValue<
-                    wrt_foundation::safe_memory::NoStdProvider<64>,
+                _args: &[kiln_foundation::component_value::ComponentValue<
+                    kiln_foundation::safe_memory::NoStdProvider<64>,
                 >],
             ) -> Result<BeforeBuiltinResult> {
                 // Bypass normal execution and return our own result
                 Ok(BeforeBuiltinResult::Bypass(vec![
-                    wrt_foundation::component_value::ComponentValue::S32(777),
+                    kiln_foundation::component_value::ComponentValue::S32(777),
                 ]))
             }
 
             fn after_builtin(
                 &self,
                 _context: &InterceptContext,
-                _args: &[wrt_foundation::component_value::ComponentValue<
-                    wrt_foundation::safe_memory::NoStdProvider<64>,
+                _args: &[kiln_foundation::component_value::ComponentValue<
+                    kiln_foundation::safe_memory::NoStdProvider<64>,
                 >],
                 result: Result<
                     Vec<
-                        wrt_foundation::component_value::ComponentValue<
-                            wrt_foundation::safe_memory::NoStdProvider<64>,
+                        kiln_foundation::component_value::ComponentValue<
+                            kiln_foundation::safe_memory::NoStdProvider<64>,
                         >,
                     >,
                 >,
             ) -> Result<
                 Vec<
-                    wrt_foundation::component_value::ComponentValue<
-                        wrt_foundation::safe_memory::NoStdProvider<64>,
+                    kiln_foundation::component_value::ComponentValue<
+                        kiln_foundation::safe_memory::NoStdProvider<64>,
                     >,
                 >,
             > {

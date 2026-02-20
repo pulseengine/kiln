@@ -1,5 +1,5 @@
 [package]
-name = "wrt-build-core"
+name = "kiln-build-core"
 authors.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ version.workspace = true
 
 [features]
 default = ["std"]
-std = ["anyhow/std", "clap/std", "wrt-runtime/std", "wrt-decoder/std"]
+std = ["anyhow/std", "clap/std", "kiln-runtime/std", "kiln-decoder/std"]
 no_std = []
 
 [dependencies]
@@ -35,12 +35,12 @@ md5 = "0.7"
 wast = "235.0"
 wat = "1.232.0"
 
-# Internal WRT crates
-wrt-error = { workspace = true }
-wrt-foundation = { workspace = true }
-wrt-format = { workspace = true }
-wrt-decoder = { workspace = true }
-wrt-runtime = { workspace = true }
+# Internal Kiln crates
+kiln-error = { workspace = true }
+kiln-foundation = { workspace = true }
+kiln-format = { workspace = true }
+kiln-decoder = { workspace = true }
+kiln-runtime = { workspace = true }
 
 # Optional testing framework integration
 [dev-dependencies]

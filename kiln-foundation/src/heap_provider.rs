@@ -12,7 +12,7 @@ use core::sync::atomic::{
 #[cfg(feature = "std")]
 use std::vec::Vec;
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
@@ -179,11 +179,11 @@ impl Provider for HeapProvider {
         self
     }
 
-    fn acquire_memory(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8> {
+    fn acquire_memory(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
         self.allocate(layout)
     }
 
-    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> wrt_error::Result<()> {
+    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> kiln_error::Result<()> {
         self.deallocate(ptr, layout)
     }
 
@@ -207,7 +207,7 @@ impl core::fmt::Debug for HeapProvider {
 }
 
 impl Allocator for HeapProvider {
-    fn allocate(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8> {
+    fn allocate(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
         // This is a simple heap provider that doesn't support raw allocation
         // It's meant to be used through the Provider interface
         Err(Error::memory_error(
@@ -215,7 +215,7 @@ impl Allocator for HeapProvider {
         ))
     }
 
-    fn deallocate(&self, _ptr: *mut u8, _layout: core::alloc::Layout) -> wrt_error::Result<()> {
+    fn deallocate(&self, _ptr: *mut u8, _layout: core::alloc::Layout) -> kiln_error::Result<()> {
         // No-op for this simple implementation
         Ok(())
     }

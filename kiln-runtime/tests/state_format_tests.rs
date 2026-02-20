@@ -2,12 +2,12 @@
 //!
 //! This module contains tests for the state serialization module.
 
-use wrt_format::{
+use kiln_format::{
     CompressionType,
     CustomSection,
     Module,
 };
-use wrt_runtime::state::{
+use kiln_runtime::state::{
     create_state_section,
     extract_state_section,
     has_state_sections,

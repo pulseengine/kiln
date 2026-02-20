@@ -7,7 +7,7 @@
 ///
 /// # Examples
 /// ```
-/// use wrt_error::{create_error, ErrorCategory, codes};
+/// use kiln_error::{create_error, ErrorCategory, codes};
 /// 
 /// let category = ErrorCategory::Memory;
 /// let code = codes::MEMORY_ERROR;
@@ -105,15 +105,15 @@ macro_rules! create_error {
 /// Helper trait for types that can be converted to Error
 /// 
 /// This helps migrate patterns where custom error types are used
-pub trait IntoWrtError {
-    /// Convert to a WRT Error using appropriate factory method
-    fn into_wrt_error(self) -> Error;
+pub trait IntoKilnError {
+    /// Convert to a Kiln Error using appropriate factory method
+    fn into_kiln_error(self) -> Error;
 }
 
 // Example implementations for common patterns
 #[cfg(feature = "std")]
-impl IntoWrtError for std::io::Error {
-    fn into_wrt_error(self) -> Error {
+impl IntoKilnError for std::io::Error {
+    fn into_kiln_error(self) -> Error {
         match self.kind() {
             std::io::ErrorKind::OutOfMemory => Error::memory_allocation_failed("IO out of memory"),
             std::io::ErrorKind::NotFound => Error::resource_not_found("IO resource not found"),
@@ -127,8 +127,8 @@ impl IntoWrtError for std::io::Error {
 // Helper for threading errors seen in the codebase
 pub struct ThreadingError(pub String;
 
-impl IntoWrtError for ThreadingError {
-    fn into_wrt_error(self) -> Error {
+impl IntoKilnError for ThreadingError {
+    fn into_kiln_error(self) -> Error {
         Error::threading_error("Threading error")
     }
 }
@@ -136,8 +136,8 @@ impl IntoWrtError for ThreadingError {
 // Helper for async errors seen in the codebase  
 pub struct AsyncError(pub String;
 
-impl IntoWrtError for AsyncError {
-    fn into_wrt_error(self) -> Error {
+impl IntoKilnError for AsyncError {
+    fn into_kiln_error(self) -> Error {
         Error::async_error("Async error")
     }
 }

@@ -8,12 +8,12 @@
 //! and uses bounded collections for predictable memory usage in no_std
 //! environments.
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedVec,
     component_value::{
         ValType,
@@ -153,7 +153,7 @@ impl<'a, P: MemoryProvider + Default + Clone + PartialEq + Eq> TypeBuilder<'a, P
 
 #[cfg(test)]
 mod tests {
-    use wrt_foundation::traits::DefaultMemoryProvider;
+    use kiln_foundation::traits::DefaultMemoryProvider;
 
     use super::*;
 

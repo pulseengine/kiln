@@ -5,7 +5,7 @@
 mod tests {
     use std::collections::HashSet;
 
-    use wrt_error::codes;
+    use kiln_error::codes;
 
     #[test]
     #[allow(clippy::too_many_lines)]

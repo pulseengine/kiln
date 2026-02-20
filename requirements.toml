@@ -1,5 +1,5 @@
 [meta]
-project = "WRT WebAssembly Runtime"
+project = "Kiln WebAssembly Runtime"
 version = "0.2.0"
 safety_standard = "ISO26262"
 
@@ -9,8 +9,8 @@ title = "Memory Bounds Checking"
 description = "All memory operations must be bounds-checked to prevent buffer overflows"
 type = "Memory"
 asil_level = "AsilC"
-implementations = ["wrt-foundation/src/safe_memory.rs"]
-tests = ["wrt-foundation/tests/memory_tests_moved.rs"]
+implementations = ["kiln-foundation/src/safe_memory.rs"]
+tests = ["kiln-foundation/tests/memory_tests_moved.rs"]
 documentation = ["docs/architecture/memory_model.rst"]
 
 [[requirement]]
@@ -19,8 +19,8 @@ title = "ASIL Context Maintenance"
 description = "Runtime must maintain safety context with ASIL level tracking"
 type = "Safety"
 asil_level = "AsilD"
-implementations = ["wrt-foundation/src/safety_system.rs"]
-tests = ["wrt-foundation/tests/"]
+implementations = ["kiln-foundation/src/safety_system.rs"]
+tests = ["kiln-foundation/tests/"]
 documentation = ["docs/architecture/safety.rst"]
 
 [[requirement]]
@@ -29,8 +29,8 @@ title = "Component Isolation"
 description = "Components must be isolated from each other with proper resource boundaries"
 type = "Component"
 asil_level = "AsilC"
-implementations = ["wrt-component/src/bounded_resource_management.rs"]
-tests = ["wrt-component/tests/resource_management_tests.rs"]
+implementations = ["kiln-component/src/bounded_resource_management.rs"]
+tests = ["kiln-component/tests/resource_management_tests.rs"]
 documentation = ["docs/architecture/component_model.rst"]
 
 [[requirement]]
@@ -39,8 +39,8 @@ title = "Async Task Management"
 description = "Async operations must be properly managed with task cancellation and resource cleanup"
 type = "Runtime"
 asil_level = "AsilB"
-implementations = ["wrt-component/src/threading/task_manager.rs", "wrt-component/src/async_/async_canonical.rs"]
-tests = ["wrt-component/tests/async_features_integration_test.rs"]
+implementations = ["kiln-component/src/threading/task_manager.rs", "kiln-component/src/async_/async_canonical.rs"]
+tests = ["kiln-component/tests/async_features_integration_test.rs"]
 documentation = ["docs/architecture/async_threading.rst"]
 
 [[requirement]]
@@ -49,8 +49,8 @@ title = "Bounded WIT Parsing"
 description = "WIT parsing must respect memory limits and prevent unbounded allocation"
 type = "Parse"
 asil_level = "AsilC"
-implementations = ["wrt-format/src/bounded_wit_parser.rs"]
-tests = ["wrt-format/tests/parser_test_reference.rs"]
+implementations = ["kiln-format/src/bounded_wit_parser.rs"]
+tests = ["kiln-format/tests/parser_test_reference.rs"]
 documentation = ["docs/architecture/intercept_system.rst"]
 
 [[requirement]]
@@ -59,8 +59,8 @@ title = "Structured Error Handling"
 description = "All errors must be categorized and traceable with proper context"
 type = "System"
 asil_level = "AsilB"
-implementations = ["wrt-error/src/errors.rs", "wrt-error/src/codes.rs"]
-tests = ["wrt-error/tests/error_conversion_test.rs"]
+implementations = ["kiln-error/src/errors.rs", "kiln-error/src/codes.rs"]
+tests = ["kiln-error/tests/error_conversion_test.rs"]
 documentation = ["docs/architecture/logging.rst"]
 
 [[requirement]]
@@ -69,6 +69,6 @@ title = "Advanced Threading Support"
 description = "Advanced threading capabilities including task management, spawning, and synchronization"
 type = "Runtime"
 asil_level = "AsilB"
-implementations = ["wrt-component/src/threading/advanced_threading_builtins.rs", "wrt-component/src/threading/thread_builtins.rs"]
-tests = ["wrt-component/tests/"]
+implementations = ["kiln-component/src/threading/advanced_threading_builtins.rs", "kiln-component/src/threading/thread_builtins.rs"]
+tests = ["kiln-component/tests/"]
 documentation = ["docs/source/requirements.rst"]

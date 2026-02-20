@@ -1,7 +1,7 @@
-//! Memory budget limits for wrt-component safety-critical operations
+//! Memory budget limits for kiln-component safety-critical operations
 //!
 //! This module defines compile-time memory limits for all bounded collections
-//! used in the wrt-component crate when the safety-critical feature is enabled.
+//! used in the kiln-component crate when the safety-critical feature is enabled.
 
 #![cfg(feature = "safety-critical")]
 

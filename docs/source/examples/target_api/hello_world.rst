@@ -39,9 +39,9 @@ Before we start, make sure you have:
    rustup target add wasm32-unknown-unknown
    
    # PulseEngine command-line tool (from source)
-   git clone https://github.com/pulseengine/wrt
-   cd wrt
-   cargo build --bin wrtd
+   git clone https://github.com/pulseengine/kiln
+   cd kiln
+   cargo build --bin kilnd
 
 Let's Build Something! 🔨
 -------------------------
@@ -53,8 +53,8 @@ First, let's create a new Rust project:
 
 .. code-block:: bash
 
-   cargo new --lib hello-wrt
-   cd hello-wrt
+   cargo new --lib hello-kiln
+   cd hello-kiln
 
 Step 2: Configure for WebAssembly
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -65,7 +65,7 @@ Update your ``Cargo.toml`` to build a WebAssembly module:
    :caption: Cargo.toml
 
    [package]
-   name = "hello-wrt"
+   name = "hello-kiln"
    version = "0.1.0"
    edition = "2021"
 
@@ -135,7 +135,7 @@ Time to compile to WebAssembly:
    cargo build --target wasm32-unknown-unknown --release
 
 Your WebAssembly module is now at:
-``target/wasm32-unknown-unknown/release/hello_wrt.wasm``
+``target/wasm32-unknown-unknown/release/hello_kiln.wasm``
 
 Step 5: Run It! 🚀
 ~~~~~~~~~~~~~~~~~~
@@ -148,11 +148,11 @@ Let's create a simple runner to test our module:
    // This code shows the target API design
    // Current implementation status: Infrastructure exists, execution engine in progress
    
-   use wrt::prelude::*;
+   use kiln::prelude::*;
    
    fn main() -> Result<(), Box<dyn std::error::Error>> {
        // TARGET API: Load the WebAssembly module
-       let bytes = include_bytes!("../target/wasm32-unknown-unknown/release/hello_wrt.wasm");
+       let bytes = include_bytes!("../target/wasm32-unknown-unknown/release/hello_kiln.wasm");
        let module = Module::from_bytes(bytes)?;  // Not yet implemented
        
        // TARGET API: Create an instance  
@@ -175,16 +175,16 @@ Or use the command-line tool (when execution engine is complete):
 .. code-block:: bash
 
    # Planned CLI usage (under development)
-   wrtd run target/wasm32-unknown-unknown/release/hello_wrt.wasm
+   kilnd run target/wasm32-unknown-unknown/release/hello_kiln.wasm
    
    # Module inspection (partially implemented)
-   wrtd inspect target/wasm32-unknown-unknown/release/hello_wrt.wasm
+   kilnd inspect target/wasm32-unknown-unknown/release/hello_kiln.wasm
 
 You should see output like:
 
 .. code-block:: text
 
-   Module: hello_wrt.wasm
+   Module: hello_kiln.wasm
    Exports:
      - add: [i32, i32] -> [i32]
      - greet: [i32, i32] -> [i32]

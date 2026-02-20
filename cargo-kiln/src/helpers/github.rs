@@ -1,6 +1,6 @@
-//! GitHub integration utilities for cargo-wrt
+//! GitHub integration utilities for cargo-kiln
 //!
-//! Provides functions for integrating cargo-wrt reports with GitHub
+//! Provides functions for integrating cargo-kiln reports with GitHub
 //! workflows, including PR comments and issue creation.
 
 use std::env;
@@ -166,7 +166,7 @@ async fn post_pr_comment(context: &GitHubContext, comment: &str) -> Result<()> {
         .post(&url)
         .header("Authorization", format!("token {}", context.token))
         .header("Accept", "application/vnd.github.v3+json")
-        .header("User-Agent", "cargo-wrt")
+        .header("User-Agent", "cargo-kiln")
         .json(&payload)
         .send()
         .await
@@ -204,7 +204,7 @@ pub fn generate_workflow_summary(
 ) -> Result<String> {
     let mut summary = String::new();
 
-    summary.push_str("# WRT Verification Summary\n\n");
+    summary.push_str("# Kiln Verification Summary\n\n");
 
     // Requirements summary
     if let Some(reqs) = requirements {

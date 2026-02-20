@@ -1,12 +1,12 @@
-//! Cross-Component Communication Integration with wrt-intercept
+//! Cross-Component Communication Integration with kiln-intercept
 //!
 //! This module provides the integration between the Component-to-Component
-//! Communication System and the wrt-intercept framework, implementing
+//! Communication System and the kiln-intercept framework, implementing
 //! component communication as interception strategies.
 //!
 //! # Features
 //!
-//! - **Unified Interception**: Integrates with wrt-intercept's strategy pattern
+//! - **Unified Interception**: Integrates with kiln-intercept's strategy pattern
 //! - **Cross-Component Calls**: Function calls between component instances
 //! - **Parameter Marshaling**: Safe parameter passing through Canonical ABI
 //! - **Resource Transfer**: Secure resource sharing between components
@@ -28,8 +28,8 @@
 //! # Example
 //!
 //! ```no_run
-//! use wrt_component::cross_component_communication::ComponentCommunicationStrategy;
-//! use wrt_intercept::{LinkInterceptor, LinkInterceptorStrategy};
+//! use kiln_component::cross_component_communication::ComponentCommunicationStrategy;
+//! use kiln_intercept::{LinkInterceptor, LinkInterceptorStrategy};
 //!
 //! // Create communication strategy
 //! let comm_strategy = ComponentCommunicationStrategy::new();
@@ -44,9 +44,9 @@
 use std::{boxed::Box, collections::HashMap, format, string::String, sync::Arc, vec::Vec};
 
 #[cfg(all(feature = "std", feature = "safety-critical"))]
-use wrt_foundation::allocator::{CrateId, WrtHashMap as HashMap, WrtVec as Vec};
+use kiln_foundation::allocator::{CrateId, KilnHashMap as HashMap, KilnVec as Vec};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedString, collections::StaticVec as BoundedVec, safe_memory::NoStdProvider,
 };
 
@@ -64,16 +64,16 @@ use alloc::{boxed::Box, format, vec};
 
 // Arc is already imported from prelude, no need for type alias
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_foundation::ValType;
-use wrt_intercept::{LinkInterceptorStrategy, ResourceCanonicalOperation};
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::ValType;
+use kiln_intercept::{LinkInterceptorStrategy, ResourceCanonicalOperation};
 
 // Import our communication system components
 pub use crate::components::component_communication::{
     CallContext, CallRouter, CallRouterConfig, CallState, CommunicationError, MarshalingConfig,
     ParameterBridge, ResourceBridge, ResourceTransferType,
 };
-// Import our prelude for type aliases like WrtComponentValue
+// Import our prelude for type aliases like KilnComponentValue
 use crate::prelude::*;
 use crate::{
     bounded_component_infra::ComponentProvider,
@@ -93,13 +93,13 @@ pub struct ComponentCommunicationStrategy {
     call_context_manager: CallContextManager,
     /// Instance registry for component lookup
     #[cfg(feature = "safety-critical")]
-    instance_registry: WrtHashMap<InstanceId, String, { CrateId::Component as u8 }, 256>,
+    instance_registry: KilnHashMap<InstanceId, String, { CrateId::Component as u8 }, 256>,
     #[cfg(not(feature = "safety-critical"))]
     instance_registry: HashMap<InstanceId, String>,
     /// Security policies for component interactions
     #[cfg(feature = "safety-critical")]
     security_policies:
-        WrtHashMap<String, ComponentSecurityPolicy, { CrateId::Component as u8 }, 64>,
+        KilnHashMap<String, ComponentSecurityPolicy, { CrateId::Component as u8 }, 64>,
     #[cfg(not(feature = "safety-critical"))]
     security_policies: HashMap<String, ComponentSecurityPolicy>,
     /// Configuration
@@ -113,12 +113,12 @@ pub struct ComponentCommunicationStrategy {
 pub struct ComponentSecurityPolicy {
     /// Allowed target components
     #[cfg(feature = "safety-critical")]
-    pub allowed_targets: WrtVec<String, { CrateId::Component as u8 }, 32>,
+    pub allowed_targets: KilnVec<String, { CrateId::Component as u8 }, 32>,
     #[cfg(not(feature = "safety-critical"))]
     pub allowed_targets: Vec<String>,
     /// Allowed function patterns
     #[cfg(feature = "safety-critical")]
-    pub allowed_functions: WrtVec<String, { CrateId::Component as u8 }, 64>,
+    pub allowed_functions: KilnVec<String, { CrateId::Component as u8 }, 64>,
     #[cfg(not(feature = "safety-critical"))]
     pub allowed_functions: Vec<String>,
     /// Resource access permissions
@@ -179,7 +179,7 @@ pub struct CallRoutingInfo {
 pub struct ParameterMarshalingResult {
     /// Marshaled parameter data
     #[cfg(feature = "safety-critical")]
-    pub marshaled_data: WrtVec<u8, { CrateId::Component as u8 }, 8192>,
+    pub marshaled_data: KilnVec<u8, { CrateId::Component as u8 }, 8192>,
     #[cfg(not(feature = "safety-critical"))]
     pub marshaled_data: Vec<u8>,
     /// Marshaling metadata
@@ -219,11 +219,11 @@ impl Default for ComponentSecurityPolicy {
     fn default() -> Self {
         Self {
             #[cfg(feature = "safety-critical")]
-            allowed_targets: WrtVec::new(),
+            allowed_targets: KilnVec::new(),
             #[cfg(not(feature = "safety-critical"))]
             allowed_targets: Vec::new(),
             #[cfg(feature = "safety-critical")]
-            allowed_functions: WrtVec::new(),
+            allowed_functions: KilnVec::new(),
             #[cfg(not(feature = "safety-critical"))]
             allowed_functions: Vec::new(),
             allow_resource_transfer: false,
@@ -262,11 +262,11 @@ impl ComponentCommunicationStrategy {
             call_router: CallRouter::with_config(router_config),
             call_context_manager: CallContextManager::with_config(context_config),
             #[cfg(feature = "safety-critical")]
-            instance_registry: WrtHashMap::new(),
+            instance_registry: KilnHashMap::new(),
             #[cfg(not(feature = "safety-critical"))]
             instance_registry: HashMap::new(),
             #[cfg(feature = "safety-critical")]
-            security_policies: WrtHashMap::new(),
+            security_policies: KilnHashMap::new(),
             #[cfg(not(feature = "safety-critical"))]
             security_policies: HashMap::new(),
             config,
@@ -411,16 +411,16 @@ impl ComponentCommunicationStrategy {
     /// Marshal parameters for cross-component call
     fn marshal_call_parameters(
         &self,
-        args: &[wrt_foundation::values::Value],
+        args: &[kiln_foundation::values::Value],
     ) -> Result<ParameterMarshalingResult> {
         let start_time = 0; // Would use actual timestamp
 
         // Convert to ComponentValue format
         #[cfg(feature = "safety-critical")]
         let component_values: Result<
-            WrtVec<WrtComponentValue, { CrateId::Component as u8 }, 256>,
+            KilnVec<KilnComponentValue, { CrateId::Component as u8 }, 256>,
         > = {
-            let mut vec = WrtVec::new();
+            let mut vec = KilnVec::new();
             for val in args.iter() {
                 let converted = self.convert_value_to_component_value(val)?;
                 vec.push(converted).map_err(|_| {
@@ -432,7 +432,7 @@ impl ComponentCommunicationStrategy {
             Ok(vec)
         };
         #[cfg(not(feature = "safety-critical"))]
-        let component_values: Result<Vec<WrtComponentValue<ComponentProvider>>> = {
+        let component_values: Result<Vec<KilnComponentValue<ComponentProvider>>> = {
             let mut vec = Vec::new();
             for val in args.iter() {
                 let converted = self.convert_value_to_component_value(val)?;
@@ -456,7 +456,7 @@ impl ComponentCommunicationStrategy {
         if marshaled_size > self.config.max_parameter_size {
             return Ok(ParameterMarshalingResult {
                 #[cfg(feature = "safety-critical")]
-                marshaled_data: WrtVec::new(),
+                marshaled_data: KilnVec::new(),
                 #[cfg(not(feature = "safety-critical"))]
                 marshaled_data: Vec::new(),
                 metadata: MarshalingMetadata {
@@ -470,7 +470,7 @@ impl ComponentCommunicationStrategy {
                 error_message: Some("Parameter data too large".to_string()),
                 #[cfg(not(feature = "std"))]
                 error_message: Some(
-                    wrt_foundation::BoundedString::try_from_str("Parameter data too large")
+                    kiln_foundation::BoundedString::try_from_str("Parameter data too large")
                         .unwrap_or_default(),
                 ),
             });
@@ -479,7 +479,7 @@ impl ComponentCommunicationStrategy {
         // For now, serialize as simple byte representation
         // In a full implementation, this would use proper canonical ABI serialization
         #[cfg(feature = "safety-critical")]
-        let mut marshaled_data: WrtVec<u8, { CrateId::Component as u8 }, 8192> = WrtVec::new();
+        let mut marshaled_data: KilnVec<u8, { CrateId::Component as u8 }, 8192> = KilnVec::new();
         #[cfg(not(feature = "safety-critical"))]
         let mut marshaled_data = Vec::new();
         for value in &component_values {
@@ -518,13 +518,13 @@ impl ComponentCommunicationStrategy {
     /// Convert Value to ComponentValue
     fn convert_value_to_component_value(
         &self,
-        value: &wrt_foundation::values::Value,
-    ) -> Result<WrtComponentValue<ComponentProvider>> {
+        value: &kiln_foundation::values::Value,
+    ) -> Result<KilnComponentValue<ComponentProvider>> {
         match value {
-            wrt_foundation::values::Value::I32(v) => Ok(WrtComponentValue::S32(*v)),
-            wrt_foundation::values::Value::I64(v) => Ok(WrtComponentValue::S64(*v)),
-            wrt_foundation::values::Value::F32(v) => Ok(WrtComponentValue::F32(*v)),
-            wrt_foundation::values::Value::F64(v) => Ok(WrtComponentValue::F64(*v)),
+            kiln_foundation::values::Value::I32(v) => Ok(KilnComponentValue::S32(*v)),
+            kiln_foundation::values::Value::I64(v) => Ok(KilnComponentValue::S64(*v)),
+            kiln_foundation::values::Value::F32(v) => Ok(KilnComponentValue::F32(*v)),
+            kiln_foundation::values::Value::F64(v) => Ok(KilnComponentValue::F64(*v)),
             _ => Err(Error::runtime_type_mismatch(
                 "Unsupported value type for component call",
             )),
@@ -534,37 +534,37 @@ impl ComponentCommunicationStrategy {
     /// Calculate marshaled size for component values
     fn calculate_marshaled_size(
         &self,
-        values: &[WrtComponentValue<ComponentProvider>],
+        values: &[KilnComponentValue<ComponentProvider>],
     ) -> Result<u32> {
         let mut total_size = 0u32;
 
         for value in values {
             let size = match value {
-                WrtComponentValue::Bool(_) => 1,
-                WrtComponentValue::S8(_) | WrtComponentValue::U8(_) => 1,
-                WrtComponentValue::S16(_) | WrtComponentValue::U16(_) => 2,
-                WrtComponentValue::S32(_)
-                | WrtComponentValue::U32(_)
-                | WrtComponentValue::F32(_) => 4,
-                WrtComponentValue::S64(_)
-                | WrtComponentValue::U64(_)
-                | WrtComponentValue::F64(_) => 8,
-                WrtComponentValue::Char(_) => 4,
-                WrtComponentValue::String(s) => s.len() as u32 + 4, // String + length prefix
-                WrtComponentValue::List(_items) => {
+                KilnComponentValue::Bool(_) => 1,
+                KilnComponentValue::S8(_) | KilnComponentValue::U8(_) => 1,
+                KilnComponentValue::S16(_) | KilnComponentValue::U16(_) => 2,
+                KilnComponentValue::S32(_)
+                | KilnComponentValue::U32(_)
+                | KilnComponentValue::F32(_) => 4,
+                KilnComponentValue::S64(_)
+                | KilnComponentValue::U64(_)
+                | KilnComponentValue::F64(_) => 8,
+                KilnComponentValue::Char(_) => 4,
+                KilnComponentValue::String(s) => s.len() as u32 + 4, // String + length prefix
+                KilnComponentValue::List(_items) => {
                     // List contains ValueRef, not ComponentValue directly
                     // Cannot recursively calculate size without resolving refs
                     16 // Placeholder size
                 },
-                WrtComponentValue::Record(_fields) => {
+                KilnComponentValue::Record(_fields) => {
                     // Record contains (name, ValueRef) pairs, not ComponentValue
                     32 // Placeholder size
                 },
-                WrtComponentValue::Tuple(_elements) => {
+                KilnComponentValue::Tuple(_elements) => {
                     // Tuple contains ValueRef, not ComponentValue directly
                     16 // Placeholder size
                 },
-                WrtComponentValue::Variant(_, value) => {
+                KilnComponentValue::Variant(_, value) => {
                     4 + if value.is_some() {
                         // Variant value is ValueRef, cannot calculate without resolving
                         8 // Placeholder size for ValueRef
@@ -572,8 +572,8 @@ impl ComponentCommunicationStrategy {
                         0
                     }
                 },
-                WrtComponentValue::Enum(_) => 4,
-                WrtComponentValue::Option(opt) => {
+                KilnComponentValue::Enum(_) => 4,
+                KilnComponentValue::Option(opt) => {
                     1 + if opt.is_some() {
                         // Option value is ValueRef, cannot calculate without resolving
                         8 // Placeholder size for ValueRef
@@ -581,7 +581,7 @@ impl ComponentCommunicationStrategy {
                         0
                     }
                 },
-                WrtComponentValue::Result(result) => {
+                KilnComponentValue::Result(result) => {
                     1 + match result {
                         Ok(v) | Err(v) => {
                             // Result contains ValueRef directly, not Option<ValueRef>
@@ -590,20 +590,20 @@ impl ComponentCommunicationStrategy {
                         },
                     }
                 },
-                WrtComponentValue::Flags(_) => 4,
-                WrtComponentValue::Void => 0,
-                WrtComponentValue::Unit => 0,
-                WrtComponentValue::FixedList(items, _) => {
+                KilnComponentValue::Flags(_) => 4,
+                KilnComponentValue::Void => 0,
+                KilnComponentValue::Unit => 0,
+                KilnComponentValue::FixedList(items, _) => {
                     // FixedList contains ValueRef, cannot calculate without resolving
                     items.len() as u32 * 8 // Placeholder size per item
                 },
-                WrtComponentValue::ErrorContext(items) => {
+                KilnComponentValue::ErrorContext(items) => {
                     // ErrorContext contains ValueRef, cannot calculate without resolving
                     items.len() as u32 * 8 // Placeholder size per item
                 },
-                WrtComponentValue::Own(_) => 4,
-                WrtComponentValue::Handle(_) => 4,
-                WrtComponentValue::Borrow(_) => 4,
+                KilnComponentValue::Own(_) => 4,
+                KilnComponentValue::Handle(_) => 4,
+                KilnComponentValue::Borrow(_) => 4,
             };
             total_size += size;
         }
@@ -614,12 +614,12 @@ impl ComponentCommunicationStrategy {
     /// Serialize a component value to bytes
     fn serialize_component_value(
         &self,
-        value: &WrtComponentValue<ComponentProvider>,
+        value: &KilnComponentValue<ComponentProvider>,
     ) -> Result<Vec<u8>> {
         // Simplified serialization - would use proper canonical ABI in full
         // implementation
         match value {
-            WrtComponentValue::S32(v) => {
+            KilnComponentValue::S32(v) => {
                 let bytes = v.to_le_bytes();
                 let mut vec = Vec::new();
                 for byte in bytes {
@@ -631,7 +631,7 @@ impl ComponentCommunicationStrategy {
                 }
                 Ok(vec)
             },
-            WrtComponentValue::S64(v) => {
+            KilnComponentValue::S64(v) => {
                 let bytes = v.to_le_bytes();
                 let mut vec = Vec::new();
                 for byte in bytes {
@@ -643,7 +643,7 @@ impl ComponentCommunicationStrategy {
                 }
                 Ok(vec)
             },
-            WrtComponentValue::F32(v) => {
+            KilnComponentValue::F32(v) => {
                 let bytes = v.to_bits().to_le_bytes();
                 let mut vec = Vec::new();
                 for byte in bytes {
@@ -655,7 +655,7 @@ impl ComponentCommunicationStrategy {
                 }
                 Ok(vec)
             },
-            WrtComponentValue::F64(v) => {
+            KilnComponentValue::F64(v) => {
                 let bytes = v.to_bits().to_le_bytes();
                 let mut vec = Vec::new();
                 for byte in bytes {
@@ -667,7 +667,7 @@ impl ComponentCommunicationStrategy {
                 }
                 Ok(vec)
             },
-            WrtComponentValue::String(s) => {
+            KilnComponentValue::String(s) => {
                 let mut bytes = Vec::new();
                 // Add length prefix
                 for byte in (s.len() as u32).to_le_bytes() {
@@ -691,7 +691,7 @@ impl ComponentCommunicationStrategy {
             },
             #[cfg(feature = "safety-critical")]
             _ => {
-                let mut vec = WrtVec::new();
+                let mut vec = KilnVec::new();
                 vec.push(0).map_err(|_| {
                     Error::runtime_execution_error("Unable to serialize component value")
                 })?;
@@ -716,8 +716,8 @@ impl LinkInterceptorStrategy for ComponentCommunicationStrategy {
         source: &str,
         target: &str,
         function: &str,
-        args: &[wrt_foundation::values::Value],
-    ) -> Result<Vec<wrt_foundation::values::Value>> {
+        args: &[kiln_foundation::values::Value],
+    ) -> Result<Vec<kiln_foundation::values::Value>> {
         // Check if this is a cross-component call
         if let Some(mut routing_info) = self.parse_component_call(function) {
             routing_info.source_component =
@@ -755,9 +755,9 @@ impl LinkInterceptorStrategy for ComponentCommunicationStrategy {
         source: &str,
         target: &str,
         function: &str,
-        args: &[wrt_foundation::values::Value],
-        result: Result<Vec<wrt_foundation::values::Value>>,
-    ) -> Result<Vec<wrt_foundation::values::Value>> {
+        args: &[kiln_foundation::values::Value],
+        result: Result<Vec<kiln_foundation::values::Value>>,
+    ) -> Result<Vec<kiln_foundation::values::Value>> {
         // Check if this was a cross-component call
         if let Some(routing_info) = self.parse_component_call(function) {
             // Update statistics based on result
@@ -795,7 +795,7 @@ impl LinkInterceptorStrategy for ComponentCommunicationStrategy {
     /// Intercepts a lift operation in the canonical ABI
     fn intercept_lift(
         &self,
-        ty: &ValType<wrt_foundation::NoStdProvider<64>>,
+        ty: &ValType<kiln_foundation::NoStdProvider<64>>,
         addr: u32,
         memory_bytes: &[u8],
     ) -> Result<Option<Vec<u8>>> {
@@ -809,7 +809,7 @@ impl LinkInterceptorStrategy for ComponentCommunicationStrategy {
     /// Intercepts a lower operation in the canonical ABI
     fn intercept_lower(
         &self,
-        value_type: &ValType<wrt_foundation::NoStdProvider<64>>,
+        value_type: &ValType<kiln_foundation::NoStdProvider<64>>,
         value_data: &[u8],
         addr: u32,
         memory_bytes: &mut [u8],
@@ -831,7 +831,7 @@ impl LinkInterceptorStrategy for ComponentCommunicationStrategy {
     fn intercept_function_call(
         &self,
         function_name: &str,
-        arg_types: &[ValType<wrt_foundation::NoStdProvider<64>>],
+        arg_types: &[ValType<kiln_foundation::NoStdProvider<64>>],
         arg_data: &[u8],
     ) -> Result<Option<Vec<u8>>> {
         // Check if this is a cross-component call we should handle
@@ -852,7 +852,7 @@ impl LinkInterceptorStrategy for ComponentCommunicationStrategy {
     fn intercept_function_result(
         &self,
         function_name: &str,
-        result_types: &[ValType<wrt_foundation::NoStdProvider<64>>],
+        result_types: &[ValType<kiln_foundation::NoStdProvider<64>>],
         result_data: &[u8],
     ) -> Result<Option<Vec<u8>>> {
         // Handle result marshaling for cross-component calls
@@ -896,7 +896,7 @@ impl LinkInterceptorStrategy for ComponentCommunicationStrategy {
     fn after_start(
         &self,
         component_name: &str,
-        result_types: &[ValType<wrt_foundation::NoStdProvider<64>>],
+        result_types: &[ValType<kiln_foundation::NoStdProvider<64>>],
         result_data: Option<&[u8]>,
     ) -> Result<Option<Vec<u8>>> {
         // Could implement component startup completion handling
@@ -914,16 +914,16 @@ impl LinkInterceptorStrategy for ComponentCommunicationStrategy {
         &self,
         component_name: &str,
         func_name: &str,
-        args: &[ComponentValue<wrt_foundation::NoStdProvider<64>>],
-        results: &[ComponentValue<wrt_foundation::NoStdProvider<64>>],
-    ) -> Result<Option<Vec<wrt_intercept::Modification>>> {
+        args: &[ComponentValue<kiln_foundation::NoStdProvider<64>>],
+        results: &[ComponentValue<kiln_foundation::NoStdProvider<64>>],
+    ) -> Result<Option<Vec<kiln_intercept::Modification>>> {
         // Could implement result post-processing for cross-component calls
         Ok(None)
     }
 }
 
 // Note: no_std implementation removed because workspace builds always compile
-// wrt-intercept with std features, so the std trait is always active
+// kiln-intercept with std features, so the std trait is always active
 
 impl Default for ComponentCommunicationStrategy {
     fn default() -> Self {

@@ -1,4 +1,4 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Module: Foundation Integration Stubs
 // SW-REQ-ID: REQ_INTEGRATION_STUBS_001, REQ_COMPONENT_FOUNDATION_001
 //
@@ -53,8 +53,8 @@ impl SafetyContext {
 
 // Memory provider stubs
 pub trait UnifiedMemoryProvider: Send + Sync {
-    fn allocate(&mut self, size: usize) -> core::result::Result<&mut [u8], wrt_error::Error>;
-    fn deallocate(&mut self, ptr: &mut [u8]) -> core::result::Result<(), wrt_error::Error>;
+    fn allocate(&mut self, size: usize) -> core::result::Result<&mut [u8], kiln_error::Error>;
+    fn deallocate(&mut self, ptr: &mut [u8]) -> core::result::Result<(), kiln_error::Error>;
     fn available_memory(&self) -> usize;
     fn total_memory(&self) -> usize;
 }
@@ -80,16 +80,16 @@ impl<const SIZE: usize> Default for NoStdProvider<SIZE> {
 }
 
 impl<const SIZE: usize> UnifiedMemoryProvider for NoStdProvider<SIZE> {
-    fn allocate(&mut self, size: usize) -> core::result::Result<&mut [u8], wrt_error::Error> {
+    fn allocate(&mut self, size: usize) -> core::result::Result<&mut [u8], kiln_error::Error> {
         if self.allocated + size > SIZE {
-            return Err(wrt_error::Error::resource_exhausted("Out of memory"));
+            return Err(kiln_error::Error::resource_exhausted("Out of memory"));
         }
         let start = self.allocated;
         self.allocated += size;
         Ok(&mut self.buffer[start..self.allocated])
     }
 
-    fn deallocate(&mut self, _ptr: &mut [u8]) -> core::result::Result<(), wrt_error::Error> {
+    fn deallocate(&mut self, _ptr: &mut [u8]) -> core::result::Result<(), kiln_error::Error> {
         // Simple implementation - could reset if ptr is at end
         Ok(())
     }
@@ -104,7 +104,7 @@ impl<const SIZE: usize> UnifiedMemoryProvider for NoStdProvider<SIZE> {
 }
 
 // Error types from Agent A
-pub use wrt_error::Error;
+pub use kiln_error::Error;
 
 // Threading stubs for component model
 /// Thread identifier type for component threading

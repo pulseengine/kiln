@@ -1,7 +1,7 @@
 // Copyright (c) 2025 R T
 // SPDX-License-Identifier: MIT
-// Project: WRT
-// Module: wrt-math::safety (SW-REQ-ID-TBD)
+// Project: Kiln
+// Module: kiln-math::safety (SW-REQ-ID-TBD)
 
 //! ASIL-specific safety features for mathematical operations.
 //!
@@ -12,9 +12,9 @@
 //! - ASIL-C: Saturating arithmetic as default
 //! - ASIL-D: Formal verification hooks for arithmetic
 
-use wrt_error::{
+use kiln_error::{
     codes::TrapCode,
-    Error as WrtError,
+    Error as KilnError,
     ErrorCategory,
     Result,
 };
@@ -616,7 +616,7 @@ pub fn safe_simd_load<T: Copy>(memory: &[u8], offset: usize, len: usize) -> Resu
     // For ASIL compliance, we'll return an error if alignment is not guaranteed
     // rather than using unsafe pointer casting
     if offset % core::mem::align_of::<T>() != 0 {
-        return Err(WrtError::runtime_execution_error(
+        return Err(KilnError::runtime_execution_error(
             "Misaligned SIMD memory access",
         ));
     }
@@ -624,7 +624,7 @@ pub fn safe_simd_load<T: Copy>(memory: &[u8], offset: usize, len: usize) -> Resu
     // Since we can't safely cast without platform-specific code, we'll provide a
     // different API This is a placeholder - real SIMD operations would need
     // platform-specific handling
-    Err(WrtError::runtime_not_implemented(
+    Err(KilnError::runtime_not_implemented(
         "SIMD operations require platform-specific implementation",
     ))
 }
@@ -637,7 +637,7 @@ pub fn safe_simd_store<T: Copy>(memory: &mut [u8], offset: usize, data: &[T]) ->
 
     // For ASIL compliance, we'll return an error if alignment is not guaranteed
     if offset % core::mem::align_of::<T>() != 0 {
-        return Err(WrtError::runtime_execution_error(
+        return Err(KilnError::runtime_execution_error(
             "Misaligned SIMD memory access",
         ));
     }
@@ -645,7 +645,7 @@ pub fn safe_simd_store<T: Copy>(memory: &mut [u8], offset: usize, data: &[T]) ->
     // Since we can't safely store without platform-specific code, we'll provide a
     // different API This is a placeholder - real SIMD operations would need
     // platform-specific handling
-    Err(WrtError::runtime_not_implemented(
+    Err(KilnError::runtime_not_implemented(
         "SIMD operations require platform-specific implementation",
     ))
 }

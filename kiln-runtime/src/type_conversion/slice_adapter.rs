@@ -3,8 +3,8 @@
 //! This module provides utilities to adapt between slice-based APIs and
 //! the bounded collection types used in ASIL-compliant code.
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     bounded::BoundedVec,
     bounded_slice::{
         BoundedSlice,
@@ -74,9 +74,9 @@ impl<'a> ExactSizeIterator for SliceIterator<'a> {}
 pub fn get_slice_qm<T, const N: usize, P>(bounded: &BoundedVec<T, N, P>) -> &[T]
 where
     T: Sized
-        + wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+        + kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -96,9 +96,9 @@ pub fn process_slice_asil<T, const N: usize, P, F>(
 ) -> Result<()>
 where
     T: Sized
-        + wrt_foundation::traits::Checksummable
-        + wrt_foundation::traits::ToBytes
-        + wrt_foundation::traits::FromBytes
+        + kiln_foundation::traits::Checksummable
+        + kiln_foundation::traits::ToBytes
+        + kiln_foundation::traits::FromBytes
         + Default
         + Clone
         + PartialEq
@@ -109,7 +109,7 @@ where
     for i in 0..bounded.len() {
         let item = bounded
             .get(i)
-            .map_err(|_| wrt_error::Error::runtime_out_of_bounds("Index out of bounds"))?
+            .map_err(|_| kiln_error::Error::runtime_out_of_bounds("Index out of bounds"))?
             .clone();
         f(i, item)?;
     }

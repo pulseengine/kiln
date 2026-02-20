@@ -13,7 +13,7 @@ use std::{fmt, mem};
 #[cfg(feature = "std")]
 use crate::bounded_component_infra::ComponentProvider;
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     MemoryProvider, NoStdProvider,
     bounded::BoundedString,
     budget_aware_provider::CrateId,
@@ -23,7 +23,7 @@ use wrt_foundation::{
     verification::Checksum,
 };
 #[cfg(feature = "std")]
-use wrt_foundation::{
+use kiln_foundation::{
     collections::StaticVec as BoundedVec,
     component_value::ComponentValue,
     prelude::*,
@@ -72,7 +72,7 @@ impl ToBytes for StreamHandle {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
@@ -81,7 +81,7 @@ impl FromBytes for StreamHandle {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u32::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -113,7 +113,7 @@ impl ToBytes for FutureHandle {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
@@ -122,7 +122,7 @@ impl FromBytes for FutureHandle {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u32::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -158,7 +158,7 @@ impl ToBytes for WaitableSetHandle {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
@@ -167,7 +167,7 @@ impl FromBytes for WaitableSetHandle {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u32::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -311,7 +311,7 @@ impl ToBytes for StackFrame {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         #[cfg(feature = "std")]
         self.function.to_bytes_with_provider(writer, provider)?;
         #[cfg(not(any(feature = "std",)))]
@@ -326,7 +326,7 @@ impl FromBytes for StackFrame {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         #[cfg(feature = "std")]
         let function = String::from_bytes_with_provider(reader, provider)?;
         #[cfg(not(any(feature = "std",)))]
@@ -417,7 +417,7 @@ impl ToBytes for Waitable {
         &self,
         writer: &mut WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         match self {
             Self::StreamReadable(h) => {
                 0u8.to_bytes_with_provider(writer, provider)?;
@@ -443,7 +443,7 @@ impl FromBytes for Waitable {
     fn from_bytes_with_provider<'a, P: MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let tag = u8::from_bytes_with_provider(reader, provider)?;
         let value = u32::from_bytes_with_provider(reader, provider)?;
         match tag {
@@ -451,7 +451,7 @@ impl FromBytes for Waitable {
             1 => Ok(Self::StreamWritable(StreamHandle(value))),
             2 => Ok(Self::FutureReadable(FutureHandle(value))),
             3 => Ok(Self::FutureWritable(FutureHandle(value))),
-            _ => Err(wrt_error::Error::validation_invalid_type(
+            _ => Err(kiln_error::Error::validation_invalid_type(
                 "Invalid Waitable tag",
             )),
         }
@@ -475,7 +475,7 @@ where
     T: Checksummable + ToBytes + FromBytes + Default + Clone + PartialEq + Eq,
 {
     /// Create a new stream
-    pub fn new(handle: StreamHandle, element_type: ValType) -> wrt_error::Result<Self> {
+    pub fn new(handle: StreamHandle, element_type: ValType) -> kiln_error::Result<Self> {
         Ok(Self {
             handle,
             element_type,
@@ -567,9 +567,9 @@ where
     }
 
     /// Set the future value
-    pub fn set_value(&mut self, value: T) -> wrt_error::Result<()> {
+    pub fn set_value(&mut self, value: T) -> kiln_error::Result<()> {
         if self.state != FutureState::Pending {
-            return Err(wrt_error::Error::runtime_execution_error(
+            return Err(kiln_error::Error::runtime_execution_error(
                 "Future already completed",
             ));
         }
@@ -619,7 +619,7 @@ impl ErrorContext {
     pub fn new(
         handle: ErrorContextHandle,
         message: BoundedString<1024>,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self {
             handle,
             message,
@@ -651,7 +651,7 @@ impl ErrorContext {
 
 impl DebugInfo {
     /// Create new debug info
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             source_component: None,
             error_code: None,
@@ -677,16 +677,16 @@ impl DebugInfo {
         &mut self,
         key: BoundedString<64>,
         value: ComponentValue,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.properties
             .push((key, value))
-            .map_err(|_| wrt_error::Error::runtime_execution_error("Failed to add property"))
+            .map_err(|_| kiln_error::Error::runtime_execution_error("Failed to add property"))
     }
 }
 
 impl WaitableSet {
     /// Create a new waitable set
-    pub fn new() -> wrt_error::Result<Self> {
+    pub fn new() -> kiln_error::Result<Self> {
         Ok(Self {
             #[cfg(feature = "std")]
             waitables: Vec::new(),
@@ -700,10 +700,10 @@ impl WaitableSet {
     }
 
     /// Add a waitable to the set
-    pub fn add(&mut self, waitable: Waitable) -> wrt_error::Result<u32> {
+    pub fn add(&mut self, waitable: Waitable) -> kiln_error::Result<u32> {
         let index = self.waitables.len();
         if index >= 64 {
-            return Err(wrt_error::Error::runtime_execution_error(
+            return Err(kiln_error::Error::runtime_execution_error(
                 "Too many waitables",
             ));
         }
@@ -716,7 +716,7 @@ impl WaitableSet {
         {
             self.waitables
                 .push(waitable)
-                .map_err(|_| wrt_error::Error::runtime_execution_error("Error occurred"))?;
+                .map_err(|_| kiln_error::Error::runtime_execution_error("Error occurred"))?;
         }
 
         Ok(index as u32)

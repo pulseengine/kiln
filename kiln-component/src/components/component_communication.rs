@@ -26,7 +26,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use wrt_component::component_communication::{
+//! use kiln_component::component_communication::{
 //!     CallContext,
 //!     CallRouter,
 //! };
@@ -45,9 +45,9 @@ use alloc::{boxed::Box, collections::BTreeMap as HashMap, format, string::String
 #[cfg(feature = "std")]
 use std::{boxed::Box, collections::HashMap, format, string::String, vec::Vec};
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{BoundedString, BoundedVec},
     safe_memory::NoStdProvider,
 };
@@ -107,7 +107,7 @@ pub struct CallContext {
     /// Call parameters
     pub parameters: Vec<ComponentValue>,
     /// Expected return types
-    pub return_types: Vec<wrt_foundation::component_value::ValType<NoStdProvider<4096>>>,
+    pub return_types: Vec<kiln_foundation::component_value::ValType<NoStdProvider<4096>>>,
     /// Resource handles passed with this call
     pub resource_handles: Vec<ResourceHandle>,
     /// Call metadata
@@ -553,7 +553,7 @@ impl CallRouter {
         // For now, just store an empty vector as placeholder
         // In a full implementation, this would properly convert the ComponentType
         let converted_return_types: Vec<
-            wrt_foundation::component_value::ValType<NoStdProvider<4096>>,
+            kiln_foundation::component_value::ValType<NoStdProvider<4096>>,
         > = Vec::new();
 
         Ok(CallContext {
@@ -634,11 +634,11 @@ impl CallRouter {
     ) -> Result<Vec<ComponentValue>> {
         // Execute the function in the target instance
         // Note: Component-to-component calls don't need host registry
-        #[cfg(feature = "wrt-execution")]
+        #[cfg(feature = "kiln-execution")]
         {
             target_instance.call_function(function_name, parameters, None)
         }
-        #[cfg(not(feature = "wrt-execution"))]
+        #[cfg(not(feature = "kiln-execution"))]
         {
             target_instance.call_function(function_name, parameters)
         }

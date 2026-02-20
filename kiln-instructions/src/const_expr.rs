@@ -10,18 +10,18 @@
 //! The extended constant expressions proposal adds support for more
 //! instructions in constant contexts.
 
-use wrt_error::{
+use kiln_error::{
     Error,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     types::{
         RefType,
         ValueType,
     },
     values::Value,
 };
-use wrt_math;
+use kiln_math;
 
 #[cfg(not(feature = "std"))]
 use crate::prelude::BoundedVec;
@@ -139,7 +139,7 @@ impl ConstExprSequence {
     /// Helper to pop from stack in both std and `no_std` environments
     #[cfg(not(feature = "std"))]
     fn stack_pop(
-        stack: &mut BoundedVec<Value, 8, wrt_foundation::NoStdProvider<128>>,
+        stack: &mut BoundedVec<Value, 8, kiln_foundation::NoStdProvider<128>>,
     ) -> Result<Value> {
         match stack.pop() {
             Ok(Some(val)) => Ok(val),
@@ -161,11 +161,11 @@ impl ConstExprSequence {
 
         #[cfg(not(feature = "std"))]
         let mut stack = {
-            let provider = wrt_foundation::safe_managed_alloc!(
+            let provider = kiln_foundation::safe_managed_alloc!(
                 128,
-                wrt_foundation::budget_aware_provider::CrateId::Instructions
+                kiln_foundation::budget_aware_provider::CrateId::Instructions
             )?;
-            BoundedVec::<Value, 8, wrt_foundation::NoStdProvider<128>>::new(provider)
+            BoundedVec::<Value, 8, kiln_foundation::NoStdProvider<128>>::new(provider)
                 .map_err(|_| Error::memory_error("Failed to create evaluation stack"))?
         };
 
@@ -193,7 +193,7 @@ impl ConstExprSequence {
                         .map_err(|_| Error::runtime_error("Constant expression stack overflow"))?;
                 },
                 ConstExpr::F32Const(v) => {
-                    let float_bits = wrt_foundation::values::FloatBits32::from_float(*v);
+                    let float_bits = kiln_foundation::values::FloatBits32::from_float(*v);
                     #[cfg(feature = "std")]
                     stack.push(Value::F32(float_bits));
 
@@ -203,7 +203,7 @@ impl ConstExprSequence {
                         .map_err(|_| Error::runtime_error("Constant expression stack overflow"))?;
                 },
                 ConstExpr::F64Const(v) => {
-                    let float_bits = wrt_foundation::values::FloatBits64::from_float(*v);
+                    let float_bits = kiln_foundation::values::FloatBits64::from_float(*v);
                     #[cfg(feature = "std")]
                     stack.push(Value::F64(float_bits));
 
@@ -233,7 +233,7 @@ impl ConstExprSequence {
                         ));
                     }
 
-                    let func_ref = wrt_foundation::values::FuncRef { index: *idx };
+                    let func_ref = kiln_foundation::values::FuncRef { index: *idx };
 
                     #[cfg(feature = "std")]
                     stack.push(Value::FuncRef(Some(func_ref)));
@@ -262,7 +262,7 @@ impl ConstExprSequence {
                         return Err(Error::type_error("I32Add requires two i32 values"));
                     };
 
-                    let result = wrt_math::i32_add(a_val, b_val)?;
+                    let result = kiln_math::i32_add(a_val, b_val)?;
 
                     #[cfg(feature = "std")]
                     stack.push(Value::I32(result));
@@ -280,7 +280,7 @@ impl ConstExprSequence {
                         return Err(Error::type_error("I32Sub requires two i32 values"));
                     };
 
-                    let result = wrt_math::i32_sub(a_val, b_val)?;
+                    let result = kiln_math::i32_sub(a_val, b_val)?;
 
                     #[cfg(feature = "std")]
                     stack.push(Value::I32(result));
@@ -298,7 +298,7 @@ impl ConstExprSequence {
                         return Err(Error::type_error("I32Mul requires two i32 values"));
                     };
 
-                    let result = wrt_math::i32_mul(a_val, b_val)?;
+                    let result = kiln_math::i32_mul(a_val, b_val)?;
 
                     #[cfg(feature = "std")]
                     stack.push(Value::I32(result));
@@ -316,7 +316,7 @@ impl ConstExprSequence {
                         return Err(Error::type_error("I64Add requires two i64 values"));
                     };
 
-                    let result = wrt_math::i64_add(a_val, b_val)?;
+                    let result = kiln_math::i64_add(a_val, b_val)?;
 
                     #[cfg(feature = "std")]
                     stack.push(Value::I64(result));
@@ -334,7 +334,7 @@ impl ConstExprSequence {
                         return Err(Error::type_error("I64Sub requires two i64 values"));
                     };
 
-                    let result = wrt_math::i64_sub(a_val, b_val)?;
+                    let result = kiln_math::i64_sub(a_val, b_val)?;
 
                     #[cfg(feature = "std")]
                     stack.push(Value::I64(result));
@@ -352,7 +352,7 @@ impl ConstExprSequence {
                         return Err(Error::type_error("I64Mul requires two i64 values"));
                     };
 
-                    let result = wrt_math::i64_mul(a_val, b_val)?;
+                    let result = kiln_math::i64_mul(a_val, b_val)?;
 
                     #[cfg(feature = "std")]
                     stack.push(Value::I64(result));

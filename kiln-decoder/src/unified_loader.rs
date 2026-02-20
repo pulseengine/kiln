@@ -16,8 +16,8 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use wrt_error::Result;
-use wrt_format::module::Module as WrtModule;
+use kiln_error::Result;
+use kiln_format::module::Module as KilnModule;
 
 use crate::prelude::*;
 

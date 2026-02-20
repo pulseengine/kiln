@@ -3,7 +3,7 @@
 Visual Dynamic Behavior Models
 ==============================
 
-This section presents the dynamic behavior of Pulseengine (WRT Edition) through visual models,
+This section presents the dynamic behavior of Pulseengine (Kiln Edition) through visual models,
 focusing on state machines, activity flows, and interaction patterns rather than code details.
 
 Component Lifecycle State Machine

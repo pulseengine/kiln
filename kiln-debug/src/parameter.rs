@@ -1,4 +1,4 @@
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{BoundedVec, MAX_DWARF_ABBREV_CACHE},
     budget_aware_provider::CrateId,
     memory_sizing::LargeProvider,
@@ -135,8 +135,8 @@ impl<'a> PartialEq for Parameter<'a> {
 
 impl<'a> Eq for Parameter<'a> {}
 
-impl<'a> wrt_foundation::traits::Checksummable for Parameter<'a> {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl<'a> kiln_foundation::traits::Checksummable for Parameter<'a> {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         if let Some(ref name) = self.name {
             checksum.update(1);
             name.update_checksum(checksum);
@@ -151,12 +151,12 @@ impl<'a> wrt_foundation::traits::Checksummable for Parameter<'a> {
     }
 }
 
-impl<'a> wrt_foundation::traits::ToBytes for Parameter<'a> {
-    fn to_bytes_with_provider<'b, P: wrt_foundation::MemoryProvider>(
+impl<'a> kiln_foundation::traits::ToBytes for Parameter<'a> {
+    fn to_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'b>,
+        writer: &mut kiln_foundation::traits::WriteStream<'b>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write name option
         match &self.name {
             Some(name) => {
@@ -176,11 +176,11 @@ impl<'a> wrt_foundation::traits::ToBytes for Parameter<'a> {
     }
 }
 
-impl<'a> wrt_foundation::traits::FromBytes for Parameter<'a> {
-    fn from_bytes_with_provider<'b, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'b>,
+impl<'a> kiln_foundation::traits::FromBytes for Parameter<'a> {
+    fn from_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'b>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let has_name = reader.read_u8()? != 0;
         let name = if has_name {
             Some(DebugString::from_bytes_with_provider(reader, provider)?)
@@ -325,8 +325,8 @@ impl<'a> PartialEq for InlinedFunction<'a> {
 
 impl<'a> Eq for InlinedFunction<'a> {}
 
-impl<'a> wrt_foundation::traits::Checksummable for InlinedFunction<'a> {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl<'a> kiln_foundation::traits::Checksummable for InlinedFunction<'a> {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         if let Some(ref name) = self.name {
             checksum.update(1);
             name.update_checksum(checksum);
@@ -343,12 +343,12 @@ impl<'a> wrt_foundation::traits::Checksummable for InlinedFunction<'a> {
     }
 }
 
-impl<'a> wrt_foundation::traits::ToBytes for InlinedFunction<'a> {
-    fn to_bytes_with_provider<'b, P: wrt_foundation::MemoryProvider>(
+impl<'a> kiln_foundation::traits::ToBytes for InlinedFunction<'a> {
+    fn to_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'b>,
+        writer: &mut kiln_foundation::traits::WriteStream<'b>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write name option
         match &self.name {
             Some(name) => {
@@ -370,11 +370,11 @@ impl<'a> wrt_foundation::traits::ToBytes for InlinedFunction<'a> {
     }
 }
 
-impl<'a> wrt_foundation::traits::FromBytes for InlinedFunction<'a> {
-    fn from_bytes_with_provider<'b, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'b>,
+impl<'a> kiln_foundation::traits::FromBytes for InlinedFunction<'a> {
+    fn from_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'b>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let has_name = reader.read_u8()? != 0;
         let name = if has_name {
             Some(DebugString::from_bytes_with_provider(reader, provider)?)

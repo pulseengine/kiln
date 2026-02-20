@@ -240,7 +240,7 @@ impl<P: Provider> Provider for CapabilityAwareProvider<P> {
         self.provider.ensure_used_up_to(byte_offset)
     }
 
-    fn acquire_memory(&self, layout: core::alloc::Layout) -> wrt_error::Result<*mut u8> {
+    fn acquire_memory(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
         // Verify capability allows allocation
         let operation = MemoryOperation::Allocate {
             size: layout.size(),
@@ -251,7 +251,7 @@ impl<P: Provider> Provider for CapabilityAwareProvider<P> {
         self.provider.acquire_memory(layout)
     }
 
-    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> wrt_error::Result<()> {
+    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> kiln_error::Result<()> {
         // Verify capability allows deallocation
         let operation = MemoryOperation::Deallocate;
         self.verify_capability_access(&operation)?;

@@ -8,7 +8,7 @@ macOS Platform Features
    
    -- Every developer trying to port Linux code
 
-macOS brings its own unique blend of BSD heritage, Mach microkernel, and Apple's special sauce. While it may frustrate systems programmers used to Linux, it also offers some unique capabilities. Let's explore how WRT makes the most of Apple's platform.
+macOS brings its own unique blend of BSD heritage, Mach microkernel, and Apple's special sauce. While it may frustrate systems programmers used to Linux, it also offers some unique capabilities. Let's explore how Kiln makes the most of Apple's platform.
 
 .. admonition:: What You'll Learn
    :class: note
@@ -32,8 +32,8 @@ macOS uses the Mach microkernel for virtual memory:
    :caption: Mach VM operations
    :linenos:
 
-   use wrt_platform::{MacOsAllocator, MacOsAllocatorBuilder};
-   use wrt_platform::macos_memory::{VmFlags, VmProt, VmInherit};
+   use kiln_platform::{MacOsAllocator, MacOsAllocatorBuilder};
+   use kiln_platform::macos_memory::{VmFlags, VmProt, VmInherit};
    
    fn create_mach_vm_allocator() -> Result<MacOsAllocator, Error> {
        MacOsAllocatorBuilder::new()
@@ -76,7 +76,7 @@ macOS's unique memory pressure handling:
    :caption: Purgeable memory for caches
    :linenos:
 
-   use wrt_platform::macos_memory::{PurgeableState, Volatility};
+   use kiln_platform::macos_memory::{PurgeableState, Volatility};
    
    fn create_purgeable_cache() -> Result<(), Error> {
        let allocator = MacOsAllocatorBuilder::new()
@@ -117,7 +117,7 @@ Respond to system memory pressure:
    :caption: Memory pressure handling
    :linenos:
 
-   use wrt_platform::macos_memory::{MemoryPressureHandler, PressureLevel};
+   use kiln_platform::macos_memory::{MemoryPressureHandler, PressureLevel};
    
    fn setup_memory_pressure_handling() -> Result<(), Error> {
        let handler = MemoryPressureHandler::new();
@@ -161,7 +161,7 @@ Integrate with macOS's concurrency system:
    :caption: GCD integration
    :linenos:
 
-   use wrt_platform::macos_sync::{
+   use kiln_platform::macos_sync::{
        DispatchQueue, 
        DispatchGroup,
        DispatchSemaphore,
@@ -170,7 +170,7 @@ Integrate with macOS's concurrency system:
    
    fn setup_gcd_execution() -> Result<(), Error> {
        // Create queue for WASM execution
-       let queue = DispatchQueue::create("com.wrt.wasm.execution")
+       let queue = DispatchQueue::create("com.kiln.wasm.execution")
            .with_qos(QosClass::UserInitiated)
            .with_concurrent(true)
            .build()?;
@@ -223,7 +223,7 @@ macOS's fastest synchronization primitive:
    :caption: Unfair lock usage
    :linenos:
 
-   use wrt_platform::macos_sync::{MacOsFutex, SpinPolicy};
+   use kiln_platform::macos_sync::{MacOsFutex, SpinPolicy};
    
    fn create_unfair_lock() -> Result<MacOsFutex, Error> {
        // Note: "unfair" means no FIFO guarantee - can be faster!
@@ -255,7 +255,7 @@ Hardware-accelerated isolation:
    :caption: Hypervisor framework for isolation
    :linenos:
 
-   use wrt_platform::macos_hypervisor::{
+   use kiln_platform::macos_hypervisor::{
        Hypervisor,
        VirtualMachine,
        VmExitReason
@@ -313,7 +313,7 @@ GPU acceleration for WebAssembly:
    :caption: Metal compute integration
    :linenos:
 
-   use wrt_platform::macos_metal::{
+   use kiln_platform::macos_metal::{
        MetalDevice,
        ComputePipeline,
        Buffer
@@ -372,7 +372,7 @@ Configure sandboxing for WASM execution:
    :caption: macOS sandboxing
    :linenos:
 
-   use wrt_platform::macos_security::{
+   use kiln_platform::macos_security::{
        Sandbox,
        SandboxProfile,
        Entitlements
@@ -410,7 +410,7 @@ Handle code signing for JIT:
    :caption: Code signing for JIT
    :linenos:
 
-   use wrt_platform::macos_security::{CodeSigning, SecCodeRef};
+   use kiln_platform::macos_security::{CodeSigning, SecCodeRef};
    
    fn setup_jit_code_signing() -> Result<(), Error> {
        // Check if we have JIT entitlement
@@ -448,13 +448,13 @@ Profile with Instruments:
    :caption: Instruments profiling
    :linenos:
 
-   use wrt_platform::macos_instruments::{
+   use kiln_platform::macos_instruments::{
        InstrumentsRecorder,
        SignpostID
    };
    
    fn profile_with_instruments() -> Result<(), Error> {
-       let recorder = InstrumentsRecorder::new("com.wrt.profiling")?;
+       let recorder = InstrumentsRecorder::new("com.kiln.profiling")?;
        
        // Define signpost intervals
        let load_id = SignpostID::new();
@@ -485,10 +485,10 @@ Structured logging for Console.app:
    :caption: os_log integration
    :linenos:
 
-   use wrt_platform::macos_logging::{OSLog, LogType};
+   use kiln_platform::macos_logging::{OSLog, LogType};
    
    fn setup_system_logging() -> Result<(), Error> {
-       let log = OSLog::new("com.wrt.runtime", "wasm")?;
+       let log = OSLog::new("com.kiln.runtime", "wasm")?;
        
        // Different log types
        log.default("WASM module loaded: {}", module_name);

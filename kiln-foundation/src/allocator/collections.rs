@@ -36,12 +36,12 @@ pub use super::phantom_budgets::{
 
 /// Zero-cost wrapper around std::vec::Vec with compile-time budget verification
 #[derive(Debug, Clone)]
-pub struct WrtVec<T, const CRATE: u8, const MAX_SIZE: usize> {
+pub struct KilnVec<T, const CRATE: u8, const MAX_SIZE: usize> {
     inner:   Vec<T>,
     _budget: PhantomData<MemoryBudget<CRATE, MAX_SIZE>>,
 }
 
-impl<T, const CRATE: u8, const MAX_SIZE: usize> WrtVec<T, CRATE, MAX_SIZE> {
+impl<T, const CRATE: u8, const MAX_SIZE: usize> KilnVec<T, CRATE, MAX_SIZE> {
     /// Create new vector with compile-time budget verification
     pub fn new() -> Self {
         Self {
@@ -77,7 +77,7 @@ impl<T, const CRATE: u8, const MAX_SIZE: usize> WrtVec<T, CRATE, MAX_SIZE> {
     pub fn force_push(&mut self, item: T) {
         if self.inner.len() >= MAX_SIZE {
             panic!(
-                "WrtVec capacity exceeded: {} >= {}",
+                "KilnVec capacity exceeded: {} >= {}",
                 self.inner.len(),
                 MAX_SIZE
             );
@@ -97,7 +97,7 @@ impl<T, const CRATE: u8, const MAX_SIZE: usize> WrtVec<T, CRATE, MAX_SIZE> {
 }
 
 // Zero-cost deref to std::vec::Vec for full compatibility
-impl<T, const CRATE: u8, const MAX_SIZE: usize> Deref for WrtVec<T, CRATE, MAX_SIZE> {
+impl<T, const CRATE: u8, const MAX_SIZE: usize> Deref for KilnVec<T, CRATE, MAX_SIZE> {
     type Target = Vec<T>;
 
     fn deref(&self) -> &Self::Target {
@@ -105,14 +105,14 @@ impl<T, const CRATE: u8, const MAX_SIZE: usize> Deref for WrtVec<T, CRATE, MAX_S
     }
 }
 
-impl<T, const CRATE: u8, const MAX_SIZE: usize> DerefMut for WrtVec<T, CRATE, MAX_SIZE> {
+impl<T, const CRATE: u8, const MAX_SIZE: usize> DerefMut for KilnVec<T, CRATE, MAX_SIZE> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
 // Default implementation
-impl<T, const CRATE: u8, const MAX_SIZE: usize> Default for WrtVec<T, CRATE, MAX_SIZE> {
+impl<T, const CRATE: u8, const MAX_SIZE: usize> Default for KilnVec<T, CRATE, MAX_SIZE> {
     fn default() -> Self {
         Self::new()
     }
@@ -121,7 +121,7 @@ impl<T, const CRATE: u8, const MAX_SIZE: usize> Default for WrtVec<T, CRATE, MAX
 /// Zero-cost wrapper around std::collections::HashMap with compile-time budget
 /// verification
 #[derive(Debug, Clone)]
-pub struct WrtHashMap<K, V, const CRATE: u8, const MAX_SIZE: usize>
+pub struct KilnHashMap<K, V, const CRATE: u8, const MAX_SIZE: usize>
 where
     K: std::hash::Hash + Eq,
 {
@@ -129,12 +129,12 @@ where
     _budget: PhantomData<MemoryBudget<CRATE, MAX_SIZE>>,
 }
 
-impl<K, V, const CRATE: u8, const MAX_SIZE: usize> WrtHashMap<K, V, CRATE, MAX_SIZE> where
+impl<K, V, const CRATE: u8, const MAX_SIZE: usize> KilnHashMap<K, V, CRATE, MAX_SIZE> where
     K: std::hash::Hash + Eq
 {
 }
 
-impl<K, V, const CRATE: u8, const MAX_SIZE: usize> Default for WrtHashMap<K, V, CRATE, MAX_SIZE>
+impl<K, V, const CRATE: u8, const MAX_SIZE: usize> Default for KilnHashMap<K, V, CRATE, MAX_SIZE>
 where
     K: std::hash::Hash + Eq,
 {
@@ -143,7 +143,7 @@ where
     }
 }
 
-impl<K, V, const CRATE: u8, const MAX_SIZE: usize> WrtHashMap<K, V, CRATE, MAX_SIZE>
+impl<K, V, const CRATE: u8, const MAX_SIZE: usize> KilnHashMap<K, V, CRATE, MAX_SIZE>
 where
     K: std::hash::Hash + Eq,
 {
@@ -184,7 +184,7 @@ where
 }
 
 // Zero-cost deref to std::collections::HashMap for full compatibility
-impl<K, V, const CRATE: u8, const MAX_SIZE: usize> Deref for WrtHashMap<K, V, CRATE, MAX_SIZE>
+impl<K, V, const CRATE: u8, const MAX_SIZE: usize> Deref for KilnHashMap<K, V, CRATE, MAX_SIZE>
 where
     K: std::hash::Hash + Eq,
 {
@@ -195,7 +195,7 @@ where
     }
 }
 
-impl<K, V, const CRATE: u8, const MAX_SIZE: usize> DerefMut for WrtHashMap<K, V, CRATE, MAX_SIZE>
+impl<K, V, const CRATE: u8, const MAX_SIZE: usize> DerefMut for KilnHashMap<K, V, CRATE, MAX_SIZE>
 where
     K: std::hash::Hash + Eq,
 {
@@ -207,13 +207,13 @@ where
 /// Zero-cost wrapper around String with compile-time budget verification
 #[cfg(feature = "std")]
 #[derive(Debug, Clone)]
-pub struct WrtString<const CRATE: u8, const MAX_SIZE: usize> {
+pub struct KilnString<const CRATE: u8, const MAX_SIZE: usize> {
     inner:   String,
     _budget: PhantomData<MemoryBudget<CRATE, MAX_SIZE>>,
 }
 
 #[cfg(feature = "std")]
-impl<const CRATE: u8, const MAX_SIZE: usize> WrtString<CRATE, MAX_SIZE> {
+impl<const CRATE: u8, const MAX_SIZE: usize> KilnString<CRATE, MAX_SIZE> {
     /// Create new string with compile-time budget verification
     pub fn new() -> Self {
         Self {
@@ -256,7 +256,7 @@ impl<const CRATE: u8, const MAX_SIZE: usize> WrtString<CRATE, MAX_SIZE> {
 }
 
 #[cfg(feature = "std")]
-impl<const CRATE: u8, const MAX_SIZE: usize> Deref for WrtString<CRATE, MAX_SIZE> {
+impl<const CRATE: u8, const MAX_SIZE: usize> Deref for KilnString<CRATE, MAX_SIZE> {
     type Target = String;
 
     fn deref(&self) -> &Self::Target {
@@ -265,14 +265,14 @@ impl<const CRATE: u8, const MAX_SIZE: usize> Deref for WrtString<CRATE, MAX_SIZE
 }
 
 #[cfg(feature = "std")]
-impl<const CRATE: u8, const MAX_SIZE: usize> DerefMut for WrtString<CRATE, MAX_SIZE> {
+impl<const CRATE: u8, const MAX_SIZE: usize> DerefMut for KilnString<CRATE, MAX_SIZE> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
 #[cfg(feature = "std")]
-impl<const CRATE: u8, const MAX_SIZE: usize> Default for WrtString<CRATE, MAX_SIZE> {
+impl<const CRATE: u8, const MAX_SIZE: usize> Default for KilnString<CRATE, MAX_SIZE> {
     fn default() -> Self {
         Self::new()
     }
@@ -283,30 +283,30 @@ pub mod aliases {
     use super::*;
 
     // Foundation crate collections
-    pub type FoundationVec<T, const N: usize> = WrtVec<T, { CrateId::Foundation as u8 }, N>;
+    pub type FoundationVec<T, const N: usize> = KilnVec<T, { CrateId::Foundation as u8 }, N>;
     pub type FoundationHashMap<K, V, const N: usize> =
-        WrtHashMap<K, V, { CrateId::Foundation as u8 }, N>;
+        KilnHashMap<K, V, { CrateId::Foundation as u8 }, N>;
     #[cfg(feature = "std")]
-    pub type FoundationString<const N: usize> = WrtString<{ CrateId::Foundation as u8 }, N>;
+    pub type FoundationString<const N: usize> = KilnString<{ CrateId::Foundation as u8 }, N>;
 
     // Component crate collections
-    pub type ComponentVec<T, const N: usize> = WrtVec<T, { CrateId::Component as u8 }, N>;
+    pub type ComponentVec<T, const N: usize> = KilnVec<T, { CrateId::Component as u8 }, N>;
     pub type ComponentHashMap<K, V, const N: usize> =
-        WrtHashMap<K, V, { CrateId::Component as u8 }, N>;
+        KilnHashMap<K, V, { CrateId::Component as u8 }, N>;
     #[cfg(feature = "std")]
-    pub type ComponentString<const N: usize> = WrtString<{ CrateId::Component as u8 }, N>;
+    pub type ComponentString<const N: usize> = KilnString<{ CrateId::Component as u8 }, N>;
 
     // Runtime crate collections
-    pub type RuntimeVec<T, const N: usize> = WrtVec<T, { CrateId::Runtime as u8 }, N>;
-    pub type RuntimeHashMap<K, V, const N: usize> = WrtHashMap<K, V, { CrateId::Runtime as u8 }, N>;
+    pub type RuntimeVec<T, const N: usize> = KilnVec<T, { CrateId::Runtime as u8 }, N>;
+    pub type RuntimeHashMap<K, V, const N: usize> = KilnHashMap<K, V, { CrateId::Runtime as u8 }, N>;
     #[cfg(feature = "std")]
-    pub type RuntimeString<const N: usize> = WrtString<{ CrateId::Runtime as u8 }, N>;
+    pub type RuntimeString<const N: usize> = KilnString<{ CrateId::Runtime as u8 }, N>;
 
     // Host crate collections
-    pub type HostVec<T, const N: usize> = WrtVec<T, { CrateId::Host as u8 }, N>;
-    pub type HostHashMap<K, V, const N: usize> = WrtHashMap<K, V, { CrateId::Host as u8 }, N>;
+    pub type HostVec<T, const N: usize> = KilnVec<T, { CrateId::Host as u8 }, N>;
+    pub type HostHashMap<K, V, const N: usize> = KilnHashMap<K, V, { CrateId::Host as u8 }, N>;
     #[cfg(feature = "std")]
-    pub type HostString<const N: usize> = WrtString<{ CrateId::Host as u8 }, N>;
+    pub type HostString<const N: usize> = KilnString<{ CrateId::Host as u8 }, N>;
 }
 
 #[cfg(test)]
@@ -315,10 +315,10 @@ mod tests {
 
     #[test]
     fn test_wrt_vec_creation() {
-        let mut vec: WrtVec<i32, { CrateId::Foundation as u8 }, 100> = WrtVec::new();
+        let mut vec: KilnVec<i32, { CrateId::Foundation as u8 }, 100> = KilnVec::new();
         assert_eq!(vec.len(), 0);
         assert_eq!(
-            WrtVec::<i32, { CrateId::Foundation as u8 }, 100>::max_capacity(),
+            KilnVec::<i32, { CrateId::Foundation as u8 }, 100>::max_capacity(),
             100
         );
 
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn test_wrt_vec_capacity_limits() {
-        let mut vec: WrtVec<i32, { CrateId::Foundation as u8 }, 2> = WrtVec::new();
+        let mut vec: KilnVec<i32, { CrateId::Foundation as u8 }, 2> = KilnVec::new();
 
         // Fill to capacity
         assert!(vec.push(1).is_ok());
@@ -343,11 +343,11 @@ mod tests {
 
     #[test]
     fn test_wrt_hashmap_creation() {
-        let mut map: WrtHashMap<String, i32, { CrateId::Foundation as u8 }, 100> =
-            WrtHashMap::new();
+        let mut map: KilnHashMap<String, i32, { CrateId::Foundation as u8 }, 100> =
+            KilnHashMap::new();
         assert_eq!(map.len(), 0);
         assert_eq!(
-            WrtHashMap::<String, i32, { CrateId::Foundation as u8 }, 100>::max_capacity(),
+            KilnHashMap::<String, i32, { CrateId::Foundation as u8 }, 100>::max_capacity(),
             100
         );
 

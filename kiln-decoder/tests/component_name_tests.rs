@@ -1,10 +1,10 @@
-use wrt_decoder::component::{
+use kiln_decoder::component::{
     component_name_section::{
         ComponentNameSection, generate_component_name_section, parse_component_name_section,
     },
     decode_component, encode_component,
 };
-use wrt_format::{
+use kiln_format::{
     binary,
     component::{Component, Sort},
 };

@@ -2,7 +2,7 @@
 Fault Detection System
 ============================
 
-This document describes the systematic fault detection mechanisms implemented for ASIL-A compliance in the WRT runtime.
+This document describes the systematic fault detection mechanisms implemented for ASIL-A compliance in the Kiln runtime.
 
 .. contents:: On this page
    :local:
@@ -11,7 +11,7 @@ This document describes the systematic fault detection mechanisms implemented fo
 Overview
 --------
 
-The WRT fault detection system provides runtime monitoring and detection of memory safety violations as required by ISO 26262 for ASIL-A systems. It operates as a lightweight, always-on system that can detect, report, and respond to various types of faults.
+The Kiln fault detection system provides runtime monitoring and detection of memory safety violations as required by ISO 26262 for ASIL-A systems. It operates as a lightweight, always-on system that can detect, report, and respond to various types of faults.
 
 Architecture
 ------------
@@ -128,7 +128,7 @@ Additional Fault Types
 - **StackOverflow**: Stack exhaustion detection
 - **AlignmentViolation**: Misaligned memory access
 
-Integration with WRT Components
+Integration with Kiln Components
 -------------------------------
 
 BoundedVec Integration
@@ -181,7 +181,7 @@ Basic Bounds Checking
 
 .. code-block:: rust
 
-   use wrt_foundation::fault_detection::{fault_detector, FaultContext, OperationType};
+   use kiln_foundation::fault_detection::{fault_detector, FaultContext, OperationType};
    
    let context = FaultContext {
        crate_id: CrateId::Component,
@@ -213,7 +213,7 @@ Using Convenience Macros
 
 .. code-block:: rust
 
-   use wrt_foundation::{check_bounds, check_budget};
+   use kiln_foundation::{check_bounds, check_budget};
    
    // Bounds checking with automatic context
    check_bounds!(index, limit, CrateId::Foundation)?;
@@ -301,7 +301,7 @@ Enable fault detection with:
 .. code-block:: toml
 
    [dependencies]
-   wrt-foundation = { version = "0.1", features = ["fault-detection"] }
+   kiln-foundation = { version = "0.1", features = ["fault-detection"] }
 
 Runtime Configuration
 ~~~~~~~~~~~~~~~~~~~~~

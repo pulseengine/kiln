@@ -2,7 +2,7 @@
 Technical Internals
 ==================
 
-Deep technical documentation for WRT internals and implementation details.
+Deep technical documentation for Kiln internals and implementation details.
 
 .. toctree::
    :maxdepth: 2
@@ -16,7 +16,7 @@ Deep technical documentation for WRT internals and implementation details.
 Architecture Overview
 =====================
 
-WRT is built as a modular Rust workspace with clear separation of concerns:
+Kiln is built as a modular Rust workspace with clear separation of concerns:
 
 * **Core Runtime**: WebAssembly execution engine
 * **Component Model**: WASI and Component Model support
@@ -30,39 +30,39 @@ Crate Organization
 Workspace Structure
 -------------------
 
-The WRT workspace follows a hierarchical organization:
+The Kiln workspace follows a hierarchical organization:
 
 .. code-block::
 
    wrt2/
-   ├── wrt/                    # Main runtime library
-   ├── wrt-component/          # Component Model implementation  
-   ├── wrt-runtime/            # Core execution engine
-   ├── wrt-decoder/            # WASM binary parsing
-   ├── wrt-format/             # Format specifications
-   ├── wrt-foundation/         # Common utilities
-   ├── wrt-platform/           # Platform abstractions
-   ├── wrt-instructions/       # Instruction implementations
-   ├── wrt-math/               # Mathematical operations
-   ├── wrt-error/              # Error handling
-   ├── wrt-logging/            # Logging infrastructure
-   └── wrt-sync/               # Synchronization primitives
+   ├── kiln/                   # Main runtime library
+   ├── kiln-component/          # Component Model implementation  
+   ├── kiln-runtime/            # Core execution engine
+   ├── kiln-decoder/            # WASM binary parsing
+   ├── kiln-format/             # Format specifications
+   ├── kiln-foundation/         # Common utilities
+   ├── kiln-platform/           # Platform abstractions
+   ├── kiln-instructions/       # Instruction implementations
+   ├── kiln-math/               # Mathematical operations
+   ├── kiln-error/              # Error handling
+   ├── kiln-logging/            # Logging infrastructure
+   └── kiln-sync/               # Synchronization primitives
 
 Dependency Graph
 ----------------
 
 The crates maintain a clear dependency hierarchy to avoid cycles:
 
-1. **Foundation Layer**: wrt-foundation, wrt-error, wrt-sync
-2. **Platform Layer**: wrt-platform, wrt-logging
-3. **Core Layer**: wrt-math, wrt-instructions, wrt-format
-4. **Runtime Layer**: wrt-decoder, wrt-runtime
-5. **High-level Layer**: wrt-component, wrt
+1. **Foundation Layer**: kiln-foundation, kiln-error, kiln-sync
+2. **Platform Layer**: kiln-platform, kiln-logging
+3. **Core Layer**: kiln-math, kiln-instructions, kiln-format
+4. **Runtime Layer**: kiln-decoder, kiln-runtime
+5. **High-level Layer**: kiln-component, kiln
 
 no_std Support
 ==============
 
-WRT supports three compilation modes:
+Kiln supports three compilation modes:
 
 1. **std**: Full standard library (default)
 2. **alloc**: Heap allocation without std
@@ -151,9 +151,9 @@ Error Propagation
 
 .. code-block:: rust
 
-   use wrt_error::{WrtError, WrtResult};
+   use kiln_error::{KilnError, KilnResult};
 
-   fn operation() -> WrtResult<Value> {
+   fn operation() -> KilnResult<Value> {
        let input = validate_input()?;
        let result = process(input)?;
        Ok(result)
@@ -164,7 +164,7 @@ Resource Management
 
 .. code-block:: rust
 
-   use wrt_foundation::BoundedVec;
+   use kiln_foundation::BoundedVec;
 
    fn with_bounded_storage<T>(capacity: usize) -> BoundedVec<T> {
        BoundedVec::with_capacity(capacity)
@@ -180,7 +180,7 @@ Platform Abstraction
    use std::collections::HashMap;
    
    #[cfg(not(feature = "std"))]
-   use wrt_foundation::NoStdHashMap as HashMap;
+   use kiln_foundation::NoStdHashMap as HashMap;
 
 Next Steps
 ==========

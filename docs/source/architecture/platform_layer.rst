@@ -2,7 +2,7 @@
 Platform Layer
 ==============
 
-The WRT Platform Abstraction Layer (PAL) provides a unified interface for platform-specific operations across diverse operating systems and embedded environments. This layer enables WRT to run efficiently on everything from traditional POSIX systems to bare-metal embedded platforms.
+The Kiln Platform Abstraction Layer (PAL) provides a unified interface for platform-specific operations across diverse operating systems and embedded environments. This layer enables Kiln to run efficiently on everything from traditional POSIX systems to bare-metal embedded platforms.
 
 Core Architecture
 -----------------
@@ -178,7 +178,7 @@ The platform layer includes a compile-time abstraction that supports different p
 .. code-block:: rust
 
    // Compile-time platform selection
-   use wrt_platform::{platform_select, PlatformConfig};
+   use kiln_platform::{platform_select, PlatformConfig};
    
    // Auto-selects best paradigm based on features
    let platform = platform_select::create_auto_platform();
@@ -204,7 +204,7 @@ ARM Architecture
 
 .. code-block:: rust
 
-   use wrt_platform::hardware_optimizations::arm::*;
+   use kiln_platform::hardware_optimizations::arm::*;
    
    // Enable BTI for control flow integrity
    let bti = BranchTargetIdentification::enable()?;
@@ -220,7 +220,7 @@ Intel x86_64
 
 .. code-block:: rust
 
-   use wrt_platform::hardware_optimizations::intel::*;
+   use kiln_platform::hardware_optimizations::intel::*;
    
    // Enable CET shadow stack
    let cet = ControlFlowEnforcement::enable()?;
@@ -234,7 +234,7 @@ RISC-V
 
 .. code-block:: rust
 
-   use wrt_platform::hardware_optimizations::riscv::*;
+   use kiln_platform::hardware_optimizations::riscv::*;
    
    // Configure PMP entries
    let pmp = PhysicalMemoryProtection::enable()?;
@@ -251,7 +251,7 @@ The platform layer includes advanced synchronization primitives:
 
 .. code-block:: rust
 
-   use wrt_platform::advanced_sync::*;
+   use kiln_platform::advanced_sync::*;
    
    // Priority inheritance mutex for real-time systems
    let mutex = PriorityInheritanceMutex::new(data, Priority::new(10));
@@ -263,7 +263,7 @@ The platform layer can detect capabilities at runtime:
 
 .. code-block:: rust
 
-   use wrt_platform::runtime_detection::PlatformDetector;
+   use kiln_platform::runtime_detection::PlatformDetector;
    
    let mut detector = PlatformDetector::new();
    let caps = detector.detect()?;
@@ -284,7 +284,7 @@ The platform layer includes extensive formal verification annotations:
 
 .. code-block:: rust
 
-   use wrt_platform::formal_verification::annotations::*;
+   use kiln_platform::formal_verification::annotations::*;
    
    #[verified_memory_safe]
    #[constant_time]
@@ -303,7 +303,7 @@ The platform layer provides defenses against timing and cache attacks:
 
 .. code-block:: rust
 
-   use wrt_platform::side_channel_resistance::*;
+   use kiln_platform::side_channel_resistance::*;
    
    // Constant-time memory comparison
    let equal = constant_time::compare_memory(ptr1, ptr2, size);
@@ -318,7 +318,7 @@ Compile-time and runtime performance validation:
 
 .. code-block:: rust
 
-   use wrt_platform::performance_validation::*;
+   use kiln_platform::performance_validation::*;
    
    // Compile-time checks
    CompileTimeValidator::validate_zero_cost();
@@ -359,7 +359,7 @@ All platform operations use consistent error handling:
 
    match allocator.allocate(10) {
        Ok(ptr) => println!("Allocated at {:?}", ptr),
-       Err(e) if e.code() == wrt_error::codes::OUT_OF_MEMORY => {
+       Err(e) if e.code() == kiln_error::codes::OUT_OF_MEMORY => {
            println!("Out of memory");
        }
        Err(e) => return Err(e),

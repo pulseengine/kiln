@@ -92,7 +92,7 @@ impl CodeValidator {
 
         // Crates that legitimately contain test-related files as part of their implementation
         // (not unit tests, but testing infrastructure code)
-        let excluded_crates = ["cargo-wrt", "wrt-build-core"];
+        let excluded_crates = ["cargo-kiln", "kiln-build-core"];
 
         for crate_path in crates {
             // Skip excluded crates that legitimately contain test infrastructure

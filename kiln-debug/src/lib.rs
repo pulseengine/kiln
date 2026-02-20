@@ -2,7 +2,7 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! DWARF debug information support for WebAssembly Runtime (WRT)
+//! DWARF debug information support for WebAssembly Runtime (Kiln)
 //! SW-REQ-ID: REQ_FUNC_032
 //!
 //! This crate provides zero-allocation DWARF debug information parsing
@@ -91,10 +91,10 @@ pub use wit_source_map::{
     MemoryRegion as WitMemoryRegion, MemoryRegionType as WitMemoryRegionType, SourceContext,
     SourceSpan, TypeId, WitDiagnostic, WitSourceFile, WitSourceMap, WitTypeInfo, WitTypeKind,
 };
-use wrt_error::{Error, Result};
-use wrt_foundation::prelude::*;
+use kiln_error::{Error, Result};
+use kiln_foundation::prelude::*;
 #[cfg(feature = "abbrev")]
-use wrt_foundation::{
+use kiln_foundation::{
     NoStdProvider,
     bounded::{BoundedVec, MAX_DWARF_ABBREV_CACHE},
     budget_aware_provider::CrateId,
@@ -324,7 +324,7 @@ pub mod prelude {
 }
 
 // Panic handler disabled to avoid conflicts with other crates
-// // Provide a panic handler only when wrt-debug is being tested in isolation
+// // Provide a panic handler only when kiln-debug is being tested in isolation
 // #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {

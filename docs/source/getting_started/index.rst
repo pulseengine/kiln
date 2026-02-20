@@ -5,9 +5,9 @@ Getting Started
 .. image:: ../_static/icons/logo.svg
    :width: 80px
    :align: right
-   :alt: WRT Logo
+   :alt: Kiln Logo
 
-Welcome to PulseEngine (WRT Edition)! This guide will help you install and set up PulseEngine on various platforms, from development environments to embedded systems.
+Welcome to PulseEngine (Kiln Edition)! This guide will help you install and set up PulseEngine on various platforms, from development environments to embedded systems.
 
 .. contents:: On this page
    :local:
@@ -24,16 +24,16 @@ For most development scenarios, follow these quick steps:
 
    .. code-block:: bash
 
-      git clone https://github.com/pulseengine/wrt.git
-      cd wrt
+      git clone https://github.com/pulseengine/kiln.git
+      cd kiln
 
 2. **Build and test** (requires Rust 1.86.0+):
 
    .. code-block:: bash
 
-      cargo install --path cargo-wrt
-      cargo-wrt build
-      cargo-wrt test
+      cargo install --path cargo-kiln
+      cargo-kiln build
+      cargo-kiln test
 
 Supported Platforms
 ===================
@@ -87,10 +87,10 @@ Run WebAssembly modules directly:
 .. code-block:: bash
 
    # Run a simple module
-   cargo-wrt wrtd
+   cargo-kiln kilnd
 
    # Build and run example
-   cargo run --bin wrtd -- module.wasm
+   cargo run --bin kilnd -- module.wasm
 
 Library Integration
 -------------------
@@ -100,13 +100,13 @@ Add PulseEngine to your Rust project:
 .. code-block:: toml
 
    [dependencies]
-   wrt = { path = "wrt" }  # Adjust path or use published version
+   kiln = { path = "kiln" }  # Adjust path or use published version
 
 Basic runtime usage:
 
 .. code-block:: rust
 
-   use wrt::prelude::*;
+   use kiln::prelude::*;
 
    // Load and execute WebAssembly
    let module = Module::from_bytes(&wasm_bytes)?;
@@ -120,7 +120,7 @@ Work with WebAssembly components:
 
 .. code-block:: rust
 
-   use wrt_component::prelude::*;
+   use kiln_component::prelude::*;
 
    // Load component with WIT interface
    let component = Component::from_bytes(&component_bytes)?;
@@ -141,7 +141,7 @@ Next Steps
       :link: ../architecture/index
       :link-type: doc
 
-      Understand WRT's design, safety features, and performance characteristics.
+      Understand Kiln's design, safety features, and performance characteristics.
 
    .. grid-item-card:: 🔧 Development
       :link: ../developer/index

@@ -1,17 +1,17 @@
-// WRT - wrt-platform
+// Kiln - kiln-platform
 // Module: Crate Prelude
 // SW-REQ-ID: REQ_PLATFORM_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Public prelude for the `wrt-platform` crate.
+//! Public prelude for the `kiln-platform` crate.
 //!
 //! This module re-exports the core traits and types for convenient use.
 
 // Re-export core error type (already re-exported in lib.rs, but good practice)
-pub use wrt_error::{
+pub use kiln_error::{
     Error,
     ErrorCategory,
     Result,

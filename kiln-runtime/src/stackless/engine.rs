@@ -6,7 +6,7 @@
 
 // Import tracing utilities
 #[cfg(feature = "tracing")]
-use wrt_foundation::tracing::{
+use kiln_foundation::tracing::{
     ExecutionTrace, ImportTrace, ModuleTrace, MemoryTrace,
     debug, trace, info, warn, error,
     debug_span, info_span, trace_span, Span
@@ -23,7 +23,7 @@ use core::sync::atomic::{
     AtomicU64,
     Ordering,
 };
-// Use std types when available, fall back to alloc, then wrt_foundation
+// Use std types when available, fall back to alloc, then kiln_foundation
 #[cfg(feature = "std")]
 use std::{
     collections::HashMap,
@@ -32,13 +32,13 @@ use std::{
     vec::Vec,
 };
 
-// Debug support - only available with std and wrt-debug crate
+// Debug support - only available with std and kiln-debug crate
 #[cfg(all(feature = "std", feature = "debugger"))]
-use wrt_debug::runtime_traits::{RuntimeDebugger, RuntimeState, DebugAction};
+use kiln_debug::runtime_traits::{RuntimeDebugger, RuntimeState, DebugAction};
 
 // For pure no_std without alloc, use bounded collections
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::BoundedString,
     bounded::BoundedVec,
     bounded_collections::BoundedMap,
@@ -82,42 +82,42 @@ impl<T: Clone> Clone for Arc<T> {
 
 // Implement required traits for Arc to work with bounded collections
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T> wrt_foundation::traits::Checksummable for Arc<T>
+impl<T> kiln_foundation::traits::Checksummable for Arc<T>
 where
-    T: wrt_foundation::traits::Checksummable,
+    T: kiln_foundation::traits::Checksummable,
 {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T> wrt_foundation::traits::ToBytes for Arc<T>
+impl<T> kiln_foundation::traits::ToBytes for Arc<T>
 where
-    T: wrt_foundation::traits::ToBytes,
+    T: kiln_foundation::traits::ToBytes,
 {
     fn serialized_size(&self) -> usize {
         self.0.serialized_size()
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
 #[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T> wrt_foundation::traits::FromBytes for Arc<T>
+impl<T> kiln_foundation::traits::FromBytes for Arc<T>
 where
-    T: wrt_foundation::traits::FromBytes,
+    T: kiln_foundation::traits::FromBytes,
 {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         let value = T::from_bytes_with_provider(reader, provider)?;
         Ok(Arc::new(value))
     }
@@ -140,8 +140,8 @@ impl<T: PartialEq> PartialEq for Arc<T> {
 #[cfg(not(any(feature = "std", feature = "alloc")))]
 impl<T: Eq> Eq for Arc<T> {}
 
-use wrt_error::Result;
-use wrt_foundation::{
+use kiln_error::Result;
+use kiln_foundation::{
     traits::BoundedCapacity,
     values::{
         FloatBits32,
@@ -166,7 +166,7 @@ fn strip_wasi_version(interface: &str) -> &str {
 /// Check if two function types match structurally.
 /// WebAssembly uses structural type equivalence: two function types are compatible
 /// if they have the same parameter and result types in the same order.
-fn func_types_match(expected: &wrt_foundation::types::FuncType, actual: &wrt_foundation::types::FuncType) -> bool {
+fn func_types_match(expected: &kiln_foundation::types::FuncType, actual: &kiln_foundation::types::FuncType) -> bool {
     if expected.params.len() != actual.params.len() {
         return false;
     }
@@ -323,7 +323,7 @@ pub struct StacklessEngine {
     instruction_pointer:   AtomicU64,
     /// Host function registry for calling imported functions
     #[cfg(feature = "std")]
-    host_registry:         Option<Arc<wrt_host::CallbackRegistry>>,
+    host_registry:         Option<Arc<kiln_host::CallbackRegistry>>,
     /// Pre-allocated WASI stub memory for each instance
     wasi_stubs:            HashMap<usize, WasiStubMemory>,
     /// Dropped data segments per instance (for data.drop/memory.init)
@@ -338,10 +338,10 @@ pub struct StacklessEngine {
     aliased_functions:     HashMap<(usize, usize), usize>,
     /// WASI dispatcher for proper WASI host function implementations
     #[cfg(feature = "wasi")]
-    wasi_dispatcher:       Option<wrt_wasi::WasiDispatcher>,
+    wasi_dispatcher:       Option<kiln_wasi::WasiDispatcher>,
     /// Generic host import handler for all host function calls
     #[cfg(feature = "std")]
-    host_handler:          Option<Box<dyn wrt_foundation::HostImportHandler>>,
+    host_handler:          Option<Box<dyn kiln_foundation::HostImportHandler>>,
     /// Optional runtime debugger for profiling and debugging
     #[cfg(all(feature = "std", feature = "debugger"))]
     debugger:              Option<Box<dyn RuntimeDebugger>>,
@@ -449,25 +449,25 @@ impl<'a> RuntimeState for ExecutionState<'a> {
 /// Per WebAssembly spec, if base + offset overflows or exceeds u32::MAX, it traps.
 /// Returns Ok(effective_address) or Err if overflow occurs.
 #[inline]
-fn calculate_effective_address(base: i32, offset: u32, size: u32) -> wrt_error::Result<u64> {
+fn calculate_effective_address(base: i32, offset: u32, size: u32) -> kiln_error::Result<u64> {
     // Convert base to u32 first (WebAssembly treats addresses as unsigned)
     let base_u32 = base as u32;
 
     // Check for overflow in base + offset
     let effective_addr = (base_u32 as u64)
         .checked_add(offset as u64)
-        .ok_or_else(|| wrt_error::Error::runtime_trap("out of bounds memory access"))?;
+        .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
     // Check for overflow when adding access size
     let end_addr = effective_addr
         .checked_add(size as u64)
-        .ok_or_else(|| wrt_error::Error::runtime_trap("out of bounds memory access"))?;
+        .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
     // If end_addr exceeds u32::MAX + 1 (4GB), it's out of bounds for 32-bit memory
     // But we let the actual memory bounds check handle the memory size comparison
     // Just ensure the calculation doesn't overflow
     if end_addr > u64::from(u32::MAX) + 1 {
-        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
     }
 
     Ok(effective_addr)
@@ -495,7 +495,7 @@ impl StacklessEngine {
             #[cfg(feature = "std")]
             aliased_functions:   HashMap::new(),
             #[cfg(feature = "wasi")]
-            wasi_dispatcher:     wrt_wasi::WasiDispatcher::with_defaults().ok(),
+            wasi_dispatcher:     kiln_wasi::WasiDispatcher::with_defaults().ok(),
             #[cfg(feature = "std")]
             host_handler:        None,
             #[cfg(all(feature = "std", feature = "debugger"))]
@@ -538,7 +538,7 @@ impl StacklessEngine {
 
     /// Set the host import handler for resolving host function calls
     #[cfg(feature = "std")]
-    pub fn set_host_handler(&mut self, handler: Box<dyn wrt_foundation::HostImportHandler>) {
+    pub fn set_host_handler(&mut self, handler: Box<dyn kiln_foundation::HostImportHandler>) {
         self.host_handler = Some(handler);
     }
 
@@ -661,7 +661,7 @@ impl StacklessEngine {
     ) -> Result<Vec<Value>> {
         let lowered = self.lowered_functions.get(&(instance_id, func_idx))
             .cloned()
-            .ok_or_else(|| wrt_error::Error::runtime_error("Lowered function not found"))?;
+            .ok_or_else(|| kiln_error::Error::runtime_error("Lowered function not found"))?;
 
         #[cfg(feature = "tracing")]
         trace!(
@@ -684,27 +684,27 @@ impl StacklessEngine {
         if let Some(ref mut dispatcher) = self.wasi_dispatcher {
             let wasi_results = dispatcher.dispatch(&lowered.interface, &lowered.function, &wasi_args)?;
 
-            // Convert wrt_wasi::Value back to wrt_foundation::values::Value
+            // Convert kiln_wasi::Value back to kiln_foundation::values::Value
             let results: Vec<Value> = wasi_results.into_iter().map(|v| {
                 match v {
-                    wrt_wasi::Value::S32(i) => Value::I32(i),
-                    wrt_wasi::Value::U32(u) => Value::I32(u as i32),
-                    wrt_wasi::Value::S64(i) => Value::I64(i),
-                    wrt_wasi::Value::U64(u) => Value::I64(u as i64),
-                    wrt_wasi::Value::F32(f) => Value::F32(FloatBits32::from_f32(f)),
-                    wrt_wasi::Value::F64(f) => Value::F64(FloatBits64::from_f64(f)),
-                    wrt_wasi::Value::Bool(b) => Value::I32(if b { 1 } else { 0 }),
-                    wrt_wasi::Value::U8(u) => Value::I32(u as i32),
-                    wrt_wasi::Value::S8(i) => Value::I32(i as i32),
-                    wrt_wasi::Value::U16(u) => Value::I32(u as i32),
-                    wrt_wasi::Value::S16(i) => Value::I32(i as i32),
+                    kiln_wasi::Value::S32(i) => Value::I32(i),
+                    kiln_wasi::Value::U32(u) => Value::I32(u as i32),
+                    kiln_wasi::Value::S64(i) => Value::I64(i),
+                    kiln_wasi::Value::U64(u) => Value::I64(u as i64),
+                    kiln_wasi::Value::F32(f) => Value::F32(FloatBits32::from_f32(f)),
+                    kiln_wasi::Value::F64(f) => Value::F64(FloatBits64::from_f64(f)),
+                    kiln_wasi::Value::Bool(b) => Value::I32(if b { 1 } else { 0 }),
+                    kiln_wasi::Value::U8(u) => Value::I32(u as i32),
+                    kiln_wasi::Value::S8(i) => Value::I32(i as i32),
+                    kiln_wasi::Value::U16(u) => Value::I32(u as i32),
+                    kiln_wasi::Value::S16(i) => Value::I32(i as i32),
                     _ => Value::I32(0), // Default for unsupported types
                 }
             }).collect();
 
             Ok(results)
         } else {
-            Err(wrt_error::Error::runtime_error("WASI dispatcher not available for lowered function"))
+            Err(kiln_error::Error::runtime_error("WASI dispatcher not available for lowered function"))
         }
     }
 
@@ -720,7 +720,7 @@ impl StacklessEngine {
         interface: &str,
         function: &str,
         args: &[Value],
-    ) -> Result<Vec<wrt_wasi::Value>> {
+    ) -> Result<Vec<kiln_wasi::Value>> {
         // Check if this function needs special ABI lifting
         let needs_write_lifting = function.contains("blocking-write")
             || function.contains("write-zeroes")
@@ -733,13 +733,13 @@ impl StacklessEngine {
         }
 
         // For other functions, do simple value conversion
-        let wasi_args: Vec<wrt_wasi::Value> = args.iter().map(|v| {
+        let wasi_args: Vec<kiln_wasi::Value> = args.iter().map(|v| {
             match v {
-                Value::I32(i) => wrt_wasi::Value::S32(*i),
-                Value::I64(i) => wrt_wasi::Value::S64(*i),
-                Value::F32(f) => wrt_wasi::Value::F32(f.to_f32()),
-                Value::F64(f) => wrt_wasi::Value::F64(f.to_f64()),
-                _ => wrt_wasi::Value::U32(0),
+                Value::I32(i) => kiln_wasi::Value::S32(*i),
+                Value::I64(i) => kiln_wasi::Value::S64(*i),
+                Value::F32(f) => kiln_wasi::Value::F32(f.to_f32()),
+                Value::F64(f) => kiln_wasi::Value::F64(f.to_f64()),
+                _ => kiln_wasi::Value::U32(0),
             }
         }).collect();
 
@@ -755,21 +755,21 @@ impl StacklessEngine {
         &self,
         instance_id: usize,
         args: &[Value],
-    ) -> Result<Vec<wrt_wasi::Value>> {
+    ) -> Result<Vec<kiln_wasi::Value>> {
         // Extract the pointer and length from args
         let handle = match args.get(0) {
             Some(Value::I32(h)) => *h as u32,
-            _ => return Err(wrt_error::Error::runtime_error("Missing handle argument for write")),
+            _ => return Err(kiln_error::Error::runtime_error("Missing handle argument for write")),
         };
 
         let data_ptr = match args.get(1) {
             Some(Value::I32(p)) => *p as u32,
-            _ => return Err(wrt_error::Error::runtime_error("Missing data pointer for write")),
+            _ => return Err(kiln_error::Error::runtime_error("Missing data pointer for write")),
         };
 
         let data_len = match args.get(2) {
             Some(Value::I32(l)) => *l as u32,
-            _ => return Err(wrt_error::Error::runtime_error("Missing data length for write")),
+            _ => return Err(kiln_error::Error::runtime_error("Missing data length for write")),
         };
 
         #[cfg(feature = "tracing")]
@@ -791,7 +791,7 @@ impl StacklessEngine {
             let addr = data_ptr + i;
             let mut buffer = [0u8; 1];
             memory.0.read(addr, &mut buffer)
-                .map_err(|_| wrt_error::Error::runtime_error("Failed to read memory for write data"))?;
+                .map_err(|_| kiln_error::Error::runtime_error("Failed to read memory for write data"))?;
             data.push(buffer[0]);
         }
 
@@ -803,13 +803,13 @@ impl StacklessEngine {
         );
 
         // Convert to WASI values: handle and list of bytes
-        let byte_list: Vec<wrt_wasi::Value> = data.into_iter()
-            .map(wrt_wasi::Value::U8)
+        let byte_list: Vec<kiln_wasi::Value> = data.into_iter()
+            .map(kiln_wasi::Value::U8)
             .collect();
 
         Ok(vec![
-            wrt_wasi::Value::U32(handle),
-            wrt_wasi::Value::List(byte_list),
+            kiln_wasi::Value::U32(handle),
+            kiln_wasi::Value::List(byte_list),
         ])
     }
 
@@ -844,7 +844,7 @@ impl StacklessEngine {
             }
         }
 
-        Err(wrt_error::Error::runtime_error("No instance with memory found for ABI lifting"))
+        Err(kiln_error::Error::runtime_error("No instance with memory found for ABI lifting"))
     }
 
     /// Register a cross-instance import link
@@ -881,12 +881,12 @@ impl StacklessEngine {
             #[cfg(feature = "tracing")]
             trace!("[CROSS_CALL] call stack exhausted at depth {} (target_instance={}, export='{}')",
                      self.call_frames_count, target_instance_id, export_name);
-            return Err(wrt_error::Error::runtime_trap("call stack exhausted"));
+            return Err(kiln_error::Error::runtime_trap("call stack exhausted"));
         }
 
         // Get the target instance
         let target_instance = self.instances.get(&target_instance_id)
-            .ok_or_else(|| wrt_error::Error::resource_not_found("Target instance not found"))?
+            .ok_or_else(|| kiln_error::Error::resource_not_found("Target instance not found"))?
             .clone();
 
         // Access module via public API
@@ -920,7 +920,7 @@ impl StacklessEngine {
         let func_idx = func_idx.ok_or_else(|| {
             #[cfg(feature = "tracing")]
             warn!("Cross-instance call: Export '{}' not found", export_name);
-            wrt_error::Error::resource_not_found("Export not found")
+            kiln_error::Error::resource_not_found("Export not found")
         })?;
 
         #[cfg(feature = "tracing")]
@@ -944,7 +944,7 @@ impl StacklessEngine {
         export_name: &str,
     ) -> Result<usize> {
         let target_instance = self.instances.get(&target_instance_id)
-            .ok_or_else(|| wrt_error::Error::resource_not_found("Target instance not found"))?;
+            .ok_or_else(|| kiln_error::Error::resource_not_found("Target instance not found"))?;
         let module = target_instance.module();
 
         let mut func_idx = None;
@@ -961,7 +961,7 @@ impl StacklessEngine {
         }
 
         func_idx.ok_or_else(|| {
-            wrt_error::Error::resource_not_found("Export not found")
+            kiln_error::Error::resource_not_found("Export not found")
         })
     }
 
@@ -975,7 +975,7 @@ impl StacklessEngine {
     /// Returns true if a handler was found and applied, false otherwise.
     #[cfg(feature = "std")]
     fn find_and_apply_exception_handler(&mut self, frame: &mut SuspendedFrame) -> bool {
-        use wrt_foundation::types::Instruction;
+        use kiln_foundation::types::Instruction;
 
         // Get the active exception (including tag identity for imported tags)
         let (ex_tag_idx, ex_identity, ex_payload) = match &self.active_exception {
@@ -1020,7 +1020,7 @@ impl StacklessEngine {
                             if let Ok(handler) = handlers.get(i) {
                                 let handler_val = handler.clone();
                                 let (matches, lbl, is_ref) = match handler_val {
-                                    wrt_foundation::types::CatchHandler::Catch { tag_idx: htag, label: hlbl } => {
+                                    kiln_foundation::types::CatchHandler::Catch { tag_idx: htag, label: hlbl } => {
                                         // Get the handler tag's effective identity
                                         let handler_identity = self.get_effective_tag_identity(frame.instance_id, &actual_module, htag);
                                         // Match by identity if both have identity, by index if both local-only
@@ -1031,7 +1031,7 @@ impl StacklessEngine {
                                         };
                                         (tag_matches, hlbl, false)
                                     }
-                                    wrt_foundation::types::CatchHandler::CatchRef { tag_idx: htag, label: hlbl } => {
+                                    kiln_foundation::types::CatchHandler::CatchRef { tag_idx: htag, label: hlbl } => {
                                         // Get the handler tag's effective identity
                                         let handler_identity = self.get_effective_tag_identity(frame.instance_id, &actual_module, htag);
                                         // Match by identity if both have identity, by index if both local-only
@@ -1042,10 +1042,10 @@ impl StacklessEngine {
                                         };
                                         (tag_matches, hlbl, true)
                                     }
-                                    wrt_foundation::types::CatchHandler::CatchAll { label } => {
+                                    kiln_foundation::types::CatchHandler::CatchAll { label } => {
                                         (true, label, false)
                                     }
-                                    wrt_foundation::types::CatchHandler::CatchAllRef { label } => {
+                                    kiln_foundation::types::CatchHandler::CatchAllRef { label } => {
                                         (true, label, true)
                                     }
                                 };
@@ -1152,7 +1152,7 @@ impl StacklessEngine {
 
     /// Set the host function registry for imported function calls
     #[cfg(feature = "std")]
-    pub fn set_host_registry(&mut self, registry: Arc<wrt_host::CallbackRegistry>) {
+    pub fn set_host_registry(&mut self, registry: Arc<kiln_host::CallbackRegistry>) {
         self.host_registry = Some(registry);
     }
 
@@ -1235,7 +1235,7 @@ impl StacklessEngine {
 
         for i in 0..5 {
             if offset + i >= data.len() {
-                return Err(wrt_error::Error::parse_error("Unexpected end of LEB128"));
+                return Err(kiln_error::Error::parse_error("Unexpected end of LEB128"));
             }
             let byte = data[offset + i];
             result |= ((byte & 0x7F) as u32) << shift;
@@ -1258,7 +1258,7 @@ impl StacklessEngine {
 
         for i in 0..5 {
             if offset + i >= data.len() {
-                return Err(wrt_error::Error::parse_error("Unexpected end of LEB128"));
+                return Err(kiln_error::Error::parse_error("Unexpected end of LEB128"));
             }
             byte = data[offset + i];
             result |= ((byte & 0x7F) as i32) << shift;
@@ -1286,7 +1286,7 @@ impl StacklessEngine {
 
         for i in 0..10 {
             if offset + i >= data.len() {
-                return Err(wrt_error::Error::parse_error("Unexpected end of LEB128"));
+                return Err(kiln_error::Error::parse_error("Unexpected end of LEB128"));
             }
             byte = data[offset + i];
             result |= ((byte & 0x7F) as i64) << shift;
@@ -1307,17 +1307,17 @@ impl StacklessEngine {
 
     /// Create a new stackless engine (no_std version)
     #[cfg(not(any(feature = "std", feature = "alloc")))]
-    pub fn new() -> wrt_error::Result<Self> {
-        use wrt_foundation::{
+    pub fn new() -> kiln_error::Result<Self> {
+        use kiln_foundation::{
             budget_aware_provider::CrateId,
             safe_managed_alloc,
         };
 
         let provider = safe_managed_alloc!(4096, CrateId::Runtime)?;
         let instances = BoundedMap::new(provider.clone())
-            .map_err(|_| wrt_error::Error::runtime_error("Failed to create instances map"))?;
+            .map_err(|_| kiln_error::Error::runtime_error("Failed to create instances map"))?;
         let operand_stack = BoundedVec::new(provider)
-            .map_err(|_| wrt_error::Error::runtime_error("Failed to create operand stack"))?;
+            .map_err(|_| kiln_error::Error::runtime_error("Failed to create operand stack"))?;
 
         #[cfg(any(feature = "std", feature = "alloc"))]
         {
@@ -1356,7 +1356,7 @@ impl StacklessEngine {
 
         // Check instance limit manually
         if self.instances.len() >= MAX_CONCURRENT_INSTANCES {
-            return Err(wrt_error::Error::resource_limit_exceeded(
+            return Err(kiln_error::Error::resource_limit_exceeded(
                 "Too many concurrent instances",
             ));
         }
@@ -1439,7 +1439,7 @@ impl StacklessEngine {
 
         // Check call depth for the initial function
         if self.call_frames_count >= MAX_CALL_DEPTH {
-            return Err(wrt_error::Error::runtime_trap("call stack exhausted"));
+            return Err(kiln_error::Error::runtime_trap("call stack exhausted"));
         }
         self.call_frames_count += 1;
 
@@ -1490,7 +1490,7 @@ impl StacklessEngine {
                     if self.call_frames_count >= MAX_CALL_DEPTH {
                         let depth = pending_frames.len() + 1;
                         self.call_frames_count = self.call_frames_count.saturating_sub(depth);
-                        return Err(wrt_error::Error::runtime_trap("call stack exhausted"));
+                        return Err(kiln_error::Error::runtime_trap("call stack exhausted"));
                     }
                     self.call_frames_count += 1;
                     current_instance_id = target_id;
@@ -1549,7 +1549,7 @@ impl StacklessEngine {
     ) -> Result<Vec<Value>> {
         // Leaf functions still count toward call depth for safety
         if self.call_frames_count >= MAX_CALL_DEPTH {
-            return Err(wrt_error::Error::runtime_trap("call stack exhausted"));
+            return Err(kiln_error::Error::runtime_trap("call stack exhausted"));
         }
         self.call_frames_count += 1;
 
@@ -1562,13 +1562,13 @@ impl StacklessEngine {
             Ok(ExecutionOutcome::Complete(results)) => Ok(results),
             Ok(ExecutionOutcome::TailCall { .. }) => {
                 // Leaf functions must not tail call
-                Err(wrt_error::Error::runtime_error(
+                Err(kiln_error::Error::runtime_error(
                     "leaf function attempted tail call (cabi_realloc contract violation)",
                 ))
             }
             Ok(ExecutionOutcome::Call { .. }) => {
                 // Leaf functions must not call other functions
-                Err(wrt_error::Error::runtime_error(
+                Err(kiln_error::Error::runtime_error(
                     "leaf function attempted call (cabi_realloc contract violation)",
                 ))
             }
@@ -1597,7 +1597,7 @@ impl StacklessEngine {
             if found.is_none() {
                 #[cfg(feature = "tracing")]
                 trace!(instance_id = instance_id, "[INNER_EXEC] Instance not found");
-                return Err(wrt_error::Error::runtime_execution_error("Instance not found"));
+                return Err(kiln_error::Error::runtime_execution_error("Instance not found"));
             }
             found.unwrap().clone()
         };
@@ -1606,7 +1606,7 @@ impl StacklessEngine {
         let instance = self
             .instances
             .get(&instance_id)?
-            .ok_or_else(|| wrt_error::Error::runtime_execution_error("Instance not found"))?
+            .ok_or_else(|| kiln_error::Error::runtime_execution_error("Instance not found"))?
             .clone();
 
         // Check if this function is aliased and get the correct module
@@ -1624,7 +1624,7 @@ impl StacklessEngine {
                 let original_instance = self
                     .instances
                     .get(&original_instance_id)
-                    .ok_or_else(|| wrt_error::Error::runtime_execution_error("Original instance not found"))?;
+                    .ok_or_else(|| kiln_error::Error::runtime_execution_error("Original instance not found"))?;
                 original_instance.module().clone()
             } else {
                 // Not aliased, use the current instance's module
@@ -1672,7 +1672,7 @@ impl StacklessEngine {
                         // Detect self-referencing loop
                         let target_func = self.resolve_export_func_idx(target_instance_id, &export_name)?;
                         if target_instance_id == instance_id && target_func == func_idx {
-                            return Err(wrt_error::Error::runtime_trap("circular import link detected"));
+                            return Err(kiln_error::Error::runtime_trap("circular import link detected"));
                         }
                         // NON-RECURSIVE: Resolve target and redirect via trampoline
                         return Ok(ExecutionOutcome::Call {
@@ -1690,10 +1690,10 @@ impl StacklessEngine {
                             let mut results = Vec::new();
                             for result_type in &func_type.results {
                                 let default_value = match result_type {
-                                    wrt_foundation::ValueType::I32 => Value::I32(0),
-                                    wrt_foundation::ValueType::I64 => Value::I64(0),
-                                    wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                                    wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                                    kiln_foundation::ValueType::I32 => Value::I32(0),
+                                    kiln_foundation::ValueType::I64 => Value::I64(0),
+                                    kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
+                                    kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
                                     _ => Value::I32(0),
                                 };
                                 results.push(default_value);
@@ -1709,14 +1709,14 @@ impl StacklessEngine {
             {
                 // In no_std mode, return error for unresolved imports
                 self.call_frames_count -= 1;
-                return Err(wrt_error::Error::runtime_error("Import resolution not supported in no_std"));
+                return Err(kiln_error::Error::runtime_error("Import resolution not supported in no_std"));
             }
         }
 
         // Validate function index
         // Note: module.functions includes both import stubs and local functions
         if func_idx >= module.functions.len() {
-            return Err(wrt_error::Error::runtime_function_not_found(
+            return Err(kiln_error::Error::runtime_function_not_found(
                 "Function index out of bounds",
             ));
         }
@@ -1726,7 +1726,7 @@ impl StacklessEngine {
         let func = module
             .functions
             .get(func_idx)
-            .ok_or_else(|| wrt_error::Error::runtime_function_not_found("Failed to get function"))?;
+            .ok_or_else(|| kiln_error::Error::runtime_function_not_found("Failed to get function"))?;
 
         #[cfg(feature = "std")]
         #[cfg(feature = "tracing")]
@@ -1738,7 +1738,7 @@ impl StacklessEngine {
         let func_type = module
             .types
             .get(func.type_idx as usize)
-            .ok_or_else(|| wrt_error::Error::runtime_error("Function type index out of bounds"))?;
+            .ok_or_else(|| kiln_error::Error::runtime_error("Function type index out of bounds"))?;
 
         // In no_std mode, types is BoundedVec so use .get() method
         #[cfg(not(feature = "std"))]
@@ -1749,13 +1749,13 @@ impl StacklessEngine {
                 #[cfg(feature = "tracing")]
 
                 debug!("StacklessEngine: Failed to get type at index {}: {:?}", func.type_idx, e);
-                wrt_error::Error::runtime_error("Failed to get function type")
+                kiln_error::Error::runtime_error("Failed to get function type")
             })?;
 
         // Execute the function's bytecode instructions
         #[cfg(feature = "std")]
         {
-            use wrt_foundation::types::Instruction;
+            use kiln_foundation::types::Instruction;
 
             // Get the parsed instructions
             #[cfg(feature = "tracing")]
@@ -1827,7 +1827,7 @@ impl StacklessEngine {
                 // Get expected parameter count from function type
                 // Per CLAUDE.md: FAIL LOUD AND EARLY - don't silently substitute defaults
                 let func_type = module.types.get(func.type_idx as usize)
-                    .ok_or_else(|| wrt_error::Error::runtime_error(
+                    .ok_or_else(|| kiln_error::Error::runtime_error(
                         "Function type not found - module corrupted"
                     ))?;
                 let expected_param_count = func_type.params.len();
@@ -1850,14 +1850,14 @@ impl StacklessEngine {
                 if args.len() < expected_param_count {
                     for i in args.len()..expected_param_count {
                         let param_type = func_type.params.get(i)
-                            .ok_or_else(|| wrt_error::Error::runtime_error(
+                            .ok_or_else(|| kiln_error::Error::runtime_error(
                                 "Parameter index out of bounds - type corrupted"
                             ))?;
                         let default_value = match param_type {
-                            wrt_foundation::ValueType::I32 => Value::I32(0),
-                            wrt_foundation::ValueType::I64 => Value::I64(0),
-                            wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                            wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                            kiln_foundation::ValueType::I32 => Value::I32(0),
+                            kiln_foundation::ValueType::I64 => Value::I64(0),
+                            kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
+                            kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
                             _ => Value::I32(0),
                         };
                         locals.push(default_value);
@@ -1873,10 +1873,10 @@ impl StacklessEngine {
                         #[cfg(feature = "tracing")]
                         trace!("LocalEntry[{}]: type={:?}, count={}", i, local_decl.value_type, local_decl.count);
                         let zero_value = match local_decl.value_type {
-                            wrt_foundation::ValueType::I32 => Value::I32(0),
-                            wrt_foundation::ValueType::I64 => Value::I64(0),
-                            wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                            wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                            kiln_foundation::ValueType::I32 => Value::I32(0),
+                            kiln_foundation::ValueType::I64 => Value::I64(0),
+                            kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
+                            kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
                             _ => Value::I32(0),
                         };
                         for _ in 0..local_decl.count {
@@ -1893,10 +1893,10 @@ impl StacklessEngine {
             while pc < instructions.len() {
                 #[cfg(feature = "std")]
                 let instruction = instructions.get(pc)
-                    .ok_or_else(|| wrt_error::Error::runtime_error("Instruction index out of bounds"))?;
+                    .ok_or_else(|| kiln_error::Error::runtime_error("Instruction index out of bounds"))?;
                 #[cfg(not(feature = "std"))]
                 let instruction = instructions.get(pc)
-                    .map_err(|_| wrt_error::Error::runtime_error("Instruction index out of bounds"))?;
+                    .map_err(|_| kiln_error::Error::runtime_error("Instruction index out of bounds"))?;
 
                 instruction_count += 1;
                 #[cfg(feature = "tracing")]
@@ -1913,7 +1913,7 @@ impl StacklessEngine {
                     };
                     let action = debugger.on_instruction(pc as u32, &state);
                     if action == DebugAction::Break {
-                        return Err(wrt_error::Error::runtime_execution_error("Debugger break requested"));
+                        return Err(kiln_error::Error::runtime_execution_error("Debugger break requested"));
                     }
                 }
 
@@ -1934,7 +1934,7 @@ impl StacklessEngine {
                                 "[TRAP] Unreachable instruction executed"
                             );
                         }
-                        return Err(wrt_error::Error::runtime_execution_error(
+                        return Err(kiln_error::Error::runtime_execution_error(
                             "WebAssembly trap: unreachable instruction executed",
                         ));
                     }
@@ -1954,7 +1954,7 @@ impl StacklessEngine {
                             #[cfg(feature = "tracing")]
 
                             trace!("Drop: stack underflow");
-                            return Err(wrt_error::Error::runtime_trap("Drop: stack underflow"));
+                            return Err(kiln_error::Error::runtime_trap("Drop: stack underflow"));
                         }
                     }
                     Instruction::Select => {
@@ -1979,9 +1979,9 @@ impl StacklessEngine {
                             Some(other) => {
                                 #[cfg(feature = "tracing")]
                                 error!(condition = ?other, "[Select] ERROR: condition is not i32");
-                                return Err(wrt_error::Error::runtime_trap("Select: condition must be i32"));
+                                return Err(kiln_error::Error::runtime_trap("Select: condition must be i32"));
                             }
-                            None => return Err(wrt_error::Error::runtime_trap("Select: stack underflow (no condition)")),
+                            None => return Err(kiln_error::Error::runtime_trap("Select: stack underflow (no condition)")),
                         };
 
                         if let (Some(v2), Some(v1)) = (val2, val1) {
@@ -2008,7 +2008,7 @@ impl StacklessEngine {
                             #[cfg(feature = "tracing")]
 
                             trace!("Select: insufficient operands on stack");
-                            return Err(wrt_error::Error::runtime_trap("Select: stack underflow (missing values)"));
+                            return Err(kiln_error::Error::runtime_trap("Select: stack underflow (missing values)"));
                         }
                     }
                     Instruction::SelectWithType(ref _types) => {
@@ -2031,9 +2031,9 @@ impl StacklessEngine {
                             Some(other) => {
                                 #[cfg(feature = "tracing")]
                                 error!(condition = ?other, "[SelectWithType] ERROR: condition is not i32");
-                                return Err(wrt_error::Error::runtime_trap("SelectWithType: condition must be i32"));
+                                return Err(kiln_error::Error::runtime_trap("SelectWithType: condition must be i32"));
                             }
-                            None => return Err(wrt_error::Error::runtime_trap("SelectWithType: stack underflow (no condition)")),
+                            None => return Err(kiln_error::Error::runtime_trap("SelectWithType: stack underflow (no condition)")),
                         };
 
                         if let (Some(v2), Some(v1)) = (val2, val1) {
@@ -2045,7 +2045,7 @@ impl StacklessEngine {
                         } else {
                             #[cfg(feature = "tracing")]
                             trace!("SelectWithType: insufficient operands on stack");
-                            return Err(wrt_error::Error::runtime_trap("SelectWithType: stack underflow (missing values)"));
+                            return Err(kiln_error::Error::runtime_trap("SelectWithType: stack underflow (missing values)"));
                         }
                     }
                     Instruction::Call(func_idx) => {
@@ -2215,7 +2215,7 @@ impl StacklessEngine {
                                 #[cfg(feature = "tracing")]
 
                                 trace!("Function index {} out of bounds", func_idx);
-                                return Err(wrt_error::Error::runtime_error("Function index out of bounds"));
+                                return Err(kiln_error::Error::runtime_error("Function index out of bounds"));
                             }
 
                             let func = &module.functions[local_func_idx];
@@ -2226,7 +2226,7 @@ impl StacklessEngine {
                                 "[CALL] Function type info"
                             );
                             let func_type = module.types.get(func.type_idx as usize)
-                                .ok_or_else(|| wrt_error::Error::runtime_error("Invalid function type"))?;
+                                .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
 
                             // Pop the required number of arguments from the stack
                             let param_count = func_type.params.len();
@@ -2273,7 +2273,7 @@ impl StacklessEngine {
                                     #[cfg(feature = "tracing")]
 
                                     trace!("Not enough arguments on stack for function call");
-                                    return Err(wrt_error::Error::runtime_error("Stack underflow on function call"));
+                                    return Err(kiln_error::Error::runtime_error("Stack underflow on function call"));
                                 }
                             }
                             // Arguments were popped in reverse order, so reverse them
@@ -2316,7 +2316,7 @@ impl StacklessEngine {
                         let table_func_idx = if let Some(Value::I32(idx)) = operand_stack.pop() {
                             idx as u32
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("CallIndirect: expected i32 function index on stack"));
+                            return Err(kiln_error::Error::runtime_trap("CallIndirect: expected i32 function index on stack"));
                         };
 
                         #[cfg(feature = "tracing")]
@@ -2338,15 +2338,15 @@ impl StacklessEngine {
                                     // Tables store FuncRef values, not raw integers
                                     match func_ref {
                                         Value::FuncRef(Some(fref)) => fref.index as usize,
-                                        Value::FuncRef(None) => return Err(wrt_error::Error::runtime_trap("uninitialized element")),
+                                        Value::FuncRef(None) => return Err(kiln_error::Error::runtime_trap("uninitialized element")),
                                         Value::I32(idx) => idx as usize, // Legacy fallback
                                         Value::I64(idx) => idx as usize, // Legacy fallback
-                                        _ => return Err(wrt_error::Error::runtime_trap("uninitialized element")),
+                                        _ => return Err(kiln_error::Error::runtime_trap("uninitialized element")),
                                     }
                                 } else if let Ok(None) = table.0.get(table_func_idx) {
-                                    return Err(wrt_error::Error::runtime_trap("uninitialized element"));
+                                    return Err(kiln_error::Error::runtime_trap("uninitialized element"));
                                 } else {
-                                    return Err(wrt_error::Error::runtime_trap("undefined element"));
+                                    return Err(kiln_error::Error::runtime_trap("undefined element"));
                                 }
                             } else {
                                 // Fall back: use the element segment if tables aren't properly initialized
@@ -2373,7 +2373,7 @@ impl StacklessEngine {
                                         // The offset is where this element starts in the table
                                         // First check mode for offset, then fall back to offset_expr
                                         let elem_offset = match &elem.mode {
-                                            wrt_foundation::types::ElementMode::Active { offset, .. } => *offset,
+                                            kiln_foundation::types::ElementMode::Active { offset, .. } => *offset,
                                             _ => {
                                                 // Try offset_expr
                                                 if let Some(ref offset_expr) = elem.offset_expr {
@@ -2425,11 +2425,11 @@ impl StacklessEngine {
 
                                 // NO FALLBACK: Per CLAUDE.md, fail loud and early if element not found
                                 resolved_func_idx.ok_or_else(|| {
-                                    wrt_error::Error::runtime_trap("undefined element")
+                                    kiln_error::Error::runtime_trap("undefined element")
                                 })?
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("CallIndirect: instance not found"));
+                            return Err(kiln_error::Error::runtime_trap("CallIndirect: instance not found"));
                         };
 
                         #[cfg(feature = "tracing")]
@@ -2450,7 +2450,7 @@ impl StacklessEngine {
                             // Get function type to determine parameter count
                             let func = &module.functions[func_idx];
                             let func_type = module.types.get(func.type_idx as usize)
-                                .ok_or_else(|| wrt_error::Error::runtime_error("Invalid function type"))?;
+                                .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
 
                             // Pop the required number of arguments from the stack
                             let param_count = func_type.params.len();
@@ -2459,7 +2459,7 @@ impl StacklessEngine {
                                 if let Some(arg) = operand_stack.pop() {
                                     call_args.push(arg);
                                 } else {
-                                    return Err(wrt_error::Error::runtime_error("Stack underflow on lowered function call"));
+                                    return Err(kiln_error::Error::runtime_error("Stack underflow on lowered function call"));
                                 }
                             }
                             call_args.reverse();
@@ -2494,7 +2494,7 @@ impl StacklessEngine {
 
                         // Validate function index
                         if func_idx >= module.functions.len() {
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "call_indirect: function index out of bounds"
                             ));
                         }
@@ -2502,11 +2502,11 @@ impl StacklessEngine {
                         // Get function type to determine parameter count
                         let func = &module.functions[func_idx];
                         let func_type = module.types.get(func.type_idx as usize)
-                            .ok_or_else(|| wrt_error::Error::runtime_error("Invalid function type"))?;
+                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
 
                         // Validate type matches expected type (structural equivalence)
                         let expected_type = module.types.get(type_idx as usize)
-                            .ok_or_else(|| wrt_error::Error::runtime_error("Invalid expected function type"))?;
+                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid expected function type"))?;
 
                         if !func_types_match(expected_type, func_type) {
                             #[cfg(feature = "tracing")]
@@ -2517,7 +2517,7 @@ impl StacklessEngine {
                                 got_results = func_type.results.len(),
                                 "[CALL_INDIRECT] Type mismatch"
                             );
-                            return Err(wrt_error::Error::runtime_trap("indirect call type mismatch"));
+                            return Err(kiln_error::Error::runtime_trap("indirect call type mismatch"));
                         }
 
                         // Pop the required number of arguments from the stack
@@ -2527,7 +2527,7 @@ impl StacklessEngine {
                             if let Some(arg) = operand_stack.pop() {
                                 call_args.push(arg);
                             } else {
-                                return Err(wrt_error::Error::runtime_error("Stack underflow on call_indirect"));
+                                return Err(kiln_error::Error::runtime_error("Stack underflow on call_indirect"));
                             }
                         }
                         call_args.reverse();
@@ -2683,11 +2683,11 @@ impl StacklessEngine {
 
                         // Get function type to determine parameter count
                         if (func_idx as usize) >= module.functions.len() {
-                            return Err(wrt_error::Error::runtime_trap("return_call: function index out of bounds"));
+                            return Err(kiln_error::Error::runtime_trap("return_call: function index out of bounds"));
                         }
                         let func = &module.functions[func_idx as usize];
                         let func_type = module.types.get(func.type_idx as usize)
-                            .ok_or_else(|| wrt_error::Error::runtime_error("Invalid function type"))?;
+                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
 
                         // Pop the required number of arguments from the stack
                         let param_count = func_type.params.len();
@@ -2696,7 +2696,7 @@ impl StacklessEngine {
                             if let Some(arg) = operand_stack.pop() {
                                 call_args.push(arg);
                             } else {
-                                return Err(wrt_error::Error::runtime_error("Stack underflow on return_call"));
+                                return Err(kiln_error::Error::runtime_error("Stack underflow on return_call"));
                             }
                         }
                         call_args.reverse();
@@ -2720,7 +2720,7 @@ impl StacklessEngine {
                         let table_func_idx = if let Some(Value::I32(idx)) = operand_stack.pop() {
                             idx as u32
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("return_call_indirect: expected i32 function index on stack"));
+                            return Err(kiln_error::Error::runtime_trap("return_call_indirect: expected i32 function index on stack"));
                         };
 
                         #[cfg(feature = "tracing")]
@@ -2737,38 +2737,38 @@ impl StacklessEngine {
                                 if let Ok(Some(func_ref)) = table.0.get(table_func_idx) {
                                     match func_ref {
                                         Value::FuncRef(Some(fref)) => fref.index as usize,
-                                        Value::FuncRef(None) => return Err(wrt_error::Error::runtime_trap("uninitialized element")),
+                                        Value::FuncRef(None) => return Err(kiln_error::Error::runtime_trap("uninitialized element")),
                                         Value::I32(idx) => idx as usize,
                                         Value::I64(idx) => idx as usize,
-                                        _ => return Err(wrt_error::Error::runtime_trap("uninitialized element")),
+                                        _ => return Err(kiln_error::Error::runtime_trap("uninitialized element")),
                                     }
                                 } else if let Ok(None) = table.0.get(table_func_idx) {
-                                    return Err(wrt_error::Error::runtime_trap("uninitialized element"));
+                                    return Err(kiln_error::Error::runtime_trap("uninitialized element"));
                                 } else {
-                                    return Err(wrt_error::Error::runtime_trap("undefined element"));
+                                    return Err(kiln_error::Error::runtime_trap("undefined element"));
                                 }
                             } else {
-                                return Err(wrt_error::Error::runtime_trap("return_call_indirect: table not found"));
+                                return Err(kiln_error::Error::runtime_trap("return_call_indirect: table not found"));
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("return_call_indirect: instance not found"));
+                            return Err(kiln_error::Error::runtime_trap("return_call_indirect: instance not found"));
                         };
 
                         // Validate function index
                         if func_idx >= module.functions.len() {
-                            return Err(wrt_error::Error::runtime_trap("return_call_indirect: function index out of bounds"));
+                            return Err(kiln_error::Error::runtime_trap("return_call_indirect: function index out of bounds"));
                         }
 
                         // Get function type and validate
                         let func = &module.functions[func_idx];
                         let func_type = module.types.get(func.type_idx as usize)
-                            .ok_or_else(|| wrt_error::Error::runtime_error("Invalid function type"))?;
+                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
 
                         let expected_type = module.types.get(type_idx as usize)
-                            .ok_or_else(|| wrt_error::Error::runtime_error("Invalid expected function type"))?;
+                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid expected function type"))?;
 
                         if !func_types_match(expected_type, func_type) {
-                            return Err(wrt_error::Error::runtime_trap("indirect call type mismatch"));
+                            return Err(kiln_error::Error::runtime_trap("indirect call type mismatch"));
                         }
 
                         // Pop the required number of arguments from the stack
@@ -2778,7 +2778,7 @@ impl StacklessEngine {
                             if let Some(arg) = operand_stack.pop() {
                                 call_args.push(arg);
                             } else {
-                                return Err(wrt_error::Error::runtime_error("Stack underflow on return_call_indirect"));
+                                return Err(kiln_error::Error::runtime_error("Stack underflow on return_call_indirect"));
                             }
                         }
                         call_args.reverse();
@@ -2927,7 +2927,7 @@ impl StacklessEngine {
                             Ok(global_wrapper) => {
                                 // GlobalWrapper now uses Arc<RwLock<Global>>, use get() method
                                 let value = global_wrapper.get().map_err(|_| {
-                                    wrt_error::Error::runtime_execution_error(
+                                    kiln_error::Error::runtime_execution_error(
                                         "Failed to read global value"
                                     )
                                 })?;
@@ -2956,7 +2956,7 @@ impl StacklessEngine {
                                 #[cfg(feature = "tracing")]
                                 error!("GlobalGet: failed to get global[{}]: {:?}", global_idx, e);
                                 // NO FALLBACKS - fail properly as per user directive
-                                return Err(wrt_error::Error::runtime_execution_error(
+                                return Err(kiln_error::Error::runtime_execution_error(
                                     "Failed to get global from instance"
                                 ));
                             }
@@ -2988,7 +2988,7 @@ impl StacklessEngine {
                             match instance.global(global_idx) {
                                 Ok(global_wrapper) => {
                                     global_wrapper.set(value).map_err(|e| {
-                                        wrt_error::Error::runtime_execution_error(
+                                        kiln_error::Error::runtime_execution_error(
                                             "GlobalSet: failed to set global value"
                                         )
                                     })?;
@@ -2996,13 +2996,13 @@ impl StacklessEngine {
                                     trace!("GlobalSet: successfully set global[{}]", global_idx);
                                 }
                                 Err(_e) => {
-                                    return Err(wrt_error::Error::runtime_execution_error(
+                                    return Err(kiln_error::Error::runtime_execution_error(
                                         "GlobalSet: global index out of bounds"
                                     ));
                                 }
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_execution_error(
+                            return Err(kiln_error::Error::runtime_execution_error(
                                 "GlobalSet requires a value on the operand stack"
                             ));
                         }
@@ -3071,11 +3071,11 @@ impl StacklessEngine {
                     Instruction::I32DivS => {
                         if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             if b == 0 {
-                                return Err(wrt_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
                             }
                             // Check for integer overflow: INT_MIN / -1 would overflow
                             if a == i32::MIN && b == -1 {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             let result = a.wrapping_div(b);
                             #[cfg(feature = "tracing")]
@@ -3086,7 +3086,7 @@ impl StacklessEngine {
                     Instruction::I32DivU => {
                         if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             if b == 0 {
-                                return Err(wrt_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
                             }
                             let result = (a as u32).wrapping_div(b as u32) as i32;
                             #[cfg(feature = "tracing")]
@@ -3097,7 +3097,7 @@ impl StacklessEngine {
                     Instruction::I32RemS => {
                         if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             if b == 0 {
-                                return Err(wrt_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
                             }
                             // Note: INT_MIN % -1 = 0 (no overflow for remainder)
                             let result = a.wrapping_rem(b);
@@ -3109,7 +3109,7 @@ impl StacklessEngine {
                     Instruction::I32RemU => {
                         if let (Some(Value::I32(b)), Some(Value::I32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             if b == 0 {
-                                return Err(wrt_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
                             }
                             let result = (a as u32).wrapping_rem(b as u32) as i32;
                             #[cfg(feature = "tracing")]
@@ -3149,11 +3149,11 @@ impl StacklessEngine {
                     Instruction::I64DivS => {
                         if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             if b == 0 {
-                                return Err(wrt_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
                             }
                             // Check for integer overflow: INT_MIN / -1 would overflow
                             if a == i64::MIN && b == -1 {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             let result = a.wrapping_div(b);
                             #[cfg(feature = "tracing")]
@@ -3164,7 +3164,7 @@ impl StacklessEngine {
                     Instruction::I64DivU => {
                         if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             if b == 0 {
-                                return Err(wrt_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
                             }
                             let result = (a as u64).wrapping_div(b as u64) as i64;
                             #[cfg(feature = "tracing")]
@@ -3175,7 +3175,7 @@ impl StacklessEngine {
                     Instruction::I64RemS => {
                         if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             if b == 0 {
-                                return Err(wrt_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
                             }
                             // Note: INT_MIN % -1 = 0 (no overflow for remainder)
                             let result = a.wrapping_rem(b);
@@ -3187,7 +3187,7 @@ impl StacklessEngine {
                     Instruction::I64RemU => {
                         if let (Some(Value::I64(b)), Some(Value::I64(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             if b == 0 {
-                                return Err(wrt_error::Error::runtime_trap("integer divide by zero"));
+                                return Err(kiln_error::Error::runtime_trap("integer divide by zero"));
                             }
                             let result = (a as u64).wrapping_rem(b as u64) as i64;
                             #[cfg(feature = "tracing")]
@@ -3265,17 +3265,17 @@ impl StacklessEngine {
                         if let Some(Value::F32(bits)) = operand_stack.pop() {
                             let f = f32::from_bits(bits.0);
                             if f.is_nan() {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "invalid conversion to integer",
                                 ));
                             }
                             if f.is_infinite() {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             let f_trunc = f.trunc();
                             // Range check: must be in [-2147483648, 2147483647]
                             if f_trunc < -2_147_483_648.0_f32 || f_trunc >= 2_147_483_648.0_f32 {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             operand_stack.push(Value::I32(f_trunc as i32));
                         }
@@ -3284,17 +3284,17 @@ impl StacklessEngine {
                         if let Some(Value::F32(bits)) = operand_stack.pop() {
                             let f = f32::from_bits(bits.0);
                             if f.is_nan() {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "invalid conversion to integer",
                                 ));
                             }
                             if f.is_infinite() {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             let f_trunc = f.trunc();
                             // Range check: must be in [0, 4294967295]
                             if f_trunc < 0.0_f32 || f_trunc >= 4_294_967_296.0_f32 {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             operand_stack.push(Value::I32(f_trunc as u32 as i32));
                         }
@@ -3303,17 +3303,17 @@ impl StacklessEngine {
                         if let Some(Value::F64(bits)) = operand_stack.pop() {
                             let f = f64::from_bits(bits.0);
                             if f.is_nan() {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "invalid conversion to integer",
                                 ));
                             }
                             if f.is_infinite() {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             let f_trunc = f.trunc();
                             // Range check: must be in [-2147483648, 2147483647]
                             if f_trunc < -2_147_483_648.0_f64 || f_trunc >= 2_147_483_648.0_f64 {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             operand_stack.push(Value::I32(f_trunc as i32));
                         }
@@ -3322,17 +3322,17 @@ impl StacklessEngine {
                         if let Some(Value::F64(bits)) = operand_stack.pop() {
                             let f = f64::from_bits(bits.0);
                             if f.is_nan() {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "invalid conversion to integer",
                                 ));
                             }
                             if f.is_infinite() {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             let f_trunc = f.trunc();
                             // Range check: must be in [0, 4294967295]
                             if f_trunc < 0.0_f64 || f_trunc >= 4_294_967_296.0_f64 {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             operand_stack.push(Value::I32(f_trunc as u32 as i32));
                         }
@@ -3341,19 +3341,19 @@ impl StacklessEngine {
                         if let Some(Value::F32(bits)) = operand_stack.pop() {
                             let f = f32::from_bits(bits.0);
                             if f.is_nan() {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "invalid conversion to integer",
                                 ));
                             }
                             if f.is_infinite() {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             let f_trunc = f.trunc();
                             // Range check: must be in [-9223372036854775808, 9223372036854775807]
                             if f_trunc < -9_223_372_036_854_775_808.0_f32
                                 || f_trunc >= 9_223_372_036_854_775_808.0_f32
                             {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             operand_stack.push(Value::I64(f_trunc as i64));
                         }
@@ -3362,17 +3362,17 @@ impl StacklessEngine {
                         if let Some(Value::F32(bits)) = operand_stack.pop() {
                             let f = f32::from_bits(bits.0);
                             if f.is_nan() {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "invalid conversion to integer",
                                 ));
                             }
                             if f.is_infinite() {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             let f_trunc = f.trunc();
                             // Range check: must be in [0, 18446744073709551615]
                             if f_trunc < 0.0_f32 || f_trunc >= 18_446_744_073_709_551_616.0_f32 {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             operand_stack.push(Value::I64(f_trunc as u64 as i64));
                         }
@@ -3381,19 +3381,19 @@ impl StacklessEngine {
                         if let Some(Value::F64(bits)) = operand_stack.pop() {
                             let f = f64::from_bits(bits.0);
                             if f.is_nan() {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "invalid conversion to integer",
                                 ));
                             }
                             if f.is_infinite() {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             let f_trunc = f.trunc();
                             // Range check: must be in [-9223372036854775808, 9223372036854775807]
                             if f_trunc < -9_223_372_036_854_775_808.0_f64
                                 || f_trunc >= 9_223_372_036_854_775_808.0_f64
                             {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             operand_stack.push(Value::I64(f_trunc as i64));
                         }
@@ -3402,17 +3402,17 @@ impl StacklessEngine {
                         if let Some(Value::F64(bits)) = operand_stack.pop() {
                             let f = f64::from_bits(bits.0);
                             if f.is_nan() {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "invalid conversion to integer",
                                 ));
                             }
                             if f.is_infinite() {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             let f_trunc = f.trunc();
                             // Range check: must be in [0, 18446744073709551615]
                             if f_trunc < 0.0_f64 || f_trunc >= 18_446_744_073_709_551_616.0_f64 {
-                                return Err(wrt_error::Error::runtime_trap("integer overflow"));
+                                return Err(kiln_error::Error::runtime_trap("integer overflow"));
                             }
                             operand_stack.push(Value::I64(f_trunc as u64 as i64));
                         }
@@ -4120,14 +4120,14 @@ impl StacklessEngine {
                                                 pc = pc,
                                                 "[MEM-OOB] I32Load failed"
                                             );
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(e) => {
                                     #[cfg(feature = "tracing")]
                                     trace!("I32Load: failed to get memory at index {}: {:?}", mem_arg.memory_index, e);
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4151,12 +4151,12 @@ impl StacklessEngine {
                                             trace!("I32Store: successfully wrote value {} to address {}", value, offset);
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4178,12 +4178,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I32(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4203,12 +4203,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I32(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4228,12 +4228,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I32(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4253,12 +4253,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I32(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4277,12 +4277,12 @@ impl StacklessEngine {
                                     match memory.write_shared(offset, &bytes) {
                                         Ok(()) => {}
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4300,12 +4300,12 @@ impl StacklessEngine {
                                             trace!("I32Store16: successfully wrote value {} to address {}", value as u16, offset);
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4345,12 +4345,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4369,14 +4369,14 @@ impl StacklessEngine {
                                             trace!("I64Store: successfully wrote value {} to address {}", value, offset);
                                         }
                                         Err(_e) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_e) => {
                                     #[cfg(feature = "tracing")]
                                     trace!("I64Store: failed to get memory at index {}", mem_arg.memory_index);
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4406,12 +4406,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4438,12 +4438,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4470,12 +4470,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4502,12 +4502,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4534,12 +4534,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4566,12 +4566,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4601,14 +4601,14 @@ impl StacklessEngine {
                                             trace!("I64Store8: successfully wrote value {} to address {}", value & 0xFF, offset);
                                         }
                                         Err(_e) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_e) => {
                                     #[cfg(feature = "tracing")]
                                     trace!("I64Store8: failed to get memory at index {}", mem_arg.memory_index);
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4635,14 +4635,14 @@ impl StacklessEngine {
                                             trace!("I64Store16: successfully wrote value {} to address {}", value & 0xFFFF, offset);
                                         }
                                         Err(_e) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_e) => {
                                     #[cfg(feature = "tracing")]
                                     trace!("I64Store16: failed to get memory at index {}", mem_arg.memory_index);
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4669,14 +4669,14 @@ impl StacklessEngine {
                                             trace!("I64Store32: successfully wrote value {} to address {}", value & 0xFFFFFFFF, offset);
                                         }
                                         Err(_e) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_e) => {
                                     #[cfg(feature = "tracing")]
                                     trace!("I64Store32: failed to get memory at index {}", mem_arg.memory_index);
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4712,14 +4712,14 @@ impl StacklessEngine {
                                         Err(e) => {
                                             #[cfg(feature = "tracing")]
                                             error!("F32Load: memory read error: {:?}", e);
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(e) => {
                                     #[cfg(feature = "tracing")]
                                     error!("F32Load: memory access error: {:?}", e);
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         } else {
@@ -4735,11 +4735,11 @@ impl StacklessEngine {
                                     let memory = &memory_wrapper.0;
                                     let bytes = bits.0.to_le_bytes();
                                     if memory.write_shared(offset, &bytes).is_err() {
-                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
                                 Err(_e) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4757,12 +4757,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::F64(FloatBits64(bits)));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -4775,11 +4775,11 @@ impl StacklessEngine {
                                     let memory = &memory_wrapper.0;
                                     let bytes = bits.0.to_le_bytes();
                                     if memory.write_shared(offset, &bytes).is_err() {
-                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
                                 Err(_e) => {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -5149,14 +5149,14 @@ impl StacklessEngine {
                                 while new_pc < instructions.len() && depth > 0 {
                                     if let Some(instr) = instructions.get(new_pc) {
                                         match instr {
-                                            wrt_foundation::types::Instruction::If { .. } |
-                                            wrt_foundation::types::Instruction::Block { .. } |
-                                            wrt_foundation::types::Instruction::Loop { .. } |
-                                            wrt_foundation::types::Instruction::Try { .. } |
-                                            wrt_foundation::types::Instruction::TryTable { .. } => {
+                                            kiln_foundation::types::Instruction::If { .. } |
+                                            kiln_foundation::types::Instruction::Block { .. } |
+                                            kiln_foundation::types::Instruction::Loop { .. } |
+                                            kiln_foundation::types::Instruction::Try { .. } |
+                                            kiln_foundation::types::Instruction::TryTable { .. } => {
                                                 depth += 1;
                                             }
-                                            wrt_foundation::types::Instruction::End => {
+                                            kiln_foundation::types::Instruction::End => {
                                                 depth -= 1;
                                                 if depth == 0 {
                                                     // Found matching end - jump just before it so we execute the End
@@ -5167,7 +5167,7 @@ impl StacklessEngine {
                                                     break;
                                                 }
                                             }
-                                            wrt_foundation::types::Instruction::Else => {
+                                            kiln_foundation::types::Instruction::Else => {
                                                 if depth == 1 {
                                                     // Found else at same level - execute else block
                                                     #[cfg(feature = "tracing")]
@@ -5201,14 +5201,14 @@ impl StacklessEngine {
                         while new_pc < instructions.len() && depth > 0 {
                             if let Some(instr) = instructions.get(new_pc) {
                                 match instr {
-                                    wrt_foundation::types::Instruction::If { .. } |
-                                    wrt_foundation::types::Instruction::Block { .. } |
-                                    wrt_foundation::types::Instruction::Loop { .. } |
-                                    wrt_foundation::types::Instruction::Try { .. } |
-                                    wrt_foundation::types::Instruction::TryTable { .. } => {
+                                    kiln_foundation::types::Instruction::If { .. } |
+                                    kiln_foundation::types::Instruction::Block { .. } |
+                                    kiln_foundation::types::Instruction::Loop { .. } |
+                                    kiln_foundation::types::Instruction::Try { .. } |
+                                    kiln_foundation::types::Instruction::TryTable { .. } => {
                                         depth += 1;
                                     }
-                                    wrt_foundation::types::Instruction::End => {
+                                    kiln_foundation::types::Instruction::End => {
                                         depth -= 1;
                                         if depth == 0 {
                                             // Found matching end - jump just before it
@@ -5400,18 +5400,18 @@ impl StacklessEngine {
                                 while new_pc < instructions.len() && target_depth > 0 {
                                     if let Some(instr) = instructions.get(new_pc) {
                                         match instr {
-                                            wrt_foundation::types::Instruction::Block { .. } |
-                                            wrt_foundation::types::Instruction::Loop { .. } |
-                                            wrt_foundation::types::Instruction::If { .. } |
-                                            wrt_foundation::types::Instruction::Try { .. } |
-                                            wrt_foundation::types::Instruction::TryTable { .. } => {
+                                            kiln_foundation::types::Instruction::Block { .. } |
+                                            kiln_foundation::types::Instruction::Loop { .. } |
+                                            kiln_foundation::types::Instruction::If { .. } |
+                                            kiln_foundation::types::Instruction::Try { .. } |
+                                            kiln_foundation::types::Instruction::TryTable { .. } => {
                                                 depth += 1;
                                                 #[cfg(feature = "tracing")]
                                                 if func_idx == 76 {
                                                     trace!(pc = new_pc, depth = depth, "[BR-FWD] Block/Loop/If/Try");
                                                 }
                                             }
-                                            wrt_foundation::types::Instruction::End => {
+                                            kiln_foundation::types::Instruction::End => {
                                                 #[cfg(feature = "tracing")]
                                                 if func_idx == 76 {
                                                     trace!(pc = new_pc, depth = depth, target_depth = target_depth, "[BR-FWD] End");
@@ -5582,14 +5582,14 @@ impl StacklessEngine {
                                         while new_pc < instructions.len() && target_depth > 0 {
                                             if let Some(instr) = instructions.get(new_pc) {
                                                 match instr {
-                                                    wrt_foundation::types::Instruction::Block { .. } |
-                                                    wrt_foundation::types::Instruction::Loop { .. } |
-                                                    wrt_foundation::types::Instruction::If { .. } |
-                                                    wrt_foundation::types::Instruction::Try { .. } |
-                                                    wrt_foundation::types::Instruction::TryTable { .. } => {
+                                                    kiln_foundation::types::Instruction::Block { .. } |
+                                                    kiln_foundation::types::Instruction::Loop { .. } |
+                                                    kiln_foundation::types::Instruction::If { .. } |
+                                                    kiln_foundation::types::Instruction::Try { .. } |
+                                                    kiln_foundation::types::Instruction::TryTable { .. } => {
                                                         depth += 1;
                                                     }
-                                                    wrt_foundation::types::Instruction::End => {
+                                                    kiln_foundation::types::Instruction::End => {
                                                         if depth == 0 {
                                                             target_depth -= 1;
                                                             if target_depth == 0 {
@@ -5746,7 +5746,7 @@ impl StacklessEngine {
                             if dst_mem_idx != src_mem_idx {
                                 #[cfg(feature = "tracing")]
                                 trace!("MemoryCopy: cross-memory copy not yet implemented");
-                                return Err(wrt_error::Error::runtime_error("Cross-memory copy not yet implemented"));
+                                return Err(kiln_error::Error::runtime_error("Cross-memory copy not yet implemented"));
                             }
 
                             // Per WebAssembly spec: bounds check MUST happen before checking size==0
@@ -5764,7 +5764,7 @@ impl StacklessEngine {
                                 if size_u32 == 0 {
                                     // For size 0, check if offsets are within bounds (can be equal to size)
                                     if dest_u32 > memory_size || src_u32 > memory_size {
-                                        return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                     // No-op for zero size copy after bounds check passes
                                     continue;
@@ -5772,12 +5772,12 @@ impl StacklessEngine {
 
                                 // For size > 0, check if (offset + size) overflows or exceeds memory size
                                 let dest_end = dest_u32.checked_add(size_u32)
-                                    .ok_or_else(|| wrt_error::Error::runtime_trap("out of bounds memory access"))?;
+                                    .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
                                 let src_end = src_u32.checked_add(size_u32)
-                                    .ok_or_else(|| wrt_error::Error::runtime_trap("out of bounds memory access"))?;
+                                    .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
                                 if dest_end > memory_size || src_end > memory_size {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
 
                                 let size_usize = size_u32 as usize;
@@ -5814,7 +5814,7 @@ impl StacklessEngine {
                                 }
                             }
                             #[cfg(not(any(feature = "std", feature = "alloc")))]
-                            return Err(wrt_error::Error::runtime_error("MemoryCopy requires std or alloc feature"));
+                            return Err(kiln_error::Error::runtime_error("MemoryCopy requires std or alloc feature"));
                         } else {
                             #[cfg(feature = "tracing")]
                             trace!("MemoryCopy: insufficient values on stack");
@@ -5846,7 +5846,7 @@ impl StacklessEngine {
                             if size_u32 == 0 {
                                 // For size 0, check if offset is within bounds (can be equal to size)
                                 if dest_u32 > memory_size {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                                 // No-op for zero size fill after bounds check passes
                                 continue;
@@ -5854,10 +5854,10 @@ impl StacklessEngine {
 
                             // For size > 0, check if (offset + size) overflows or exceeds memory size
                             let dest_end = dest_u32.checked_add(size_u32)
-                                .ok_or_else(|| wrt_error::Error::runtime_trap("out of bounds memory access"))?;
+                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
                             if dest_end > memory_size {
-                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
 
                             let size_usize = size_u32 as usize;
@@ -5910,7 +5910,7 @@ impl StacklessEngine {
 
                             // Get data segment from module (for length calculation)
                             let data_segment = module.data.get(data_idx as usize)
-                                .ok_or_else(|| wrt_error::Error::runtime_trap("out of bounds memory access"))?;
+                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
                             // If dropped, treat as zero-length segment
                             let data_len = if is_dropped { 0u32 } else { data_segment.init.len() as u32 };
@@ -5927,7 +5927,7 @@ impl StacklessEngine {
                             if n_u32 == 0 {
                                 // For n == 0, check if offsets are within bounds (can be equal to size)
                                 if s_u32 > data_len || d_u32 > memory_size {
-                                    return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                                 // No-op for zero size init after bounds check passes
                                 continue;
@@ -5935,15 +5935,15 @@ impl StacklessEngine {
 
                             // For n > 0, check if (offset + n) overflows or exceeds bounds
                             let src_end = s_u32.checked_add(n_u32)
-                                .ok_or_else(|| wrt_error::Error::runtime_trap("out of bounds memory access"))?;
+                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
                             let dest_end = d_u32.checked_add(n_u32)
-                                .ok_or_else(|| wrt_error::Error::runtime_trap("out of bounds memory access"))?;
+                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
                             if src_end > data_len {
-                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                             if dest_end > memory_size {
-                                return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
 
                             // Copy data from segment to memory
@@ -5975,7 +5975,7 @@ impl StacklessEngine {
 
                         // Validate data segment index
                         if data_idx as usize >= module.data.len() {
-                            return Err(wrt_error::Error::runtime_trap("out of bounds memory access"));
+                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                         }
 
                         // Initialize dropped_data_segments for this instance if not already done
@@ -6113,14 +6113,14 @@ impl StacklessEngine {
                                     while new_pc < instructions.len() && target_depth > 0 {
                                         if let Some(instr) = instructions.get(new_pc) {
                                             match instr {
-                                                wrt_foundation::types::Instruction::Block { .. } |
-                                                wrt_foundation::types::Instruction::Loop { .. } |
-                                                wrt_foundation::types::Instruction::If { .. } |
-                                                wrt_foundation::types::Instruction::Try { .. } |
-                                                wrt_foundation::types::Instruction::TryTable { .. } => {
+                                                kiln_foundation::types::Instruction::Block { .. } |
+                                                kiln_foundation::types::Instruction::Loop { .. } |
+                                                kiln_foundation::types::Instruction::If { .. } |
+                                                kiln_foundation::types::Instruction::Try { .. } |
+                                                kiln_foundation::types::Instruction::TryTable { .. } => {
                                                     depth += 1;
                                                 }
-                                                wrt_foundation::types::Instruction::End => {
+                                                kiln_foundation::types::Instruction::End => {
                                                     if depth == 0 {
                                                         target_depth -= 1;
                                                         if target_depth == 0 {
@@ -6252,7 +6252,7 @@ impl StacklessEngine {
                     // ========================================
                     Instruction::RefNull(value_type) => {
                         // Push a null reference of the specified type
-                        use wrt_foundation::types::ValueType;
+                        use kiln_foundation::types::ValueType;
                         #[cfg(feature = "tracing")]
                         trace!("RefNull: type={:?}", value_type);
                         let null_value = match value_type {
@@ -6275,7 +6275,7 @@ impl StacklessEngine {
                         // Push a reference to the function at func_idx
                         #[cfg(feature = "tracing")]
                         trace!("RefFunc: func_idx={}", func_idx_arg);
-                        operand_stack.push(Value::FuncRef(Some(wrt_foundation::values::FuncRef { index: func_idx_arg })));
+                        operand_stack.push(Value::FuncRef(Some(kiln_foundation::values::FuncRef { index: func_idx_arg })));
                     }
                     Instruction::RefIsNull => {
                         // Pop reference, push 1 if null, 0 if not null
@@ -6288,7 +6288,7 @@ impl StacklessEngine {
                                 _ => {
                                     #[cfg(feature = "tracing")]
                                     error!("RefIsNull: expected reference type, got {:?}", ref_val);
-                                    return Err(wrt_error::Error::runtime_type_mismatch(
+                                    return Err(kiln_error::Error::runtime_type_mismatch(
                                         "ref.is_null expects a reference type",
                                     ));
                                 }
@@ -6305,7 +6305,7 @@ impl StacklessEngine {
                                 Value::FuncRef(None) | Value::ExternRef(None) => {
                                     #[cfg(feature = "tracing")]
                                     error!("RefAsNonNull: null reference");
-                                    return Err(wrt_error::Error::runtime_trap(
+                                    return Err(kiln_error::Error::runtime_trap(
                                         "null reference in ref.as_non_null",
                                     ));
                                 }
@@ -6317,7 +6317,7 @@ impl StacklessEngine {
                                 _ => {
                                     #[cfg(feature = "tracing")]
                                     error!("RefAsNonNull: expected reference type, got {:?}", ref_val);
-                                    return Err(wrt_error::Error::runtime_type_mismatch(
+                                    return Err(kiln_error::Error::runtime_type_mismatch(
                                         "ref.as_non_null expects a reference type",
                                     ));
                                 }
@@ -6418,7 +6418,7 @@ impl StacklessEngine {
                             );
 
                             if elem_idx < 0 {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "table.get: index cannot be negative",
                                 ));
                             }
@@ -6433,8 +6433,8 @@ impl StacklessEngine {
                                 None => {
                                     // Return null reference based on table element type
                                     match table.element_type() {
-                                        wrt_foundation::types::RefType::Funcref => Value::FuncRef(None),
-                                        wrt_foundation::types::RefType::Externref => Value::ExternRef(None),
+                                        kiln_foundation::types::RefType::Funcref => Value::FuncRef(None),
+                                        kiln_foundation::types::RefType::Externref => Value::ExternRef(None),
                                     }
                                 }
                             };
@@ -6447,7 +6447,7 @@ impl StacklessEngine {
                                 "[TableGet] SUCCESS"
                             );
                         } else {
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "table.get: expected i32 index on stack",
                             ));
                         }
@@ -6457,10 +6457,10 @@ impl StacklessEngine {
                         // table.set: [i32 ref] -> []
                         // Pop value, then index from stack; set element in table
                         let value = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.set: expected value on stack")
+                            kiln_error::Error::runtime_trap("table.set: expected value on stack")
                         })?;
                         let idx = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.set: expected index on stack")
+                            kiln_error::Error::runtime_trap("table.set: expected index on stack")
                         })?;
 
                         if let Value::I32(elem_idx) = idx {
@@ -6473,7 +6473,7 @@ impl StacklessEngine {
                             );
 
                             if elem_idx < 0 {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "table.set: index cannot be negative",
                                 ));
                             }
@@ -6483,7 +6483,7 @@ impl StacklessEngine {
                                 Value::FuncRef(fr) => Some(Value::FuncRef(fr.clone())),
                                 Value::ExternRef(er) => Some(Value::ExternRef(er.clone())),
                                 _ => {
-                                    return Err(wrt_error::Error::runtime_trap(
+                                    return Err(kiln_error::Error::runtime_trap(
                                         "table.set: value must be a reference type",
                                     ));
                                 }
@@ -6500,7 +6500,7 @@ impl StacklessEngine {
                                 "[TableSet] SUCCESS"
                             );
                         } else {
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "table.set: expected i32 index",
                             ));
                         }
@@ -6531,10 +6531,10 @@ impl StacklessEngine {
                         // table.grow: [ref i32] -> [i32]
                         // Pop delta (i32), pop init value (ref), grow table, push old size or -1
                         let delta = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.grow: expected delta on stack")
+                            kiln_error::Error::runtime_trap("table.grow: expected delta on stack")
                         })?;
                         let init_value = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.grow: expected init value on stack")
+                            kiln_error::Error::runtime_trap("table.grow: expected init value on stack")
                         })?;
 
                         if let Value::I32(delta_val) = delta {
@@ -6554,7 +6554,7 @@ impl StacklessEngine {
                                 match &init_value {
                                     Value::FuncRef(_) | Value::ExternRef(_) => {}
                                     _ => {
-                                        return Err(wrt_error::Error::runtime_trap(
+                                        return Err(kiln_error::Error::runtime_trap(
                                             "table.grow: init value must be a reference type",
                                         ));
                                     }
@@ -6583,7 +6583,7 @@ impl StacklessEngine {
                                 }
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "table.grow: expected i32 delta",
                             ));
                         }
@@ -6593,13 +6593,13 @@ impl StacklessEngine {
                         // table.fill: [i32 ref i32] -> []
                         // Pop size, value, dest; fill table region with value
                         let size = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.fill: expected size on stack")
+                            kiln_error::Error::runtime_trap("table.fill: expected size on stack")
                         })?;
                         let value = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.fill: expected value on stack")
+                            kiln_error::Error::runtime_trap("table.fill: expected value on stack")
                         })?;
                         let dest = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.fill: expected dest on stack")
+                            kiln_error::Error::runtime_trap("table.fill: expected dest on stack")
                         })?;
 
                         if let (Value::I32(dest_idx), Value::I32(fill_size)) = (&dest, &size) {
@@ -6613,7 +6613,7 @@ impl StacklessEngine {
                             );
 
                             if *dest_idx < 0 || *fill_size < 0 {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "table.fill: negative dest or size",
                                 ));
                             }
@@ -6623,7 +6623,7 @@ impl StacklessEngine {
                                 Value::FuncRef(fr) => Some(Value::FuncRef(fr.clone())),
                                 Value::ExternRef(er) => Some(Value::ExternRef(er.clone())),
                                 _ => {
-                                    return Err(wrt_error::Error::runtime_trap(
+                                    return Err(kiln_error::Error::runtime_trap(
                                         "table.fill: value must be a reference type",
                                     ));
                                 }
@@ -6640,7 +6640,7 @@ impl StacklessEngine {
                                 "[TableFill] SUCCESS"
                             );
                         } else {
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "table.fill: expected i32 values for dest and size",
                             ));
                         }
@@ -6650,13 +6650,13 @@ impl StacklessEngine {
                         // table.copy: [i32 i32 i32] -> []
                         // Pop size, src_offset, dst_offset; copy elements between tables
                         let size = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.copy: expected size on stack")
+                            kiln_error::Error::runtime_trap("table.copy: expected size on stack")
                         })?;
                         let src_offset = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.copy: expected src offset on stack")
+                            kiln_error::Error::runtime_trap("table.copy: expected src offset on stack")
                         })?;
                         let dst_offset = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.copy: expected dst offset on stack")
+                            kiln_error::Error::runtime_trap("table.copy: expected dst offset on stack")
                         })?;
 
                         if let (Value::I32(dst_idx), Value::I32(src_idx), Value::I32(copy_size)) =
@@ -6673,7 +6673,7 @@ impl StacklessEngine {
                             );
 
                             if *dst_idx < 0 || *src_idx < 0 || *copy_size < 0 {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "out of bounds table access",
                                 ));
                             }
@@ -6690,15 +6690,15 @@ impl StacklessEngine {
 
                                 // Bounds check BEFORE zero-length check (per WebAssembly spec)
                                 let src_end = (*src_idx as u32).checked_add(*copy_size as u32)
-                                    .ok_or_else(|| wrt_error::Error::runtime_trap(
+                                    .ok_or_else(|| kiln_error::Error::runtime_trap(
                                         "out of bounds table access"
                                     ))?;
                                 let dst_end = (*dst_idx as u32).checked_add(*copy_size as u32)
-                                    .ok_or_else(|| wrt_error::Error::runtime_trap(
+                                    .ok_or_else(|| kiln_error::Error::runtime_trap(
                                         "out of bounds table access"
                                     ))?;
                                 if src_end > src_table.size() || dst_end > dst_table.size() {
-                                    return Err(wrt_error::Error::runtime_trap(
+                                    return Err(kiln_error::Error::runtime_trap(
                                         "out of bounds table access"
                                     ));
                                 }
@@ -6728,7 +6728,7 @@ impl StacklessEngine {
                                 "[TableCopy] SUCCESS"
                             );
                         } else {
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "table.copy: expected i32 values for offsets and size",
                             ));
                         }
@@ -6739,13 +6739,13 @@ impl StacklessEngine {
                         // Pop size, src_offset (in elem segment), dst_offset (in table)
                         // Initialize table elements from element segment
                         let size = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.init: expected size on stack")
+                            kiln_error::Error::runtime_trap("table.init: expected size on stack")
                         })?;
                         let src_offset = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.init: expected src offset on stack")
+                            kiln_error::Error::runtime_trap("table.init: expected src offset on stack")
                         })?;
                         let dst_offset = operand_stack.pop().ok_or_else(|| {
-                            wrt_error::Error::runtime_trap("table.init: expected dst offset on stack")
+                            kiln_error::Error::runtime_trap("table.init: expected dst offset on stack")
                         })?;
 
                         if let (Value::I32(dst_idx), Value::I32(src_idx), Value::I32(init_size)) =
@@ -6762,7 +6762,7 @@ impl StacklessEngine {
                             );
 
                             if *dst_idx < 0 || *src_idx < 0 || *init_size < 0 {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "out of bounds table access",
                                 ));
                             }
@@ -6770,12 +6770,12 @@ impl StacklessEngine {
                             // Get the element segment from the module (needed for bounds check)
                             #[cfg(feature = "std")]
                             let elem_segment = module.elements.get(elem_seg_idx as usize)
-                                .ok_or_else(|| wrt_error::Error::runtime_trap(
+                                .ok_or_else(|| kiln_error::Error::runtime_trap(
                                     "table.init: invalid element segment index"
                                 ))?;
                             #[cfg(not(feature = "std"))]
                             let elem_segment = module.elements.get(elem_seg_idx as usize)
-                                .map_err(|_| wrt_error::Error::runtime_trap(
+                                .map_err(|_| kiln_error::Error::runtime_trap(
                                     "table.init: invalid element segment index"
                                 ))?;
 
@@ -6789,11 +6789,11 @@ impl StacklessEngine {
 
                             // Check bounds in element segment (must happen BEFORE zero-size check per spec)
                             let src_end = (*src_idx as usize).checked_add(*init_size as usize)
-                                .ok_or_else(|| wrt_error::Error::runtime_trap(
+                                .ok_or_else(|| kiln_error::Error::runtime_trap(
                                     "out of bounds table access"
                                 ))?;
                             if src_end > effective_elem_len {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "out of bounds table access",
                                 ));
                             }
@@ -6801,11 +6801,11 @@ impl StacklessEngine {
                             // Get table and check bounds (must happen BEFORE zero-size check per spec)
                             let table = instance.table(table_idx)?;
                             let dst_end = (*dst_idx as u32).checked_add(*init_size as u32)
-                                .ok_or_else(|| wrt_error::Error::runtime_trap(
+                                .ok_or_else(|| kiln_error::Error::runtime_trap(
                                     "out of bounds table access"
                                 ))?;
                             if dst_end > table.size() {
-                                return Err(wrt_error::Error::runtime_trap(
+                                return Err(kiln_error::Error::runtime_trap(
                                     "out of bounds table access",
                                 ));
                             }
@@ -6820,7 +6820,7 @@ impl StacklessEngine {
                                 for i in 0..*init_size as usize {
                                     let item_idx = *src_idx as usize + i;
                                     let func_idx = elem_segment.items.get(item_idx)
-                                        .map_err(|_| wrt_error::Error::runtime_trap(
+                                        .map_err(|_| kiln_error::Error::runtime_trap(
                                             "table.init: element segment access error"
                                         ))?;
 
@@ -6829,7 +6829,7 @@ impl StacklessEngine {
                                         Some(Value::FuncRef(None))  // null funcref
                                     } else {
                                         Some(Value::FuncRef(Some(
-                                            wrt_foundation::values::FuncRef { index: func_idx }
+                                            kiln_foundation::values::FuncRef { index: func_idx }
                                         )))
                                     };
                                     table.set(*dst_idx as u32 + i as u32, value)?;
@@ -6843,7 +6843,7 @@ impl StacklessEngine {
                                 );
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "table.init: expected i32 values for offsets and size",
                             ));
                         }
@@ -6864,13 +6864,13 @@ impl StacklessEngine {
                         // Validate element segment index exists
                         #[cfg(feature = "std")]
                         if elem_seg_idx as usize >= module.elements.len() {
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "elem.drop: invalid element segment index",
                             ));
                         }
                         #[cfg(not(feature = "std"))]
                         if module.elements.get(elem_seg_idx as usize).is_err() {
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "elem.drop: invalid element segment index",
                             ));
                         }
@@ -6899,7 +6899,7 @@ impl StacklessEngine {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             // Check alignment - notify requires 4-byte alignment
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -6922,7 +6922,7 @@ impl StacklessEngine {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             // Check alignment - wait32 requires 4-byte alignment
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -6945,12 +6945,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I32(result));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -6965,7 +6965,7 @@ impl StacklessEngine {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             // Check alignment - wait64 requires 8-byte alignment
                             if effective_addr % 8 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -6985,12 +6985,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I32(result));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7013,7 +7013,7 @@ impl StacklessEngine {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             // Check 4-byte alignment for i32
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7031,12 +7031,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I32(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7047,7 +7047,7 @@ impl StacklessEngine {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             // Check 8-byte alignment for i64
                             if effective_addr % 8 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7065,12 +7065,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7096,12 +7096,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I32(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7112,7 +7112,7 @@ impl StacklessEngine {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             // Check 2-byte alignment for i16
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7130,12 +7130,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I32(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7160,12 +7160,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7175,7 +7175,7 @@ impl StacklessEngine {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7193,12 +7193,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7208,7 +7208,7 @@ impl StacklessEngine {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7226,12 +7226,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I64(value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7245,7 +7245,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7261,12 +7261,12 @@ impl StacklessEngine {
                                             );
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7276,7 +7276,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 8 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7292,12 +7292,12 @@ impl StacklessEngine {
                                             );
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7320,12 +7320,12 @@ impl StacklessEngine {
                                             );
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7335,7 +7335,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7351,12 +7351,12 @@ impl StacklessEngine {
                                             );
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7379,12 +7379,12 @@ impl StacklessEngine {
                                             );
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7394,7 +7394,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7410,12 +7410,12 @@ impl StacklessEngine {
                                             );
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7425,7 +7425,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7441,12 +7441,12 @@ impl StacklessEngine {
                                             );
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7460,7 +7460,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7484,17 +7484,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7504,7 +7504,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 8 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7526,17 +7526,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7558,17 +7558,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7578,7 +7578,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7593,17 +7593,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7625,17 +7625,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7645,7 +7645,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7660,17 +7660,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7680,7 +7680,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7695,17 +7695,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7719,7 +7719,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7734,17 +7734,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7754,7 +7754,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 8 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7769,17 +7769,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7801,17 +7801,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7821,7 +7821,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7836,17 +7836,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7868,17 +7868,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7888,7 +7888,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7903,17 +7903,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7923,7 +7923,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7938,17 +7938,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7962,7 +7962,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7977,17 +7977,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -7997,7 +7997,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 8 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8012,17 +8012,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8044,17 +8044,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8064,7 +8064,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8079,17 +8079,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8111,17 +8111,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8131,7 +8131,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8146,17 +8146,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8166,7 +8166,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8181,17 +8181,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8205,7 +8205,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8220,17 +8220,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8240,7 +8240,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 8 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8255,17 +8255,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8287,17 +8287,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8307,7 +8307,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8322,17 +8322,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8354,17 +8354,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8374,7 +8374,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8389,17 +8389,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8409,7 +8409,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8424,17 +8424,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8448,7 +8448,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8463,17 +8463,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8483,7 +8483,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 8 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8498,17 +8498,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8530,17 +8530,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8550,7 +8550,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8565,17 +8565,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8597,17 +8597,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8617,7 +8617,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8632,17 +8632,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8652,7 +8652,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8667,17 +8667,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8691,7 +8691,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8705,17 +8705,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8725,7 +8725,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 8 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8739,17 +8739,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8770,17 +8770,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8790,7 +8790,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8804,17 +8804,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I32(old_value as i32));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8835,17 +8835,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8855,7 +8855,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8869,17 +8869,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8889,7 +8889,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8903,17 +8903,17 @@ impl StacklessEngine {
                                                     operand_stack.push(Value::I64(old_value as i64));
                                                 }
                                                 Err(_) => {
-                                                    return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                    return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                 }
                                             }
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8930,7 +8930,7 @@ impl StacklessEngine {
                         {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8944,7 +8944,7 @@ impl StacklessEngine {
                                                 match memory.write_shared(effective_addr, &replacement.to_le_bytes()) {
                                                     Ok(()) => {}
                                                     Err(_) => {
-                                                        return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                     }
                                                 }
                                             }
@@ -8960,12 +8960,12 @@ impl StacklessEngine {
                                             operand_stack.push(Value::I32(old_value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -8977,7 +8977,7 @@ impl StacklessEngine {
                         {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 8 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -8990,19 +8990,19 @@ impl StacklessEngine {
                                                 match memory.write_shared(effective_addr, &replacement.to_le_bytes()) {
                                                     Ok(()) => {}
                                                     Err(_) => {
-                                                        return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                     }
                                                 }
                                             }
                                             operand_stack.push(Value::I64(old_value));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -9024,19 +9024,19 @@ impl StacklessEngine {
                                                 match memory.write_shared(effective_addr, &[(replacement as u8)]) {
                                                     Ok(()) => {}
                                                     Err(_) => {
-                                                        return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                     }
                                                 }
                                             }
                                             operand_stack.push(Value::I32(old_value as i32));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -9048,7 +9048,7 @@ impl StacklessEngine {
                         {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9061,19 +9061,19 @@ impl StacklessEngine {
                                                 match memory.write_shared(effective_addr, &(replacement as u16).to_le_bytes()) {
                                                     Ok(()) => {}
                                                     Err(_) => {
-                                                        return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                     }
                                                 }
                                             }
                                             operand_stack.push(Value::I32(old_value as i32));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -9095,19 +9095,19 @@ impl StacklessEngine {
                                                 match memory.write_shared(effective_addr, &[(replacement as u8)]) {
                                                     Ok(()) => {}
                                                     Err(_) => {
-                                                        return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                     }
                                                 }
                                             }
                                             operand_stack.push(Value::I64(old_value as i64));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -9119,7 +9119,7 @@ impl StacklessEngine {
                         {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 2 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9132,19 +9132,19 @@ impl StacklessEngine {
                                                 match memory.write_shared(effective_addr, &(replacement as u16).to_le_bytes()) {
                                                     Ok(()) => {}
                                                     Err(_) => {
-                                                        return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                     }
                                                 }
                                             }
                                             operand_stack.push(Value::I64(old_value as i64));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -9156,7 +9156,7 @@ impl StacklessEngine {
                         {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
                             if effective_addr % 4 != 0 {
-                                return Err(wrt_error::Error::runtime_trap("unaligned atomic access"));
+                                return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -9169,19 +9169,19 @@ impl StacklessEngine {
                                                 match memory.write_shared(effective_addr, &(replacement as u32).to_le_bytes()) {
                                                     Ok(()) => {}
                                                     Err(_) => {
-                                                        return Err(wrt_error::Error::runtime_trap("Memory write out of bounds"));
+                                                        return Err(kiln_error::Error::runtime_trap("Memory write out of bounds"));
                                                     }
                                                 }
                                             }
                                             operand_stack.push(Value::I64(old_value as i64));
                                         }
                                         Err(_) => {
-                                            return Err(wrt_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(wrt_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
                                 }
                             }
                         }
@@ -9256,7 +9256,7 @@ impl StacklessEngine {
                                             if let Ok(handler) = handlers.get(i) {
                                                 let handler_val = handler.clone();
                                                 let (matches, lbl, is_ref) = match handler_val {
-                                                    wrt_foundation::types::CatchHandler::Catch { tag_idx: htag, label: hlbl } => {
+                                                    kiln_foundation::types::CatchHandler::Catch { tag_idx: htag, label: hlbl } => {
                                                         // Get handler tag's effective identity for comparison
                                                         let handler_identity = self.get_effective_tag_identity(instance_id, &module, htag);
                                                         // Match by identity if both have identity, by index if both local-only
@@ -9267,7 +9267,7 @@ impl StacklessEngine {
                                                         };
                                                         (tag_matches, hlbl, false)
                                                     }
-                                                    wrt_foundation::types::CatchHandler::CatchRef { tag_idx: htag, label: hlbl } => {
+                                                    kiln_foundation::types::CatchHandler::CatchRef { tag_idx: htag, label: hlbl } => {
                                                         // Get handler tag's effective identity for comparison
                                                         let handler_identity = self.get_effective_tag_identity(instance_id, &module, htag);
                                                         // Match by identity if both have identity, by index if both local-only
@@ -9278,10 +9278,10 @@ impl StacklessEngine {
                                                         };
                                                         (tag_matches, hlbl, true)
                                                     }
-                                                    wrt_foundation::types::CatchHandler::CatchAll { label } => {
+                                                    kiln_foundation::types::CatchHandler::CatchAll { label } => {
                                                         (true, label, false)
                                                     }
-                                                    wrt_foundation::types::CatchHandler::CatchAllRef { label } => {
+                                                    kiln_foundation::types::CatchHandler::CatchAllRef { label } => {
                                                         (true, label, true)
                                                     }
                                                 };
@@ -9415,7 +9415,7 @@ impl StacklessEngine {
                                 "[EXCEPTION] No handler found - propagating to caller"
                             );
                             // Return error to trigger unwinding - caller will check active_exception
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "exception",
                             ));
                         }
@@ -9430,19 +9430,19 @@ impl StacklessEngine {
                                     if let Some((stored_tag, stored_identity, stored_payload)) = self.exception_storage.get(exn_idx as usize) {
                                         (*stored_tag, stored_identity.clone(), stored_payload.clone())
                                     } else {
-                                        return Err(wrt_error::Error::runtime_trap(
+                                        return Err(kiln_error::Error::runtime_trap(
                                             "invalid exception reference",
                                         ));
                                     }
                                 }
                                 Value::ExnRef(None) => {
                                     // Throwing null exnref is a trap
-                                    return Err(wrt_error::Error::runtime_trap(
+                                    return Err(kiln_error::Error::runtime_trap(
                                         "null exception reference",
                                     ));
                                 }
                                 _ => {
-                                    return Err(wrt_error::Error::runtime_type_mismatch(
+                                    return Err(kiln_error::Error::runtime_type_mismatch(
                                         "throw_ref expects an exnref",
                                     ));
                                 }
@@ -9471,7 +9471,7 @@ impl StacklessEngine {
                                                 if let Ok(handler) = handlers.get(i) {
                                                     let handler_val = handler.clone();
                                                     let (matches, lbl, is_ref) = match handler_val {
-                                                        wrt_foundation::types::CatchHandler::Catch { tag_idx: htag, label: hlbl } => {
+                                                        kiln_foundation::types::CatchHandler::Catch { tag_idx: htag, label: hlbl } => {
                                                             // Get handler tag's effective identity for comparison
                                                             let handler_identity = self.get_effective_tag_identity(instance_id, &module, htag);
                                                             // Match by identity if both have identity, by index if both local-only
@@ -9482,7 +9482,7 @@ impl StacklessEngine {
                                                             };
                                                             (tag_matches, hlbl, false)
                                                         }
-                                                        wrt_foundation::types::CatchHandler::CatchRef { tag_idx: htag, label: hlbl } => {
+                                                        kiln_foundation::types::CatchHandler::CatchRef { tag_idx: htag, label: hlbl } => {
                                                             // Get handler tag's effective identity for comparison
                                                             let handler_identity = self.get_effective_tag_identity(instance_id, &module, htag);
                                                             // Match by identity if both have identity, by index if both local-only
@@ -9493,10 +9493,10 @@ impl StacklessEngine {
                                                             };
                                                             (tag_matches, hlbl, true)
                                                         }
-                                                        wrt_foundation::types::CatchHandler::CatchAll { label } => {
+                                                        kiln_foundation::types::CatchHandler::CatchAll { label } => {
                                                             (true, label, false)
                                                         }
-                                                        wrt_foundation::types::CatchHandler::CatchAllRef { label } => {
+                                                        kiln_foundation::types::CatchHandler::CatchAllRef { label } => {
                                                             (true, label, true)
                                                         }
                                                     };
@@ -9591,10 +9591,10 @@ impl StacklessEngine {
                                     // (thrown_tag_identity was retrieved from exception_storage)
                                     self.active_exception = Some((instance_id, tag_idx, thrown_tag_identity, exception_payload));
                                 }
-                                return Err(wrt_error::Error::runtime_trap("exception"));
+                                return Err(kiln_error::Error::runtime_trap("exception"));
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap(
+                            return Err(kiln_error::Error::runtime_trap(
                                 "throw_ref: stack underflow",
                             ));
                         }
@@ -9666,7 +9666,7 @@ impl StacklessEngine {
                             pc = pc,
                             "[EXCEPTION] Rethrow instruction"
                         );
-                        return Err(wrt_error::Error::runtime_trap(
+                        return Err(kiln_error::Error::runtime_trap(
                             "uncaught exception (rethrow)",
                         ));
                     }
@@ -9730,10 +9730,10 @@ impl StacklessEngine {
                         trace!("StructNew: type_idx={}", type_idx);
                         // For now, create an empty struct reference
                         // Full implementation requires type info to pop correct number of fields
-                        let struct_ref = wrt_foundation::values::StructRef::new(
+                        let struct_ref = kiln_foundation::values::StructRef::new(
                             type_idx,
-                            wrt_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| wrt_error::Error::runtime_error("Failed to create struct"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default()
+                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
                         operand_stack.push(Value::StructRef(Some(struct_ref)));
                     }
 
@@ -9742,10 +9742,10 @@ impl StacklessEngine {
                         // Create struct with default field values
                         #[cfg(feature = "tracing")]
                         trace!("StructNewDefault: type_idx={}", type_idx);
-                        let struct_ref = wrt_foundation::values::StructRef::new(
+                        let struct_ref = kiln_foundation::values::StructRef::new(
                             type_idx,
-                            wrt_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| wrt_error::Error::runtime_error("Failed to create struct"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default()
+                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
                         operand_stack.push(Value::StructRef(Some(struct_ref)));
                     }
 
@@ -9757,10 +9757,10 @@ impl StacklessEngine {
                             if let Ok(field) = s.get_field(field_idx as usize) {
                                 operand_stack.push(field.clone());
                             } else {
-                                return Err(wrt_error::Error::runtime_trap("struct.get: field index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap("struct.get: field index out of bounds"));
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("struct.get: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("struct.get: null reference"));
                         }
                     }
 
@@ -9772,10 +9772,10 @@ impl StacklessEngine {
                             if let Ok(field) = s.get_field(field_idx as usize) {
                                 operand_stack.push(field.clone());
                             } else {
-                                return Err(wrt_error::Error::runtime_trap("struct.get_s: field index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap("struct.get_s: field index out of bounds"));
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("struct.get_s: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("struct.get_s: null reference"));
                         }
                     }
 
@@ -9787,10 +9787,10 @@ impl StacklessEngine {
                             if let Ok(field) = s.get_field(field_idx as usize) {
                                 operand_stack.push(field.clone());
                             } else {
-                                return Err(wrt_error::Error::runtime_trap("struct.get_u: field index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap("struct.get_u: field index out of bounds"));
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("struct.get_u: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("struct.get_u: null reference"));
                         }
                     }
 
@@ -9799,12 +9799,12 @@ impl StacklessEngine {
                         #[cfg(feature = "tracing")]
                         trace!("StructSet: type_idx={}, field_idx={}", type_idx, field_idx);
                         let value = operand_stack.pop().ok_or_else(||
-                            wrt_error::Error::runtime_trap("struct.set: expected value"))?;
+                            kiln_error::Error::runtime_trap("struct.set: expected value"))?;
                         if let Some(Value::StructRef(Some(mut s))) = operand_stack.pop() {
                             s.set_field(field_idx as usize, value).map_err(|_|
-                                wrt_error::Error::runtime_trap("struct.set: field index out of bounds"))?;
+                                kiln_error::Error::runtime_trap("struct.set: field index out of bounds"))?;
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("struct.set: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("struct.set: null reference"));
                         }
                     }
 
@@ -9814,17 +9814,17 @@ impl StacklessEngine {
                         trace!("ArrayNew: type_idx={}", type_idx);
                         let length = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(wrt_error::Error::runtime_trap("array.new: expected i32 length")),
+                            _ => return Err(kiln_error::Error::runtime_trap("array.new: expected i32 length")),
                         };
                         let init_value = operand_stack.pop().ok_or_else(||
-                            wrt_error::Error::runtime_trap("array.new: expected init value"))?;
-                        let mut array_ref = wrt_foundation::values::ArrayRef::new(
+                            kiln_error::Error::runtime_trap("array.new: expected init value"))?;
+                        let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
-                            wrt_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| wrt_error::Error::runtime_error("Failed to create array"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default()
+                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for _ in 0..length {
                             array_ref.push(init_value.clone()).map_err(|_|
-                                wrt_error::Error::runtime_error("Failed to push to array"))?;
+                                kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
                         operand_stack.push(Value::ArrayRef(Some(array_ref)));
                     }
@@ -9835,15 +9835,15 @@ impl StacklessEngine {
                         trace!("ArrayNewDefault: type_idx={}", type_idx);
                         let length = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
-                            _ => return Err(wrt_error::Error::runtime_trap("array.new_default: expected i32 length")),
+                            _ => return Err(kiln_error::Error::runtime_trap("array.new_default: expected i32 length")),
                         };
-                        let mut array_ref = wrt_foundation::values::ArrayRef::new(
+                        let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
-                            wrt_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| wrt_error::Error::runtime_error("Failed to create array"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default()
+                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for _ in 0..length {
                             array_ref.push(Value::I32(0)).map_err(|_|
-                                wrt_error::Error::runtime_error("Failed to push to array"))?;
+                                kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
                         operand_stack.push(Value::ArrayRef(Some(array_ref)));
                     }
@@ -9859,13 +9859,13 @@ impl StacklessEngine {
                             }
                         }
                         values.reverse();
-                        let mut array_ref = wrt_foundation::values::ArrayRef::new(
+                        let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
-                            wrt_foundation::traits::DefaultMemoryProvider::default()
-                        ).map_err(|_| wrt_error::Error::runtime_error("Failed to create array"))?;
+                            kiln_foundation::traits::DefaultMemoryProvider::default()
+                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for v in values {
                             array_ref.push(v).map_err(|_|
-                                wrt_error::Error::runtime_error("Failed to push to array"))?;
+                                kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
                         operand_stack.push(Value::ArrayRef(Some(array_ref)));
                     }
@@ -9876,16 +9876,16 @@ impl StacklessEngine {
                         trace!("ArrayGet: type_idx={}", type_idx);
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
-                            _ => return Err(wrt_error::Error::runtime_trap("array.get: expected i32 index")),
+                            _ => return Err(kiln_error::Error::runtime_trap("array.get: expected i32 index")),
                         };
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             if let Ok(elem) = a.get(index) {
                                 operand_stack.push(elem.clone());
                             } else {
-                                return Err(wrt_error::Error::runtime_trap("array.get: index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap("array.get: index out of bounds"));
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("array.get: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("array.get: null reference"));
                         }
                     }
 
@@ -9895,16 +9895,16 @@ impl StacklessEngine {
                         trace!("ArrayGetS: type_idx={}", type_idx);
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
-                            _ => return Err(wrt_error::Error::runtime_trap("array.get_s: expected i32 index")),
+                            _ => return Err(kiln_error::Error::runtime_trap("array.get_s: expected i32 index")),
                         };
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             if let Ok(elem) = a.get(index) {
                                 operand_stack.push(elem.clone());
                             } else {
-                                return Err(wrt_error::Error::runtime_trap("array.get_s: index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap("array.get_s: index out of bounds"));
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("array.get_s: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("array.get_s: null reference"));
                         }
                     }
 
@@ -9914,16 +9914,16 @@ impl StacklessEngine {
                         trace!("ArrayGetU: type_idx={}", type_idx);
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
-                            _ => return Err(wrt_error::Error::runtime_trap("array.get_u: expected i32 index")),
+                            _ => return Err(kiln_error::Error::runtime_trap("array.get_u: expected i32 index")),
                         };
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             if let Ok(elem) = a.get(index) {
                                 operand_stack.push(elem.clone());
                             } else {
-                                return Err(wrt_error::Error::runtime_trap("array.get_u: index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap("array.get_u: index out of bounds"));
                             }
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("array.get_u: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("array.get_u: null reference"));
                         }
                     }
 
@@ -9932,16 +9932,16 @@ impl StacklessEngine {
                         #[cfg(feature = "tracing")]
                         trace!("ArraySet: type_idx={}", type_idx);
                         let value = operand_stack.pop().ok_or_else(||
-                            wrt_error::Error::runtime_trap("array.set: expected value"))?;
+                            kiln_error::Error::runtime_trap("array.set: expected value"))?;
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
-                            _ => return Err(wrt_error::Error::runtime_trap("array.set: expected i32 index")),
+                            _ => return Err(kiln_error::Error::runtime_trap("array.set: expected i32 index")),
                         };
                         if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
                             a.set(index, value).map_err(|_|
-                                wrt_error::Error::runtime_trap("array.set: index out of bounds"))?;
+                                kiln_error::Error::runtime_trap("array.set: index out of bounds"))?;
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("array.set: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("array.set: null reference"));
                         }
                     }
 
@@ -9952,7 +9952,7 @@ impl StacklessEngine {
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             operand_stack.push(Value::I32(a.len() as i32));
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("array.len: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("array.len: null reference"));
                         }
                     }
 
@@ -9965,7 +9965,7 @@ impl StacklessEngine {
                             let i31_val = (n << 1) >> 1;
                             operand_stack.push(Value::I31Ref(Some(i31_val)));
                         } else {
-                            return Err(wrt_error::Error::runtime_trap("ref.i31: expected i32"));
+                            return Err(kiln_error::Error::runtime_trap("ref.i31: expected i32"));
                         }
                     }
 
@@ -9978,10 +9978,10 @@ impl StacklessEngine {
                                 operand_stack.push(Value::I32(n));
                             }
                             Some(Value::I31Ref(None)) => {
-                                return Err(wrt_error::Error::runtime_trap("i31.get_s: null reference"));
+                                return Err(kiln_error::Error::runtime_trap("i31.get_s: null reference"));
                             }
                             _ => {
-                                return Err(wrt_error::Error::runtime_trap("i31.get_s: expected i31ref"));
+                                return Err(kiln_error::Error::runtime_trap("i31.get_s: expected i31ref"));
                             }
                         }
                     }
@@ -9996,10 +9996,10 @@ impl StacklessEngine {
                                 operand_stack.push(Value::I32(n & 0x7FFFFFFF));
                             }
                             Some(Value::I31Ref(None)) => {
-                                return Err(wrt_error::Error::runtime_trap("i31.get_u: null reference"));
+                                return Err(kiln_error::Error::runtime_trap("i31.get_u: null reference"));
                             }
                             _ => {
-                                return Err(wrt_error::Error::runtime_trap("i31.get_u: expected i31ref"));
+                                return Err(kiln_error::Error::runtime_trap("i31.get_u: expected i31ref"));
                             }
                         }
                     }
@@ -10024,7 +10024,7 @@ impl StacklessEngine {
                         trace!("GC instruction (stub): {:?}", instruction);
                         // These instructions require more complex type system integration
                         // For now, return an error indicating incomplete implementation
-                        return Err(wrt_error::Error::runtime_error(
+                        return Err(kiln_error::Error::runtime_error(
                             "GC instruction not yet fully implemented",
                         ));
                     }
@@ -10033,7 +10033,7 @@ impl StacklessEngine {
                         // CLAUDE.md: FAIL LOUD AND EARLY - return error instead of silently skipping
                         #[cfg(feature = "tracing")]
                         error!("Unimplemented instruction at pc={}: {:?}", pc, instruction);
-                        return Err(wrt_error::Error::runtime_error(
+                        return Err(kiln_error::Error::runtime_error(
                             "Unimplemented instruction encountered",
                         ));
                     }
@@ -10086,7 +10086,7 @@ impl StacklessEngine {
         {
             // Fallback for no_std - return default values
             let mut results = {
-                use wrt_foundation::{
+                use kiln_foundation::{
                     budget_aware_provider::CrateId,
                     safe_managed_alloc,
                 };
@@ -10096,10 +10096,10 @@ impl StacklessEngine {
             };
             for result_type in &func_type.results {
                 let default_value = match result_type {
-                    wrt_foundation::ValueType::I32 => Value::I32(0),
-                    wrt_foundation::ValueType::I64 => Value::I64(0),
-                    wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                    wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                    kiln_foundation::ValueType::I32 => Value::I32(0),
+                    kiln_foundation::ValueType::I64 => Value::I64(0),
+                    kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
+                    kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
                     _ => Value::I32(0),
                 };
                 results.push(default_value)?;
@@ -10124,7 +10124,7 @@ impl StacklessEngine {
         let instance = self
             .instances
             .get(&instance_id)?
-            .ok_or_else(|| wrt_error::Error::runtime_execution_error("Instance not found"))?;
+            .ok_or_else(|| kiln_error::Error::runtime_execution_error("Instance not found"))?;
 
         // For now, implement a basic execution that validates the function exists
         // and returns appropriate results
@@ -10137,7 +10137,7 @@ impl StacklessEngine {
 
         // Validate function index
         if func_idx >= module.functions.len() {
-            return Err(wrt_error::Error::runtime_function_not_found(
+            return Err(kiln_error::Error::runtime_function_not_found(
                 "Function index out of bounds",
             ));
         }
@@ -10145,7 +10145,7 @@ impl StacklessEngine {
         let func = module
             .functions
             .get(func_idx)
-            .map_err(|_| wrt_error::Error::runtime_error("Failed to get function"))?;
+            .map_err(|_| kiln_error::Error::runtime_error("Failed to get function"))?;
 
         #[cfg(feature = "std")]
         #[cfg(feature = "tracing")]
@@ -10162,38 +10162,38 @@ impl StacklessEngine {
         let func_type = module
             .types
             .get(func.type_idx as usize)
-            .ok_or_else(|| wrt_error::Error::runtime_error("Failed to get function type"))?;
+            .ok_or_else(|| kiln_error::Error::runtime_error("Failed to get function type"))?;
 
         // In no_std mode, types is BoundedVec so get() returns Result<T>
         #[cfg(not(feature = "std"))]
         let func_type = &module
             .types
             .get(func.type_idx as usize)
-            .map_err(|_| wrt_error::Error::runtime_error("Failed to get function type"))?;
+            .map_err(|_| kiln_error::Error::runtime_error("Failed to get function type"))?;
 
         // Return appropriate default values based on function signature
         let mut results = {
-            use wrt_foundation::{
+            use kiln_foundation::{
                 budget_aware_provider::CrateId,
                 safe_managed_alloc,
             };
 
             let provider = safe_managed_alloc!(4096, CrateId::Runtime)?;
             BoundedVec::new(provider)
-                .map_err(|_| wrt_error::Error::runtime_error("Failed to create results vector"))?
+                .map_err(|_| kiln_error::Error::runtime_error("Failed to create results vector"))?
         };
         for result_type in &func_type.results {
             let default_value = match result_type {
-                wrt_foundation::ValueType::I32 => Value::I32(0),
-                wrt_foundation::ValueType::I64 => Value::I64(0),
-                wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0.0f32.to_bits())),
-                wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0.0f64.to_bits())),
+                kiln_foundation::ValueType::I32 => Value::I32(0),
+                kiln_foundation::ValueType::I64 => Value::I64(0),
+                kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0.0f32.to_bits())),
+                kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0.0f64.to_bits())),
                 // Add other types as needed
                 _ => Value::I32(0), // Default fallback
             };
             results
                 .push(default_value)
-                .map_err(|_| wrt_error::Error::runtime_error("Failed to push result value"))?;
+                .map_err(|_| kiln_error::Error::runtime_error("Failed to push result value"))?;
         }
 
         Ok(results)
@@ -10217,7 +10217,7 @@ impl StacklessEngine {
         params: &[Value],
         max_instructions: u32,
     ) -> Result<crate::stackless::ExecutionResult> {
-        use wrt_foundation::{
+        use kiln_foundation::{
             budget_aware_provider::CrateId,
             safe_managed_alloc,
         };
@@ -10225,7 +10225,7 @@ impl StacklessEngine {
         // Validate function exists
         let module = instance.module();
         if func_idx >= module.functions.len() {
-            return Err(wrt_error::Error::runtime_function_not_found(
+            return Err(kiln_error::Error::runtime_function_not_found(
                 "Function index out of bounds",
             ));
         }
@@ -10234,38 +10234,38 @@ impl StacklessEngine {
         let func = module
             .functions
             .get(func_idx)
-            .ok_or_else(|| wrt_error::Error::runtime_function_not_found("Failed to get function"))?;
+            .ok_or_else(|| kiln_error::Error::runtime_function_not_found("Failed to get function"))?;
         // In std mode, types is Vec so get() returns Option<&T>
         #[cfg(feature = "std")]
         let func_type = module
             .types
             .get(func.type_idx as usize)
-            .ok_or_else(|| wrt_error::Error::runtime_error("Failed to get function type"))?;
+            .ok_or_else(|| kiln_error::Error::runtime_error("Failed to get function type"))?;
 
         // In no_std mode, types is BoundedVec so get() returns Result<T>
         #[cfg(not(feature = "std"))]
         let func_type = &module
             .types
             .get(func.type_idx as usize)
-            .map_err(|_| wrt_error::Error::runtime_error("Failed to get function type"))?;
+            .map_err(|_| kiln_error::Error::runtime_error("Failed to get function type"))?;
 
         // Simulate step execution - in real implementation would execute instructions
         // For now, return completed with default values
         let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
-        let mut results = wrt_foundation::bounded::BoundedVec::new(provider)
-            .map_err(|_| wrt_error::Error::runtime_error("Failed to create results vector"))?;
+        let mut results = kiln_foundation::bounded::BoundedVec::new(provider)
+            .map_err(|_| kiln_error::Error::runtime_error("Failed to create results vector"))?;
 
         for result_type in &func_type.results {
             let default_value = match result_type {
-                wrt_foundation::ValueType::I32 => Value::I32(0),
-                wrt_foundation::ValueType::I64 => Value::I64(0),
-                wrt_foundation::ValueType::F32 => Value::F32(FloatBits32(0.0f32.to_bits())),
-                wrt_foundation::ValueType::F64 => Value::F64(FloatBits64(0.0f64.to_bits())),
+                kiln_foundation::ValueType::I32 => Value::I32(0),
+                kiln_foundation::ValueType::I64 => Value::I64(0),
+                kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0.0f32.to_bits())),
+                kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0.0f64.to_bits())),
                 _ => Value::I32(0),
             };
             results
                 .push(default_value)
-                .map_err(|_| wrt_error::Error::runtime_error("Failed to push result value"))?;
+                .map_err(|_| kiln_error::Error::runtime_error("Failed to push result value"))?;
         }
 
         // Update instruction pointer
@@ -10300,7 +10300,7 @@ impl StacklessEngine {
         &mut self,
         max_instructions: u32,
     ) -> Result<crate::stackless::ExecutionResult> {
-        use wrt_foundation::{
+        use kiln_foundation::{
             budget_aware_provider::CrateId,
             safe_managed_alloc,
         };
@@ -10324,8 +10324,8 @@ impl StacklessEngine {
 
         // For now, return completed with empty results
         let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
-        let results = wrt_foundation::bounded::BoundedVec::new(provider)
-            .map_err(|_| wrt_error::Error::runtime_error("Failed to create results vector"))?;
+        let results = kiln_foundation::bounded::BoundedVec::new(provider)
+            .map_err(|_| kiln_error::Error::runtime_error("Failed to create results vector"))?;
 
         Ok(crate::stackless::ExecutionResult::Completed(results))
     }
@@ -10364,7 +10364,7 @@ impl StacklessEngine {
         use crate::module::RuntimeImportDesc;
 
         #[cfg(feature = "tracing")]
-        let _span = wrt_foundation::tracing::ImportTrace::lookup("", "").entered();
+        let _span = kiln_foundation::tracing::ImportTrace::lookup("", "").entered();
 
         #[cfg(feature = "tracing")]
         debug!("Looking for function import at index {} (import_order.len()={}, import_types.len()={})",
@@ -10414,7 +10414,7 @@ impl StacklessEngine {
 
         #[cfg(feature = "tracing")]
         trace!("Could not find function import at index {} (import_order.len()={})", func_idx, module.import_order.len());
-        Err(wrt_error::Error::runtime_error("Import not found"))
+        Err(kiln_error::Error::runtime_error("Import not found"))
     }
 
     /// Collect function arguments from operand stack based on function signature
@@ -10443,7 +10443,7 @@ impl StacklessEngine {
 
     /// Get the parameter count for an imported function
     fn get_import_param_count(module: &crate::module::Module, import_idx: usize) -> usize {
-        use wrt_foundation::types::ImportDesc;
+        use kiln_foundation::types::ImportDesc;
 
         // Look up the import's type from import_types
         if let Some(import_desc) = module.import_types.get(import_idx) {
@@ -10502,7 +10502,7 @@ impl StacklessEngine {
             }
         }
 
-        Err(wrt_error::Error::runtime_error("Export function not found"))
+        Err(kiln_error::Error::runtime_error("Export function not found"))
     }
 
     /// Find an import's parameter count by module and field name
@@ -10512,7 +10512,7 @@ impl StacklessEngine {
         module_name: &str,
         field_name: &str,
     ) -> usize {
-        use wrt_foundation::types::ImportDesc;
+        use kiln_foundation::types::ImportDesc;
 
         // Strip version from module name for matching
         let base_module = strip_wasi_version(module_name);
@@ -10587,7 +10587,7 @@ impl StacklessEngine {
         if let Some(Value::I32(ptr)) = results.first() {
             Ok(*ptr as u32)
         } else {
-            Err(wrt_error::Error::runtime_error("cabi_realloc returned invalid value"))
+            Err(kiln_error::Error::runtime_error("cabi_realloc returned invalid value"))
         }
     }
 
@@ -10611,7 +10611,7 @@ impl StacklessEngine {
     ) -> Result<Option<(u32, Vec<(u32, u32)>)>> {
         // Find cabi_realloc export
         let instance = self.instances.get(&instance_id)
-            .ok_or_else(|| wrt_error::Error::runtime_error("Instance not found"))?
+            .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?
             .clone();
         let module = instance.module();
 
@@ -10696,10 +10696,10 @@ impl StacklessEngine {
     /// Ok(()) if successful, Err if allocation fails
     #[cfg(feature = "wasi")]
     pub fn pre_allocate_wasi_args(&mut self, instance_id: usize) -> Result<()> {
-        // Get args from global state (set by wrtd before execution)
+        // Get args from global state (set by kilnd before execution)
         // This is more reliable than using internal dispatcher since it
         // ensures we use the same args that will be returned by get-arguments
-        let args: Vec<String> = wrt_wasi::get_global_wasi_args();
+        let args: Vec<String> = kiln_wasi::get_global_wasi_args();
 
         if args.is_empty() {
             #[cfg(feature = "tracing")]
@@ -10749,7 +10749,7 @@ impl StacklessEngine {
     /// Write data to WASM instance memory
     fn write_to_instance(&self, instance_id: usize, addr: u32, data: &[u8]) -> Result<()> {
         let instance = self.instances.get(&instance_id)
-            .ok_or_else(|| wrt_error::Error::runtime_error("Instance not found"))?;
+            .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?;
 
         #[cfg(feature = "tracing")]
 
@@ -10778,7 +10778,7 @@ impl StacklessEngine {
             #[cfg(feature = "tracing")]
 
             debug!("WASI init: write_to_instance: write at {:#x} + {} bytes would exceed {} byte memory",                      addr, data.len(), bytes);
-            return Err(wrt_error::Error::runtime_execution_error("Write would exceed memory bounds"));
+            return Err(kiln_error::Error::runtime_execution_error("Write would exceed memory bounds"));
         }
 
         memory.0.write_shared(addr, data)?;
@@ -10880,7 +10880,7 @@ impl StacklessEngine {
                     #[cfg(feature = "tracing")]
                     debug!("WASI: Found {} in host registry, calling implementation", field_name);
 
-                    let args: Vec<wrt_foundation::Value> = vec![];
+                    let args: Vec<kiln_foundation::Value> = vec![];
                     let mut dummy_engine: i32 = 0;
                     match registry.call_host_function(&mut dummy_engine, module_name, field_name, args) {
                         Ok(result) => {
@@ -10911,7 +10911,7 @@ impl StacklessEngine {
             // reuses our memory for other purposes.
             #[cfg(feature = "wasi")]
             let args_alloc = if module_name.contains("wasi:cli/environment") && field_name == "get-arguments" {
-                let wasi_args = wrt_wasi::get_global_wasi_args();
+                let wasi_args = kiln_wasi::get_global_wasi_args();
                 if !wasi_args.is_empty() {
                     #[cfg(feature = "tracing")]
                     trace!(
@@ -10958,13 +10958,13 @@ impl StacklessEngine {
 
                 // Get instance and memory
                 let instance = self.instances.get(&instance_id)
-                    .ok_or_else(|| wrt_error::Error::runtime_error("Instance not found for host handler call"))?
+                    .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found for host handler call"))?
                     .clone();
 
                 // Get memory as MemoryAccessor
                 let mem_wrapper = instance.memory(0).ok();
-                let memory: Option<&dyn wrt_foundation::MemoryAccessor> = mem_wrapper.as_ref()
-                    .map(|m| m.0.as_ref() as &dyn wrt_foundation::MemoryAccessor);
+                let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+                    .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
 
                 // Collect args from stack based on function signature
                 let args = Self::collect_import_args_by_name(&module, module_name, field_name, stack);
@@ -10995,7 +10995,7 @@ impl StacklessEngine {
         // The host_handler routes to WasiDispatcher which handles all WASI functions
         //
         // If we reach here, it means:
-        // 1. host_handler was not configured (wrtd should always configure it)
+        // 1. host_handler was not configured (kilnd should always configure it)
         // 2. The caller is using the engine without proper WASI setup
         //
         // This is NOT a fallback - it's a hard error per CLAUDE.md:
@@ -11007,7 +11007,7 @@ impl StacklessEngine {
             "[WASI] No host_handler configured - cannot dispatch WASI function"
         );
 
-        Err(wrt_error::Error::runtime_error(
+        Err(kiln_error::Error::runtime_error(
             "WASI function called but no host_handler configured. \
              Use engine.set_host_handler() with a WasiDispatcher to enable WASI support."
         ))
@@ -11016,7 +11016,7 @@ impl StacklessEngine {
 
 // REMOVED: ~950 lines of inline WASI dispatch code
 // All WASI dispatch is now handled by WasiDispatcher via HostImportHandler trait
-// See wrt-wasi/src/dispatcher.rs for the implementation
+// See kiln-wasi/src/dispatcher.rs for the implementation
 
 impl Default for StacklessEngine {
     #[cfg(any(feature = "std", feature = "alloc"))]

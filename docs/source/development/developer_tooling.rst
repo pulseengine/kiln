@@ -31,7 +31,7 @@ The following configuration files define standards and tool behavior across the 
 Local Development Workflow & Checks
 -----------------------------------
 
-The unified `cargo-wrt` build tool provides convenient commands for common development tasks and running checks.
+The unified `cargo-kiln` build tool provides convenient commands for common development tasks and running checks.
 
 .. _dev-formatting:
 
@@ -41,7 +41,7 @@ Code Formatting
 *   **Tool**: `rustfmt`
 *   **Configuration**: `rustfmt.toml`
 *   **Usage**:
-    *   To format and check all code: ``cargo-wrt check`` (includes formatting)
+    *   To format and check all code: ``cargo-kiln check`` (includes formatting)
     *   To check formatting only: ``cargo fmt --check`` (if needed separately)
 
 .. _dev-linting:
@@ -52,17 +52,17 @@ Linting with Clippy
 *   **Tool**: `clippy`
 *   **Configuration**: `[lints.clippy]` in `Cargo.toml` files.
 *   **Usage**:
-    *   Run clippy checks: ``cargo-wrt check`` (all warnings treated as errors)
-    *   Clippy is also run as part of ``cargo-wrt ci``.
+    *   Run clippy checks: ``cargo-kiln check`` (all warnings treated as errors)
+    *   Clippy is also run as part of ``cargo-kiln ci``.
 
 .. _dev-file-checks:
 
 Project File & Header Checks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*   **Tool**: Integrated into `cargo-wrt`.
+*   **Tool**: Integrated into `cargo-kiln`.
 *   **Usage**:
-    *   All file and header checks are integrated into: ``cargo-wrt ci``
+    *   All file and header checks are integrated into: ``cargo-kiln ci``
     *   Includes checking for essential project files, file headers, copyright, license, SPDX, and ``#![forbid(unsafe_code)]``
 
 .. _dev-dependency-checks:
@@ -71,18 +71,18 @@ Dependency Management & Audit
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 *   **Dependency Policy & Security**:
-    *   **Tools**: `cargo-deny`, `cargo-udeps`, `cargo-audit` (integrated into cargo-wrt)
+    *   **Tools**: `cargo-deny`, `cargo-udeps`, `cargo-audit` (integrated into cargo-kiln)
     *   **Configuration**: `deny.toml`
-    *   **Usage**: ``cargo-wrt ci`` (includes dependency policy, unused deps, and security audit)
-    *   **Strict checks**: ``cargo-wrt check --strict`` (additional dependency analysis)
+    *   **Usage**: ``cargo-kiln ci`` (includes dependency policy, unused deps, and security audit)
+    *   **Strict checks**: ``cargo-kiln check --strict`` (additional dependency analysis)
 
 .. _dev-geiger:
 
 Unsafe Code Detection
 ~~~~~~~~~~~~~~~~~~~~~
 
-*   **Tool**: `cargo-geiger` (integrated into cargo-wrt)
-*   **Usage**: ``cargo-wrt ci`` (includes unsafe code detection)
+*   **Tool**: `cargo-geiger` (integrated into cargo-kiln)
+*   **Usage**: ``cargo-kiln ci`` (includes unsafe code detection)
     This tool scans for `unsafe` Rust code usage and provides statistics.
 
 .. _dev-spell-check:
@@ -92,7 +92,7 @@ Spell Checking
 
 *   **Tool**: `cspell` (requires installation: `npm install -g cspell`)
 *   **Configuration**: `cspell.json`
-*   **Usage**: ``cargo-wrt ci`` (includes spell checking if cspell is available)
+*   **Usage**: ``cargo-kiln ci`` (includes spell checking if cspell is available)
 *   **External setup**: Install cspell manually with `npm install -g cspell`
 
 .. _dev-testing:
@@ -100,30 +100,30 @@ Spell Checking
 Running Tests
 ~~~~~~~~~~~~~
 
-*   **Unit & Integration Tests**: ``cargo-wrt test`` (runs comprehensive test suite)
-*   **Main CI Check Suite**: ``cargo-wrt ci``
+*   **Unit & Integration Tests**: ``cargo-kiln test`` (runs comprehensive test suite)
+*   **Main CI Check Suite**: ``cargo-kiln ci``
     *   Includes: build, toolchain checks, formatting, linting, file/header checks, dependency policy, unsafe code detection, tests, documentation, and more.
 *   **Additional Test Options**:
 
-        *   ``cargo-wrt test --miri``: Runs tests under Miri to detect undefined behavior.
-        *   ``cargo-wrt kani-verify``: Runs Kani formal verification proofs.
-        *   ``cargo-wrt coverage``: Generates code coverage reports.
-        *   ``cargo-wrt verify-matrix``: Comprehensive build matrix verification.
+        *   ``cargo-kiln test --miri``: Runs tests under Miri to detect undefined behavior.
+        *   ``cargo-kiln kani-verify``: Runs Kani formal verification proofs.
+        *   ``cargo-kiln coverage``: Generates code coverage reports.
+        *   ``cargo-kiln verify-matrix``: Comprehensive build matrix verification.
 
 CI Pipeline Overview
 --------------------
 
-The CI pipeline (defined in `.github/workflows/ci.yml`) automates most of these checks using the unified `cargo-wrt` build system. Key jobs include:
+The CI pipeline (defined in `.github/workflows/ci.yml`) automates most of these checks using the unified `cargo-kiln` build system. Key jobs include:
 
-*   **Build & Test**: Runs ``cargo-wrt build`` and ``cargo-wrt test``.
-*   **Comprehensive CI**: Runs ``cargo-wrt ci`` which covers:
+*   **Build & Test**: Runs ``cargo-kiln build`` and ``cargo-kiln test``.
+*   **Comprehensive CI**: Runs ``cargo-kiln ci`` which covers:
     *   Code formatting and linting
     *   File and header validation
     *   Dependency policy and security audits
     *   Unsafe code detection
     *   Documentation builds
     *   Test execution
-*   **Formal Verification**: Runs ``cargo-wrt kani-verify`` for safety-critical verification.
-*   **Build Matrix**: Runs ``cargo-wrt verify-matrix`` for comprehensive configuration testing.
+*   **Formal Verification**: Runs ``cargo-kiln kani-verify`` for safety-critical verification.
+*   **Build Matrix**: Runs ``cargo-kiln verify-matrix`` for comprehensive configuration testing.
 
 This unified approach ensures that code merged into the main branch adheres to the defined quality and safety standards while providing a consistent development experience.

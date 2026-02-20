@@ -1,15 +1,15 @@
-//! Simple test to verify safety feature enforcement without wrt-component
+//! Simple test to verify safety feature enforcement without kiln-component
 //! dependency
 
-use wrt_foundation::{
+use kiln_foundation::{
     memory_init::{
         init_crate_memory,
-        init_wrt_memory,
+        init_kiln_memory,
     },
     safe_managed_alloc,
     CrateId,
 };
-use wrt_wasi::{
+use kiln_wasi::{
     wasi_max_allocation_size,
     wasi_safety_level,
 };
@@ -68,7 +68,7 @@ fn test_allocation_limits() {
 #[test]
 fn test_safety_aware_allocation() {
     // Initialize memory system first
-    init_wrt_memory().unwrap();
+    init_kiln_memory().unwrap();
     init_crate_memory(CrateId::Wasi).unwrap();
 
     // Small allocation should always work

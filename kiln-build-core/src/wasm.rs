@@ -92,7 +92,7 @@ impl WasmVerifier {
 
         let start_time = Instant::now();
 
-        // Parse the module using wrt-decoder unified loader
+        // Parse the module using kiln-decoder unified loader
         let mut imports = Vec::new();
         let mut exports = Vec::new();
         let mut builtin_imports = Vec::new();
@@ -100,7 +100,7 @@ impl WasmVerifier {
         let section_count = 0; // Will be updated when we have section counting
         let version = 1; // WebAssembly version 1
 
-        match wrt_decoder::load_wasm_unified(&module_bytes) {
+        match kiln_decoder::load_wasm_unified(&module_bytes) {
             Ok(wasm_info) => {
                 match &wasm_info.module_info {
                     Some(module_info) => {

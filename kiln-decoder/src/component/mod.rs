@@ -59,7 +59,7 @@ pub use val_type::encode_val_type;
 pub use validation::{ValidationConfig, validate_component};
 #[cfg(feature = "std")]
 pub use validation::{ValidationConfig, validate_component, validate_component_with_config};
-use wrt_error::{Error, ErrorCategory, Result, codes};
+use kiln_error::{Error, ErrorCategory, Result, codes};
 
 #[cfg(not(feature = "std"))]
 use crate::prelude::*;
@@ -77,7 +77,7 @@ pub enum BinaryType {
 // No_std safe utility functions with bounded behavior
 #[cfg(not(feature = "std"))]
 mod no_std_utils {
-    use wrt_foundation::BoundedString;
+    use kiln_foundation::BoundedString;
 
     use super::*;
 
@@ -217,7 +217,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
     // Track index counters for each sort to assign dest_idx to aliases
     // These are incremented for both aliases AND canon definitions
     // IMPORTANT: Core and component index spaces are SEPARATE
-    use wrt_format::component::{CanonOperation, CoreSort};
+    use kiln_format::component::{CanonOperation, CoreSort};
 
     // Core-level counters (for CoreInstanceExport aliases)
     let mut core_func_counter = 0u32;
@@ -242,11 +242,11 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
         offset += 1;
 
         // Read section size
-        let (section_size, size_len) = wrt_format::binary::read_leb128_u32(data, offset)?;
+        let (section_size, size_len) = kiln_format::binary::read_leb128_u32(data, offset)?;
         offset += size_len;
 
         #[cfg(feature = "tracing")]
-        wrt_foundation::tracing::trace!(
+        kiln_foundation::tracing::trace!(
             section_id = format!("0x{:02x}", section_id),
             offset = offset - size_len - 1,
             size = section_size,
@@ -294,7 +294,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                 match parse::parse_core_instance_section(section_data) {
                     Ok((instances, _)) => {
                         #[cfg(feature = "tracing")]
-                        wrt_foundation::tracing::trace!(
+                        kiln_foundation::tracing::trace!(
                             from = component.core_instances.len(),
                             to = component.core_instances.len() + instances.len(),
                             added = instances.len(),
@@ -305,7 +305,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                     Err(e) => {
                         // Continue parsing other sections
                         #[cfg(feature = "tracing")]
-                        wrt_foundation::tracing::warn!(error = ?e, "ERROR parsing core instances");
+                        kiln_foundation::tracing::warn!(error = ?e, "ERROR parsing core instances");
                     },
                 }
             },
@@ -325,7 +325,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                 match parse::parse_component_section(section_data) {
                     Ok((components, _bytes_consumed)) => {
                         #[cfg(feature = "tracing")]
-                        wrt_foundation::tracing::trace!(
+                        kiln_foundation::tracing::trace!(
                             count = components.len(),
                             "Parsed nested components"
                         );
@@ -334,7 +334,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                     Err(e) => {
                         // Following "FAIL LOUD AND EARLY" principle - propagate nested component parse errors
                         #[cfg(feature = "tracing")]
-                        wrt_foundation::tracing::error!(error = %e, "Failed to parse nested component section");
+                        kiln_foundation::tracing::error!(error = %e, "Failed to parse nested component section");
                         return Err(e);
                     },
                 }
@@ -355,14 +355,14 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                 match parse::parse_alias_section(section_data) {
                     Ok((mut aliases, _)) => {
                         #[cfg(feature = "tracing")]
-                        wrt_foundation::tracing::trace!(
+                        kiln_foundation::tracing::trace!(
                             count = aliases.len(),
                             "Parsed aliases section"
                         );
 
                         // Assign dest_idx to each alias based on its sort and current counter
                         for alias in &mut aliases {
-                            use wrt_format::component::{AliasTarget, Sort};
+                            use kiln_format::component::{AliasTarget, Sort};
                             match &alias.target {
                                 AliasTarget::CoreInstanceExport { kind, .. } => {
                                     // Core-level aliases use core counters
@@ -405,7 +405,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                                     };
                                     alias.dest_idx = Some(idx);
                                     #[cfg(feature = "tracing")]
-                                    wrt_foundation::tracing::trace!(kind = ?kind, idx = idx, "Assigned CoreInstanceExport");
+                                    kiln_foundation::tracing::trace!(kind = ?kind, idx = idx, "Assigned CoreInstanceExport");
                                 },
                                 AliasTarget::InstanceExport { kind, .. } => {
                                     // Component-level aliases use component counters
@@ -438,7 +438,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                                         Sort::Core(_) => {
                                             // Core sorts in InstanceExport are unusual, skip for now
                                             #[cfg(feature = "tracing")]
-                                            wrt_foundation::tracing::warn!(
+                                            kiln_foundation::tracing::warn!(
                                                 "InstanceExport with Core sort"
                                             );
                                             continue;
@@ -446,13 +446,13 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                                     };
                                     alias.dest_idx = Some(idx);
                                     #[cfg(feature = "tracing")]
-                                    wrt_foundation::tracing::trace!(kind = ?kind, idx = idx, "Assigned InstanceExport");
+                                    kiln_foundation::tracing::trace!(kind = ?kind, idx = idx, "Assigned InstanceExport");
                                 },
                                 AliasTarget::Outer { .. } => {
                                     // Outer aliases reference parent component's index space
                                     // These don't consume indices in the current component
                                     #[cfg(feature = "tracing")]
-                                    wrt_foundation::tracing::trace!(
+                                    kiln_foundation::tracing::trace!(
                                         "Outer alias (no index assigned)"
                                     );
                                 },
@@ -463,7 +463,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                     },
                     Err(e) => {
                         #[cfg(feature = "tracing")]
-                        wrt_foundation::tracing::warn!(error = ?e, "ERROR parsing alias section");
+                        kiln_foundation::tracing::warn!(error = ?e, "ERROR parsing alias section");
                         // Continue parsing other sections
                     },
                 }
@@ -485,7 +485,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                 match parse::parse_canon_section(section_data) {
                     Ok((canons, _)) => {
                         #[cfg(feature = "tracing")]
-                        wrt_foundation::tracing::trace!(
+                        kiln_foundation::tracing::trace!(
                             count = canons.len(),
                             "Parsed canonicals section"
                         );
@@ -496,7 +496,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                                 CanonOperation::Lower { .. } => {
                                     // Canon lower creates a CORE function
                                     #[cfg(feature = "tracing")]
-                                    wrt_foundation::tracing::trace!(
+                                    kiln_foundation::tracing::trace!(
                                         idx = core_func_counter,
                                         "Canon lower creates core func"
                                     );
@@ -505,7 +505,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                                 CanonOperation::Lift { .. } => {
                                     // Canon lift creates a COMPONENT function
                                     #[cfg(feature = "tracing")]
-                                    wrt_foundation::tracing::trace!(
+                                    kiln_foundation::tracing::trace!(
                                         idx = component_func_counter,
                                         "Canon lift creates component func"
                                     );
@@ -514,7 +514,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                                 CanonOperation::Resource(_) => {
                                     // Resource operations (like resource.drop) create CORE functions
                                     #[cfg(feature = "tracing")]
-                                    wrt_foundation::tracing::trace!(
+                                    kiln_foundation::tracing::trace!(
                                         idx = core_func_counter,
                                         "Canon resource creates core func"
                                     );
@@ -530,7 +530,7 @@ fn parse_component_sections(data: &[u8], component: &mut Component) -> Result<()
                     },
                     Err(e) => {
                         #[cfg(feature = "tracing")]
-                        wrt_foundation::tracing::warn!(error = ?e, "ERROR parsing canon section");
+                        kiln_foundation::tracing::warn!(error = ?e, "ERROR parsing canon section");
                         // Continue parsing other sections
                     },
                 }

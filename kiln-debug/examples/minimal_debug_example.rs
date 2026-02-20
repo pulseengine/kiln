@@ -2,7 +2,7 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Minimal example demonstrating wrt-debug with no features enabled
+//! Minimal example demonstrating kiln-debug with no features enabled
 //!
 //! This example shows the absolute minimum debug functionality when all
 //! optional features are disabled. Only basic section registration is
@@ -11,7 +11,7 @@
 #![no_std]
 #![no_main]
 
-use wrt_debug::prelude::*;
+use kiln_debug::prelude::*;
 
 // Example module bytes
 const MODULE_BYTES: &[u8] = &[
@@ -65,4 +65,4 @@ pub extern "C" fn conditional_debug_features() -> u32 {
     feature_count
 }
 
-// Panic handler removed - provided by wrt-platform crate
+// Panic handler removed - provided by kiln-platform crate

@@ -1,8 +1,8 @@
-// WRT - wrt-platform
+// Kiln - kiln-platform
 // Module: Platform Synchronization Primitives
 // SW-REQ-ID: REQ_PLATFORM_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
@@ -34,10 +34,10 @@ pub use std::sync::{
 };
 
 #[cfg(not(feature = "std"))]
-pub use wrt_sync::{
-    WrtMutex as Mutex,
-    WrtMutexGuard as MutexGuard,
-    WrtRwLock as RwLock,
+pub use kiln_sync::{
+    KilnMutex as Mutex,
+    KilnMutexGuard as MutexGuard,
+    KilnRwLock as RwLock,
 };
 
 use crate::prelude::Result;
@@ -58,7 +58,7 @@ impl Condvar {
 
     /// Wait on the condition variable (not supported in no_std)
     pub fn wait<'a, T>(&self, _guard: MutexGuard<'a, T>) -> Result<MutexGuard<'a, T>> {
-        Err(wrt_error::Error::runtime_not_implemented(
+        Err(kiln_error::Error::runtime_not_implemented(
             "Condvar not supported in no_std",
         ))
     }
@@ -223,7 +223,7 @@ impl FutexLike for SpinFutex {
         // If we get here, we've timed out
         if timeout.is_some() {
             // Return a system error for timeout
-            Err(wrt_error::Error::system_error("Operation timed out"))
+            Err(kiln_error::Error::system_error("Operation timed out"))
         } else {
             // Should never reach here with infinite timeout
             Ok(())
@@ -244,7 +244,7 @@ impl FutexLike for SpinFutex {
 mod tests {
     use core::time::Duration;
 
-    use wrt_error::{
+    use kiln_error::{
         ErrorCategory,
         ErrorSource,
     };

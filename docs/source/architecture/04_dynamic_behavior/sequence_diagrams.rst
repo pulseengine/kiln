@@ -4,7 +4,7 @@ Sequence Diagrams
 ==================
 
 This section provides detailed sequence diagrams showing the dynamic interactions between
-components in PulseEngine (WRT Edition) across different runtime environments and scenarios.
+components in PulseEngine (Kiln Edition) across different runtime environments and scenarios.
 
 .. warning::
    **Design Documentation**: These sequence diagrams show the intended design and interactions.
@@ -259,7 +259,7 @@ Function Execution with Error Handling
    deactivate Engine
    
    Runtime -> Runtime: cleanup_failed_execution()
-   Runtime --> User: Err(WrtError)
+   Runtime --> User: Err(KilnError)
    deactivate Runtime
    @enduml
 
@@ -517,10 +517,10 @@ Error Context Building
    activate ErrorCtx
    ErrorCtx -> ErrorCtx: create_error_chain()
    note right: execution_state, call_stack
-   ErrorCtx --> Runtime: WrtError
+   ErrorCtx --> Runtime: KilnError
    deactivate ErrorCtx
    
-   Runtime --> User: Err(WrtError)
+   Runtime --> User: Err(KilnError)
    deactivate Runtime
    @enduml
 

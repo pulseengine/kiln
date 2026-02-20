@@ -12,8 +12,8 @@
 
 // Legacy imports for backward compatibility (deprecated)
 #[allow(deprecated)]
-use crate::wrt_memory_system::{
-    CapabilityWrtFactory,
+use crate::kiln_memory_system::{
+    CapabilityKilnFactory,
     NoStdProviderFactory,
 };
 use crate::{
@@ -138,7 +138,7 @@ pub mod capability_factories {
 /// # Examples
 ///
 /// ```rust
-/// use wrt_foundation::{
+/// use kiln_foundation::{
 ///     capability_managed_alloc,
 ///     CrateId,
 ///     MemoryCapabilityContext,

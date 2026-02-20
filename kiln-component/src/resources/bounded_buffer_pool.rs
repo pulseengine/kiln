@@ -1,10 +1,10 @@
-// WRT - wrt-component
+// WRT - kiln-component
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-use wrt_error::{Error, ErrorCategory, Result, codes};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, Result, codes};
+use kiln_foundation::{
     budget_aware_provider::CrateId, capabilities::CapabilityAwareProvider,
     collections::StaticVec as BoundedVec, safe_managed_alloc,
 };
@@ -14,7 +14,7 @@ use crate::bounded_component_infra::BufferProvider;
 /// Helper function to create buffer pool provider using capability-driven
 /// design
 fn create_buffer_provider() -> Result<BufferProvider> {
-    use wrt_foundation::memory_init::get_global_capability_context;
+    use kiln_foundation::memory_init::get_global_capability_context;
 
     let context = get_global_capability_context()
         .map_err(|_| Error::initialization_error("Global capability context not available"))?;

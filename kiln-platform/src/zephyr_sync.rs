@@ -1,7 +1,7 @@
 #![allow(unsafe_code)]
 #![allow(dead_code)]
 // Allow unsafe FFI calls to Zephyr kernel
-// WRT - wrt-platform
+// WRT - kiln-platform
 // Module: Zephyr Synchronization Primitives
 // SW-REQ-ID: REQ_PLATFORM_001
 //
@@ -22,7 +22,7 @@ use core::{
     time::Duration,
 };
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,

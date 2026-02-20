@@ -1,7 +1,7 @@
-//! Memory budget limits for wrtd safety-critical operations
+//! Memory budget limits for kilnd safety-critical operations
 //!
 //! This module defines compile-time memory limits for all bounded collections
-//! used in the wrtd daemon when the safety-critical feature is enabled.
+//! used in the kilnd daemon when the safety-critical feature is enabled.
 
 #![cfg(feature = "safety-critical")]
 
@@ -34,7 +34,7 @@ pub mod execution {
 mod validation {
     use super::*;
 
-    /// Total wrtd memory budget in bytes (512 KiB)
+    /// Total kilnd memory budget in bytes (512 KiB)
     const TOTAL_BUDGET: usize = 512 * 1024;
 
     #[test]

@@ -12,8 +12,8 @@ use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use alloc::vec::Vec;
 
-use wrt_format::module::{ImportDesc, Module as WrtModule};
-use wrt_foundation::safe_memory::NoStdProvider;
+use kiln_format::module::{ImportDesc, Module as KilnModule};
+use kiln_foundation::safe_memory::NoStdProvider;
 
 use crate::prelude::*;
 
@@ -31,14 +31,14 @@ type DecoderProvider = NoStdProvider<65536>;
 /// # Returns
 /// * A decoded Module ready for runtime use
 #[cfg(feature = "std")]
-pub fn decode_module(binary: &[u8]) -> Result<WrtModule> {
+pub fn decode_module(binary: &[u8]) -> Result<KilnModule> {
     // Use streaming decoder for std builds
     crate::streaming_decoder::decode_module_streaming(binary)
 }
 
 /// Decode a WebAssembly module from binary format (no_std version)
 #[cfg(not(feature = "std"))]
-pub fn decode_module(binary: &[u8]) -> Result<WrtModule<DecoderProvider>> {
+pub fn decode_module(binary: &[u8]) -> Result<KilnModule<DecoderProvider>> {
     // Use the streaming decoder for minimal memory usage
     let module = crate::streaming_decoder::decode_module_streaming(binary)?;
     // Convert from the streaming decoder's provider to our provider
@@ -48,64 +48,64 @@ pub fn decode_module(binary: &[u8]) -> Result<WrtModule<DecoderProvider>> {
 
 /// Convert a module from one provider to another (std version)
 #[cfg(feature = "std")]
-fn convert_module_provider(source: WrtModule) -> WrtModule {
+fn convert_module_provider(source: KilnModule) -> KilnModule {
     // In std mode, no conversion needed
     source
 }
 
 /// Convert a module from one provider to another (no_std version)
 #[cfg(not(feature = "std"))]
-fn convert_module_provider(_source: WrtModule<NoStdProvider<8192>>) -> WrtModule<DecoderProvider> {
+fn convert_module_provider(_source: KilnModule<NoStdProvider<8192>>) -> KilnModule<DecoderProvider> {
     // For now, create a new empty module
     // In a real implementation, we would copy all fields
     let provider = DecoderProvider::default();
-    WrtModule::default()
+    KilnModule::default()
 }
 
 /// Convert import descriptor from foundation to format types (std version)
 #[cfg(feature = "std")]
 fn convert_import_desc(
-    desc: wrt_foundation::types::ImportDesc<DecoderProvider>,
-) -> wrt_format::module::ImportDesc {
+    desc: kiln_foundation::types::ImportDesc<DecoderProvider>,
+) -> kiln_format::module::ImportDesc {
     match desc {
-        wrt_foundation::types::ImportDesc::Function(idx) => {
-            wrt_format::module::ImportDesc::Function(idx)
+        kiln_foundation::types::ImportDesc::Function(idx) => {
+            kiln_format::module::ImportDesc::Function(idx)
         },
-        wrt_foundation::types::ImportDesc::Table(table_type) => {
-            // wrt_format::module::Table is a type alias for WrtTableType
-            wrt_format::module::ImportDesc::Table(table_type)
+        kiln_foundation::types::ImportDesc::Table(table_type) => {
+            // kiln_format::module::Table is a type alias for KilnTableType
+            kiln_format::module::ImportDesc::Table(table_type)
         },
-        wrt_foundation::types::ImportDesc::Memory(mem_type) => {
-            // wrt_format::module::Memory is a type alias for WrtMemoryType
-            wrt_format::module::ImportDesc::Memory(mem_type)
+        kiln_foundation::types::ImportDesc::Memory(mem_type) => {
+            // kiln_format::module::Memory is a type alias for KilnMemoryType
+            kiln_format::module::ImportDesc::Memory(mem_type)
         },
-        wrt_foundation::types::ImportDesc::Global(global_type) => {
-            wrt_format::module::ImportDesc::Global(wrt_format::types::FormatGlobalType {
+        kiln_foundation::types::ImportDesc::Global(global_type) => {
+            kiln_format::module::ImportDesc::Global(kiln_format::types::FormatGlobalType {
                 value_type: global_type.value_type,
                 mutable: global_type.mutable,
             })
         },
-        wrt_foundation::types::ImportDesc::Extern(_) => {
+        kiln_foundation::types::ImportDesc::Extern(_) => {
             // For now, treat extern as function
-            wrt_format::module::ImportDesc::Function(0)
+            kiln_format::module::ImportDesc::Function(0)
         },
-        wrt_foundation::types::ImportDesc::Resource(_) => {
+        kiln_foundation::types::ImportDesc::Resource(_) => {
             // For now, treat resource as function
-            wrt_format::module::ImportDesc::Function(0)
+            kiln_format::module::ImportDesc::Function(0)
         },
-        wrt_foundation::types::ImportDesc::_Phantom(_) => {
+        kiln_foundation::types::ImportDesc::_Phantom(_) => {
             // This should never occur in practice, but we need to handle it
-            wrt_format::module::ImportDesc::Function(0)
+            kiln_format::module::ImportDesc::Function(0)
         },
-        wrt_foundation::types::ImportDesc::Tag(tag_type) => {
-            wrt_format::module::ImportDesc::Tag(tag_type.type_idx)
+        kiln_foundation::types::ImportDesc::Tag(tag_type) => {
+            kiln_format::module::ImportDesc::Tag(tag_type.type_idx)
         },
     }
 }
 
 #[cfg(feature = "std")]
-fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result<WrtModule> {
-    let mut module = WrtModule {
+fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result<KilnModule> {
+    let mut module = KilnModule {
         types: Vec::new(),
         functions: Vec::new(),
         tables: Vec::new(),
@@ -118,7 +118,7 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
         start: None,
         custom_sections: Vec::new(),
         binary: None,
-        core_version: wrt_format::types::CoreWasmVersion::default(),
+        core_version: kiln_format::types::CoreWasmVersion::default(),
         type_info_section: None,
         tags: Vec::new(),
     };
@@ -128,7 +128,7 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
             crate::sections::Section::Type(types) => {
                 for func_type in types {
                     // Convert FuncType to CleanCoreFuncType
-                    let clean_func_type = wrt_foundation::CleanCoreFuncType {
+                    let clean_func_type = kiln_foundation::CleanCoreFuncType {
                         params: func_type.params.into_iter().collect(),
                         results: func_type.results.into_iter().collect(),
                     };
@@ -137,8 +137,8 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
             },
             crate::sections::Section::Import(imports) => {
                 for import in imports {
-                    // Convert from wrt_foundation Import to wrt_format Import
-                    let format_import = wrt_format::module::Import {
+                    // Convert from kiln_foundation Import to kiln_format Import
+                    let format_import = kiln_format::module::Import {
                         module: import.module_name.as_str().unwrap_or("").to_string(),
                         name: import.item_name.as_str().unwrap_or("").to_string(),
                         desc: convert_import_desc(import.desc.clone()),
@@ -147,8 +147,8 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
 
                     // CRITICAL: Add imported functions to the functions vector
                     // This ensures proper function indexing
-                    if let wrt_foundation::types::ImportDesc::Function(type_idx) = import.desc {
-                        let func = wrt_format::module::Function {
+                    if let kiln_foundation::types::ImportDesc::Function(type_idx) = import.desc {
+                        let func = kiln_format::module::Function {
                             type_idx,
                             locals: Vec::new(),
                             code: Vec::new(), // Imported functions have no code
@@ -159,7 +159,7 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
             },
             crate::sections::Section::Function(func_indices) => {
                 for type_idx in func_indices {
-                    let func = wrt_format::module::Function {
+                    let func = kiln_format::module::Function {
                         type_idx,
                         locals: Vec::new(),
                         code: Vec::new(),
@@ -180,8 +180,8 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
             crate::sections::Section::Global(globals) => {
                 for global_type in globals {
                     // Convert from GlobalType to Global
-                    let global = wrt_format::module::Global {
-                        global_type: wrt_format::types::FormatGlobalType {
+                    let global = kiln_format::module::Global {
+                        global_type: kiln_format::types::FormatGlobalType {
                             value_type: global_type.value_type,
                             mutable: global_type.mutable,
                         },
@@ -221,7 +221,7 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
                     .count();
 
                 #[cfg(feature = "tracing")]
-                wrt_foundation::tracing::trace!(
+                kiln_foundation::tracing::trace!(
                     code_bodies = code_bodies.len(),
                     num_imports = num_imports,
                     total_functions = module.functions.len(),
@@ -233,7 +233,7 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
                     let func_idx = num_imports + idx;
 
                     #[cfg(feature = "tracing")]
-                    wrt_foundation::tracing::trace!(
+                    kiln_foundation::tracing::trace!(
                         idx = idx,
                         func_idx = func_idx,
                         "Assigning code body to function"
@@ -243,7 +243,7 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
                         func.code = body.into_iter().collect();
                     } else {
                         #[cfg(feature = "tracing")]
-                        wrt_foundation::tracing::warn!(
+                        kiln_foundation::tracing::warn!(
                             func_idx = func_idx,
                             "Function index not found in functions vector"
                         );
@@ -251,7 +251,7 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
                 }
             },
             crate::sections::Section::Custom { name, data } => {
-                let custom = wrt_format::section::CustomSection {
+                let custom = kiln_format::section::CustomSection {
                     name: name.clone(),
                     data: data.into_iter().collect(),
                 };
@@ -270,15 +270,15 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
 #[cfg(not(feature = "std"))]
 fn build_module_from_sections(
     sections: crate::bounded_decoder_infra::BoundedSectionVec<crate::sections::Section>,
-) -> Result<WrtModule<DecoderProvider>> {
+) -> Result<KilnModule<DecoderProvider>> {
     let provider = DecoderProvider::default();
-    let mut module: WrtModule<DecoderProvider> = WrtModule::new();
+    let mut module: KilnModule<DecoderProvider> = KilnModule::new();
 
     for section in sections {
         match section {
             crate::sections::Section::Type(types) => {
                 for func_type in types {
-                    // TODO: Fix type conversion from WrtFuncType to ValueType
+                    // TODO: Fix type conversion from KilnFuncType to ValueType
                 }
             },
             crate::sections::Section::Import(imports) => {
@@ -289,13 +289,13 @@ fn build_module_from_sections(
             crate::sections::Section::Function(func_indices) => {
                 for type_idx in func_indices {
                     #[cfg(feature = "std")]
-                    let func = wrt_format::module::Function {
+                    let func = kiln_format::module::Function {
                         type_idx,
                         locals: Vec::new(),
                         code: Vec::new(),
                     };
                     #[cfg(not(feature = "std"))]
-                    let func = wrt_format::module::Function {
+                    let func = kiln_format::module::Function {
                         type_idx,
                         locals: alloc::vec::Vec::new(),
                         code: alloc::vec::Vec::new(),
@@ -364,7 +364,7 @@ fn build_module_from_sections(
                 }
             },
             crate::sections::Section::Custom { name, data } => {
-                let custom = wrt_format::section::CustomSection {
+                let custom = kiln_format::section::CustomSection {
                     name: alloc::string::String::from(name.as_str().unwrap_or("")),
                     data: data.into_iter().collect(),
                 };

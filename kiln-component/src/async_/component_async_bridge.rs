@@ -14,11 +14,11 @@ use core::{
 #[cfg(feature = "std")]
 use std::sync::Weak;
 
-use wrt_foundation::{
+use kiln_foundation::{
     Arc, CrateId, Mutex, collections::StaticMap as BoundedMap, safe_managed_alloc,
     verification::VerificationLevel,
 };
-use wrt_platform::advanced_sync::Priority;
+use kiln_platform::advanced_sync::Priority;
 
 #[cfg(feature = "component-model-threading")]
 use crate::threading::{

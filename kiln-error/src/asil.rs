@@ -1,4 +1,4 @@
-// WRT - wrt-error
+// Kiln - kiln-error
 // Module: ASIL Safety Level Support
 // SW-REQ-ID: REQ_SAFETY_ASIL_001
 //

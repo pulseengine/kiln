@@ -8,7 +8,7 @@ Platform Performance Optimizations
    
    -- Donald Knuth (slightly paraphrased)
 
-Performance optimization in WRT isn't about micro-optimizing every line - it's about understanding your platform's strengths and working with them. This guide shows you how to squeeze every drop of performance from each platform while maintaining safety.
+Performance optimization in Kiln isn't about micro-optimizing every line - it's about understanding your platform's strengths and working with them. This guide shows you how to squeeze every drop of performance from each platform while maintaining safety.
 
 .. admonition:: What You'll Learn
    :class: note
@@ -32,7 +32,7 @@ Before optimizing, measure:
    :caption: Cross-platform performance profiling
    :linenos:
 
-   use wrt_platform::performance_validation::{
+   use kiln_platform::performance_validation::{
        PerformanceValidator,
        BenchmarkResult
    };
@@ -74,8 +74,8 @@ Choose optimizations based on detected features:
    :caption: Adaptive optimization selection
    :linenos:
 
-   use wrt_platform::runtime_detection::PlatformDetector;
-   use wrt_platform::memory_optimizations::{
+   use kiln_platform::runtime_detection::PlatformDetector;
+   use kiln_platform::memory_optimizations::{
        MemoryOptimization,
        PlatformMemoryOptimizer
    };
@@ -130,7 +130,7 @@ Reduce TLB misses with huge pages:
    :caption: Huge page optimization
    :linenos:
 
-   use wrt_platform::memory_optimizations::HugePageOptimizer;
+   use kiln_platform::memory_optimizations::HugePageOptimizer;
    
    fn optimize_large_heap() -> Result<(), Error> {
        let optimizer = HugePageOptimizer::new();
@@ -172,7 +172,7 @@ Optimize for multi-socket systems:
    :caption: NUMA-aware memory layout
    :linenos:
 
-   use wrt_platform::numa::{NumaOptimizer, NumaStrategy};
+   use kiln_platform::numa::{NumaOptimizer, NumaStrategy};
    
    fn optimize_for_numa() -> Result<(), Error> {
        let numa = NumaOptimizer::new()?;
@@ -213,7 +213,7 @@ Optimize for CPU cache hierarchies:
    :caption: Cache optimization
    :linenos:
 
-   use wrt_platform::cache::{CacheOptimizer, CacheLineSize};
+   use kiln_platform::cache::{CacheOptimizer, CacheLineSize};
    
    fn optimize_cache_usage() -> Result<(), Error> {
        let cache = CacheOptimizer::new();
@@ -265,7 +265,7 @@ Platform-specific SIMD usage:
    :caption: SIMD optimization
    :linenos:
 
-   use wrt_platform::simd::{SimdOptimizer, SimdCapability};
+   use kiln_platform::simd::{SimdOptimizer, SimdCapability};
    
    fn optimize_with_simd() -> Result<(), Error> {
        let simd = SimdOptimizer::new();
@@ -325,7 +325,7 @@ Help the CPU predict branches:
    :caption: Branch optimization
    :linenos:
 
-   use wrt_platform::cpu::{likely, unlikely};
+   use kiln_platform::cpu::{likely, unlikely};
    
    fn optimize_branches() -> Result<(), Error> {
        // Mark likely/unlikely branches
@@ -369,7 +369,7 @@ Bypass syscalls with io_uring:
    :linenos:
 
    #[cfg(target_os = "linux")]
-   use wrt_platform::linux_io_uring::{IoUring, Submission};
+   use kiln_platform::linux_io_uring::{IoUring, Submission};
    
    fn fast_io_operations() -> Result<(), Error> {
        let mut ring = IoUring::builder()
@@ -410,7 +410,7 @@ Optimize with QNX scheduling:
    :linenos:
 
    #[cfg(target_os = "nto")]
-   use wrt_platform::qnx_adaptive::AdaptivePartition;
+   use kiln_platform::qnx_adaptive::AdaptivePartition;
    
    fn optimize_qnx_scheduling() -> Result<(), Error> {
        let partition = AdaptivePartition::create("wasm_fast")?;
@@ -444,7 +444,7 @@ Minimize footprint for embedded:
    :caption: Size optimization
    :linenos:
 
-   use wrt_platform::embedded_optimizations::{
+   use kiln_platform::embedded_optimizations::{
        CodeOptimizer,
        OptimizationLevel
    };
@@ -483,7 +483,7 @@ Optimize for battery life:
    :caption: Power-aware execution
    :linenos:
 
-   use wrt_platform::power::{PowerOptimizer, PowerProfile};
+   use kiln_platform::power::{PowerOptimizer, PowerProfile};
    
    fn optimize_for_power() -> Result<(), Error> {
        let power = PowerOptimizer::new();
@@ -525,7 +525,7 @@ Automated performance testing:
    :caption: Performance CI
    :linenos:
 
-   use wrt_platform::performance_validation::{
+   use kiln_platform::performance_validation::{
        PerformanceTest,
        RegressionDetector
    };

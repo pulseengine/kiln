@@ -18,8 +18,8 @@ use alloc::{string::String, vec::Vec};
 #[cfg(feature = "std")]
 use alloc::{string::String, vec::Vec};
 
-use wrt_error::{Error, ErrorCategory, codes};
-use wrt_foundation::{
+use kiln_error::{Error, ErrorCategory, codes};
+use kiln_foundation::{
     BoundedMap, BoundedString, BoundedVec, Checksum, CrateId, NoStdProvider, safe_managed_alloc,
     traits::{Checksummable, ReadStream, WriteStream},
 };
@@ -50,12 +50,12 @@ pub type CustomLimitsMap<P> =
 /// Resource limits specification embedded in WebAssembly custom section
 ///
 /// Design Philosophy for ASIL-D:
-/// - Uses wrt-foundation bounded types with compile-time capacity limits
+/// - Uses kiln-foundation bounded types with compile-time capacity limits
 /// - Memory managed through safe_managed_alloc! capability system
 /// - All collections have deterministic memory usage
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceLimitsSection<
-    P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = NoStdProvider<4096>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = NoStdProvider<4096>,
 > {
     /// Format version for compatibility
     pub version: u32,
@@ -105,7 +105,7 @@ pub struct ResourceLimitsSection<
 /// - Uses bounded collections with compile-time limits for ASIL-D compatibility
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceTypeLimit<
-    P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = NoStdProvider<4096>,
+    P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq = NoStdProvider<4096>,
 > {
     /// Maximum number of handles for this resource type
     /// ASIL-D: Bounded to prevent handle exhaustion
@@ -124,7 +124,7 @@ pub struct ResourceTypeLimit<
     pub custom_limits: CustomLimitsMap<P>,
 }
 
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default
     for ResourceTypeLimit<P>
 {
     fn default() -> Self {
@@ -139,8 +139,8 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Defau
     }
 }
 
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::Checksummable for ResourceTypeLimit<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::Checksummable for ResourceTypeLimit<P>
 {
     fn update_checksum(&self, checksum: &mut Checksum) {
         if let Some(max_handles) = self.max_handles {
@@ -156,19 +156,19 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
     }
 }
 
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::ToBytes for ResourceTypeLimit<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::ToBytes for ResourceTypeLimit<P>
 {
     fn serialized_size(&self) -> usize {
         12 + // 3 Option<u32/u64> fields with presence bytes  
         self.custom_limits.serialized_size()
     }
 
-    fn to_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
         _provider: &PStream,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         // Write max_handles
         if let Some(handles) = self.max_handles {
             writer.write_u8(1)?; // Present
@@ -199,13 +199,13 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
     }
 }
 
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
-    wrt_foundation::traits::FromBytes for ResourceTypeLimit<P>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+    kiln_foundation::traits::FromBytes for ResourceTypeLimit<P>
 {
-    fn from_bytes_with_provider<'a, PStream: wrt_foundation::MemoryProvider>(
+    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
         reader: &mut ReadStream<'a>,
         provider: &PStream,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Read max_handles
         let max_handles = if reader.read_u8()? == 1 { Some(reader.read_u32_le()?) } else { None };
 
@@ -228,7 +228,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
     }
 }
 
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default
     for ResourceLimitsSection<P>
 {
     fn default() -> Self {
@@ -248,7 +248,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Defau
     }
 }
 
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
     ResourceLimitsSection<P>
 {
     /// Create a new resource limits section with provider
@@ -1088,7 +1088,7 @@ impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
     }
 }
 
-impl<P: wrt_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> ResourceTypeLimit<P> {
+impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> ResourceTypeLimit<P> {
     /// Create a new resource type limit
     pub fn new(provider: P) -> Result<Self, Error> {
         Ok(Self {
@@ -1173,10 +1173,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_asil_d_config_creation() -> wrt_error::Result<()> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+    fn test_asil_d_config_creation() -> kiln_error::Result<()> {
+        let provider = kiln_foundation::safe_managed_alloc!(
             4096,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
         let limits = ResourceLimitsSection::asil_d_config(
             provider,
@@ -1195,10 +1195,10 @@ mod tests {
     }
 
     #[test]
-    fn test_asil_d_bounds_validation() -> wrt_error::Result<()> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+    fn test_asil_d_bounds_validation() -> kiln_error::Result<()> {
+        let provider = kiln_foundation::safe_managed_alloc!(
             4096,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
         let mut limits =
             ResourceLimitsSection::asil_d_config(provider.clone(), 1000, 64 * 1024, 32, 10, 100)
@@ -1227,10 +1227,10 @@ mod tests {
     }
 
     #[test]
-    fn test_asil_d_size_limits() -> wrt_error::Result<()> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+    fn test_asil_d_size_limits() -> kiln_error::Result<()> {
+        let provider = kiln_foundation::safe_managed_alloc!(
             4096,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
         let limits = ResourceLimitsSection::asil_d_config(
             provider,
@@ -1247,10 +1247,10 @@ mod tests {
     }
 
     #[test]
-    fn test_qualification_info() -> wrt_error::Result<()> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+    fn test_qualification_info() -> kiln_error::Result<()> {
+        let provider = kiln_foundation::safe_managed_alloc!(
             4096,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
         let hash = [0u8; 32];
         let asil_d_str = ["ASIL", "-", "D"].concat();
@@ -1267,10 +1267,10 @@ mod tests {
     }
 
     #[test]
-    fn test_encode_decode_roundtrip() -> wrt_error::Result<()> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+    fn test_encode_decode_roundtrip() -> kiln_error::Result<()> {
+        let provider = kiln_foundation::safe_managed_alloc!(
             4096,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
         let original =
             ResourceLimitsSection::asil_d_config(provider.clone(), 1000, 64 * 1024, 32, 10, 100)?;
@@ -1283,10 +1283,10 @@ mod tests {
     }
 
     #[test]
-    fn test_lower_asil_levels() -> wrt_error::Result<()> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+    fn test_lower_asil_levels() -> kiln_error::Result<()> {
+        let provider = kiln_foundation::safe_managed_alloc!(
             4096,
-            wrt_foundation::budget_aware_provider::CrateId::Decoder
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
         )?;
         // Test that lower ASIL levels can use partial configuration
         let asil_b_limits = ResourceLimitsSection::with_execution_limits(

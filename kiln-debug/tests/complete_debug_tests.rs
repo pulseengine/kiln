@@ -3,7 +3,7 @@
 
 #[cfg(test)]
 mod complete_debug_tests {
-    use wrt_debug::*;
+    use kiln_debug::*;
 
     /// Mock compilation unit with multiple functions and parameters
     fn create_mock_debug_info() -> Vec<u8> {
@@ -57,7 +57,7 @@ mod complete_debug_tests {
 
     #[test]
     fn test_inline_function_detection() {
-        let mut inlined = wrt_debug::InlinedFunctions::new();
+        let mut inlined = kiln_debug::InlinedFunctions::new();
 
         // Add an inlined function
         let func = InlinedFunction {
@@ -130,7 +130,7 @@ mod complete_debug_tests {
     #[cfg(feature = "line-info")]
     fn test_location_display_with_file_table() {
         // Create a line info entry
-        let line_info = wrt_debug::LineInfo {
+        let line_info = kiln_debug::LineInfo {
             file_index: 1,
             line: 42,
             column: 8,
@@ -179,7 +179,7 @@ mod complete_debug_tests {
         let frame = StackFrame {
             pc: 0x1234,
             function: None, // Would be populated in real scenario
-            line_info: Some(wrt_debug::LineInfo {
+            line_info: Some(kiln_debug::LineInfo {
                 file_index: 1,
                 line: 100,
                 column: 4,
@@ -208,7 +208,7 @@ mod complete_debug_tests {
     #[test]
     fn test_comprehensive_function_info() {
         // Test the complete FunctionInfo structure
-        use wrt_debug::*;
+        use kiln_debug::*;
 
         // Create a parameter list
         let mut params = ParameterList::new();
@@ -244,7 +244,7 @@ mod complete_debug_tests {
     #[test]
     fn test_inline_function_depth() {
         // Test nested inline functions
-        let mut inlined = wrt_debug::InlinedFunctions::new();
+        let mut inlined = kiln_debug::InlinedFunctions::new();
 
         // Add multiple levels of inlining
         let func1 = InlinedFunction {

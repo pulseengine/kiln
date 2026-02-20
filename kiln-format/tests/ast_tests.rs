@@ -1,8 +1,8 @@
 //! Basic tests for AST functionality
 
 #[cfg(feature = "std")]
-use wrt_format::ast::*;
-use wrt_foundation::budget_aware_provider::CrateId;
+use kiln_format::ast::*;
+use kiln_foundation::budget_aware_provider::CrateId;
 
 #[cfg(feature = "std")]
 #[test]
@@ -20,8 +20,8 @@ fn test_source_span() {
 #[cfg(feature = "std")]
 #[test]
 fn test_identifier() {
-    use wrt_format::wit_parser::WitBoundedString;
-    use wrt_foundation::{
+    use kiln_format::wit_parser::WitBoundedString;
+    use kiln_foundation::{
         safe_managed_alloc,
         NoStdProvider,
     };
@@ -74,8 +74,8 @@ fn test_type_expr() {
     assert_eq!(primitive.span(), SourceSpan::empty());
 
     // Test that we can create a named type
-    use wrt_format::wit_parser::WitBoundedString;
-    use wrt_foundation::{
+    use kiln_format::wit_parser::WitBoundedString;
+    use kiln_foundation::{
         safe_managed_alloc,
         NoStdProvider,
     };

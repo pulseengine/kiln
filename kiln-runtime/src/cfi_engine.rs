@@ -18,26 +18,26 @@
 //! to enforce control flow policies without unsafe code.
 //!
 //! SW-REQ-ID: REQ_CFI_RUNTIME_001
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
 #![allow(dead_code)] // Allow during development
 
-use wrt_error::Result;
+use kiln_error::Result;
 
 // CFI imports temporarily disabled since CFI module is disabled
-// use wrt_instructions::{
+// use kiln_instructions::{
 //     CfiControlFlowOps, CfiControlFlowProtection, CfiExecutionContext,
 // CfiProtectedBranchTarget,     DefaultCfiControlFlowOps,
 // };
-// CFI types - define locally if not available in wrt_instructions
+// CFI types - define locally if not available in kiln_instructions
 // Available for both std and no_std since CFI module is disabled
 mod cfi_types {
     /// CFI hardware instruction types
     #[derive(Debug, Clone, PartialEq)]
     pub enum CfiHardwareInstruction {
-        // ArmBti { mode: wrt_instructions::cfi_control_ops::ArmBtiMode }, // Disabled since CFI
+        // ArmBti { mode: kiln_instructions::cfi_control_ops::ArmBtiMode }, // Disabled since CFI
         // module is disabled
         /// ARM Branch Target Identification instruction
         ArmBti {
@@ -83,24 +83,24 @@ mod cfi_types {
         pub function_index: u32,
     }
 
-    impl wrt_foundation::traits::Checksummable for ShadowStackEntry {
-        fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    impl kiln_foundation::traits::Checksummable for ShadowStackEntry {
+        fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
             checksum.update_slice(&self.return_address.to_le_bytes());
             checksum.update_slice(&self.stack_pointer.to_le_bytes());
             checksum.update_slice(&self.function_index.to_le_bytes());
         }
     }
 
-    impl wrt_foundation::traits::ToBytes for ShadowStackEntry {
+    impl kiln_foundation::traits::ToBytes for ShadowStackEntry {
         fn serialized_size(&self) -> usize {
             12 // 3 * u32
         }
 
-        fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+        fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
             &self,
-            writer: &mut wrt_foundation::traits::WriteStream<'_>,
+            writer: &mut kiln_foundation::traits::WriteStream<'_>,
             _provider: &P,
-        ) -> wrt_error::Result<()> {
+        ) -> kiln_error::Result<()> {
             writer.write_all(&self.return_address.to_le_bytes())?;
             writer.write_all(&self.stack_pointer.to_le_bytes())?;
             writer.write_all(&self.function_index.to_le_bytes())?;
@@ -108,11 +108,11 @@ mod cfi_types {
         }
     }
 
-    impl wrt_foundation::traits::FromBytes for ShadowStackEntry {
-        fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-            reader: &mut wrt_foundation::traits::ReadStream<'_>,
+    impl kiln_foundation::traits::FromBytes for ShadowStackEntry {
+        fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+            reader: &mut kiln_foundation::traits::ReadStream<'_>,
             _provider: &P,
-        ) -> wrt_error::Result<Self> {
+        ) -> kiln_error::Result<Self> {
             let mut bytes = [0u8; 4];
 
             reader.read_exact(&mut bytes)?;
@@ -135,10 +135,10 @@ mod cfi_types {
 
 // CFI imports temporarily disabled since CFI module is disabled
 // #[cfg(not(feature = "std"))]
-// use wrt_instructions::cfi_control_ops::{CfiHardwareInstruction,
+// use kiln_instructions::cfi_control_ops::{CfiHardwareInstruction,
 // CfiSoftwareValidation}; Available for both std and no_std since CFI module is
 // disabled
-use wrt_foundation::traits::DefaultMemoryProvider;
+use kiln_foundation::traits::DefaultMemoryProvider;
 
 use self::cfi_types::ShadowStackRequirement;
 // Export CFI types for all feature combinations
@@ -149,7 +149,7 @@ pub use self::cfi_types::{
 };
 // CFI imports temporarily disabled since CFI module is disabled
 // #[cfg(feature = "std")]
-// use wrt_instructions::cfi_control_ops::{
+// use kiln_instructions::cfi_control_ops::{
 //     CfiHardwareInstruction, ArmBtiMode, CfiSoftwareValidation,
 //     ShadowStackRequirement, ShadowStackEntry
 // };
@@ -259,16 +259,16 @@ pub struct CfiExecutionContext {
     /// Offset of the current instruction within the function
     pub current_instruction:      u32,
     /// Shadow stack for return address protection
-    pub shadow_stack: wrt_foundation::bounded::BoundedVec<
+    pub shadow_stack: kiln_foundation::bounded::BoundedVec<
         ShadowStackEntry,
         64,
-        wrt_foundation::safe_memory::NoStdProvider<1024>,
+        kiln_foundation::safe_memory::NoStdProvider<1024>,
     >,
     /// Expected landing pads for indirect calls
-    pub landing_pad_expectations: wrt_foundation::bounded::BoundedVec<
+    pub landing_pad_expectations: kiln_foundation::bounded::BoundedVec<
         LandingPadExpectation,
         32,
-        wrt_foundation::safe_memory::NoStdProvider<1024>,
+        kiln_foundation::safe_memory::NoStdProvider<1024>,
     >,
     /// Number of CFI violations detected
     pub violation_count:          u32,
@@ -285,10 +285,10 @@ pub struct CfiExecutionContext {
     /// Maximum number of labels for control flow validation
     pub max_labels:               u32,
     /// Valid branch targets for CFI validation
-    pub valid_branch_targets: wrt_foundation::bounded::BoundedVec<
+    pub valid_branch_targets: kiln_foundation::bounded::BoundedVec<
         u32,
         256,
-        wrt_foundation::safe_memory::NoStdProvider<1024>,
+        kiln_foundation::safe_memory::NoStdProvider<1024>,
     >,
 }
 
@@ -296,23 +296,23 @@ pub struct CfiExecutionContext {
 impl CfiExecutionContext {
     /// Create a new CFI execution context
     pub fn new() -> Result<Self> {
-        let provider1 = wrt_foundation::safe_managed_alloc!(
+        let provider1 = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Runtime
+            kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
-        let provider2 = wrt_foundation::safe_managed_alloc!(
+        let provider2 = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Runtime
+            kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
-        let provider3 = wrt_foundation::safe_managed_alloc!(
+        let provider3 = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Runtime
+            kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
         Ok(Self {
             current_function:         0,
             current_instruction:      0,
-            shadow_stack:             wrt_foundation::bounded::BoundedVec::new(provider1)?,
-            landing_pad_expectations: wrt_foundation::bounded::BoundedVec::new(provider2)?,
+            shadow_stack:             kiln_foundation::bounded::BoundedVec::new(provider1)?,
+            landing_pad_expectations: kiln_foundation::bounded::BoundedVec::new(provider2)?,
             violation_count:          0,
             metrics:                  CfiMetrics::default(),
             calling_convention:       CallingConvention::default(),
@@ -320,7 +320,7 @@ impl CfiExecutionContext {
             software_config:          CfiSoftwareConfig::default(),
             last_checkpoint_time:     0,
             max_labels:               128,
-            valid_branch_targets:     wrt_foundation::bounded::BoundedVec::new(provider3)?,
+            valid_branch_targets:     kiln_foundation::bounded::BoundedVec::new(provider3)?,
         })
     }
 }
@@ -367,8 +367,8 @@ pub struct LandingPadExpectation {
     pub deadline:           Option<u64>,
 }
 
-impl wrt_foundation::traits::Checksummable for LandingPadExpectation {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for LandingPadExpectation {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.function_index.to_le_bytes());
         checksum.update_slice(&self.instruction_offset.to_le_bytes());
         if let Some(deadline) = self.deadline {
@@ -377,14 +377,14 @@ impl wrt_foundation::traits::Checksummable for LandingPadExpectation {
     }
 }
 
-impl wrt_foundation::traits::ToBytes for LandingPadExpectation {
+impl kiln_foundation::traits::ToBytes for LandingPadExpectation {
     fn serialized_size(&self) -> usize {
         16 // Simplified
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         writer.write_all(&self.function_index.to_le_bytes())?;
@@ -393,9 +393,9 @@ impl wrt_foundation::traits::ToBytes for LandingPadExpectation {
     }
 }
 
-impl wrt_foundation::traits::FromBytes for LandingPadExpectation {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for LandingPadExpectation {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         let mut func_bytes = [0u8; 4];
@@ -894,7 +894,7 @@ impl CfiExecutionEngine {
 
         // Log violation details (in real implementation)
         #[cfg(feature = "tracing")]
-        wrt_foundation::tracing::error!(violation_type = ?violation_type, "CFI Violation detected");
+        kiln_foundation::tracing::error!(violation_type = ?violation_type, "CFI Violation detected");
 
         // Apply violation policy
         match self.violation_policy {
@@ -981,7 +981,7 @@ impl CfiExecutionEngine {
         (self.cfi_context.current_function << 16) | self.cfi_context.current_instruction
     }
 
-    /// Integration methods with the actual WRT execution engine
+    /// Integration methods with the actual Kiln execution engine
     fn perform_indirect_call(
         &mut self,
         type_idx: u32,
@@ -1129,7 +1129,7 @@ pub enum CfiExecutionResult {
 #[derive(Debug, Clone)]
 pub struct CfiCheck {
     /// Check type
-    pub check_type: wrt_foundation::bounded::BoundedString<64>,
+    pub check_type: kiln_foundation::bounded::BoundedString<64>,
     /// Location of check
     pub location:   usize,
 }
@@ -1137,12 +1137,12 @@ pub struct CfiCheck {
 impl CfiCheck {
     /// Create a new CFI check
     pub fn new(check_type: &str, location: usize) -> Result<Self> {
-        let provider = wrt_foundation::safe_managed_alloc!(
+        let provider = kiln_foundation::safe_managed_alloc!(
             1024,
-            wrt_foundation::budget_aware_provider::CrateId::Runtime
+            kiln_foundation::budget_aware_provider::CrateId::Runtime
         )?;
         let bounded_check_type =
-            wrt_foundation::bounded::BoundedString::from_str_truncate(check_type)?;
+            kiln_foundation::bounded::BoundedString::from_str_truncate(check_type)?;
         Ok(Self {
             check_type: bounded_check_type,
             location,
@@ -1172,7 +1172,7 @@ pub enum CfiViolationType {
 }
 
 /// Placeholder execution result enum for CFI engine
-/// This would be replaced by the actual WRT execution result type
+/// This would be replaced by the actual Kiln execution result type
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecutionResult {
     /// Continue execution
@@ -1188,7 +1188,7 @@ pub enum ExecutionResult {
 #[cfg(test)]
 mod tests {
     // CFI imports temporarily disabled since CFI module is disabled
-    // use wrt_instructions::CfiProtectionLevel;
+    // use kiln_instructions::CfiProtectionLevel;
 
     use super::*;
 

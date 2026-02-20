@@ -6,20 +6,20 @@
 
 // alloc is imported in lib.rs with proper feature gates
 
-// Import platform ordering from wrt-foundation abstraction layer
+// Import platform ordering from kiln-foundation abstraction layer
 use core::sync::atomic::Ordering as AtomicOrdering;
 
-use wrt_error::{
+use kiln_error::{
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::{
+use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     traits::BoundedCapacity,
 };
-use wrt_instructions::atomic_ops::{
+use kiln_instructions::atomic_ops::{
     AtomicOp,
     MemoryOrdering,
 };
@@ -50,16 +50,16 @@ use crate::{
 // Type aliases for capability-based memory allocation - imported above on line
 // 13
 type AtomicProvider1K = RuntimeProvider;
-type DataRaceVec = wrt_foundation::bounded::BoundedVec<DataRaceReport, 64, AtomicProvider1K>;
+type DataRaceVec = kiln_foundation::bounded::BoundedVec<DataRaceReport, 64, AtomicProvider1K>;
 type OrderingViolationVec =
-    wrt_foundation::bounded::BoundedVec<OrderingViolationReport, 64, AtomicProvider1K>;
-type DeadlockVec = wrt_foundation::bounded::BoundedVec<DeadlockReport, 32, AtomicProvider1K>;
+    kiln_foundation::bounded::BoundedVec<OrderingViolationReport, 64, AtomicProvider1K>;
+type DeadlockVec = kiln_foundation::bounded::BoundedVec<DeadlockReport, 32, AtomicProvider1K>;
 type SyncViolationVec =
-    wrt_foundation::bounded::BoundedVec<SyncViolationReport, 64, AtomicProvider1K>;
-type ThreadIdVec = wrt_foundation::bounded::BoundedVec<ThreadId, 16, AtomicProvider1K>;
-type ResourceVec = wrt_foundation::bounded::BoundedVec<usize, 16, AtomicProvider1K>;
-type ViolationString = wrt_foundation::bounded::BoundedString<64>;
-type OperationTypeVec = wrt_foundation::bounded::BoundedVec<ViolationString, 16, AtomicProvider1K>;
+    kiln_foundation::bounded::BoundedVec<SyncViolationReport, 64, AtomicProvider1K>;
+type ThreadIdVec = kiln_foundation::bounded::BoundedVec<ThreadId, 16, AtomicProvider1K>;
+type ResourceVec = kiln_foundation::bounded::BoundedVec<usize, 16, AtomicProvider1K>;
+type ViolationString = kiln_foundation::bounded::BoundedString<64>;
+type OperationTypeVec = kiln_foundation::bounded::BoundedVec<ViolationString, 16, AtomicProvider1K>;
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::{
@@ -148,7 +148,7 @@ impl AtomicMemoryModel {
                 if operands.is_empty() {
                     return Err(Error::new(
                         ErrorCategory::Runtime,
-                        wrt_error::codes::RUNTIME_INVALID_ARGUMENT_ERROR,
+                        kiln_error::codes::RUNTIME_INVALID_ARGUMENT_ERROR,
                         "RMW operation requires value operand",
                     ));
                 }
@@ -373,22 +373,22 @@ impl AtomicMemoryModel {
     fn detect_data_races(&self) -> Result<DataRaceVec> {
         // Simplified data race detection - real implementation would be more
         // sophisticated
-        wrt_foundation::bounded::BoundedVec::new(create_runtime_provider()?)
+        kiln_foundation::bounded::BoundedVec::new(create_runtime_provider()?)
             .map_err(|_| Error::memory_error("Failed to create data race report vector"))
     }
 
     fn detect_ordering_violations(&self) -> Result<OrderingViolationVec> {
-        wrt_foundation::bounded::BoundedVec::new(create_runtime_provider()?)
+        kiln_foundation::bounded::BoundedVec::new(create_runtime_provider()?)
             .map_err(|_| Error::memory_error("Failed to create ordering violation report vector"))
     }
 
     fn detect_potential_deadlocks(&self) -> Result<DeadlockVec> {
-        wrt_foundation::bounded::BoundedVec::new(create_runtime_provider()?)
+        kiln_foundation::bounded::BoundedVec::new(create_runtime_provider()?)
             .map_err(|_| Error::memory_error("Failed to create deadlock report vector"))
     }
 
     fn validate_sync_state(&self) -> Result<SyncViolationVec> {
-        wrt_foundation::bounded::BoundedVec::new(create_runtime_provider()?)
+        kiln_foundation::bounded::BoundedVec::new(create_runtime_provider()?)
             .map_err(|_| Error::memory_error("Failed to create sync violation report vector"))
     }
 
@@ -570,19 +570,19 @@ impl ConsistencyValidationResult {
     fn new() -> Result<Self> {
         Ok(Self {
             is_consistent:       true,
-            data_races:          wrt_foundation::bounded::BoundedVec::new(
+            data_races:          kiln_foundation::bounded::BoundedVec::new(
                 create_runtime_provider()?
             )
             .map_err(|_| Error::memory_error("Failed to create data races vector"))?,
-            ordering_violations: wrt_foundation::bounded::BoundedVec::new(
+            ordering_violations: kiln_foundation::bounded::BoundedVec::new(
                 create_runtime_provider()?
             )
             .map_err(|_| Error::memory_error("Failed to create ordering violations vector"))?,
-            potential_deadlocks: wrt_foundation::bounded::BoundedVec::new(
+            potential_deadlocks: kiln_foundation::bounded::BoundedVec::new(
                 create_runtime_provider()?
             )
             .map_err(|_| Error::memory_error("Failed to create potential deadlocks vector"))?,
-            sync_violations:     wrt_foundation::bounded::BoundedVec::new(
+            sync_violations:     kiln_foundation::bounded::BoundedVec::new(
                 create_runtime_provider()?
             )
             .map_err(|_| Error::memory_error("Failed to create sync violations vector"))?,
@@ -648,29 +648,29 @@ pub struct DataRaceReport {
     pub operation_types: OperationTypeVec,
 }
 
-impl wrt_foundation::traits::Checksummable for DataRaceReport {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for DataRaceReport {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&self.memory_address.to_le_bytes());
     }
 }
 
-impl wrt_foundation::traits::ToBytes for DataRaceReport {
+impl kiln_foundation::traits::ToBytes for DataRaceReport {
     fn serialized_size(&self) -> usize {
         8 // Just the memory address for simplicity
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         writer.write_all(&self.memory_address.to_le_bytes())
     }
 }
 
-impl wrt_foundation::traits::FromBytes for DataRaceReport {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for DataRaceReport {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         let mut bytes = [0u8; 8];
@@ -694,29 +694,29 @@ pub struct OrderingViolationReport {
     pub actual_ordering:   MemoryOrdering,
 }
 
-impl wrt_foundation::traits::Checksummable for OrderingViolationReport {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for OrderingViolationReport {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&[self.thread_id as u8]);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for OrderingViolationReport {
+impl kiln_foundation::traits::ToBytes for OrderingViolationReport {
     fn serialized_size(&self) -> usize {
         4 // Just the thread_id for simplicity
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         writer.write_all(&self.thread_id.to_le_bytes())
     }
 }
 
-impl wrt_foundation::traits::FromBytes for OrderingViolationReport {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for OrderingViolationReport {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         let mut bytes = [0u8; 4];
@@ -738,29 +738,29 @@ pub struct DeadlockReport {
     pub resources:  ResourceVec,
 }
 
-impl wrt_foundation::traits::Checksummable for DeadlockReport {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for DeadlockReport {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(b"deadlock");
     }
 }
 
-impl wrt_foundation::traits::ToBytes for DeadlockReport {
+impl kiln_foundation::traits::ToBytes for DeadlockReport {
     fn serialized_size(&self) -> usize {
         4
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         writer.write_all(&[0u8; 4])
     }
 }
 
-impl wrt_foundation::traits::FromBytes for DeadlockReport {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        _reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for DeadlockReport {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        _reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         Ok(Self::default())
@@ -776,29 +776,29 @@ pub struct SyncViolationReport {
     pub violation_type: ViolationString,
 }
 
-impl wrt_foundation::traits::Checksummable for SyncViolationReport {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+impl kiln_foundation::traits::Checksummable for SyncViolationReport {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         checksum.update_slice(&[self.thread_id as u8]);
     }
 }
 
-impl wrt_foundation::traits::ToBytes for SyncViolationReport {
+impl kiln_foundation::traits::ToBytes for SyncViolationReport {
     fn serialized_size(&self) -> usize {
         4
     }
 
-    fn to_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'_>,
+        writer: &mut kiln_foundation::traits::WriteStream<'_>,
         _provider: &P,
     ) -> Result<()> {
         writer.write_all(&self.thread_id.to_le_bytes())
     }
 }
 
-impl wrt_foundation::traits::FromBytes for SyncViolationReport {
-    fn from_bytes_with_provider<P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'_>,
+impl kiln_foundation::traits::FromBytes for SyncViolationReport {
+    fn from_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'_>,
         _provider: &P,
     ) -> Result<Self> {
         let mut bytes = [0u8; 4];

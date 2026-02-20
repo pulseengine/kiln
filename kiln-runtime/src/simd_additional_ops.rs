@@ -6,13 +6,13 @@
 #[cfg(not(feature = "std"))]
 use alloc::format;
 
-use wrt_error::{
+use kiln_error::{
     codes,
     Error,
     ErrorCategory,
     Result,
 };
-use wrt_foundation::values::{
+use kiln_foundation::values::{
     Value,
     V128,
 };

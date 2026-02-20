@@ -1,8 +1,8 @@
 [package]
-name = "wrt-instructions"
+name = "kiln-instructions"
 version.workspace = true
 edition.workspace = true
-description = "WebAssembly instruction implementations for the WRT runtime"
+description = "WebAssembly instruction implementations for the Kiln runtime"
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
@@ -13,23 +13,23 @@ categories = ["wasm", "emulators", "no-std", "embedded"]
 default = []
 # Binary choice: std OR no_std (no alloc middle ground)
 std = [
-    "wrt-foundation/std",
-    "wrt-sync/std",
-    "wrt-math/std",
+    "kiln-foundation/std",
+    "kiln-sync/std",
+    "kiln-math/std",
     "dep:log"]
 # This crate is no_std by default, this feature is a no-op for compatibility
 no_std = []
 
 # Allocation support for no_std environments
-alloc = ["wrt-foundation/alloc", "wrt-math/alloc"]
-optimize = ["wrt-foundation/optimize"]
+alloc = ["kiln-foundation/alloc", "kiln-math/alloc"]
+optimize = ["kiln-foundation/optimize"]
 
 # Safety level presets using capability-based features
-qm = ["wrt-foundation/dynamic-allocation", "wrt-math/qm"]
-asil-a = ["wrt-foundation/bounded-collections", "wrt-math/asil-a"]
-asil-b = ["wrt-foundation/bounded-collections", "wrt-math/asil-b"]
-asil-c = ["wrt-foundation/static-memory-safety", "wrt-math/asil-c"]
-asil-d = ["wrt-foundation/asil-d", "wrt-math/asil-d"]
+qm = ["kiln-foundation/dynamic-allocation", "kiln-math/qm"]
+asil-a = ["kiln-foundation/bounded-collections", "kiln-math/asil-a"]
+asil-b = ["kiln-foundation/bounded-collections", "kiln-math/asil-b"]
+asil-c = ["kiln-foundation/static-memory-safety", "kiln-math/asil-c"]
+asil-d = ["kiln-foundation/asil-d", "kiln-math/asil-d"]
 
 # Legacy compatibility features
 safe-memory = ["asil-b"]
@@ -41,10 +41,10 @@ kani = []
 
 
 [dependencies]
-wrt-error = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false }
-wrt-sync = { workspace = true, default-features = false }
-wrt-math = { workspace = true, default-features = false }
+kiln-error = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false }
+kiln-sync = { workspace = true, default-features = false }
+kiln-math = { workspace = true, default-features = false }
 log = { version = "0.4", optional = true }
 
 # No-std support

@@ -1,5 +1,5 @@
-// WRT - wrt-error
-// Module: WRT Error Handling
+// Kiln - kiln-error
+// Module: Kiln Error Handling
 // SW-REQ-ID: REQ_004
 // SW-REQ-ID: REQ_ERROR_001
 //
@@ -7,9 +7,9 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! WRT Error handling library
+//! Kiln Error handling library
 //!
-//! This library provides a comprehensive error handling system for the WRT
+//! This library provides a comprehensive error handling system for the Kiln
 //! runtime. It includes error types, helper functions, and utilities for
 //! creating and managing errors.
 //!
@@ -50,15 +50,15 @@
 //!
 //! ```
 //! // Binary std/no_std choice
-//! use wrt_error::{
+//! use kiln_error::{
 //!     kinds,
 //!     Error,
 //! };
 //!
 //! // Using helper functions for common errors
 //! let error = Error::new(
-//!     wrt_error::ErrorCategory::Core,
-//!     wrt_error::codes::INVALID_FUNCTION_INDEX,
+//!     kiln_error::ErrorCategory::Core,
+//!     kiln_error::codes::INVALID_FUNCTION_INDEX,
 //!     "Invalid function index: 42",
 //! );
 //!
@@ -86,7 +86,7 @@ extern crate std;
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-/// Error codes for wrt
+/// Error codes for kiln
 pub mod codes;
 /// Error and error handling types
 pub mod errors;
@@ -114,10 +114,10 @@ pub mod verify;
 // Re-export key types
 pub use errors::{Error, ErrorCategory, ErrorSource};
 
-/// A specialized `Result` type for WRT operations.
+/// A specialized `Result` type for Kiln operations.
 ///
-/// This type alias uses `wrt_error::Error` as the error type.
-/// It is suitable for `no_std` environments as `wrt_error::Error`
+/// This type alias uses `kiln_error::Error` as the error type.
+/// It is suitable for `no_std` environments as `kiln_error::Error`
 /// Binary `std/no_std` choice
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -131,7 +131,7 @@ pub use kinds::{
 /// Error conversion trait for converting between error types
 ///
 /// This trait provides a standardized way to convert between error types
-/// across the WRT codebase. It is used to ensure a consistent error
+/// across the Kiln codebase. It is used to ensure a consistent error
 /// handling approach across all crates.
 pub trait FromError<E> {
     /// Convert from the source error type to the target error type
@@ -161,7 +161,7 @@ pub use helpers::*;
 pub const fn placeholder() {}
 
 // Panic handler disabled to avoid conflicts with other crates
-// The main wrt crate should provide the panic handler
+// The main kiln crate should provide the panic handler
 // #[cfg(all(not(feature = "std"), not(test), not(feature =
 // "disable-panic-handler")))] #[panic_handler]
 // fn panic(_info: &core::panic::PanicInfo) -> ! {

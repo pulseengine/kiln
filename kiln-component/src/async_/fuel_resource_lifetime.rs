@@ -14,7 +14,7 @@ use core::{
 #[cfg(feature = "std")]
 use std::sync::Weak;
 
-use wrt_foundation::{
+use kiln_foundation::{
     Arc, CrateId,
     collections::{StaticMap as BoundedMap, StaticVec as BoundedVec},
     operations::{Type as OperationType, record_global_operation},
@@ -49,26 +49,26 @@ const RESOURCE_TRANSFER_FUEL: u64 = 8;
 pub struct ResourceHandle(pub u64);
 
 impl Checksummable for ResourceHandle {
-    fn update_checksum(&self, checksum: &mut wrt_foundation::verification::Checksum) {
+    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.0.update_checksum(checksum);
     }
 }
 
 impl ToBytes for ResourceHandle {
-    fn to_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
+    fn to_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
         &self,
-        writer: &mut wrt_foundation::traits::WriteStream<'a>,
+        writer: &mut kiln_foundation::traits::WriteStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         self.0.to_bytes_with_provider(writer, provider)
     }
 }
 
 impl FromBytes for ResourceHandle {
-    fn from_bytes_with_provider<'a, P: wrt_foundation::MemoryProvider>(
-        reader: &mut wrt_foundation::traits::ReadStream<'a>,
+    fn from_bytes_with_provider<'a, P: kiln_foundation::MemoryProvider>(
+        reader: &mut kiln_foundation::traits::ReadStream<'a>,
         provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self(u64::from_bytes_with_provider(reader, provider)?))
     }
 }
@@ -133,7 +133,7 @@ impl<T> TrackedResource<T> {
         type_name: String,
         verification_level: VerificationLevel,
     ) -> Result<Self> {
-        let created_at = wrt_foundation::operations::global_fuel_consumed();
+        let created_at = kiln_foundation::operations::global_fuel_consumed();
 
         // Record resource creation
         record_global_operation(OperationType::Other, verification_level);
@@ -175,7 +175,7 @@ impl<T> TrackedResource<T> {
 
         // Update last accessed time and consume fuel
         self.metadata.last_accessed.store(
-            wrt_foundation::operations::global_fuel_consumed(),
+            kiln_foundation::operations::global_fuel_consumed(),
             Ordering::Release,
         );
         self.fuel_consumed.fetch_add(RESOURCE_ACQUIRE_FUEL, Ordering::AcqRel);
@@ -422,13 +422,13 @@ impl ResourceLifetimeManager {
 
 /// Resource scope for automatic cleanup
 pub struct ResourceScope {
-    manager: Arc<wrt_sync::Mutex<ResourceLifetimeManager>>,
+    manager: Arc<kiln_sync::Mutex<ResourceLifetimeManager>>,
     resources: Vec<ResourceHandle>,
 }
 
 impl ResourceScope {
     /// Create a new resource scope
-    pub fn new(manager: Arc<wrt_sync::Mutex<ResourceLifetimeManager>>) -> Self {
+    pub fn new(manager: Arc<kiln_sync::Mutex<ResourceLifetimeManager>>) -> Self {
         Self {
             manager,
             resources: Vec::new(),
@@ -468,7 +468,7 @@ impl Drop for ResourceScope {
 /// Component resource tracker
 pub struct ComponentResourceTracker {
     /// Resource managers by component ID
-    managers: BoundedMap<u64, Arc<wrt_sync::Mutex<ResourceLifetimeManager>>, 128>,
+    managers: BoundedMap<u64, Arc<kiln_sync::Mutex<ResourceLifetimeManager>>, 128>,
     /// Global resource fuel budget
     global_fuel_budget: u64,
 }
@@ -489,7 +489,7 @@ impl ComponentResourceTracker {
     pub fn get_or_create_manager(
         &mut self,
         component_id: u64,
-    ) -> Result<Arc<wrt_sync::Mutex<ResourceLifetimeManager>>> {
+    ) -> Result<Arc<kiln_sync::Mutex<ResourceLifetimeManager>>> {
         if let Some(manager) = self.managers.get(&component_id) {
             Ok(manager.clone())
         } else {
@@ -497,7 +497,7 @@ impl ComponentResourceTracker {
                 component_id,
                 self.global_fuel_budget / 10, // Each component gets 10% of global budget
             )?;
-            let arc_manager = Arc::new(wrt_sync::Mutex::new(manager));
+            let arc_manager = Arc::new(kiln_sync::Mutex::new(manager));
             self.managers.insert(component_id, arc_manager.clone())?;
             Ok(arc_manager)
         }

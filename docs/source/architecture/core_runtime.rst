@@ -19,18 +19,18 @@ The core runtime is responsible for executing WebAssembly instructions and manag
    
    .. code-block:: text
       
-      User -> WRTD CLI -> Engine -> Module
+      User -> KILND CLI -> Engine -> Module
       Engine -> Memory
       
       When fuel is exhausted:
-      Engine -> WRTD CLI (paused)
-      WRTD CLI -> Engine (add fuel)
-      Engine -> WRTD CLI (resume)
+      Engine -> KILND CLI (paused)
+      KILND CLI -> Engine (add fuel)
+      Engine -> KILND CLI (resume)
       
       Final result:
-      Engine -> WRTD CLI -> User
+      Engine -> KILND CLI -> User
    
-   The execution flow demonstrates the bounded execution model, showing how the WRTD CLI interacts with the Engine and how the fuel-based execution can be paused when fuel is exhausted. The diagram also illustrates the difference between executing a standard WebAssembly module and a Component Model component, highlighting the resource management and canonical conversion aspects of the Component Model.
+   The execution flow demonstrates the bounded execution model, showing how the KilnD CLI interacts with the Engine and how the fuel-based execution can be paused when fuel is exhausted. The diagram also illustrates the difference between executing a standard WebAssembly module and a Component Model component, highlighting the resource management and canonical conversion aspects of the Component Model.
 
 .. spec:: Core Runtime Architecture
    :id: SPEC_002

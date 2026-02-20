@@ -1,22 +1,22 @@
 [package]
-name = "wrt-wasi"
+name = "kiln-wasi"
 version.workspace = true
 edition.workspace = true
 license = { workspace = true }
-description = "WASI Preview2 implementation for WebAssembly Runtime with Preview3 preparation"
-repository = "https://github.com/pulseengine/wrt"
+description = "WASI Preview2 implementation for Kiln WebAssembly Runtime with Preview3 preparation"
+repository = "https://github.com/pulseengine/kiln"
 readme = "README.md"
 keywords = ["wasm", "webassembly", "wasi", "preview2", "component-model"]
 categories = ["wasm", "api-bindings", "os"]
 
 [dependencies]
-# Core WRT dependencies - reuse existing patterns
-wrt-error = { workspace = true, default-features = false }
-wrt-foundation = { workspace = true, default-features = false }
-wrt-host = { workspace = true, default-features = false }
-# wrt-component = { workspace = true, default-features = false }
-wrt-platform = { workspace = true, default-features = false }
-wrt-format = { workspace = true, default-features = false }
+# Core Kiln dependencies - reuse existing patterns
+kiln-error = { workspace = true, default-features = false }
+kiln-foundation = { workspace = true, default-features = false }
+kiln-host = { workspace = true, default-features = false }
+# kiln-component = { workspace = true, default-features = false }
+kiln-platform = { workspace = true, default-features = false }
+kiln-format = { workspace = true, default-features = false }
 
 # Neural network inference backend
 tract-onnx = { version = "0.21", optional = true, default-features = false }
@@ -28,16 +28,16 @@ once_cell = { version = "1.19", optional = true }
 default = ["std", "preview2", "wasi-filesystem", "wasi-cli", "wasi-clocks", "wasi-io", "wasi-random"]
 
 # Tracing support for structured logging
-tracing = ["wrt-foundation/tracing"]
+tracing = ["kiln-foundation/tracing"]
 
 # Standard library support
 std = [
-    "wrt-error/std",
-    "wrt-foundation/std",
-    "wrt-host/std",
-    # "wrt-component/std",
-    "wrt-platform/std",
-    "wrt-format/std",
+    "kiln-error/std",
+    "kiln-foundation/std",
+    "kiln-host/std",
+    # "kiln-component/std",
+    "kiln-platform/std",
+    "kiln-format/std",
     "dep:once_cell"
 ]
 
@@ -64,10 +64,10 @@ tract = ["dep:tract-onnx"]  # Tract backend feature
 component-model = []
 
 # Safety level presets using new capability-based features
-# wrt-wasi supports QM to ASIL-B (WASI system interfaces with bounded safety)
-qm = ["wrt-foundation/dynamic-allocation", "wrt-format/qm", "wrt-host/qm", "wrt-platform/qm"]
-asil-a = ["wrt-foundation/bounded-collections", "wrt-format/asil-a", "wrt-host/asil-a", "wrt-platform/asil-a"]
-asil-b = ["wrt-foundation/bounded-collections", "wrt-format/asil-b", "wrt-host/asil-b", "wrt-platform/asil-b"]
+# kiln-wasi supports QM to ASIL-B (WASI system interfaces with bounded safety)
+qm = ["kiln-foundation/dynamic-allocation", "kiln-format/qm", "kiln-host/qm", "kiln-platform/qm"]
+asil-a = ["kiln-foundation/bounded-collections", "kiln-format/asil-a", "kiln-host/asil-a", "kiln-platform/asil-a"]
+asil-b = ["kiln-foundation/bounded-collections", "kiln-format/asil-b", "kiln-host/asil-b", "kiln-platform/asil-b"]
 # Note: ASIL-C and ASIL-D are not supported for WASI system interfaces
 # WASI involves external system calls which cannot meet ASIL-C/D determinism requirements
 

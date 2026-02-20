@@ -4,7 +4,7 @@
 //! and core modules. These types handle the actual instantiation process
 //! and runtime state management.
 
-use wrt_foundation::{
+use kiln_foundation::{
     bounded::{
         BoundedString,
         BoundedVec,
@@ -26,7 +26,7 @@ use crate::prelude::*;
 const MAX_INSTANTIATION_ARGS: usize = 256;
 
 /// Memory provider for instantiation data
-type InstantiationProvider = wrt_foundation::safe_memory::NoStdProvider<4096>;
+type InstantiationProvider = kiln_foundation::safe_memory::NoStdProvider<4096>;
 
 /// Runtime component instantiation data
 #[derive(Debug, Clone)]
@@ -210,7 +210,7 @@ impl CoreModuleInstantiation {
         self.args.push(arg).map_err(|_| {
             Error::new(
                 ErrorCategory::Memory,
-                wrt_error::codes::CAPACITY_EXCEEDED,
+                kiln_error::codes::CAPACITY_EXCEEDED,
                 "Argument capacity exceeded",
             )
         })
@@ -233,7 +233,7 @@ impl CoreModuleInstantiation {
         if !self.runtime_state.is_started {
             return Err(Error::new(
                 ErrorCategory::Runtime,
-                wrt_error::codes::INVALID_STATE,
+                kiln_error::codes::INVALID_STATE,
                 "Core instantiation not started",
             ));
         }
@@ -285,7 +285,7 @@ impl ToBytes for RuntimeInstantiateArg {
         &self,
         writer: &mut WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_all(self.name.as_str()?.as_bytes())?;
         writer.write_all(&self.runtime_ref.runtime_idx.to_le_bytes())?;
         writer.write_all(&[if self.is_validated { 1 } else { 0 }])?;
@@ -297,7 +297,7 @@ impl FromBytes for RuntimeInstantiateArg {
     fn from_bytes_with_provider<P: MemoryProvider>(
         reader: &mut ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         // Simple implementation - in real usage this would parse the bytes
         // For now, return default instance
         Ok(Self::default())
@@ -322,7 +322,7 @@ impl ToBytes for RuntimeCoreInstantiateArg {
         &self,
         writer: &mut WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_all(self.name.as_str()?.as_bytes())?;
         writer.write_all(&self.runtime_instance_idx.to_le_bytes())?;
         writer.write_all(&[if self.is_validated { 1 } else { 0 }])?;
@@ -334,7 +334,7 @@ impl FromBytes for RuntimeCoreInstantiateArg {
     fn from_bytes_with_provider<P: MemoryProvider>(
         reader: &mut ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }
@@ -357,7 +357,7 @@ impl ToBytes for RuntimeReference {
         &self,
         writer: &mut WriteStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<()> {
+    ) -> kiln_error::Result<()> {
         writer.write_all(&(self.sort as u32).to_le_bytes())?;
         writer.write_all(&self.runtime_idx.to_le_bytes())?;
         writer.write_all(&self.runtime_handle.to_le_bytes())?;
@@ -369,7 +369,7 @@ impl FromBytes for RuntimeReference {
     fn from_bytes_with_provider<P: MemoryProvider>(
         reader: &mut ReadStream<'_>,
         _provider: &P,
-    ) -> wrt_error::Result<Self> {
+    ) -> kiln_error::Result<Self> {
         Ok(Self::default())
     }
 }

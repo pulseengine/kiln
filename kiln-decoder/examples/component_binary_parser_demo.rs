@@ -3,11 +3,11 @@
 //! This example demonstrates how to use the ComponentBinaryParser to parse
 //! WebAssembly Component Model binaries with full cross-environment support.
 
-use wrt_decoder::component::{
+use kiln_decoder::component::{
     ComponentBinaryParser, ValidationLevel, parse_component_binary,
     parse_component_binary_with_validation,
 };
-use wrt_error::Result;
+use kiln_error::Result;
 
 /// Create a minimal valid component binary for demonstration
 fn create_demo_component_binary() -> Vec<u8> {

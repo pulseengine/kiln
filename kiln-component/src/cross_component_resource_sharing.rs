@@ -6,7 +6,7 @@ use core::{
 // Import from prelude for std/no_std compatibility
 use crate::prelude::{Box, Duration};
 
-use wrt_foundation::{
+use kiln_foundation::{
     ToString,
     // safe_memory::SafeMemory, // Not available
     bounded::BoundedVec,
@@ -21,7 +21,7 @@ use crate::{
     generative_types::{GenerativeResourceType, GenerativeTypeRegistry},
     handle_representation::{AccessRights, HandleOperation, HandleRepresentationManager},
     post_return::{CleanupTask, CleanupTaskType, PostReturnRegistry},
-    prelude::WrtComponentValue,
+    prelude::KilnComponentValue,
     type_bounds::{TypeBoundsChecker, TypeRelation},
     virtualization::{Capability, VirtualizationManager},
 };
@@ -47,7 +47,7 @@ use alloc::{format, vec};
 use std::{string::String, vec::Vec};
 
 #[cfg(not(feature = "std"))]
-use wrt_foundation::{bounded::BoundedString, safe_memory::NoStdProvider};
+use kiln_foundation::{bounded::BoundedString, safe_memory::NoStdProvider};
 
 #[cfg(not(feature = "std"))]
 type String = BoundedString<256>;
@@ -196,7 +196,7 @@ pub struct ResourceTransferRequest {
     pub target_component: ComponentInstanceId,
     pub transfer_type: TransferType,
     pub access_rights: AccessRights,
-    pub metadata: Option<WrtComponentValue<ComponentProvider>>,
+    pub metadata: Option<KilnComponentValue<ComponentProvider>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -257,7 +257,7 @@ pub struct CrossComponentResourceSharingManager {
     sharing_policies: SharingPolicyVec,
     transfer_queue: TransferRequestVec,
 
-    callbacks: StaticMap<wrt_foundation::String, SharingCallback, MAX_SHARING_CALLBACKS>,
+    callbacks: StaticMap<kiln_foundation::String, SharingCallback, MAX_SHARING_CALLBACKS>,
 
     next_agreement_id: AtomicU32,
     next_policy_id: AtomicU32,
@@ -530,7 +530,7 @@ impl CrossComponentResourceSharingManager {
         component_id: ComponentInstanceId,
         resource_handle: ResourceHandle,
         operation: HandleOperation,
-    ) -> ResourceSharingResult<Option<WrtComponentValue<ComponentProvider>>> {
+    ) -> ResourceSharingResult<Option<KilnComponentValue<ComponentProvider>>> {
         // Check if resource is shared
         let shared_resource =
             self.shared_resources.get(&resource_handle).ok_or(ResourceSharingError {
@@ -691,7 +691,7 @@ impl CrossComponentResourceSharingManager {
 
     pub fn register_sharing_callback(
         &mut self,
-        name: wrt_foundation::String,
+        name: kiln_foundation::String,
         callback: SharingCallback,
     ) -> ResourceSharingResult<()> {
         self.callbacks.insert(name, callback).map_err(|_| ResourceSharingError {
@@ -711,7 +711,7 @@ impl CrossComponentResourceSharingManager {
     pub fn get_shared_resources_for_component(
         &self,
         component_id: ComponentInstanceId,
-    ) -> Result<BoundedVec<ResourceHandle, 256, ComponentProvider>, wrt_error::Error> {
+    ) -> Result<BoundedVec<ResourceHandle, 256, ComponentProvider>, kiln_error::Error> {
         let provider = safe_managed_alloc!(4096, CrateId::Component)?;
         let mut result = BoundedVec::new(provider)?;
         for (handle, shared) in self.shared_resources.iter() {
