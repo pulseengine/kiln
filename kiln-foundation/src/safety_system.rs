@@ -6,7 +6,7 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Universal Safety System for WRT Foundation
+//! Universal Safety System for Kiln Foundation
 //!
 //! ⚠️ **PRELIMINARY IMPLEMENTATION WARNING** ⚠️
 //!
@@ -175,7 +175,7 @@ impl Default for AsilLevel {
 /// Safety level wrapper for ASIL integration
 ///
 /// This type provides a common interface for safety level operations
-/// across the WRT system, wrapping the core AsilLevel enum.
+/// across the Kiln system, wrapping the core AsilLevel enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SafetyLevel {
     asil: AsilLevel,
@@ -914,7 +914,7 @@ impl Default for SafetyContext {
 ///
 /// This context uses atomic operations extensively for thread-safe operation
 /// counting, violation tracking, and runtime state management. The atomic
-/// operations integrate with WRT's checksum system to ensure data integrity:
+/// operations integrate with Kiln's checksum system to ensure data integrity:
 ///
 /// 1. **Atomic Counters**: All counters use memory ordering guarantees to
 ///    prevent race conditions

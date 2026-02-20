@@ -8,7 +8,7 @@ fn main() {
     use kiln_decoder::memory_optimized::{MemoryPool, check_bounds_u32, safe_usize_conversion};
     use kiln_foundation::NoStdProvider;
 
-    println!("=== WRT-Decoder Memory Optimization Demo ===\n");
+    println!("=== Kiln-Decoder Memory Optimization Demo ===\n");
 
     // 1. Demonstrate bounds checking protection
     println!("1. Bounds Checking Protection:");

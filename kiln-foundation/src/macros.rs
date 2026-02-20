@@ -1,6 +1,6 @@
 //! Zero-Configuration Memory Management Macros
 //!
-//! This module provides the convenience macros that make the WRT memory system
+//! This module provides the convenience macros that make the Kiln memory system
 //! extremely easy to use - achieving A+ grade usability.
 //!
 //! SW-REQ-ID: REQ_USABILITY_001 - Zero boilerplate APIs

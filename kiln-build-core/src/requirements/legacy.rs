@@ -115,7 +115,7 @@ impl Requirements {
     /// Initialize a sample requirements file
     pub fn init_sample(path: &Path) -> BuildResult<()> {
         let sample = r#"[metadata]
-project = "WRT - WebAssembly Runtime"
+project = "Kiln - WebAssembly Runtime"
 version = "0.2.0"
 asil_level = "ASIL-D"
 verification_method = "SCORE-inspired"

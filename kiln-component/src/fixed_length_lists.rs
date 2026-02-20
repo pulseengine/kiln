@@ -1,4 +1,4 @@
-// WRT - kiln-component
+// Kiln - kiln-component
 // Module: Fixed-Length List Type System Support
 // SW-REQ-ID: REQ_FIXED_LENGTH_LISTS_001
 //

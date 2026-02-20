@@ -116,7 +116,7 @@ fn example_lkm_threading() {
     let thread_config = VxWorksThreadConfig {
         context: VxWorksContext::Lkm,
         stack_size: 32768,  // Larger stack for kernel tasks
-        name: Some("wrt_kernel_task".to_string()),
+        name: Some("kiln_kernel_task".to_string()),
         floating_point: true,
         detached: true,
         priority: Some(100), // Real-time priority
@@ -135,7 +135,7 @@ fn example_lkm_threading() {
 
 #[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
 fn example_lkm_integration() {
-    println!("\n=== LKM Integration with WRT ===");
+    println!("\n=== LKM Integration with Kiln ===");
     
     println!("LKM integration features:");
     println!("✓ Direct kernel API access");

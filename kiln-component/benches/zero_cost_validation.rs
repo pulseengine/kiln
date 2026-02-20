@@ -1,6 +1,6 @@
-//! Zero-cost abstraction validation for WRT allocator
+//! Zero-cost abstraction validation for Kiln allocator
 //!
-//! This benchmark validates that WRT allocator truly provides zero-cost
+//! This benchmark validates that Kiln allocator truly provides zero-cost
 //! abstractions by comparing assembly-level operations.
 
 #![allow(unused_imports)]

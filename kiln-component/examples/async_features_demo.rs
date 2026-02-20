@@ -1,4 +1,4 @@
-// WRT - kiln-component
+// Kiln - kiln-component
 // Example: Async Features Demo
 // SW-REQ-ID: REQ_ASYNC_DEMO_001
 //
@@ -6,7 +6,7 @@
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
-//! Demonstration of WRT Component Model async features
+//! Demonstration of Kiln Component Model async features
 //!
 //! This example showcases the newly implemented async features including:
 //! - Async context management (context.get/set)
@@ -22,7 +22,7 @@ use kiln_foundation::component_value::ComponentValue;
 
 #[cfg(feature = "std")]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("WRT Component Model Async Features Demo");
+    println!("Kiln Component Model Async Features Demo");
     println!("=======================================");
 
     // Demo 1: Async Context Management

@@ -16,7 +16,7 @@ use kiln_error::{
     kinds::{InvalidValue, NotImplementedError, OutOfBoundsAccess, ValueOutOfRangeError},
 };
 use kiln_format::component::FormatValType;
-// HashMap imports - migrate to WRT allocator for safety
+// HashMap imports - migrate to Kiln allocator for safety
 #[cfg(all(feature = "std", feature = "safety-critical"))]
 use kiln_foundation::allocator::{CrateId, KilnHashMap as HashMap, KilnVec};
 use kiln_foundation::{

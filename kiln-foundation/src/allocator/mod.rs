@@ -1,4 +1,4 @@
-//! WRT Compile-Time Allocator System
+//! Kiln Compile-Time Allocator System
 //!
 //! This module provides the revolutionary compile-time memory allocation system
 //! that enables A+ functional safety compliance with zero runtime overhead.

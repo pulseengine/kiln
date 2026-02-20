@@ -1,8 +1,8 @@
-//! Tracing support for WRT runtime
+//! Tracing support for Kiln runtime
 //!
 //! This module provides structured tracing capabilities that work in both
 //! std and no_std environments. It wraps the `tracing` crate and provides
-//! WRT-specific utilities for debugging complex execution flows.
+//! Kiln-specific utilities for debugging complex execution flows.
 
 #![cfg(feature = "tracing")]
 

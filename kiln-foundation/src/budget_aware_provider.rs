@@ -1,6 +1,6 @@
 //! CrateId Definitions
 //!
-//! This module provides the CrateId enum used throughout the WRT memory system.
+//! This module provides the CrateId enum used throughout the Kiln memory system.
 
 use crate::{
     memory_coordinator::CrateIdentifier,

@@ -1,10 +1,10 @@
-# wrt-error
+# kiln-error
 
 > Error handling foundation for WebAssembly Runtime
 
 ## Overview
 
-Provides lightweight, no_std compatible error handling for WRT. Supports error chaining, context preservation, and specific error types for WebAssembly operations.
+Provides lightweight, no_std compatible error handling for Kiln. Supports error chaining, context preservation, and specific error types for WebAssembly operations.
 
 ## Features
 
@@ -18,11 +18,11 @@ Provides lightweight, no_std compatible error handling for WRT. Supports error c
 
 ```toml
 [dependencies]
-wrt-error = "0.1"
+kiln-error = "0.1"
 ```
 
 ```rust
-use wrt_error::{Error, KilnResult, ResultExt};
+use kiln_error::{Error, KilnResult, ResultExt};
 
 fn parse_module(bytes: &[u8]) -> KilnResult<Module> {
     validate_magic(bytes)
@@ -35,5 +35,5 @@ fn parse_module(bytes: &[u8]) -> KilnResult<Module> {
 
 ## See Also
 
-- [API Documentation](https://docs.rs/wrt-error)
+- [API Documentation](https://docs.rs/kiln-error)
 - [Error Handling Guide](../docs/source/development/error_handling.rst)

@@ -1,6 +1,6 @@
-# WebAssembly Runtime Interception Layer (wrt-intercept)
+# WebAssembly Runtime Interception Layer (kiln-intercept)
 
-This crate provides a flexible interception mechanism for WebAssembly component linking in the WebAssembly Runtime (WRT). It allows intercepting function calls between components and between components and the host.
+This crate provides a flexible interception mechanism for WebAssembly component linking in the WebAssembly Runtime (Kiln). It allows intercepting function calls between components and between components and the host.
 
 ## Features
 
@@ -17,7 +17,7 @@ This crate provides a flexible interception mechanism for WebAssembly component 
 
 ```rust
 use std::sync::Arc;
-use wrt_intercept::{LinkInterceptor, strategies::LoggingStrategy};
+use kiln_intercept::{LinkInterceptor, strategies::LoggingStrategy};
 
 // Create a logging strategy
 let log_sink = Arc::new(|entry: &str| println!("{}", entry));
@@ -34,7 +34,7 @@ interceptor.add_strategy(Arc::new(logging));
 ### Using the Firewall Strategy
 
 ```rust
-use wrt_intercept::strategies::{FirewallBuilder, FirewallRule};
+use kiln_intercept::strategies::{FirewallBuilder, FirewallRule};
 
 // Create a firewall that denies by default
 let firewall = FirewallBuilder::new(false)
@@ -51,7 +51,7 @@ interceptor.add_strategy(Arc::new(firewall));
 ### Collecting Statistics
 
 ```rust
-use wrt_intercept::strategies::{StatisticsStrategy, StatisticsConfig};
+use kiln_intercept::strategies::{StatisticsStrategy, StatisticsConfig};
 
 // Create a statistics collector with custom config
 let config = StatisticsConfig {
@@ -80,9 +80,9 @@ To create a custom strategy, implement the `LinkInterceptorStrategy` trait:
 
 ```rust
 use std::sync::Arc;
-use wrt_intercept::{LinkInterceptorStrategy, LinkInterceptor};
-use wrt_error::Result;
-use wrt_foundation::values::Value;
+use kiln_intercept::{LinkInterceptorStrategy, LinkInterceptor};
+use kiln_error::Result;
+use kiln_foundation::values::Value;
 
 struct MyCustomStrategy {
     // Your strategy's state
@@ -147,7 +147,7 @@ This crate can be used in no-std environments by disabling the default `std` fea
 
 ```toml
 [dependencies]
-wrt-intercept = { version = "0.2.0", default-features = false, features = ["no_std"] }
+kiln-intercept = { version = "0.2.0", default-features = false, features = ["no_std"] }
 ```
 
 Note that some strategies (like `StatisticsStrategy`) have limited functionality in no-std mode.

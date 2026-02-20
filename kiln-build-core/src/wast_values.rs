@@ -1,7 +1,7 @@
 //! WAST Value Conversion Utilities
 //!
 //! This module provides functions to convert between WAST test framework value
-//! types and WRT runtime value types, including proper handling of NaN patterns,
+//! types and Kiln runtime value types, including proper handling of NaN patterns,
 //! V128 vectors, and reference types.
 
 #![cfg(feature = "std")]

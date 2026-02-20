@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for your interest in contributing to WRT!
+Thank you for your interest in contributing to Kiln!
 
 ## Quick Start
 
@@ -18,29 +18,29 @@ For complete contribution guidelines, please see our comprehensive documentation
 ### Quick Commands
 
 ```bash
-# Install cargo-wrt
-cargo install --path cargo-wrt
+# Install cargo-kiln
+cargo install --path cargo-kiln
 
 # Setup development environment
-cargo-wrt setup --check             # Check tool dependencies
-cargo-wrt setup --all               # Install tools and setup git hooks
-cargo-wrt build
-cargo-wrt test
+cargo-kiln setup --check             # Check tool dependencies
+cargo-kiln setup --all               # Install tools and setup git hooks
+cargo-kiln build
+cargo-kiln test
 
 # Tool version management
-cargo-wrt tool-versions check       # Verify tool versions
-cargo-wrt tool-versions check --verbose  # Detailed version information
+cargo-kiln tool-versions check       # Verify tool versions
+cargo-kiln tool-versions check --verbose  # Detailed version information
 
 # Before submitting PR
-cargo-wrt check
-cargo-wrt ci
+cargo-kiln check
+cargo-kiln ci
 
 # Additional development commands
-cargo-wrt no-std                   # Verify no_std compatibility
-cargo-wrt check --strict            # Check code formatting and linting
-cargo-wrt coverage --html           # Generate test coverage
-cargo-wrt docs --private            # Build and validate documentation
-cargo-wrt verify-matrix --report    # Run comprehensive verification
+cargo-kiln no-std                   # Verify no_std compatibility
+cargo-kiln check --strict            # Check code formatting and linting
+cargo-kiln coverage --html           # Generate test coverage
+cargo-kiln docs --private            # Build and validate documentation
+cargo-kiln verify-matrix --report    # Run comprehensive verification
 ```
 
 ## Code of Conduct

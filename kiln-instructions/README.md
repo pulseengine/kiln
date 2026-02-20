@@ -1,4 +1,4 @@
-# wrt-instructions
+# kiln-instructions
 
 > WebAssembly instruction encoding, decoding, and execution
 
@@ -18,11 +18,11 @@ Provides comprehensive support for WebAssembly instructions including encoding, 
 
 ```toml
 [dependencies]
-wrt-instructions = "0.1"
+kiln-instructions = "0.1"
 ```
 
 ```rust
-use wrt_instructions::{Instruction, InstructionDecoder};
+use kiln_instructions::{Instruction, InstructionDecoder};
 
 // Decode instruction from bytes
 let decoder = InstructionDecoder::new(bytes);
@@ -41,5 +41,5 @@ match instruction {
 
 ## See Also
 
-- [API Documentation](https://docs.rs/wrt-instructions)
+- [API Documentation](https://docs.rs/kiln-instructions)
 - [WebAssembly Instruction Reference](https://webassembly.github.io/spec/core/syntax/instructions.html)

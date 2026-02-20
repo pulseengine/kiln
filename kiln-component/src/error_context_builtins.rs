@@ -1,4 +1,4 @@
-// WRT - kiln-component
+// Kiln - kiln-component
 // Module: Error Context Canonical Built-ins
 // SW-REQ-ID: REQ_ERROR_CONTEXT_001
 //

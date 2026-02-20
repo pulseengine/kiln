@@ -1,43 +1,43 @@
-# cargo-wrt
+# cargo-kiln
 
-Unified build tool for WRT (WebAssembly Runtime) - the next-generation safety-critical WebAssembly runtime.
+Unified build tool for Kiln (WebAssembly Runtime) - the next-generation safety-critical WebAssembly runtime.
 
 ## Installation
 
 ### From crates.io (once published)
 ```bash
-cargo install cargo-wrt
+cargo install cargo-kiln
 ```
 
 ### From source
 ```bash
-git clone https://github.com/pulseengine/wrt
-cd wrt
-cargo install --path cargo-wrt
+git clone https://github.com/pulseengine/kiln
+cd kiln
+cargo install --path cargo-kiln
 ```
 
 ### For development
 ```bash
-cargo build -p cargo-wrt
-# Binary will be available at ./target/debug/cargo-wrt
+cargo build -p cargo-kiln
+# Binary will be available at ./target/debug/cargo-kiln
 ```
 
 ## Usage
 
-cargo-wrt supports two usage patterns:
+cargo-kiln supports two usage patterns:
 
 ### 1. Direct Usage
 ```bash
-cargo-wrt --help
-cargo-wrt build
-cargo-wrt test
+cargo-kiln --help
+cargo-kiln build
+cargo-kiln test
 ```
 
 ### 2. Cargo Subcommand
 ```bash
-cargo wrt --help
-cargo wrt build  
-cargo wrt test
+cargo kiln --help
+cargo kiln build  
+cargo kiln test
 ```
 
 Both patterns work identically - the same binary automatically detects how it's being called and adjusts accordingly.
@@ -45,7 +45,7 @@ Both patterns work identically - the same binary automatically detects how it's 
 ### Available Commands
 
 #### Core Build & Test Commands
-- `build` - Build all WRT components
+- `build` - Build all Kiln components
 - `test` - Run tests across the workspace  
 - `check` - Run static analysis (clippy + formatting)
 - `clean` - Clean build artifacts
@@ -84,7 +84,7 @@ Both patterns work identically - the same binary automatically detects how it's 
 - `testsuite` - WebAssembly test suite management
 
 #### Specialized Commands
-- `wrtd` - Build WRTD (WebAssembly Runtime Daemon) binaries
+- `kilnd` - Build kilnd (WebAssembly Runtime Daemon) binaries
 
 #### Advanced Features
 - `help-diagnostics` - Comprehensive diagnostic system guide
@@ -96,85 +96,85 @@ Both patterns work identically - the same binary automatically detects how it's 
 #### Basic Usage
 ```bash
 # Setup development environment
-cargo-wrt setup --check
-cargo-wrt setup --all
+cargo-kiln setup --check
+cargo-kiln setup --all
 
 # Build and test
-cargo-wrt build
-cargo-wrt test
-cargo-wrt check
+cargo-kiln build
+cargo-kiln test
+cargo-kiln check
 
 # Safety verification
-cargo-wrt verify --asil d
-cargo-wrt verify-matrix --report
+cargo-kiln verify --asil d
+cargo-kiln verify-matrix --report
 ```
 
 #### Advanced Diagnostic System
 ```bash
 # JSON output for tooling/AI agents
-cargo-wrt build --output json
+cargo-kiln build --output json
 
 # Filter errors only with caching
-cargo-wrt build --output json --filter-severity error --cache
+cargo-kiln build --output json --filter-severity error --cache
 
 # Show only new diagnostics since last run
-cargo-wrt build --cache --diff-only
+cargo-kiln build --cache --diff-only
 
 # Group diagnostics by file
-cargo-wrt build --output json --group-by file
+cargo-kiln build --output json --group-by file
 
 # Filter by specific tool (clippy, rustc, etc.)
-cargo-wrt check --output json --filter-source clippy
+cargo-kiln check --output json --filter-source clippy
 ```
 
 #### WebAssembly Analysis
 ```bash
 # Analyze WebAssembly modules
-cargo-wrt wasm verify module.wasm
-cargo-wrt wasm imports module.wasm
-cargo-wrt wasm exports module.wasm
-cargo-wrt wasm analyze *.wasm
+cargo-kiln wasm verify module.wasm
+cargo-kiln wasm imports module.wasm
+cargo-kiln wasm exports module.wasm
+cargo-kiln wasm analyze *.wasm
 
 # Create test modules
-cargo-wrt wasm create-test test_module.wasm
+cargo-kiln wasm create-test test_module.wasm
 ```
 
 #### Requirements Management (SCORE)
 ```bash
 # Initialize and manage requirements
-cargo-wrt requirements init
-cargo-wrt requirements verify
-cargo-wrt requirements score
-cargo-wrt requirements matrix
+cargo-kiln requirements init
+cargo-kiln requirements verify
+cargo-kiln requirements score
+cargo-kiln requirements matrix
 
 # Check missing requirements
-cargo-wrt requirements missing
-cargo-wrt requirements demo
+cargo-kiln requirements missing
+cargo-kiln requirements demo
 ```
 
 #### Comprehensive Verification
 ```bash
 # Full ASIL compliance verification
-cargo-wrt verify-matrix --asil d --report
+cargo-kiln verify-matrix --asil d --report
 
 # Formal verification with KANI
-cargo-wrt kani-verify --asil-profile d
+cargo-kiln kani-verify --asil-profile d
 
 # Feature combination testing
-cargo-wrt test-features --comprehensive
+cargo-kiln test-features --comprehensive
 
 # WebAssembly test suite
-cargo-wrt testsuite --validate
+cargo-kiln testsuite --validate
 ```
 
 #### CI/CD Integration
 ```bash
 # Simulate CI locally
-cargo-wrt simulate-ci --profile asil-d
+cargo-kiln simulate-ci --profile asil-d
 
 # Generate structured reports
-cargo-wrt ci --output json
-cargo-wrt verify --output json --filter-severity error
+cargo-kiln ci --output json
+cargo-kiln verify --output json --filter-severity error
 ```
 
 ## Features
@@ -208,7 +208,7 @@ cargo-wrt verify --output json --filter-severity error
 
 ## Tool Management
 
-cargo-wrt automatically detects and manages external tool dependencies:
+cargo-kiln automatically detects and manages external tool dependencies:
 
 ### Required Tools (Usually Available)
 - `cargo` - Rust package manager
@@ -222,52 +222,52 @@ cargo-wrt automatically detects and manages external tool dependencies:
 ### Setup Commands
 ```bash
 # Check what tools are available
-cargo-wrt setup --check
+cargo-kiln setup --check
 
 # Install missing optional tools
-cargo-wrt setup --install
+cargo-kiln setup --install
 
 # Complete development setup
-cargo-wrt setup --all
+cargo-kiln setup --all
 ```
 
 ### Tool Version Management
 
-cargo-wrt now includes sophisticated tool version management with configurable requirements:
+cargo-kiln now includes sophisticated tool version management with configurable requirements:
 
 ```bash
 # Check all tool versions against requirements
-cargo-wrt tool-versions check
+cargo-kiln tool-versions check
 
 # Show detailed version information
-cargo-wrt tool-versions check --verbose
+cargo-kiln tool-versions check --verbose
 
 # Check specific tool only
-cargo-wrt tool-versions check --tool kani
+cargo-kiln tool-versions check --tool kani
 
 # Generate tool-versions.toml configuration file
-cargo-wrt tool-versions generate
+cargo-kiln tool-versions generate
 
 # Generate comprehensive configuration (all tools)
-cargo-wrt tool-versions generate --all
+cargo-kiln tool-versions generate --all
 
 # Update existing configuration (future feature)
-cargo-wrt tool-versions update --all
+cargo-kiln tool-versions update --all
 ```
 
 The tool version system uses a `tool-versions.toml` file in the workspace root to specify:
 - Exact version requirements (e.g., kani must be exactly 0.63.0)
 - Minimum version requirements (e.g., git must be at least 2.30.0)
 - Installation commands for each tool
-- Which cargo-wrt commands require each tool
+- Which cargo-kiln commands require each tool
 
 This ensures reproducible builds and consistent development environments across all contributors.
 
-When you run a command that needs a missing tool, cargo-wrt will:
+When you run a command that needs a missing tool, cargo-kiln will:
 1. Detect the missing tool
 2. Show a helpful error message
 3. Provide exact installation commands
-4. Suggest running `cargo-wrt setup --install`
+4. Suggest running `cargo-kiln setup --install`
 
 ## License
 

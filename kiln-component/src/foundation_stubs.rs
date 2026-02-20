@@ -1,4 +1,4 @@
-// WRT - kiln-component
+// Kiln - kiln-component
 // Module: Foundation Integration Stubs
 // SW-REQ-ID: REQ_INTEGRATION_STUBS_001, REQ_COMPONENT_FOUNDATION_001
 //

@@ -5,7 +5,7 @@
 
 ## Summary
 
-The WRT decoder currently accepts malformed WebAssembly binaries that should be rejected. This plan addresses 8 categories of validation failures.
+The Kiln decoder currently accepts malformed WebAssembly binaries that should be rejected. This plan addresses 8 categories of validation failures.
 
 ---
 
@@ -20,7 +20,7 @@ The WRT decoder currently accepts malformed WebAssembly binaries that should be 
 2. Custom section format: name_len (LEB128), name (bytes), data (remaining)
 3. Validate the name is valid UTF-8 before proceeding
 
-**File**: `/Users/r/git/wrt2/wrt-decoder/src/streaming_decoder.rs` lines 2350-2354
+**File**: `/Users/r/git/wrt2/kiln-decoder/src/streaming_decoder.rs` lines 2350-2354
 
 ---
 
@@ -38,7 +38,7 @@ The WRT decoder currently accepts malformed WebAssembly binaries that should be 
    - Set bit after processing
 3. Allow multiple custom sections (ID 0), reject duplicates of IDs 1-13
 
-**File**: `/Users/r/git/wrt2/wrt-decoder/src/streaming_decoder.rs` lines 220-244
+**File**: `/Users/r/git/wrt2/kiln-decoder/src/streaming_decoder.rs` lines 220-244
 
 ---
 
@@ -52,7 +52,7 @@ The WRT decoder currently accepts malformed WebAssembly binaries that should be 
    - Verify all bytes consumed within section
    - If content remains, return error "section size mismatch"
 
-**File**: `/Users/r/git/wrt2/wrt-decoder/src/streaming_decoder.rs` - all `process_*_section()` methods
+**File**: `/Users/r/git/wrt2/kiln-decoder/src/streaming_decoder.rs` - all `process_*_section()` methods
 
 ---
 
@@ -61,12 +61,12 @@ The WRT decoder currently accepts malformed WebAssembly binaries that should be 
 **Problem**: Some LEB128 integers that overflow u32 are accepted.
 
 **Implementation**:
-1. In `/Users/r/git/wrt2/wrt-format/src/binary.rs` `read_leb128_u32()`:
+1. In `/Users/r/git/wrt2/kiln-format/src/binary.rs` `read_leb128_u32()`:
    - On 5th byte: check `(byte & 0xF0) == 0` (only low 4 bits valid)
    - Check before `result |= ...` to prevent overflow
    - Reject 5+ byte encodings
 
-**File**: `/Users/r/git/wrt2/wrt-format/src/binary.rs` lines 625-669
+**File**: `/Users/r/git/wrt2/kiln-format/src/binary.rs` lines 625-669
 
 ---
 
@@ -90,7 +90,7 @@ match section_id {
 }
 ```
 
-**File**: `/Users/r/git/wrt2/wrt-decoder/src/streaming_decoder.rs` lines 226-264
+**File**: `/Users/r/git/wrt2/kiln-decoder/src/streaming_decoder.rs` lines 226-264
 
 ---
 
@@ -111,7 +111,7 @@ match section_id {
    - If data_count_value exists, must equal data_section_count
    - If uses_memory_init_or_data_drop, data_count_value must exist
 
-**File**: `/Users/r/git/wrt2/wrt-decoder/src/streaming_decoder.rs` struct definition and `finish()`
+**File**: `/Users/r/git/wrt2/kiln-decoder/src/streaming_decoder.rs` struct definition and `finish()`
 
 ---
 
@@ -131,7 +131,7 @@ match section_id {
    - Threads: 0x00-0x03 valid
    - Memory64: 0x00-0x07 valid
 
-**File**: `/Users/r/git/wrt2/wrt-decoder/src/streaming_decoder.rs` lines 1172-1188
+**File**: `/Users/r/git/wrt2/kiln-decoder/src/streaming_decoder.rs` lines 1172-1188
 
 ---
 
@@ -167,8 +167,8 @@ match section_id {
 
 | File | Changes Needed |
 |------|----------------|
-| `wrt-decoder/src/streaming_decoder.rs` | UTF-8, section ordering, section ID, limits flags, cross-section |
-| `wrt-format/src/binary.rs` | LEB128 overflow checks |
-| `wrt-decoder/src/optimized_string.rs` | UTF-8 validation utilities (reuse) |
-| `wrt-decoder/src/decoder_no_alloc.rs` | Existing section order validation (reference) |
-| `wrt-decoder/src/sections.rs` | Section parsing size validation |
+| `kiln-decoder/src/streaming_decoder.rs` | UTF-8, section ordering, section ID, limits flags, cross-section |
+| `kiln-format/src/binary.rs` | LEB128 overflow checks |
+| `kiln-decoder/src/optimized_string.rs` | UTF-8 validation utilities (reuse) |
+| `kiln-decoder/src/decoder_no_alloc.rs` | Existing section order validation (reference) |
+| `kiln-decoder/src/sections.rs` | Section parsing size validation |

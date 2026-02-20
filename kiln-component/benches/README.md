@@ -1,10 +1,10 @@
-# WRT Allocator Performance Benchmarks
+# Kiln Allocator Performance Benchmarks
 
-This directory contains performance benchmarks comparing the WRT safety-critical allocator with standard library collections.
+This directory contains performance benchmarks comparing the Kiln safety-critical allocator with standard library collections.
 
 ## Benchmarks
 
-### 1. `wrt_allocator_benchmarks.rs`
+### 1. `kiln_allocator_benchmarks.rs`
 Comprehensive performance comparison including:
 - Vector push operations (small/medium/large sizes)
 - Vector iteration performance
@@ -24,22 +24,22 @@ Validates the zero-cost abstraction claim:
 
 ```bash
 # Run all benchmarks
-cargo bench -p wrt-component --features "std,safety-critical"
+cargo bench -p kiln-component --features "std,safety-critical"
 
 # Run specific benchmark
-cargo bench -p wrt-component --features "std,safety-critical" -- wrt_allocator
+cargo bench -p kiln-component --features "std,safety-critical" -- kiln_allocator
 
 # Generate detailed HTML reports
-cargo bench -p wrt-component --features "std,safety-critical" -- --verbose
+cargo bench -p kiln-component --features "std,safety-critical" -- --verbose
 
 # Run with baseline comparison
-cargo bench -p wrt-component --features "std,safety-critical" -- --save-baseline wrt-allocator
+cargo bench -p kiln-component --features "std,safety-critical" -- --save-baseline kiln-allocator
 ```
 
 ## Expected Results
 
 ### Performance Parity
-The WRT allocator should show near-identical performance to std collections for:
+The Kiln allocator should show near-identical performance to std collections for:
 - Push/insert operations: ±5% variance
 - Iteration: ±2% variance (should compile to identical code)
 - Direct indexing: 0% overhead (identical assembly)
@@ -62,14 +62,14 @@ Small overhead (≤5%) is expected only from:
 ### Good Performance
 ```
 std_vec_push/1000       time:   [20.5 µs 20.7 µs 20.9 µs]
-wrt_vec_push/1000       time:   [20.8 µs 21.0 µs 21.2 µs]
+kiln_vec_push/1000       time:   [20.8 µs 21.0 µs 21.2 µs]
                         ^^^^ Within 2% - excellent
 ```
 
 ### Concerning Performance
 ```
 std_vec_push/1000       time:   [20.5 µs 20.7 µs 20.9 µs]
-wrt_vec_push/1000       time:   [25.1 µs 25.4 µs 25.7 µs]
+kiln_vec_push/1000       time:   [25.1 µs 25.4 µs 25.7 µs]
                         ^^^^ >20% overhead - investigate
 ```
 
@@ -82,7 +82,7 @@ wrt_vec_push/1000       time:   [25.1 µs 25.4 µs 25.7 µs]
 
 ## Safety vs Performance Trade-offs
 
-The WRT allocator prioritizes safety with:
+The Kiln allocator prioritizes safety with:
 - Compile-time capacity limits (no runtime allocation)
 - Explicit error handling (no panics)
 - Deterministic behavior (predictable performance)

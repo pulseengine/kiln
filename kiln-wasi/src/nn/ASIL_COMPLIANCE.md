@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document provides evidence of ASIL (Automotive Safety Integrity Level) compliance for the WRT WASI-NN implementation. The implementation meets safety requirements up to ASIL-B level with preparations for ASIL-C/D certification.
+This document provides evidence of ASIL (Automotive Safety Integrity Level) compliance for the Kiln WASI-NN implementation. The implementation meets safety requirements up to ASIL-B level with preparations for ASIL-C/D certification.
 
 ## 1. No Unsafe Code Verification
 
@@ -205,7 +205,7 @@ for &dim in &dimensions {
 
 ## 12. Conclusion
 
-The WRT WASI-NN implementation demonstrates strong compliance with ASIL safety requirements:
+The Kiln WASI-NN implementation demonstrates strong compliance with ASIL safety requirements:
 
 - ✅ **No unsafe code** - Verified across all modules
 - ✅ **Memory safety** - Bounded, tracked, and verified
@@ -232,14 +232,14 @@ Test Coverage: Comprehensive unit and integration tests
 
 ```bash
 # Verify no unsafe code
-find /Users/r/git/wrt2/wrt-wasi/src/nn -name "*.rs" | xargs grep -n "unsafe"
+find /Users/r/git/wrt2/kiln-wasi/src/nn -name "*.rs" | xargs grep -n "unsafe"
 
 # Check for unwrap calls
-find /Users/r/git/wrt2/wrt-wasi/src/nn -name "*.rs" | xargs grep -n "\.unwrap()"
+find /Users/r/git/wrt2/kiln-wasi/src/nn -name "*.rs" | xargs grep -n "\.unwrap()"
 
 # Verify compilation
-cargo check -p wrt-wasi --features "nn-preview2,tract"
+cargo check -p kiln-wasi --features "nn-preview2,tract"
 
 # Run tests
-cargo test -p wrt-wasi --features "nn-preview2,tract" --lib nn
+cargo test -p kiln-wasi --features "nn-preview2,tract" --lib nn
 ```

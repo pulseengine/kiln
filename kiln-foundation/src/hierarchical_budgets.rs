@@ -208,7 +208,7 @@ impl<const MAX_SUB_BUDGETS: usize> HierarchicalBudget<MAX_SUB_BUDGETS> {
         if let Some(sub_budget) = &self.sub_budgets[idx] {
             sub_budget.try_allocate(size)?;
 
-            // Create capability-guarded provider through the WRT factory
+            // Create capability-guarded provider through the Kiln factory
             let guard = CapabilityKilnFactory::create_provider::<N>(self.crate_id)?;
 
             Ok((guard, idx))

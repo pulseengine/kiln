@@ -7,7 +7,7 @@
 //! This module supports both std and no_std environments with appropriate
 //! implementations for each.
 
-// WRT - kiln-component
+// Kiln - kiln-component
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT

@@ -1,4 +1,4 @@
-//! WRT verification tool functionality
+//! Kiln verification tool functionality
 //!
 //! Provides integrated access to verification capabilities including
 //! safety verification, documentation checking, and platform verification.

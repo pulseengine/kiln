@@ -1,4 +1,4 @@
-# Clippy configuration for WRT
+# Clippy configuration for Kiln
 
 # Don't require backticks for common technical terms
 doc-valid-idents = [

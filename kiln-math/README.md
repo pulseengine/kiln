@@ -1,4 +1,4 @@
-# wrt-math
+# kiln-math
 
 > Mathematical operations and numeric types for WebAssembly Runtime
 
@@ -18,13 +18,13 @@ Provides WebAssembly-compliant mathematical operations and numeric type handling
 
 ```toml
 [dependencies]
-wrt-math = "0.1"
+kiln-math = "0.1"
 ```
 
 ### Basic Usage
 
 ```rust
-use wrt_math::prelude::*;
+use kiln_math::prelude::*;
 
 // Integer operations
 let result = i32_add(10, 32)?;          // 42
@@ -48,7 +48,7 @@ let converted = f64_convert_i32_u(100)?; // 100.0
 ### Type Utilities
 
 ```rust
-use wrt_math::float_bits::*;
+use kiln_math::float_bits::*;
 
 // Float bit manipulation
 let bits = f32_to_bits(3.14);
@@ -61,7 +61,7 @@ let is_inf = f64_is_infinite(f64::INFINITY);
 
 ## WebAssembly Instruction Mapping
 
-| WebAssembly | wrt-math Function | Description |
+| WebAssembly | kiln-math Function | Description |
 |-------------|-------------------|-------------|
 | `i32.add` | `i32_add()` | 32-bit integer addition |
 | `i64.mul` | `i64_mul()` | 64-bit integer multiplication |
@@ -75,19 +75,19 @@ let is_inf = f64_is_infinite(f64::INFINITY);
 
 ### Standard Library
 ```toml
-wrt-math = { version = "0.1", features = ["std"] }
+kiln-math = { version = "0.1", features = ["std"] }
 ```
 Full functionality with std math functions.
 
 ### no_std + alloc  
 ```toml
-wrt-math = { version = "0.1", features = ["alloc"] }
+kiln-math = { version = "0.1", features = ["alloc"] }
 ```
 Core operations with heap allocation support.
 
 ### Pure no_std
 ```toml
-wrt-math = { version = "0.1", default-features = false }
+kiln-math = { version = "0.1", default-features = false }
 ```
 Essential operations only, no heap allocation.
 
@@ -95,7 +95,7 @@ Essential operations only, no heap allocation.
 
 ### Saturating Arithmetic
 ```rust
-use wrt_math::ops::*;
+use kiln_math::ops::*;
 
 // Saturating operations (clamp to min/max instead of wrapping)
 let sat_add = i32_add_sat_s(i32::MAX, 100)?; // i32::MAX
@@ -104,7 +104,7 @@ let sat_sub = i32_sub_sat_u(10, 20)?;         // 0
 
 ### Bit-Precise Float Operations
 ```rust
-use wrt_math::float_bits::*;
+use kiln_math::float_bits::*;
 
 // WebAssembly-compliant float operations
 let canonical_nan = f32_canonical_nan();
@@ -152,7 +152,7 @@ All operations follow WebAssembly specification semantics:
 ## Integration Example
 
 ```rust
-use wrt_math::prelude::*;
+use kiln_math::prelude::*;
 
 // WebAssembly runtime integration
 fn execute_numeric_instruction(opcode: u8, lhs: Value, rhs: Value) -> Result<Value> {
@@ -169,6 +169,6 @@ fn execute_numeric_instruction(opcode: u8, lhs: Value, rhs: Value) -> Result<Val
 
 ## See Also
 
-- [API Documentation](https://docs.rs/wrt-math)
+- [API Documentation](https://docs.rs/kiln-math)
 - [WebAssembly Numeric Instructions](https://webassembly.github.io/spec/core/syntax/instructions.html#numeric-instructions)
 - [CPU Acceleration Guide](../docs/source/architecture/cpu_acceleration.rst)

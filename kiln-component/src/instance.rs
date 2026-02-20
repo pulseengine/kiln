@@ -3,7 +3,7 @@
 //! This module provides the instance types for component instances.
 //! It supports both std and no_std environments.
 
-// WRT - kiln-component
+// Kiln - kiln-component
 // Copyright (c) 2025 Ralf Anton Beier
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT

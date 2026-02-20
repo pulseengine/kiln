@@ -23,7 +23,7 @@ pub struct ToolVersion {
     /// Whether this tool is required for basic functionality
     #[serde(default)]
     pub required: bool,
-    /// Which cargo-wrt commands need this tool
+    /// Which cargo-kiln commands need this tool
     #[serde(default)]
     pub used_by: Vec<String>,
     /// Tool description
@@ -113,7 +113,7 @@ pub struct ToolVersionToml {
     /// Whether this tool is required for basic functionality
     #[serde(default)]
     pub required: bool,
-    /// Which cargo-wrt commands need this tool
+    /// Which cargo-kiln commands need this tool
     #[serde(default)]
     pub used_by: Vec<String>,
     /// Tool description
@@ -436,7 +436,7 @@ impl ToolVersionConfig {
             metadata: VersionConfigMetadata {
                 config_version: "1.0.0".to_string(),
                 last_updated: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC").to_string(),
-                description: "WRT build system tool version requirements (fallback)".to_string(),
+                description: "Kiln build system tool version requirements (fallback)".to_string(),
             },
             rust_toolchain: None, // Will be loaded from rust-toolchain.toml if available
         }

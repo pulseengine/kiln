@@ -1,12 +1,12 @@
-# WASI-NN Implementation for WRT
+# WASI-NN Implementation for Kiln
 
-This module provides a capability-based implementation of WASI-NN (WebAssembly System Interface for Neural Networks) for the WRT runtime.
+This module provides a capability-based implementation of WASI-NN (WebAssembly System Interface for Neural Networks) for the Kiln runtime.
 
 ## Architecture
 
 The implementation is designed to be:
 - **Preview-agnostic**: Works with both WASI Preview2 (synchronous) and Preview3 (asynchronous)
-- **Capability-based**: Uses WRT's VerificationLevel abstraction instead of direct safety level references
+- **Capability-based**: Uses Kiln's VerificationLevel abstraction instead of direct safety level references
 - **Multi-standard**: Supports ASIL (automotive), DO-178C (aerospace), IEC 62304 (medical), and other safety standards
 
 ## Components
@@ -49,11 +49,11 @@ The implementation maps abstract VerificationLevel to concrete capabilities:
 ## Usage Example
 
 ```rust
-use wrt_wasi::nn::{
+use kiln_wasi::nn::{
     initialize_nn, capabilities::create_nn_capability,
     sync_bridge::{nn_load, nn_init_execution_context, nn_set_input, nn_compute, nn_get_output},
 };
-use wrt_foundation::verification::VerificationLevel;
+use kiln_foundation::verification::VerificationLevel;
 
 // Initialize with appropriate capability level
 let capability = create_nn_capability(VerificationLevel::Standard)?;

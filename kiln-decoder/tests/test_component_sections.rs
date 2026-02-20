@@ -3,7 +3,7 @@ use std::fs;
 
 #[test]
 fn test_parse_file_ops_component() {
-    let bytes = fs::read("../wrt-tests/fixtures/file_ops_component.wasm")
+    let bytes = fs::read("../kiln-tests/fixtures/file_ops_component.wasm")
         .expect("Failed to read component file");
 
     let component =

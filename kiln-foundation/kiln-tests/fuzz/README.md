@@ -1,6 +1,6 @@
-# WRT Foundation Fuzz Testing
+# Kiln Foundation Fuzz Testing
 
-This directory contains both traditional fuzz testing and property-based tests for WRT Foundation components.
+This directory contains both traditional fuzz testing and property-based tests for Kiln Foundation components.
 
 ## Structure
 
@@ -45,14 +45,14 @@ The `*_fuzz.rs` modules contain deterministic property-based tests that:
 
 ```bash
 # Run property-based tests
-cargo test --package wrt-foundation-fuzz
+cargo test --package kiln-foundation-fuzz
 ```
 
 ## Migration from Root `/fuzz` Directory
 
 This fuzz testing setup replaces the previous `/fuzz` directory. Key changes:
 
-1. **Location**: Moved from `/fuzz/` to `/wrt-tests/fuzz/`
+1. **Location**: Moved from `/fuzz/` to `/kiln-tests/fuzz/`
 2. **Structure**: Added property-based tests alongside fuzz targets
 3. **Dependencies**: Updated import paths for new location
 4. **CI Integration**: Property tests can run in CI without cargo-fuzz
@@ -86,7 +86,7 @@ All tests exercise four verification levels:
 
 ### Quick Test (Property-based only)
 ```bash
-cargo test --package wrt-foundation-fuzz
+cargo test --package kiln-foundation-fuzz
 ```
 
 ### Full Fuzz Testing
@@ -124,6 +124,6 @@ cargo fuzz fmt fuzz_bounded_vec <crash_file>
 The fuzz package has its own Cargo.toml with:
 - `libfuzzer-sys`: For traditional fuzzing
 - `arbitrary`: For generating test inputs
-- Local WRT crates with `std` features enabled
+- Local Kiln crates with `std` features enabled
 
 This ensures fuzz tests can use standard library features while the main crates remain `no_std` compatible.

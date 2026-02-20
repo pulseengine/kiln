@@ -179,10 +179,10 @@ jobs:
           <head>
               <meta charset="utf-8">
               <title>Kiln Documentation</title>
-              <meta http-equiv="refresh" content="0; url=api/wrt/index.html">
+              <meta http-equiv="refresh" content="0; url=api/kiln/index.html">
           </head>
           <body>
-              <p>Redirecting to <a href="api/wrt/index.html">Kiln API Documentation</a>...</p>
+              <p>Redirecting to <a href="api/kiln/index.html">Kiln API Documentation</a>...</p>
           </body>
           </html>
           EOF

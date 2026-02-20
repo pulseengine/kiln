@@ -1,13 +1,13 @@
 //! Platform Concepts Demonstration
 //!
-//! This example demonstrates WRT platform concepts and shows how
+//! This example demonstrates Kiln platform concepts and shows how
 //! external developers can extend platform support.
 
 use kiln_platform::FutexLike;
 use core::time::Duration;
 
 fn main() {
-    println!("=== WRT Platform Concepts ===\n");
+    println!("=== Kiln Platform Concepts ===\n");
     
     show_platform_abstraction_concepts();
     show_external_platform_strategy();
@@ -41,7 +41,7 @@ fn show_external_platform_strategy() {
     println!("   ====================================");
     
     println!("\n   Why External Crates?");
-    println!("   - Support platforms not in core WRT");
+    println!("   - Support platforms not in core Kiln");
     println!("   - Maintain separate release cycles");
     println!("   - Keep heavy dependencies separate");
     println!("   - Support proprietary platforms");
@@ -111,18 +111,18 @@ fn show_vxworks_integration_example() {
     println!("       ..Default::default()");
     println!("   }});";
     println!("   ");
-    println!("   // Create WRT components");
+    println!("   // Create Kiln components");
     println!("   let allocator = platform.create_allocator_boxed()?;";
     println!("   let futex = platform.create_futex_boxed()?;";
     println!("   ```");
     
-    println!("\n   Integration with WRT:");
+    println!("\n   Integration with Kiln:");
     println!("   ```rust");
     println!("   // These work with any platform implementation");
     println!("   fn use_with_wrt<A: PageAllocator, F: FutexLike>(");
     println!("       allocator: A, futex: F");
     println!("   ) {{");
-    println!("       // Generic WRT runtime code");
+    println!("       // Generic Kiln runtime code");
     println!("   }}");
     println!("   ");
     println!("   use_with_wrt(allocator, futex);";
@@ -182,7 +182,7 @@ fn demonstrate_trait_integration() {
     }
     
     println!("\n   This demonstrates how platform implementations");
-    println!("   work with WRT's trait system!");
+    println!("   work with Kiln's trait system!");
     
     show_external_crate_template();
 }
@@ -229,7 +229,7 @@ fn show_external_crate_template() {
     println!("       let allocator = platform.create_allocator_boxed()?;";
     println!("       let futex = platform.create_futex_boxed()?;";
     println!("       ");
-    println!("       // Use with WRT runtime");
+    println!("       // Use with Kiln runtime");
     println!("       let runtime = wrt::Runtime::builder()");
     println!("           .with_allocator(allocator)");
     println!("           .with_futex(futex)");
@@ -242,8 +242,8 @@ fn show_external_crate_template() {
     println!("\n   Benefits:");
     println!("   ✓ Independent development and releases");
     println!("   ✓ Platform-specific dependencies and licensing");
-    println!("   ✓ No impact on core WRT maintenance");
-    println!("   ✓ Seamless integration with WRT ecosystem");
+    println!("   ✓ No impact on core Kiln maintenance");
+    println!("   ✓ Seamless integration with Kiln ecosystem");
     println!("   ✓ Support for any platform, including proprietary ones");
     
     println!("\n   Get started with the template at:");
@@ -251,5 +251,5 @@ fn show_external_crate_template() {
     
     println!("\n=== Platform Extension Complete ===");
     println!("\nThis approach enables unlimited platform extensibility");
-    println!("while keeping WRT core focused and maintainable!");
+    println!("while keeping Kiln core focused and maintainable!");
 }

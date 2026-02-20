@@ -1,4 +1,4 @@
-//! Safety-aware feature system for WRT
+//! Safety-aware feature system for Kiln
 //!
 //! This module provides capability-based safety features that can be composed
 //! to meet various safety standards (ISO 26262, DO-178C, IEC 61508, etc.)

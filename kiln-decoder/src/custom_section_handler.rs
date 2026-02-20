@@ -14,7 +14,7 @@ use alloc::{string::String, vec::Vec};
 use std::collections::HashMap;
 
 use kiln_error::{Error, ErrorCategory, Result, codes};
-// Conditional imports for WRT allocator
+// Conditional imports for Kiln allocator
 #[cfg(all(feature = "std", feature = "safety-critical"))]
 use kiln_foundation::allocator::{CrateId, KilnHashMap};
 

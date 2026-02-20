@@ -115,7 +115,7 @@ impl BuildSystem {
                     Range::entire_line(0),
                     Severity::Error,
                     format!("Failed to parse test output: {}", e),
-                    "cargo-wrt".to_string(),
+                    "cargo-kiln".to_string(),
                 ));
             },
         }
@@ -156,7 +156,7 @@ impl BuildSystem {
                     "Tests failed: {} passed, {} failed",
                     test_passed, test_failed
                 ),
-                "cargo-wrt".to_string(),
+                "cargo-kiln".to_string(),
             ));
         } else {
             collection.add_diagnostic(Diagnostic::new(
@@ -164,7 +164,7 @@ impl BuildSystem {
                 Range::entire_line(0),
                 Severity::Info,
                 format!("All tests passed: {} tests", test_passed),
-                "cargo-wrt".to_string(),
+                "cargo-kiln".to_string(),
             ));
         }
 
@@ -174,7 +174,7 @@ impl BuildSystem {
 
     /// Run tests with specific options
     pub fn run_tests_with_options(&self, options: &TestOptions) -> BuildResult<TestResults> {
-        println!("{} Running WRT test suite...", "🧪".bright_blue());
+        println!("{} Running Kiln test suite...", "🧪".bright_blue());
 
         let start_time = std::time::Instant::now();
 

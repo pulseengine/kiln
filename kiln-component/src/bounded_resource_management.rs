@@ -1,4 +1,4 @@
-// WRT - kiln-component
+// Kiln - kiln-component
 // Module: Enhanced Resource Management with Bounded Collections
 // SW-REQ-ID: REQ_RESOURCE_BOUNDED_001, REQ_RESOURCE_LIMITS_001, REQ_COMPONENT_RESOURCE_001
 //

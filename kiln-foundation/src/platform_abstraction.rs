@@ -1,4 +1,4 @@
-//! Simple Platform Abstraction for WRT Foundation
+//! Simple Platform Abstraction for Kiln Foundation
 //!
 //! This module provides essential platform services that can be injected
 //! into the runtime, keeping the core runtime platform-agnostic.

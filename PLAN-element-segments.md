@@ -9,7 +9,7 @@ WAST tests fail with "Failed to initialize element segments" when modules have t
 
 ## Root Cause Analysis
 
-The error occurs in `wrt-runtime/src/module_instance.rs` at `initialize_element_segments()` when calling `table.set_shared(table_offset, value)`. The `set_shared()` function in `table.rs` checks bounds:
+The error occurs in `kiln-runtime/src/module_instance.rs` at `initialize_element_segments()` when calling `table.set_shared(table_offset, value)`. The `set_shared()` function in `table.rs` checks bounds:
 
 ```rust
 if idx_usize >= elements.len() {
@@ -33,11 +33,11 @@ We need to verify our decoder reads `limits.min` correctly.
 ## Data Flow Chain
 
 ```
-1. wrt-decoder/streaming_decoder.rs::process_table_section()   → reads limits.min
-2. wrt-decoder/streaming_decoder.rs::process_element_section() → reads element items
-3. wrt-runtime/module.rs::from_wrt_module()                    → converts to runtime
-4. wrt-runtime/module_instance.rs::populate_tables_from_module() → copies tables
-5. wrt-runtime/module_instance.rs::initialize_element_segments()  → initializes elements
+1. kiln-decoder/streaming_decoder.rs::process_table_section()   → reads limits.min
+2. kiln-decoder/streaming_decoder.rs::process_element_section() → reads element items
+3. kiln-runtime/module.rs::from_kiln_module()                    → converts to runtime
+4. kiln-runtime/module_instance.rs::populate_tables_from_module() → copies tables
+5. kiln-runtime/module_instance.rs::initialize_element_segments()  → initializes elements
 ```
 
 ---
@@ -46,7 +46,7 @@ We need to verify our decoder reads `limits.min` correctly.
 
 ### Step 1: Add Diagnostic Tracing
 
-**In `wrt-runtime/src/module_instance.rs` - `populate_tables_from_module()`:**
+**In `kiln-runtime/src/module_instance.rs` - `populate_tables_from_module()`:**
 ```rust
 #[cfg(feature = "tracing")]
 for (idx, table_wrapper) in self.module.tables.iter().enumerate() {
@@ -64,7 +64,7 @@ for (idx, elem) in self.module.elements.iter().enumerate() {
 }
 ```
 
-**In `wrt-decoder/src/streaming_decoder.rs` - `process_table_section()`:**
+**In `kiln-decoder/src/streaming_decoder.rs` - `process_table_section()`:**
 ```rust
 #[cfg(feature = "tracing")]
 trace!(table_index = i, min = min, max = ?max, "Parsed table limits");
@@ -78,7 +78,7 @@ trace!(elem_idx = elem_idx, item_count = item_count, mode = ?mode, "Parsed eleme
 
 ### Step 2: Verify Table Creation
 
-**In `wrt-runtime/src/module.rs` table conversion (~line 1596-1619):**
+**In `kiln-runtime/src/module.rs` table conversion (~line 1596-1619):**
 ```rust
 #[cfg(feature = "tracing")]
 trace!(
@@ -91,7 +91,7 @@ trace!(
 
 ### Step 3: Add Unit Test
 
-**In `wrt-runtime/src/module_instance.rs`:**
+**In `kiln-runtime/src/module_instance.rs`:**
 ```rust
 #[test]
 fn test_inline_element_segment_initialization() {
@@ -104,7 +104,7 @@ fn test_inline_element_segment_initialization() {
 ### Step 4: Run Diagnostics
 
 ```bash
-RUST_LOG=trace cargo-wrt testsuite --run-wast --wast-filter "block" 2>&1 | grep -E "(Table|Element|limits)"
+RUST_LOG=trace cargo-kiln testsuite --run-wast --wast-filter "block" 2>&1 | grep -E "(Table|Element|limits)"
 ```
 
 ### Step 5: Fix Root Cause
@@ -113,19 +113,19 @@ Based on diagnostic output, fix in one of:
 
 | Location | Issue |
 |----------|-------|
-| `wrt-decoder` | `limits.min` not read correctly |
-| `wrt-runtime/module.rs` | Table type not copied correctly |
-| `wrt-runtime/module_instance.rs` | Tables not added to instance |
+| `kiln-decoder` | `limits.min` not read correctly |
+| `kiln-runtime/module.rs` | Table type not copied correctly |
+| `kiln-runtime/module_instance.rs` | Tables not added to instance |
 | Element segment conversion | Offset calculation wrong |
 
 ---
 
 ## Likely Fix Locations
 
-**Option A**: In `wrt-runtime/src/module.rs` around line 1603
+**Option A**: In `kiln-runtime/src/module.rs` around line 1603
 - Check that `table_type.limits.min` matches expected value
 
-**Option B**: In `wrt-runtime/src/module_instance.rs` around line 768
+**Option B**: In `kiln-runtime/src/module_instance.rs` around line 768
 - Verify `self.module.tables` is non-empty with correct sizes
 
 **Option C**: In element segment conversion (lines 1833-1866)
@@ -137,11 +137,11 @@ Based on diagnostic output, fix in one of:
 
 | File | Purpose |
 |------|---------|
-| `wrt-runtime/src/module_instance.rs` | Add tracing, potential fix location |
-| `wrt-runtime/src/module.rs` | Add tracing for table/element conversion |
-| `wrt-runtime/src/table.rs` | Add tracing for table creation |
-| `wrt-decoder/src/streaming_decoder.rs` | Add tracing for parsing |
-| `wrt-build-core/src/wast_execution.rs` | Add debug output |
+| `kiln-runtime/src/module_instance.rs` | Add tracing, potential fix location |
+| `kiln-runtime/src/module.rs` | Add tracing for table/element conversion |
+| `kiln-runtime/src/table.rs` | Add tracing for table creation |
+| `kiln-decoder/src/streaming_decoder.rs` | Add tracing for parsing |
+| `kiln-build-core/src/wast_execution.rs` | Add debug output |
 
 ---
 
@@ -170,11 +170,11 @@ Based on diagnostic output, fix in one of:
 
 ```bash
 # Run single test with trace
-RUST_LOG=trace cargo-wrt testsuite --run-wast --wast-filter "block" 2>&1 | head -200
+RUST_LOG=trace cargo-kiln testsuite --run-wast --wast-filter "block" 2>&1 | head -200
 
 # Check binary encoding
-cargo test -p wrt-build-core test_simple_wast_execution -- --nocapture
+cargo test -p kiln-build-core test_simple_wast_execution -- --nocapture
 
 # Verify table limits in decoder
-RUST_LOG=wrt_decoder=trace cargo test -p wrt-decoder table -- --nocapture
+RUST_LOG=kiln_decoder=trace cargo test -p kiln-decoder table -- --nocapture
 ```

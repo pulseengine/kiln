@@ -1,20 +1,20 @@
-// WRT - kiln-platform
+// Kiln - kiln-platform
 // Module: Side-Channel Resistance Analysis and Implementation
 // SW-REQ-ID: REQ_PLATFORM_SIDECHANNEL_001
 //
-// Copyright (c) 2025 The WRT Project Developers
+// Copyright (c) 2025 The Kiln Project Developers
 // Licensed under the MIT license.
 // SPDX-License-Identifier: MIT
 
 //! Side-Channel Resistance for WebAssembly Runtime Security
 //!
 //! This module analyzes and implements side-channel resistance techniques
-//! for the WRT platform, protecting against timing attacks, cache attacks,
+//! for the Kiln platform, protecting against timing attacks, cache attacks,
 //! and other information leakage vectors.
 //!
 //! # Analysis Summary
 //!
-//! Side-channel resistance fits into the WRT platform as a **cross-cutting
+//! Side-channel resistance fits into the Kiln platform as a **cross-cutting
 //! security concern** that integrates with all existing platform layers:
 //!
 //! ## Integration Points
@@ -71,7 +71,7 @@ pub enum AttackVector {
     MemoryPattern,
 }
 
-/// Analysis: How Side-Channel Resistance Integrates with WRT Platform
+/// Analysis: How Side-Channel Resistance Integrates with Kiln Platform
 pub mod integration_analysis {
 
     /// Integration with Memory Subsystem
@@ -610,7 +610,7 @@ pub mod access_obfuscation {
     }
 }
 
-/// Integration layer for side-channel resistance across WRT platform
+/// Integration layer for side-channel resistance across Kiln platform
 pub mod platform_integration {
     use super::*;
     use crate::platform_abstraction::PlatformConfig;

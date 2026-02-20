@@ -1,6 +1,6 @@
-# Fuzzing for wrt-component
+# Fuzzing for kiln-component
 
-This directory contains fuzzing targets for the wrt-component crate to ensure robustness against malformed input.
+This directory contains fuzzing targets for the kiln-component crate to ensure robustness against malformed input.
 
 ## Prerequisites
 
@@ -16,7 +16,7 @@ Note: Fuzzing requires a nightly Rust toolchain and is only supported on Unix-li
 To run a specific fuzzing target:
 
 ```bash
-# From the wrt-component directory
+# From the kiln-component directory
 cd fuzz
 
 # Run the WIT parser fuzzer

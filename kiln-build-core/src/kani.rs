@@ -1,6 +1,6 @@
 //! KANI formal verification and report generation
 //!
-//! This module provides comprehensive KANI formal verification support for WRT,
+//! This module provides comprehensive KANI formal verification support for Kiln,
 //! including verification execution, report generation, and coverage analysis.
 
 use std::{
@@ -115,7 +115,7 @@ impl KaniVerifier {
 
     /// Run KANI verification
     pub fn run_verification(&self) -> BuildResult<KaniVerificationResults> {
-        println!("{} WRT KANI Formal Verification", "🔍".bright_blue());
+        println!("{} Kiln KANI Formal Verification", "🔍".bright_blue());
         println!("Profile: {:?}", self.config.profile);
         println!("Timestamp: {}", self.timestamp);
         println!();
@@ -377,7 +377,7 @@ impl KaniVerifier {
             self.report_dir.join(format!("verification_report_{}.md", self.timestamp));
 
         let mut content = format!(
-            r#"# WRT KANI Formal Verification Report
+            r#"# Kiln KANI Formal Verification Report
 
 **Date**: {}  
 **Profile**: {:?}  

@@ -1,4 +1,4 @@
-// Safety-critical imports for WRT allocator
+// Safety-critical imports for Kiln allocator
 #[cfg(not(feature = "std"))]
 use alloc::collections::BTreeMap as HashMap;
 #[cfg(all(feature = "std", not(feature = "safety-critical")))]
@@ -274,7 +274,7 @@ impl BufferPoolTrait for SizeClassBufferPool {
 
 /// Budget-aware resource table with bounded memory allocation
 ///
-/// This table integrates with the WRT memory budget system to ensure
+/// This table integrates with the Kiln memory budget system to ensure
 /// static memory allocation for ASIL-D compliance.
 ///
 /// SW-REQ-ID: REQ_MEM_001 - Memory bounds checking
@@ -330,7 +330,7 @@ impl fmt::Debug for ResourceTable {
 impl ResourceTable {
     /// Create a new budget-aware resource table with default settings
     ///
-    /// This constructor integrates with the WRT memory budget system
+    /// This constructor integrates with the Kiln memory budget system
     /// to ensure compile-time allocation enforcement.
     ///
     /// # ASIL-D Safety

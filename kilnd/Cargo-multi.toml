@@ -2,46 +2,46 @@
 # This demonstrates how to set up different build targets
 
 [package]
-name = "wrtd"
+name = "kilnd"
 version.workspace = true
 edition.workspace = true
 license = { workspace = true }
 description = "WebAssembly Runtime Daemon with multi-mode support (std, alloc, no_std)"
-repository = "https://github.com/pulseengine/wrt"
+repository = "https://github.com/pulseengine/kiln"
 readme = "README.md"
 keywords = ["wasm", "webassembly", "daemon", "runtime", "host"]
 categories = ["wasm", "command-line-utilities", "network-programming"]
 
 # Multiple binary targets for different modes
 [[bin]]
-name = "wrtd"
+name = "kilnd"
 path = "src/main.rs"
 
 [[bin]]
-name = "wrtd-std"
+name = "kilnd-std"
 path = "src/main.rs"
 required-features = ["runtime-std"]
 
 [[bin]]
-name = "wrtd-alloc"
+name = "kilnd-alloc"
 path = "src/main.rs"
 required-features = ["runtime-alloc"]
 
 [[bin]]
-name = "wrtd-nostd"
+name = "kilnd-nostd"
 path = "src/main.rs"
 required-features = ["runtime-nostd"]
 
 [[bin]]
-name = "wrtd-universal"
+name = "kilnd-universal"
 path = "src/main.rs"
 required-features = ["test-all-modes"]
 
 [dependencies]
-# WRT dependencies with conditional features
-wrt = { workspace = true, default-features = false }
-wrt-component = { workspace = true, default-features = false }
-wrt-intercept = { workspace = true, default-features = false }
+# Kiln dependencies with conditional features
+kiln = { workspace = true, default-features = false }
+kiln-component = { workspace = true, default-features = false }
+kiln-intercept = { workspace = true, default-features = false }
 
 # Standard library dependencies (always available)
 clap = { version = "4.5.37", features = ["derive"] }
@@ -58,25 +58,25 @@ default = ["runtime-std"]
 
 # Core runtime mode features
 runtime-std = [
-    "wrt/std", 
-    "wrt-component/std", 
-    "wrt-intercept/std",
+    "kiln/std", 
+    "kiln-component/std", 
+    "kiln-intercept/std",
     "dep:tracing",
     "dep:tracing-subscriber",
     "dep:once_cell"
 ]
 
 runtime-alloc = [
-    "wrt/alloc", 
-    "wrt-component/alloc", 
-    "wrt-intercept/alloc",
+    "kiln/alloc", 
+    "kiln-component/alloc", 
+    "kiln-intercept/alloc",
     "dep:once_cell"
 ]
 
 runtime-nostd = [
-    "wrt/no_std", 
-    "wrt-component/no_std", 
-    "wrt-intercept/no_std"
+    "kiln/no_std", 
+    "kiln-component/no_std", 
+    "kiln-intercept/no_std"
 ]
 
 # Combination features
@@ -89,9 +89,9 @@ test-all-modes = ["all-modes"]
 dev-features = ["all-modes", "tracing/max_level_trace"]
 
 # Platform-specific optimizations
-embedded = ["runtime-nostd", "wrt/safety"]
-server = ["runtime-std", "wrt/optimize"]
-iot = ["runtime-alloc", "wrt/optimize"]
+embedded = ["runtime-nostd", "kiln/safety"]
+server = ["runtime-std", "kiln/optimize"]
+iot = ["runtime-alloc", "kiln/optimize"]
 
 # Build profiles for different use cases
 [profile.embedded]
@@ -116,26 +116,26 @@ opt-level = 1       # Some optimization for faster dev builds
 [package.metadata.cargo-install]
 # Install different binaries for different use cases
 [[package.metadata.cargo-install.bin]]
-name = "wrtd"
+name = "kilnd"
 features = ["runtime-std"]
 
 [[package.metadata.cargo-install.bin]]  
-name = "wrtd-embedded"
+name = "kilnd-embedded"
 features = ["embedded"]
 
 [[package.metadata.cargo-install.bin]]
-name = "wrtd-server"
+name = "kilnd-server"
 features = ["server"]
 
 # Example usage in comments:
 #
 # Build mode-specific binaries:
-# cargo build --bin wrtd-std --features runtime-std
-# cargo build --bin wrtd-alloc --features runtime-alloc
-# cargo build --bin wrtd-nostd --features runtime-nostd
+# cargo build --bin kilnd-std --features runtime-std
+# cargo build --bin kilnd-alloc --features runtime-alloc
+# cargo build --bin kilnd-nostd --features runtime-nostd
 #
 # Build universal binary:
-# cargo build --bin wrtd-universal --features test-all-modes
+# cargo build --bin kilnd-universal --features test-all-modes
 #
 # Build for embedded (optimized for size):
 # cargo build --profile embedded --features embedded
@@ -144,5 +144,5 @@ features = ["server"]
 # cargo build --profile server --features server
 #
 # Install mode-specific binaries:
-# cargo install --path . --bin wrtd-std --features runtime-std
-# cargo install --path . --bin wrtd-embedded --features embedded
+# cargo install --path . --bin kilnd-std --features runtime-std
+# cargo install --path . --bin kilnd-embedded --features embedded

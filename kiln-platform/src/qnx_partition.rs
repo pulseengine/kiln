@@ -221,7 +221,7 @@ pub struct QnxPartitionConfig {
 impl Default for QnxPartitionConfig {
     fn default() -> Self {
         Self {
-            name:              "wrt_partition",
+            name:              "kiln_partition",
             flags:             QnxPartitionFlags::Standard,
             use_system_parent: true,
             memory_size:       None,
