@@ -19,7 +19,7 @@ const MODULE_BYTES: &[u8] = &[
     0x01, 0x00, 0x00, 0x00, // version 1
 ];
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn minimal_debug_usage() -> bool {
     // Create debug info parser - returns Result now
     let mut debug_info = match DwarfDebugInfo::new(MODULE_BYTES) {
@@ -36,7 +36,7 @@ pub extern "C" fn minimal_debug_usage() -> bool {
 }
 
 /// Example showing conditional compilation based on features
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn conditional_debug_features() -> u32 {
     let mut debug_info = match DwarfDebugInfo::new(MODULE_BYTES) {
         Ok(info) => info,

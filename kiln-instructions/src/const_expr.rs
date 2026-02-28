@@ -233,7 +233,7 @@ impl ConstExprSequence {
                         ));
                     }
 
-                    let func_ref = kiln_foundation::values::FuncRef { index: *idx };
+                    let func_ref = kiln_foundation::values::FuncRef::from_index(*idx);
 
                     #[cfg(feature = "std")]
                     stack.push(Value::FuncRef(Some(func_ref)));

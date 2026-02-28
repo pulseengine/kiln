@@ -680,11 +680,6 @@ impl CapabilityEngine for CapabilityAwareEngine {
         // Function imports can be applied later (resolved at call time).
         #[cfg(feature = "std")]
         if let Some(ref links) = pending_links {
-            #[cfg(feature = "tracing")]
-            trace!(
-                total_links = links.len(),
-                "Applying non-function imports BEFORE element segments"
-            );
             for (import_key, link) in links {
                 match link.import_kind {
                     ImportKind::Table => {
@@ -775,8 +770,6 @@ impl CapabilityEngine for CapabilityAwareEngine {
         // IMPORTANT: This MUST come AFTER table imports are applied above
         #[cfg(feature = "std")]
         {
-            #[cfg(feature = "tracing")]
-            debug!("Initializing element segments...");
             instance.initialize_element_segments()?;
         }
 

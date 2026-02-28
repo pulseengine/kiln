@@ -200,6 +200,12 @@ impl ModuleInstance {
         &self.module
     }
 
+    /// Get the instance ID (ModuleInstance-level ID, not engine ID)
+    #[must_use]
+    pub fn instance_id(&self) -> usize {
+        self.instance_id
+    }
+
     /// Get a memory from this instance
     pub fn memory(&self, idx: u32) -> Result<MemoryWrapper> {
         #[cfg(feature = "std")]
@@ -1187,7 +1193,9 @@ impl ModuleInstance {
                             continue;
                         } else {
                             // Normal function reference (only valid for funcref elements)
-                            Some(KilnValue::FuncRef(Some(KilnFuncRef { index: func_idx })))
+                            // Stamp with this instance's ID for cross-instance table sharing
+                            let fref = KilnFuncRef::from_index_with_instance(func_idx, self.instance_id as u32);
+                            Some(KilnValue::FuncRef(Some(fref)))
                         };
 
                         // Use set_shared which provides interior mutability
@@ -1268,7 +1276,7 @@ impl ModuleInstance {
                             for item_idx in 0..elem_segment.items.len() {
                                 if let Ok(func_idx) = elem_segment.items.get(item_idx) {
                                     let table_offset = *offset + item_idx as u32;
-                                    let value = Some(KilnValue::FuncRef(Some(KilnFuncRef { index: func_idx })));
+                                    let value = Some(KilnValue::FuncRef(Some(KilnFuncRef::from_index_with_instance(func_idx, self.instance_id as u32))));
                                     table.set_shared(table_offset, value)?;
                                 }
                             }
@@ -1723,6 +1731,7 @@ impl FromBytes for ModuleInstance {
             deferred_global_inits: Vec::new(),
             #[cfg(feature = "std")]
             import_types: Vec::new(),
+            num_import_functions: 0,
         };
 
         // Create the instance using the new method
