@@ -132,12 +132,12 @@ pub fn convert_wast_ret_core_to_value(ret: &WastRetCore) -> Result<Value> {
                         wast::token::Index::Num(n, _) => *n,
                         wast::token::Index::Id(_) => 0, // Named indices default to 0
                     };
-                    Ok(Value::FuncRef(Some(FuncRef { index: func_index })))
+                    Ok(Value::FuncRef(Some(FuncRef::from_index(func_index))))
                 },
                 None => {
                     // (ref.func) without index means "any non-null funcref"
                     // Use u32::MAX as a sentinel value for pattern matching
-                    Ok(Value::FuncRef(Some(FuncRef { index: u32::MAX })))
+                    Ok(Value::FuncRef(Some(FuncRef::from_index(u32::MAX))))
                 },
             }
         },
@@ -272,8 +272,8 @@ pub fn values_equal(actual: &Value, expected: &Value) -> bool {
         (Value::Ref(a), Value::Ref(b)) => a == b,
         // FuncRef comparison
         // Handle "any funcref" pattern (u32::MAX sentinel)
-        (Value::FuncRef(Some(_)), Value::FuncRef(Some(FuncRef { index: u32::MAX }))) => true,
-        (Value::FuncRef(None), Value::FuncRef(Some(FuncRef { index: u32::MAX }))) => false,
+        (Value::FuncRef(Some(_)), Value::FuncRef(Some(FuncRef { index: u32::MAX, .. }))) => true,
+        (Value::FuncRef(None), Value::FuncRef(Some(FuncRef { index: u32::MAX, .. }))) => false,
         (Value::FuncRef(a), Value::FuncRef(b)) => a == b,
         // ExternRef comparison
         // Handle "any externref" pattern (u32::MAX sentinel)

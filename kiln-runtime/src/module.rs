@@ -752,6 +752,9 @@ pub struct Module {
     /// This provides fast lookup for import kind detection during linking
     #[cfg(feature = "std")]
     pub import_types: Vec<RuntimeImportDesc>,
+    /// Number of imported functions (set during decoding/loading)
+    /// Used by the engine to distinguish import calls from local calls
+    pub num_import_functions: usize,
 }
 
 impl Module {
@@ -946,7 +949,7 @@ impl Module {
                     let (func_idx, consumed) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
                     pos += consumed;
                     // ref.func creates a FuncRef with the function index
-                    stack.push(Value::FuncRef(Some(kiln_foundation::values::FuncRef { index: func_idx })));
+                    stack.push(Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(func_idx))));
                 }
                 // i32.add
                 0x6A => {
@@ -1205,7 +1208,7 @@ impl Module {
                     // ref.func
                     let (func_idx, consumed) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
                     pos += consumed;
-                    stack.push(Value::FuncRef(Some(kiln_foundation::values::FuncRef { index: func_idx })));
+                    stack.push(Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(func_idx))));
                 }
                 0xD0 => {
                     // ref.null
@@ -1276,6 +1279,7 @@ impl Module {
             deferred_global_inits: Vec::new(),
             #[cfg(feature = "std")]
             import_types: Vec::new(),
+            num_import_functions: 0,
         })
     }
 
@@ -1314,6 +1318,7 @@ impl Module {
             global_import_types: Vec::new(), // Will be populated when processing imports
             deferred_global_inits: Vec::new(), // Will be populated when processing globals
             import_types: Vec::new(), // Will be populated when processing imports
+            num_import_functions: 0, // Will be set after processing imports
         };
 
         // Convert types
@@ -1447,6 +1452,11 @@ impl Module {
 
         // Set the count of global imports for proper index space mapping
         runtime_module.num_global_imports = global_import_count;
+
+        // Count function imports for the engine's import/local call distinction
+        runtime_module.num_import_functions = kiln_module.imports.iter()
+            .filter(|imp| matches!(imp.desc, FormatImportDesc::Function(_)))
+            .count();
 
         // Convert functions
         #[cfg(feature = "tracing")]
@@ -2106,6 +2116,11 @@ impl Module {
 
         // Set the count of global imports for proper index space mapping
         runtime_module.num_global_imports = global_import_count;
+
+        // Count function imports for the engine's import/local call distinction
+        runtime_module.num_import_functions = kiln_module.imports.iter()
+            .filter(|imp| matches!(imp.desc, FormatImportDesc::Function(_)))
+            .count();
 
         // Convert functions
         for function in &kiln_module.functions {
@@ -3473,6 +3488,7 @@ impl Module {
             deferred_global_inits: Vec::new(),
             #[cfg(feature = "std")]
             import_types: Vec::new(),
+            num_import_functions: 0,
         };
 
         // Set start function if present
@@ -3604,6 +3620,11 @@ impl Module {
             #[cfg(feature = "tracing")]
             trace!("Import processed successfully");
         }
+
+        // Count function imports and set num_import_functions
+        runtime_module.num_import_functions = module_info.imports.iter()
+            .filter(|imp| matches!(imp.import_type, kiln_decoder::ImportType::Function(_)))
+            .count();
 
         // Process exports
         for export in &module_info.exports {
@@ -3938,6 +3959,7 @@ impl kiln_foundation::traits::FromBytes for Module {
             deferred_global_inits: Vec::new(),
             #[cfg(feature = "std")]
             import_types: Vec::new(),
+            num_import_functions: 0,
         };
 
         Ok(module)
@@ -4698,7 +4720,7 @@ impl FromBytes for GlobalWrapper {
                 if value_low == 0xFFFFFFFF {
                     Value::FuncRef(None)
                 } else {
-                    Value::FuncRef(Some(kiln_foundation::values::FuncRef { index: value_low }))
+                    Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(value_low)))
                 }
             },
             ValueType::ExternRef => {

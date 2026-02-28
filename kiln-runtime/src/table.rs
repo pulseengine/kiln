@@ -748,7 +748,7 @@ impl Table {
         }
         self.set(
             idx,
-            Some(KilnValue::FuncRef(Some(KilnFuncRef { index: func_idx }))),
+            Some(KilnValue::FuncRef(Some(KilnFuncRef::from_index(func_idx)))),
         )
     }
 

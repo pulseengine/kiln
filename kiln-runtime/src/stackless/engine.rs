@@ -645,6 +645,51 @@ impl StacklessEngine {
         self.lowered_functions.contains_key(&(instance_id, func_idx))
     }
 
+    /// Dispatch a canon-lowered function by interface and function name.
+    ///
+    /// Called when an import link target has a `__canon_lower_` prefix export name.
+    /// This handles the canonical ABI lifting and WASI dispatch without needing
+    /// the lowered_functions map (which may have incorrect indices for mixed exports).
+    #[cfg(all(feature = "std", feature = "wasi"))]
+    fn dispatch_canon_lowered(
+        &mut self,
+        instance_id: usize,
+        interface: &str,
+        function: &str,
+        args: Vec<Value>,
+    ) -> Result<Vec<Value>> {
+        // Lift args based on the function being called
+        let wasi_args = self.lift_lowered_function_args(
+            instance_id, interface, function, &args,
+        )?;
+
+        // Dispatch to WASI
+        if let Some(ref mut dispatcher) = self.wasi_dispatcher {
+            let wasi_results = dispatcher.dispatch(interface, function, &wasi_args)?;
+
+            let results: Vec<Value> = wasi_results.into_iter().map(|v| {
+                match v {
+                    kiln_wasi::Value::S32(i) => Value::I32(i),
+                    kiln_wasi::Value::U32(u) => Value::I32(u as i32),
+                    kiln_wasi::Value::S64(i) => Value::I64(i),
+                    kiln_wasi::Value::U64(u) => Value::I64(u as i64),
+                    kiln_wasi::Value::F32(f) => Value::F32(FloatBits32::from_f32(f)),
+                    kiln_wasi::Value::F64(f) => Value::F64(FloatBits64::from_f64(f)),
+                    kiln_wasi::Value::Bool(b) => Value::I32(if b { 1 } else { 0 }),
+                    kiln_wasi::Value::U8(u) => Value::I32(u as i32),
+                    kiln_wasi::Value::S8(i) => Value::I32(i as i32),
+                    kiln_wasi::Value::U16(u) => Value::I32(u as i32),
+                    kiln_wasi::Value::S16(i) => Value::I32(i as i32),
+                    _ => Value::I32(0),
+                }
+            }).collect();
+
+            Ok(results)
+        } else {
+            Err(kiln_error::Error::runtime_error("WASI dispatcher not available for canon-lowered function"))
+        }
+    }
+
     /// Execute a lowered function via the WASI dispatcher
     ///
     /// This is called when the engine detects that a function is a lowered function.
@@ -1167,8 +1212,8 @@ impl StacklessEngine {
         export_name: String,
     ) {
         self.import_links.insert(
-            (instance_id, import_module, import_name),
-            (target_instance_id, export_name)
+            (instance_id, import_module.clone(), import_name.clone()),
+            (target_instance_id, export_name.clone())
         );
     }
 
@@ -1666,23 +1711,48 @@ impl StacklessEngine {
                 // This is an imported function - need to call via import link
                 if let Ok((module_name, field_name)) = self.find_import_by_index(&module, func_idx) {
                     let import_key = (instance_id, module_name.clone(), field_name.clone());
-                    if let Some((target_instance_id, export_name)) = self.import_links.get(&import_key)
-                        .map(|(ti, en)| (*ti, en.clone()))
+                    let linked = self.import_links.get(&import_key)
+                        .map(|(ti, en)| (*ti, en.clone()));
+                    if let Some((target_instance_id, export_name)) = linked
                     {
-                        // Detect self-referencing loop
-                        let target_func = self.resolve_export_func_idx(target_instance_id, &export_name)?;
-                        if target_instance_id == instance_id && target_func == func_idx {
-                            return Err(kiln_error::Error::runtime_trap("circular import link detected"));
+                        // Check if this is a canon-lowered function
+                        #[cfg(all(feature = "std", feature = "wasi"))]
+                        if export_name.starts_with("__canon_lower_") {
+                            let canon_suffix = &export_name["__canon_lower_".len()..];
+                            if let Some(sep_pos) = canon_suffix.rfind("::") {
+                                let interface = &canon_suffix[..sep_pos];
+                                let function = &canon_suffix[sep_pos + 2..];
+                                let results = self.dispatch_canon_lowered(
+                                    instance_id, interface, function, args,
+                                )?;
+                                return Ok(ExecutionOutcome::Complete(results));
+                            }
                         }
-                        // NON-RECURSIVE: Resolve target and redirect via trampoline
-                        return Ok(ExecutionOutcome::Call {
-                            instance_id: target_instance_id,
-                            func_idx: target_func,
-                            args,
-                            return_state: None, // No state to save - this is the very start
-                        });
+
+                        // Handle resource drops as no-ops
+                        if export_name.starts_with("[resource-drop]") {
+                            return Ok(ExecutionOutcome::Complete(Vec::new()));
+                        }
+
+                        // Try to resolve the export in the target instance
+                        match self.resolve_export_func_idx(target_instance_id, &export_name) {
+                            Ok(target_func) => {
+                                if target_instance_id == instance_id && target_func == func_idx {
+                                    return Err(kiln_error::Error::runtime_trap("circular import link detected"));
+                                }
+                                return Ok(ExecutionOutcome::Call {
+                                    instance_id: target_instance_id,
+                                    func_idx: target_func,
+                                    args,
+                                    return_state: None,
+                                });
+                            },
+                            Err(_) => {
+                                // Export not found - fall through to default results
+                            },
+                        }
                     }
-                    // Import not linked - return correct number of default results
+                    // Import not linked or link unresolvable - return correct number of default results
                     // based on the imported function's type signature
                     // NOTE: Do NOT decrement here - execute() will decrement on Complete
                     if let Some(func) = module.functions.get(func_idx) {
@@ -2128,32 +2198,74 @@ impl StacklessEngine {
                                     );
 
                                     if let Some((target_instance, export_name)) = linked {
-                                        // Collect args from operand stack based on function signature
-                                        let call_args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
+                                        // Check if this is a canon-lowered function (export name
+                                        // starts with __canon_lower_). These are WASI functions
+                                        // that should be dispatched via the canonical ABI executor,
+                                        // not as cross-instance calls.
+                                        #[cfg(all(feature = "std", feature = "wasi"))]
+                                        if export_name.starts_with("__canon_lower_") {
+                                            // Parse interface::function from __canon_lower_{interface}::{function}
+                                            let canon_suffix = &export_name["__canon_lower_".len()..];
+                                            if let Some(sep_pos) = canon_suffix.rfind("::") {
+                                                let interface = &canon_suffix[..sep_pos];
+                                                let function = &canon_suffix[sep_pos + 2..];
+                                                // Collect args and dispatch to WASI
+                                                let args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
+                                                let results = self.dispatch_canon_lowered(
+                                                    instance_id, interface, function, args,
+                                                )?;
+                                                for result in results {
+                                                    operand_stack.push(result);
+                                                }
+                                                pc += 1;
+                                                continue;
+                                            }
+                                        }
 
-                                        // NON-RECURSIVE: resolve target function and return to trampoline
-                                        let target_func = self.resolve_export_func_idx(target_instance, &export_name)?;
+                                        // Handle resource drops as no-ops (resource lifetime
+                                        // is managed by the host, not the core module)
+                                        if export_name.starts_with("[resource-drop]") {
+                                            // Pop the resource handle argument
+                                            let _args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
+                                            // Resource drops return nothing
+                                            pc += 1;
+                                            continue;
+                                        }
 
-                                        // Save current execution state for resumption after callee returns
-                                        let saved_state = SuspendedFrame {
-                                            instance_id,
-                                            func_idx: caller_func_idx,
-                                            pc: pc + 1, // resume at next instruction
-                                            locals,
-                                            operand_stack,
-                                            block_stack,
-                                            block_depth,
-                                            instruction_count,
-                                        };
+                                        // Try to resolve the export in the target instance.
+                                        // If resolution fails (e.g., numeric export from InlineExports
+                                        // that doesn't exist as a real module export), fall through
+                                        // to WASI dispatch instead of returning an error.
+                                        match self.resolve_export_func_idx(target_instance, &export_name) {
+                                            Ok(target_func) => {
+                                                // Collect args from operand stack based on function signature
+                                                let call_args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
 
-                                        return Ok(ExecutionOutcome::Call {
-                                            instance_id: target_instance,
-                                            func_idx: target_func,
-                                            args: call_args,
-                                            return_state: Some(saved_state),
-                                        });
+                                                // Save current execution state for resumption after callee returns
+                                                let saved_state = SuspendedFrame {
+                                                    instance_id,
+                                                    func_idx: caller_func_idx,
+                                                    pc: pc + 1, // resume at next instruction
+                                                    locals,
+                                                    operand_stack,
+                                                    block_stack,
+                                                    block_depth,
+                                                    instruction_count,
+                                                };
+
+                                                return Ok(ExecutionOutcome::Call {
+                                                    instance_id: target_instance,
+                                                    func_idx: target_func,
+                                                    args: call_args,
+                                                    return_state: Some(saved_state),
+                                                });
+                                            },
+                                            Err(_) => {
+                                                // Export not found in target - fall through to WASI dispatch
+                                            },
+                                        }
                                     }
-                                    // Not linked - fall through to WASI dispatch
+                                    // Not linked or link unresolvable - fall through to WASI dispatch
                                 }
 
                                 // Dispatch to WASI implementation
@@ -2327,20 +2439,23 @@ impl StacklessEngine {
                             "[CALL_INDIRECT] Indirect call"
                         );
 
-                        // Look up the function in the table
-                        // For now, we need to get the table from the instance and look up the function
-                        let func_idx = if let Some(inst) = self.instances.get(&instance_id) {
+                        // Look up the function in the table, extracting both func_idx and
+                        // optional cross-instance target (for shared tables in Component Model)
+                        let (func_idx, target_instance_id) = if let Some(inst) = self.instances.get(&instance_id) {
                             // Get the table
                             if let Ok(table) = inst.table(table_idx) {
                                 // Get the function reference from the table
                                 if let Ok(Some(func_ref)) = table.0.get(table_func_idx) {
-                                    // Extract the function index from the Value
-                                    // Tables store FuncRef values, not raw integers
+                                    // Extract the function index and optional instance_id from the Value
                                     match func_ref {
-                                        Value::FuncRef(Some(fref)) => fref.index as usize,
+                                        Value::FuncRef(Some(fref)) => {
+                                            // Check for cross-instance reference (shared table)
+                                            let target = fref.instance_id.map(|id| id as usize);
+                                            (fref.index as usize, target)
+                                        },
                                         Value::FuncRef(None) => return Err(kiln_error::Error::runtime_trap("uninitialized element")),
-                                        Value::I32(idx) => idx as usize, // Legacy fallback
-                                        Value::I64(idx) => idx as usize, // Legacy fallback
+                                        Value::I32(idx) => (idx as usize, None), // Legacy fallback
+                                        Value::I64(idx) => (idx as usize, None), // Legacy fallback
                                         _ => return Err(kiln_error::Error::runtime_trap("uninitialized element")),
                                     }
                                 } else if let Ok(None) = table.0.get(table_func_idx) {
@@ -2424,13 +2539,98 @@ impl StacklessEngine {
                                 }
 
                                 // NO FALLBACK: Per CLAUDE.md, fail loud and early if element not found
-                                resolved_func_idx.ok_or_else(|| {
+                                let fidx = resolved_func_idx.ok_or_else(|| {
                                     kiln_error::Error::runtime_trap("undefined element")
-                                })?
+                                })?;
+                                (fidx, None) // Element segment fallback has no cross-instance info
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("CallIndirect: instance not found"));
                         };
+
+                        // Cross-instance dispatch via shared table:
+                        // If the FuncRef was written by a different instance (shared table in
+                        // Component Model), dispatch to that instance instead of the current one.
+                        // Note: FuncRef.instance_id stores ModuleInstance.instance_id which uses a
+                        // different numbering scheme than the engine's instance_id. We must translate.
+                        if let Some(mod_target_id) = target_instance_id {
+                            // Translate ModuleInstance.instance_id → engine instance_id
+                            let engine_target_id = self.instances.iter()
+                                .find(|(_, inst)| inst.instance_id() == mod_target_id)
+                                .map(|(engine_id, _)| *engine_id);
+
+                            let target_id = engine_target_id.unwrap_or(mod_target_id);
+
+                            if target_id != instance_id {
+                                // Get the target module to look up function type for arg count
+                                let target_module = self.instances.get(&target_id)
+                                    .ok_or_else(|| kiln_error::Error::runtime_trap("cross-instance target not found"))?
+                                    .module().clone();
+
+                                // Check if this is a lowered function in the target instance
+                                #[cfg(all(feature = "std", feature = "wasi"))]
+                                if self.is_lowered_function(target_id, func_idx) {
+                                    let func = &target_module.functions[func_idx];
+                                    let func_type = target_module.types.get(func.type_idx as usize)
+                                        .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
+                                    let param_count = func_type.params.len();
+                                    let mut call_args = Vec::new();
+                                    for _ in 0..param_count {
+                                        if let Some(arg) = operand_stack.pop() {
+                                            call_args.push(arg);
+                                        } else {
+                                            return Err(kiln_error::Error::runtime_error("Stack underflow on cross-instance lowered call"));
+                                        }
+                                    }
+                                    call_args.reverse();
+                                    let results = self.execute_lowered_function(target_id, func_idx, call_args)?;
+                                    for result in results {
+                                        operand_stack.push(result);
+                                    }
+                                    pc += 1;
+                                    continue;
+                                }
+
+                                // Get the function type from the TARGET module for arg count
+                                if func_idx < target_module.functions.len() {
+                                    let func = &target_module.functions[func_idx];
+                                    let func_type = target_module.types.get(func.type_idx as usize)
+                                        .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type in cross-instance call"))?;
+                                    let param_count = func_type.params.len();
+                                    let mut call_args = Vec::new();
+                                    for _ in 0..param_count {
+                                        if let Some(arg) = operand_stack.pop() {
+                                            call_args.push(arg);
+                                        } else {
+                                            return Err(kiln_error::Error::runtime_error("Stack underflow on cross-instance call_indirect"));
+                                        }
+                                    }
+                                    call_args.reverse();
+
+                                    // Save current frame and dispatch to target instance
+                                    let saved_state = SuspendedFrame {
+                                        instance_id,
+                                        func_idx: caller_func_idx,
+                                        pc: pc + 1,
+                                        locals,
+                                        operand_stack,
+                                        block_stack,
+                                        block_depth,
+                                        instruction_count,
+                                    };
+                                    return Ok(ExecutionOutcome::Call {
+                                        instance_id: target_id,
+                                        func_idx,
+                                        args: call_args,
+                                        return_state: Some(saved_state),
+                                    });
+                                } else {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "cross-instance call_indirect: function index out of bounds in target"
+                                    ));
+                                }
+                            }
+                        }
 
                         #[cfg(feature = "tracing")]
                         trace!(func_idx = func_idx, "[CALL_INDIRECT] Resolved to function index");
@@ -6275,7 +6475,7 @@ impl StacklessEngine {
                         // Push a reference to the function at func_idx
                         #[cfg(feature = "tracing")]
                         trace!("RefFunc: func_idx={}", func_idx_arg);
-                        operand_stack.push(Value::FuncRef(Some(kiln_foundation::values::FuncRef { index: func_idx_arg })));
+                        operand_stack.push(Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(func_idx_arg))));
                     }
                     Instruction::RefIsNull => {
                         // Pop reference, push 1 if null, 0 if not null
@@ -6829,7 +7029,7 @@ impl StacklessEngine {
                                         Some(Value::FuncRef(None))  // null funcref
                                     } else {
                                         Some(Value::FuncRef(Some(
-                                            kiln_foundation::values::FuncRef { index: func_idx }
+                                            kiln_foundation::values::FuncRef::from_index(func_idx)
                                         )))
                                     };
                                     table.set(*dst_idx as u32 + i as u32, value)?;
@@ -10332,25 +10532,23 @@ impl StacklessEngine {
 
     /// Count total number of imports across all modules
     fn count_total_imports(&self, module: &crate::module::Module) -> usize {
-        // For now, we'll count based on the fact that imported functions
-        // are added as placeholder functions at the beginning of the functions array
-        // A proper implementation would iterate through module.imports
+        // Use the authoritative num_import_functions field set during module loading
+        if module.num_import_functions > 0 {
+            return module.num_import_functions;
+        }
 
-        // Count functions that are imports (those with empty body)
+        // Fallback: count functions with empty body (for modules that don't set the field)
         let mut import_count = 0;
         for func in &module.functions {
             if func.body.is_empty() && func.locals.is_empty() {
                 import_count += 1;
             } else {
-                // Once we hit a non-import function, we're done
                 break;
             }
         }
 
         #[cfg(feature = "tracing")]
-
-
-        trace!("Total imports counted: {}", import_count);
+        trace!("Total imports counted (heuristic): {}", import_count);
         import_count
     }
 

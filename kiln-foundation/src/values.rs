@@ -324,17 +324,31 @@ pub fn v128(bytes: [u8; 16]) -> V128 {
 }
 
 /// Function reference type
+///
+/// In multi-instance scenarios (e.g., Component Model shared tables),
+/// `instance_id` identifies which instance's function space this reference
+/// belongs to. When `None`, the reference is resolved in the current instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, core::hash::Hash)]
 pub struct FuncRef {
-    /// Function index
+    /// Function index within the instance's function space
     pub index: u32,
+    /// Optional instance ID for cross-instance references (shared tables)
+    /// When None, resolved in the current instance's function space.
+    /// When Some(id), resolved in instance `id`'s function space.
+    pub instance_id: Option<u32>,
 }
 
 impl FuncRef {
-    /// Creates a new `FuncRef` from an index
+    /// Creates a new `FuncRef` from an index (local to current instance)
     #[must_use]
     pub fn from_index(index: u32) -> Self {
-        Self { index }
+        Self { index, instance_id: None }
+    }
+
+    /// Creates a new `FuncRef` with a specific instance ID (cross-instance)
+    #[must_use]
+    pub fn from_index_with_instance(index: u32, instance_id: u32) -> Self {
+        Self { index, instance_id: Some(instance_id) }
     }
 }
 
@@ -1034,6 +1048,12 @@ impl FromBytes for V128 {
 impl Checksummable for FuncRef {
     fn update_checksum(&self, checksum: &mut Checksum) {
         self.index.update_checksum(checksum);
+        // Encode instance_id as u32 (0 = None, N+1 = Some(N))
+        let instance_id_encoded = match self.instance_id {
+            None => 0u32,
+            Some(id) => id.wrapping_add(1),
+        };
+        instance_id_encoded.update_checksum(checksum);
     }
 }
 
@@ -1043,8 +1063,13 @@ impl ToBytes for FuncRef {
         writer: &mut WriteStream<'a>,
         provider: &PStream,
     ) -> kiln_error::Result<()> {
-        // Delegate to the u32 implementation
-        self.index.to_bytes_with_provider(writer, provider)
+        self.index.to_bytes_with_provider(writer, provider)?;
+        // Encode instance_id: 0 = None, N+1 = Some(N)
+        let instance_id_encoded: u32 = match self.instance_id {
+            None => 0,
+            Some(id) => id.wrapping_add(1),
+        };
+        instance_id_encoded.to_bytes_with_provider(writer, provider)
     }
     // to_bytes method is provided by the trait with DefaultMemoryProvider
 }
@@ -1054,9 +1079,14 @@ impl FromBytes for FuncRef {
         reader: &mut ReadStream<'a>,
         provider: &PStream,
     ) -> kiln_error::Result<Self> {
-        // Delegate to the u32 implementation
         let index = u32::from_bytes_with_provider(reader, provider)?;
-        Ok(FuncRef { index })
+        let instance_id_encoded = u32::from_bytes_with_provider(reader, provider)?;
+        let instance_id = if instance_id_encoded == 0 {
+            None
+        } else {
+            Some(instance_id_encoded.wrapping_sub(1))
+        };
+        Ok(FuncRef { index, instance_id })
     }
     // from_bytes method is provided by the trait with DefaultMemoryProvider
 }
@@ -1213,7 +1243,7 @@ impl ToBytes for Value {
             Value::V128(_) | Value::I16x8(_) => 16,
             // Reference types with Option: always use max size for BoundedVec compatibility
             // 1 byte for Some/None flag + 4 bytes for index (always reserved)
-            Value::FuncRef(_) => 1 + 4,
+            Value::FuncRef(_) => 1 + 8, // 1 flag + 4 index + 4 instance_id
             Value::ExternRef(_) => 1 + 4,
             Value::ExnRef(_) => 1 + 4,
             Value::I31Ref(_) => 1 + 4,
@@ -1294,11 +1324,14 @@ impl ToBytes for Value {
             Value::F64(v) => v.to_bytes_with_provider(writer, provider)?,
             Value::V128(v) | Value::I16x8(v) => v.to_bytes_with_provider(writer, provider)?,
             Value::FuncRef(opt_v) => {
-                // Write Some/None flag + always write 4 bytes for fixed size
+                // Write Some/None flag + always write 8 bytes for fixed size (4 index + 4 instance_id)
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
                     Some(v) => v.to_bytes_with_provider(writer, provider)?,
-                    None => writer.write_u32_le(0)?, // Padding for fixed size
+                    None => {
+                        writer.write_u32_le(0)?; // Padding for index
+                        writer.write_u32_le(0)?; // Padding for instance_id
+                    },
                 }
             },
             Value::ExternRef(opt_v) => {
@@ -1399,13 +1432,14 @@ impl FromBytes for Value {
                 Ok(Value::V128(v))
             },
             5 => {
-                // FuncRef - always read 5 bytes (1 flag + 4 data) for fixed size
+                // FuncRef - always read 9 bytes (1 flag + 4 index + 4 instance_id) for fixed size
                 let is_some = reader.read_u8()? == 1;
                 if is_some {
                     let v = FuncRef::from_bytes_with_provider(reader, provider)?;
                     Ok(Value::FuncRef(Some(v)))
                 } else {
-                    let _ = reader.read_u32_le()?; // Skip padding
+                    let _ = reader.read_u32_le()?; // Skip index padding
+                    let _ = reader.read_u32_le()?; // Skip instance_id padding
                     Ok(Value::FuncRef(None))
                 }
             },
