@@ -1117,16 +1117,16 @@ mod tests {
     #[test]
     fn test_extract_stream_handle() -> Result<()> {
         let args = vec![Value::U32(42)];
-        let handle = extract_stream_handle(args)?;
+        let handle = extract_stream_handle(&args)?;
         assert_eq!(handle, 42);
 
         let args = vec![Value::S32(24)];
-        let handle = extract_stream_handle(args)?;
+        let handle = extract_stream_handle(&args)?;
         assert_eq!(handle, 24);
 
         // Test negative handle
         let args = vec![Value::S32(-1)];
-        let result = extract_stream_handle(args);
+        let result = extract_stream_handle(&args);
         assert!(result.is_err());
 
         Ok(())
@@ -1135,11 +1135,11 @@ mod tests {
     #[test]
     fn test_extract_read_length() -> Result<()> {
         let args = vec![Value::U32(42), Value::U64(1024)];
-        let len = extract_read_length(args, 1)?;
+        let len = extract_read_length(&args, 1)?;
         assert_eq!(len, 1024);
 
         let args = vec![Value::U32(42), Value::U32(512)];
-        let len = extract_read_length(args, 1)?;
+        let len = extract_read_length(&args, 1)?;
         assert_eq!(len, 512);
 
         Ok(())
@@ -1150,7 +1150,7 @@ mod tests {
         let data = vec![Value::U8(1), Value::U8(2), Value::U8(3)];
         let args = vec![Value::U32(42), Value::List(data)];
 
-        let bytes = extract_write_data(args, 1)?;
+        let bytes = extract_write_data(&args, 1)?;
         assert_eq!(bytes, vec![1, 2, 3]);
 
         Ok(())
@@ -1167,7 +1167,7 @@ mod tests {
             Value::U8(111),
         ]; // "Hello"
         let args = vec![Value::U32(1), Value::List(data)];
-        let result = wasi_stream_write(&mut (), args)?;
+        let result = wasi_stream_write(&mut (), &args)?;
         assert_eq!(result.len(), 1);
         if let Value::U64(bytes_written) = &result[0] {
             assert_eq!(*bytes_written, 5);
@@ -1175,12 +1175,12 @@ mod tests {
 
         // Test flush operation
         let args = vec![Value::U32(1)];
-        let result = wasi_stream_flush(&mut (), args)?;
+        let result = wasi_stream_flush(&mut (), &args)?;
         assert_eq!(result.len(), 0); // Flush returns unit
 
         // Test check-write operation
         let args = vec![Value::U32(1)];
-        let result = wasi_stream_check_write(&mut (), args)?;
+        let result = wasi_stream_check_write(&mut (), &args)?;
         assert_eq!(result.len(), 1);
         if let Value::U64(capacity) = &result[0] {
             assert!(*capacity > 0);
@@ -1193,7 +1193,7 @@ mod tests {
     fn test_pollable_operations() -> Result<()> {
         // Test subscribe operation for stdout (stream 1)
         let args = vec![Value::U32(1)];
-        let result = wasi_stream_subscribe(&mut (), args)?;
+        let result = wasi_stream_subscribe(&mut (), &args)?;
         assert_eq!(result.len(), 1);
         let pollable1 = if let Value::U32(pollable) = &result[0] {
             assert!(*pollable >= POLLABLE_OFFSET); // Should be at or after offset
@@ -1204,7 +1204,7 @@ mod tests {
 
         // Subscribe another stream (stderr = 2)
         let args = vec![Value::U32(2)];
-        let result = wasi_stream_subscribe(&mut (), args)?;
+        let result = wasi_stream_subscribe(&mut (), &args)?;
         assert_eq!(result.len(), 1);
         let pollable2 = if let Value::U32(pollable) = &result[0] {
             assert!(*pollable >= POLLABLE_OFFSET);
@@ -1216,7 +1216,7 @@ mod tests {
         // Test poll operation with the pollables we created
         let pollables = vec![Value::U32(pollable1), Value::U32(pollable2)];
         let args = vec![Value::List(pollables)];
-        let result = wasi_poll_one_off(&mut (), args)?;
+        let result = wasi_poll_one_off(&mut (), &args)?;
         assert_eq!(result.len(), 1);
         if let Value::List(results) = &result[0] {
             assert_eq!(results.len(), 2);
@@ -1233,7 +1233,7 @@ mod tests {
     fn test_timer_pollable() -> Result<()> {
         // Create a timer pollable that should already be expired (deadline in past)
         let args = vec![Value::U64(0)]; // deadline at epoch (already passed)
-        let result = wasi_subscribe_timer(&mut (), args)?;
+        let result = wasi_subscribe_timer(&mut (), &args)?;
         assert_eq!(result.len(), 1);
 
         let timer_pollable = if let Value::U32(p) = &result[0] {
@@ -1245,7 +1245,7 @@ mod tests {
         // Poll the timer - should be ready since deadline passed
         let pollables = vec![Value::U32(timer_pollable)];
         let args = vec![Value::List(pollables)];
-        let result = wasi_poll_one_off(&mut (), args)?;
+        let result = wasi_poll_one_off(&mut (), &args)?;
 
         if let Value::List(results) = &result[0] {
             assert_eq!(results.len(), 1);
@@ -1260,7 +1260,7 @@ mod tests {
     fn test_drop_pollable() -> Result<()> {
         // Create a pollable
         let args = vec![Value::U32(1)];
-        let result = wasi_stream_subscribe(&mut (), args)?;
+        let result = wasi_stream_subscribe(&mut (), &args)?;
         let pollable = if let Value::U32(p) = &result[0] {
             *p
         } else {
@@ -1269,7 +1269,7 @@ mod tests {
 
         // Drop it
         let args = vec![Value::U32(pollable)];
-        let result = wasi_drop_pollable(&mut (), args)?;
+        let result = wasi_drop_pollable(&mut (), &args)?;
         assert!(result.is_empty()); // Drop returns nothing on success
 
         Ok(())

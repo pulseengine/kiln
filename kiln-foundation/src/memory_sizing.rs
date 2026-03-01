@@ -160,6 +160,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg_attr(feature = "std", serial_test::serial)]
     fn test_size_calculation() {
         // Test that size calculation rounds up appropriately
         assert_eq!(calculate_required_size(10, 10, 20), size_classes::TINY); // 120 -> 256

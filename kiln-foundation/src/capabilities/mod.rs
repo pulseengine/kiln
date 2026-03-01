@@ -362,6 +362,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "std", serial_test::serial)]
     fn test_memory_operation_requires_capability() {
         let read_op = MemoryOperation::Read {
             offset: 0,

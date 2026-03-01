@@ -2423,7 +2423,7 @@ mod tests {
         let mut dispatcher = WasiDispatcher::with_defaults()?;
 
         // First call to get-stdout allocates a resource handle
-        let result1 = dispatcher.dispatch("wasi:cli/stdout@0.2.4", "get-stdout", vec![])?;
+        let result1 = dispatcher.dispatch("wasi:cli/stdout@0.2.4", "get-stdout", &[])?;
         assert_eq!(result1.len(), 1);
         let handle1 = match &result1[0] {
             Value::U32(h) => *h,
@@ -2431,7 +2431,7 @@ mod tests {
         };
 
         // Second call should return a DIFFERENT handle (Preview2 semantics)
-        let result2 = dispatcher.dispatch("wasi:cli/stdout@0.2.4", "get-stdout", vec![])?;
+        let result2 = dispatcher.dispatch("wasi:cli/stdout@0.2.4", "get-stdout", &[])?;
         assert_eq!(result2.len(), 1);
         let handle2 = match &result2[0] {
             Value::U32(h) => *h,
@@ -2449,7 +2449,7 @@ mod tests {
         let mut dispatcher = WasiDispatcher::with_defaults()?;
 
         // get-stderr allocates a resource handle
-        let result = dispatcher.dispatch("wasi:cli/stderr@0.2.4", "get-stderr", vec![])?;
+        let result = dispatcher.dispatch("wasi:cli/stderr@0.2.4", "get-stderr", &[])?;
         assert_eq!(result.len(), 1);
         // Handle should be a valid u32 (value doesn't matter, it's dynamic)
         assert!(matches!(result[0], Value::U32(_)));
@@ -2467,7 +2467,7 @@ mod tests {
     fn test_wall_clock_now() -> Result<()> {
         MemoryInitializer::ensure_initialized()?;
         let mut dispatcher = WasiDispatcher::with_defaults()?;
-        let result = dispatcher.dispatch("wasi:clocks/wall-clock@0.2.4", "now", vec![])?;
+        let result = dispatcher.dispatch("wasi:clocks/wall-clock@0.2.4", "now", &[])?;
         assert_eq!(result.len(), 1);
         // Should return a Tuple with (seconds, nanoseconds)
         if let Value::Tuple(parts) = &result[0] {

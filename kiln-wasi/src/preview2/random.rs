@@ -235,20 +235,20 @@ mod tests {
     #[test]
     fn test_extract_length() -> Result<()> {
         let args = vec![Value::U64(1024)];
-        let len = extract_length(args)?;
+        let len = extract_length(&args)?;
         assert_eq!(len, 1024);
 
         let args = vec![Value::U32(512)];
-        let len = extract_length(args)?;
+        let len = extract_length(&args)?;
         assert_eq!(len, 512);
 
         let args = vec![Value::S32(256)];
-        let len = extract_length(args)?;
+        let len = extract_length(&args)?;
         assert_eq!(len, 256);
 
         // Test negative length
         let args = vec![Value::S32(-1)];
-        let result = extract_length(args);
+        let result = extract_length(&args);
         assert!(result.is_err());
 
         Ok(())
@@ -258,7 +258,7 @@ mod tests {
     fn test_wasi_get_random_bytes() -> Result<()> {
         // Test small request
         let args = vec![Value::U64(16)];
-        let result = wasi_get_random_bytes(&mut (), args)?;
+        let result = wasi_get_random_bytes(&mut (), &args)?;
         assert_eq!(result.len(), 1);
 
         if let Value::List(bytes) = &result[0] {
@@ -272,7 +272,7 @@ mod tests {
 
         // Test large request (should fail)
         let args = vec![Value::U64(2 * 1024 * 1024)]; // 2MB
-        let result = wasi_get_random_bytes(&mut (), args);
+        let result = wasi_get_random_bytes(&mut (), &args);
         assert!(result.is_err());
 
         Ok(())
@@ -282,7 +282,7 @@ mod tests {
     fn test_wasi_get_insecure_random_bytes() -> Result<()> {
         // Test medium request
         let args = vec![Value::U64(1024)];
-        let result = wasi_get_insecure_random_bytes(&mut (), args)?;
+        let result = wasi_get_insecure_random_bytes(&mut (), &args)?;
         assert_eq!(result.len(), 1);
 
         if let Value::List(bytes) = &result[0] {
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn test_wasi_get_random_u64() -> Result<()> {
-        let result = wasi_get_random_u64(&mut (), vec![])?;
+        let result = wasi_get_random_u64(&mut (), &[])?;
         assert_eq!(result.len(), 1);
 
         if let Value::U64(value) = &result[0] {
