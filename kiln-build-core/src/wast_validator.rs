@@ -127,6 +127,14 @@ impl StackType {
         match rt {
             kiln_foundation::RefType::Funcref => StackType::FuncRef,
             kiln_foundation::RefType::Externref => StackType::ExternRef,
+            kiln_foundation::RefType::Gc(gc) => {
+                use kiln_foundation::types::HeapType;
+                match gc.heap_type {
+                    HeapType::Func => StackType::FuncRef,
+                    HeapType::Extern => StackType::ExternRef,
+                    _ => StackType::ExternRef,
+                }
+            }
         }
     }
 }

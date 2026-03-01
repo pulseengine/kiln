@@ -3495,6 +3495,7 @@ impl Module {
                     let table_type = KilnTableType {
                         element_type: KilnRefType::Funcref,
                         limits:       KilnLimits { min: 0, max: None },
+                        table64:      false,
                     };
                     ExternType::Table(table_type)
                 },
@@ -3979,6 +3980,7 @@ impl Default for TableWrapper {
                 min: 0,
                 max: Some(1),
             },
+            table64: false,
         };
         Self::new(Table::new(table_type).expect("Failed to create Table for TableWrapper::default()"))
     }
@@ -4396,7 +4398,12 @@ impl Checksummable for TableWrapper {
     fn update_checksum(&self, checksum: &mut Checksum) {
         // Use table size and element type for checksum
         checksum.update_slice(&self.0.size().to_le_bytes());
-        checksum.update_slice(&(self.0.ty.element_type as u8).to_le_bytes());
+        let element_type_byte: u8 = match self.0.ty.element_type {
+            KilnRefType::Funcref => 0,
+            KilnRefType::Externref => 1,
+            KilnRefType::Gc(_) => 2,
+        };
+        checksum.update_slice(&element_type_byte.to_le_bytes());
     }
 }
 
@@ -4411,7 +4418,12 @@ impl ToBytes for TableWrapper {
         _provider: &P,
     ) -> Result<()> {
         writer.write_all(&self.0.size().to_le_bytes())?;
-        writer.write_all(&(self.0.ty.element_type as u8).to_le_bytes())?;
+        let element_type_byte: u8 = match self.0.ty.element_type {
+            KilnRefType::Funcref => 0,
+            KilnRefType::Externref => 1,
+            KilnRefType::Gc(_) => 2,
+        };
+        writer.write_all(&element_type_byte.to_le_bytes())?;
         writer.write_all(&self.0.ty.limits.min.to_le_bytes())?;
         Ok(())
     }
@@ -4437,6 +4449,7 @@ impl FromBytes for TableWrapper {
                 min: 0,
                 max: Some(1),
             },
+            table64: false,
         };
 
         let table = Table::new(table_type).map_err(|_| {

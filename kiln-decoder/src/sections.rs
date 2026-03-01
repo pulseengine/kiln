@@ -615,6 +615,7 @@ pub mod parsers {
             kiln_foundation::TableType {
                 element_type: ref_type,
                 limits: foundation_limits,
+                table64: false,
             },
             offset,
         ))

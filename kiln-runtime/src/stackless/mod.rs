@@ -18,6 +18,7 @@ type String =
 pub mod engine;
 pub mod extensions;
 pub mod frame;
+pub mod simd_ops;
 
 #[cfg(feature = "std")]
 pub mod tail_call;

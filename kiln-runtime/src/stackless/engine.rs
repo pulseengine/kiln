@@ -6635,6 +6635,7 @@ impl StacklessEngine {
                                     match table.element_type() {
                                         kiln_foundation::types::RefType::Funcref => Value::FuncRef(None),
                                         kiln_foundation::types::RefType::Externref => Value::ExternRef(None),
+                                        kiln_foundation::types::RefType::Gc(_) => Value::ExternRef(None),
                                     }
                                 }
                             };

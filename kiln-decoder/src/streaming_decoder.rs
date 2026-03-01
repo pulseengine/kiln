@@ -850,6 +850,7 @@ impl<'a> StreamingDecoder<'a> {
                         let table_type = TableType {
                             element_type: ref_type,
                             limits,
+                            table64: false,
                         };
 
                         let import = Import {
