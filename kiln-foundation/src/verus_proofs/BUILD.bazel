@@ -1,0 +1,22 @@
+load("@rules_verus//verus:defs.bzl", "verus_library", "verus_test")
+
+verus_library(
+    name = "static_vec_proofs",
+    srcs = [
+        "mod.rs",
+        "static_vec_proofs.rs",
+    ],
+    crate_root = "static_vec_proofs.rs",
+    crate_name = "static_vec_proofs",
+    visibility = ["//visibility:public"],
+)
+
+verus_test(
+    name = "static_vec_verify",
+    srcs = [
+        "mod.rs",
+        "static_vec_proofs.rs",
+    ],
+    crate_root = "static_vec_proofs.rs",
+    crate_name = "static_vec_proofs",
+)
