@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 use kiln_decoder::component::{
     component_name_section::{
         ComponentNameSection, generate_component_name_section, parse_component_name_section,

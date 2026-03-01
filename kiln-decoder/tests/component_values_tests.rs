@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 //! Tests for WebAssembly Component Model value encoding and decoding
 
 use kiln_decoder::component::{decode_component, encode_component};

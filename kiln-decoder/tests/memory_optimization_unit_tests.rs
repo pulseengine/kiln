@@ -1,6 +1,7 @@
+#![cfg(feature = "std")]
+
 //! Unit tests for memory optimization utilities
 
-#[cfg(feature = "std")]
 mod tests {
     #[test]
     fn test_bounds_checking() {

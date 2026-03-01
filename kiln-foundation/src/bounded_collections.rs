@@ -971,13 +971,13 @@ where
         // Update deque state
         self.length += 1;
 
-        // If this is the first element, set front = back
+        // If this is the first element, front points to it
         if self.length == 1 {
-            self.front = self.back;
-        } else {
-            // Move back pointer forward
-            self.back = (self.back + 1) % N_ELEMENTS;
+            self.front = physical_index;
         }
+
+        // Always advance back to the next write position
+        self.back = (self.back + 1) % N_ELEMENTS;
 
         // Record the operation and update checksums if needed
         record_global_operation(OperationType::CollectionWrite, self.verification_level);
@@ -3133,6 +3133,8 @@ impl<const N_BITS: usize> FromBytes for BoundedBitSet<N_BITS> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
+    use std::vec;
     use crate::{
         budget_aware_provider::CrateId,
         safe_managed_alloc,
@@ -3146,6 +3148,7 @@ mod tests {
 
     // Test BoundedQueue
     #[test]
+    #[serial_test::serial]
     fn test_bounded_queue() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
@@ -3193,6 +3196,7 @@ mod tests {
 
     // Test BoundedMap
     #[test]
+    #[serial_test::serial]
     fn test_bounded_map() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
@@ -3235,6 +3239,7 @@ mod tests {
 
     // Test BoundedSet
     #[test]
+    #[serial_test::serial]
     fn test_bounded_set() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
@@ -3272,7 +3277,7 @@ mod tests {
 
     // Test BoundedDeque
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_bounded_deque() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();

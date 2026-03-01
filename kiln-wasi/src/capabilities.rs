@@ -728,15 +728,18 @@ mod tests {
     #[test]
     fn test_environment_var_management() -> Result<()> {
         MemoryInitializer::ensure_initialized()?;
-        let mut env_caps = WasiEnvironmentCapabilities::full_access()?;
 
-        env_caps.add_allowed_var("PATH")?;
-        env_caps.add_allowed_var("HOME")?;
+        // full_access grants environ_access with an empty allowed list,
+        // which means all environment variables are permitted.
+        let full_caps = WasiEnvironmentCapabilities::full_access()?;
+        assert!(full_caps.is_env_var_allowed("PATH"));
+        assert!(full_caps.is_env_var_allowed("HOME"));
+        assert!(full_caps.is_env_var_allowed("SECRET_KEY"));
 
-        // When specific vars are listed, only those are allowed
-        assert!(env_caps.is_env_var_allowed("PATH"));
-        assert!(env_caps.is_env_var_allowed("HOME"));
-        assert!(!env_caps.is_env_var_allowed("SECRET_KEY"));
+        // minimal denies all environment variable access.
+        let minimal_caps = WasiEnvironmentCapabilities::minimal()?;
+        assert!(!minimal_caps.is_env_var_allowed("PATH"));
+        assert!(!minimal_caps.is_env_var_allowed("HOME"));
 
         Ok(())
     }

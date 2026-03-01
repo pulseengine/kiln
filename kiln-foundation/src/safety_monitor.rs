@@ -419,6 +419,8 @@ macro_rules! safety_assert {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
+    use std::vec;
 
     #[test]
     fn test_health_score_calculation() {
@@ -479,8 +481,13 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_thread_safe_access() {
+        // Reset global monitor to avoid pollution from other serial tests
+        with_safety_monitor(|monitor| {
+            monitor.reset();
+        });
+
         with_safety_monitor(|monitor| {
             monitor.record_allocation(1024);
         });

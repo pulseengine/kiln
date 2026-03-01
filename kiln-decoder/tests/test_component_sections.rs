@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 // Test for component section parsing
 use std::fs;
 

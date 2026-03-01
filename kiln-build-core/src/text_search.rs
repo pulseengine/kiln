@@ -325,24 +325,58 @@ impl TextSearcher {
         })?;
 
         let mut matches = Vec::new();
+
+        // Check if the entire file is test context based on path
+        let is_test_file = Self::is_test_file_path(file_path);
+
         let mut in_test_module = false;
-        let mut brace_depth = 0;
+        let mut test_module_depth: i32 = 0;
+        let mut current_depth: i32 = 0;
+        let mut next_fn_is_test = false;
+        let mut in_test_fn = false;
+        let mut test_fn_depth: i32 = 0;
 
         for (line_number, line) in content.lines().enumerate() {
             let line_number = line_number + 1; // Convert to 1-indexed
+            let trimmed = line.trim();
 
-            // Track if we're in a test module
-            if line.contains("#[cfg(test)]") || line.contains("mod tests") {
+            // Track #[cfg(test)] / mod tests blocks
+            if trimmed.contains("#[cfg(test)]")
+                || (trimmed.starts_with("mod tests") && !trimmed.starts_with("mod tests_"))
+            {
                 in_test_module = true;
-                brace_depth = 0;
+                test_module_depth = current_depth;
             }
 
-            // Track brace depth to know when we exit test modules
-            brace_depth += line.chars().filter(|&c| c == '{').count() as i32;
-            brace_depth -= line.chars().filter(|&c| c == '}').count() as i32;
+            // Track #[test] attribute for next function
+            if trimmed == "#[test]" || trimmed.starts_with("#[test]")
+                || trimmed == "#[tokio::test]" || trimmed.starts_with("#[tokio::test]")
+            {
+                next_fn_is_test = true;
+            }
 
-            if in_test_module && brace_depth <= 0 {
+            // Track function starts after #[test]
+            if next_fn_is_test && (trimmed.starts_with("fn ") || trimmed.starts_with("pub fn ")
+                || trimmed.starts_with("async fn ") || trimmed.starts_with("pub async fn "))
+            {
+                in_test_fn = true;
+                test_fn_depth = current_depth;
+                next_fn_is_test = false;
+            }
+
+            // Track brace depth
+            let opens = line.chars().filter(|&c| c == '{').count() as i32;
+            let closes = line.chars().filter(|&c| c == '}').count() as i32;
+            current_depth += opens - closes;
+
+            // Exit test module when we return to its entry depth
+            if in_test_module && current_depth <= test_module_depth {
                 in_test_module = false;
+            }
+
+            // Exit test function when we return to its entry depth
+            if in_test_fn && current_depth <= test_fn_depth {
+                in_test_fn = false;
             }
 
             // Check if line matches pattern
@@ -352,7 +386,7 @@ impl TextSearcher {
                     line_number,
                     line_content: line.to_string(),
                     is_comment: self.is_comment_line(line),
-                    is_test_context: in_test_module || self.is_test_function(line),
+                    is_test_context: is_test_file || in_test_module || in_test_fn,
                 });
             }
         }
@@ -360,15 +394,43 @@ impl TextSearcher {
         Ok(matches)
     }
 
+    /// Check if a file path indicates non-production code (tests, examples, benches, build tools)
+    fn is_test_file_path(path: &Path) -> bool {
+        let path_str = path.to_string_lossy();
+
+        // Files in tests/, examples/, benches/ directories
+        if path_str.contains("/tests/") || path_str.contains("/test/")
+            || path_str.contains("/examples/") || path_str.contains("/benches/")
+        {
+            return true;
+        }
+
+        // Build tool crates are not safety-critical runtime code
+        if path_str.contains("/cargo-kiln/") || path_str.contains("/kiln-build-core/") {
+            return true;
+        }
+
+        // Daemon crate (server binary, not embedded runtime)
+        if path_str.contains("/kilnd/") {
+            return true;
+        }
+
+        // Test helper files (suffix-based detection)
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.ends_with("_test.rs") || name.ends_with("_tests.rs")
+                || name == "test_lib.rs" || name == "test_utils.rs"
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+
     /// Check if a line is a comment
     fn is_comment_line(&self, line: &str) -> bool {
         let trimmed = line.trim();
         trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*")
-    }
-
-    /// Check if a line is in a test function context
-    fn is_test_function(&self, line: &str) -> bool {
-        line.contains("#[test]") || line.contains("#[cfg(test)]")
     }
 }
 
@@ -380,6 +442,28 @@ pub fn count_matches(matches: &[SearchMatch]) -> usize {
 /// Count matches excluding comments and test code
 pub fn count_production_matches(matches: &[SearchMatch]) -> usize {
     matches.iter().filter(|m| !m.is_comment && !m.is_test_context).count()
+}
+
+/// Format only production (non-test, non-comment) matches for display
+pub fn format_production_matches(matches: &[SearchMatch], max_display: usize) -> String {
+    let production: Vec<_> = matches
+        .iter()
+        .filter(|m| !m.is_comment && !m.is_test_context)
+        .collect();
+    let mut output = String::new();
+    for (i, m) in production.iter().take(max_display).enumerate() {
+        output.push_str(&format!(
+            "  {}:{}:{}\n",
+            m.file_path.display(),
+            m.line_number,
+            m.line_content.trim()
+        ));
+        if i >= max_display - 1 && production.len() > max_display {
+            output.push_str(&format!("  ... and {} more\n", production.len() - max_display));
+            break;
+        }
+    }
+    output
 }
 
 /// Format search results for display

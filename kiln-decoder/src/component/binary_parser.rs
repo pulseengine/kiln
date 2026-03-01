@@ -271,11 +271,13 @@ mod component_binary_parser {
             let section_id_byte = bytes[self.offset];
             self.offset += 1;
 
-            let section_id = ComponentSectionId::from_u8(section_id_byte)
-                .ok_or_else(|| Error::parse_error("Unknown component section ID"))?;
+            let section_id_opt = ComponentSectionId::from_u8(section_id_byte);
 
             // Read section size (LEB128)
-            let (section_size, _size_bytes) = self.read_leb128_u32(bytes)?;
+            // Note: read_leb128_u32 resets self.offset internally, so we must
+            // advance past the LEB128 bytes manually using the returned byte count.
+            let (section_size, size_bytes) = self.read_leb128_u32(bytes)?;
+            self.offset += size_bytes;
 
             // Validate section size
             if self.offset + section_size as usize > self.size {
@@ -288,6 +290,16 @@ mod component_binary_parser {
             let section_start = self.offset;
             let section_end = self.offset + section_size as usize;
             let section_data = &bytes[section_start..section_end];
+
+            // For unknown section IDs, skip the section data
+            let section_id = match section_id_opt {
+                Some(id) => id,
+                None => {
+                    // Unknown sections are skipped per the component model spec
+                    self.offset = section_end;
+                    return Ok(());
+                }
+            };
 
             // Parse section based on type
             match section_id {

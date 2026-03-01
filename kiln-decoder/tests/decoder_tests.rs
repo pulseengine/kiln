@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 use kiln_error::{Error, ErrorCategory, codes};
 
 // Custom Result type for our tests

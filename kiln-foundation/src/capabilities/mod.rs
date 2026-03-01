@@ -349,6 +349,8 @@ pub mod capability_errors {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
+    use std::vec;
 
     #[test]
     fn test_capability_mask_intersection() {
@@ -362,16 +364,18 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_memory_operation_requires_capability() {
         let read_op = MemoryOperation::Read {
             offset: 0,
             len:    100,
         };
-        let write_mask = CapabilityMask::read_only();
-        let read_mask = CapabilityMask::all();
+        let read_only_mask = CapabilityMask::read_only();
+        let no_perms_mask = CapabilityMask::none();
 
-        assert!(!read_op.requires_capability(&write_mask));
-        assert!(read_op.requires_capability(&read_mask));
+        // Read op should be permitted by read-only mask
+        assert!(read_op.requires_capability(&read_only_mask));
+        // Read op should NOT be permitted by no-permissions mask
+        assert!(!read_op.requires_capability(&no_perms_mask));
     }
 }

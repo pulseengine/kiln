@@ -20,3 +20,24 @@ verus_test(
     crate_root = "static_vec_proofs.rs",
     crate_name = "static_vec_proofs",
 )
+
+verus_library(
+    name = "static_queue_proofs",
+    srcs = [
+        "mod.rs",
+        "static_queue_proofs.rs",
+    ],
+    crate_root = "static_queue_proofs.rs",
+    crate_name = "static_queue_proofs",
+    visibility = ["//visibility:public"],
+)
+
+verus_test(
+    name = "static_queue_verify",
+    srcs = [
+        "mod.rs",
+        "static_queue_proofs.rs",
+    ],
+    crate_root = "static_queue_proofs.rs",
+    crate_name = "static_queue_proofs",
+)

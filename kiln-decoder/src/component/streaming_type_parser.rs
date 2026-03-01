@@ -1229,7 +1229,7 @@ impl ComponentTypeSection {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
 
@@ -1271,8 +1271,20 @@ mod tests {
         #[cfg(feature = "std")]
         data.push(count as u8);
 
+        let len = data.len();
+        let mut buf = [0u8; 16];
+        #[cfg(feature = "std")]
+        {
+            buf[..len].copy_from_slice(&data[..len]);
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            for i in 0..len {
+                buf[i] = data.get(i).unwrap();
+            }
+        }
         let mut parser =
-            StreamingTypeParser::new(data.as_slice(), VerificationLevel::Standard).unwrap();
+            StreamingTypeParser::new(&buf[..len], VerificationLevel::Standard).unwrap();
 
         assert!(parser.parse().is_err());
         Ok(())

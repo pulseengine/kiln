@@ -158,14 +158,16 @@ macro_rules! sized_provider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
+    use std::vec;
 
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_size_calculation() {
         // Test that size calculation rounds up appropriately
         assert_eq!(calculate_required_size(10, 10, 20), size_classes::TINY); // 120 -> 256
         assert_eq!(calculate_required_size(100, 8, 20), size_classes::SMALL); // 960 -> 1024
-        assert_eq!(calculate_required_size(1000, 4, 20), size_classes::MEDIUM); // 4800 -> 4096 (already over)
+        assert_eq!(calculate_required_size(1000, 4, 20), size_classes::LARGE); // 4800 > 4096 -> 16384
     }
 
     #[test]

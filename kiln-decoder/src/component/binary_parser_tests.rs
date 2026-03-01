@@ -4,7 +4,7 @@
 //! Model binary parser, including edge cases, error conditions, and
 //! cross-environment compatibility.
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     extern crate alloc;
     use alloc::format;
