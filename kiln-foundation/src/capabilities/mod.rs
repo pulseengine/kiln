@@ -368,10 +368,12 @@ mod tests {
             offset: 0,
             len:    100,
         };
-        let write_mask = CapabilityMask::read_only();
-        let read_mask = CapabilityMask::all();
+        let read_only_mask = CapabilityMask::read_only();
+        let no_perms_mask = CapabilityMask::none();
 
-        assert!(!read_op.requires_capability(&write_mask));
-        assert!(read_op.requires_capability(&read_mask));
+        // Read op should be permitted by read-only mask
+        assert!(read_op.requires_capability(&read_only_mask));
+        // Read op should NOT be permitted by no-permissions mask
+        assert!(!read_op.requires_capability(&no_perms_mask));
     }
 }

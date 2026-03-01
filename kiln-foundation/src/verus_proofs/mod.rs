@@ -40,3 +40,4 @@
 //! This module implements Tier 2 (Verus) verification.
 
 pub mod static_vec_proofs;
+pub mod static_queue_proofs;

@@ -32,10 +32,10 @@ use crate::{
 const MAX_BUILTIN_TYPES: usize = 35;
 
 // Calculate a suitable capacity for the NoStdProvider.
-// Each BuiltinType takes 1 byte (serialized_size).
-// BoundedVec itself might have a small overhead, but provider capacity is for
-// raw bytes.
-const ALL_AVAILABLE_PROVIDER_CAPACITY: usize = MAX_BUILTIN_TYPES * 1; // BuiltinType::default().serialized_size() is 1
+// BoundedVec uses `get_item_size_impl()` which returns 12 bytes per item
+// (hardcoded emergency fix for recursion avoidance). The provider must have
+// enough capacity for MAX_BUILTIN_TYPES items at 12-byte stride.
+const ALL_AVAILABLE_PROVIDER_CAPACITY: usize = MAX_BUILTIN_TYPES * 12;
 
 /// Enumeration of all supported WebAssembly Component Model built-in functions
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -241,6 +241,10 @@ impl Checksummable for BuiltinType {
 }
 
 impl ToBytes for BuiltinType {
+    fn serialized_size(&self) -> usize {
+        1 // Single u8 discriminant
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,

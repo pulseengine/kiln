@@ -793,6 +793,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "std", serial_test::serial)]
     fn test_global_counter() {
         reset_global_operations();
         let vl_full = VerificationLevel::Full;

@@ -233,6 +233,29 @@ jobs:
       - name: Safety Verification Gate
         run: cargo-kiln verify --asil d
 
+  verus_verification:
+    name: Verus Formal Verification
+    runs-on: macos-latest
+    # Run on pushes to main and manual triggers
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Bazel
+        uses: bazel-contrib/setup-bazel@0.14.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-verus
+          repository-cache: true
+      - name: Install Rust toolchain (for Verus sysroot)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.93.0"
+      - name: Run Verus verification (StaticVec + StaticQueue)
+        run: |
+          bazel test \
+            //kiln-foundation/src/verus_proofs:static_vec_verify \
+            //kiln-foundation/src/verus_proofs:static_queue_verify
+
   extended_static_analysis:
     name: Extended Static Analysis (Miri, Kani)
     runs-on: ubuntu-latest

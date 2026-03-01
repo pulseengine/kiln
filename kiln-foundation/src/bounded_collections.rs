@@ -971,13 +971,13 @@ where
         // Update deque state
         self.length += 1;
 
-        // If this is the first element, set front = back
+        // If this is the first element, front points to it
         if self.length == 1 {
-            self.front = self.back;
-        } else {
-            // Move back pointer forward
-            self.back = (self.back + 1) % N_ELEMENTS;
+            self.front = physical_index;
         }
+
+        // Always advance back to the next write position
+        self.back = (self.back + 1) % N_ELEMENTS;
 
         // Record the operation and update checksums if needed
         record_global_operation(OperationType::CollectionWrite, self.verification_level);
@@ -3146,6 +3146,7 @@ mod tests {
 
     // Test BoundedQueue
     #[test]
+    #[cfg_attr(feature = "std", serial_test::serial)]
     fn test_bounded_queue() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
@@ -3193,6 +3194,7 @@ mod tests {
 
     // Test BoundedMap
     #[test]
+    #[cfg_attr(feature = "std", serial_test::serial)]
     fn test_bounded_map() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
@@ -3235,6 +3237,7 @@ mod tests {
 
     // Test BoundedSet
     #[test]
+    #[cfg_attr(feature = "std", serial_test::serial)]
     fn test_bounded_set() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();

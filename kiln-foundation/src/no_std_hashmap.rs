@@ -23,7 +23,7 @@
 use core::{
     borrow::Borrow,
     fmt,
-    hash::Hash,
+    hash::{Hash, Hasher},
     marker::PhantomData,
 };
 
@@ -37,6 +37,38 @@ use crate::{
     verification::Checksum,
     MemoryProvider,
 };
+
+/// A simple FNV-1a hasher for no_std environments.
+///
+/// Uses the 64-bit FNV-1a algorithm for reasonable hash distribution
+/// without requiring std or external dependencies.
+struct SimpleHasher {
+    state: u64,
+}
+
+impl SimpleHasher {
+    const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x00000100000001B3;
+
+    fn new() -> Self {
+        Self {
+            state: Self::FNV_OFFSET_BASIS,
+        }
+    }
+}
+
+impl Hasher for SimpleHasher {
+    fn finish(&self) -> u64 {
+        self.state
+    }
+
+    fn write(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.state ^= u64::from(byte);
+            self.state = self.state.wrapping_mul(Self::FNV_PRIME);
+        }
+    }
+}
 
 /// A simple fixed-capacity hash map implementation for no_std environments.
 ///
@@ -100,9 +132,13 @@ where
 
 impl<K, V> ToBytes for Entry<K, V>
 where
-    K: Clone + PartialEq + Eq + ToBytes,
-    V: Clone + PartialEq + Eq + ToBytes,
+    K: Clone + PartialEq + Eq + ToBytes + Default,
+    V: Clone + PartialEq + Eq + ToBytes + Default,
 {
+    fn serialized_size(&self) -> usize {
+        self.key.serialized_size() + self.value.serialized_size() + self.hash.serialized_size()
+    }
+
     fn to_bytes_with_provider<'a, PStream: MemoryProvider>(
         &self,
         writer: &mut crate::traits::WriteStream<'a>,
@@ -173,20 +209,11 @@ where
         N
     }
 
-    /// Calculates the hash of a key.
+    /// Calculates the hash of a key using a simple FNV-1a-style hasher.
     fn hash_key<Q: ?Sized + Hash>(&self, key: &Q) -> u64 {
-        // For no_std environments, use a simple hash function
-        // This is not cryptographically secure but sufficient for HashMap functionality
-        let hash: u64 = 5381; // DJB2 hash algorithm starting value
-
-        // Binary std/no_std choice
-        // we'll use a simplified approach. In a real implementation, you'd want
-        // to use a proper no_std hasher like `ahash` or implement Hasher for a simple
-        // algorithm.
-
-        // For now, use a basic checksum-style hash
-        hash.wrapping_mul(33)
-            .wrapping_add(core::ptr::addr_of!(*key) as *const () as usize as u64)
+        let mut hasher = SimpleHasher::new();
+        key.hash(&mut hasher);
+        hasher.finish()
     }
 
     /// Calculates the initial index for a key.

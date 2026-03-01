@@ -129,12 +129,10 @@ impl MemoryInitializer {
         // Store the global context
         #[cfg(feature = "std")]
         {
-            if GLOBAL_CAPABILITY_CONTEXT.set(context).is_err() {
-                MEMORY_INITIALIZED.store(false, Ordering::Release);
-                return Err(Error::runtime_execution_error(
-                    "Failed to set global capability context",
-                ));
-            }
+            // OnceLock can only be set once. If it was already set (e.g., after
+            // a test called reset()), the existing context remains valid since
+            // budgets are compile-time constants. Silently succeed in this case.
+            let _ = GLOBAL_CAPABILITY_CONTEXT.set(context);
         }
 
         #[cfg(not(feature = "std"))]

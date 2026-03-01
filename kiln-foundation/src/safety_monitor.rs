@@ -481,6 +481,11 @@ mod tests {
     #[test]
     #[cfg_attr(feature = "std", serial_test::serial)]
     fn test_thread_safe_access() {
+        // Reset global monitor to avoid pollution from other serial tests
+        with_safety_monitor(|monitor| {
+            monitor.reset();
+        });
+
         with_safety_monitor(|monitor| {
             monitor.record_allocation(1024);
         });

@@ -1027,27 +1027,16 @@ where
     }
 }
 
-/// EMERGENCY FIX: Get item size without causing recursion
-#[allow(clippy::extra_unused_type_parameters)]
+/// Get item serialized size for BoundedVec.
+///
+/// Delegates to `get_item_serialized_size` which uses autoref specialization
+/// to prefer `StaticSerializedSize` (compile-time constant) when available,
+/// falling back to `T::default().serialized_size()` otherwise.
 fn get_item_size_impl<T>() -> usize
 where
     T: crate::traits::ToBytes + crate::traits::FromBytes + Default,
 {
-    // TEMPORARY SOLUTION: Hardcoded size to break recursion
-    // This avoids calling T::default().serialized_size() which causes
-    // stack overflow for types like MemoryWrapper that recursively create
-    // BoundedVec
-
-    // Use 12 bytes as conservative estimate:
-    // - Covers most WebAssembly types (u32=4, i64=8, etc.)
-    // - Matches MemoryWrapper StaticSerializedSize implementation (size + min + max
-    //   = 4+4+4)
-    // - Better to have slightly wrong size estimates than stack overflow
-
-    // NOTE: If actual serialization size differs significantly from this estimate,
-    // the BoundedVec might have capacity/indexing issues. This is a trade-off
-    // to prevent immediate crash.
-    12
+    get_item_serialized_size::<T>()
 }
 
 /// A bounded vector with a fixed maximum capacity and verification.
