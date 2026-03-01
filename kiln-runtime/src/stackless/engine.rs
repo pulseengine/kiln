@@ -146,6 +146,7 @@ use kiln_foundation::{
     values::{
         FloatBits32,
         FloatBits64,
+        V128,
         Value,
     },
 };
@@ -10230,6 +10231,34 @@ impl StacklessEngine {
                         ));
                     }
 
+                    // ========================================
+                    // SIMD Instructions (V128)
+                    // ========================================
+                    Instruction::V128Const { bytes } => {
+                        push_v128(&mut operand_stack, bytes);
+                    }
+                    Instruction::SimdShuffle { lanes } => {
+                        let b = pop_v128(&mut operand_stack)?;
+                        let a = pop_v128(&mut operand_stack)?;
+                        push_v128(&mut operand_stack, crate::stackless::simd_ops::i8x16_shuffle(&a, &b, &lanes));
+                    }
+                    Instruction::SimdOp { opcode } => {
+                        execute_simd_op(opcode, &mut operand_stack)?;
+                    }
+                    Instruction::SimdLaneOp { opcode, lane } => {
+                        execute_simd_lane_op(opcode, lane, &mut operand_stack)?;
+                    }
+                    Instruction::SimdMemOp { opcode: _, memarg: _ } => {
+                        return Err(kiln_error::Error::runtime_execution_error(
+                            "SIMD memory operations not yet implemented",
+                        ));
+                    }
+                    Instruction::SimdMemLaneOp { opcode: _, memarg: _, lane: _ } => {
+                        return Err(kiln_error::Error::runtime_execution_error(
+                            "SIMD memory lane operations not yet implemented",
+                        ));
+                    }
+
                     _ => {
                         // CLAUDE.md: FAIL LOUD AND EARLY - return error instead of silently skipping
                         #[cfg(feature = "tracing")]
@@ -11216,6 +11245,428 @@ impl StacklessEngine {
 // REMOVED: ~950 lines of inline WASI dispatch code
 // All WASI dispatch is now handled by WasiDispatcher via HostImportHandler trait
 // See kiln-wasi/src/dispatcher.rs for the implementation
+
+// ============================================================
+// SIMD helper functions
+// ============================================================
+
+/// Pop a v128 value from the stack
+fn pop_v128(stack: &mut Vec<Value>) -> Result<[u8; 16]> {
+    match stack.pop() {
+        Some(Value::V128(v)) => Ok(v.bytes),
+        Some(_) => Err(kiln_error::Error::runtime_execution_error("SIMD: expected v128")),
+        None => Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+    }
+}
+
+/// Pop an i32 value for SIMD shift/lane operations
+fn pop_i32_for_simd(stack: &mut Vec<Value>) -> Result<i32> {
+    match stack.pop() {
+        Some(Value::I32(v)) => Ok(v),
+        Some(_) => Err(kiln_error::Error::runtime_execution_error("SIMD: expected i32")),
+        None => Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+    }
+}
+
+/// Push a v128 value onto the stack
+fn push_v128(stack: &mut Vec<Value>, bytes: [u8; 16]) {
+    stack.push(Value::V128(V128 { bytes }));
+}
+
+/// Execute a SIMD opcode (0xFD prefix operations without additional lane/mem immediates)
+fn execute_simd_op(opcode: u32, stack: &mut Vec<Value>) -> Result<()> {
+    use crate::stackless::simd_ops;
+
+    match opcode {
+        // v128.not
+        0x4D => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_not(&a)); }
+        // v128.and
+        0x4E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_and(&a, &b)); }
+        // v128.andnot
+        0x4F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_andnot(&a, &b)); }
+        // v128.or
+        0x50 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_or(&a, &b)); }
+        // v128.xor
+        0x51 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_xor(&a, &b)); }
+        // v128.bitselect
+        0x52 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::v128_bitselect(&a, &b, &c)); }
+        // v128.any_true
+        0x53 => { let a = pop_v128(stack)?; stack.push(Value::I32(if simd_ops::v128_any_true(&a) { 1 } else { 0 })); }
+
+        // i8x16 splat
+        0x0F => { let val = pop_i32_for_simd(stack)?; push_v128(stack, simd_ops::splat_i8x16(val as u8)); }
+        // i16x8 splat
+        0x10 => { let val = pop_i32_for_simd(stack)?; push_v128(stack, simd_ops::splat_i16x8(val as u16)); }
+        // i32x4 splat
+        0x11 => { let val = pop_i32_for_simd(stack)?; push_v128(stack, simd_ops::splat_i32x4(val as u32)); }
+        // i64x2 splat
+        0x12 => {
+            let val = match stack.pop() {
+                Some(Value::I64(v)) => v,
+                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected i64")),
+                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+            };
+            push_v128(stack, simd_ops::splat_i64x2(val as u64));
+        }
+        // f32x4 splat
+        0x13 => {
+            let val = match stack.pop() {
+                Some(Value::F32(v)) => v.to_f32(),
+                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected f32")),
+                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+            };
+            push_v128(stack, simd_ops::splat_f32x4(val));
+        }
+        // f64x2 splat
+        0x14 => {
+            let val = match stack.pop() {
+                Some(Value::F64(v)) => v.to_f64(),
+                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected f64")),
+                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+            };
+            push_v128(stack, simd_ops::splat_f64x2(val));
+        }
+
+        // i8x16 comparisons
+        0x23 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) == simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+        0x24 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) != simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+        0x25 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) < simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+        0x26 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_u8(&a, i) < simd_ops::get_u8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+        0x27 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) > simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+        0x28 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_u8(&a, i) > simd_ops::get_u8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+        0x29 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) <= simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+        0x2A => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_u8(&a, i) <= simd_ops::get_u8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+        0x2B => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_i8(&a, i) >= simd_ops::get_i8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+        0x2C => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..16 { r[i] = if simd_ops::get_u8(&a, i) >= simd_ops::get_u8(&b, i) { 0xFF } else { 0 }; } push_v128(stack, r); }
+
+        // i16x8 comparisons
+        0x2D => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) == simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x2E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) != simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x2F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) < simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x30 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_u16(&a, i) < simd_ops::get_u16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x31 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) > simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x32 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_u16(&a, i) > simd_ops::get_u16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x33 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) <= simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x34 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_u16(&a, i) <= simd_ops::get_u16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x35 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_i16(&a, i) >= simd_ops::get_i16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x36 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..8 { simd_ops::set_i16(&mut r, i, if simd_ops::get_u16(&a, i) >= simd_ops::get_u16(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+
+        // i32x4 comparisons
+        0x37 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) == simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x38 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) != simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x39 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) < simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x3A => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if (simd_ops::get_i32(&a, i) as u32) < (simd_ops::get_i32(&b, i) as u32) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x3B => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) > simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x3C => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if (simd_ops::get_i32(&a, i) as u32) > (simd_ops::get_i32(&b, i) as u32) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x3D => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) <= simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x3E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if (simd_ops::get_i32(&a, i) as u32) <= (simd_ops::get_i32(&b, i) as u32) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x3F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_i32(&a, i) >= simd_ops::get_i32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x40 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if (simd_ops::get_i32(&a, i) as u32) >= (simd_ops::get_i32(&b, i) as u32) { -1 } else { 0 }); } push_v128(stack, r); }
+
+        // f32x4 comparisons
+        0x41 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) == simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x42 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) != simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x43 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) < simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x44 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) > simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x45 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) <= simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x46 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_i32(&mut r, i, if simd_ops::get_f32(&a, i) >= simd_ops::get_f32(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+
+        // f64x2 comparisons
+        0x47 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) == simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x48 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) != simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x49 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) < simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x4A => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) > simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x4B => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) <= simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0x4C => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_f64(&a, i) >= simd_ops::get_f64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+
+        // i8x16 swizzle
+        0x0E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_swizzle(&a, &b)); }
+
+        // i8x16 operations
+        0x60 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_abs(&a)); }
+        0x61 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_neg(&a)); }
+        0x62 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_popcnt(&a)); }
+        0x63 => { let a = pop_v128(stack)?; stack.push(Value::I32(if simd_ops::i8x16_all_true(&a) { 1 } else { 0 })); }
+        0x64 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::i8x16_bitmask(&a) as i32)); }
+        0x65 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_narrow_i16x8_s(&a, &b)); }
+        0x66 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_narrow_i16x8_u(&a, &b)); }
+        // f32x4.ceil/floor/trunc/nearest
+        0x67 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_ceil(&a)); }
+        0x68 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_floor(&a)); }
+        0x69 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_trunc(&a)); }
+        0x6A => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_nearest(&a)); }
+        // i8x16 shifts
+        0x6B => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_shl(&a, shift as u32)); }
+        0x6C => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_shr_s(&a, shift as u32)); }
+        0x6D => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_shr_u(&a, shift as u32)); }
+        // i8x16 arithmetic
+        0x6E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_add(&a, &b)); }
+        0x6F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_add_sat_s(&a, &b)); }
+        0x70 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_add_sat_u(&a, &b)); }
+        0x71 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_sub(&a, &b)); }
+        0x72 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_sub_sat_s(&a, &b)); }
+        0x73 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_sub_sat_u(&a, &b)); }
+        // f64x2.ceil/floor
+        0x74 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_ceil(&a)); }
+        0x75 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_floor(&a)); }
+        // i8x16 min/max
+        0x76 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_min_s(&a, &b)); }
+        0x77 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_min_u(&a, &b)); }
+        0x78 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_max_s(&a, &b)); }
+        0x79 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_max_u(&a, &b)); }
+        // f64x2.trunc
+        0x7A => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_trunc(&a)); }
+        // i8x16.avgr_u
+        0x7B => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_avgr_u(&a, &b)); }
+        // extadd_pairwise
+        0x7C => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extadd_pairwise_i8x16_s(&a)); }
+        0x7D => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extadd_pairwise_i8x16_u(&a)); }
+        0x7E => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extadd_pairwise_i16x8_s(&a)); }
+        0x7F => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extadd_pairwise_i16x8_u(&a)); }
+
+        // i16x8 operations
+        0x80 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_abs(&a)); }
+        0x81 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_neg(&a)); }
+        0x82 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_q15mulr_sat_s(&a, &b)); }
+        0x83 => { let a = pop_v128(stack)?; stack.push(Value::I32(if simd_ops::i16x8_all_true(&a) { 1 } else { 0 })); }
+        0x84 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::i16x8_bitmask(&a) as i32)); }
+        0x85 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_narrow_i32x4_s(&a, &b)); }
+        0x86 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_narrow_i32x4_u(&a, &b)); }
+        0x87 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extend_low_i8x16_s(&a)); }
+        0x88 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extend_high_i8x16_s(&a)); }
+        0x89 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extend_low_i8x16_u(&a)); }
+        0x8A => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extend_high_i8x16_u(&a)); }
+        0x8B => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_shl(&a, shift as u32)); }
+        0x8C => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_shr_s(&a, shift as u32)); }
+        0x8D => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_shr_u(&a, shift as u32)); }
+        0x8E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_add(&a, &b)); }
+        0x8F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_add_sat_s(&a, &b)); }
+        0x90 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_add_sat_u(&a, &b)); }
+        0x91 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_sub(&a, &b)); }
+        0x92 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_sub_sat_s(&a, &b)); }
+        0x93 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_sub_sat_u(&a, &b)); }
+        // f64x2.nearest
+        0x94 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_nearest(&a)); }
+        0x95 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_mul(&a, &b)); }
+        0x96 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_min_s(&a, &b)); }
+        0x97 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_min_u(&a, &b)); }
+        0x98 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_max_s(&a, &b)); }
+        0x99 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_max_u(&a, &b)); }
+        0x9B => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_avgr_u(&a, &b)); }
+        0x9C => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extmul_low_i8x16_s(&a, &b)); }
+        0x9D => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extmul_high_i8x16_s(&a, &b)); }
+        0x9E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extmul_low_i8x16_u(&a, &b)); }
+        0x9F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_extmul_high_i8x16_u(&a, &b)); }
+
+        // i32x4 operations
+        0xA0 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_abs(&a)); }
+        0xA1 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_neg(&a)); }
+        0xA3 => { let a = pop_v128(stack)?; stack.push(Value::I32(if simd_ops::i32x4_all_true(&a) { 1 } else { 0 })); }
+        0xA4 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::i32x4_bitmask(&a) as i32)); }
+        0xA7 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extend_low_i16x8_s(&a)); }
+        0xA8 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extend_high_i16x8_s(&a)); }
+        0xA9 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extend_low_i16x8_u(&a)); }
+        0xAA => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extend_high_i16x8_u(&a)); }
+        0xAB => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_shl(&a, shift as u32)); }
+        0xAC => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_shr_s(&a, shift as u32)); }
+        0xAD => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_shr_u(&a, shift as u32)); }
+        0xAE => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_add(&a, &b)); }
+        0xB1 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_sub(&a, &b)); }
+        0xB5 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_mul(&a, &b)); }
+        0xB6 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_min_s(&a, &b)); }
+        0xB7 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_min_u(&a, &b)); }
+        0xB8 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_max_s(&a, &b)); }
+        0xB9 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_max_u(&a, &b)); }
+        0xBA => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_dot_i16x8_s(&a, &b)); }
+        0xBC => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extmul_low_i16x8_s(&a, &b)); }
+        0xBD => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extmul_high_i16x8_s(&a, &b)); }
+        0xBE => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extmul_low_i16x8_u(&a, &b)); }
+        0xBF => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_extmul_high_i16x8_u(&a, &b)); }
+
+        // i64x2 operations
+        0xC0 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_abs(&a)); }
+        0xC1 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_neg(&a)); }
+        0xC3 => { let a = pop_v128(stack)?; stack.push(Value::I32(if simd_ops::i64x2_all_true(&a) { 1 } else { 0 })); }
+        0xC4 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::i64x2_bitmask(&a) as i32)); }
+        0xC7 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extend_low_i32x4_s(&a)); }
+        0xC8 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extend_high_i32x4_s(&a)); }
+        0xC9 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extend_low_i32x4_u(&a)); }
+        0xCA => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extend_high_i32x4_u(&a)); }
+        0xCB => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_shl(&a, shift as u32)); }
+        0xCC => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_shr_s(&a, shift as u32)); }
+        0xCD => { let shift = pop_i32_for_simd(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_shr_u(&a, shift as u32)); }
+        0xCE => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_add(&a, &b)); }
+        0xD1 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_sub(&a, &b)); }
+        0xD5 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_mul(&a, &b)); }
+        // i64x2 comparisons
+        0xD6 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) == simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0xD7 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) != simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0xD8 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) < simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0xD9 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) > simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0xDA => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) <= simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0xDB => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_i64(&mut r, i, if simd_ops::get_i64(&a, i) >= simd_ops::get_i64(&b, i) { -1 } else { 0 }); } push_v128(stack, r); }
+        0xDC => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extmul_low_i32x4_s(&a, &b)); }
+        0xDD => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extmul_high_i32x4_s(&a, &b)); }
+        0xDE => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extmul_low_i32x4_u(&a, &b)); }
+        0xDF => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i64x2_extmul_high_i32x4_u(&a, &b)); }
+
+        // f32x4 operations
+        0xE0 => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::get_f32(&a, i).abs()); } push_v128(stack, r); }
+        0xE1 => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, -simd_ops::get_f32(&a, i)); } push_v128(stack, r); }
+        0xE3 => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i).sqrt())); } push_v128(stack, r); }
+        0xE4 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) + simd_ops::get_f32(&b, i))); } push_v128(stack, r); }
+        0xE5 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) - simd_ops::get_f32(&b, i))); } push_v128(stack, r); }
+        0xE6 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) * simd_ops::get_f32(&b, i))); } push_v128(stack, r); }
+        0xE7 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { simd_ops::set_f32(&mut r, i, simd_ops::canonicalize_f32(simd_ops::get_f32(&a, i) / simd_ops::get_f32(&b, i))); } push_v128(stack, r); }
+        // f32x4.min
+        0xE8 => {
+            let b = pop_v128(stack)?; let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                let va = simd_ops::get_f32(&a, i); let vb = simd_ops::get_f32(&b, i);
+                let result = if va.is_nan() || vb.is_nan() { simd_ops::canonicalize_f32(f32::NAN) }
+                    else if va == 0.0 && vb == 0.0 { if va.is_sign_negative() { va } else { vb } }
+                    else if va < vb { va } else { vb };
+                simd_ops::set_f32(&mut r, i, result);
+            }
+            push_v128(stack, r);
+        }
+        // f32x4.max
+        0xE9 => {
+            let b = pop_v128(stack)?; let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..4 {
+                let va = simd_ops::get_f32(&a, i); let vb = simd_ops::get_f32(&b, i);
+                let result = if va.is_nan() || vb.is_nan() { simd_ops::canonicalize_f32(f32::NAN) }
+                    else if va == 0.0 && vb == 0.0 { if va.is_sign_positive() { va } else { vb } }
+                    else if va > vb { va } else { vb };
+                simd_ops::set_f32(&mut r, i, result);
+            }
+            push_v128(stack, r);
+        }
+        // f32x4.pmin/pmax
+        0xEA => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { let va = simd_ops::get_f32(&a, i); let vb = simd_ops::get_f32(&b, i); simd_ops::set_f32(&mut r, i, if vb < va { vb } else { va }); } push_v128(stack, r); }
+        0xEB => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..4 { let va = simd_ops::get_f32(&a, i); let vb = simd_ops::get_f32(&b, i); simd_ops::set_f32(&mut r, i, if va < vb { vb } else { va }); } push_v128(stack, r); }
+
+        // f64x2 operations
+        0xEC => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::get_f64(&a, i).abs()); } push_v128(stack, r); }
+        0xED => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, -simd_ops::get_f64(&a, i)); } push_v128(stack, r); }
+        0xEF => { let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i).sqrt())); } push_v128(stack, r); }
+        0xF0 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) + simd_ops::get_f64(&b, i))); } push_v128(stack, r); }
+        0xF1 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) - simd_ops::get_f64(&b, i))); } push_v128(stack, r); }
+        0xF2 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) * simd_ops::get_f64(&b, i))); } push_v128(stack, r); }
+        0xF3 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { simd_ops::set_f64(&mut r, i, simd_ops::canonicalize_f64(simd_ops::get_f64(&a, i) / simd_ops::get_f64(&b, i))); } push_v128(stack, r); }
+        // f64x2.min
+        0xF4 => {
+            let b = pop_v128(stack)?; let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                let va = simd_ops::get_f64(&a, i); let vb = simd_ops::get_f64(&b, i);
+                let result = if va.is_nan() || vb.is_nan() { simd_ops::canonicalize_f64(f64::NAN) }
+                    else if va == 0.0 && vb == 0.0 { if va.is_sign_negative() { va } else { vb } }
+                    else if va < vb { va } else { vb };
+                simd_ops::set_f64(&mut r, i, result);
+            }
+            push_v128(stack, r);
+        }
+        // f64x2.max
+        0xF5 => {
+            let b = pop_v128(stack)?; let a = pop_v128(stack)?;
+            let mut r = [0u8; 16];
+            for i in 0..2 {
+                let va = simd_ops::get_f64(&a, i); let vb = simd_ops::get_f64(&b, i);
+                let result = if va.is_nan() || vb.is_nan() { simd_ops::canonicalize_f64(f64::NAN) }
+                    else if va == 0.0 && vb == 0.0 { if va.is_sign_positive() { va } else { vb } }
+                    else if va > vb { va } else { vb };
+                simd_ops::set_f64(&mut r, i, result);
+            }
+            push_v128(stack, r);
+        }
+        // f64x2.pmin/pmax
+        0xF6 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { let va = simd_ops::get_f64(&a, i); let vb = simd_ops::get_f64(&b, i); simd_ops::set_f64(&mut r, i, if vb < va { vb } else { va }); } push_v128(stack, r); }
+        0xF7 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; let mut r = [0u8; 16]; for i in 0..2 { let va = simd_ops::get_f64(&a, i); let vb = simd_ops::get_f64(&b, i); simd_ops::set_f64(&mut r, i, if va < vb { vb } else { va }); } push_v128(stack, r); }
+
+        // Conversion operations
+        0xF8 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_trunc_sat_f32x4_s(&a)); }
+        0xF9 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_trunc_sat_f32x4_u(&a)); }
+        0xFA => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_convert_i32x4_s(&a)); }
+        0xFB => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_convert_i32x4_u(&a)); }
+        0xFC => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_trunc_sat_f64x2_s_zero(&a)); }
+        0xFD => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_trunc_sat_f64x2_u_zero(&a)); }
+        0xFE => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_convert_low_i32x4_s(&a)); }
+        0xFF => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_convert_low_i32x4_u(&a)); }
+        // f32x4.demote_f64x2_zero / f64x2.promote_low_f32x4
+        0x5E => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_demote_f64x2_zero(&a)); }
+        0x5F => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_promote_low_f32x4(&a)); }
+
+        _ => {
+            return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD opcode"));
+        }
+    }
+    Ok(())
+}
+
+/// Execute a SIMD lane operation (extract_lane, replace_lane)
+fn execute_simd_lane_op(opcode: u32, lane: u8, stack: &mut Vec<Value>) -> Result<()> {
+    use crate::stackless::simd_ops;
+    let lane_idx = lane as usize;
+
+    match opcode {
+        // i8x16.extract_lane_s
+        0x15 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::get_i8(&a, lane_idx) as i32)); }
+        // i8x16.extract_lane_u
+        0x16 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::get_u8(&a, lane_idx) as i32)); }
+        // i8x16.replace_lane
+        0x17 => { let val = pop_i32_for_simd(stack)?; let mut a = pop_v128(stack)?; simd_ops::set_u8(&mut a, lane_idx, val as u8); push_v128(stack, a); }
+        // i16x8.extract_lane_s
+        0x18 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::get_i16(&a, lane_idx) as i32)); }
+        // i16x8.extract_lane_u
+        0x19 => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::get_u16(&a, lane_idx) as i32)); }
+        // i16x8.replace_lane
+        0x1A => { let val = pop_i32_for_simd(stack)?; let mut a = pop_v128(stack)?; simd_ops::set_u16(&mut a, lane_idx, val as u16); push_v128(stack, a); }
+        // i32x4.extract_lane
+        0x1B => { let a = pop_v128(stack)?; stack.push(Value::I32(simd_ops::get_i32(&a, lane_idx))); }
+        // i32x4.replace_lane
+        0x1C => { let val = pop_i32_for_simd(stack)?; let mut a = pop_v128(stack)?; simd_ops::set_i32(&mut a, lane_idx, val); push_v128(stack, a); }
+        // i64x2.extract_lane
+        0x1D => { let a = pop_v128(stack)?; stack.push(Value::I64(simd_ops::get_i64(&a, lane_idx))); }
+        // i64x2.replace_lane
+        0x1E => {
+            let val = match stack.pop() {
+                Some(Value::I64(v)) => v,
+                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected i64")),
+                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+            };
+            let mut a = pop_v128(stack)?; simd_ops::set_i64(&mut a, lane_idx, val); push_v128(stack, a);
+        }
+        // f32x4.extract_lane
+        0x1F => { let a = pop_v128(stack)?; stack.push(Value::F32(FloatBits32::from_f32(simd_ops::get_f32(&a, lane_idx)))); }
+        // f32x4.replace_lane
+        0x20 => {
+            let val = match stack.pop() {
+                Some(Value::F32(v)) => v.to_f32(),
+                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected f32")),
+                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+            };
+            let mut a = pop_v128(stack)?; simd_ops::set_f32(&mut a, lane_idx, val); push_v128(stack, a);
+        }
+        // f64x2.extract_lane
+        0x21 => { let a = pop_v128(stack)?; stack.push(Value::F64(FloatBits64::from_f64(simd_ops::get_f64(&a, lane_idx)))); }
+        // f64x2.replace_lane
+        0x22 => {
+            let val = match stack.pop() {
+                Some(Value::F64(v)) => v.to_f64(),
+                Some(_) => return Err(kiln_error::Error::runtime_execution_error("SIMD: expected f64")),
+                None => return Err(kiln_error::Error::runtime_execution_error("SIMD: stack underflow")),
+            };
+            let mut a = pop_v128(stack)?; simd_ops::set_f64(&mut a, lane_idx, val); push_v128(stack, a);
+        }
+        _ => {
+            return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD lane opcode"));
+        }
+    }
+    Ok(())
+}
 
 impl Default for StacklessEngine {
     #[cfg(any(feature = "std", feature = "alloc"))]
