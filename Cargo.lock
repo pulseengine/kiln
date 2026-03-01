@@ -1413,6 +1413,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "kiln-synth-bridge"
+version = "0.2.0"
+dependencies = [
+ "kiln-error",
+ "kiln-foundation",
+ "kiln-host",
+]
+
+[[package]]
 name = "kiln-wasi"
 version = "0.2.0"
 dependencies = [

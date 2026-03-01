@@ -1,0 +1,21 @@
+[package]
+name = "kiln-synth-bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "C-ABI bridge between Synth-compiled ARM code and Kiln runtime"
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[features]
+default = ["std"]
+std = ["kiln-host/std", "kiln-foundation/std"]
+no_std = []
+
+[dependencies]
+kiln-host = { workspace = true }
+kiln-foundation = { workspace = true }
+kiln-error = { workspace = true }
