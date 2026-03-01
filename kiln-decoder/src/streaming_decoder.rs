@@ -836,12 +836,22 @@ impl<'a> StreamingDecoder<'a> {
                     #[cfg(feature = "std")]
                     {
                         use kiln_format::module::{Import, ImportDesc};
-                        use kiln_foundation::types::{Limits, RefType, TableType};
+                        use kiln_foundation::types::{GcRefType, HeapType, Limits, RefType, TableType};
 
                         // Convert ref_type byte to RefType
                         let ref_type = match ref_type_byte {
                             0x70 => RefType::Funcref,
                             0x6F => RefType::Externref,
+                            0x6E => RefType::Gc(GcRefType::ANYREF),
+                            0x6D => RefType::Gc(GcRefType::EQREF),
+                            0x6C => RefType::Gc(GcRefType::I31REF),
+                            0x6B => RefType::Gc(GcRefType::new(true, HeapType::Struct)),
+                            0x6A => RefType::Gc(GcRefType::new(true, HeapType::Array)),
+                            0x69 => RefType::Gc(GcRefType::EXNREF),
+                            0x73 => RefType::Gc(GcRefType::NULLFUNCREF),
+                            0x72 => RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
+                            0x71 => RefType::Gc(GcRefType::new(true, HeapType::None)),
+                            0x74 => RefType::Gc(GcRefType::new(true, HeapType::Exn)),
                             _ => RefType::Funcref, // Default for unknown
                         };
 
@@ -1116,7 +1126,7 @@ impl<'a> StreamingDecoder<'a> {
     /// Process table section
     fn process_table_section(&mut self, data: &[u8]) -> Result<usize> {
         use kiln_format::binary::read_leb128_u32;
-        use kiln_foundation::types::{Limits, RefType, TableType};
+        use kiln_foundation::types::{GcRefType, HeapType, Limits, RefType, TableType};
 
         let mut offset = 0;
         let (count, bytes_read) = read_leb128_u32(data, offset)?;
@@ -1159,6 +1169,16 @@ impl<'a> StreamingDecoder<'a> {
             let element_type = match ref_type_byte {
                 0x70 => RefType::Funcref,   // funcref
                 0x6F => RefType::Externref, // externref
+                0x6E => RefType::Gc(GcRefType::ANYREF),
+                0x6D => RefType::Gc(GcRefType::EQREF),
+                0x6C => RefType::Gc(GcRefType::I31REF),
+                0x6B => RefType::Gc(GcRefType::new(true, HeapType::Struct)),
+                0x6A => RefType::Gc(GcRefType::new(true, HeapType::Array)),
+                0x69 => RefType::Gc(GcRefType::EXNREF),
+                0x73 => RefType::Gc(GcRefType::NULLFUNCREF),
+                0x72 => RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
+                0x71 => RefType::Gc(GcRefType::new(true, HeapType::None)),
+                0x74 => RefType::Gc(GcRefType::new(true, HeapType::Exn)),
                 _ => {
                     return Err(Error::parse_error("Unknown table element type"));
                 },
@@ -1651,6 +1671,7 @@ impl<'a> StreamingDecoder<'a> {
     /// Process element section
     fn process_element_section(&mut self, data: &[u8]) -> Result<usize> {
         use kiln_format::pure_format_types::{PureElementInit, PureElementMode, PureElementSegment};
+        use kiln_foundation::types::{GcRefType, HeapType};
 
         let mut offset = 0;
         let (count, bytes_read) = read_leb128_u32(data, offset)?;
@@ -1710,6 +1731,16 @@ impl<'a> StreamingDecoder<'a> {
                     let ref_type = match elem_type {
                         0x70 => kiln_format::types::RefType::Funcref,
                         0x6F => kiln_format::types::RefType::Externref,
+                        0x6E => kiln_format::types::RefType::Gc(GcRefType::ANYREF),
+                        0x6D => kiln_format::types::RefType::Gc(GcRefType::EQREF),
+                        0x6C => kiln_format::types::RefType::Gc(GcRefType::I31REF),
+                        0x6B => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Struct)),
+                        0x6A => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Array)),
+                        0x69 => kiln_format::types::RefType::Gc(GcRefType::EXNREF),
+                        0x73 => kiln_format::types::RefType::Gc(GcRefType::NULLFUNCREF),
+                        0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
+                        0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
+                        0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
                         _ => kiln_format::types::RefType::Funcref,
                     };
                     #[cfg(feature = "tracing")]
@@ -1757,6 +1788,16 @@ impl<'a> StreamingDecoder<'a> {
                     let ref_type = match elem_type {
                         0x70 => kiln_format::types::RefType::Funcref,
                         0x6F => kiln_format::types::RefType::Externref,
+                        0x6E => kiln_format::types::RefType::Gc(GcRefType::ANYREF),
+                        0x6D => kiln_format::types::RefType::Gc(GcRefType::EQREF),
+                        0x6C => kiln_format::types::RefType::Gc(GcRefType::I31REF),
+                        0x6B => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Struct)),
+                        0x6A => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Array)),
+                        0x69 => kiln_format::types::RefType::Gc(GcRefType::EXNREF),
+                        0x73 => kiln_format::types::RefType::Gc(GcRefType::NULLFUNCREF),
+                        0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
+                        0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
+                        0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
                         _ => kiln_format::types::RefType::Funcref,
                     };
                     #[cfg(feature = "tracing")]
@@ -1793,6 +1834,16 @@ impl<'a> StreamingDecoder<'a> {
                     let ref_type = match ref_type_byte {
                         0x70 => kiln_format::types::RefType::Funcref,
                         0x6F => kiln_format::types::RefType::Externref,
+                        0x6E => kiln_format::types::RefType::Gc(GcRefType::ANYREF),
+                        0x6D => kiln_format::types::RefType::Gc(GcRefType::EQREF),
+                        0x6C => kiln_format::types::RefType::Gc(GcRefType::I31REF),
+                        0x6B => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Struct)),
+                        0x6A => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Array)),
+                        0x69 => kiln_format::types::RefType::Gc(GcRefType::EXNREF),
+                        0x73 => kiln_format::types::RefType::Gc(GcRefType::NULLFUNCREF),
+                        0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
+                        0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
+                        0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
                         _ => kiln_format::types::RefType::Funcref,
                     };
                     #[cfg(feature = "tracing")]
@@ -1821,6 +1872,16 @@ impl<'a> StreamingDecoder<'a> {
                     let ref_type = match ref_type_byte {
                         0x70 => kiln_format::types::RefType::Funcref,
                         0x6F => kiln_format::types::RefType::Externref,
+                        0x6E => kiln_format::types::RefType::Gc(GcRefType::ANYREF),
+                        0x6D => kiln_format::types::RefType::Gc(GcRefType::EQREF),
+                        0x6C => kiln_format::types::RefType::Gc(GcRefType::I31REF),
+                        0x6B => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Struct)),
+                        0x6A => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Array)),
+                        0x69 => kiln_format::types::RefType::Gc(GcRefType::EXNREF),
+                        0x73 => kiln_format::types::RefType::Gc(GcRefType::NULLFUNCREF),
+                        0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
+                        0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
+                        0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
                         _ => kiln_format::types::RefType::Funcref,
                     };
 
@@ -1843,6 +1904,16 @@ impl<'a> StreamingDecoder<'a> {
                     let ref_type = match ref_type_byte {
                         0x70 => kiln_format::types::RefType::Funcref,
                         0x6F => kiln_format::types::RefType::Externref,
+                        0x6E => kiln_format::types::RefType::Gc(GcRefType::ANYREF),
+                        0x6D => kiln_format::types::RefType::Gc(GcRefType::EQREF),
+                        0x6C => kiln_format::types::RefType::Gc(GcRefType::I31REF),
+                        0x6B => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Struct)),
+                        0x6A => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Array)),
+                        0x69 => kiln_format::types::RefType::Gc(GcRefType::EXNREF),
+                        0x73 => kiln_format::types::RefType::Gc(GcRefType::NULLFUNCREF),
+                        0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
+                        0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
+                        0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
                         _ => kiln_format::types::RefType::Funcref,
                     };
                     #[cfg(feature = "tracing")]
