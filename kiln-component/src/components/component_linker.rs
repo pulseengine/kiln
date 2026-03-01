@@ -209,29 +209,23 @@ impl Default for ComponentMetadata {
             use kiln_foundation::{budget_aware_provider::CrateId, safe_managed_alloc};
 
             let name_provider = safe_managed_alloc!(1024, CrateId::Component)
-                .unwrap_or_else(|_| panic!("Failed to allocate memory for ComponentMetadata name"));
-            let version_provider =
-                safe_managed_alloc!(1024, CrateId::Component).unwrap_or_else(|_| {
-                    panic!("Failed to allocate memory for ComponentMetadata version")
-                });
+                .expect("Failed to allocate memory for ComponentMetadata name");
+            let version_provider = safe_managed_alloc!(1024, CrateId::Component)
+                .expect("Failed to allocate memory for ComponentMetadata version");
             let description_provider = safe_managed_alloc!(1024, CrateId::Component)
-                .unwrap_or_else(|_| {
-                    panic!("Failed to allocate memory for ComponentMetadata description")
-                });
-            let author_provider =
-                safe_managed_alloc!(1024, CrateId::Component).unwrap_or_else(|_| {
-                    panic!("Failed to allocate memory for ComponentMetadata author")
-                });
+                .expect("Failed to allocate memory for ComponentMetadata description");
+            let author_provider = safe_managed_alloc!(1024, CrateId::Component)
+                .expect("Failed to allocate memory for ComponentMetadata author");
 
             Self {
                 name: BoundedString::try_from_str("")
-                    .unwrap_or_else(|_| panic!("Failed to create ComponentMetadata name")),
+                    .expect("Failed to create ComponentMetadata name"),
                 version: BoundedString::try_from_str("1.0.0")
-                    .unwrap_or_else(|_| panic!("Failed to create ComponentMetadata version")),
+                    .expect("Failed to create ComponentMetadata version"),
                 description: BoundedString::try_from_str("")
-                    .unwrap_or_else(|_| panic!("Failed to create ComponentMetadata description")),
+                    .expect("Failed to create ComponentMetadata description"),
                 author: BoundedString::try_from_str("")
-                    .unwrap_or_else(|_| panic!("Failed to create ComponentMetadata author")),
+                    .expect("Failed to create ComponentMetadata author"),
                 compiled_at: 0,
             }
         }

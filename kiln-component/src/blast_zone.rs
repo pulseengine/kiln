@@ -727,7 +727,7 @@ impl BlastZoneManager {
 
 impl Default for BlastZoneManager {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| panic!("Failed to create default BlastZoneManager"))
+        Self::new().expect("Failed to create default BlastZoneManager")
     }
 }
 

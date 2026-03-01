@@ -357,7 +357,7 @@ impl<P: MemoryProvider + Clone + Default + Eq> StreamingParser<P> {
 impl<P: MemoryProvider + Clone + Default + Eq> Default for StreamingParser<P> {
     fn default() -> Self {
         let provider = P::default();
-        Self::new(provider).unwrap_or_else(|_| panic!("Failed to create default StreamingParser"))
+        Self::new(provider).expect("Failed to create default StreamingParser: memory allocation failed")
     }
 }
 

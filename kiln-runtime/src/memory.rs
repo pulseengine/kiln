@@ -384,9 +384,8 @@ impl Clone for Memory {
 
             // Copy the data into the new handler
             if !current_bytes.is_empty() {
-                new_handler.write_data(0, &current_bytes).unwrap_or_else(|e| {
-                    panic!("Failed to write cloned data: {}", e);
-                });
+                new_handler.write_data(0, &current_bytes)
+                    .expect("Failed to write cloned data during memory clone");
             }
             Box::new(RwLock::new(new_handler))
         };

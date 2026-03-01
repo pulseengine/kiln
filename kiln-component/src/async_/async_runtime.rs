@@ -335,7 +335,7 @@ impl Default for ScheduledTask {
             estimated_time_us: 0,
             task_fn: TaskFunction::Custom {
                 name: BoundedString::from_str_truncate("")
-                    .unwrap_or_else(|_| panic!("Failed to create default task name")),
+                    .expect("Failed to create default task name"),
                 placeholder: 0,
             },
         }

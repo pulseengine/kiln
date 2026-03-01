@@ -283,7 +283,7 @@ impl Default for StackFrame {
             function: String::new(),
             #[cfg(not(any(feature = "std",)))]
             function: BoundedString::from_str_truncate("")
-                .unwrap_or_else(|_| panic!("Failed to create default StackFrame function name")),
+                .expect("Failed to create default StackFrame function name"),
             component_instance: None,
             offset: None,
         }

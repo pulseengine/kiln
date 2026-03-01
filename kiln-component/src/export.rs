@@ -73,7 +73,7 @@ impl Default for Export {
             let export_name_provider = NoStdProvider::<512>::default();
             let export_name =
                 kiln_foundation::BoundedString::<MAX_WASM_NAME_LENGTH>::from_str_truncate("")
-                    .unwrap_or_else(|_| panic!("Failed to create default export name"));
+                    .expect("Failed to create default export name");
 
             FunctionValue {
                 ty: func_type,

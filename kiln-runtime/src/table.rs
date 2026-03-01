@@ -131,11 +131,13 @@ impl Debug for Table {
 impl Clone for Table {
     fn clone(&self) -> Self {
         let mut new_elements: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            kiln_foundation::bounded::BoundedVec::new(TableProvider::default())
+                .expect("Failed to allocate table elements during clone");
 
         // Lock the source elements for reading
         #[cfg(feature = "std")]
-        let source_elements = self.elements.lock().unwrap();
+        let source_elements = self.elements.lock()
+            .expect("Table mutex poisoned during clone");
         #[cfg(not(feature = "std"))]
         let source_elements = self.elements.lock();
 
@@ -172,12 +174,14 @@ impl PartialEq for Table {
 
         // Lock both tables for comparison
         #[cfg(feature = "std")]
-        let self_elements = self.elements.lock().unwrap();
+        let self_elements = self.elements.lock()
+            .expect("Table mutex poisoned during comparison");
         #[cfg(not(feature = "std"))]
         let self_elements = self.elements.lock();
 
         #[cfg(feature = "std")]
-        let other_elements = other.elements.lock().unwrap();
+        let other_elements = other.elements.lock()
+            .expect("Table mutex poisoned during comparison");
         #[cfg(not(feature = "std"))]
         let other_elements = other.elements.lock();
 
@@ -187,8 +191,10 @@ impl PartialEq for Table {
         }
         for i in 0..self_elements.len() {
             // Use get() method instead of direct indexing for BoundedVec
-            let self_elem = self_elements.get(i).unwrap();
-            let other_elem = other_elements.get(i).unwrap();
+            let (self_elem, other_elem) = match (self_elements.get(i), other_elements.get(i)) {
+                (Ok(a), Ok(b)) => (a, b),
+                _ => return false,
+            };
             if self_elem != other_elem {
                 return false;
             }
@@ -212,7 +218,7 @@ impl Default for Table {
                 max: Some(1),
             },
         };
-        Self::new(table_type).unwrap()
+        Self::new(table_type).expect("Failed to create default Table")
     }
 }
 

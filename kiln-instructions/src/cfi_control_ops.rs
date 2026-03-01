@@ -374,11 +374,9 @@ impl Default for CfiLandingPad {
             }
             #[cfg(not(feature = "std"))]
             {
-                // Use minimal fallback - this will panic if used, but needed for trait compat
-                panic!(
-                    "CfiLandingPad::default() fallback should not be used in no_std - use \
-                     try_default() instead"
-                )
+                // try_default() should not fail in practice
+                Self::try_default()
+                    .expect("CfiLandingPad::default() failed in no_std - use try_default() instead")
             }
         })
     }
@@ -935,10 +933,9 @@ impl Default for CfiExecutionContext {
             }
             #[cfg(not(feature = "std"))]
             {
-                panic!(
-                    "CfiExecutionContext::default() fallback should not be used in no_std - use \
-                     try_default() instead"
-                )
+                // try_default() should not fail in practice
+                Self::try_default()
+                    .expect("CfiExecutionContext::default() failed in no_std - use try_default() instead")
             }
         })
     }

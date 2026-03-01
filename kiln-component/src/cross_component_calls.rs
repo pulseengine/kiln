@@ -993,10 +993,7 @@ impl Default for CallPermissions {
 
 impl Default for CrossComponentCallManager {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| {
-            // In case of allocation failure, panic as this is a critical error
-            panic!("Failed to create CrossComponentCallManager: memory allocation failed")
-        })
+        Self::new().expect("Failed to create CrossComponentCallManager: memory allocation failed")
     }
 }
 

@@ -588,7 +588,13 @@ mod tests {
 
     #[test]
     fn test_invalid_magic() {
-        let mut validator = StreamingValidator::new().unwrap();
+        // Use continue_after_critical so validate_header stores the issue
+        // instead of returning Err immediately on critical findings.
+        let config = ValidationConfig {
+            continue_after_critical: true,
+            ..ValidationConfig::default()
+        };
+        let mut validator = StreamingValidator::with_config(config).unwrap();
 
         // Invalid magic number
         let invalid_header = [0xFF, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];

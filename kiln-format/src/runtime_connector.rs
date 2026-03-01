@@ -28,10 +28,10 @@ impl FormatRuntimeConnector {
     /// Complete flow: parse format -> extract runtime data -> prepare for runtime
     pub fn prepare_module_for_runtime(module: &Module) -> Result<RuntimePreparationResult> {
         // Phase 1: Extract runtime data using format bridge
-        let module_runtime_data = ModuleBridge::extract_module_runtime_data(module);
-        
+        let module_runtime_data = ModuleBridge::extract_module_runtime_data(module)?;
+
         // Phase 2: Create initialization plan
-        let initialization_plan = ModuleBridge::create_initialization_plan(module);
+        let initialization_plan = ModuleBridge::create_initialization_plan(module)?;
         
         // Store requires_initialization before moving data
         let requires_initialization = module_runtime_data.requires_initialization;

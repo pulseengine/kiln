@@ -313,7 +313,7 @@ impl WaitableSetImpl {
 
 impl Default for WaitableSetImpl {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| panic!("Failed to create WaitableSetImpl"))
+        Self::new().expect("Failed to create WaitableSetImpl")
     }
 }
 
@@ -381,7 +381,7 @@ impl WaitableSetRegistry {
 
 impl Default for WaitableSetRegistry {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| panic!("Failed to create WaitableSetRegistry"))
+        Self::new().expect("Failed to create WaitableSetRegistry")
     }
 }
 

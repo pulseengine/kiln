@@ -103,46 +103,52 @@ pub struct Component {
 
 impl Default for Component {
     fn default() -> Self {
-        Self::new()
+        Self::try_new().expect("Failed to create default Component: memory allocation failed")
     }
 }
 
 impl Component {
-    /// Create a new empty component
-    pub fn new() -> Self {
-        Self {
+    /// Create a new empty component.
+    /// Returns an error if memory allocation fails.
+    pub fn try_new() -> Result<Self> {
+        Ok(Self {
             name: None,
-            modules: Self::new_vec(),
-            core_instances: Self::new_vec(),
-            core_types: Self::new_vec(),
-            components: Self::new_vec(),
-            instances: Self::new_vec(),
-            aliases: Self::new_vec(),
-            types: Self::new_vec(),
-            canonicals: Self::new_vec(),
+            modules: Self::try_new_vec()?,
+            core_instances: Self::try_new_vec()?,
+            core_types: Self::try_new_vec()?,
+            components: Self::try_new_vec()?,
+            instances: Self::try_new_vec()?,
+            aliases: Self::try_new_vec()?,
+            types: Self::try_new_vec()?,
+            canonicals: Self::try_new_vec()?,
             start: None,
-            imports: Self::new_vec(),
-            exports: Self::new_vec(),
-            values: Self::new_vec(),
+            imports: Self::try_new_vec()?,
+            exports: Self::try_new_vec()?,
+            values: Self::try_new_vec()?,
             binary: None,
-        }
+        })
+    }
+
+    /// Create a new empty component (infallible).
+    /// Panics if memory allocation fails. Prefer `try_new()` when possible.
+    pub fn new() -> Self {
+        Self::try_new().expect("Failed to create Component: memory allocation failed")
     }
 
     /// Helper to create a new ComponentVec
     #[cfg(feature = "std")]
-    fn new_vec<T>() -> ComponentVec<T> {
-        Vec::new()
+    fn try_new_vec<T>() -> Result<ComponentVec<T>> {
+        Ok(Vec::new())
     }
 
     /// Helper to create a new ComponentVec for no_std
     #[cfg(not(any(feature = "std")))]
-    fn new_vec<T>() -> ComponentVec<T> {
+    fn try_new_vec<T>() -> Result<ComponentVec<T>> {
         let provider = kiln_foundation::safe_managed_alloc!(
             1024,
             kiln_foundation::budget_aware_provider::CrateId::Format
-        )
-        .unwrap_or_else(|_| panic!("Failed to allocate memory provider"));
-        WasmVec::new(provider).unwrap_or_else(|_| panic!("Failed to create WasmVec"))
+        )?;
+        Ok(WasmVec::new(provider)?)
     }
 }
 

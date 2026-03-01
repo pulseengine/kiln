@@ -2188,9 +2188,12 @@ async fn cmd_coverage(
         println!("{} Running coverage analysis...", "📊".bright_blue());
     }
 
+    // Determine if HTML output is needed (explicit flag or format=html)
+    let generate_html = html || format == "html";
+
     if best_effort {
         // In best-effort mode, try to run coverage but continue on failures
-        match build_system.run_coverage() {
+        match build_system.run_coverage(generate_html) {
             Ok(_) => println!(
                 "{} Coverage analysis completed successfully",
                 "✅".bright_green()
@@ -2205,15 +2208,43 @@ async fn cmd_coverage(
         }
     } else {
         // Normal mode - fail on errors
-        build_system.run_coverage().context("Coverage analysis failed")?;
+        build_system
+            .run_coverage(generate_html)
+            .context("Coverage analysis failed")?;
     }
 
     if open {
-        println!(
-            "{} Opening coverage report in browser...",
-            "🌐".bright_blue()
-        );
-        // TODO: Implement browser opening
+        let html_index = std::path::Path::new("target/coverage/html/index.html");
+        if html_index.exists() {
+            println!(
+                "{} Opening coverage report in browser...",
+                "🌐".bright_blue()
+            );
+            #[cfg(target_os = "macos")]
+            {
+                let _ = std::process::Command::new("open")
+                    .arg(html_index)
+                    .spawn();
+            }
+            #[cfg(target_os = "linux")]
+            {
+                let _ = std::process::Command::new("xdg-open")
+                    .arg(html_index)
+                    .spawn();
+            }
+            #[cfg(target_os = "windows")]
+            {
+                let _ = std::process::Command::new("cmd")
+                    .args(["/C", "start"])
+                    .arg(html_index)
+                    .spawn();
+            }
+        } else {
+            println!(
+                "{} No HTML report found. Use --html to generate one.",
+                "⚠️".bright_yellow()
+            );
+        }
     }
 
     Ok(())

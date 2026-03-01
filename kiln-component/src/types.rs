@@ -1079,7 +1079,7 @@ impl Default for Field {
             name: String::new(),
             #[cfg(not(any(feature = "std",)))]
             name: BoundedString::from_str_truncate("")
-                .unwrap_or_else(|_| panic!("Failed to create default Field name")),
+                .expect("Failed to create default Field name"),
             ty: Box::new(ValType::default()),
         }
     }
@@ -1114,7 +1114,7 @@ impl Default for Case {
             name: String::new(),
             #[cfg(not(any(feature = "std",)))]
             name: BoundedString::from_str_truncate("")
-                .unwrap_or_else(|_| panic!("Failed to create default Case name")),
+                .expect("Failed to create default Case name"),
             ty: None,
             refines: None,
         }

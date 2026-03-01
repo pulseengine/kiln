@@ -294,7 +294,7 @@ impl Clone for Memory {
     fn clone(&self) -> Self {
         // Create new SafeMemoryHandler by copying bytes
         let current_bytes =
-            self.data.to_vec().unwrap_or_else(|e| panic!("Failed to clone memory data: {}", e;
+            self.data.to_vec().expect("Failed to clone memory data");
         // Convert BoundedVec to appropriate provider
         let new_data = {
             #[cfg(feature = "std")]

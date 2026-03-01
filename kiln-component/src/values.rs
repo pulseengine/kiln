@@ -77,11 +77,8 @@ pub fn convert_common_to_format_valtype(common_type: &CanonicalValType) -> KilnF
                             Ok(s) => s,
                             Err(_) => {
                                 // Return an empty safe slice - this is safe because we're referencing static empty data
-                                kiln_foundation::safe_memory::Slice::new(&[]).unwrap_or_else(|_| {
-                                    // If even empty slice creation fails, return a default empty Slice
-                                    // This branch should never execute as empty slice creation is always valid
-                                    panic!("Failed to create empty slice")
-                                })
+                                kiln_foundation::safe_memory::Slice::new(&[])
+                                    .expect("Failed to create empty slice - this should never happen")
                             },
                         }
                     });
@@ -102,11 +99,8 @@ pub fn convert_common_to_format_valtype(common_type: &CanonicalValType) -> KilnF
                             Ok(s) => s,
                             Err(_) => {
                                 // Return an empty safe slice - this is safe because we're referencing static empty data
-                                kiln_foundation::safe_memory::Slice::new(&[]).unwrap_or_else(|_| {
-                                    // If even empty slice creation fails, return a default empty Slice
-                                    // This branch should never execute as empty slice creation is always valid
-                                    panic!("Failed to create empty slice")
-                                })
+                                kiln_foundation::safe_memory::Slice::new(&[])
+                                    .expect("Failed to create empty slice - this should never happen")
                             },
                         }
                     });

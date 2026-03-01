@@ -71,10 +71,8 @@ impl Default for ContextKey {
         #[cfg(feature = "std")]
         return Self(String::new());
         #[cfg(not(any(feature = "std",)))]
-        return Self(BoundedString::from_str_truncate("").unwrap_or_else(|_| {
-            // Fallback: This should never happen, but we need to handle it gracefully
-            panic!("Failed to create empty BoundedString");
-        }));
+        return Self(BoundedString::from_str_truncate("")
+            .expect("Failed to create empty BoundedString"));
     }
 }
 

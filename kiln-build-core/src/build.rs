@@ -84,15 +84,31 @@ pub mod xtask_port {
     use super::*;
 
     /// Run comprehensive coverage analysis (ported from xtask coverage)
-    pub fn run_coverage_analysis(config: &BuildConfig) -> BuildResult<()> {
+    pub fn run_coverage_analysis(config: &BuildConfig, html: bool) -> BuildResult<()> {
         println!(
             "{} Running comprehensive coverage analysis...",
             "📊".bright_blue()
         );
 
-        // Build with coverage flags
+        let coverage_dir = PathBuf::from("target/coverage");
+        // Ensure coverage directory exists
+        std::fs::create_dir_all(&coverage_dir).map_err(|e| {
+            BuildError::Build(format!("Failed to create coverage directory: {}", e))
+        })?;
+
+        // Clean old profraw files
+        if let Ok(entries) = std::fs::read_dir(&coverage_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("profraw") {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
+        }
+
+        // Build with coverage flags and capture test binary paths
         let mut cmd = Command::new("cargo");
-        cmd.args(["test", "--no-run", "--workspace"])
+        cmd.args(["test", "--no-run", "--workspace", "--message-format=json"])
             .env("RUSTFLAGS", "-C instrument-coverage")
             .env("LLVM_PROFILE_FILE", "target/coverage/profile-%p-%m.profraw");
 
@@ -100,6 +116,31 @@ pub mod xtask_port {
 
         if !output.status.success() {
             return Err(BuildError::Build("Coverage build failed".to_string()));
+        }
+
+        // Extract test binary paths from cargo's JSON output
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let test_binaries: Vec<String> = stdout
+            .lines()
+            .filter_map(|line| {
+                // Parse JSON lines looking for compiler artifacts with executables
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
+                    if json.get("reason").and_then(|r| r.as_str()) == Some("compiler-artifact") {
+                        if let Some(executable) = json.get("executable").and_then(|e| e.as_str()) {
+                            return Some(executable.to_string());
+                        }
+                    }
+                }
+                None
+            })
+            .collect();
+
+        if config.verbose {
+            println!(
+                "{} Found {} test binaries",
+                "ℹ️".bright_blue(),
+                test_binaries.len()
+            );
         }
 
         // Run tests with coverage
@@ -116,8 +157,231 @@ pub mod xtask_port {
             return Err(BuildError::Test("Coverage tests failed".to_string()));
         }
 
+        // Find llvm tools
+        let llvm_profdata = find_llvm_tool("llvm-profdata")?;
+        let llvm_cov = find_llvm_tool("llvm-cov")?;
+
+        if config.verbose {
+            println!(
+                "{} Using llvm-profdata: {}",
+                "ℹ️".bright_blue(),
+                llvm_profdata.display()
+            );
+            println!(
+                "{} Using llvm-cov: {}",
+                "ℹ️".bright_blue(),
+                llvm_cov.display()
+            );
+        }
+
+        // Collect profraw files
+        let profraw_files: Vec<PathBuf> = std::fs::read_dir(&coverage_dir)
+            .map_err(|e| {
+                BuildError::Build(format!("Failed to read coverage directory: {}", e))
+            })?
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("profraw") {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if profraw_files.is_empty() {
+            return Err(BuildError::Build(
+                "No .profraw files found. Tests may not have generated coverage data.".to_string(),
+            ));
+        }
+
+        println!(
+            "{} Merging {} profile data files...",
+            "📊".bright_blue(),
+            profraw_files.len()
+        );
+
+        // Merge profraw files into a single profdata file
+        let profdata_path = coverage_dir.join("coverage.profdata");
+        let mut merge_cmd = Command::new(&llvm_profdata);
+        merge_cmd.arg("merge").arg("-sparse");
+        for profraw in &profraw_files {
+            merge_cmd.arg(profraw);
+        }
+        merge_cmd.arg("-o").arg(&profdata_path);
+
+        let merge_output =
+            super::execute_command(&mut merge_cmd, config, "Merging profile data")?;
+
+        if !merge_output.status.success() {
+            let stderr = String::from_utf8_lossy(&merge_output.stderr);
+            return Err(BuildError::Build(format!(
+                "Failed to merge profile data: {}",
+                stderr
+            )));
+        }
+
+        // Generate lcov report
+        let lcov_path = coverage_dir.join("lcov.info");
+        println!(
+            "{} Generating lcov report...",
+            "📊".bright_blue()
+        );
+
+        let mut lcov_cmd = Command::new(&llvm_cov);
+        lcov_cmd
+            .arg("export")
+            .arg("--format=lcov")
+            .arg(format!("--instr-profile={}", profdata_path.display()))
+            .arg("--ignore-filename-regex=\\.cargo|rustc|target");
+        // Add test binaries as objects
+        if let Some(first) = test_binaries.first() {
+            lcov_cmd.arg(first);
+            for binary in test_binaries.iter().skip(1) {
+                lcov_cmd.arg(format!("--object={}", binary));
+            }
+        }
+
+        let lcov_output =
+            super::execute_command(&mut lcov_cmd, config, "Generating lcov report")?;
+
+        if !lcov_output.status.success() {
+            let stderr = String::from_utf8_lossy(&lcov_output.stderr);
+            return Err(BuildError::Build(format!(
+                "Failed to generate lcov report: {}",
+                stderr
+            )));
+        }
+
+        // Write lcov data to file
+        std::fs::write(&lcov_path, &lcov_output.stdout).map_err(|e| {
+            BuildError::Build(format!("Failed to write lcov report: {}", e))
+        })?;
+
+        println!(
+            "{} lcov report written to {}",
+            "✅".bright_green(),
+            lcov_path.display()
+        );
+
+        // Generate HTML report if requested
+        if html {
+            let html_dir = coverage_dir.join("html");
+            std::fs::create_dir_all(&html_dir).map_err(|e| {
+                BuildError::Build(format!("Failed to create HTML output directory: {}", e))
+            })?;
+
+            println!(
+                "{} Generating HTML coverage report...",
+                "📊".bright_blue()
+            );
+
+            let mut html_cmd = Command::new(&llvm_cov);
+            html_cmd
+                .arg("show")
+                .arg("--format=html")
+                .arg(format!("--instr-profile={}", profdata_path.display()))
+                .arg(format!("--output-dir={}", html_dir.display()))
+                .arg("--ignore-filename-regex=\\.cargo|rustc|target")
+                .arg("--show-line-counts-or-regions")
+                .arg("--show-instantiations");
+            // Add test binaries as objects
+            if let Some(first) = test_binaries.first() {
+                html_cmd.arg(first);
+                for binary in test_binaries.iter().skip(1) {
+                    html_cmd.arg(format!("--object={}", binary));
+                }
+            }
+
+            let html_output =
+                super::execute_command(&mut html_cmd, config, "Generating HTML report")?;
+
+            if !html_output.status.success() {
+                let stderr = String::from_utf8_lossy(&html_output.stderr);
+                return Err(BuildError::Build(format!(
+                    "Failed to generate HTML coverage report: {}",
+                    stderr
+                )));
+            }
+
+            println!(
+                "{} HTML coverage report written to {}",
+                "✅".bright_green(),
+                html_dir.display()
+            );
+        }
+
         println!("{} Coverage analysis completed", "✅".bright_green());
         Ok(())
+    }
+
+    /// Find an LLVM tool binary from the Rust toolchain
+    fn find_llvm_tool(tool_name: &str) -> BuildResult<PathBuf> {
+        // Get the sysroot
+        let sysroot_output = Command::new("rustc")
+            .arg("--print")
+            .arg("sysroot")
+            .output()
+            .map_err(|e| BuildError::Tool(format!("Failed to run rustc --print sysroot: {}", e)))?;
+
+        if !sysroot_output.status.success() {
+            return Err(BuildError::Tool(
+                "Failed to determine Rust sysroot".to_string(),
+            ));
+        }
+
+        let sysroot = String::from_utf8_lossy(&sysroot_output.stdout)
+            .trim()
+            .to_string();
+
+        // Get the host triple
+        let version_output = Command::new("rustc")
+            .arg("-vV")
+            .output()
+            .map_err(|e| BuildError::Tool(format!("Failed to run rustc -vV: {}", e)))?;
+
+        let version_str = String::from_utf8_lossy(&version_output.stdout);
+        let host_triple = version_str
+            .lines()
+            .find_map(|line| {
+                if line.starts_with("host:") {
+                    Some(line.trim_start_matches("host:").trim().to_string())
+                } else {
+                    None
+                }
+            })
+            .ok_or_else(|| {
+                BuildError::Tool("Failed to determine host triple from rustc -vV".to_string())
+            })?;
+
+        let tool_path = PathBuf::from(&sysroot)
+            .join("lib")
+            .join("rustlib")
+            .join(&host_triple)
+            .join("bin")
+            .join(tool_name);
+
+        if tool_path.exists() {
+            return Ok(tool_path);
+        }
+
+        // Fallback: check if the tool is on PATH (e.g., installed via package manager)
+        let which_output = Command::new("which")
+            .arg(tool_name)
+            .output();
+
+        if let Ok(output) = which_output {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                return Ok(PathBuf::from(path));
+            }
+        }
+
+        Err(BuildError::Tool(format!(
+            "Could not find '{}'. Install it with: rustup component add llvm-tools-preview",
+            tool_name
+        )))
     }
 
     /// Generate documentation (ported from xtask docs)
@@ -908,8 +1172,11 @@ impl BuildSystem {
     }
 
     /// Run comprehensive coverage analysis using ported xtask logic
-    pub fn run_coverage(&self) -> BuildResult<()> {
-        xtask_port::run_coverage_analysis(&self.config)
+    ///
+    /// When `html` is true, generates an HTML coverage report in
+    /// `target/coverage/html/` in addition to the lcov report.
+    pub fn run_coverage(&self, html: bool) -> BuildResult<()> {
+        xtask_port::run_coverage_analysis(&self.config, html)
     }
 
     /// Generate documentation using ported xtask logic

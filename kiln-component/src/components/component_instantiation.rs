@@ -2696,7 +2696,7 @@ impl ComponentInstance {
                     // Create a function export with placeholder signature
                     let provider = NoStdProvider::<4096>::default();
                     let signature = kiln_foundation::ComponentType::unit(provider)
-                        .unwrap_or_else(|_| panic!("Failed to create component type"));
+                        .expect("Failed to create component type");
 
                     let func_export = FunctionExport {
                         signature,

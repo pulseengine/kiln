@@ -86,7 +86,7 @@ macro_rules! vec {
                 $crate::types::InstructionVec::new(provider)
                     .map_err(|_| kiln_error::Error::memory_error("Failed to create BoundedVec"))
             })()
-            .unwrap_or_else(|_| panic!("Failed to create vec!"))
+            .expect("Failed to create vec!: memory allocation failed")
         }
     };
     ($($x:expr),+ $(,)?) => {
@@ -100,7 +100,7 @@ macro_rules! vec {
                 )*
                 Ok(temp_vec)
             })()
-            .unwrap_or_else(|_| panic!("Failed to create vec!"))
+            .expect("Failed to create vec!: memory allocation failed")
         }
     };
 }

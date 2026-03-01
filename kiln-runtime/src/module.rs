@@ -312,9 +312,9 @@ impl Default for Import {
     fn default() -> Self {
         Self {
             module: kiln_foundation::bounded::BoundedString::from_str_truncate("")
-                .unwrap(),
+                .expect("Failed to create empty BoundedString for Import::default()"),
             name:   kiln_foundation::bounded::BoundedString::from_str_truncate("")
-                .unwrap(),
+                .expect("Failed to create empty BoundedString for Import::default()"),
             ty:     ExternType::default(),
             desc:   RuntimeImportDesc::Function(0),
         }
@@ -382,10 +382,12 @@ pub struct Function {
 
 impl Default for Function {
     fn default() -> Self {
-        let provider = create_runtime_provider().unwrap();
+        let provider = create_runtime_provider()
+            .expect("Failed to create runtime provider for Function::default()");
         Self {
             type_idx: 0,
-            locals:   BoundedLocalsVec::new(provider).unwrap(),
+            locals:   BoundedLocalsVec::new(provider)
+                .expect("Failed to create locals vector for Function::default()"),
             body:     KilnExpr::default(),
         }
     }
@@ -432,7 +434,7 @@ impl kiln_foundation::traits::FromBytes for Function {
         })?;
         Ok(Self {
             type_idx,
-            locals: BoundedLocalsVec::new(provider).unwrap(),
+            locals: BoundedLocalsVec::new(provider)?,
             body: KilnExpr::default(),
         })
     }
@@ -1136,66 +1138,48 @@ impl Module {
                 }
                 0x6A => {
                     // i32.add
-                    if stack.len() < 2 {
-                        return Err(Error::parse_error("Stack underflow in i32.add"));
-                    }
-                    let b = stack.pop().unwrap();
-                    let a = stack.pop().unwrap();
+                    let b = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i32.add"))?;
+                    let a = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i32.add"))?;
                     if let (Value::I32(va), Value::I32(vb)) = (a, b) {
                         stack.push(Value::I32(va.wrapping_add(vb)));
                     }
                 }
                 0x6B => {
                     // i32.sub
-                    if stack.len() < 2 {
-                        return Err(Error::parse_error("Stack underflow in i32.sub"));
-                    }
-                    let b = stack.pop().unwrap();
-                    let a = stack.pop().unwrap();
+                    let b = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i32.sub"))?;
+                    let a = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i32.sub"))?;
                     if let (Value::I32(va), Value::I32(vb)) = (a, b) {
                         stack.push(Value::I32(va.wrapping_sub(vb)));
                     }
                 }
                 0x6C => {
                     // i32.mul
-                    if stack.len() < 2 {
-                        return Err(Error::parse_error("Stack underflow in i32.mul"));
-                    }
-                    let b = stack.pop().unwrap();
-                    let a = stack.pop().unwrap();
+                    let b = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i32.mul"))?;
+                    let a = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i32.mul"))?;
                     if let (Value::I32(va), Value::I32(vb)) = (a, b) {
                         stack.push(Value::I32(va.wrapping_mul(vb)));
                     }
                 }
                 0x7C => {
                     // i64.add
-                    if stack.len() < 2 {
-                        return Err(Error::parse_error("Stack underflow in i64.add"));
-                    }
-                    let b = stack.pop().unwrap();
-                    let a = stack.pop().unwrap();
+                    let b = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i64.add"))?;
+                    let a = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i64.add"))?;
                     if let (Value::I64(va), Value::I64(vb)) = (a, b) {
                         stack.push(Value::I64(va.wrapping_add(vb)));
                     }
                 }
                 0x7D => {
                     // i64.sub
-                    if stack.len() < 2 {
-                        return Err(Error::parse_error("Stack underflow in i64.sub"));
-                    }
-                    let b = stack.pop().unwrap();
-                    let a = stack.pop().unwrap();
+                    let b = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i64.sub"))?;
+                    let a = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i64.sub"))?;
                     if let (Value::I64(va), Value::I64(vb)) = (a, b) {
                         stack.push(Value::I64(va.wrapping_sub(vb)));
                     }
                 }
                 0x7E => {
                     // i64.mul
-                    if stack.len() < 2 {
-                        return Err(Error::parse_error("Stack underflow in i64.mul"));
-                    }
-                    let b = stack.pop().unwrap();
-                    let a = stack.pop().unwrap();
+                    let b = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i64.mul"))?;
+                    let a = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in i64.mul"))?;
                     if let (Value::I64(va), Value::I64(vb)) = (a, b) {
                         stack.push(Value::I64(va.wrapping_mul(vb)));
                     }
@@ -3996,7 +3980,7 @@ impl Default for TableWrapper {
                 max: Some(1),
             },
         };
-        Self::new(Table::new(table_type).unwrap())
+        Self::new(Table::new(table_type).expect("Failed to create Table for TableWrapper::default()"))
     }
 }
 
@@ -4271,7 +4255,8 @@ impl Default for GlobalWrapper {
             types::ValueType,
             values::Value,
         };
-        Self::new(Global::new(ValueType::I32, false, Value::I32(0)).unwrap())
+        Self::new(Global::new(ValueType::I32, false, Value::I32(0))
+            .expect("Failed to create Global for GlobalWrapper::default()"))
     }
 }
 

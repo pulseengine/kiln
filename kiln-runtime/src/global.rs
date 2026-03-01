@@ -117,10 +117,8 @@ impl Default for Global {
             },
             values::Value,
         };
-        Self::new(ValueType::I32, false, Value::I32(0)).unwrap_or_else(|e| {
-            // If we can't create default global, panic as this is a critical failure
-            panic!("Critical: Unable to create default global: {}", e)
-        })
+        Self::new(ValueType::I32, false, Value::I32(0))
+            .expect("Critical: Unable to create default global")
     }
 }
 

@@ -183,12 +183,20 @@ pub fn load_wasm_unified(binary: &[u8]) -> Result<WasmInfo> {
         return Err(Error::parse_error("Invalid WASM magic number"));
     }
 
-    // Check version (1.0 for core modules, different for components)
+    // Check version using the WebAssembly layer encoding:
+    // bytes[4..6] = version (u16 LE), bytes[6..8] = layer (u16 LE)
+    // Core modules: version=1, layer=0 (u32 LE = 0x00000001)
+    // Components: version=0x0a/0x0d, layer=1 (u32 LE = 0x0001000a etc.)
     let version = u32::from_le_bytes([binary[4], binary[5], binary[6], binary[7]]);
-    let format_type = match version {
-        1 => WasmFormat::CoreModule,
+    let layer = (version >> 16) as u16;
+    let format_type = match (version, layer) {
+        (1, 0) => WasmFormat::CoreModule,
+        (_, 1) => {
+            // Layer 1 indicates component model format
+            WasmFormat::Component
+        },
         _ => {
-            // Check for component-specific indicators
+            // Check for component-specific section indicators as fallback
             if detect_component_format(binary)? {
                 WasmFormat::Component
             } else {

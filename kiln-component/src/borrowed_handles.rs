@@ -738,10 +738,7 @@ impl LifetimeStats {
 
 impl Default for HandleLifetimeTracker {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| {
-            // Fallback for Default trait - this should only be used in non-critical paths
-            panic!("Failed to create HandleLifetimeTracker with default memory allocation")
-        })
+        Self::new().expect("Failed to create HandleLifetimeTracker with default memory allocation")
     }
 }
 

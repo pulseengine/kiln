@@ -268,7 +268,41 @@ pub fn values_equal(actual: &Value, expected: &Value) -> bool {
             let b_val = b.value();
             if a_val.is_nan() && b_val.is_nan() { true } else { a == b }
         },
-        (Value::V128(a), Value::V128(b)) => a == b,
+        (Value::V128(a), Value::V128(b)) => {
+            if a == b {
+                return true;
+            }
+            // NaN-aware V128 comparison: try f32x4 lane comparison where NaN lanes match any NaN
+            let a_bytes = &a.bytes;
+            let b_bytes = &b.bytes;
+            // Try f32x4 interpretation
+            let f32_match = (0..4).all(|i| {
+                let a_val = f32::from_le_bytes([a_bytes[i*4], a_bytes[i*4+1], a_bytes[i*4+2], a_bytes[i*4+3]]);
+                let b_val = f32::from_le_bytes([b_bytes[i*4], b_bytes[i*4+1], b_bytes[i*4+2], b_bytes[i*4+3]]);
+                if a_val.is_nan() && b_val.is_nan() {
+                    true
+                } else {
+                    a_bytes[i*4..i*4+4] == b_bytes[i*4..i*4+4]
+                }
+            });
+            if f32_match { return true; }
+            // Try f64x2 interpretation
+            (0..2).all(|i| {
+                let a_val = f64::from_le_bytes([
+                    a_bytes[i*8], a_bytes[i*8+1], a_bytes[i*8+2], a_bytes[i*8+3],
+                    a_bytes[i*8+4], a_bytes[i*8+5], a_bytes[i*8+6], a_bytes[i*8+7],
+                ]);
+                let b_val = f64::from_le_bytes([
+                    b_bytes[i*8], b_bytes[i*8+1], b_bytes[i*8+2], b_bytes[i*8+3],
+                    b_bytes[i*8+4], b_bytes[i*8+5], b_bytes[i*8+6], b_bytes[i*8+7],
+                ]);
+                if a_val.is_nan() && b_val.is_nan() {
+                    true
+                } else {
+                    a_bytes[i*8..i*8+8] == b_bytes[i*8..i*8+8]
+                }
+            })
+        },
         (Value::Ref(a), Value::Ref(b)) => a == b,
         // FuncRef comparison
         // Handle "any funcref" pattern (u32::MAX sentinel)
