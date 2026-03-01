@@ -1,0 +1,2 @@
+# Root BUILD file for Kiln
+# Verus verification targets are in kiln-foundation/src/verus_proofs/

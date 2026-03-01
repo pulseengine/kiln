@@ -1,0 +1,19 @@
+module(
+    name = "kiln",
+    version = "0.2.0",
+)
+
+# Verus verification toolchain
+bazel_dep(name = "rules_verus", version = "0.1.0")
+
+git_override(
+    module_name = "rules_verus",
+    remote = "https://github.com/pulseengine/rules_verus.git",
+    commit = "e2c1600a8cca4c0deb78c5fcb4a33f1da2273d29",
+)
+
+verus = use_extension("@rules_verus//verus:extensions.bzl", "verus")
+verus.toolchain(version = "0.2026.02.15")
+use_repo(verus, "verus_toolchains")
+
+register_toolchains("@verus_toolchains//:all")

@@ -48,6 +48,13 @@ docs_output/
 .cursorignore
 *.rlib
 
+# Bazel build system
+/bazel-bin
+/bazel-out
+/bazel-testlogs
+/bazel-wrt2
+MODULE.bazel.lock
+
 # Temporary test files
 *.log
 /test_*.wat
