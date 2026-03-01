@@ -41,3 +41,4 @@
 
 pub mod static_vec_proofs;
 pub mod static_queue_proofs;
+pub mod static_string_proofs;

@@ -62,7 +62,7 @@ impl Default for Import {
         use kiln_foundation::safe_memory::NoStdProvider;
         // Create a default Unit type with a provider
         let component_type = KilnComponentType::unit(NoStdProvider::<4096>::default())
-            .unwrap_or_else(|_| panic!("Failed to create unit component type"));
+            .expect("Failed to create unit component type");
 
         #[cfg(feature = "std")]
         let func_value = FunctionValue {
@@ -81,7 +81,7 @@ impl Default for Import {
             let export_name_provider = NoStdProvider::<512>::default();
             let export_name =
                 kiln_foundation::BoundedString::<MAX_WASM_NAME_LENGTH>::from_str_truncate("")
-                    .unwrap_or_else(|_| panic!("Failed to create default export name"));
+                    .expect("Failed to create default export name");
 
             FunctionValue {
                 ty: func_type,
@@ -150,7 +150,7 @@ impl Import {
         // Default import type based on ExternType - this is a simplified mapping
         let import_type = ImportType::Function(
             KilnComponentType::unit(NoStdProvider::<4096>::default())
-                .unwrap_or_else(|_| panic!("Failed to create unit component type")),
+                .expect("Failed to create unit component type"),
         );
         Self {
             namespace,

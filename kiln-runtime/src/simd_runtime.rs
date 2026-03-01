@@ -36,6 +36,18 @@ mod simd_additional_ops;
 // Re-export functions from simd_additional_ops for internal use
 use simd_additional_ops::*;
 
+/// Canonicalize f32 NaN to the WebAssembly canonical NaN (0x7FC00000)
+#[inline]
+fn canonicalize_f32_nan(val: f32) -> f32 {
+    if val.is_nan() { f32::from_bits(0x7FC0_0000) } else { val }
+}
+
+/// Canonicalize f64 NaN to the WebAssembly canonical NaN (0x7FF8000000000000)
+#[inline]
+fn canonicalize_f64_nan(val: f64) -> f64 {
+    if val.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) } else { val }
+}
+
 /// Provider trait for SIMD memory management across ASIL levels
 pub trait SimdProvider {
     /// Execute SIMD operation with provider-specific optimizations
@@ -1406,7 +1418,7 @@ fn execute_f32x4_add(inputs: &[Value]) -> Result<Value> {
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
         let b_val = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
-        let res_val = a_val + b_val;
+        let res_val = canonicalize_f32_nan(a_val + b_val);
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1422,7 +1434,7 @@ fn execute_f32x4_sub(inputs: &[Value]) -> Result<Value> {
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
         let b_val = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
-        let res_val = a_val - b_val;
+        let res_val = canonicalize_f32_nan(a_val - b_val);
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1438,7 +1450,7 @@ fn execute_f32x4_mul(inputs: &[Value]) -> Result<Value> {
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
         let b_val = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
-        let res_val = a_val * b_val;
+        let res_val = canonicalize_f32_nan(a_val * b_val);
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1454,7 +1466,7 @@ fn execute_f32x4_div(inputs: &[Value]) -> Result<Value> {
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
         let b_val = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
-        let res_val = a_val / b_val;
+        let res_val = canonicalize_f32_nan(a_val / b_val);
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1482,7 +1494,7 @@ fn execute_f32x4_sqrt(inputs: &[Value]) -> Result<Value> {
 
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
-        let res_val = a_val.sqrt();
+        let res_val = canonicalize_f32_nan(a_val.sqrt());
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1512,7 +1524,7 @@ fn execute_f32x4_min(inputs: &[Value]) -> Result<Value> {
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
         let b_val = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
-        let res_val = a_val.min(b_val);
+        let res_val = canonicalize_f32_nan(a_val.min(b_val));
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1528,7 +1540,7 @@ fn execute_f32x4_max(inputs: &[Value]) -> Result<Value> {
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
         let b_val = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
-        let res_val = a_val.max(b_val);
+        let res_val = canonicalize_f32_nan(a_val.max(b_val));
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1610,7 +1622,7 @@ fn execute_f64x2_add(inputs: &[Value]) -> Result<Value> {
             b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
             b_bytes[7],
         ]);
-        let res_val = a_val + b_val;
+        let res_val = canonicalize_f64_nan(a_val + b_val);
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
@@ -1634,7 +1646,7 @@ fn execute_f64x2_sub(inputs: &[Value]) -> Result<Value> {
             b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
             b_bytes[7],
         ]);
-        let res_val = a_val - b_val;
+        let res_val = canonicalize_f64_nan(a_val - b_val);
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
@@ -1658,7 +1670,7 @@ fn execute_f64x2_mul(inputs: &[Value]) -> Result<Value> {
             b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
             b_bytes[7],
         ]);
-        let res_val = a_val * b_val;
+        let res_val = canonicalize_f64_nan(a_val * b_val);
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
@@ -1682,7 +1694,7 @@ fn execute_f64x2_div(inputs: &[Value]) -> Result<Value> {
             b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
             b_bytes[7],
         ]);
-        let res_val = a_val / b_val;
+        let res_val = canonicalize_f64_nan(a_val / b_val);
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
@@ -1718,7 +1730,7 @@ fn execute_f64x2_sqrt(inputs: &[Value]) -> Result<Value> {
             a_bytes[0], a_bytes[1], a_bytes[2], a_bytes[3], a_bytes[4], a_bytes[5], a_bytes[6],
             a_bytes[7],
         ]);
-        let res_val = a_val.sqrt();
+        let res_val = canonicalize_f64_nan(a_val.sqrt());
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
@@ -1760,7 +1772,7 @@ fn execute_f64x2_min(inputs: &[Value]) -> Result<Value> {
             b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
             b_bytes[7],
         ]);
-        let res_val = a_val.min(b_val);
+        let res_val = canonicalize_f64_nan(a_val.min(b_val));
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
@@ -1784,7 +1796,7 @@ fn execute_f64x2_max(inputs: &[Value]) -> Result<Value> {
             b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
             b_bytes[7],
         ]);
-        let res_val = a_val.max(b_val);
+        let res_val = canonicalize_f64_nan(a_val.max(b_val));
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
@@ -3659,7 +3671,7 @@ fn execute_f32x4_demote_f64x2_zero(inputs: &[Value]) -> Result<Value> {
             f64_bytes[6],
             f64_bytes[7],
         ]);
-        let f32_val = f64_val as f32;
+        let f32_val = canonicalize_f32_nan(f64_val as f32);
         let f32_bytes = f32_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&f32_bytes);
     }
@@ -3675,7 +3687,7 @@ fn execute_f64x2_promote_low_f32x4(inputs: &[Value]) -> Result<Value> {
     for i in 0..2 {
         let f32_bytes = &a[i * 4..i * 4 + 4];
         let f32_val = f32::from_le_bytes([f32_bytes[0], f32_bytes[1], f32_bytes[2], f32_bytes[3]]);
-        let f64_val = f32_val as f64;
+        let f64_val = canonicalize_f64_nan(f32_val as f64);
         let f64_bytes = f64_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&f64_bytes);
     }

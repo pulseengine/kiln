@@ -179,7 +179,7 @@ impl From<KilnComponentValue<ComponentProvider>> for Value {
                 let provider = safe_managed_alloc!(2048, CrateId::Component)
                     .unwrap_or_else(|_| NoStdProvider::default());
                 let bounded_str = kiln_foundation::bounded::BoundedString::try_from_str(&s)
-                    .unwrap_or_else(|_| panic!("Failed to convert string"));
+                    .expect("Failed to convert string");
                 Value::String(bounded_str)
             },
             #[cfg(not(any(feature = "std",)))]
@@ -187,7 +187,7 @@ impl From<KilnComponentValue<ComponentProvider>> for Value {
                 let _provider = safe_managed_alloc!(2048, CrateId::Component)
                     .unwrap_or_else(|_| NoStdProvider::default());
                 let bounded_str = kiln_foundation::bounded::BoundedString::try_from_str(s.as_str())
-                    .unwrap_or_else(|_| panic!("Failed to convert string"));
+                    .expect("Failed to convert string");
                 Value::String(bounded_str)
             },
             _ => Value::Bool(false), // Fallback
@@ -213,7 +213,7 @@ impl From<Value> for KilnComponentValue<ComponentProvider> {
             #[cfg(feature = "std")]
             Value::String(s) => {
                 let string =
-                    s.as_str().unwrap_or_else(|_| panic!("Failed to get string slice")).to_string();
+                    s.as_str().expect("Failed to get string slice").to_string();
                 KilnComponentValue::String(string)
             },
             #[cfg(not(any(feature = "std",)))]

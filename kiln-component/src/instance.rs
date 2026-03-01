@@ -108,7 +108,7 @@ mod no_std_impl {
         fn default() -> Self {
             Self {
                 name: BoundedString::from_str_truncate("")
-                    .unwrap_or_else(|_| panic!("Failed to create default InstanceValue name")),
+                    .expect("Failed to create default InstanceValue name"),
                 ty: ComponentTypeDefinition::Instance { exports: vec![] },
                 exports: BoundedVec::new(NoStdProvider::default())
                     .expect("Failed to create default exports"),

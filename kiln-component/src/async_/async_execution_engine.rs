@@ -932,7 +932,7 @@ impl ExecutionContext {
     pub fn reset(&mut self) {
         self.component_instance = 0;
         self.function_name = BoundedString::from_str_truncate("")
-            .unwrap_or_else(|_| panic!("Failed to reset function_name"));
+            .expect("Failed to reset function_name");
         self.call_stack.clear();
         self.locals.clear();
         self.memory_views = MemoryViews::new();

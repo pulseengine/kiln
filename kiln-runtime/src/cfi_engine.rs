@@ -793,7 +793,7 @@ impl CfiExecutionEngine {
         // Update metrics and handle violations after borrowing is done
         self.cfi_context.metrics.landing_pads_validated += metrics_landing_pads_validated;
         if violations_detected {
-            self.handle_cfi_violation(CfiViolationType::LandingPadTimeout);
+            self.handle_cfi_violation(CfiViolationType::LandingPadTimeout)?;
         }
 
         Ok(())
@@ -888,7 +888,7 @@ impl CfiExecutionEngine {
     }
 
     /// Handle CFI violation
-    fn handle_cfi_violation(&mut self, violation_type: CfiViolationType) {
+    fn handle_cfi_violation(&mut self, violation_type: CfiViolationType) -> Result<()> {
         self.cfi_context.violation_count += 1;
         self.statistics.violations_detected += 1;
 
@@ -900,18 +900,24 @@ impl CfiExecutionEngine {
         match self.violation_policy {
             CfiViolationPolicy::LogAndContinue => {
                 // Already logged, continue execution
+                Ok(())
             },
             CfiViolationPolicy::Terminate => {
-                // Would terminate execution (panic in real implementation)
-                #[cfg(feature = "std")]
-                panic!("CFI violation: {:?}", violation_type);
+                // Terminate execution by returning a safety error
+                Err(Error::cfi_validation_failed(
+                    "CFI violation detected: execution terminated by policy",
+                ))
             },
             CfiViolationPolicy::ReturnError => {
-                // Would return error to caller
+                // Return error to caller
+                Err(Error::cfi_validation_failed(
+                    "CFI violation detected",
+                ))
             },
             CfiViolationPolicy::AttemptRecovery => {
-                // Would attempt to recover from violation
+                // Attempt to recover from violation
                 self.attempt_violation_recovery(violation_type);
+                Ok(())
             },
         }
     }
@@ -1230,7 +1236,8 @@ mod tests {
                 .expect("Ok");
 
         let initial_violations = engine.statistics.violations_detected;
-        engine.handle_cfi_violation(CfiViolationType::ShadowStackMismatch);
+        // LogAndContinue policy should succeed without error
+        engine.handle_cfi_violation(CfiViolationType::ShadowStackMismatch).unwrap();
 
         assert_eq!(
             engine.statistics.violations_detected,

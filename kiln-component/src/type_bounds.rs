@@ -566,11 +566,7 @@ impl TypeBoundsChecker {
 
 impl Default for TypeBoundsChecker {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| {
-            // Fallback to empty structures on allocation failure
-            // This should not happen in practice but satisfies the Default trait
-            panic!("Failed to allocate memory for TypeBoundsChecker")
-        })
+        Self::new().expect("Failed to allocate memory for TypeBoundsChecker")
     }
 }
 

@@ -52,9 +52,9 @@ impl Default for ErrorContext {
             component_id: 0,
             task_id: None,
             location: BoundedString::from_str_truncate("")
-                .unwrap_or_else(|_| panic!("Failed to create default location")),
+                .expect("Failed to create default location"),
             context: BoundedString::from_str_truncate("")
-                .unwrap_or_else(|_| panic!("Failed to create default context")),
+                .expect("Failed to create default context"),
             fuel_consumed: 0,
         }
     }

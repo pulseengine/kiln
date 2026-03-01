@@ -474,7 +474,7 @@ impl KilnComponentType {
 impl Default for KilnComponentType {
     fn default() -> Self {
         Self::new()
-            .unwrap_or_else(|_| panic!("Failed to allocate memory for KilnComponentType::default"))
+            .expect("Failed to allocate memory for KilnComponentType::default")
     }
 }
 
@@ -711,7 +711,7 @@ impl RuntimeInstance {
 impl Default for RuntimeInstance {
     fn default() -> Self {
         Self::new()
-            .unwrap_or_else(|_| panic!("Failed to allocate memory for RuntimeInstance::default"))
+            .expect("Failed to allocate memory for RuntimeInstance::default")
     }
 }
 
@@ -948,7 +948,7 @@ impl Component {
 
 impl Default for Component {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| panic!("Failed to allocate memory for Component::default"))
+        Self::new().expect("Failed to allocate memory for Component::default")
     }
 }
 

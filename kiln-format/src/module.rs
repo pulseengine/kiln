@@ -1648,42 +1648,38 @@ pub struct Module<
 #[cfg(not(any(feature = "std")))]
 impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Default for Module<P> {
     fn default() -> Self {
-        Self::new()
+        Self::try_new().expect("Failed to create default Module: memory allocation failed")
     }
 }
 
 #[cfg(not(any(feature = "std")))]
 impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Module<P> {
-    /// Create a new empty module for no_std environments
-    pub fn new() -> Self {
-        Self {
-            types:             crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create types vector")),
-            functions:         crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create functions vector")),
-            tables:            crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create tables vector")),
-            memories:          crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create memories vector")),
-            globals:           crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create globals vector")),
-            tags:              crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create tags vector")),
-            elements:          crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create elements vector")),
-            data:              crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create data vector")),
-            exports:           crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create exports vector")),
-            imports:           crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create imports vector")),
+    /// Create a new empty module for no_std environments.
+    /// Returns an error if memory allocation fails.
+    pub fn try_new() -> Result<Self> {
+        Ok(Self {
+            types:             crate::WasmVec::new(P::default())?,
+            functions:         crate::WasmVec::new(P::default())?,
+            tables:            crate::WasmVec::new(P::default())?,
+            memories:          crate::WasmVec::new(P::default())?,
+            globals:           crate::WasmVec::new(P::default())?,
+            tags:              crate::WasmVec::new(P::default())?,
+            elements:          crate::WasmVec::new(P::default())?,
+            data:              crate::WasmVec::new(P::default())?,
+            exports:           crate::WasmVec::new(P::default())?,
+            imports:           crate::WasmVec::new(P::default())?,
             start:             None,
-            custom_sections:   crate::WasmVec::new(P::default())
-                .unwrap_or_else(|_| panic!("Failed to create custom_sections vector")),
+            custom_sections:   crate::WasmVec::new(P::default())?,
             binary:            None,
             core_version:      CoreWasmVersion::default(),
             type_info_section: None,
-        }
+        })
+    }
+
+    /// Create a new empty module for no_std environments (infallible).
+    /// Panics if memory allocation fails. Prefer `try_new()` when possible.
+    pub fn new() -> Self {
+        Self::try_new().expect("Failed to create Module: memory allocation failed")
     }
 }
 

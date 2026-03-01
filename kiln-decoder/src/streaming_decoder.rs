@@ -1289,12 +1289,8 @@ impl<'a> StreamingDecoder<'a> {
         #[cfg(feature = "tracing")]
         trace!(count = count, "process_memory_section");
 
-        // WebAssembly core spec: only one memory is allowed without the multi-memory proposal
-        // Total memories = imported memories + defined memories
+        // Multi-memory proposal is now part of WebAssembly 3.0 spec - allow multiple memories
         let total_memories = self.num_memory_imports + count as usize;
-        if total_memories > 1 {
-            return Err(Error::validation_error("multiple memories"));
-        }
 
         // Process each memory one at a time
         for i in 0..count {
@@ -2371,7 +2367,14 @@ impl<'a> StreamingDecoder<'a> {
     /// Process custom section
     /// Returns the number of bytes consumed (entire section for custom sections).
     fn process_custom_section(&mut self, data: &[u8]) -> Result<usize> {
-        // Custom sections are skipped - consume all bytes
+        // Validate custom section name is valid UTF-8 per WebAssembly spec
+        if !data.is_empty() {
+            let (name_bytes, _name_end) = read_name(data, 0)?;
+            if core::str::from_utf8(name_bytes).is_err() {
+                return Err(Error::parse_error("malformed UTF-8 encoding"));
+            }
+        }
+        // Custom sections are otherwise skipped - consume all bytes
         Ok(data.len())
     }
 

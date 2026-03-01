@@ -90,7 +90,7 @@ impl ExecutionContext {
 
 impl Default for ExecutionContext {
     fn default() -> Self {
-        Self::new().unwrap_or_else(|_| panic!("Failed to create ExecutionContext"))
+        Self::new().expect("Failed to create default ExecutionContext")
     }
 }
 

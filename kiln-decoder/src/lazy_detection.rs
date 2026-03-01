@@ -101,15 +101,32 @@ impl LazyDetector {
         // Check version
         let version = u32::from_le_bytes([binary[4], binary[5], binary[6], binary[7]]);
 
-        // Component Model typically uses different version numbers
-        match version {
-            1 => {
-                // Version 1 could be core module or component
-                // Need to examine sections
-                self.examine_sections(binary)
+        // Component Model uses layer encoding in the version field:
+        // bytes[4..6] = version (u16 LE), bytes[6..8] = layer (u16 LE)
+        // Core modules: version=1, layer=0 (u32 LE = 0x00000001)
+        // Components: version=0x0a/0x0d, layer=1 (u32 LE = 0x0001000a etc.)
+        let layer = (version >> 16) as u16;
+
+        match (version, layer) {
+            (1, 0) => {
+                // Version 1, layer 0: this is a core module by specification.
+                // Examine sections for additional confirmation, but default to
+                // CoreModule if the result is ambiguous or if section parsing
+                // fails (Invalid). Version 1 is exclusively used by core modules
+                // per the WebAssembly spec, so unless there are strong component
+                // indicators, this is a core module.
+                let result = self.examine_sections(binary)?;
+                match result {
+                    ComponentDetection::Component => Ok(ComponentDetection::Component),
+                    _ => Ok(ComponentDetection::CoreModule),
+                }
+            },
+            (_, 1) => {
+                // Layer 1 indicates component model format
+                Ok(ComponentDetection::Component)
             },
             _ => {
-                // Non-standard version, likely component or invalid
+                // Non-standard version, try heuristics
                 if self.config.use_heuristics {
                     self.examine_sections(binary)
                 } else {

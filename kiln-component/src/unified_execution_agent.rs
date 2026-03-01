@@ -1006,12 +1006,8 @@ impl fmt::Display for UnifiedExecutionState {
 
 impl Default for UnifiedExecutionAgent {
     fn default() -> Self {
-        Self::new_default().unwrap_or_else(|_| {
-            // This should never happen in practice, but we need a fallback for the Default
-            // trait In production code, prefer using new_default() directly
-            // which returns Result
-            panic!("Failed to create default UnifiedExecutionAgent: memory allocation error")
-        })
+        Self::new_default()
+            .expect("Failed to create default UnifiedExecutionAgent: memory allocation error")
     }
 }
 

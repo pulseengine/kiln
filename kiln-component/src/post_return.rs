@@ -1649,10 +1649,6 @@ pub mod helpers {
 
 impl Default for PostReturnRegistry {
     fn default() -> Self {
-        Self::new(1024).unwrap_or_else(|_| {
-            // Fallback on allocation failure - this should not happen in practice
-            // but satisfies the Default trait requirement
-            panic!("Failed to allocate memory for PostReturnRegistry")
-        })
+        Self::new(1024).expect("Failed to allocate memory for PostReturnRegistry")
     }
 }
