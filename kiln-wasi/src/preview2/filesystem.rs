@@ -1010,7 +1010,7 @@ mod tests {
     #[test]
     fn test_extract_file_descriptor() {
         let args = vec![Value::U32(42)];
-        assert_eq!(extract_file_descriptor(args).unwrap(), 42);
+        assert_eq!(extract_file_descriptor(&args).unwrap(), 42);
 
         let invalid_args = vec![Value::String("not_a_fd".to_string())];
         assert!(extract_file_descriptor(&invalid_args).is_err());
@@ -1019,7 +1019,7 @@ mod tests {
     #[test]
     fn test_extract_length() {
         let args = vec![Value::U32(0), Value::U64(1024)];
-        assert_eq!(extract_length(args, 1).unwrap(), 1024);
+        assert_eq!(extract_length(&args, 1).unwrap(), 1024);
 
         let args_u32 = vec![Value::U32(0), Value::U32(512)];
         assert_eq!(extract_length(&args_u32, 1).unwrap(), 512);
@@ -1030,7 +1030,7 @@ mod tests {
         let data = vec![Value::U8(1), Value::U8(2), Value::U8(3)];
         let args = vec![Value::U32(42), Value::List(data)];
 
-        let bytes = extract_byte_data(args, 1)?;
+        let bytes = extract_byte_data(&args, 1)?;
         assert_eq!(bytes, vec![1, 2, 3]);
 
         Ok(())
@@ -1039,7 +1039,7 @@ mod tests {
     #[test]
     fn test_extract_string() -> Result<()> {
         let args = vec![Value::U32(42), Value::String("test.txt".to_string())];
-        let path = extract_string(args, 1)?;
+        let path = extract_string(&args, 1)?;
         assert_eq!(path, "test.txt");
 
         Ok(())
@@ -1049,7 +1049,7 @@ mod tests {
     fn test_open_flags_extraction() {
         // Test bit-based flags
         let args = vec![Value::U32(0), Value::U32(0), Value::String("test".to_string()), Value::U32(0x05)];
-        let flags = extract_open_flags(args, 3).unwrap();
+        let flags = extract_open_flags(&args, 3).unwrap();
         assert!(flags.create);
         assert!(!flags.directory);
         assert!(flags.exclusive);
@@ -1059,7 +1059,7 @@ mod tests {
     #[test]
     fn test_descriptor_flags_extraction() {
         let args = vec![Value::U32(0), Value::U32(0), Value::String("test".to_string()), Value::U32(0), Value::U32(0x03)];
-        let flags = extract_descriptor_flags(args, 4).unwrap();
+        let flags = extract_descriptor_flags(&args, 4).unwrap();
         assert!(flags.read);
         assert!(flags.write);
         assert!(!flags.sync);

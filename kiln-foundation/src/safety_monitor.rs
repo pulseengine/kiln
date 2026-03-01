@@ -479,6 +479,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "std", serial_test::serial)]
     fn test_thread_safe_access() {
         with_safety_monitor(|monitor| {
             monitor.record_allocation(1024);

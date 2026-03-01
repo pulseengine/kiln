@@ -771,6 +771,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "std", serial_test::serial)]
     fn test_all_available() {
         // Should at least contain the resource built-ins
         let available = BuiltinType::all_available();

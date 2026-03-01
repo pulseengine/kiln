@@ -1311,6 +1311,7 @@ dependencies = [
  "log",
  "proptest",
  "proptest-derive",
+ "serial_test",
  "tracing",
  "tracing-core",
 ]

@@ -3272,6 +3272,7 @@ mod tests {
 
     // Test BoundedDeque
     #[test]
+    #[cfg_attr(feature = "std", serial_test::serial)]
     fn test_bounded_deque() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
