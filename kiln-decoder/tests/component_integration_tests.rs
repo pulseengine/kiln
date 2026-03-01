@@ -1,3 +1,5 @@
+#![cfg(feature = "std")]
+
 #[cfg(test)]
 mod tests {
     use kiln_decoder::component::decode_component;

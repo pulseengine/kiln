@@ -562,6 +562,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
+    use std::vec;
     use crate::{
         budget_aware_provider::CrateId,
         safe_managed_alloc,
@@ -569,7 +571,7 @@ mod tests {
     };
 
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_simple_hashmap() -> kiln_error::Result<()> {
         let provider = safe_managed_alloc!(512, CrateId::Foundation)?;
         let mut map = SimpleHashMap::<u32, i32, 8, NoStdProvider<512>>::new(provider)?;
@@ -606,7 +608,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_full_map() -> kiln_error::Result<()> {
         let provider = safe_managed_alloc!(256, CrateId::Foundation)?;
         let mut map = SimpleHashMap::<i32, i32, 4, NoStdProvider<256>>::new(provider)?;

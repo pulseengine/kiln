@@ -1005,7 +1005,17 @@ mod tests {
         }
 
         let bytes = generate_component_name_section(&name_section).unwrap();
+        #[cfg(feature = "std")]
         let parsed = parse_component_name_section(bytes.as_slice()).unwrap();
+        #[cfg(not(feature = "std"))]
+        let parsed = {
+            let mut buf = [0u8; 4096];
+            let len = bytes.len();
+            for i in 0..len {
+                buf[i] = bytes.get(i).unwrap();
+            }
+            parse_component_name_section(&buf[..len]).unwrap()
+        };
 
         #[cfg(feature = "std")]
         assert_eq!(parsed.component_name, Some("test_component".to_string()));
@@ -1053,7 +1063,17 @@ mod tests {
         }
 
         let bytes = generate_component_name_section(&name_section).unwrap();
+        #[cfg(feature = "std")]
         let parsed = parse_component_name_section(bytes.as_slice()).unwrap();
+        #[cfg(not(feature = "std"))]
+        let parsed = {
+            let mut buf = [0u8; 4096];
+            let len = bytes.len();
+            for i in 0..len {
+                buf[i] = bytes.get(i).unwrap();
+            }
+            parse_component_name_section(&buf[..len]).unwrap()
+        };
 
         assert_eq!(parsed.sort_names.len(), 1);
         assert!(matches!(

@@ -349,6 +349,8 @@ pub mod capability_errors {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
+    use std::vec;
 
     #[test]
     fn test_capability_mask_intersection() {
@@ -362,7 +364,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_memory_operation_requires_capability() {
         let read_op = MemoryOperation::Read {
             offset: 0,

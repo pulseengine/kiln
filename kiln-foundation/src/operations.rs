@@ -745,6 +745,8 @@ fn verification_cost_multiplier_scaled(level: &VerificationLevel) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
+    use std::vec;
     use crate::verification::VerificationLevel;
 
     #[test]
@@ -793,7 +795,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_global_counter() {
         reset_global_operations();
         let vl_full = VerificationLevel::Full;

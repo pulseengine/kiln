@@ -87,6 +87,11 @@ extern crate core;
 #[cfg(feature = "std")]
 extern crate std;
 
+// Make std available in test modules even without the std feature,
+// so serial_test::serial can be used unconditionally.
+#[cfg(all(test, not(feature = "std")))]
+extern crate std;
+
 #[cfg(any(feature = "std", feature = "alloc"))]
 extern crate alloc;
 

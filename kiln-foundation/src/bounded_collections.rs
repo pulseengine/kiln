@@ -3133,6 +3133,8 @@ impl<const N_BITS: usize> FromBytes for BoundedBitSet<N_BITS> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
+    use std::vec;
     use crate::{
         budget_aware_provider::CrateId,
         safe_managed_alloc,
@@ -3146,7 +3148,7 @@ mod tests {
 
     // Test BoundedQueue
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_bounded_queue() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
@@ -3194,7 +3196,7 @@ mod tests {
 
     // Test BoundedMap
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_bounded_map() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
@@ -3237,7 +3239,7 @@ mod tests {
 
     // Test BoundedSet
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_bounded_set() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
@@ -3275,7 +3277,7 @@ mod tests {
 
     // Test BoundedDeque
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_bounded_deque() {
         init_test_memory_system();
         let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();

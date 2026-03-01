@@ -725,6 +725,8 @@ impl fmt::Display for BuiltinType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[allow(unused_imports)]
+    use std::vec;
 
     #[test]
     fn test_builtin_name() {
@@ -775,7 +777,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(feature = "std", serial_test::serial)]
+    #[serial_test::serial]
     fn test_all_available() {
         // Should at least contain the resource built-ins
         let available = BuiltinType::all_available();

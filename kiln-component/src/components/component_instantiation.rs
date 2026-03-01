@@ -2428,10 +2428,6 @@ impl ComponentInstance {
     fn extract_core_modules(parsed: &mut kiln_format::component::Component) -> Result<Vec<Vec<u8>>> {
         use kiln_error::{ErrorCategory, codes};
 
-        #[cfg(feature = "std")]
-        {
-        }
-
         let mut module_binaries = Vec::with_capacity(parsed.modules.len());
 
         // Move modules out of parsed component (no copy)
@@ -2439,26 +2435,10 @@ impl ComponentInstance {
             // Extract the binary data from the module
             // Module structure contains the actual binary
             if let Some(binary) = module.binary {
-                #[cfg(feature = "std")]
-
                 // Validate module magic/version before accepting
                 if binary.len() >= 8 && &binary[0..4] == b"\0asm" {
-                    // Read version bytes
-                    let version = u32::from_le_bytes([binary[4], binary[5], binary[6], binary[7]]);
-
-                    #[cfg(feature = "std")]
-                    {
-
-                        // Validate it's a core module (version 1)
-                        if version == 1 {
-                        } else {
-                        }
-                    }
-
                     module_binaries.push(binary.to_vec());
                 } else {
-                    #[cfg(feature = "std")]
-
                     return Err(Error::new(
                         ErrorCategory::Validation,
                         codes::PARSE_INVALID_MAGIC_BYTES,
@@ -2466,8 +2446,6 @@ impl ComponentInstance {
                     ));
                 }
             } else {
-                #[cfg(feature = "std")]
-
                 return Err(Error::new(
                     ErrorCategory::Validation,
                     codes::PARSE_INVALID_SECTION_ID,
@@ -2475,8 +2453,6 @@ impl ComponentInstance {
                 ));
             }
         }
-
-        #[cfg(feature = "std")]
 
         Ok(module_binaries)
     }
@@ -4331,34 +4307,29 @@ impl ComponentInstance {
                         Error::runtime_error("Instantiation failed")
                     })?;
 
-                #[cfg(feature = "std")]
-
                 // Populate instance_memory so WASI host functions can access WASM memory
                 // The engine stores instances and exposes them via get_instance()
+                #[cfg(feature = "std")]
                 match engine.get_instance(instance) {
                     Ok(inst_arc) => {
                         let mut lock = instance_memory.lock().unwrap();
                         *lock = Some(inst_arc.clone());
                     }
-                    Err(e) => {
+                    Err(_e) => {
                     }
                 }
 
-                // Try to find and execute the component's exported function
-                // For WASI components, we need to call _initialize first to set up globals
-                #[cfg(feature = "std")]
-
                 // Call _initialize first (critical for TinyGo WASM)
+                #[cfg(feature = "std")]
                 match engine.execute(instance, "_initialize", &[]) {
                     Ok(_) => {
                     }
-                    Err(e) => {
+                    Err(_e) => {
                     }
                 }
 
-                #[cfg(feature = "std")]
-
                 // Try the actual entry points
+                #[cfg(feature = "std")]
                 let entry_points = vec![
                     "wasi:cli/run@0.2.0#run", // Component model entry point (primary)
                     "_start",                  // WASI command entry point (fallback)
