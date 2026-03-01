@@ -242,6 +242,12 @@ pub mod verified_allocator;
 #[cfg(any(doc, kani))]
 pub mod verify;
 
+/// Verus SMT-backed deductive proofs for unbounded correctness
+/// verification of safety-critical data structures.
+/// Gated behind cfg(verus) — invisible to normal cargo builds.
+#[cfg(verus)]
+pub mod verus_proofs;
+
 // Modern Memory Management System
 /// Compile-time budget verification system
 pub mod budget_verification;

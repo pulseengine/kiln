@@ -341,6 +341,7 @@ kani-verifier = { version = "0.62.0", optional = true }
 proptest = { version = "1.4.0", default-features = false, features = ["std"] }
 proptest-derive = "0.5.1"
 criterion = { version = "0.6", features = ["html_reports"] }
+serial_test = "3.2"
 
 [package.metadata.kani]
 default-unwind = 2
@@ -348,7 +349,7 @@ default-unwind = 2
 # Ensure panic=abort for safety profiles
 [lints.rust]
 unsafe_code = "deny"
-unexpected_cfgs = { level = "allow", check-cfg = ['cfg(test)', 'cfg(kani)', 'cfg(coverage)', 'cfg(doc)'] }
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(test)', 'cfg(kani)', 'cfg(verus)', 'cfg(coverage)', 'cfg(doc)'] }
 missing_docs = "allow"
 static_mut_refs = "deny"
 let_underscore_drop = "warn"
