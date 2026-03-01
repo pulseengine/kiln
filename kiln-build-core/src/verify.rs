@@ -15,7 +15,7 @@ use crate::{
     diagnostics::{Diagnostic, DiagnosticCollection, Position, Range, Severity, ToolOutputParser},
     error::{BuildError, BuildResult},
     parsers::{CargoAuditOutputParser, CargoOutputParser, KaniOutputParser, MiriOutputParser},
-    text_search::{SearchMatch, TextSearcher, count_production_matches},
+    text_search::{SearchMatch, TextSearcher, count_production_matches, format_production_matches},
 };
 
 /// Configuration for allowed unsafe blocks
@@ -332,6 +332,19 @@ impl BuildSystem {
                 critical_failures,
                 major_failures
             );
+            if options.detailed_reports {
+                for check in &checks {
+                    if !check.passed {
+                        println!(
+                            "  {} [{}] {}: {}",
+                            "FAIL".bright_red(),
+                            format!("{:?}", check.severity).bright_yellow(),
+                            check.name,
+                            check.details
+                        );
+                    }
+                }
+            }
         }
 
         Ok(VerificationResults {
@@ -405,8 +418,9 @@ impl BuildSystem {
                 "No unsafe code blocks found (excluding allowed exceptions)".to_string()
             } else {
                 format!(
-                    "Found {} unsafe code blocks not in allowed list",
-                    unsafe_count
+                    "Found {} unsafe code blocks not in allowed list:\n{}",
+                    unsafe_count,
+                    format_production_matches(&filtered_matches, 20)
                 )
             },
             severity: VerificationSeverity::Critical,
@@ -425,7 +439,11 @@ impl BuildSystem {
             details: if panic_count == 0 {
                 "No panic! macros found in production code".to_string()
             } else {
-                format!("Found {} panic! macros in production code", panic_count)
+                format!(
+                    "Found {} panic! macros in production code:\n{}",
+                    panic_count,
+                    format_production_matches(&matches, 20)
+                )
             },
             severity: VerificationSeverity::Major,
         })
@@ -443,7 +461,11 @@ impl BuildSystem {
             details: if unwrap_count == 0 {
                 "No .unwrap() calls found in production code".to_string()
             } else {
-                format!("Found {} .unwrap() calls in production code", unwrap_count)
+                format!(
+                    "Found {} .unwrap() calls in production code:\n{}",
+                    unwrap_count,
+                    format_production_matches(&matches, 20)
+                )
             },
             severity: VerificationSeverity::Major,
         })
