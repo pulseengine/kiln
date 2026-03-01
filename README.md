@@ -6,6 +6,7 @@
 
 &nbsp;
 
+[![CI](https://github.com/pulseengine/kiln/actions/workflows/ci.yml/badge.svg)](https://github.com/pulseengine/kiln/actions/workflows/ci.yml)
 ![Rust](https://img.shields.io/badge/Rust-CE422B?style=flat-square&logo=rust&logoColor=white&labelColor=1a1b27)
 ![WebAssembly](https://img.shields.io/badge/WebAssembly-654FF0?style=flat-square&logo=webassembly&logoColor=white&labelColor=1a1b27)
 ![no_std](https://img.shields.io/badge/no__std-compatible-654FF0?style=flat-square&labelColor=1a1b27)
@@ -32,7 +33,7 @@
 
 Meld fuses. Loom weaves. Synth transpiles. Kiln fires. Sigil seals.
 
-A Rust implementation of a WebAssembly runtime with full Component Model and WASI Preview 2 support. Designed for safety-critical embedded systems with bounded allocations, deterministic execution, and a modular `no_std` architecture for automotive, medical, and aerospace environments.
+A Rust implementation of a WebAssembly runtime with full Component Model and WASI 0.2 support. Designed for safety-critical embedded systems with bounded allocations, deterministic execution, and a modular `no_std` architecture for automotive, medical, and aerospace environments.
 
 Kiln bridges the gap between WebAssembly's portability and the strict requirements of safety-critical deployment. It runs on everything from cloud servers to bare-metal Cortex-M targets.
 
@@ -95,14 +96,14 @@ cargo test --workspace
 ### Working
 
 - WebAssembly Component Model parsing and instantiation
-- WASI Preview 2 stdout/stderr output (`wasi:cli/stdout`, `wasi:io/streams`)
+- WASI 0.2 stdout/stderr output (`wasi:cli/stdout`, `wasi:io/streams`)
 - Core WebAssembly module execution
 - Basic memory management with bounds checking
 - `no_std` compatible foundation
 
 ### In Progress
 
-- Additional WASI Preview 2 interfaces (filesystem, environment)
+- Additional WASI 0.2 interfaces (filesystem, environment)
 - Cross-component function calls
 - Full Component Model linking
 
