@@ -27,6 +27,28 @@ use crate::{
     streaming_validator::{ComprehensivePlatformLimits, StreamingWasmValidator},
 };
 
+/// Decode a heap type from an s33 LEB128 value.
+/// Negative values map to abstract heap types, non-negative values are type indices.
+fn decode_heap_type(val: i64) -> kiln_foundation::types::HeapType {
+    use kiln_foundation::types::HeapType;
+    match val {
+        v if v >= 0 => HeapType::Concrete(v as u32),
+        -0x10 => HeapType::Func,      // 0x70
+        -0x11 => HeapType::Extern,    // 0x6F
+        -0x12 => HeapType::Any,       // 0x6E
+        -0x13 => HeapType::Eq,        // 0x6D
+        -0x14 => HeapType::I31,       // 0x6C
+        -0x15 => HeapType::Struct,    // 0x6B
+        -0x16 => HeapType::Array,     // 0x6A
+        -0x17 => HeapType::Exn,       // 0x69
+        -0x0D => HeapType::NoFunc,    // 0x73
+        -0x0E => HeapType::NoExtern,  // 0x72
+        -0x0F => HeapType::None,      // 0x71
+        -0x0C => HeapType::Exn,       // 0x74 noexn (mapped to Exn for now)
+        _ => HeapType::Func,          // fallback
+    }
+}
+
 /// Skip an LEB128-encoded unsigned integer and return the number of bytes consumed
 fn skip_leb128_u32(data: &[u8], offset: usize) -> usize {
     let mut bytes = 0;
@@ -807,12 +829,21 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 0x01 => {
                     // Table import - need to parse table type
-                    // ref_type (1 byte) + limits (flags + min, optional max)
+                    // ref_type + limits (flags + min, optional max)
                     if offset >= data.len() {
                         return Err(Error::parse_error("Unexpected end of table import"));
                     }
                     let ref_type_byte = data[offset];
                     offset += 1;
+
+                    // For encoded ref types (0x63/0x64), consume the heap type LEB128
+                    let _heap_type_val = if ref_type_byte == 0x63 || ref_type_byte == 0x64 {
+                        let (ht_val, ht_bytes) = kiln_format::binary::read_leb128_i64(data, offset)?;
+                        offset += ht_bytes;
+                        Some(ht_val)
+                    } else {
+                        None
+                    };
 
                     // Parse limits
                     if offset >= data.len() {
@@ -852,6 +883,11 @@ impl<'a> StreamingDecoder<'a> {
                             0x72 => RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
                             0x71 => RefType::Gc(GcRefType::new(true, HeapType::None)),
                             0x74 => RefType::Gc(GcRefType::new(true, HeapType::Exn)),
+                            0x63 | 0x64 => {
+                                let nullable = ref_type_byte == 0x63;
+                                let heap_type = decode_heap_type(_heap_type_val.unwrap_or(0));
+                                RefType::Gc(GcRefType::new(nullable, heap_type))
+                            }
                             _ => RefType::Funcref, // Default for unknown
                         };
 
@@ -1179,6 +1215,15 @@ impl<'a> StreamingDecoder<'a> {
                 0x72 => RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
                 0x71 => RefType::Gc(GcRefType::new(true, HeapType::None)),
                 0x74 => RefType::Gc(GcRefType::new(true, HeapType::Exn)),
+                // Encoded reference types: 0x63 = ref null ht, 0x64 = ref ht
+                0x63 | 0x64 => {
+                    use kiln_format::binary::read_leb128_i64;
+                    let nullable = ref_type_byte == 0x63;
+                    let (ht_val, ht_bytes) = read_leb128_i64(data, offset)?;
+                    offset += ht_bytes;
+                    let heap_type = decode_heap_type(ht_val);
+                    RefType::Gc(GcRefType::new(nullable, heap_type))
+                }
                 _ => {
                     return Err(Error::parse_error("Unknown table element type"));
                 },
@@ -1844,6 +1889,12 @@ impl<'a> StreamingDecoder<'a> {
                         0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
                         0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
                         0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
+                        0x63 | 0x64 => {
+                            let nullable = ref_type_byte == 0x63;
+                            let (ht_val, ht_bytes) = kiln_format::binary::read_leb128_i64(data, offset)?;
+                            offset += ht_bytes;
+                            kiln_format::types::RefType::Gc(GcRefType::new(nullable, decode_heap_type(ht_val)))
+                        }
                         _ => kiln_format::types::RefType::Funcref,
                     };
                     #[cfg(feature = "tracing")]
@@ -1882,6 +1933,12 @@ impl<'a> StreamingDecoder<'a> {
                         0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
                         0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
                         0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
+                        0x63 | 0x64 => {
+                            let nullable = ref_type_byte == 0x63;
+                            let (ht_val, ht_bytes) = kiln_format::binary::read_leb128_i64(data, offset)?;
+                            offset += ht_bytes;
+                            kiln_format::types::RefType::Gc(GcRefType::new(nullable, decode_heap_type(ht_val)))
+                        }
                         _ => kiln_format::types::RefType::Funcref,
                     };
 
@@ -1914,6 +1971,12 @@ impl<'a> StreamingDecoder<'a> {
                         0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
                         0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
                         0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
+                        0x63 | 0x64 => {
+                            let nullable = ref_type_byte == 0x63;
+                            let (ht_val, ht_bytes) = kiln_format::binary::read_leb128_i64(data, offset)?;
+                            offset += ht_bytes;
+                            kiln_format::types::RefType::Gc(GcRefType::new(nullable, decode_heap_type(ht_val)))
+                        }
                         _ => kiln_format::types::RefType::Funcref,
                     };
                     #[cfg(feature = "tracing")]
