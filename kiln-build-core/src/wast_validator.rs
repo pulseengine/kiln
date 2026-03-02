@@ -132,7 +132,11 @@ impl StackType {
                 match gc.heap_type {
                     HeapType::Func => StackType::FuncRef,
                     HeapType::Extern => StackType::ExternRef,
-                    _ => StackType::ExternRef,
+                    HeapType::Exn => StackType::ExnRef,
+                    HeapType::NoFunc => StackType::NullFuncRef,
+                    HeapType::Concrete(idx) => StackType::TypedFuncRef(idx, gc.nullable),
+                    // GC types not yet fully supported
+                    _ => StackType::Unknown,
                 }
             }
         }
@@ -179,6 +183,9 @@ impl WastModuleValidator {
         Self::validate_memory_limits(module)?;
         Self::validate_table_limits(module)?;
         Self::validate_tags(module)?;
+
+        // Validate type index references are within bounds
+        Self::validate_type_references(module)?;
 
         // Validate data segments - only ACTIVE segments require a memory to be defined
         // Passive segments can exist without memory (they're only used via memory.init/data.drop)
@@ -564,6 +571,86 @@ impl WastModuleValidator {
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Check if a ValueType contains a type index reference and validate it
+    fn check_value_type_ref(vt: &ValueType, num_types: usize) -> Result<()> {
+        match vt {
+            ValueType::TypedFuncRef(idx, _)
+            | ValueType::StructRef(idx)
+            | ValueType::ArrayRef(idx) => {
+                if (*idx as usize) >= num_types {
+                    return Err(anyhow!("unknown type"));
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Check if a RefType contains a type index reference and validate it
+    fn check_ref_type_ref(rt: &kiln_foundation::RefType, num_types: usize) -> Result<()> {
+        if let kiln_foundation::RefType::Gc(gc) = rt {
+            use kiln_foundation::types::HeapType;
+            if let HeapType::Concrete(idx) = gc.heap_type {
+                if (idx as usize) >= num_types {
+                    return Err(anyhow!("unknown type"));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate that all type index references in the module are within bounds
+    fn validate_type_references(module: &Module) -> Result<()> {
+        let num_types = module.types.len();
+
+        // Check type section itself (params and results may reference other types)
+        for func_type in &module.types {
+            for vt in &func_type.params {
+                Self::check_value_type_ref(vt, num_types)?;
+            }
+            for vt in &func_type.results {
+                Self::check_value_type_ref(vt, num_types)?;
+            }
+        }
+
+        // Check function locals
+        for func in &module.functions {
+            for vt in &func.locals {
+                Self::check_value_type_ref(vt, num_types)?;
+            }
+        }
+
+        // Check table element types
+        for table in &module.tables {
+            Self::check_ref_type_ref(&table.element_type, num_types)?;
+        }
+
+        // Check global types
+        for global in &module.globals {
+            Self::check_value_type_ref(&global.global_type.value_type, num_types)?;
+        }
+
+        // Check imported tables and globals
+        for import in &module.imports {
+            match &import.desc {
+                ImportDesc::Table(table) => {
+                    Self::check_ref_type_ref(&table.element_type, num_types)?;
+                }
+                ImportDesc::Global(global_type) => {
+                    Self::check_value_type_ref(&global_type.value_type, num_types)?;
+                }
+                _ => {}
+            }
+        }
+
+        // Check element segment types
+        for elem in &module.elements {
+            Self::check_ref_type_ref(&elem.element_type, num_types)?;
+        }
+
         Ok(())
     }
 
@@ -2225,6 +2312,14 @@ impl WastModuleValidator {
                             0x7B => StackType::V128,
                             0x70 => StackType::FuncRef,
                             0x6F => StackType::ExternRef,
+                            0x69 => StackType::ExnRef,
+                            0x63 | 0x64 => {
+                                // ref null heaptype / ref heaptype
+                                let (heap_type, new_offset) = Self::parse_heap_type(code, offset)?;
+                                offset = new_offset;
+                                Self::check_value_type_ref(&heap_type, module.types.len())?;
+                                StackType::from_value_type(heap_type)
+                            },
                             _ => StackType::Unknown,
                         };
                     }
@@ -2701,10 +2796,7 @@ impl WastModuleValidator {
                             return Err(anyhow!("type mismatch"));
                         }
                         let ref_type = stack.pop().unwrap();
-                        if ref_type != StackType::FuncRef
-                            && ref_type != StackType::ExternRef
-                            && ref_type != StackType::Unknown
-                        {
+                        if !ref_type.is_reference() && ref_type != StackType::Unknown {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
@@ -4734,6 +4826,8 @@ impl WastModuleValidator {
                 // 0x64 = ref heaptype (non-nullable)
                 // Parse the heap type following the prefix
                 let (heap_type, new_offset) = Self::parse_heap_type(code, offset + 1)?;
+                // Validate type index bounds for concrete references
+                Self::check_value_type_ref(&heap_type, module.types.len())?;
                 return Ok((BlockType::ValueType(heap_type), new_offset));
             },
             _ if byte >= 0 => {

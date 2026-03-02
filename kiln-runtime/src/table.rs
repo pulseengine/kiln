@@ -448,6 +448,7 @@ impl Table {
             let val_matches = matches!(
                 (&val, &self.ty.element_type),
                 (KilnValue::FuncRef(_), KilnRefType::Funcref)
+                | (KilnValue::FuncRef(_), KilnRefType::Gc(_))
                 | (KilnValue::ExternRef(_), KilnRefType::Externref)
                 | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
                 | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
@@ -498,6 +499,7 @@ impl Table {
             let val_matches = matches!(
                 (&val, &self.ty.element_type),
                 (KilnValue::FuncRef(_), KilnRefType::Funcref)
+                | (KilnValue::FuncRef(_), KilnRefType::Gc(_))
                 | (KilnValue::ExternRef(_), KilnRefType::Externref)
                 | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
                 | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
