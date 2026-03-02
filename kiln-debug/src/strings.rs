@@ -11,7 +11,7 @@ pub struct StringTable<'a> {
 
 /// A reference to a string in the debug string table
 /// Provides zero-copy access to string data
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DebugString<'a> {
     data: &'a str,
 }
@@ -25,6 +25,11 @@ impl<'a> kiln_foundation::traits::Checksummable for DebugString<'a> {
 }
 
 impl<'a> kiln_foundation::traits::ToBytes for DebugString<'a> {
+    fn serialized_size(&self) -> usize {
+        // 4 bytes for the u32 length prefix + the string data bytes
+        4 + self.data.len()
+    }
+
     fn to_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut kiln_foundation::traits::WriteStream<'b>,

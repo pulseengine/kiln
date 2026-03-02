@@ -190,7 +190,9 @@ where
                     Poll::Pending => return Poll::Pending,
                 },
                 ChainState::Done => {
-                    panic!("FuelChain polled after completion");
+                    return Poll::Ready(Err(Error::runtime_execution_error(
+                        "FuelChain polled after completion",
+                    )));
                 },
             }
         }

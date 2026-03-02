@@ -204,7 +204,7 @@ pub fn convert_format_to_common_valtype(format_type: &KilnFormatValType) -> Cano
 
 // Serialization and deserialization functions for ComponentValue
 pub fn serialize_component_value(value: &ComponentComponentValue) -> Result<Vec<u8>> {
-    let common_type = value.get_type();
+    let common_type = value.get_type()?;
     let format_type = convert_common_to_format_valtype(&common_type);
 
     // Serialize the value based on its type

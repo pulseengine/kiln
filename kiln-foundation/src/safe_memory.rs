@@ -1260,9 +1260,9 @@ impl<const N: usize> NoStdProvider<N> {
         let mut heap_data = vec![0u8; N];
         
         // Convert Vec to fixed-size array
-        // SAFETY: We know the Vec has exactly N elements
+        // SAFETY: Infallible - Vec was created with exactly N elements via vec![0u8; N]
         let data_array: [u8; N] = heap_data.try_into()
-            .unwrap_or_else(|_| panic!("Failed to convert Vec to array of size {}", N));
+            .expect("Vec<u8> of size N must convert to [u8; N]");
         
         Self {
             data: data_array,

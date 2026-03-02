@@ -758,53 +758,55 @@ impl<P: MemoryProvider + Default + Clone + PartialEq + Eq> ComponentValue<P> {
     /// NOTE: This returns a ValType with type references (ValTypeRef) that may need
     /// resolution via a type table. For complex types (Record, Variant, List, etc.),
     /// the returned type will contain indices that require lookup in a ComponentValueStore.
-    pub fn get_type(&self) -> ValType<P> {
+    ///
+    /// Returns an error if the memory provider fails to allocate for complex types.
+    pub fn get_type(&self) -> kiln_error::Result<ValType<P>> {
         match self {
-            ComponentValue::Void => ValType::Void,
-            ComponentValue::Unit => ValType::Tuple(BoundedVec::new(P::default()).unwrap_or_else(|_| panic!("Failed to create empty tuple type"))),
-            ComponentValue::Bool(_) => ValType::Bool,
-            ComponentValue::S8(_) => ValType::S8,
-            ComponentValue::U8(_) => ValType::U8,
-            ComponentValue::S16(_) => ValType::S16,
-            ComponentValue::U16(_) => ValType::U16,
-            ComponentValue::S32(_) => ValType::S32,
-            ComponentValue::U32(_) => ValType::U32,
-            ComponentValue::S64(_) => ValType::S64,
-            ComponentValue::U64(_) => ValType::U64,
-            ComponentValue::F32(_) => ValType::F32,
-            ComponentValue::F64(_) => ValType::F64,
-            ComponentValue::Char(_) => ValType::Char,
-            ComponentValue::String(_) => ValType::String,
+            ComponentValue::Void => Ok(ValType::Void),
+            ComponentValue::Unit => Ok(ValType::Tuple(BoundedVec::new(P::default())?)),
+            ComponentValue::Bool(_) => Ok(ValType::Bool),
+            ComponentValue::S8(_) => Ok(ValType::S8),
+            ComponentValue::U8(_) => Ok(ValType::U8),
+            ComponentValue::S16(_) => Ok(ValType::S16),
+            ComponentValue::U16(_) => Ok(ValType::U16),
+            ComponentValue::S32(_) => Ok(ValType::S32),
+            ComponentValue::U32(_) => Ok(ValType::U32),
+            ComponentValue::S64(_) => Ok(ValType::S64),
+            ComponentValue::U64(_) => Ok(ValType::U64),
+            ComponentValue::F32(_) => Ok(ValType::F32),
+            ComponentValue::F64(_) => Ok(ValType::F64),
+            ComponentValue::Char(_) => Ok(ValType::Char),
+            ComponentValue::String(_) => Ok(ValType::String),
             // For complex types that use ValueRef, we return placeholder types
             // TODO: These need a type table to properly resolve the ValTypeRef
-            ComponentValue::List(_) => ValType::List(ValTypeRef(0)), // Placeholder index
-            ComponentValue::FixedList(_, size) => ValType::FixedList(ValTypeRef(0), *size),
+            ComponentValue::List(_) => Ok(ValType::List(ValTypeRef(0))), // Placeholder index
+            ComponentValue::FixedList(_, size) => Ok(ValType::FixedList(ValTypeRef(0), *size)),
             ComponentValue::Record(_) => {
                 // Return empty record - proper resolution requires type table
-                ValType::Record(BoundedVec::new(P::default()).unwrap_or_else(|_| panic!("Failed to create empty record type")))
+                Ok(ValType::Record(BoundedVec::new(P::default())?))
             },
             ComponentValue::Variant(_, _) => {
                 // Return empty variant - proper resolution requires type table
-                ValType::Variant(BoundedVec::new(P::default()).unwrap_or_else(|_| panic!("Failed to create empty variant type")))
+                Ok(ValType::Variant(BoundedVec::new(P::default())?))
             },
             ComponentValue::Tuple(_) => {
                 // Return empty tuple - proper resolution requires type table
-                ValType::Tuple(BoundedVec::new(P::default()).unwrap_or_else(|_| panic!("Failed to create empty tuple type")))
+                Ok(ValType::Tuple(BoundedVec::new(P::default())?))
             },
             ComponentValue::Flags(_) => {
                 // Return empty flags - proper resolution requires type table
-                ValType::Flags(BoundedVec::new(P::default()).unwrap_or_else(|_| panic!("Failed to create empty flags type")))
+                Ok(ValType::Flags(BoundedVec::new(P::default())?))
             },
             ComponentValue::Enum(_) => {
                 // Return empty enum - proper resolution requires type table
-                ValType::Enum(BoundedVec::new(P::default()).unwrap_or_else(|_| panic!("Failed to create empty enum type")))
+                Ok(ValType::Enum(BoundedVec::new(P::default())?))
             },
-            ComponentValue::Option(_) => ValType::Option(ValTypeRef(0)), // Placeholder index
-            ComponentValue::Result(_) => ValType::Result { ok: None, err: None }, // Placeholder
-            ComponentValue::Own(idx) => ValType::Own(*idx),
-            ComponentValue::Borrow(idx) => ValType::Borrow(*idx),
-            ComponentValue::Handle(idx) => ValType::Own(*idx), // Handle maps to Own
-            ComponentValue::ErrorContext(_) => ValType::ErrorContext,
+            ComponentValue::Option(_) => Ok(ValType::Option(ValTypeRef(0))), // Placeholder index
+            ComponentValue::Result(_) => Ok(ValType::Result { ok: None, err: None }), // Placeholder
+            ComponentValue::Own(idx) => Ok(ValType::Own(*idx)),
+            ComponentValue::Borrow(idx) => Ok(ValType::Borrow(*idx)),
+            ComponentValue::Handle(idx) => Ok(ValType::Own(*idx)), // Handle maps to Own
+            ComponentValue::ErrorContext(_) => Ok(ValType::ErrorContext),
         }
     }
 }
