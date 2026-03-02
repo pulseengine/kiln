@@ -10248,15 +10248,11 @@ impl StacklessEngine {
                     Instruction::SimdLaneOp { opcode, lane } => {
                         execute_simd_lane_op(opcode, lane, &mut operand_stack)?;
                     }
-                    Instruction::SimdMemOp { opcode: _, memarg: _ } => {
-                        return Err(kiln_error::Error::runtime_execution_error(
-                            "SIMD memory operations not yet implemented",
-                        ));
+                    Instruction::SimdMemOp { opcode, memarg } => {
+                        execute_simd_mem_op(opcode, &memarg, &mut operand_stack, &instance)?;
                     }
-                    Instruction::SimdMemLaneOp { opcode: _, memarg: _, lane: _ } => {
-                        return Err(kiln_error::Error::runtime_execution_error(
-                            "SIMD memory lane operations not yet implemented",
-                        ));
+                    Instruction::SimdMemLaneOp { opcode, memarg, lane } => {
+                        execute_simd_mem_lane_op(opcode, &memarg, lane, &mut operand_stack, &instance)?;
                     }
 
                     _ => {
@@ -11663,6 +11659,310 @@ fn execute_simd_lane_op(opcode: u32, lane: u8, stack: &mut Vec<Value>) -> Result
         }
         _ => {
             return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD lane opcode"));
+        }
+    }
+    Ok(())
+}
+
+/// Execute a SIMD memory operation (v128.load, v128.store, and load-extend/splat/zero variants)
+fn execute_simd_mem_op(
+    opcode: u32,
+    memarg: &kiln_foundation::types::MemArg,
+    stack: &mut Vec<Value>,
+    instance: &ModuleInstance,
+) -> Result<()> {
+    match opcode {
+        // v128.load - load 16 bytes
+        0x00 => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 16)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 16];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            push_v128(stack, buf);
+        }
+        // v128.load8x8_s - load 8 bytes, sign-extend each to i16
+        0x01 => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 8)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 8];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let mut result = [0u8; 16];
+            for i in 0..8 {
+                let val = buf[i] as i8 as i16;
+                result[i * 2..i * 2 + 2].copy_from_slice(&val.to_le_bytes());
+            }
+            push_v128(stack, result);
+        }
+        // v128.load8x8_u - load 8 bytes, zero-extend each to i16
+        0x02 => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 8)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 8];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let mut result = [0u8; 16];
+            for i in 0..8 {
+                let val = buf[i] as u16;
+                result[i * 2..i * 2 + 2].copy_from_slice(&val.to_le_bytes());
+            }
+            push_v128(stack, result);
+        }
+        // v128.load16x4_s - load 8 bytes (4×i16), sign-extend each to i32
+        0x03 => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 8)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 8];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let mut result = [0u8; 16];
+            for i in 0..4 {
+                let val = i16::from_le_bytes([buf[i * 2], buf[i * 2 + 1]]) as i32;
+                result[i * 4..i * 4 + 4].copy_from_slice(&val.to_le_bytes());
+            }
+            push_v128(stack, result);
+        }
+        // v128.load16x4_u - load 8 bytes (4×i16), zero-extend each to i32
+        0x04 => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 8)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 8];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let mut result = [0u8; 16];
+            for i in 0..4 {
+                let val = u16::from_le_bytes([buf[i * 2], buf[i * 2 + 1]]) as u32;
+                result[i * 4..i * 4 + 4].copy_from_slice(&val.to_le_bytes());
+            }
+            push_v128(stack, result);
+        }
+        // v128.load32x2_s - load 8 bytes (2×i32), sign-extend each to i64
+        0x05 => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 8)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 8];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let mut result = [0u8; 16];
+            for i in 0..2 {
+                let val = i32::from_le_bytes([buf[i * 4], buf[i * 4 + 1], buf[i * 4 + 2], buf[i * 4 + 3]]) as i64;
+                result[i * 8..i * 8 + 8].copy_from_slice(&val.to_le_bytes());
+            }
+            push_v128(stack, result);
+        }
+        // v128.load32x2_u - load 8 bytes (2×i32), zero-extend each to i64
+        0x06 => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 8)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 8];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let mut result = [0u8; 16];
+            for i in 0..2 {
+                let val = u32::from_le_bytes([buf[i * 4], buf[i * 4 + 1], buf[i * 4 + 2], buf[i * 4 + 3]]) as u64;
+                result[i * 8..i * 8 + 8].copy_from_slice(&val.to_le_bytes());
+            }
+            push_v128(stack, result);
+        }
+        // v128.load8_splat - load 1 byte, splat to all 16 lanes
+        0x07 => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 1)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 1];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            push_v128(stack, [buf[0]; 16]);
+        }
+        // v128.load16_splat - load 2 bytes, splat to all 8 lanes
+        0x08 => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 2)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 2];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let mut result = [0u8; 16];
+            for i in 0..8 {
+                result[i * 2] = buf[0];
+                result[i * 2 + 1] = buf[1];
+            }
+            push_v128(stack, result);
+        }
+        // v128.load32_splat - load 4 bytes, splat to all 4 lanes
+        0x09 => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 4)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 4];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let mut result = [0u8; 16];
+            for i in 0..4 {
+                result[i * 4..i * 4 + 4].copy_from_slice(&buf);
+            }
+            push_v128(stack, result);
+        }
+        // v128.load64_splat - load 8 bytes, splat to both lanes
+        0x0A => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 8)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 8];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let mut result = [0u8; 16];
+            result[0..8].copy_from_slice(&buf);
+            result[8..16].copy_from_slice(&buf);
+            push_v128(stack, result);
+        }
+        // v128.store - store 16 bytes
+        0x0B => {
+            let v = pop_v128(stack)?;
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 16)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            memory.write_shared(ea, &v).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+        }
+        // v128.load32_zero - load 4 bytes into low 32 bits, zero rest
+        0x5C => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 4)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut result = [0u8; 16];
+            memory.read(ea, &mut result[0..4]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            push_v128(stack, result);
+        }
+        // v128.load64_zero - load 8 bytes into low 64 bits, zero rest
+        0x5D => {
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 8)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut result = [0u8; 16];
+            memory.read(ea, &mut result[0..8]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            push_v128(stack, result);
+        }
+        _ => {
+            return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD memory opcode"));
+        }
+    }
+    Ok(())
+}
+
+/// Execute a SIMD memory lane operation (load_lane / store_lane)
+fn execute_simd_mem_lane_op(
+    opcode: u32,
+    memarg: &kiln_foundation::types::MemArg,
+    lane: u8,
+    stack: &mut Vec<Value>,
+    instance: &ModuleInstance,
+) -> Result<()> {
+    let lane_idx = lane as usize;
+    match opcode {
+        // v128.load8_lane - load 1 byte into specified lane
+        0x54 => {
+            let mut v = pop_v128(stack)?;
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 1)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 1];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            v[lane_idx] = buf[0];
+            push_v128(stack, v);
+        }
+        // v128.load16_lane - load 2 bytes into specified lane
+        0x55 => {
+            let mut v = pop_v128(stack)?;
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 2)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 2];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let off = lane_idx * 2;
+            v[off] = buf[0];
+            v[off + 1] = buf[1];
+            push_v128(stack, v);
+        }
+        // v128.load32_lane - load 4 bytes into specified lane
+        0x56 => {
+            let mut v = pop_v128(stack)?;
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 4)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 4];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let off = lane_idx * 4;
+            v[off..off + 4].copy_from_slice(&buf);
+            push_v128(stack, v);
+        }
+        // v128.load64_lane - load 8 bytes into specified lane
+        0x57 => {
+            let mut v = pop_v128(stack)?;
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 8)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let mut buf = [0u8; 8];
+            memory.read(ea, &mut buf).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+            let off = lane_idx * 8;
+            v[off..off + 8].copy_from_slice(&buf);
+            push_v128(stack, v);
+        }
+        // v128.store8_lane - store 1 byte from specified lane
+        0x58 => {
+            let v = pop_v128(stack)?;
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 1)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            memory.write_shared(ea, &[v[lane_idx]]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+        }
+        // v128.store16_lane - store 2 bytes from specified lane
+        0x59 => {
+            let v = pop_v128(stack)?;
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 2)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let off = lane_idx * 2;
+            memory.write_shared(ea, &v[off..off + 2]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+        }
+        // v128.store32_lane - store 4 bytes from specified lane
+        0x5A => {
+            let v = pop_v128(stack)?;
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 4)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let off = lane_idx * 4;
+            memory.write_shared(ea, &v[off..off + 4]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+        }
+        // v128.store64_lane - store 8 bytes from specified lane
+        0x5B => {
+            let v = pop_v128(stack)?;
+            let addr = pop_i32_for_simd(stack)?;
+            let ea = calculate_effective_address(addr, memarg.offset, 8)? as u32;
+            let mem = instance.memory(memarg.memory_index as u32)?;
+            let memory = &mem.0;
+            let off = lane_idx * 8;
+            memory.write_shared(ea, &v[off..off + 8]).map_err(|_| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+        }
+        _ => {
+            return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD memory lane opcode"));
         }
     }
     Ok(())

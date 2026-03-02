@@ -1023,11 +1023,22 @@ fn parse_instruction_with_provider(
             consumed += opcode_bytes;
 
             match simd_opcode {
-                // SIMD memory load/store operations (0x00-0x0B, 0x5C-0x5D, 0x58-0x5B)
-                0x00..=0x0B | 0x5C..=0x5D | 0x54..=0x5B => {
+                // SIMD memory load/store operations (0x00-0x0B, 0x5C-0x5D) - memarg only
+                0x00..=0x0B | 0x5C..=0x5D => {
                     let (memarg, memarg_bytes) = parse_memarg(bytecode, offset + consumed)?;
                     consumed += memarg_bytes;
                     Instruction::SimdMemOp { opcode: simd_opcode, memarg }
+                }
+                // SIMD memory lane operations (0x54-0x5B) - memarg + lane index
+                0x54..=0x5B => {
+                    let (memarg, memarg_bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += memarg_bytes;
+                    if offset + consumed >= bytecode.len() {
+                        return Err(Error::parse_error("Unexpected end in SIMD memory lane op"));
+                    }
+                    let lane = bytecode[offset + consumed];
+                    consumed += 1;
+                    Instruction::SimdMemLaneOp { opcode: simd_opcode, memarg, lane }
                 }
                 // v128.const (0x0C) - 16 bytes immediate
                 0x0C => {
