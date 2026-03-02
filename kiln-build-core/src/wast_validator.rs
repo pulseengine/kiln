@@ -12,7 +12,7 @@
 
 use anyhow::{Context, Result, anyhow};
 use std::collections::HashSet;
-use kiln_format::module::{Function, Global, ImportDesc, Module};
+use kiln_format::module::{ExportKind, Function, Global, ImportDesc, Module};
 use kiln_format::pure_format_types::{PureElementInit, PureElementMode, PureElementSegment};
 use kiln_format::types::RefType;
 use kiln_foundation::ValueType;
@@ -175,8 +175,10 @@ const WASM_MAX_MEMORY_PAGES: u32 = 65536;
 impl WastModuleValidator {
     /// Validate a module
     pub fn validate(module: &Module) -> Result<()> {
-        // Validate memory limits
+        // Validate memory, table, and tag limits
         Self::validate_memory_limits(module)?;
+        Self::validate_table_limits(module)?;
+        Self::validate_tags(module)?;
 
         // Validate data segments - only ACTIVE segments require a memory to be defined
         // Passive segments can exist without memory (they're only used via memory.init/data.drop)
@@ -257,6 +259,9 @@ impl WastModuleValidator {
         // Validate export names are unique
         Self::validate_export_names(module)?;
 
+        // Validate export indices are within bounds
+        Self::validate_export_indices(module)?;
+
         Ok(())
     }
 
@@ -267,6 +272,48 @@ impl WastModuleValidator {
         for export in &module.exports {
             if !seen_names.insert(export.name.as_str()) {
                 return Err(anyhow!("duplicate export name"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Validate that all export indices are within bounds
+    fn validate_export_indices(module: &Module) -> Result<()> {
+        // Note: module.functions already includes imported functions (decoder design),
+        // so we use it directly instead of total_functions() which would double-count.
+        let total_funcs = module.functions.len();
+        let total_tables = Self::total_tables(module);
+        let total_memories = Self::total_memories(module);
+        let total_globals = Self::total_globals(module);
+        let total_tags = Self::total_tags(module);
+
+        for export in &module.exports {
+            match export.kind {
+                ExportKind::Function => {
+                    if (export.index as usize) >= total_funcs {
+                        return Err(anyhow!("unknown function {}", export.index));
+                    }
+                },
+                ExportKind::Table => {
+                    if (export.index as usize) >= total_tables {
+                        return Err(anyhow!("unknown table {}", export.index));
+                    }
+                },
+                ExportKind::Memory => {
+                    if (export.index as usize) >= total_memories {
+                        return Err(anyhow!("unknown memory {}", export.index));
+                    }
+                },
+                ExportKind::Global => {
+                    if (export.index as usize) >= total_globals {
+                        return Err(anyhow!("unknown global {}", export.index));
+                    }
+                },
+                ExportKind::Tag => {
+                    if (export.index as usize) >= total_tags {
+                        return Err(anyhow!("unknown tag {}", export.index));
+                    }
+                },
             }
         }
         Ok(())
@@ -467,6 +514,56 @@ impl WastModuleValidator {
             }
         }
 
+        Ok(())
+    }
+
+    /// Validate table section limits
+    fn validate_table_limits(module: &Module) -> Result<()> {
+        // Check imported tables
+        for import in &module.imports {
+            if let ImportDesc::Table(table_type) = &import.desc {
+                if let Some(max) = table_type.limits.max {
+                    if table_type.limits.min > max {
+                        return Err(anyhow!("size minimum must not be greater than maximum"));
+                    }
+                }
+            }
+        }
+
+        // Check defined tables
+        for table in &module.tables {
+            if let Some(max) = table.limits.max {
+                if table.limits.min > max {
+                    return Err(anyhow!("size minimum must not be greater than maximum"));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate tag types (exception handling)
+    fn validate_tags(module: &Module) -> Result<()> {
+        // Check defined tags - result type must be empty
+        for tag in &module.tags {
+            if (tag.type_idx as usize) < module.types.len() {
+                let func_type = &module.types[tag.type_idx as usize];
+                if !func_type.results.is_empty() {
+                    return Err(anyhow!("non-empty tag result type"));
+                }
+            }
+        }
+        // Check imported tags - ImportDesc::Tag(type_idx)
+        for import in &module.imports {
+            if let ImportDesc::Tag(type_idx) = &import.desc {
+                if (*type_idx as usize) < module.types.len() {
+                    let func_type = &module.types[*type_idx as usize];
+                    if !func_type.results.is_empty() {
+                        return Err(anyhow!("non-empty tag result type"));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -2749,10 +2846,16 @@ impl WastModuleValidator {
                         // Dest offset uses memory address type, source offset and length are always i32
                         // (they index into the data segment, not memory)
                         0x08 => {
-                            let (_data_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (data_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
                             let (mem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            if data_idx as usize >= module.data.len() {
+                                return Err(anyhow!("unknown data segment"));
+                            }
+                            if mem_idx as usize >= Self::total_memories(module) {
+                                return Err(anyhow!("unknown memory {}", mem_idx));
+                            }
                             let it = if Self::is_memory64(module, mem_idx) { StackType::I64 } else { StackType::I32 };
                             // Pop n (length: i32), s (source offset: i32), d (dest offset: it) in reverse
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
@@ -2767,8 +2870,11 @@ impl WastModuleValidator {
                         },
                         // data.drop (0x09): [] -> []
                         0x09 => {
-                            let (_data_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (data_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            if data_idx as usize >= module.data.len() {
+                                return Err(anyhow!("unknown data segment"));
+                            }
                         },
                         // memory.copy (0x0A): [it_d, it_s, it_n] -> [] (memory64-aware)
                         0x0A => {
@@ -2776,6 +2882,12 @@ impl WastModuleValidator {
                             offset = new_offset;
                             let (src_mem, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            if dst_mem as usize >= Self::total_memories(module) {
+                                return Err(anyhow!("unknown memory {}", dst_mem));
+                            }
+                            if src_mem as usize >= Self::total_memories(module) {
+                                return Err(anyhow!("unknown memory {}", src_mem));
+                            }
                             let dst64 = Self::is_memory64(module, dst_mem);
                             let src64 = Self::is_memory64(module, src_mem);
                             let it_d = if dst64 { StackType::I64 } else { StackType::I32 };
@@ -2797,6 +2909,9 @@ impl WastModuleValidator {
                         0x0B => {
                             let (mem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            if mem_idx as usize >= Self::total_memories(module) {
+                                return Err(anyhow!("unknown memory {}", mem_idx));
+                            }
                             let it = if Self::is_memory64(module, mem_idx) { StackType::I64 } else { StackType::I32 };
                             // Pop n (length), val (value), d (dest) in reverse
                             if !Self::pop_type(&mut stack, it, frame_height, unreachable) {
@@ -2813,10 +2928,16 @@ impl WastModuleValidator {
                         // Dest offset uses table address type, source offset and length are always i32
                         // (they index into the element segment, not the table)
                         0x0C => {
-                            let (_elem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (elem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
                             let (table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            if elem_idx as usize >= module.elements.len() {
+                                return Err(anyhow!("unknown elem segment {}", elem_idx));
+                            }
+                            if table_idx as usize >= Self::total_tables(module) {
+                                return Err(anyhow!("unknown table {}", table_idx));
+                            }
                             let it = if Self::is_table64(module, table_idx) { StackType::I64 } else { StackType::I32 };
                             // Pop n (length: i32), s (source: i32), d (dest: it) in reverse
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
@@ -2831,8 +2952,11 @@ impl WastModuleValidator {
                         },
                         // elem.drop (0x0D): [] -> []
                         0x0D => {
-                            let (_elem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                            let (elem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            if elem_idx as usize >= module.elements.len() {
+                                return Err(anyhow!("unknown elem segment {}", elem_idx));
+                            }
                         },
                         // table.copy (0x0E): [it_d, it_s, it_n] -> [] (table64-aware)
                         0x0E => {
@@ -2840,6 +2964,12 @@ impl WastModuleValidator {
                             offset = new_offset;
                             let (src_table, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
+                            if dst_table as usize >= Self::total_tables(module) {
+                                return Err(anyhow!("unknown table {}", dst_table));
+                            }
+                            if src_table as usize >= Self::total_tables(module) {
+                                return Err(anyhow!("unknown table {}", src_table));
+                            }
                             let dst64 = Self::is_table64(module, dst_table);
                             let src64 = Self::is_table64(module, src_table);
                             let it_d = if dst64 { StackType::I64 } else { StackType::I32 };
@@ -2990,6 +3120,11 @@ impl WastModuleValidator {
                         // i8x16.shuffle (0x0D): [v128, v128] -> [v128] - 16 lane bytes
                         0x0D => {
                             if offset + 16 > code.len() { return Err(anyhow!("unexpected end")); }
+                            for i in 0..16 {
+                                if code[offset + i] >= 32 {
+                                    return Err(anyhow!("invalid lane index"));
+                                }
+                            }
                             offset += 16;
                             if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
@@ -3037,19 +3172,73 @@ impl WastModuleValidator {
                             }
                             stack.push(StackType::V128);
                         },
-                        // Extract lane i8x16/i16x8/i32x4 (0x15,0x16,0x18,0x19,0x1B): [v128] -> [i32]
-                        0x15 | 0x16 | 0x18 | 0x19 | 0x1B => {
+                        // Extract lane i8x16 (0x15,0x16): [v128] -> [i32]
+                        0x15 | 0x16 => {
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
                             offset += 1;
+                            if lane >= 16 { return Err(anyhow!("invalid lane index")); }
                             if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
                             stack.push(StackType::I32);
                         },
-                        // Replace lane i8x16/i16x8/i32x4 (0x17,0x1A,0x1C): [v128, i32] -> [v128]
-                        0x17 | 0x1A | 0x1C => {
+                        // Replace lane i8x16 (0x17): [v128, i32] -> [v128]
+                        0x17 => {
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
                             offset += 1;
+                            if lane >= 16 { return Err(anyhow!("invalid lane index")); }
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::V128);
+                        },
+                        // Extract lane i16x8 (0x18,0x19): [v128] -> [i32]
+                        0x18 | 0x19 => {
+                            if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
+                            offset += 1;
+                            if lane >= 8 { return Err(anyhow!("invalid lane index")); }
+                            if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I32);
+                        },
+                        // Replace lane i16x8 (0x1A): [v128, i32] -> [v128]
+                        0x1A => {
+                            if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
+                            offset += 1;
+                            if lane >= 8 { return Err(anyhow!("invalid lane index")); }
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::V128);
+                        },
+                        // Extract lane i32x4 (0x1B): [v128] -> [i32]
+                        0x1B => {
+                            if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
+                            offset += 1;
+                            if lane >= 4 { return Err(anyhow!("invalid lane index")); }
+                            if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I32);
+                        },
+                        // Replace lane i32x4 (0x1C): [v128, i32] -> [v128]
+                        0x1C => {
+                            if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
+                            offset += 1;
+                            if lane >= 4 { return Err(anyhow!("invalid lane index")); }
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -3061,7 +3250,9 @@ impl WastModuleValidator {
                         // i64x2.extract_lane (0x1D): [v128] -> [i64]
                         0x1D => {
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
                             offset += 1;
+                            if lane >= 2 { return Err(anyhow!("invalid lane index")); }
                             if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -3070,7 +3261,9 @@ impl WastModuleValidator {
                         // i64x2.replace_lane (0x1E): [v128, i64] -> [v128]
                         0x1E => {
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
                             offset += 1;
+                            if lane >= 2 { return Err(anyhow!("invalid lane index")); }
                             if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -3082,7 +3275,9 @@ impl WastModuleValidator {
                         // f32x4.extract_lane (0x1F): [v128] -> [f32]
                         0x1F => {
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
                             offset += 1;
+                            if lane >= 4 { return Err(anyhow!("invalid lane index")); }
                             if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -3091,7 +3286,9 @@ impl WastModuleValidator {
                         // f32x4.replace_lane (0x20): [v128, f32] -> [v128]
                         0x20 => {
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
                             offset += 1;
+                            if lane >= 4 { return Err(anyhow!("invalid lane index")); }
                             if !Self::pop_type(&mut stack, StackType::F32, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -3103,7 +3300,9 @@ impl WastModuleValidator {
                         // f64x2.extract_lane (0x21): [v128] -> [f64]
                         0x21 => {
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
                             offset += 1;
+                            if lane >= 2 { return Err(anyhow!("invalid lane index")); }
                             if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -3112,7 +3311,9 @@ impl WastModuleValidator {
                         // f64x2.replace_lane (0x22): [v128, f64] -> [v128]
                         0x22 => {
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
                             offset += 1;
+                            if lane >= 2 { return Err(anyhow!("invalid lane index")); }
                             if !Self::pop_type(&mut stack, StackType::F64, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -3144,7 +3345,10 @@ impl WastModuleValidator {
                             let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
                             offset += 1;
+                            let max_lane = Self::simd_lane_count_for_lane_op(simd_opcode);
+                            if lane >= max_lane { return Err(anyhow!("invalid lane index")); }
                             if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -3160,7 +3364,10 @@ impl WastModuleValidator {
                             let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
+                            let lane = code[offset];
                             offset += 1;
+                            let max_lane = Self::simd_lane_count_for_lane_op(simd_opcode);
+                            if lane >= max_lane { return Err(anyhow!("invalid lane index")); }
                             if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -4278,6 +4485,17 @@ impl WastModuleValidator {
             }
         }
         Ok(())
+    }
+
+    /// Get the lane count for load_lane/store_lane operations
+    fn simd_lane_count_for_lane_op(sub_opcode: u32) -> u8 {
+        match sub_opcode {
+            0x54 | 0x58 => 16, // load8_lane, store8_lane: i8x16
+            0x55 | 0x59 => 8,  // load16_lane, store16_lane: i16x8
+            0x56 | 0x5A => 4,  // load32_lane, store32_lane: i32x4
+            0x57 | 0x5B => 2,  // load64_lane, store64_lane: i64x2
+            _ => 0,
+        }
     }
 
     /// Pop a value from the stack, checking its type
