@@ -3840,7 +3840,8 @@ impl WastModuleValidator {
                         return Err(anyhow!("type mismatch"));
                     }
                     let actual_type = stack[0];
-                    if actual_type != expected_type && actual_type != StackType::Unknown {
+                    // Use subtype checking: actual must be a subtype of expected
+                    if !actual_type.is_subtype_of(&expected_type) && actual_type != StackType::Unknown {
                         return Err(anyhow!("type mismatch"));
                     }
                     return Ok(());
@@ -3908,10 +3909,20 @@ impl WastModuleValidator {
                     // Read heap type
                     let (heap_type, new_pos) = Self::read_leb128_signed(init_bytes, pos)?;
                     pos = new_pos;
-                    // 0x70 = funcref, 0x6F = externref
                     match heap_type {
-                        0x70 | -16 => stack.push(StackType::FuncRef), // funcref
-                        0x6F | -17 => stack.push(StackType::ExternRef), // externref
+                        // func → NullFuncRef (bottom of funcref hierarchy)
+                        0x70 | -16 => stack.push(StackType::NullFuncRef),
+                        // nofunc → NullFuncRef
+                        0x73 | -13 => stack.push(StackType::NullFuncRef),
+                        // extern, noextern → ExternRef
+                        0x6F | -17 | 0x72 | -14 => stack.push(StackType::ExternRef),
+                        // exn → ExnRef
+                        0x69 | -23 => stack.push(StackType::ExnRef),
+                        // Concrete type index → nullable typed reference
+                        _ if heap_type >= 0 => {
+                            stack.push(StackType::TypedFuncRef(heap_type as u32, true));
+                        },
+                        // Other abstract types
                         _ => stack.push(StackType::Unknown),
                     }
                 },
@@ -3931,7 +3942,14 @@ impl WastModuleValidator {
                         return Err(anyhow!("undeclared function reference"));
                     }
 
-                    stack.push(StackType::FuncRef);
+                    // Push the typed function reference for the function's type
+                    // This allows ref.func to match typed function reference expectations
+                    if (func_idx as usize) < module.functions.len() {
+                        let type_idx = module.functions[func_idx as usize].type_idx;
+                        stack.push(StackType::TypedFuncRef(type_idx, false));
+                    } else {
+                        stack.push(StackType::FuncRef);
+                    }
                 },
                 // Extended constant expressions (WebAssembly 2.0)
                 // i32.add, i32.sub, i32.mul - pop 2 i32, push 1 i32
