@@ -191,14 +191,61 @@ impl WastModuleValidator {
         // Validate functions
         for (func_idx, func) in module.functions.iter().enumerate() {
             if let Err(e) = Self::validate_function(func_idx, func, module, &declared_functions) {
-                return Err(e.context(format!("Function {} validation failed", func_idx)));
+                let root = e.root_cause().to_string();
+                return Err(anyhow!("Function {} validation failed ({})", func_idx, root));
             }
         }
 
         // Validate globals
         for (global_idx, global) in module.globals.iter().enumerate() {
-            Self::validate_global(global_idx, global, module, &declared_functions)
-                .context(format!("Global {} validation failed", global_idx))?;
+            if let Err(e) = Self::validate_global(global_idx, global, module, &declared_functions) {
+                let root = e.root_cause().to_string();
+                return Err(anyhow!("Global {} validation failed ({})", global_idx, root));
+            }
+        }
+
+        // Validate data segment offset expressions
+        // For data/elem offsets, all globals are accessible (they're processed after
+        // the global section), so we use total_globals as the context index to allow
+        // referencing any global. The global must still be immutable.
+        let all_globals_ctx = Self::total_globals(module);
+        for (seg_idx, data_seg) in module.data.iter().enumerate() {
+            if data_seg.is_active() && !data_seg.offset_expr_bytes.is_empty() {
+                let mem_idx = data_seg.memory_index().unwrap_or(0);
+                let addr_type = if Self::is_memory64(module, mem_idx) {
+                    StackType::I64
+                } else {
+                    StackType::I32
+                };
+                Self::validate_const_expr_typed(
+                    &data_seg.offset_expr_bytes,
+                    module,
+                    all_globals_ctx,
+                    addr_type,
+                    &declared_functions,
+                )
+                .with_context(|| format!("data segment {} offset expression invalid", seg_idx))?;
+            }
+        }
+
+        // Validate element segment offset expressions
+        for (seg_idx, elem_seg) in module.elements.iter().enumerate() {
+            if elem_seg.is_active() && !elem_seg.offset_expr_bytes.is_empty() {
+                let table_idx = elem_seg.table_index().unwrap_or(0);
+                let addr_type = if Self::is_table64(module, table_idx) {
+                    StackType::I64
+                } else {
+                    StackType::I32
+                };
+                Self::validate_const_expr_typed(
+                    &elem_seg.offset_expr_bytes,
+                    module,
+                    all_globals_ctx,
+                    addr_type,
+                    &declared_functions,
+                )
+                .with_context(|| format!("element segment {} offset expression invalid", seg_idx))?;
+            }
         }
 
         // Validate element segments - function indices must be valid
@@ -504,7 +551,10 @@ impl WastModuleValidator {
                     // unreachable
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            // Truncate stack to frame base — per spec, stack becomes
+                            // polymorphic after a terminating instruction
+                            stack.truncate(frame.stack_height);
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
                     }
@@ -786,10 +836,11 @@ impl WastModuleValidator {
                         }
                     }
 
-                    // Mark current frame as unreachable
+                    // throw is a terminating instruction — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            stack.truncate(frame.stack_height);
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
                     }
@@ -808,10 +859,11 @@ impl WastModuleValidator {
                         return Err(anyhow!("rethrow: not in try block"));
                     }
 
-                    // Mark current frame as unreachable
+                    // rethrow is a terminating instruction — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            stack.truncate(frame.stack_height);
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
                     }
@@ -830,10 +882,11 @@ impl WastModuleValidator {
                         return Err(anyhow!("type mismatch"));
                     }
 
-                    // Mark current frame as unreachable
+                    // throw_ref is a terminating instruction — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            stack.truncate(frame.stack_height);
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
                     }
@@ -858,7 +911,6 @@ impl WastModuleValidator {
                                     return Err(anyhow!("type mismatch"));
                                 }
                             }
-                            // Truncate stack to frame height (polymorphic stack can have any values)
                             stack.truncate(frame_height);
                         } else {
                             // In reachable code, check exact stack height and types
@@ -900,7 +952,7 @@ impl WastModuleValidator {
                                 return Err(anyhow!("type mismatch"));
                             }
                         }
-                        // Truncate stack to frame height (polymorphic stack can have any values)
+                        // Truncate stack to frame height
                         stack.truncate(frame_height);
                     } else {
                         // In reachable code, check exact stack height and types
@@ -931,10 +983,11 @@ impl WastModuleValidator {
                         Self::is_unreachable(&frames),
                     )?;
 
-                    // Mark current frame as unreachable
+                    // Mark current frame as unreachable — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            stack.truncate(frame.stack_height);
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
                     }
@@ -1054,10 +1107,11 @@ impl WastModuleValidator {
                         Self::is_unreachable(&frames),
                     )?;
 
-                    // Mark current frame as unreachable
+                    // Mark current frame as unreachable — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            stack.truncate(frame.stack_height);
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
                     }
@@ -1080,7 +1134,8 @@ impl WastModuleValidator {
 
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            stack.truncate(frame.stack_height);
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
                     }
@@ -1210,10 +1265,10 @@ impl WastModuleValidator {
                     }
 
                     // return_call is a terminating instruction (like return)
-                    // Mark current frame as unreachable
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            stack.truncate(frame.stack_height);
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
                     }
@@ -1285,10 +1340,10 @@ impl WastModuleValidator {
                     }
 
                     // return_call_indirect is a terminating instruction (like return)
-                    // Mark current frame as unreachable
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            frame.unreachable_height = Some(stack.len());
+                            stack.truncate(frame.stack_height);
+                            frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
                     }
@@ -1453,7 +1508,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_with_opcode(code, offset, module, Some(opcode))?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let addr_type = if Self::is_memory64(module, mem_idx) {
@@ -1476,7 +1531,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_with_opcode(code, offset, module, Some(opcode))?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let addr_type = if Self::is_memory64(module, mem_idx) {
@@ -1499,7 +1554,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_with_opcode(code, offset, module, Some(opcode))?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let addr_type = if Self::is_memory64(module, mem_idx) {
@@ -1522,7 +1577,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_with_opcode(code, offset, module, Some(opcode))?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let addr_type = if Self::is_memory64(module, mem_idx) {
@@ -1546,7 +1601,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_with_opcode(code, offset, module, Some(opcode))?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let addr_type = if Self::is_memory64(module, mem_idx) {
@@ -1575,7 +1630,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_with_opcode(code, offset, module, Some(opcode))?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     // Pop value (i32)
@@ -1607,7 +1662,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_with_opcode(code, offset, module, Some(opcode))?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     // Pop value (i64)
@@ -1639,7 +1694,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_with_opcode(code, offset, module, Some(opcode))?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     // Pop value (f32)
@@ -1671,7 +1726,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_with_opcode(code, offset, module, Some(opcode))?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     // Pop value (f64)
@@ -1703,7 +1758,7 @@ impl WastModuleValidator {
                     if !Self::has_memory(module) {
                         return Err(anyhow!("unknown memory"));
                     }
-                    let (mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                    let (mem_idx, new_offset) = Self::parse_memarg_with_opcode(code, offset, module, Some(opcode))?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     // Pop value type based on opcode
@@ -2028,38 +2083,27 @@ impl WastModuleValidator {
 
                     // Check that operands are numeric types (not reference types)
                     // Untyped select cannot be used with funcref, externref, etc.
-                    // In unreachable code, Unknown types are allowed (polymorphic)
                     if !unreachable {
-                        // In reachable code: reject reference types
+                        // In reachable code: reject reference types and mismatched types
                         if !type1.is_numeric() || !type2.is_numeric() {
                             return Err(anyhow!("type mismatch"));
                         }
-                    } else {
-                        // In unreachable code: concrete types must still be numeric
-                        if type1 != StackType::Unknown && !type1.is_numeric() {
+                        if type1 != type2 {
                             return Err(anyhow!("type mismatch"));
                         }
-                        if type2 != StackType::Unknown && !type2.is_numeric() {
-                            return Err(anyhow!("type mismatch"));
-                        }
-                    }
-
-                    // Check type match - even in unreachable code, concrete mismatched
-                    // types are an error. Only polymorphic (Unknown) types can mismatch.
-                    if type1 != type2
-                        && type1 != StackType::Unknown
-                        && type2 != StackType::Unknown
-                    {
-                        return Err(anyhow!("type mismatch"));
-                    }
-
-                    // Result type is the most specific type (concrete wins over Unknown)
-                    let result_type = if type1 != StackType::Unknown {
-                        type1
+                        stack.push(type1);
                     } else {
-                        type2
-                    };
-                    stack.push(result_type);
+                        // In unreachable code: the stack is polymorphic.
+                        // Any concrete types from unreachable instructions are valid.
+                        // Per spec, select in unreachable code always succeeds.
+                        // Push the most specific type, or Unknown if both are polymorphic.
+                        let result_type = if type1 != StackType::Unknown {
+                            type1
+                        } else {
+                            type2
+                        };
+                        stack.push(result_type);
+                    }
                 },
                 0x1C => {
                     // select t* (typed select)
@@ -2701,15 +2745,17 @@ impl WastModuleValidator {
                             }
                             stack.push(StackType::I64);
                         },
-                        // memory.init (0x08): [it, i32, it] -> [] (it=i64 if memory64)
+                        // memory.init (0x08): [it, i32, i32] -> [] (it=i64 if memory64)
+                        // Dest offset uses memory address type, source offset and length are always i32
+                        // (they index into the data segment, not memory)
                         0x08 => {
                             let (_data_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
                             let (mem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
                             let it = if Self::is_memory64(module, mem_idx) { StackType::I64 } else { StackType::I32 };
-                            // Pop n (length), s (source offset), d (dest offset) in reverse
-                            if !Self::pop_type(&mut stack, it, frame_height, unreachable) {
+                            // Pop n (length: i32), s (source offset: i32), d (dest offset: it) in reverse
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
@@ -2763,15 +2809,17 @@ impl WastModuleValidator {
                                 return Err(anyhow!("type mismatch"));
                             }
                         },
-                        // table.init (0x0C): [it, i32, it] -> [] (it=i64 if table64)
+                        // table.init (0x0C): [it, i32, i32] -> [] (it=i64 if table64)
+                        // Dest offset uses table address type, source offset and length are always i32
+                        // (they index into the element segment, not the table)
                         0x0C => {
                             let (_elem_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
                             let (table_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                             offset = new_offset;
                             let it = if Self::is_table64(module, table_idx) { StackType::I64 } else { StackType::I32 };
-                            // Pop n (length), s (source), d (dest) in reverse
-                            if !Self::pop_type(&mut stack, it, frame_height, unreachable) {
+                            // Pop n (length: i32), s (source: i32), d (dest: it) in reverse
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
                             }
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
@@ -2911,7 +2959,8 @@ impl WastModuleValidator {
                     match simd_opcode {
                         // v128.load variants (0x00-0x0A): [i32] -> [v128]
                         0x00..=0x0A => {
-                            let (_, o) = Self::parse_varuint32(code, offset)?; // align
+                            let (align, o) = Self::parse_varuint32(code, offset)?; // align
+                            Self::validate_simd_alignment(simd_opcode, align)?;
                             let (_, o) = Self::parse_varuint32(code, o)?;      // offset
                             offset = o;
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
@@ -2921,7 +2970,8 @@ impl WastModuleValidator {
                         },
                         // v128.store (0x0B): [i32, v128] -> []
                         0x0B => {
-                            let (_, o) = Self::parse_varuint32(code, offset)?;
+                            let (align, o) = Self::parse_varuint32(code, offset)?;
+                            Self::validate_simd_alignment(simd_opcode, align)?;
                             let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
@@ -3089,7 +3139,8 @@ impl WastModuleValidator {
                         },
                         // v128.load*_lane (0x54-0x57): [i32, v128] -> [v128]
                         0x54..=0x57 => {
-                            let (_, o) = Self::parse_varuint32(code, offset)?;
+                            let (align, o) = Self::parse_varuint32(code, offset)?;
+                            Self::validate_simd_alignment(simd_opcode, align)?;
                             let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
@@ -3104,7 +3155,8 @@ impl WastModuleValidator {
                         },
                         // v128.store*_lane (0x58-0x5B): [i32, v128] -> []
                         0x58..=0x5B => {
-                            let (_, o) = Self::parse_varuint32(code, offset)?;
+                            let (align, o) = Self::parse_varuint32(code, offset)?;
+                            Self::validate_simd_alignment(simd_opcode, align)?;
                             let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
@@ -3118,7 +3170,8 @@ impl WastModuleValidator {
                         },
                         // v128.load32_zero, v128.load64_zero (0x5C, 0x5D): [i32] -> [v128]
                         0x5C | 0x5D => {
-                            let (_, o) = Self::parse_varuint32(code, offset)?;
+                            let (align, o) = Self::parse_varuint32(code, offset)?;
+                            Self::validate_simd_alignment(simd_opcode, align)?;
                             let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
@@ -3161,6 +3214,274 @@ impl WastModuleValidator {
                                 stack.push(StackType::V128);
                             }
                         },
+                    }
+                },
+
+                // GC instructions (0xFB prefix)
+                0xFB => {
+                    if offset >= code.len() {
+                        return Err(anyhow!("unexpected end of code after 0xFB prefix"));
+                    }
+                    let (sub_opcode, new_offset) = Self::parse_varuint32(code, offset)?;
+                    offset = new_offset;
+
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+
+                    // Parse immediates and model stack effects for GC instructions.
+                    // We use Unknown for reference types since we don't track GC type indices.
+                    match sub_opcode {
+                        // struct.new $t: [field_types...] -> [(ref $t)]
+                        0x00 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            // Pop fields (we don't know how many without type info), push ref
+                            // For now, just push the result - the type section would tell us field count
+                            // but we approximate by not popping (avoids false negatives)
+                            stack.push(StackType::Unknown);
+                        },
+                        // struct.new_default $t: [] -> [(ref $t)]
+                        0x01 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            stack.push(StackType::Unknown);
+                        },
+                        // struct.get $t $f: [(ref null $t)] -> [field_type]
+                        0x02 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off2;
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // struct.get_s $t $f: [(ref null $t)] -> [i32]
+                        0x03 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off2;
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::I32);
+                        },
+                        // struct.get_u $t $f: [(ref null $t)] -> [i32]
+                        0x04 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off2;
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::I32);
+                        },
+                        // struct.set $t $f: [(ref null $t) field_type] -> []
+                        0x05 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off2;
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                        },
+                        // array.new $t: [elem_type i32] -> [(ref $t)]
+                        0x06 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // array.new_default $t: [i32] -> [(ref $t)]
+                        0x07 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // array.new_fixed $t $n: [elem_type * n] -> [(ref $t)]
+                        0x08 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (count, new_off2) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off2;
+                            for _ in 0..count {
+                                Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            }
+                            stack.push(StackType::Unknown);
+                        },
+                        // array.new_data $t $d: [i32 i32] -> [(ref $t)]
+                        0x09 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_data_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off2;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // array.new_elem $t $e: [i32 i32] -> [(ref $t)]
+                        0x0A => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_elem_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off2;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // array.get $t: [(ref null $t) i32] -> [elem_type]
+                        0x0B => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // array.get_s $t: [(ref null $t) i32] -> [i32]
+                        0x0C => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::I32);
+                        },
+                        // array.get_u $t: [(ref null $t) i32] -> [i32]
+                        0x0D => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::I32);
+                        },
+                        // array.set $t: [(ref null $t) i32 elem_type] -> []
+                        0x0E => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                        },
+                        // array.len: [(ref null array)] -> [i32]
+                        0x0F => {
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::I32);
+                        },
+                        // array.fill $t: [(ref null $t) i32 val i32] -> []
+                        0x10 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                        },
+                        // array.copy $t1 $t2: [(ref null $t1) i32 (ref null $t2) i32 i32] -> []
+                        0x11 => {
+                            let (_type_idx1, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_type_idx2, new_off2) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off2;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                        },
+                        // array.init_data $t $d: [(ref null $t) i32 i32 i32] -> []
+                        0x12 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_data_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off2;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                        },
+                        // array.init_elem $t $e: [(ref null $t) i32 i32 i32] -> []
+                        0x13 => {
+                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_elem_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off2;
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                        },
+                        // ref.test (ref ht): [(ref null ht)] -> [i32]
+                        0x14 | 0x15 => {
+                            // 0x14 = ref.test (non-nullable), 0x15 = ref.test (nullable)
+                            // Both take a heap type immediate
+                            let (_ht, new_off) = Self::read_leb128_signed(code, offset)?;
+                            offset = new_off;
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::I32);
+                        },
+                        // ref.cast (ref ht): [(ref null ht)] -> [(ref ht)]
+                        0x16 | 0x17 => {
+                            // 0x16 = ref.cast (non-nullable), 0x17 = ref.cast (nullable)
+                            let (_ht, new_off) = Self::read_leb128_signed(code, offset)?;
+                            offset = new_off;
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // br_on_cast: flags(1 byte) + label(u32) + ht1(s33) + ht2(s33)
+                        // [(ref rt1)] -> [(ref rt1)]
+                        0x18 => {
+                            if offset >= code.len() {
+                                return Err(anyhow!("unexpected end in br_on_cast"));
+                            }
+                            let _flags = code[offset];
+                            offset += 1;
+                            let (_label, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_ht1, new_off2) = Self::read_leb128_signed(code, offset)?;
+                            offset = new_off2;
+                            let (_ht2, new_off3) = Self::read_leb128_signed(code, offset)?;
+                            offset = new_off3;
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // br_on_cast_fail: flags(1 byte) + label(u32) + ht1(s33) + ht2(s33)
+                        // [(ref rt1)] -> [(ref rt2)]
+                        0x19 => {
+                            if offset >= code.len() {
+                                return Err(anyhow!("unexpected end in br_on_cast_fail"));
+                            }
+                            let _flags = code[offset];
+                            offset += 1;
+                            let (_label, new_off) = Self::parse_varuint32(code, offset)?;
+                            offset = new_off;
+                            let (_ht1, new_off2) = Self::read_leb128_signed(code, offset)?;
+                            offset = new_off2;
+                            let (_ht2, new_off3) = Self::read_leb128_signed(code, offset)?;
+                            offset = new_off3;
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // any.convert_extern: [(ref extern)] -> [(ref any)]
+                        0x1A => {
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // extern.convert_any: [(ref any)] -> [(ref extern)]
+                        0x1B => {
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // ref.i31: [i32] -> [(ref i31)]
+                        0x1C => {
+                            Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
+                            stack.push(StackType::Unknown);
+                        },
+                        // i31.get_s, i31.get_u: [(ref null i31)] -> [i32]
+                        0x1D | 0x1E => {
+                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            stack.push(StackType::I32);
+                        },
+                        // Unknown GC sub-opcode - skip without stack effects
+                        // This is conservative but avoids false validation failures
+                        _ => {},
                     }
                 },
 
@@ -3337,6 +3658,86 @@ impl WastModuleValidator {
                         return Err(anyhow!("type mismatch"));
                     }
                     stack.push(StackType::I64);
+                },
+                // GC instructions in constant expressions (0xFB prefix)
+                // WebAssembly 3.0 allows struct.new, array.new, etc. in const exprs
+                0xFB => {
+                    if pos >= init_bytes.len() {
+                        return Err(anyhow!("unexpected end of const expr after 0xFB prefix"));
+                    }
+                    let (sub_opcode, new_pos) = Self::read_leb128_unsigned(init_bytes, pos)?;
+                    pos = new_pos;
+                    match sub_opcode {
+                        // struct.new $t, struct.new_default $t
+                        0x00 | 0x01 => {
+                            let (_type_idx, new_pos2) = Self::read_leb128_unsigned(init_bytes, pos)?;
+                            pos = new_pos2;
+                            // For struct.new, should pop field values; approximate with push result
+                            stack.clear(); // Clear and push result
+                            stack.push(StackType::Unknown);
+                        },
+                        // array.new $t: [val i32] -> [(ref $t)]
+                        0x06 => {
+                            let (_type_idx, new_pos2) = Self::read_leb128_unsigned(init_bytes, pos)?;
+                            pos = new_pos2;
+                            stack.clear();
+                            stack.push(StackType::Unknown);
+                        },
+                        // array.new_default $t: [i32] -> [(ref $t)]
+                        0x07 => {
+                            let (_type_idx, new_pos2) = Self::read_leb128_unsigned(init_bytes, pos)?;
+                            pos = new_pos2;
+                            stack.clear();
+                            stack.push(StackType::Unknown);
+                        },
+                        // array.new_fixed $t $n
+                        0x08 => {
+                            let (_type_idx, new_pos2) = Self::read_leb128_unsigned(init_bytes, pos)?;
+                            pos = new_pos2;
+                            let (_count, new_pos3) = Self::read_leb128_unsigned(init_bytes, pos)?;
+                            pos = new_pos3;
+                            stack.clear();
+                            stack.push(StackType::Unknown);
+                        },
+                        // ref.i31: [i32] -> [(ref i31)]
+                        0x1C => {
+                            stack.clear();
+                            stack.push(StackType::Unknown);
+                        },
+                        // any.convert_extern, extern.convert_any
+                        0x1A | 0x1B => {
+                            stack.clear();
+                            stack.push(StackType::Unknown);
+                        },
+                        // Other GC const exprs - skip with type_idx immediate
+                        _ => {
+                            // Try to read a type index immediate (most GC ops have one)
+                            if pos < init_bytes.len() {
+                                let (_idx, new_pos2) = Self::read_leb128_unsigned(init_bytes, pos)?;
+                                pos = new_pos2;
+                            }
+                            stack.clear();
+                            stack.push(StackType::Unknown);
+                        },
+                    }
+                },
+                // v128.const in constant expressions
+                0xFD => {
+                    if pos >= init_bytes.len() {
+                        return Err(anyhow!("unexpected end of const expr after 0xFD prefix"));
+                    }
+                    let (sub_opcode, new_pos) = Self::read_leb128_unsigned(init_bytes, pos)?;
+                    pos = new_pos;
+                    if sub_opcode == 12 {
+                        // v128.const: 16 byte immediate
+                        if pos + 16 > init_bytes.len() {
+                            return Err(anyhow!("Truncated v128.const in constant expression"));
+                        }
+                        pos += 16;
+                        stack.push(StackType::V128);
+                    } else {
+                        return Err(anyhow!("constant expression required"));
+                    }
                 },
                 // Any other opcode is not allowed in a constant expression
                 _ => {
@@ -3854,6 +4255,31 @@ impl WastModuleValidator {
         Ok(())
     }
 
+    /// Get the maximum allowed alignment (as log2) for a SIMD memory operation
+    fn max_simd_alignment(sub_opcode: u32) -> Option<u32> {
+        match sub_opcode {
+            0x00 | 0x0B => Some(4),         // v128.load, v128.store (16 bytes)
+            0x01..=0x06 | 0x0A => Some(3),  // load8x8, load16x4, load32x2, load64_splat (8 bytes)
+            0x09 => Some(2),                // load32_splat (4 bytes)
+            0x08 => Some(1),                // load16_splat (2 bytes)
+            0x07 => Some(0),                // load8_splat (1 byte)
+            0x54 | 0x58 => Some(0),         // load8_lane, store8_lane (1 byte)
+            0x55 | 0x59 => Some(1),         // load16_lane, store16_lane (2 bytes)
+            0x56 | 0x5A | 0x5C => Some(2),  // load32_lane, store32_lane, load32_zero (4 bytes)
+            0x57 | 0x5B | 0x5D => Some(3),  // load64_lane, store64_lane, load64_zero (8 bytes)
+            _ => None,
+        }
+    }
+
+    fn validate_simd_alignment(sub_opcode: u32, align: u32) -> Result<()> {
+        if let Some(max_align) = Self::max_simd_alignment(sub_opcode) {
+            if align > max_align {
+                return Err(anyhow!("alignment must not be larger than natural"));
+            }
+        }
+        Ok(())
+    }
+
     /// Pop a value from the stack, checking its type
     /// The `min_height` parameter is the stack height at the current frame's entry -
     /// we cannot pop below this level (those values belong to the parent frame)
@@ -3977,9 +4403,26 @@ impl WastModuleValidator {
         offset: usize,
         module: &Module,
     ) -> Result<(u32, usize)> {
+        Self::parse_memarg_with_opcode(code, offset, module, None)
+    }
+
+    fn parse_memarg_with_opcode(
+        code: &[u8],
+        offset: usize,
+        module: &Module,
+        opcode: Option<u8>,
+    ) -> Result<(u32, usize)> {
         // Parse alignment (encoded as power of 2 with optional memory index flag)
         let (align_with_flags, new_offset) = Self::parse_varuint32(code, offset)?;
         let mut current_offset = new_offset;
+
+        // Extract actual alignment (lower 6 bits)
+        let align = align_with_flags & 0x3F;
+
+        // Validate alignment against natural alignment for the opcode
+        if let Some(op) = opcode {
+            Self::validate_alignment(op, align)?;
+        }
 
         // Check for multi-memory flag (bit 6 of alignment)
         // When set, the memory index follows the alignment

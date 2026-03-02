@@ -478,7 +478,7 @@ impl WastTestRunner {
                                     modifies_engine_state: true,
                                     result: TestResult::Failed,
                                     error_message: Some(format!(
-                                        "Module instantiation failed: {}",
+                                        "Module instantiation failed: {:#}",
                                         e
                                     )),
                                 })
@@ -597,7 +597,7 @@ impl WastTestRunner {
                             requires_module_state: false,
                             modifies_engine_state: true,
                             result: TestResult::Failed,
-                            error_message: Some(format!("Module instantiation failed: {}", e)),
+                            error_message: Some(format!("Module instantiation failed: {:#}", e)),
                         })
                     },
                 }

@@ -435,6 +435,10 @@ impl Value {
             // type
             (Self::ArrayRef(Some(a)), ValueType::ArrayRef(idx)) => a.type_index == *idx,
             (Self::ArrayRef(None), ValueType::ArrayRef(_)) => true, // Null matches any array type
+            // GC reference types
+            (Self::I31Ref(_), ValueType::I31Ref) => true,
+            (Self::I31Ref(_), ValueType::EqRef) => true,   // i31ref <: eqref
+            (Self::I31Ref(_), ValueType::AnyRef) => true,   // i31ref <: anyref
             _ => false,
         }
     }

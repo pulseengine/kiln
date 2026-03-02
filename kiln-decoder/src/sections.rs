@@ -607,7 +607,7 @@ pub mod parsers {
 
         // Convert kiln_format::Limits to kiln_foundation::Limits
         let foundation_limits = kiln_foundation::Limits::new(
-            limits.min as u32, // Convert u64 to u32
+            limits.min as u32,
             limits.max.map(|m| m as u32),
         );
 
@@ -615,7 +615,7 @@ pub mod parsers {
             kiln_foundation::TableType {
                 element_type: ref_type,
                 limits: foundation_limits,
-                table64: false,
+                table64: limits.memory64, // bit 2 of flags = table64
             },
             offset,
         ))

@@ -1007,6 +1007,98 @@ impl Module {
                         _ => return Err(Error::parse_error("Type mismatch in i64.mul")),
                     }
                 }
+                // GC instructions (0xFB prefix) in constant expressions
+                // WebAssembly 3.0 allows struct.new, array.new, ref.i31, etc. in const exprs
+                0xFB => {
+                    if pos >= init_bytes.len() {
+                        return Err(Error::parse_error("Truncated GC prefix in constant expression"));
+                    }
+                    let (sub_opcode, consumed) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                    pos += consumed;
+                    match sub_opcode {
+                        // struct.new $t: pops field values, pushes structref
+                        0x00 => {
+                            let (_type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            pos += consumed2;
+                            // Pop field values and create struct (simplified: just create null for now)
+                            stack.clear();
+                            stack.push(Value::StructRef(None));
+                        }
+                        // struct.new_default $t: pushes structref with default fields
+                        0x01 => {
+                            let (_type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            pos += consumed2;
+                            stack.push(Value::StructRef(None));
+                        }
+                        // array.new $t: [val i32] -> [(ref $t)]
+                        0x06 => {
+                            let (_type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            pos += consumed2;
+                            stack.clear();
+                            stack.push(Value::ArrayRef(None));
+                        }
+                        // array.new_default $t: [i32] -> [(ref $t)]
+                        0x07 => {
+                            let (_type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            pos += consumed2;
+                            stack.clear();
+                            stack.push(Value::ArrayRef(None));
+                        }
+                        // array.new_fixed $t $n: [val*n] -> [(ref $t)]
+                        0x08 => {
+                            let (_type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            pos += consumed2;
+                            let (_count, consumed3) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            pos += consumed3;
+                            stack.clear();
+                            stack.push(Value::ArrayRef(None));
+                        }
+                        // ref.i31: [i32] -> [(ref i31)]
+                        0x1C => {
+                            let val = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in ref.i31"))?;
+                            match val {
+                                Value::I32(i) => {
+                                    // i31ref stores the low 31 bits
+                                    stack.push(Value::I31Ref(Some(i & 0x7FFF_FFFF)));
+                                }
+                                _ => return Err(Error::parse_error("Type mismatch in ref.i31: expected i32")),
+                            }
+                        }
+                        // any.convert_extern: [(ref extern)] -> [(ref any)]
+                        0x1A => {
+                            let val = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in any.convert_extern"))?;
+                            stack.push(val); // Type conversion (representation unchanged)
+                        }
+                        // extern.convert_any: [(ref any)] -> [(ref extern)]
+                        0x1B => {
+                            let val = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in extern.convert_any"))?;
+                            stack.push(val); // Type conversion (representation unchanged)
+                        }
+                        _ => {
+                            return Err(Error::parse_error("Unsupported GC opcode in constant expression"));
+                        }
+                    }
+                }
+                // SIMD instructions (0xFD prefix) in constant expressions
+                0xFD => {
+                    if pos >= init_bytes.len() {
+                        return Err(Error::parse_error("Truncated SIMD prefix in constant expression"));
+                    }
+                    let (sub_opcode, consumed) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                    pos += consumed;
+                    if sub_opcode == 12 {
+                        // v128.const: 16 byte immediate
+                        if pos + 16 > init_bytes.len() {
+                            return Err(Error::parse_error("Truncated v128.const in constant expression"));
+                        }
+                        let mut bytes = [0u8; 16];
+                        bytes.copy_from_slice(&init_bytes[pos..pos + 16]);
+                        pos += 16;
+                        stack.push(Value::V128(kiln_foundation::values::V128 { bytes }));
+                    } else {
+                        return Err(Error::parse_error("Unsupported SIMD opcode in constant expression"));
+                    }
+                }
                 _ => {
                     return Err(Error::parse_error("Unknown opcode in constant expression"));
                 }

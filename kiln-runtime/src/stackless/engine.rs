@@ -474,6 +474,55 @@ fn calculate_effective_address(base: i32, offset: u32, size: u32) -> kiln_error:
     Ok(effective_addr)
 }
 
+/// Calculate effective memory address for memory64 (i64 base addresses) with overflow checking.
+/// Per WebAssembly spec, if base + offset overflows or exceeds addressable memory, it traps.
+/// Returns Ok(effective_address as u32) since actual memory is still bounded by u32 address space.
+#[inline]
+fn calculate_effective_address_64(base: i64, offset: u32, size: u32) -> kiln_error::Result<u32> {
+    let base_u64 = base as u64;
+    let effective_addr = base_u64
+        .checked_add(offset as u64)
+        .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+    let end_addr = effective_addr
+        .checked_add(size as u64)
+        .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+    // Memory is still bounded by u32 address space even with memory64 indexing
+    if end_addr > u64::from(u32::MAX) + 1 {
+        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+    }
+    Ok(effective_addr as u32)
+}
+
+/// Pop a memory address from the operand stack, accepting both I32 (memory32) and I64 (memory64) addresses.
+/// Calculates the effective address using the appropriate helper based on address type.
+/// Returns the effective address as u32 (memory is still u32-bounded even with memory64 indexing).
+#[inline]
+fn pop_memory_address(operand_stack: &mut Vec<Value>, mem_arg_offset: u32, size: u32) -> kiln_error::Result<u32> {
+    match operand_stack.pop() {
+        Some(Value::I32(addr)) => Ok(calculate_effective_address(addr, mem_arg_offset, size)? as u32),
+        Some(Value::I64(addr)) => calculate_effective_address_64(addr, mem_arg_offset, size),
+        _ => Err(kiln_error::Error::runtime_trap("out of bounds memory access")),
+    }
+}
+
+/// Pop a memory address from the operand stack for atomic operations.
+/// Accepts both I32 (memory32) and I64 (memory64) addresses.
+/// Returns the effective address as u32 using wrapping_add for offset (matching atomic semantics).
+#[inline]
+fn pop_atomic_address(operand_stack: &mut Vec<Value>, memarg_offset: u32) -> kiln_error::Result<u32> {
+    match operand_stack.pop() {
+        Some(Value::I32(addr)) => Ok((addr as u32).wrapping_add(memarg_offset)),
+        Some(Value::I64(addr)) => {
+            let effective = (addr as u64).wrapping_add(memarg_offset as u64);
+            if effective > u64::from(u32::MAX) {
+                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+            }
+            Ok(effective as u32)
+        }
+        _ => Err(kiln_error::Error::runtime_trap("out of bounds memory access")),
+    }
+}
+
 impl StacklessEngine {
     /// Create a new stackless engine
     #[cfg(any(feature = "std", feature = "alloc"))]
@@ -4292,64 +4341,56 @@ impl StacklessEngine {
                     // IMPORTANT: Use instance.memory() for initialized memory, not module.get_memory()
                     // The instance has data segments applied, the module is just a template
                     Instruction::I32Load(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            // Calculate effective address with overflow checking (4 bytes for i32)
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!("I32Load: reading from address {} (base={}, offset={})", offset, addr, mem_arg.offset);
-                            // Get memory from INSTANCE (not module) - instance has initialized data
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 4];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = i32::from_le_bytes(buffer);
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I32(value));
-                                        }
-                                        Err(e) => {
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load: memory read failed: {:?}", e);
-                                            #[cfg(feature = "tracing")]
-                                            error!(
-                                                offset = format_args!("0x{:x}", offset),
-                                                base = format_args!("0x{:x}", addr as u32),
-                                                mem_arg_offset = mem_arg.offset,
-                                                func_idx = func_idx,
-                                                pc = pc,
-                                                "[MEM-OOB] I32Load failed"
-                                            );
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
+                        #[cfg(feature = "tracing")]
+                        trace!("I32Load: reading from address {} (offset={})", eff_addr, mem_arg.offset);
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 4];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = i32::from_le_bytes(buffer);
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load: read value {} from address {}", value, eff_addr);
+                                        operand_stack.push(Value::I32(value));
+                                    }
+                                    Err(e) => {
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load: memory read failed: {:?}", e);
+                                        #[cfg(feature = "tracing")]
+                                        error!(
+                                            offset = format_args!("0x{:x}", eff_addr),
+                                            mem_arg_offset = mem_arg.offset,
+                                            func_idx = func_idx,
+                                            pc = pc,
+                                            "[MEM-OOB] I32Load failed"
+                                        );
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(e) => {
-                                    #[cfg(feature = "tracing")]
-                                    trace!("I32Load: failed to get memory at index {}: {:?}", mem_arg.memory_index, e);
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(e) => {
+                                #[cfg(feature = "tracing")]
+                                trace!("I32Load: failed to get memory at index {}: {:?}", mem_arg.memory_index, e);
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I32Store(mem_arg) => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            // Calculate effective address with overflow checking (4 bytes for i32)
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
+                        if let Some(Value::I32(value)) = operand_stack.pop() {
+                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                             #[cfg(feature = "tracing")]
-                            trace!("I32Store: writing value {} to address {} (base={}, offset={})", value, offset, addr, mem_arg.offset);
+                            trace!("I32Store: writing value {} to address {} (offset={})", value, eff_addr, mem_arg.offset);
 
-                            // Get memory from INSTANCE (not module) - instance has initialized data
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = value.to_le_bytes();
-                                    // ASIL-B COMPLIANT: Use write_shared for thread-safe writes
-                                    match memory.write_shared(offset, &bytes) {
+                                    match memory.write_shared(eff_addr, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I32Store: successfully wrote value {} to address {}", value, offset);
+                                            trace!("I32Store: successfully wrote value {} to address {}", value, eff_addr);
                                         }
                                         Err(_) => {
                                             return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
@@ -4363,119 +4404,111 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I32Load8S(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!("I32Load8S: reading from address {}", offset);
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 1];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = buffer[0] as i8 as i32; // Sign extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load8S: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I32(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
+                        #[cfg(feature = "tracing")]
+                        trace!("I32Load8S: reading from address {}", eff_addr);
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 1];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = buffer[0] as i8 as i32; // Sign extend
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load8S: read value {} from address {}", value, eff_addr);
+                                        operand_stack.push(Value::I32(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I32Load8U(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 1];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = buffer[0] as i32; // Zero extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load8U: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I32(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 1];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = buffer[0] as i32; // Zero extend
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load8U: read value {} from address {}", value, eff_addr);
+                                        operand_stack.push(Value::I32(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I32Load16S(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 2];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = i16::from_le_bytes(buffer) as i32; // Sign extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load16S: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I32(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 2];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = i16::from_le_bytes(buffer) as i32; // Sign extend
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load16S: read value {} from address {}", value, eff_addr);
+                                        operand_stack.push(Value::I32(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I32Load16U(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 2];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = u16::from_le_bytes(buffer) as i32; // Zero extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I32Load16U: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I32(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 2];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = u16::from_le_bytes(buffer) as i32; // Zero extend
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I32Load16U: read value {} from address {}", value, eff_addr);
+                                        operand_stack.push(Value::I32(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I32Store8(mem_arg) => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
+                        if let Some(Value::I32(value)) = operand_stack.pop() {
+                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
 
                             #[cfg(feature = "tracing")]
-                            trace!("I32Store8: writing byte {} to address {}", value & 0xFF, offset);
+                            trace!("I32Store8: writing byte {} to address {}", value & 0xFF, eff_addr);
 
                             match instance.memory(mem_arg.memory_index) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = [(value & 0xFF) as u8];
-                                    match memory.write_shared(offset, &bytes) {
+                                    match memory.write_shared(eff_addr, &bytes) {
                                         Ok(()) => {}
                                         Err(_) => {
                                             return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
@@ -4489,16 +4522,16 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I32Store16(mem_arg) => {
-                        if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
+                        if let Some(Value::I32(value)) = operand_stack.pop() {
+                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = (value as u16).to_le_bytes();
-                                    match memory.write_shared(offset, &bytes) {
+                                    match memory.write_shared(eff_addr, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I32Store16: successfully wrote value {} to address {}", value as u16, offset);
+                                            trace!("I32Store16: successfully wrote value {} to address {}", value as u16, eff_addr);
                                         }
                                         Err(_) => {
                                             return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
@@ -4512,62 +4545,58 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I64Load(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 8];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = i64::from_le_bytes(buffer);
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load: read value {} from address {}", value, offset);
-                                            #[cfg(all(feature = "std", feature = "tracing"))]
-                                            {
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 8];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = i64::from_le_bytes(buffer);
+                                        #[cfg(feature = "tracing")]
+                                        trace!("I64Load: read value {} from address {}", value, eff_addr);
+                                        #[cfg(all(feature = "std", feature = "tracing"))]
+                                        {
+                                            trace!(
+                                                value = value,
+                                                value_hex = format_args!("0x{:x}", value as u64),
+                                                offset = format_args!("{:#x}", eff_addr),
+                                                "[I64Load] 64-bit load"
+                                            );
+                                            // Debug: show memory identity for datetime location
+                                            if eff_addr >= 0xffe40 && eff_addr <= 0xffe50 {
+                                                use std::sync::Arc;
+                                                let arc_ptr = Arc::as_ptr(&memory_wrapper.0);
                                                 trace!(
-                                                    value = value,
-                                                    value_hex = format_args!("0x{:x}", value as u64),
-                                                    offset = format_args!("{:#x}", offset),
-                                                    "[I64Load] 64-bit load"
+                                                    instance_id = instance_id,
+                                                    memory_arc_ptr = format_args!("{:p}", arc_ptr),
+                                                    "[I64Load-DEBUG] Datetime memory access"
                                                 );
-                                                // Debug: show memory identity for datetime location
-                                                if offset >= 0xffe40 && offset <= 0xffe50 {
-                                                    // Get pointer to the actual Memory data via Arc::as_ptr
-                                                    use std::sync::Arc;
-                                                    let arc_ptr = Arc::as_ptr(&memory_wrapper.0);
-                                                    trace!(
-                                                        instance_id = instance_id,
-                                                        memory_arc_ptr = format_args!("{:p}", arc_ptr),
-                                                        "[I64Load-DEBUG] Datetime memory access"
-                                                    );
-                                                }
                                             }
-                                            operand_stack.push(Value::I64(value));
                                         }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Store(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = value.to_le_bytes();
-                                    // ASIL-B COMPLIANT: Use write_shared for thread-safe writes
-                                    match memory.write_shared(offset, &bytes) {
+                                    match memory.write_shared(eff_addr, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I64Store: successfully wrote value {} to address {}", value, offset);
+                                            trace!("I64Store: successfully wrote value {} to address {}", value, eff_addr);
                                         }
                                         Err(_e) => {
                                             return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
@@ -4586,194 +4615,164 @@ impl StacklessEngine {
                     // I64 Partial Load Instructions (load narrower value, extend to i64)
                     // ========================================
                     Instruction::I64Load8S(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load8S] Signed byte load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 1];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = buffer[0] as i8 as i64; // Sign extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load8S: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            instance_id = instance_id,
+                            offset = format_args!("{:#x}", eff_addr),
+                            "[I64Load8S] Signed byte load to i64"
+                        );
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 1];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = buffer[0] as i8 as i64; // Sign extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Load8U(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load8U] Unsigned byte load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 1];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = buffer[0] as i64; // Zero extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load8U: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            instance_id = instance_id,
+                            offset = format_args!("{:#x}", eff_addr),
+                            "[I64Load8U] Unsigned byte load to i64"
+                        );
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 1];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = buffer[0] as i64; // Zero extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Load16S(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load16S] Signed 16-bit load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 2];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = i16::from_le_bytes(buffer) as i64; // Sign extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load16S: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            instance_id = instance_id,
+                            offset = format_args!("{:#x}", eff_addr),
+                            "[I64Load16S] Signed 16-bit load to i64"
+                        );
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 2];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = i16::from_le_bytes(buffer) as i64; // Sign extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Load16U(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load16U] Unsigned 16-bit load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 2];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = u16::from_le_bytes(buffer) as i64; // Zero extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load16U: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            instance_id = instance_id,
+                            offset = format_args!("{:#x}", eff_addr),
+                            "[I64Load16U] Unsigned 16-bit load to i64"
+                        );
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 2];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = u16::from_le_bytes(buffer) as i64; // Zero extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Load32S(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load32S] Signed 32-bit load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 4];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = i32::from_le_bytes(buffer) as i64; // Sign extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load32S: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            instance_id = instance_id,
+                            offset = format_args!("{:#x}", eff_addr),
+                            "[I64Load32S] Signed 32-bit load to i64"
+                        );
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 4];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = i32::from_le_bytes(buffer) as i64; // Sign extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::I64Load32U(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
-                                "[I64Load32U] Unsigned 32-bit load to i64"
-                            );
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 4];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let value = u32::from_le_bytes(buffer) as i64; // Zero extend
-                                            #[cfg(feature = "tracing")]
-                                            trace!("I64Load32U: read value {} from address {}", value, offset);
-                                            operand_stack.push(Value::I64(value));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            instance_id = instance_id,
+                            offset = format_args!("{:#x}", eff_addr),
+                            "[I64Load32U] Unsigned 32-bit load to i64"
+                        );
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 4];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let value = u32::from_le_bytes(buffer) as i64; // Zero extend
+                                        operand_stack.push(Value::I64(value));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
@@ -10180,7 +10179,7 @@ impl StacklessEngine {
                                 operand_stack.push(Value::I32(n));
                             }
                             Some(Value::I31Ref(None)) => {
-                                return Err(kiln_error::Error::runtime_trap("i31.get_s: null reference"));
+                                return Err(kiln_error::Error::runtime_trap("null i31 reference"));
                             }
                             _ => {
                                 return Err(kiln_error::Error::runtime_trap("i31.get_s: expected i31ref"));
@@ -10198,7 +10197,7 @@ impl StacklessEngine {
                                 operand_stack.push(Value::I32(n & 0x7FFFFFFF));
                             }
                             Some(Value::I31Ref(None)) => {
-                                return Err(kiln_error::Error::runtime_trap("i31.get_u: null reference"));
+                                return Err(kiln_error::Error::runtime_trap("null i31 reference"));
                             }
                             _ => {
                                 return Err(kiln_error::Error::runtime_trap("i31.get_u: expected i31ref"));

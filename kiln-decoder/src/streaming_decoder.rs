@@ -896,7 +896,7 @@ impl<'a> StreamingDecoder<'a> {
                         let table_type = TableType {
                             element_type: ref_type,
                             limits,
-                            table64: false,
+                            table64: flags & 0x04 != 0,
                         };
 
                         let import = Import {
@@ -1330,7 +1330,8 @@ impl<'a> StreamingDecoder<'a> {
             trace!(table_index = i, element_type = ?element_type, min = min, max = ?max, "table parsed");
 
             // Create table type and add to module
-            let table_type = TableType::new(element_type, Limits { min, max });
+            let is_table64 = flags & 0x04 != 0;
+            let table_type = TableType::new_with_table64(element_type, Limits { min, max }, is_table64);
             self.module.tables.push(table_type);
 
             #[cfg(feature = "tracing")]

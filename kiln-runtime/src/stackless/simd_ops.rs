@@ -1000,7 +1000,7 @@ pub fn i32x4_dot_i16x8_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
         let a1 = get_i16(a, i * 2 + 1) as i32;
         let b0 = get_i16(b, i * 2) as i32;
         let b1 = get_i16(b, i * 2 + 1) as i32;
-        set_i32(&mut r, i, a0 * b0 + a1 * b1);
+        set_i32(&mut r, i, (a0 * b0).wrapping_add(a1 * b1));
     }
     r
 }
