@@ -2773,16 +2773,23 @@ impl WastModuleValidator {
 
                 // ref.null (0xD0)
                 0xD0 => {
-                    // Read heap type (signed LEB128 or raw byte)
-                    if offset >= code.len() {
-                        return Err(anyhow!("truncated ref.null"));
-                    }
-                    let heap_type = code[offset];
-                    offset += 1;
-                    // 0x70 = funcref, 0x6F = externref
-                    match heap_type {
-                        0x70 => stack.push(StackType::FuncRef),
-                        0x6F => stack.push(StackType::ExternRef),
+                    // Read heap type (signed LEB128 s33)
+                    let (heap_type_val, new_offset) = Self::parse_varint64(code, offset)?;
+                    offset = new_offset;
+                    match heap_type_val {
+                        // func → NullFuncRef (bottom of funcref hierarchy)
+                        0x70 | -16 => stack.push(StackType::NullFuncRef),
+                        // nofunc → NullFuncRef
+                        0x73 | -13 => stack.push(StackType::NullFuncRef),
+                        // extern, noextern → ExternRef
+                        0x6F | -17 | 0x72 | -14 => stack.push(StackType::ExternRef),
+                        // exn → ExnRef
+                        0x69 | -23 => stack.push(StackType::ExnRef),
+                        // Concrete type index → nullable typed reference
+                        _ if heap_type_val >= 0 => {
+                            stack.push(StackType::TypedFuncRef(heap_type_val as u32, true));
+                        },
+                        // Other abstract heap types
                         _ => stack.push(StackType::Unknown),
                     }
                 },
