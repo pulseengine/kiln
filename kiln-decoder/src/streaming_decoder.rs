@@ -181,6 +181,8 @@ pub struct StreamingDecoder<'a> {
     data_count_value: Option<u32>,
     /// Count from data section
     data_section_count: Option<u32>,
+    /// Last non-custom section ID seen (for ordering validation)
+    last_non_custom_section_id: u8,
     /// The module being built (std version)
     #[cfg(feature = "std")]
     module: KilnModule,
@@ -190,6 +192,32 @@ pub struct StreamingDecoder<'a> {
 }
 
 impl<'a> StreamingDecoder<'a> {
+    /// Map section ID to spec ordering index.
+    /// Returns 0 for unknown/invalid section IDs.
+    /// The WebAssembly spec ordering is:
+    /// type(1), import(2), function(3), table(4), memory(5), tag(13),
+    /// global(6), export(7), start(8), element(9), datacount(12),
+    /// code(10), data(11)
+    fn section_order(section_id: u8) -> u8 {
+        match section_id {
+            0 => 0,   // custom - not ordered
+            1 => 1,   // type
+            2 => 2,   // import
+            3 => 3,   // function
+            4 => 4,   // table
+            5 => 5,   // memory
+            13 => 6,  // tag (exception handling) - between memory and global
+            6 => 7,   // global
+            7 => 8,   // export
+            8 => 9,   // start
+            9 => 10,  // element
+            12 => 11, // data count - before code
+            10 => 12, // code
+            11 => 13, // data
+            _ => 0,   // unknown
+        }
+    }
+
     /// Create a new streaming decoder (std version)
     #[cfg(feature = "std")]
     pub fn new(binary: &'a [u8]) -> Result<Self> {
@@ -205,6 +233,7 @@ impl<'a> StreamingDecoder<'a> {
             code_count: None,
             data_count_value: None,
             data_section_count: None,
+            last_non_custom_section_id: 0,
             module,
         })
     }
@@ -228,6 +257,7 @@ impl<'a> StreamingDecoder<'a> {
             code_count: None,
             data_count_value: None,
             data_section_count: None,
+            last_non_custom_section_id: 0,
             module,
         })
     }
@@ -264,6 +294,24 @@ impl<'a> StreamingDecoder<'a> {
         // Read section ID
         let section_id = self.binary[self.offset];
         self.offset += 1;
+
+        // Validate section ordering: non-custom sections must appear in spec
+        // order and each can appear at most once. Custom sections (0) can
+        // appear anywhere. The spec order differs from numeric section IDs:
+        // type(1), import(2), function(3), table(4), memory(5), tag(13),
+        // global(6), export(7), start(8), element(9), datacount(12),
+        // code(10), data(11)
+        if section_id != 0 {
+            let order = Self::section_order(section_id);
+            if order == 0 {
+                return Err(Error::parse_error("malformed section id"));
+            }
+            let last_order = Self::section_order(self.last_non_custom_section_id);
+            if order <= last_order {
+                return Err(Error::parse_error("unexpected content after last section"));
+            }
+            self.last_non_custom_section_id = section_id;
+        }
 
         // Read section size
         let (section_size, bytes_read) = read_leb128_u32(self.binary, self.offset)?;
