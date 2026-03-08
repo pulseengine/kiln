@@ -7,7 +7,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 #[cfg(feature = "tracing")]
 use kiln_foundation::tracing::trace;
@@ -19,7 +19,7 @@ use kiln_foundation::limits;
 #[cfg(feature = "allocation-tracing")]
 use kiln_foundation::{AllocationPhase, trace_alloc};
 
-use kiln_format::module::{Function, Module as KilnModule};
+use kiln_format::module::{CompositeTypeKind, Function, Module as KilnModule, RecGroup, SubType};
 use kiln_foundation::{bounded::BoundedVec, safe_memory::NoStdProvider, types::TagType};
 
 use crate::{
@@ -394,7 +394,10 @@ impl<'a> StreamingDecoder<'a> {
 
         // Process each type entry one at a time
         // Note: A type entry can be a single composite type, a subtype, or a rec group
+        // Track the current type index separately from the entry count, since rec groups
+        // can define multiple types with consecutive indices.
         let mut i = 0u32;
+        let mut type_index = self.module.types.len() as u32;
         while i < count {
             if offset >= data.len() {
                 return Err(Error::parse_error("Unexpected end of type section"));
@@ -412,26 +415,56 @@ impl<'a> StreamingDecoder<'a> {
                     #[cfg(feature = "tracing")]
                     trace!(rec_count = rec_count, "process_type_section: rec group");
 
+                    let start_type_index = type_index;
+                    let mut rec_sub_types = Vec::with_capacity(rec_count as usize);
+
                     // Process each subtype in the recursive group
                     for _j in 0..rec_count {
-                        offset = self.parse_subtype_entry(data, offset)?;
+                        let (new_offset, sub_type) = self.parse_subtype_entry(data, offset, type_index)?;
+                        offset = new_offset;
+                        rec_sub_types.push(sub_type);
+                        type_index += 1;
                     }
-                    // A rec group with N types counts as N type entries
-                    // But the loop already counted as 1, so we need to account for the rest
-                    // Actually, for type indexing, the rec group entries each get their own index
-                    // The outer count counts rec groups as single entries, but we need to adjust
-                    // For now, treat rec as consuming one entry (the spec says rec is one type entry
-                    // that defines multiple types with consecutive indices)
+
+                    self.module.rec_groups.push(RecGroup {
+                        types: rec_sub_types,
+                        start_type_index,
+                    });
+
+                    // A rec group counts as one entry in the type section count
                     i += 1;
                 },
                 COMPOSITE_TYPE_SUB | COMPOSITE_TYPE_SUB_FINAL => {
                     // subtype: 0x50/0x4F supertype* comptype
-                    offset = self.parse_subtype_entry(data, offset)?;
+                    // A standalone subtype is an implicit single-element rec group
+                    let (new_offset, sub_type) = self.parse_subtype_entry(data, offset, type_index)?;
+                    offset = new_offset;
+
+                    self.module.rec_groups.push(RecGroup {
+                        types: vec![sub_type],
+                        start_type_index: type_index,
+                    });
+
+                    type_index += 1;
                     i += 1;
                 },
                 COMPOSITE_TYPE_FUNC | COMPOSITE_TYPE_STRUCT | COMPOSITE_TYPE_ARRAY => {
                     // Direct composite type without subtype wrapper
-                    offset = self.parse_composite_type(data, offset)?;
+                    // Implicitly final with no supertypes, in its own implicit rec group
+                    let (new_offset, composite_kind) = self.parse_composite_type(data, offset)?;
+                    offset = new_offset;
+
+                    self.module.rec_groups.push(RecGroup {
+                        types: vec![SubType {
+                            is_final: true,
+                            supertype_indices: Vec::new(),
+                            composite_kind,
+                            type_index,
+                        }],
+                        start_type_index: type_index,
+                    });
+
+                    type_index += 1;
                     i += 1;
                 },
                 _ => {
@@ -440,7 +473,7 @@ impl<'a> StreamingDecoder<'a> {
             }
 
             #[cfg(feature = "tracing")]
-            trace!(type_index = i - 1, "process_type_section: parsed type");
+            trace!(type_index = type_index - 1, "process_type_section: parsed type");
         }
 
         #[cfg(feature = "tracing")]
@@ -453,7 +486,9 @@ impl<'a> StreamingDecoder<'a> {
     }
 
     /// Parse a subtype entry (sub, sub final, or bare composite type)
-    fn parse_subtype_entry(&mut self, data: &[u8], mut offset: usize) -> Result<usize> {
+    /// Returns the new offset and the parsed SubType metadata.
+    /// The `type_index` parameter is the type index to assign to this entry.
+    fn parse_subtype_entry(&mut self, data: &[u8], mut offset: usize, type_index: u32) -> Result<(usize, SubType)> {
         use kiln_format::binary::{
             COMPOSITE_TYPE_ARRAY, COMPOSITE_TYPE_FUNC, COMPOSITE_TYPE_STRUCT, COMPOSITE_TYPE_SUB,
             COMPOSITE_TYPE_SUB_FINAL, read_leb128_u32,
@@ -465,36 +500,56 @@ impl<'a> StreamingDecoder<'a> {
 
         let marker = data[offset];
 
-        match marker {
+        let sub_type = match marker {
             COMPOSITE_TYPE_SUB | COMPOSITE_TYPE_SUB_FINAL => {
+                let is_final = marker == COMPOSITE_TYPE_SUB_FINAL;
                 // sub/sub_final: marker supertype_count supertype* comptype
                 offset += 1;
                 let (supertype_count, bytes_read) = read_leb128_u32(data, offset)?;
                 offset += bytes_read;
 
-                // Skip supertype indices
+                // Collect supertype indices
+                let mut supertype_indices = Vec::with_capacity(supertype_count as usize);
                 for _ in 0..supertype_count {
-                    let (_supertype_idx, bytes_read) = read_leb128_u32(data, offset)?;
+                    let (supertype_idx, bytes_read) = read_leb128_u32(data, offset)?;
                     offset += bytes_read;
+                    supertype_indices.push(supertype_idx);
                 }
 
                 // Parse the composite type
-                offset = self.parse_composite_type(data, offset)?;
+                let (new_offset, composite_kind) = self.parse_composite_type(data, offset)?;
+                offset = new_offset;
+
+                SubType {
+                    is_final,
+                    supertype_indices,
+                    composite_kind,
+                    type_index,
+                }
             },
             COMPOSITE_TYPE_FUNC | COMPOSITE_TYPE_STRUCT | COMPOSITE_TYPE_ARRAY => {
                 // Direct composite type (implicitly final with no supertypes)
-                offset = self.parse_composite_type(data, offset)?;
+                let (new_offset, composite_kind) = self.parse_composite_type(data, offset)?;
+                offset = new_offset;
+
+                SubType {
+                    is_final: true,
+                    supertype_indices: Vec::new(),
+                    composite_kind,
+                    type_index,
+                }
             },
             _ => {
                 return Err(Error::parse_error("Invalid subtype marker"));
             },
-        }
+        };
 
-        Ok(offset)
+        Ok((offset, sub_type))
     }
 
     /// Parse a composite type (func, struct, or array)
-    fn parse_composite_type(&mut self, data: &[u8], mut offset: usize) -> Result<usize> {
+    /// Returns the new offset and the composite type kind parsed.
+    fn parse_composite_type(&mut self, data: &[u8], mut offset: usize) -> Result<(usize, CompositeTypeKind)> {
         use kiln_format::binary::{
             COMPOSITE_TYPE_ARRAY, COMPOSITE_TYPE_FUNC, COMPOSITE_TYPE_STRUCT, read_leb128_u32,
         };
@@ -507,7 +562,7 @@ impl<'a> StreamingDecoder<'a> {
         let type_marker = data[offset];
         offset += 1;
 
-        match type_marker {
+        let kind = match type_marker {
             COMPOSITE_TYPE_FUNC => {
                 // Parse function type: param_count param* result_count result*
                 let (param_count, bytes_read) = read_leb128_u32(data, offset)?;
@@ -582,6 +637,8 @@ impl<'a> StreamingDecoder<'a> {
                     let func_type = FuncType::new(params.into_iter(), results.into_iter())?;
                     let _ = self.module.types.push(func_type);
                 }
+
+                CompositeTypeKind::Func
             },
             COMPOSITE_TYPE_STRUCT => {
                 // Parse struct type: field_count field*
@@ -622,6 +679,8 @@ impl<'a> StreamingDecoder<'a> {
                     let placeholder = FuncType::new(core::iter::empty(), core::iter::empty())?;
                     let _ = self.module.types.push(placeholder);
                 }
+
+                CompositeTypeKind::Struct
             },
             COMPOSITE_TYPE_ARRAY => {
                 // Parse array type: storage_type mutability
@@ -655,13 +714,15 @@ impl<'a> StreamingDecoder<'a> {
                     let placeholder = FuncType::new(core::iter::empty(), core::iter::empty())?;
                     let _ = self.module.types.push(placeholder);
                 }
+
+                CompositeTypeKind::Array
             },
             _ => {
                 return Err(Error::parse_error("Invalid composite type marker"));
             },
-        }
+        };
 
-        Ok(offset)
+        Ok((offset, kind))
     }
 
     /// Parse a storage type (value type or packed type)

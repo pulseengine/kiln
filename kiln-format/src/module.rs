@@ -1580,6 +1580,45 @@ impl kiln_foundation::traits::FromBytes
     }
 }
 
+/// GC proposal: Composite type kind (func, struct, or array)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompositeTypeKind {
+    /// Function type (0x60)
+    Func,
+    /// Struct type (0x5F) - fields defined separately
+    Struct,
+    /// Array type (0x5E) - element type defined separately
+    Array,
+}
+
+/// GC proposal: Sub type declaration
+///
+/// Represents a type with optional supertypes and a composite type.
+/// `sub final` types cannot be further subtyped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubType {
+    /// Whether this is a final type (cannot be subtyped further)
+    pub is_final: bool,
+    /// Indices of supertypes (usually 0 or 1)
+    pub supertype_indices: Vec<u32>,
+    /// The composite type kind
+    pub composite_kind: CompositeTypeKind,
+    /// Type index in the module's type section
+    pub type_index: u32,
+}
+
+/// GC proposal: Recursive type group
+///
+/// Groups multiple sub types together for mutual recursion.
+/// Each type in the group gets a consecutive type index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecGroup {
+    /// The sub types in this recursive group
+    pub types: Vec<SubType>,
+    /// Starting type index for this group
+    pub start_type_index: u32,
+}
+
 /// Hypothetical Finding F5: Represents an entry in the TypeInformation section
 /// - With Allocation
 #[cfg(feature = "std")]
@@ -1643,6 +1682,8 @@ pub struct Module<
     pub core_version:      CoreWasmVersion,
     /// Type information section (if present)
     pub type_info_section: Option<TypeInformationSection<P>>,
+    /// GC proposal: recursive type groups with sub type declarations
+    pub rec_groups:        Vec<RecGroup>,
 }
 
 #[cfg(not(any(feature = "std")))]
@@ -1673,6 +1714,7 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + Eq> Module<P> {
             binary:            None,
             core_version:      CoreWasmVersion::default(),
             type_info_section: None,
+            rec_groups:        Vec::new(),
         })
     }
 
@@ -1717,6 +1759,8 @@ pub struct Module {
     pub core_version:      CoreWasmVersion,
     /// Type information section (if present)
     pub type_info_section: Option<TypeInformationSection>,
+    /// GC proposal: recursive type groups with sub type declarations
+    pub rec_groups:        Vec<RecGroup>,
 }
 
 #[cfg(feature = "std")]
@@ -1746,6 +1790,7 @@ impl Module {
             binary:            None,
             core_version:      CoreWasmVersion::default(),
             type_info_section: None,
+            rec_groups:        Vec::new(),
         }
     }
 

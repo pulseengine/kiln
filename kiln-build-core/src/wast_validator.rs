@@ -30,10 +30,26 @@ pub enum StackType {
     /// This is ref null nofunc - assignable to any nullable funcref type
     NullFuncRef,
     ExternRef,
+    /// Null extern reference - bottom type for extern hierarchy (noextern)
+    NullExternRef,
     ExnRef,
+    /// Null exception reference - bottom type for exn hierarchy (noexn)
+    NullExnRef,
     /// Typed function reference (ref null? $t) where t is a type index
     /// First field is type index, second is whether it's nullable
     TypedFuncRef(u32, bool),
+    /// GC type: anyref - top of the internal reference hierarchy
+    AnyRef,
+    /// GC type: eqref - subtypes: i31ref, structref, arrayref
+    EqRef,
+    /// GC type: i31ref - unboxed 31-bit integer reference
+    I31Ref,
+    /// GC type: structref - abstract struct reference
+    StructRef,
+    /// GC type: arrayref - abstract array reference
+    ArrayRef,
+    /// GC type: none - bottom type for the any hierarchy
+    NoneRef,
     Unknown,
 }
 
@@ -52,13 +68,14 @@ impl StackType {
             ValueType::ExnRef => StackType::ExnRef,
             // Typed function reference - preserves type index and nullability
             ValueType::TypedFuncRef(idx, nullable) => StackType::TypedFuncRef(idx, nullable),
-            // WebAssembly 3.0 GC types - not yet fully supported, treat as unknown
-            ValueType::I16x8
-            | ValueType::StructRef(_)
-            | ValueType::ArrayRef(_)
-            | ValueType::I31Ref
-            | ValueType::AnyRef
-            | ValueType::EqRef => StackType::Unknown,
+            // GC types
+            ValueType::AnyRef => StackType::AnyRef,
+            ValueType::EqRef => StackType::EqRef,
+            ValueType::I31Ref => StackType::I31Ref,
+            ValueType::StructRef(_) => StackType::StructRef,
+            ValueType::ArrayRef(_) => StackType::ArrayRef,
+            // I16x8 is a SIMD sub-type, not a reference type
+            ValueType::I16x8 => StackType::Unknown,
         }
     }
 
@@ -79,21 +96,30 @@ impl StackType {
             StackType::FuncRef
                 | StackType::NullFuncRef
                 | StackType::ExternRef
+                | StackType::NullExternRef
                 | StackType::ExnRef
+                | StackType::NullExnRef
                 | StackType::TypedFuncRef(_, _)
+                | StackType::AnyRef
+                | StackType::EqRef
+                | StackType::I31Ref
+                | StackType::StructRef
+                | StackType::ArrayRef
+                | StackType::NoneRef
         )
     }
 
     /// Check if this type is a subtype of another type
-    /// GC subtyping rules:
-    /// - NullFuncRef <: FuncRef <: any (bottom <: top)
-    /// - NullFuncRef <: TypedFuncRef(t, true) (bottom is subtype of any nullable funcref)
-    /// - TypedFuncRef(t, _) <: FuncRef (specific is subtype of general)
-    /// - FuncRef </: TypedFuncRef(t, _) (general is NOT subtype of specific)
-    /// - TypedFuncRef(t, false) <: TypedFuncRef(t, true) (non-null is subtype of nullable)
-    /// - TypedFuncRef(t, true) </: TypedFuncRef(t, false) (nullable is NOT subtype of non-null)
-    /// - ExnRef <: ExnRef (trivial)
-    /// - (ref exn) <: ExnRef (non-null is subtype of nullable exnref)
+    ///
+    /// GC subtyping lattice:
+    ///   none <: i31 <: eq <: any
+    ///   none <: struct <: eq <: any
+    ///   none <: array <: eq <: any
+    ///   nofunc <: func types <: func
+    ///   noextern <: extern
+    ///   noexn <: exn
+    ///
+    /// Nullability: non-nullable <: nullable (for the same heap type)
     fn is_subtype_of(&self, other: &StackType) -> bool {
         if self == other {
             return true;
@@ -105,19 +131,44 @@ impl StackType {
         }
 
         match (self, other) {
-            // NullFuncRef (bottom) is subtype of all funcref-related types
+            // === func hierarchy: nofunc <: typed func refs <: func ===
+            // NullFuncRef (nofunc) is bottom of func hierarchy
             (StackType::NullFuncRef, StackType::FuncRef) => true,
             (StackType::NullFuncRef, StackType::TypedFuncRef(_, nullable)) => *nullable,
             // TypedFuncRef is a subtype of FuncRef
             (StackType::TypedFuncRef(_, _), StackType::FuncRef) => true,
             // Two TypedFuncRefs: type indices must match, and nullability must be compatible
-            // (ref $t) is a subtype of (ref null $t)
-            // (ref null $t) is NOT a subtype of (ref $t)
             (StackType::TypedFuncRef(t1, n1), StackType::TypedFuncRef(t2, n2)) => {
                 t1 == t2 && (*n1 == *n2 || (!*n1 && *n2))
             },
-            // FuncRef is NOT a subtype of TypedFuncRef (general is not subtype of specific)
+            // FuncRef is NOT a subtype of TypedFuncRef
             (StackType::FuncRef, StackType::TypedFuncRef(_, _)) => false,
+
+            // === extern hierarchy: noextern <: extern ===
+            (StackType::NullExternRef, StackType::ExternRef) => true,
+
+            // === exn hierarchy: noexn <: exn ===
+            (StackType::NullExnRef, StackType::ExnRef) => true,
+
+            // === any hierarchy: none <: i31/struct/array <: eq <: any ===
+            // NoneRef (none) is bottom of the any hierarchy
+            (StackType::NoneRef, StackType::I31Ref) => true,
+            (StackType::NoneRef, StackType::StructRef) => true,
+            (StackType::NoneRef, StackType::ArrayRef) => true,
+            (StackType::NoneRef, StackType::EqRef) => true,
+            (StackType::NoneRef, StackType::AnyRef) => true,
+
+            // i31, struct, array <: eq
+            (StackType::I31Ref, StackType::EqRef) => true,
+            (StackType::StructRef, StackType::EqRef) => true,
+            (StackType::ArrayRef, StackType::EqRef) => true,
+
+            // i31, struct, array, eq <: any
+            (StackType::I31Ref, StackType::AnyRef) => true,
+            (StackType::StructRef, StackType::AnyRef) => true,
+            (StackType::ArrayRef, StackType::AnyRef) => true,
+            (StackType::EqRef, StackType::AnyRef) => true,
+
             _ => false,
         }
     }
@@ -134,9 +185,14 @@ impl StackType {
                     HeapType::Extern => StackType::ExternRef,
                     HeapType::Exn => StackType::ExnRef,
                     HeapType::NoFunc => StackType::NullFuncRef,
+                    HeapType::NoExtern => StackType::NullExternRef,
+                    HeapType::None => StackType::NoneRef,
+                    HeapType::Any => StackType::AnyRef,
+                    HeapType::Eq => StackType::EqRef,
+                    HeapType::I31 => StackType::I31Ref,
+                    HeapType::Struct => StackType::StructRef,
+                    HeapType::Array => StackType::ArrayRef,
                     HeapType::Concrete(idx) => StackType::TypedFuncRef(idx, gc.nullable),
-                    // GC types not yet fully supported
-                    _ => StackType::Unknown,
                 }
             }
         }
@@ -2354,7 +2410,8 @@ impl WastModuleValidator {
                             0x69 => StackType::ExnRef,
                             0x63 | 0x64 => {
                                 // ref null heaptype / ref heaptype
-                                let (heap_type, new_offset) = Self::parse_heap_type(code, offset)?;
+                                let nullable = type_byte == 0x63;
+                                let (heap_type, new_offset) = Self::parse_heap_type(code, offset, nullable)?;
                                 offset = new_offset;
                                 Self::check_value_type_ref(&heap_type, module.types.len())?;
                                 StackType::from_value_type(heap_type)
@@ -4881,15 +4938,16 @@ impl WastModuleValidator {
             0x6C => BlockType::ValueType(ValueType::I31Ref),
             0x6B => BlockType::ValueType(ValueType::StructRef(0)), // abstract structref
             0x6A => BlockType::ValueType(ValueType::ArrayRef(0)),  // abstract arrayref
-            0x73 => BlockType::ValueType(ValueType::FuncRef),      // nofunc (bottom for func)
-            0x72 => BlockType::ValueType(ValueType::ExternRef),    // noextern (bottom for extern)
-            0x71 => BlockType::ValueType(ValueType::AnyRef),       // none (bottom for any)
+            0x73 => BlockType::ValueType(ValueType::NullFuncRef),   // nullfuncref = (ref null nofunc)
+            0x72 => BlockType::ValueType(ValueType::ExternRef),    // nullexternref = (ref null noextern)
+            0x71 => BlockType::ValueType(ValueType::AnyRef),       // nullref = (ref null none)
             // GC typed references: (ref null? heaptype)
             0x63 | 0x64 => {
                 // 0x63 = ref null heaptype (nullable)
                 // 0x64 = ref heaptype (non-nullable)
+                let nullable = byte == 0x63;
                 // Parse the heap type following the prefix
-                let (heap_type, new_offset) = Self::parse_heap_type(code, offset + 1)?;
+                let (heap_type, new_offset) = Self::parse_heap_type(code, offset + 1, nullable)?;
                 // Validate type index bounds for concrete references
                 Self::check_value_type_ref(&heap_type, module.types.len())?;
                 return Ok((BlockType::ValueType(heap_type), new_offset));
@@ -4923,7 +4981,7 @@ impl WastModuleValidator {
     }
 
     /// Parse a GC heap type and convert to ValueType
-    fn parse_heap_type(code: &[u8], offset: usize) -> Result<(ValueType, usize)> {
+    fn parse_heap_type(code: &[u8], offset: usize, nullable: bool) -> Result<(ValueType, usize)> {
         if offset >= code.len() {
             return Err(anyhow!("truncated heap type"));
         }
@@ -4944,15 +5002,14 @@ impl WastModuleValidator {
                 -21 => ValueType::StructRef(0), // struct (0x6B) - abstract
                 -22 => ValueType::ArrayRef(0),  // array (0x6A) - abstract
                 -23 => ValueType::ExnRef,       // exn (0x69)
-                -13 => ValueType::FuncRef,      // nofunc (0x73) - bottom for func
-                -14 => ValueType::ExternRef,    // noextern (0x72) - bottom for extern
-                -15 => ValueType::AnyRef,       // none (0x71) - bottom for any
+                -13 => ValueType::NullFuncRef,  // nofunc (0x73)
+                -14 => ValueType::ExternRef,    // noextern (0x72)
+                -15 => ValueType::AnyRef,       // none (0x71)
                 _ => ValueType::AnyRef,         // fallback
             }
         } else {
             // Concrete type index - reference to a defined type
-            // For now, map to StructRef with the type index
-            ValueType::StructRef(heap_type_val as u32)
+            ValueType::TypedFuncRef(heap_type_val as u32, nullable)
         };
 
         Ok((value_type, new_offset))
