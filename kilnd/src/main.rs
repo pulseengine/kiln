@@ -862,7 +862,11 @@ impl KilndEngine {
         }
 
         // Update statistics
-        self.stats.modules_executed += 1;
+        if is_component {
+            self.stats.components_executed += 1;
+        } else {
+            self.stats.modules_executed += 1;
+        }
         self.stats.fuel_consumed += estimated_fuel;
         self.stats.peak_memory = self.stats.peak_memory.max(estimated_memory);
 
