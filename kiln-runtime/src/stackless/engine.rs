@@ -2393,12 +2393,13 @@ impl StacklessEngine {
                         // Note: FuncRef.instance_id stores ModuleInstance.instance_id which uses a
                         // different numbering scheme than the engine's instance_id. We must translate.
                         if let Some(mod_target_id) = target_instance_id {
-                            // Translate ModuleInstance.instance_id → engine instance_id
-                            let engine_target_id = self.instances.iter()
+                            // Translate ModuleInstance.instance_id -> engine instance_id
+                            let target_id = self.instances.iter()
                                 .find(|(_, inst)| inst.instance_id() == mod_target_id)
-                                .map(|(engine_id, _)| *engine_id);
-
-                            let target_id = engine_target_id.unwrap_or(mod_target_id);
+                                .map(|(engine_id, _)| *engine_id)
+                                .ok_or_else(|| kiln_error::Error::runtime_trap(
+                                    "cross-instance call_indirect: target instance not found"
+                                ))?;
 
                             if target_id != instance_id {
                                 // Get the target module to look up function type for arg count
@@ -2406,13 +2407,28 @@ impl StacklessEngine {
                                     .ok_or_else(|| kiln_error::Error::runtime_trap("cross-instance target not found"))?
                                     .module().clone();
 
+                                // Validate function index
+                                if func_idx >= target_module.functions.len() {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "cross-instance call_indirect: function index out of bounds in target"
+                                    ));
+                                }
+
+                                // Type check: validate function signature matches expected type
+                                let expected_type = module.types.get(type_idx as usize)
+                                    .ok_or_else(|| kiln_error::Error::runtime_error("Invalid expected function type"))?;
+                                let target_func = &target_module.functions[func_idx];
+                                let actual_type = target_module.types.get(target_func.type_idx as usize)
+                                    .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type in target"))?;
+
+                                if !func_types_match(expected_type, actual_type) {
+                                    return Err(kiln_error::Error::runtime_trap("indirect call type mismatch"));
+                                }
+
                                 // Check if this is a lowered function in the target instance
                                 #[cfg(all(feature = "std", feature = "wasi"))]
                                 if self.is_lowered_function(target_id, func_idx) {
-                                    let func = &target_module.functions[func_idx];
-                                    let func_type = target_module.types.get(func.type_idx as usize)
-                                        .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
-                                    let param_count = func_type.params.len();
+                                    let param_count = actual_type.params.len();
                                     let mut call_args = Vec::new();
                                     for _ in 0..param_count {
                                         if let Some(arg) = operand_stack.pop() {
@@ -2431,43 +2447,34 @@ impl StacklessEngine {
                                 }
 
                                 // Get the function type from the TARGET module for arg count
-                                if func_idx < target_module.functions.len() {
-                                    let func = &target_module.functions[func_idx];
-                                    let func_type = target_module.types.get(func.type_idx as usize)
-                                        .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type in cross-instance call"))?;
-                                    let param_count = func_type.params.len();
-                                    let mut call_args = Vec::new();
-                                    for _ in 0..param_count {
-                                        if let Some(arg) = operand_stack.pop() {
-                                            call_args.push(arg);
-                                        } else {
-                                            return Err(kiln_error::Error::runtime_error("Stack underflow on cross-instance call_indirect"));
-                                        }
+                                let param_count = actual_type.params.len();
+                                let mut call_args = Vec::new();
+                                for _ in 0..param_count {
+                                    if let Some(arg) = operand_stack.pop() {
+                                        call_args.push(arg);
+                                    } else {
+                                        return Err(kiln_error::Error::runtime_error("Stack underflow on cross-instance call_indirect"));
                                     }
-                                    call_args.reverse();
-
-                                    // Save current frame and dispatch to target instance
-                                    let saved_state = SuspendedFrame {
-                                        instance_id,
-                                        func_idx: caller_func_idx,
-                                        pc: pc + 1,
-                                        locals,
-                                        operand_stack,
-                                        block_stack,
-                                        block_depth,
-                                        instruction_count,
-                                    };
-                                    return Ok(ExecutionOutcome::Call {
-                                        instance_id: target_id,
-                                        func_idx,
-                                        args: call_args,
-                                        return_state: Some(saved_state),
-                                    });
-                                } else {
-                                    return Err(kiln_error::Error::runtime_trap(
-                                        "cross-instance call_indirect: function index out of bounds in target"
-                                    ));
                                 }
+                                call_args.reverse();
+
+                                // Save current frame and dispatch to target instance
+                                let saved_state = SuspendedFrame {
+                                    instance_id,
+                                    func_idx: caller_func_idx,
+                                    pc: pc + 1,
+                                    locals,
+                                    operand_stack,
+                                    block_stack,
+                                    block_depth,
+                                    instruction_count,
+                                };
+                                return Ok(ExecutionOutcome::Call {
+                                    instance_id: target_id,
+                                    func_idx,
+                                    args: call_args,
+                                    return_state: Some(saved_state),
+                                });
                             }
                         }
 
