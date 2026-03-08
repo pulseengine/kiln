@@ -148,11 +148,11 @@ impl WasiInstanceProvider {
         let get_stdout_index = self.next_function_index;
         self.next_function_index += 1;
 
-        let provider = ComponentProvider::default();
-        let signature = KilnComponentType::Unit(provider)?;
-
+        // Use Default::default() for signature since the WASI provider only needs the
+        // function index for dispatch - the full ComponentType is not used at runtime.
+        // ComponentType::Unit(provider) fails because BoundedVec::new rejects zero-sized items.
         let func_export = FunctionExport {
-            signature,
+            signature: KilnComponentType::<ComponentProvider>::default(),
             index: get_stdout_index,
         };
 
@@ -301,11 +301,11 @@ impl WasiInstanceProvider {
         let func_index = self.next_function_index;
         self.next_function_index += 1;
 
-        let provider = ComponentProvider::default();
-        let signature = KilnComponentType::Unit(provider)?;
-
+        // Use Default::default() for signature since the WASI provider only needs the
+        // function index for dispatch - the full ComponentType is not used at runtime.
+        // ComponentType::Unit(provider) fails because BoundedVec::new rejects zero-sized items.
         let func_export = FunctionExport {
-            signature,
+            signature: KilnComponentType::<ComponentProvider>::default(),
             index: func_index,
         };
 
