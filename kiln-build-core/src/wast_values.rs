@@ -141,6 +141,11 @@ pub fn convert_wast_ret_core_to_value(ret: &WastRetCore) -> Result<Value> {
                 },
             }
         },
+        WastRetCore::RefI31 => {
+            // (ref.i31) - any non-null i31 reference
+            // Use a sentinel value to indicate "any non-null i31ref"
+            Ok(Value::I31Ref(Some(i32::MAX)))
+        },
         _ => {
             // Handle other reference types with default FuncRef
             Ok(Value::FuncRef(None))
@@ -326,6 +331,9 @@ pub fn values_equal(actual: &Value, expected: &Value) -> bool {
         (Value::Ref(0), Value::ExternRef(None)) => true,
         // GC reference type comparisons
         (Value::ExnRef(a), Value::ExnRef(b)) => a == b,
+        // I31Ref: i32::MAX sentinel means "any non-null i31ref" (from (ref.i31) in WAST)
+        (Value::I31Ref(Some(_)), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => true,
+        (Value::I31Ref(None), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => false,
         (Value::I31Ref(a), Value::I31Ref(b)) => a == b,
         (Value::StructRef(a), Value::StructRef(b)) => a == b,
         (Value::ArrayRef(a), Value::ArrayRef(b)) => a == b,

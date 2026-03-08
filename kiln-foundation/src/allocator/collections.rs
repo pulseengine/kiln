@@ -73,18 +73,6 @@ impl<T, const CRATE: u8, const MAX_SIZE: usize> KilnVec<T, CRATE, MAX_SIZE> {
         }
     }
 
-    /// Force push (panics if capacity exceeded) - for compatibility
-    pub fn force_push(&mut self, item: T) {
-        if self.inner.len() >= MAX_SIZE {
-            panic!(
-                "KilnVec capacity exceeded: {} >= {}",
-                self.inner.len(),
-                MAX_SIZE
-            );
-        }
-        self.inner.push(item);
-    }
-
     /// Get maximum capacity (compile-time constant)
     pub const fn max_capacity() -> usize {
         MAX_SIZE

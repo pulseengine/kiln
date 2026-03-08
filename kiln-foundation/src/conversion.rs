@@ -43,6 +43,7 @@ pub fn ref_type_to_val_type(ref_type: RefType) -> CoreValueType {
     match ref_type {
         RefType::Funcref => CoreValueType::FuncRef,
         RefType::Externref => CoreValueType::ExternRef,
+        RefType::Gc(gc) => gc.to_value_type(),
     }
 }
 

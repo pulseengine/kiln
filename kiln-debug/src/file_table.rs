@@ -1,17 +1,11 @@
-use kiln_error::Result;
-use kiln_foundation::{
-    bounded::{BoundedVec, MAX_DWARF_FILE_TABLE},
-    budget_aware_provider::CrateId,
-    safe_managed_alloc,
-    safe_memory::NoStdProvider,
-};
+use kiln_foundation::bounded::MAX_DWARF_FILE_TABLE;
 
 /// File table support for resolving file indices to paths
 /// Provides the missing 2% for source file path resolution
 use crate::strings::DebugString;
 
 /// A file entry in the DWARF file table
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct FileEntry<'a> {
     /// File path (may be relative or absolute)
     pub path: DebugString<'a>,
@@ -46,6 +40,11 @@ impl<'a> kiln_foundation::traits::Checksummable for FileEntry<'a> {
 }
 
 impl<'a> kiln_foundation::traits::ToBytes for FileEntry<'a> {
+    fn serialized_size(&self) -> usize {
+        // path (DebugString) + dir_index (u32) + mod_time (u64) + size (u64)
+        self.path.serialized_size() + 4 + 8 + 8
+    }
+
     fn to_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut kiln_foundation::traits::WriteStream<'b>,
@@ -74,20 +73,28 @@ impl<'a> kiln_foundation::traits::FromBytes for FileEntry<'a> {
 }
 
 /// File table for resolving file indices to paths
-#[derive(Debug)]
+///
+/// Uses fixed-size arrays for no_std compatibility. DebugString is a zero-copy
+/// reference type that cannot survive serialization round-trips, so we store
+/// entries directly in arrays rather than using BoundedVec.
 pub struct FileTable<'a> {
     /// Directory entries
-    directories: BoundedVec<
-        DebugString<'a>,
-        MAX_DWARF_FILE_TABLE,
-        NoStdProvider<{ MAX_DWARF_FILE_TABLE * 32 }>,
-    >,
+    directories: [Option<DebugString<'a>>; MAX_DWARF_FILE_TABLE],
+    /// Number of valid directory entries
+    directory_count: usize,
     /// File entries
-    files: BoundedVec<
-        FileEntry<'a>,
-        MAX_DWARF_FILE_TABLE,
-        NoStdProvider<{ MAX_DWARF_FILE_TABLE * 64 }>,
-    >,
+    files: [Option<FileEntry<'a>>; MAX_DWARF_FILE_TABLE],
+    /// Number of valid file entries
+    file_count: usize,
+}
+
+impl<'a> core::fmt::Debug for FileTable<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("FileTable")
+            .field("directory_count", &self.directory_count)
+            .field("file_count", &self.file_count)
+            .finish()
+    }
 }
 
 impl<'a> Default for FileTable<'a> {
@@ -99,39 +106,34 @@ impl<'a> Default for FileTable<'a> {
 impl<'a> FileTable<'a> {
     /// Create a new empty file table
     pub fn new() -> Self {
-        // Create with proper error propagation
-        Self::try_new().expect("Failed to create FileTable")
-    }
-
-    /// Try to create a new FileTable with proper error handling
-    pub fn try_new() -> Result<Self> {
-        let directories = {
-            let provider = safe_managed_alloc!({ MAX_DWARF_FILE_TABLE * 32 }, CrateId::Debug)?;
-            BoundedVec::new(provider)?
-        };
-        let files = {
-            let provider = safe_managed_alloc!({ MAX_DWARF_FILE_TABLE * 64 }, CrateId::Debug)?;
-            BoundedVec::new(provider)?
-        };
-        Ok(Self { directories, files })
+        Self {
+            directories: [None; MAX_DWARF_FILE_TABLE],
+            directory_count: 0,
+            files: [None; MAX_DWARF_FILE_TABLE],
+            file_count: 0,
+        }
     }
 
     /// Add a directory entry
-    pub fn add_directory(&mut self, dir: DebugString<'a>) -> Result<u32> {
-        let index = self.directories.len() as u32;
-        self.directories
-            .push(dir)
-            .map_err(|_| kiln_error::Error::memory_error("Failed to add directory"))?;
-        Ok(index)
+    /// Returns the 1-based index (DWARF convention: 0 = compilation directory)
+    pub fn add_directory(&mut self, dir: DebugString<'a>) -> kiln_error::Result<u32> {
+        if self.directory_count >= MAX_DWARF_FILE_TABLE {
+            return Err(kiln_error::Error::memory_error("Directory table full"));
+        }
+        self.directories[self.directory_count] = Some(dir);
+        self.directory_count += 1;
+        Ok(self.directory_count as u32)
     }
 
     /// Add a file entry
-    pub fn add_file(&mut self, file: FileEntry<'a>) -> Result<u32> {
-        let index = self.files.len() as u32;
-        self.files
-            .push(file)
-            .map_err(|_| kiln_error::Error::memory_error("Failed to add file"))?;
-        Ok(index)
+    /// Returns the 1-based index (DWARF convention: 0 = no file)
+    pub fn add_file(&mut self, file: FileEntry<'a>) -> kiln_error::Result<u32> {
+        if self.file_count >= MAX_DWARF_FILE_TABLE {
+            return Err(kiln_error::Error::memory_error("File table full"));
+        }
+        self.files[self.file_count] = Some(file);
+        self.file_count += 1;
+        Ok(self.file_count as u32)
     }
 
     /// Get a file entry by index (1-based as per DWARF spec)
@@ -139,7 +141,12 @@ impl<'a> FileTable<'a> {
         if index == 0 {
             return None; // 0 means no file in DWARF
         }
-        self.files.get((index - 1) as usize).ok()
+        let i = (index - 1) as usize;
+        if i < self.file_count {
+            self.files[i]
+        } else {
+            None
+        }
     }
 
     /// Get a directory by index (0 = compilation directory)
@@ -147,7 +154,12 @@ impl<'a> FileTable<'a> {
         if index == 0 {
             return None; // 0 = compilation directory (not stored here)
         }
-        self.directories.get((index - 1) as usize).ok()
+        let i = (index - 1) as usize;
+        if i < self.directory_count {
+            self.directories[i]
+        } else {
+            None
+        }
     }
 
     /// Get the full path for a file
@@ -173,12 +185,12 @@ impl<'a> FileTable<'a> {
 
     /// Get the number of files in the table
     pub fn file_count(&self) -> usize {
-        self.files.len()
+        self.file_count
     }
 
     /// Get the number of directories in the table
     pub fn directory_count(&self) -> usize {
-        self.directories.len()
+        self.directory_count
     }
 }
 

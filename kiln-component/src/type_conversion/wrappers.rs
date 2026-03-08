@@ -156,11 +156,15 @@ impl FormatComponentType {
     }
 }
 
-impl From<ComponentTypeDefinition> for FormatComponentType {
-    fn from(type_def: ComponentTypeDefinition) -> Self {
+impl TryFrom<ComponentTypeDefinition> for FormatComponentType {
+    type Error = Error;
+
+    fn try_from(type_def: ComponentTypeDefinition) -> Result<Self> {
         match type_def {
-            ComponentTypeDefinition::Component { imports, exports } => Self::new(imports, exports),
-            _ => panic!("Expected Component type definition"),
+            ComponentTypeDefinition::Component { imports, exports } => Ok(Self::new(imports, exports)),
+            _ => Err(Error::validation_error(
+                "Expected Component type definition in FormatComponentType conversion",
+            )),
         }
     }
 }
@@ -210,11 +214,15 @@ impl FormatInstanceType {
     }
 }
 
-impl From<ComponentTypeDefinition> for FormatInstanceType {
-    fn from(type_def: ComponentTypeDefinition) -> Self {
+impl TryFrom<ComponentTypeDefinition> for FormatInstanceType {
+    type Error = Error;
+
+    fn try_from(type_def: ComponentTypeDefinition) -> Result<Self> {
         match type_def {
-            ComponentTypeDefinition::Instance { exports } => Self::new(exports),
-            _ => panic!("Expected Instance type definition"),
+            ComponentTypeDefinition::Instance { exports } => Ok(Self::new(exports)),
+            _ => Err(Error::validation_error(
+                "Expected Instance type definition in FormatInstanceType conversion",
+            )),
         }
     }
 }

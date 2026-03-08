@@ -216,6 +216,7 @@ impl ConstExprSequence {
                     let value = match ref_type {
                         RefType::Funcref => Value::FuncRef(None),
                         RefType::Externref => Value::ExternRef(None),
+                        RefType::Gc(_) => Value::ExternRef(None),
                     };
 
                     #[cfg(feature = "std")]
@@ -399,6 +400,7 @@ impl Validate for ConstExpr {
                 let val_type = match ref_type {
                     RefType::Funcref => ValueType::FuncRef,
                     RefType::Externref => ValueType::ExternRef,
+                    RefType::Gc(gc) => gc.to_value_type(),
                 };
                 ctx.push_type(val_type)?;
                 Ok(())

@@ -1,10 +1,4 @@
-use kiln_foundation::{
-    bounded::{BoundedVec, MAX_DWARF_ABBREV_CACHE},
-    budget_aware_provider::CrateId,
-    memory_sizing::LargeProvider,
-    safe_managed_alloc,
-    safe_memory::NoStdProvider,
-};
+use kiln_foundation::bounded::MAX_DWARF_ABBREV_CACHE;
 
 /// Parameter and type information support
 /// Provides the missing 2% for parameter information
@@ -89,10 +83,26 @@ impl BasicType {
             Self::Unknown => 30,
         }
     }
+
+    /// Reconstruct from a u8 representation (inverse of `to_u8`)
+    pub fn from_u8(value: u8) -> Self {
+        match value {
+            0 => Self::Void,
+            1 => Self::Bool,
+            2..=9 => Self::SignedInt(value - 2),
+            10..=17 => Self::UnsignedInt(value - 10),
+            18..=25 => Self::Float(value - 18),
+            26 => Self::Pointer,
+            27 => Self::Reference,
+            28 => Self::Array,
+            29 => Self::Struct,
+            _ => Self::Unknown,
+        }
+    }
 }
 
 /// Function parameter information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Parameter<'a> {
     /// Parameter name
     pub name: Option<DebugString<'a>>,
@@ -152,6 +162,13 @@ impl<'a> kiln_foundation::traits::Checksummable for Parameter<'a> {
 }
 
 impl<'a> kiln_foundation::traits::ToBytes for Parameter<'a> {
+    fn serialized_size(&self) -> usize {
+        // Option<DebugString>: 1 byte tag + DebugString(default) = 4 bytes (u32 len prefix)
+        // param_type (u8) + file_index (u16) + line (u32) + position (u16) + is_variadic (u8)
+        // Total: 5 + 1 + 2 + 4 + 2 + 1 = 15
+        5 + 1 + 2 + 4 + 2 + 1
+    }
+
     fn to_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut kiln_foundation::traits::WriteStream<'b>,
@@ -190,7 +207,7 @@ impl<'a> kiln_foundation::traits::FromBytes for Parameter<'a> {
 
         Ok(Self {
             name,
-            param_type: BasicType::Unknown, // We'll just use Unknown for deserialization
+            param_type: BasicType::from_u8(reader.read_u8()?),
             file_index: reader.read_u16_le()?,
             line: reader.read_u32_le()?,
             position: reader.read_u16_le()?,
@@ -200,14 +217,22 @@ impl<'a> kiln_foundation::traits::FromBytes for Parameter<'a> {
 }
 
 /// Collection of parameters for a function
-#[derive(Debug)]
+///
+/// Uses a fixed-size array for no_std compatibility. Parameter contains
+/// DebugString references that cannot survive serialization round-trips.
 pub struct ParameterList<'a> {
     /// Parameters in order
-    parameters: BoundedVec<
-        Parameter<'a>,
-        MAX_DWARF_ABBREV_CACHE,
-        NoStdProvider<{ MAX_DWARF_ABBREV_CACHE * 64 }>,
-    >,
+    parameters: [Option<Parameter<'a>>; MAX_DWARF_ABBREV_CACHE],
+    /// Number of valid parameters
+    count: usize,
+}
+
+impl<'a> core::fmt::Debug for ParameterList<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("ParameterList")
+            .field("count", &self.count)
+            .finish()
+    }
 }
 
 impl<'a> Default for ParameterList<'a> {
@@ -220,40 +245,40 @@ impl<'a> ParameterList<'a> {
     /// Create a new empty parameter list
     pub fn new() -> Self {
         Self {
-            parameters: {
-                let provider = safe_managed_alloc!({ MAX_DWARF_ABBREV_CACHE * 64 }, CrateId::Debug)
-                    .unwrap_or_else(|_| {
-                        NoStdProvider::<{ MAX_DWARF_ABBREV_CACHE * 64 }>::default()
-                    });
-                BoundedVec::new(provider).expect("Failed to create parameters BoundedVec")
-            },
+            parameters: [None; MAX_DWARF_ABBREV_CACHE],
+            count: 0,
         }
     }
 
     /// Add a parameter to the list
     #[allow(clippy::result_unit_err)]
     pub fn add_parameter(&mut self, param: Parameter<'a>) -> Result<(), ()> {
-        self.parameters.push(param).map_err(|_| ())
-    }
-
-    /// Get all parameters
-    pub fn parameters(&self) -> &[Parameter<'a>] {
-        self.parameters.as_slice().unwrap_or(&[])
+        if self.count >= MAX_DWARF_ABBREV_CACHE {
+            return Err(());
+        }
+        self.parameters[self.count] = Some(param);
+        self.count += 1;
+        Ok(())
     }
 
     /// Get parameter count
     pub fn count(&self) -> usize {
-        self.parameters.len()
+        self.count
     }
 
     /// Check if function has variadic parameters
     pub fn is_variadic(&self) -> bool {
-        self.parameters.iter().any(|p| p.is_variadic)
+        self.parameters[..self.count]
+            .iter()
+            .any(|p| p.map_or(false, |p| p.is_variadic))
     }
 
     /// Get parameter by position
     pub fn get_by_position(&self, position: u16) -> Option<Parameter<'a>> {
-        self.parameters.iter().find(|p| p.position == position)
+        self.parameters[..self.count]
+            .iter()
+            .filter_map(|p| *p)
+            .find(|p| p.position == position)
     }
 
     /// Format parameter list for display
@@ -263,7 +288,11 @@ impl<'a> ParameterList<'a> {
     {
         writer("(")?;
 
-        for (i, param) in self.parameters.iter().enumerate() {
+        for (i, param) in self.parameters[..self.count]
+            .iter()
+            .filter_map(|p| p.as_ref())
+            .enumerate()
+        {
             if i > 0 {
                 writer(", ")?;
             }
@@ -288,7 +317,7 @@ impl<'a> ParameterList<'a> {
 }
 
 /// Inline function information
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct InlinedFunction<'a> {
     /// Name of the inlined function
     pub name: Option<DebugString<'a>>,
@@ -344,6 +373,14 @@ impl<'a> kiln_foundation::traits::Checksummable for InlinedFunction<'a> {
 }
 
 impl<'a> kiln_foundation::traits::ToBytes for InlinedFunction<'a> {
+    fn serialized_size(&self) -> usize {
+        // Option<DebugString>: 1 byte tag + DebugString(default) = 4 bytes (u32 len prefix)
+        // abstract_origin (u32) + low_pc (u32) + high_pc (u32) + call_file (u16)
+        // + call_line (u32) + call_column (u16) + depth (u8)
+        // Total: 5 + 4 + 4 + 4 + 2 + 4 + 2 + 1 = 26
+        5 + 4 + 4 + 4 + 2 + 4 + 2 + 1
+    }
+
     fn to_bytes_with_provider<'b, P: kiln_foundation::MemoryProvider>(
         &self,
         writer: &mut kiln_foundation::traits::WriteStream<'b>,
@@ -396,15 +433,23 @@ impl<'a> kiln_foundation::traits::FromBytes for InlinedFunction<'a> {
 }
 
 /// Collection of inlined functions
-#[derive(Debug)]
+///
+/// Uses a fixed-size array for no_std compatibility. InlinedFunction contains
+/// DebugString references that cannot survive serialization round-trips.
 #[allow(dead_code)]
 pub struct InlinedFunctions<'a> {
     /// Inlined function entries
-    entries: BoundedVec<
-        InlinedFunction<'a>,
-        MAX_DWARF_ABBREV_CACHE,
-        NoStdProvider<{ MAX_DWARF_ABBREV_CACHE * 128 }>,
-    >,
+    entries: [Option<InlinedFunction<'a>>; MAX_DWARF_ABBREV_CACHE],
+    /// Number of valid entries
+    count: usize,
+}
+
+impl<'a> core::fmt::Debug for InlinedFunctions<'a> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("InlinedFunctions")
+            .field("count", &self.count)
+            .finish()
+    }
 }
 
 impl<'a> Default for InlinedFunctions<'a> {
@@ -418,29 +463,33 @@ impl<'a> InlinedFunctions<'a> {
     /// Create new inlined functions collection
     pub fn new() -> Self {
         Self {
-            entries: {
-                let provider =
-                    safe_managed_alloc!({ MAX_DWARF_ABBREV_CACHE * 128 }, CrateId::Debug)
-                        .unwrap_or_else(|_| LargeProvider::default());
-                BoundedVec::new(provider).expect("Failed to create entries BoundedVec")
-            },
+            entries: [None; MAX_DWARF_ABBREV_CACHE],
+            count: 0,
         }
     }
 
     /// Add an inlined function
     #[allow(clippy::result_unit_err)]
     pub fn add(&mut self, func: InlinedFunction<'a>) -> Result<(), ()> {
-        self.entries.push(func).map_err(|_| ())
+        if self.count >= MAX_DWARF_ABBREV_CACHE {
+            return Err(());
+        }
+        self.entries[self.count] = Some(func);
+        self.count += 1;
+        Ok(())
     }
 
     /// Find all inlined functions containing the given PC
     pub fn find_at_pc(&self, pc: u32) -> impl Iterator<Item = InlinedFunction<'a>> + '_ {
-        self.entries.iter().filter(move |f| pc >= f.low_pc && pc < f.high_pc)
+        self.entries[..self.count]
+            .iter()
+            .filter_map(|e| *e)
+            .filter(move |f| pc >= f.low_pc && pc < f.high_pc)
     }
 
     /// Get all inlined functions
     pub fn all(&self) -> impl Iterator<Item = InlinedFunction<'a>> + '_ {
-        self.entries.iter()
+        self.entries[..self.count].iter().filter_map(|e| *e)
     }
 
     /// Check if any functions are inlined at this PC

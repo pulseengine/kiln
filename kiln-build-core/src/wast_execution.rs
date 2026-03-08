@@ -63,7 +63,7 @@ impl WastEngine {
 
         // Validate the module before proceeding (Phase 1 of WAST conformance)
         crate::wast_validator::WastModuleValidator::validate(&kiln_module)
-            .map_err(|e| anyhow::anyhow!("Module validation failed: {:?}", e))?;
+            .map_err(|e| anyhow::anyhow!("Module validation failed: {:#}", e))?;
 
         // Convert KilnModule to RuntimeModule
         // Wrap in Arc immediately to avoid clone() which loses BoundedMap data
@@ -436,6 +436,7 @@ impl WastEngine {
                     let spectest_table_type = TableType {
                         element_type: RefType::Funcref,
                         limits: Limits { min: 10, max: Some(20) },
+                        table64: false,
                     };
                     let table = Table::new(spectest_table_type).map_err(|e| {
                         anyhow::anyhow!("Failed to create spectest table: {:?}", e)

@@ -217,6 +217,7 @@ impl Default for Table {
                 min: 0,
                 max: Some(1),
             },
+            table64: false,
         };
         Self::new(table_type).expect("Failed to create default Table")
     }
@@ -227,6 +228,7 @@ impl kiln_foundation::traits::Checksummable for Table {
         let element_type_byte = match self.ty.element_type {
             KilnRefType::Funcref => 0u8,
             KilnRefType::Externref => 1u8,
+            KilnRefType::Gc(_) => 2u8,
         };
         checksum.update_slice(&element_type_byte.to_le_bytes());
         checksum.update_slice(&self.ty.limits.min.to_le_bytes());
@@ -249,6 +251,7 @@ impl kiln_foundation::traits::ToBytes for Table {
         let element_type_byte = match self.ty.element_type {
             KilnRefType::Funcref => 0u8,
             KilnRefType::Externref => 1u8,
+            KilnRefType::Gc(_) => 2u8,
         };
         writer.write_all(&element_type_byte.to_le_bytes())?;
         writer.write_all(&self.ty.limits.min.to_le_bytes())
@@ -281,6 +284,7 @@ impl kiln_foundation::traits::FromBytes for Table {
                 min,
                 max: Some(min + 1),
             },
+            table64: false,
         };
         Self::new(table_type)
     }
@@ -294,6 +298,7 @@ impl Table {
         let init_val = match ty.element_type {
             KilnRefType::Funcref => Some(KilnValue::FuncRef(None)),
             KilnRefType::Externref => Some(KilnValue::ExternRef(None)),
+            KilnRefType::Gc(_) => Some(KilnValue::ExternRef(None)),
         };
 
         let initial_size = wasm_index_to_usize(ty.limits.min)?;
@@ -349,6 +354,7 @@ impl Table {
                 min: capacity,
                 max: Some(capacity),
             },
+            table64: false,
         };
         Self::new(table_type)
     }
@@ -439,7 +445,16 @@ impl Table {
         }
 
         if let Some(ref val) = value {
-            let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
+            let val_matches = matches!(
+                (&val, &self.ty.element_type),
+                (KilnValue::FuncRef(_), KilnRefType::Funcref)
+                | (KilnValue::FuncRef(_), KilnRefType::Gc(_))
+                | (KilnValue::ExternRef(_), KilnRefType::Externref)
+                | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
+                | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
+                | (KilnValue::StructRef(_), KilnRefType::Gc(_))
+                | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
+            );
             if !val_matches {
                 return Err(Error::validation_error(
                     "Element value type doesn't match table element type",
@@ -481,7 +496,16 @@ impl Table {
         }
 
         if let Some(ref val) = value {
-            let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
+            let val_matches = matches!(
+                (&val, &self.ty.element_type),
+                (KilnValue::FuncRef(_), KilnRefType::Funcref)
+                | (KilnValue::FuncRef(_), KilnRefType::Gc(_))
+                | (KilnValue::ExternRef(_), KilnRefType::Externref)
+                | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
+                | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
+                | (KilnValue::StructRef(_), KilnRefType::Gc(_))
+                | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
+            );
             if !val_matches {
                 return Err(Error::validation_error(
                     "Element value type doesn't match table element type",
@@ -509,7 +533,15 @@ impl Table {
     ///
     /// Returns an error if the table cannot be grown
     pub fn grow_shared(&self, delta: u32, init_value_from_arg: KilnValue) -> Result<u32> {
-        let init_val_matches = matches!((&init_value_from_arg, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
+        let init_val_matches = matches!(
+            (&init_value_from_arg, &self.ty.element_type),
+            (KilnValue::FuncRef(_), KilnRefType::Funcref)
+            | (KilnValue::ExternRef(_), KilnRefType::Externref)
+            | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
+            | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
+            | (KilnValue::StructRef(_), KilnRefType::Gc(_))
+            | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
+        );
         if !init_val_matches {
             return Err(Error::validation_error(
                 "Grow operation init value type doesn't match table element type",
@@ -665,7 +697,7 @@ impl Table {
         }
         for (i, val_opt) in init_data.iter().enumerate() {
             if let Some(val) = val_opt {
-                let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
+                let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref) | (KilnValue::ExternRef(_), KilnRefType::Gc(_)));
                 if !val_matches {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }
@@ -690,7 +722,15 @@ impl Table {
     ///
     /// Returns an error if the table cannot be grown
     pub fn grow(&mut self, delta: u32, init_value_from_arg: KilnValue) -> Result<u32> {
-        let init_val_matches = matches!((&init_value_from_arg, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
+        let init_val_matches = matches!(
+            (&init_value_from_arg, &self.ty.element_type),
+            (KilnValue::FuncRef(_), KilnRefType::Funcref)
+            | (KilnValue::ExternRef(_), KilnRefType::Externref)
+            | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
+            | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
+            | (KilnValue::StructRef(_), KilnRefType::Gc(_))
+            | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
+        );
         if !init_val_matches {
             return Err(Error::validation_error(
                 "Grow operation init value type doesn't match table element type",
@@ -786,7 +826,7 @@ impl Table {
         }
         for (i, val_opt) in init_data.iter().enumerate() {
             if let Some(val) = val_opt {
-                let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref));
+                let val_matches = matches!((&val, &self.ty.element_type), (KilnValue::FuncRef(_), KilnRefType::Funcref) | (KilnValue::ExternRef(_), KilnRefType::Externref) | (KilnValue::ExternRef(_), KilnRefType::Gc(_)));
                 if !val_matches {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }

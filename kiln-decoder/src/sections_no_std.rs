@@ -445,6 +445,7 @@ pub mod parsers {
             let kiln_table_type = KilnTableType {
                 element_type: table_type.element_type,
                 limits: table_type.limits,
+                table64: table_type.table64,
             };
 
             tables

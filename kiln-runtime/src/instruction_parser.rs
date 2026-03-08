@@ -1016,6 +1016,71 @@ fn parse_instruction_with_provider(
             }
         }
 
+        // SIMD instructions (0xFD prefix) - WebAssembly SIMD Proposal
+        0xFD => {
+            // SIMD instructions use 0xFD prefix followed by LEB128-encoded sub-opcode
+            let (simd_opcode, opcode_bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += opcode_bytes;
+
+            match simd_opcode {
+                // SIMD memory load/store operations (0x00-0x0B, 0x5C-0x5D) - memarg only
+                0x00..=0x0B | 0x5C..=0x5D => {
+                    let (memarg, memarg_bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += memarg_bytes;
+                    Instruction::SimdMemOp { opcode: simd_opcode, memarg }
+                }
+                // SIMD memory lane operations (0x54-0x5B) - memarg + lane index
+                0x54..=0x5B => {
+                    let (memarg, memarg_bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += memarg_bytes;
+                    if offset + consumed >= bytecode.len() {
+                        return Err(Error::parse_error("Unexpected end in SIMD memory lane op"));
+                    }
+                    let lane = bytecode[offset + consumed];
+                    consumed += 1;
+                    Instruction::SimdMemLaneOp { opcode: simd_opcode, memarg, lane }
+                }
+                // v128.const (0x0C) - 16 bytes immediate
+                0x0C => {
+                    if offset + consumed + 16 > bytecode.len() {
+                        return Err(Error::parse_error("Unexpected end in v128.const"));
+                    }
+                    let mut bytes = [0u8; 16];
+                    bytes.copy_from_slice(&bytecode[offset + consumed..offset + consumed + 16]);
+                    consumed += 16;
+                    Instruction::V128Const { bytes }
+                }
+                // i8x16.shuffle (0x0D) - 16 lane indices
+                0x0D => {
+                    if offset + consumed + 16 > bytecode.len() {
+                        return Err(Error::parse_error("Unexpected end in i8x16.shuffle"));
+                    }
+                    let mut lanes = [0u8; 16];
+                    lanes.copy_from_slice(&bytecode[offset + consumed..offset + consumed + 16]);
+                    consumed += 16;
+                    Instruction::SimdShuffle { lanes }
+                }
+                // SIMD extract/replace lane operations (0x15-0x22) - 1 byte lane index
+                0x15..=0x22 => {
+                    if offset + consumed >= bytecode.len() {
+                        return Err(Error::parse_error("Unexpected end in SIMD lane op"));
+                    }
+                    let lane = bytecode[offset + consumed];
+                    consumed += 1;
+                    Instruction::SimdLaneOp { opcode: simd_opcode, lane }
+                }
+                // SIMD memory lane operations (load_lane/store_lane) - memarg + lane
+                0xFE_00..=0xFE_FF => {
+                    // These shouldn't appear in practice under 0xFD prefix
+                    return Err(Error::parse_error("Invalid SIMD sub-opcode"));
+                }
+                // All other SIMD operations (no additional immediates)
+                _ => {
+                    Instruction::SimdOp { opcode: simd_opcode }
+                }
+            }
+        }
+
         // GC instructions (0xFB prefix) - WebAssembly GC Proposal
         0xFB => {
             // GC instructions use 0xFB prefix followed by LEB128-encoded opcode
@@ -1282,6 +1347,13 @@ fn parse_instruction_with_provider(
     Ok((instruction, consumed))
 }
 
+/// Parse a memory argument (align + offset) from bytecode
+fn parse_memarg(bytecode: &[u8], offset: usize) -> Result<(MemArg, usize)> {
+    let (align, bytes1) = read_leb128_u32(bytecode, offset)?;
+    let (mem_offset, bytes2) = read_leb128_u32(bytecode, offset + bytes1)?;
+    Ok((MemArg { align_exponent: align, offset: mem_offset, memory_index: 0 }, bytes1 + bytes2))
+}
+
 /// Decode a value type from its binary encoding
 ///
 /// Value types in WebAssembly are encoded as:
@@ -1310,6 +1382,11 @@ fn decode_value_type(b: u8) -> Result<kiln_foundation::types::ValueType> {
         0x6C => Ok(ValueType::I31Ref),
         0x6B => Ok(ValueType::StructRef(0)),
         0x6A => Ok(ValueType::ArrayRef(0)),
+        0x73 => Ok(ValueType::NullFuncRef),    // nullfuncref
+        0x72 => Ok(ValueType::ExternRef),      // nullexternref (maps to externref)
+        0x71 => Ok(ValueType::AnyRef),         // nullref/none (bottom for any)
+        0x74 => Ok(ValueType::ExnRef),         // noexn (bottom for exn)
+        0x63 | 0x64 => Ok(ValueType::FuncRef), // ref types (nullable/non-nullable)
         _ => Err(Error::parse_error("Unknown value type encoding")),
     }
 }
@@ -1340,6 +1417,16 @@ fn parse_block_type(bytecode: &[u8], offset: usize) -> Result<BlockType> {
         0x70 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::FuncRef))),
         0x6F => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ExternRef))),
         0x69 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ExnRef))),
+        // GC reference types
+        0x6E => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::AnyRef))),
+        0x6D => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::EqRef))),
+        0x6C => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::I31Ref))),
+        0x6B => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::StructRef(0)))),
+        0x6A => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ArrayRef(0)))),
+        0x73 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::NullFuncRef))),
+        0x72 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ExternRef))),
+        0x71 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::AnyRef))),
+        0x74 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ExnRef))),
         _ => {
             // Type index: parse as s33 (for small positive values, it's just the byte)
             // For now, handle single-byte type indices (0-63)
@@ -1466,6 +1553,12 @@ fn block_type_to_index(block_type: &BlockType) -> u32 {
         BlockType::Value(Some(kiln_foundation::types::ValueType::FuncRef)) => 0x70,
         BlockType::Value(Some(kiln_foundation::types::ValueType::ExternRef)) => 0x6F,
         BlockType::Value(Some(kiln_foundation::types::ValueType::ExnRef)) => 0x69,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::AnyRef)) => 0x6E,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::EqRef)) => 0x6D,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::I31Ref)) => 0x6C,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::StructRef(_))) => 0x6B,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::ArrayRef(_))) => 0x6A,
+        BlockType::Value(Some(kiln_foundation::types::ValueType::NullFuncRef)) => 0x73,
         BlockType::FuncType(idx) => *idx,
         // Handle any other value types with a default
         BlockType::Value(Some(_)) => 0x40, // Default to empty type for unknown types

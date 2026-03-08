@@ -1088,8 +1088,9 @@ where
             ComponentAlias::CoreInstanceExport(_) => 1u8,
             ComponentAlias::Outer(_) => 2u8,
             ComponentAlias::_Phantom(_) => {
-                // Safety: _Phantom variant should never be constructed
-                panic!("_Phantom variant should never be instantiated")
+                // Safety: _Phantom variant exists only for type parameter P
+                // and should never be constructed at runtime
+                unreachable!("_Phantom variant should never be instantiated")
             },
         };
         discriminant_byte.update_checksum(checksum);
@@ -1098,8 +1099,9 @@ where
             ComponentAlias::CoreInstanceExport(e) => e.update_checksum(checksum),
             ComponentAlias::Outer(e) => e.update_checksum(checksum),
             ComponentAlias::_Phantom(_) => {
-                // Safety: _Phantom variant should never be constructed
-                panic!("_Phantom variant should never be instantiated")
+                // Safety: _Phantom variant exists only for type parameter P
+                // and should never be constructed at runtime
+                unreachable!("_Phantom variant should never be instantiated")
             },
         }
     }
@@ -1128,8 +1130,9 @@ where
                 e.to_bytes_with_provider(writer, provider)?;
             },
             ComponentAlias::_Phantom(_) => {
-                // PhantomData variant should never be instantiated
-panic!("PhantomData variant should never be serialized")
+                return Err(kiln_error::Error::validation_error(
+                    "PhantomData variant should never be serialized",
+                ));
             },
         }
         Ok(())

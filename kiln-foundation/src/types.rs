@@ -547,6 +547,8 @@ pub enum RefType {
     Funcref,
     /// External reference type
     Externref,
+    /// GC reference type with full heap type and nullability support.
+    Gc(GcRefType),
 }
 
 impl RefType {
@@ -555,6 +557,7 @@ impl RefType {
         match self {
             RefType::Funcref => ValueType::FuncRef,
             RefType::Externref => ValueType::ExternRef,
+            RefType::Gc(gc) => gc.to_value_type(),
         }
     }
 
@@ -562,6 +565,13 @@ impl RefType {
         match vt {
             ValueType::FuncRef => Ok(RefType::Funcref),
             ValueType::ExternRef => Ok(RefType::Externref),
+            ValueType::AnyRef => Ok(RefType::Gc(GcRefType::ANYREF)),
+            ValueType::EqRef => Ok(RefType::Gc(GcRefType::EQREF)),
+            ValueType::I31Ref => Ok(RefType::Gc(GcRefType::I31REF)),
+            ValueType::StructRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
+            ValueType::ArrayRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
+            ValueType::NullFuncRef => Ok(RefType::Gc(GcRefType::NULLFUNCREF)),
+            ValueType::ExnRef => Ok(RefType::Gc(GcRefType::EXNREF)),
             _ => Err(Error::runtime_execution_error(
                 "Invalid ValueType for RefType conversion",
             )),
@@ -612,18 +622,25 @@ impl From<RefType> for ValueType {
         match rt {
             RefType::Funcref => ValueType::FuncRef,
             RefType::Externref => ValueType::ExternRef,
+            RefType::Gc(gc) => gc.to_value_type(),
         }
     }
 }
 impl TryFrom<ValueType> for RefType {
     type Error = crate::Error;
 
-    // Use the crate's Error type
-
     fn try_from(vt: ValueType) -> core::result::Result<Self, Self::Error> {
         match vt {
             ValueType::FuncRef => Ok(RefType::Funcref),
             ValueType::ExternRef => Ok(RefType::Externref),
+            ValueType::AnyRef => Ok(RefType::Gc(GcRefType::ANYREF)),
+            ValueType::EqRef => Ok(RefType::Gc(GcRefType::EQREF)),
+            ValueType::I31Ref => Ok(RefType::Gc(GcRefType::I31REF)),
+            ValueType::StructRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
+            ValueType::ArrayRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
+            ValueType::NullFuncRef => Ok(RefType::Gc(GcRefType::NULLFUNCREF)),
+            ValueType::ExnRef => Ok(RefType::Gc(GcRefType::EXNREF)),
+            ValueType::TypedFuncRef(idx, nullable) => Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Concrete(idx)))),
             _ => Err(Error::runtime_execution_error(
                 "Invalid ValueType for RefType try_from conversion",
             )),
@@ -791,6 +808,28 @@ impl GcRefType {
         match rt {
             RefType::Funcref => Self::FUNCREF,
             RefType::Externref => Self::EXTERNREF,
+            RefType::Gc(gc) => gc,
+        }
+    }
+
+    /// Convert GC reference type to ValueType
+    #[must_use]
+    pub fn to_value_type(self) -> ValueType {
+        match self.heap_type {
+            HeapType::Func => {
+                if self.nullable { ValueType::FuncRef } else { ValueType::TypedFuncRef(0, false) }
+            }
+            HeapType::Extern => ValueType::ExternRef,
+            HeapType::Any => ValueType::AnyRef,
+            HeapType::Eq => ValueType::EqRef,
+            HeapType::I31 => ValueType::I31Ref,
+            HeapType::Struct => ValueType::StructRef(0),
+            HeapType::Array => ValueType::ArrayRef(0),
+            HeapType::Exn => ValueType::ExnRef,
+            HeapType::NoFunc => ValueType::NullFuncRef,
+            HeapType::NoExtern => ValueType::ExternRef,
+            HeapType::None => ValueType::AnyRef,
+            HeapType::Concrete(idx) => ValueType::TypedFuncRef(idx, self.nullable),
         }
     }
 
@@ -1964,6 +2003,19 @@ pub enum Instruction<P: MemoryProvider + Clone + core::fmt::Debug + PartialEq + 
     I31GetS,
     /// i31.get_u: extract i32 with zero extension (0xFB 0x1E)
     I31GetU,
+
+    /// SIMD v128.const - 16-byte constant
+    V128Const { bytes: [u8; 16] },
+    /// SIMD operation (most operations - no additional immediates beyond opcode)
+    SimdOp { opcode: u32 },
+    /// SIMD memory operation (v128.load, v128.store, etc.)
+    SimdMemOp { opcode: u32, memarg: MemArg },
+    /// SIMD shuffle operation (v8x16.shuffle with 16 lane indices)
+    SimdShuffle { lanes: [u8; 16] },
+    /// SIMD lane operation (extract_lane, replace_lane)
+    SimdLaneOp { opcode: u32, lane: u8 },
+    /// SIMD memory lane operation (load_lane, store_lane)
+    SimdMemLaneOp { opcode: u32, memarg: MemArg, lane: u8 },
 
     #[doc(hidden)]
     _Phantom(core::marker::PhantomData<P>),
@@ -3764,6 +3816,8 @@ pub struct TableType {
     /// The size limits of the table, specifying initial and optional maximum
     /// size.
     pub limits:       Limits,
+    /// Table64 extension - uses i64 indices instead of i32
+    pub table64:      bool,
 }
 
 // Generic constructor, still valid as it doesn't depend on P.
@@ -3775,6 +3829,16 @@ impl TableType {
         Self {
             element_type,
             limits,
+            table64: false,
+        }
+    }
+
+    /// Creates a new `TableType` with all options including table64.
+    pub const fn new_with_table64(element_type: RefType, limits: Limits, table64: bool) -> Self {
+        Self {
+            element_type,
+            limits,
+            table64,
         }
     }
 }
@@ -3784,6 +3848,7 @@ impl Checksummable for TableType {
     fn update_checksum(&self, checksum: &mut Checksum) {
         self.element_type.update_checksum(checksum);
         self.limits.update_checksum(checksum);
+        self.table64.update_checksum(checksum);
     }
 }
 
@@ -3795,6 +3860,7 @@ impl ToBytes for TableType {
     ) -> kiln_error::Result<()> {
         self.element_type.to_bytes_with_provider(writer, provider)?;
         self.limits.to_bytes_with_provider(writer, provider)?;
+        self.table64.to_bytes_with_provider(writer, provider)?;
         Ok(())
     }
     // Default to_bytes method will be used if #cfg(feature = "default-provider") is
@@ -3808,9 +3874,11 @@ impl FromBytes for TableType {
     ) -> kiln_error::Result<Self> {
         let element_type = RefType::from_bytes_with_provider(reader, provider)?;
         let limits = Limits::from_bytes_with_provider(reader, provider)?;
+        let table64 = bool::from_bytes_with_provider(reader, provider)?;
         Ok(TableType {
             element_type,
             limits,
+            table64,
         })
     }
     // Default from_bytes method will be used if #cfg(feature = "default-provider")
