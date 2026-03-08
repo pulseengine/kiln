@@ -12,6 +12,7 @@ use super::{
 use crate::{
     budget_aware_provider::CrateId,
     memory_init::get_global_capability_context,
+    monitoring::MEMORY_MONITOR,
     safe_memory::{
         NoStdProvider,
         Provider,
@@ -108,6 +109,12 @@ impl MemoryFactory {
             }
         });
 
+        // Record in global memory monitor
+        match &verification_result {
+            Ok(_) => MEMORY_MONITOR.record_allocation(N),
+            Err(_) => MEMORY_MONITOR.record_allocation_failure(),
+        }
+
         // Return verification result
         verification_result?;
 
@@ -173,6 +180,12 @@ impl MemoryFactory {
                 },
             }
         });
+
+        // Record in global memory monitor
+        match &verification_result {
+            Ok(_) => MEMORY_MONITOR.record_allocation(N),
+            Err(_) => MEMORY_MONITOR.record_allocation_failure(),
+        }
 
         // Return verification result
         let capability = capability_result?;
@@ -269,6 +282,12 @@ impl MemoryFactory {
             }
         });
 
+        // Record in global memory monitor
+        match &final_result {
+            Ok(_) => MEMORY_MONITOR.record_allocation(N),
+            Err(_) => MEMORY_MONITOR.record_allocation_failure(),
+        }
+
         // Return verification result
         final_result?;
 
@@ -341,6 +360,9 @@ impl MemoryFactory {
                 0, // No specific crate context for manual deallocation
             );
         });
+
+        // Record in global memory monitor
+        MEMORY_MONITOR.record_deallocation(size);
     }
 
     /// Enter a module-level memory scope with budget tracking
@@ -448,6 +470,8 @@ impl MemoryFactory {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use super::*;
 
     #[test]
@@ -579,5 +603,144 @@ mod tests {
         let report = MemoryFactory::get_safety_report();
         assert_eq!(report.failed_allocations, 1);
         assert_eq!(report.capability_violations, 1);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_memory_monitor_allocation_tracking() {
+        use crate::monitoring::MEMORY_MONITOR;
+
+        // Reset both monitors for clean test state
+        MEMORY_MONITOR.reset();
+        with_safety_monitor(|monitor| {
+            #[cfg(test)]
+            monitor.reset();
+        });
+
+        // Verify initial state
+        let stats = MEMORY_MONITOR.get_statistics();
+        assert_eq!(stats.total_allocations, 0);
+        assert_eq!(stats.current_usage, 0);
+
+        // Create a capability context for testing
+        use crate::{
+            capabilities::MemoryCapabilityContext,
+            verification::VerificationLevel,
+        };
+        let mut context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
+        let _ = context.register_dynamic_capability(CrateId::Foundation, 8192);
+
+        // Allocate and verify MEMORY_MONITOR records it
+        let result = MemoryFactory::create_with_context::<2048>(&context, CrateId::Foundation);
+        assert!(result.is_ok());
+
+        let stats = MEMORY_MONITOR.get_statistics();
+        assert_eq!(stats.total_allocations, 1);
+        assert_eq!(stats.current_usage, 2048);
+        assert_eq!(stats.peak_usage, 2048);
+        assert_eq!(stats.allocation_failures, 0);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_memory_monitor_deallocation_tracking() {
+        use crate::monitoring::MEMORY_MONITOR;
+
+        // Reset both monitors for clean test state
+        MEMORY_MONITOR.reset();
+        with_safety_monitor(|monitor| {
+            #[cfg(test)]
+            monitor.reset();
+        });
+
+        // Create a capability context for testing
+        use crate::{
+            capabilities::MemoryCapabilityContext,
+            verification::VerificationLevel,
+        };
+        let mut context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
+        let _ = context.register_dynamic_capability(CrateId::Foundation, 8192);
+
+        // Allocate
+        let result = MemoryFactory::create_with_context::<1024>(&context, CrateId::Foundation);
+        assert!(result.is_ok());
+
+        let stats = MEMORY_MONITOR.get_statistics();
+        assert_eq!(stats.total_allocations, 1);
+        assert_eq!(stats.current_usage, 1024);
+
+        // Deallocate and verify tracking
+        MemoryFactory::record_deallocation(1024);
+
+        let stats = MEMORY_MONITOR.get_statistics();
+        assert_eq!(stats.total_deallocations, 1);
+        assert_eq!(stats.current_usage, 0);
+        assert_eq!(stats.peak_usage, 1024);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_memory_monitor_failure_tracking() {
+        use crate::monitoring::MEMORY_MONITOR;
+
+        // Reset both monitors for clean test state
+        MEMORY_MONITOR.reset();
+        with_safety_monitor(|monitor| {
+            #[cfg(test)]
+            monitor.reset();
+        });
+
+        // Create a capability context with no capabilities registered
+        use crate::{
+            capabilities::MemoryCapabilityContext,
+            verification::VerificationLevel,
+        };
+        let context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
+
+        // Attempt allocation that should fail
+        let result = MemoryFactory::create_with_context::<1024>(&context, CrateId::Foundation);
+        assert!(result.is_err());
+
+        // Verify MEMORY_MONITOR records the failure
+        let stats = MEMORY_MONITOR.get_statistics();
+        assert_eq!(stats.total_allocations, 0);
+        assert_eq!(stats.allocation_failures, 1);
+        assert_eq!(stats.current_usage, 0);
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_memory_monitor_per_crate_budget() {
+        use crate::monitoring::MEMORY_MONITOR;
+
+        // Reset both monitors for clean test state
+        MEMORY_MONITOR.reset();
+        with_safety_monitor(|monitor| {
+            #[cfg(test)]
+            monitor.reset();
+        });
+
+        // Create a capability context for testing
+        use crate::{
+            capabilities::MemoryCapabilityContext,
+            verification::VerificationLevel,
+        };
+        let mut context = MemoryCapabilityContext::new(VerificationLevel::Standard, false);
+        let _ = context.register_dynamic_capability(CrateId::Foundation, 8192);
+
+        // Multiple allocations should accumulate
+        let _ = MemoryFactory::create_with_context::<1024>(&context, CrateId::Foundation);
+        let _ = MemoryFactory::create_with_context::<2048>(&context, CrateId::Foundation);
+
+        let stats = MEMORY_MONITOR.get_statistics();
+        assert_eq!(stats.total_allocations, 2);
+        assert_eq!(stats.current_usage, 3072);
+        assert_eq!(stats.peak_usage, 3072);
+
+        // Deallocation reduces current but not peak
+        MemoryFactory::record_deallocation(1024);
+        let stats = MEMORY_MONITOR.get_statistics();
+        assert_eq!(stats.current_usage, 2048);
+        assert_eq!(stats.peak_usage, 3072);
     }
 }
