@@ -1843,8 +1843,8 @@ impl StacklessEngine {
                                 "[TRAP] Unreachable instruction executed"
                             );
                         }
-                        return Err(kiln_error::Error::runtime_execution_error(
-                            "WebAssembly trap: unreachable instruction executed",
+                        return Err(kiln_error::Error::runtime_trap(
+                            "unreachable",
                         ));
                     }
                     Instruction::Nop => {
@@ -6212,23 +6212,48 @@ impl StacklessEngine {
                             break; // Exit function
                         } else {
                             // This ends a block/loop/if - continue execution
+                            // Per WebAssembly spec: save result values, pop stack to
+                            // entry height, push result values back.
                             if !block_stack.is_empty() {
-                                let (block_type, start_pc, _, _) = block_stack.pop().unwrap();
+                                let (block_type, start_pc, block_type_idx, entry_stack_height) = block_stack.pop().unwrap();
                                 #[cfg(feature = "tracing")]
-                                trace!("End at pc={} (closes {} from pc={}, depth now {})", pc, block_type, start_pc, block_depth);
-                                // Trace End in specific functions for debugging
-                                #[cfg(feature = "tracing")]
-                                if func_idx == 76 || func_idx == 222 {
-                                    trace!(
-                                        func_idx = func_idx,
-                                        pc = pc,
-                                        block_type = %block_type,
-                                        start_pc = start_pc,
-                                        block_depth = block_depth,
-                                        block_stack_len = block_stack.len(),
-                                        "[END] Block closing"
-                                    );
+                                trace!("End at pc={} (closes {} from pc={}, depth now {}, entry_height={})", pc, block_type, start_pc, block_depth, entry_stack_height);
+
+                                // Determine number of result values for this block
+                                let result_count = match block_type_idx {
+                                    0x40 => 0, // empty type - no results
+                                    0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1, // i32, i64, f32, f64, v128
+                                    0x70 | 0x6F => 1, // funcref, externref
+                                    _ => {
+                                        // Type index - look up actual result count
+                                        if let Some(ft) = module.types.get(block_type_idx as usize) {
+                                            ft.results.len()
+                                        } else {
+                                            0
+                                        }
+                                    }
+                                };
+
+                                // Save result values from top of stack
+                                let mut result_values = Vec::new();
+                                for _ in 0..result_count {
+                                    if let Some(v) = operand_stack.pop() {
+                                        result_values.push(v);
+                                    }
                                 }
+
+                                // Pop stack back to entry height (removes intermediate values)
+                                while operand_stack.len() > entry_stack_height {
+                                    let _ = operand_stack.pop();
+                                }
+
+                                // Push result values back (in original order)
+                                for v in result_values.into_iter().rev() {
+                                    operand_stack.push(v);
+                                }
+
+                                #[cfg(feature = "tracing")]
+                                trace!("End: stack after cleanup: len={}", operand_stack.len());
                             } else {
                                 #[cfg(feature = "tracing")]
                                 trace!("End at pc={} (closes block, depth now {})", pc, block_depth);
