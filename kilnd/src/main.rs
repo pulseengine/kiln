@@ -475,20 +475,15 @@ impl KilndEngine {
                 "Component parsed successfully"
             );
 
-            eprintln!("DEBUG: About to call ComponentInstance::from_parsed");
-
             // Create and initialize component instance (passes by reference to avoid stack overflow)
             // This includes executing start functions and transitioning to Running state
             // Note: WASI functions are already registered in host_registry from init_wasi()
             use kiln_component::components::component_instantiation::ComponentInstance;
-
-            eprintln!("DEBUG: Calling from_parsed...");
             // Wrap host_registry in Arc for passing to component
             use std::sync::Arc;
             let registry_arc = Arc::new(self.host_registry.clone());
             let mut instance = ComponentInstance::from_parsed(0, &mut *parsed_component, Some(registry_arc))
-                .map_err(|e| {
-                    eprintln!("[DEBUG] ComponentInstance::from_parsed failed: {:?}", e);
+                .map_err(|_| {
                     Error::runtime_error("Failed to create and initialize component instance")
                 })?;
             // parsed_component is now dropped - we only keep runtime instance
@@ -526,25 +521,12 @@ impl KilndEngine {
             );
 
             // Check for WASI CLI entry point and invoke it
-            // Debug: print available exports
-            #[cfg(feature = "std")]
-            {
-                println!("\n=== Available Exports ===");
-                println!("Total exports: {}", instance.exports.len());
-                for (idx, export) in instance.exports.iter().enumerate() {
-                    println!("  Export[{}]: \"{}\"", idx, export.name);
-                }
-                println!();
-            }
-
             // Find wasi:cli/run export with any version
             let run_export = instance.exports.iter()
                 .find(|e| e.name.starts_with("wasi:cli/run@"))
                 .map(|e| e.name.clone());
 
             if let Some(export_name) = run_export {
-                #[cfg(feature = "std")]
-                eprintln!("[INFO] Calling {} entry point", export_name);
                 let _ = self.logger.handle_minimal_log(
                     LogLevel::Info,
                     "Calling wasi:cli/run entry point"
