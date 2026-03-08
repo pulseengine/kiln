@@ -5756,6 +5756,7 @@ impl StacklessEngine {
                                         return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                     // No-op for zero size copy after bounds check passes
+                                    pc += 1;
                                     continue;
                                 }
 
@@ -5838,6 +5839,7 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                                 // No-op for zero size fill after bounds check passes
+                                pc += 1;
                                 continue;
                             }
 
@@ -5919,6 +5921,7 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                                 // No-op for zero size init after bounds check passes
+                                pc += 1;
                                 continue;
                             }
 
