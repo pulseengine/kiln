@@ -142,6 +142,11 @@ impl WastEngine {
         // Link function imports from registered modules
         self.link_function_imports(&module, instance_idx)?;
 
+        // Validate that all non-spectest imports are satisfied
+        // Per WebAssembly spec: if any import cannot be resolved, the module
+        // is unlinkable and instantiation must fail.
+        self.validate_imports(&module)?;
+
         // Store the module and instance ID for later reference
         let module_name = name.unwrap_or("current").to_string();
         self.modules.insert(module_name.clone(), Arc::clone(&module));
@@ -594,6 +599,151 @@ impl WastEngine {
                 }
 
                 global_import_idx += 1;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate that all imports can be satisfied by registered modules.
+    ///
+    /// Per WebAssembly spec, a module is unlinkable if any import cannot be
+    /// resolved or if the imported entity has an incompatible type.
+    fn validate_imports(&self, module: &Module) -> Result<()> {
+        use kiln_runtime::module::RuntimeImportDesc;
+
+        let import_types = &module.import_types;
+        let import_order = &module.import_order;
+
+        for (i, (mod_name, field_name)) in import_order.iter().enumerate() {
+            // Skip spectest imports (always available via built-in stubs)
+            if mod_name == "spectest" {
+                continue;
+            }
+
+            // Check if the source module is registered
+            let source_module = match self.modules.get(mod_name) {
+                Some(m) => m,
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: module '{}' not registered (import '{}' not found)",
+                        mod_name, field_name
+                    ));
+                }
+            };
+
+            // Look up the export in the source module
+            let bounded_field = kiln_foundation::bounded::BoundedString::<256>::from_str_truncate(
+                field_name,
+            ).map_err(|e| anyhow::anyhow!("Field name too long: {:?}", e))?;
+
+            let export = match source_module.exports.get(&bounded_field) {
+                Some(exp) => exp,
+                None => {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: '{}' not exported from module '{}'",
+                        field_name, mod_name
+                    ));
+                }
+            };
+
+            // Validate the import kind matches the export kind
+            if let Some(desc) = import_types.get(i) {
+                match desc {
+                    RuntimeImportDesc::Function(type_idx) => {
+                        if export.kind != kiln_runtime::module::ExportKind::Function {
+                            return Err(anyhow::anyhow!(
+                                "incompatible import type: '{}' from '{}' is not a function",
+                                field_name, mod_name
+                            ));
+                        }
+                        // Validate function signature matches
+                        let expected_type = module.types.get(*type_idx as usize);
+                        if let Some(expected) = expected_type {
+                            let exported_func_idx = export.index as usize;
+                            if let Some(exported_func) = source_module.functions.get(exported_func_idx) {
+                                if let Some(actual_type) = source_module.types.get(exported_func.type_idx as usize) {
+                                    if expected.params.len() != actual_type.params.len()
+                                        || expected.results.len() != actual_type.results.len()
+                                    {
+                                        return Err(anyhow::anyhow!(
+                                            "incompatible import type: function '{}' from '{}' has wrong signature",
+                                            field_name, mod_name
+                                        ));
+                                    }
+                                    // Check param types
+                                    for (j, (ep, ap)) in expected.params.iter().zip(actual_type.params.iter()).enumerate() {
+                                        if ep != ap {
+                                            return Err(anyhow::anyhow!(
+                                                "incompatible import type: function '{}' param {} type mismatch",
+                                                field_name, j
+                                            ));
+                                        }
+                                    }
+                                    // Check result types
+                                    for (j, (er, ar)) in expected.results.iter().zip(actual_type.results.iter()).enumerate() {
+                                        if er != ar {
+                                            return Err(anyhow::anyhow!(
+                                                "incompatible import type: function '{}' result {} type mismatch",
+                                                field_name, j
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    RuntimeImportDesc::Global(global_type) => {
+                        if export.kind != kiln_runtime::module::ExportKind::Global {
+                            return Err(anyhow::anyhow!(
+                                "incompatible import type: '{}' from '{}' is not a global",
+                                field_name, mod_name
+                            ));
+                        }
+                        // Validate global type matches (value type and mutability)
+                        let exported_global_idx = export.index as usize;
+                        if let Ok(global_wrapper) = source_module.globals.get(exported_global_idx) {
+                            if let Ok(guard) = global_wrapper.0.read() {
+                                let exported_type = guard.global_type_descriptor();
+                                // Check mutability
+                                if global_type.mutable != exported_type.mutable {
+                                    return Err(anyhow::anyhow!(
+                                        "incompatible import type: global '{}' mutability mismatch",
+                                        field_name
+                                    ));
+                                }
+                                // Check value type
+                                if global_type.value_type != exported_type.value_type {
+                                    return Err(anyhow::anyhow!(
+                                        "incompatible import type: global '{}' type mismatch",
+                                        field_name
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    RuntimeImportDesc::Memory(mem_type) => {
+                        if export.kind != kiln_runtime::module::ExportKind::Memory {
+                            return Err(anyhow::anyhow!(
+                                "incompatible import type: '{}' from '{}' is not a memory",
+                                field_name, mod_name
+                            ));
+                        }
+                        // Memory limits validation: exported min must be >= imported min
+                        // If imported has max, exported must also have max that is <= imported max
+                    }
+                    RuntimeImportDesc::Table(table_type) => {
+                        if export.kind != kiln_runtime::module::ExportKind::Table {
+                            return Err(anyhow::anyhow!(
+                                "incompatible import type: '{}' from '{}' is not a table",
+                                field_name, mod_name
+                            ));
+                        }
+                    }
+                    _ => {
+                        // Tag and other imports - basic kind check only
+                    }
+                }
             }
         }
 
