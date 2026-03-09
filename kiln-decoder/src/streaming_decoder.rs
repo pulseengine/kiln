@@ -650,10 +650,42 @@ impl<'a> StreamingDecoder<'a> {
                 trace!(field_count = field_count, "parse_composite_type: struct");
 
                 let mut gc_fields = Vec::with_capacity(field_count as usize);
+                // Collect field types so struct.new knows how many values to pop
+                #[cfg(feature = "std")]
+                let mut field_types = Vec::with_capacity(field_count as usize);
+                #[cfg(not(feature = "std"))]
+                let mut field_types = alloc::vec::Vec::with_capacity(field_count as usize);
+
                 for _ in 0..field_count {
                     // Parse storage type (value type or packed type)
                     let (storage_byte, new_offset) = self.parse_storage_type(data, offset)?;
                     offset = new_offset;
+
+                    // Convert storage type to ValueType for the placeholder
+                    // Packed types (i8=0x78, i16=0x77) are stored as I32
+                    let field_vt = match storage_byte {
+                        0x78 | 0x77 => ValueType::I32, // packed i8/i16 -> i32
+                        _ => {
+                            // Re-parse as value type to get the proper type
+                            // The parse_storage_type already advanced offset, so use the byte
+                            match storage_byte {
+                                0x7F => ValueType::I32,
+                                0x7E => ValueType::I64,
+                                0x7D => ValueType::F32,
+                                0x7C => ValueType::F64,
+                                0x7B => ValueType::V128,
+                                0x70 => ValueType::FuncRef,
+                                0x6F => ValueType::ExternRef,
+                                0x6E => ValueType::AnyRef,
+                                0x6D => ValueType::EqRef,
+                                0x6C => ValueType::I31Ref,
+                                0x6B => ValueType::StructRef(0),
+                                0x6A => ValueType::ArrayRef(0),
+                                _ => ValueType::I32, // default for complex ref types
+                            }
+                        }
+                    };
+                    field_types.push(field_vt);
 
                     // Parse mutability flag
                     if offset >= data.len() {
@@ -670,12 +702,13 @@ impl<'a> StreamingDecoder<'a> {
                     gc_fields.push(GcFieldType { storage_type, mutable });
                 }
 
-                // Add a placeholder func type to maintain index alignment
+                // Store struct type as a placeholder func type with fields in params
+                // This lets struct.new know the field count via params.len()
                 #[cfg(feature = "std")]
                 {
                     use kiln_foundation::CleanCoreFuncType;
                     let placeholder = CleanCoreFuncType {
-                        params: Vec::new(),
+                        params: field_types,
                         results: Vec::new(),
                     };
                     self.module.types.push(placeholder);
@@ -684,7 +717,7 @@ impl<'a> StreamingDecoder<'a> {
                 #[cfg(not(feature = "std"))]
                 {
                     use kiln_foundation::types::FuncType;
-                    let placeholder = FuncType::new(core::iter::empty(), core::iter::empty())?;
+                    let placeholder = FuncType::new(field_types.into_iter(), core::iter::empty())?;
                     let _ = self.module.types.push(placeholder);
                 }
 
@@ -712,12 +745,31 @@ impl<'a> StreamingDecoder<'a> {
                 #[cfg(feature = "tracing")]
                 trace!("parse_composite_type: array");
 
-                // Add a placeholder func type to maintain index alignment
+                // Convert element storage type to ValueType
+                let elem_vt = match storage_byte {
+                    0x78 | 0x77 => ValueType::I32,
+                    0x7F => ValueType::I32,
+                    0x7E => ValueType::I64,
+                    0x7D => ValueType::F32,
+                    0x7C => ValueType::F64,
+                    0x7B => ValueType::V128,
+                    0x70 => ValueType::FuncRef,
+                    0x6F => ValueType::ExternRef,
+                    0x6E => ValueType::AnyRef,
+                    0x6D => ValueType::EqRef,
+                    0x6C => ValueType::I31Ref,
+                    0x6B => ValueType::StructRef(0),
+                    0x6A => ValueType::ArrayRef(0),
+                    _ => ValueType::I32,
+                };
+
+                // Store array type as a placeholder func type with element type in params
+                // This lets array.new know the element type via params[0]
                 #[cfg(feature = "std")]
                 {
                     use kiln_foundation::CleanCoreFuncType;
                     let placeholder = CleanCoreFuncType {
-                        params: Vec::new(),
+                        params: vec![elem_vt],
                         results: Vec::new(),
                     };
                     self.module.types.push(placeholder);
@@ -726,7 +778,8 @@ impl<'a> StreamingDecoder<'a> {
                 #[cfg(not(feature = "std"))]
                 {
                     use kiln_foundation::types::FuncType;
-                    let placeholder = FuncType::new(core::iter::empty(), core::iter::empty())?;
+                    let elem_iter = core::iter::once(elem_vt);
+                    let placeholder = FuncType::new(elem_iter, core::iter::empty())?;
                     let _ = self.module.types.push(placeholder);
                 }
 

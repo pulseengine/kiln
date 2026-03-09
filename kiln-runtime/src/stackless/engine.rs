@@ -10351,82 +10351,62 @@ impl StacklessEngine {
 
                     Instruction::StructNew(type_idx) => {
                         // struct.new: [field_values...] -> [structref]
-                        // Pop field values in reverse order, create struct with them
+                        // Pop field values in reverse order, create struct, push reference
                         #[cfg(feature = "tracing")]
                         trace!("StructNew: type_idx={}", type_idx);
-
-                        // Determine field count from GC type info
-                        let field_count = {
-                            #[cfg(feature = "std")]
-                            {
-                                match module.gc_types.get(type_idx as usize) {
-                                    Some(crate::module::GcTypeInfo::Struct(fields)) => fields.len(),
-                                    _ => 0, // Unknown type, try with 0 fields
-                                }
-                            }
-                            #[cfg(not(feature = "std"))]
-                            { 0usize }
-                        };
-
+                        // Look up field count from module type section
+                        let field_count = module.types.get(type_idx as usize)
+                            .map(|t| t.params.len())
+                            .unwrap_or(0);
+                        // Pop field values (they're on the stack in order, so pop in reverse)
+                        let mut fields = Vec::with_capacity(field_count);
+                        for _ in 0..field_count {
+                            let val = operand_stack.pop().ok_or_else(||
+                                kiln_error::Error::runtime_trap("struct.new: stack underflow"))?;
+                            fields.push(val);
+                        }
+                        fields.reverse(); // Restore original field order
                         let mut struct_ref = kiln_foundation::values::StructRef::new(
                             type_idx,
                             kiln_foundation::traits::DefaultMemoryProvider::default()
                         ).map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
-
-                        // Pop field values (they are on the stack in order, so pop in reverse)
-                        let mut field_values = Vec::new();
-                        for _ in 0..field_count {
-                            let val = operand_stack.pop().ok_or_else(||
-                                kiln_error::Error::runtime_trap("struct.new: not enough values on stack"))?;
-                            field_values.push(val);
+                        for field in fields {
+                            struct_ref.add_field(field).map_err(|_|
+                                kiln_error::Error::runtime_error("Failed to add struct field"))?;
                         }
-                        field_values.reverse();
-
-                        // Add fields to struct
-                        for val in field_values {
-                            struct_ref.add_field(val).map_err(|_|
-                                kiln_error::Error::runtime_error("Failed to add field to struct"))?;
-                        }
-
                         operand_stack.push(Value::StructRef(Some(struct_ref)));
                     }
 
                     Instruction::StructNewDefault(type_idx) => {
                         // struct.new_default: [] -> [structref]
-                        // Create struct with default (zero) field values
+                        // Create struct with default field values based on type
                         #[cfg(feature = "tracing")]
                         trace!("StructNewDefault: type_idx={}", type_idx);
-
                         let mut struct_ref = kiln_foundation::values::StructRef::new(
                             type_idx,
                             kiln_foundation::traits::DefaultMemoryProvider::default()
                         ).map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
-
-                        // Determine field types from GC type info and add default values
-                        #[cfg(feature = "std")]
-                        {
-                            if let Some(crate::module::GcTypeInfo::Struct(fields)) = module.gc_types.get(type_idx as usize) {
-                                for field in fields {
-                                    let default_val = match &field.storage {
-                                        crate::module::GcFieldStorage::I8 |
-                                        crate::module::GcFieldStorage::I16 |
-                                        crate::module::GcFieldStorage::Value(0x7F) => Value::I32(0),
-                                        crate::module::GcFieldStorage::Value(0x7E) => Value::I64(0),
-                                        crate::module::GcFieldStorage::Value(0x7D) => Value::F32(FloatBits32::from_f32(0.0)),
-                                        crate::module::GcFieldStorage::Value(0x7C) => Value::F64(FloatBits64::from_f64(0.0)),
-                                        crate::module::GcFieldStorage::Value(0x7B) => Value::V128(V128 { bytes: [0u8; 16] }),
-                                        // Reference types default to null
-                                        crate::module::GcFieldStorage::Value(0x6C) => Value::I31Ref(None),
-                                        crate::module::GcFieldStorage::Value(0x6B) => Value::StructRef(None),
-                                        crate::module::GcFieldStorage::Value(0x6A) => Value::ArrayRef(None),
-                                        _ => Value::I32(0), // Default for other types
-                                    };
-                                    struct_ref.add_field(default_val).map_err(|_|
-                                        kiln_error::Error::runtime_error("Failed to add default field to struct"))?;
-                                }
+                        // Add default values for each field based on type info
+                        if let Some(type_info) = module.types.get(type_idx as usize) {
+                            for param_type in &type_info.params {
+                                let default_val = match param_type {
+                                    kiln_foundation::types::ValueType::I32 => Value::I32(0),
+                                    kiln_foundation::types::ValueType::I64 => Value::I64(0),
+                                    kiln_foundation::types::ValueType::F32 => Value::F32(kiln_foundation::values::FloatBits32::from_f32(0.0)),
+                                    kiln_foundation::types::ValueType::F64 => Value::F64(kiln_foundation::values::FloatBits64::from_f64(0.0)),
+                                    kiln_foundation::types::ValueType::V128 => Value::V128(kiln_foundation::values::V128::zero()),
+                                    kiln_foundation::types::ValueType::FuncRef | kiln_foundation::types::ValueType::NullFuncRef => Value::FuncRef(None),
+                                    kiln_foundation::types::ValueType::ExternRef => Value::ExternRef(None),
+                                    kiln_foundation::types::ValueType::I31Ref | kiln_foundation::types::ValueType::EqRef | kiln_foundation::types::ValueType::AnyRef => Value::I31Ref(None),
+                                    kiln_foundation::types::ValueType::StructRef(_) => Value::StructRef(None),
+                                    kiln_foundation::types::ValueType::ArrayRef(_) => Value::ArrayRef(None),
+                                    kiln_foundation::types::ValueType::ExnRef => Value::ExnRef(None),
+                                    _ => Value::I32(0),
+                                };
+                                struct_ref.add_field(default_val).map_err(|_|
+                                    kiln_error::Error::runtime_error("Failed to add default struct field"))?;
                             }
                         }
-
                         operand_stack.push(Value::StructRef(Some(struct_ref)));
                     }
 
@@ -10518,12 +10498,34 @@ impl StacklessEngine {
                             Some(Value::I32(n)) => n as u32,
                             _ => return Err(kiln_error::Error::runtime_trap("array.new_default: expected i32 length")),
                         };
+                        // Determine default value based on element type from module type section
+                        let default_val = if let Some(type_info) = module.types.get(type_idx as usize) {
+                            if let Some(elem_type) = type_info.params.first() {
+                                match elem_type {
+                                    kiln_foundation::types::ValueType::I32 => Value::I32(0),
+                                    kiln_foundation::types::ValueType::I64 => Value::I64(0),
+                                    kiln_foundation::types::ValueType::F32 => Value::F32(kiln_foundation::values::FloatBits32::from_f32(0.0)),
+                                    kiln_foundation::types::ValueType::F64 => Value::F64(kiln_foundation::values::FloatBits64::from_f64(0.0)),
+                                    kiln_foundation::types::ValueType::V128 => Value::V128(kiln_foundation::values::V128::zero()),
+                                    kiln_foundation::types::ValueType::FuncRef | kiln_foundation::types::ValueType::NullFuncRef => Value::FuncRef(None),
+                                    kiln_foundation::types::ValueType::ExternRef => Value::ExternRef(None),
+                                    kiln_foundation::types::ValueType::I31Ref | kiln_foundation::types::ValueType::EqRef | kiln_foundation::types::ValueType::AnyRef => Value::I31Ref(None),
+                                    kiln_foundation::types::ValueType::StructRef(_) => Value::StructRef(None),
+                                    kiln_foundation::types::ValueType::ArrayRef(_) => Value::ArrayRef(None),
+                                    _ => Value::I32(0),
+                                }
+                            } else {
+                                Value::I32(0)
+                            }
+                        } else {
+                            Value::I32(0)
+                        };
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
                             kiln_foundation::traits::DefaultMemoryProvider::default()
                         ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for _ in 0..length {
-                            array_ref.push(Value::I32(0)).map_err(|_|
+                            array_ref.push(default_val.clone()).map_err(|_|
                                 kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
                         operand_stack.push(Value::ArrayRef(Some(array_ref)));
