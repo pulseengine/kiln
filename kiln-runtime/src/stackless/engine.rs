@@ -717,24 +717,26 @@ impl StacklessEngine {
         if let Some(ref mut dispatcher) = self.wasi_dispatcher {
             let wasi_results = dispatcher.dispatch(interface, function, &wasi_args)?;
 
-            let results: Vec<Value> = wasi_results.into_iter().map(|v| {
+            let results: Result<Vec<Value>> = wasi_results.into_iter().map(|v| {
                 match v {
-                    kiln_wasi::Value::S32(i) => Value::I32(i),
-                    kiln_wasi::Value::U32(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S64(i) => Value::I64(i),
-                    kiln_wasi::Value::U64(u) => Value::I64(u as i64),
-                    kiln_wasi::Value::F32(f) => Value::F32(FloatBits32::from_f32(f)),
-                    kiln_wasi::Value::F64(f) => Value::F64(FloatBits64::from_f64(f)),
-                    kiln_wasi::Value::Bool(b) => Value::I32(if b { 1 } else { 0 }),
-                    kiln_wasi::Value::U8(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S8(i) => Value::I32(i as i32),
-                    kiln_wasi::Value::U16(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S16(i) => Value::I32(i as i32),
-                    _ => Value::I32(0),
+                    kiln_wasi::Value::S32(i) => Ok(Value::I32(i)),
+                    kiln_wasi::Value::U32(u) => Ok(Value::I32(u as i32)),
+                    kiln_wasi::Value::S64(i) => Ok(Value::I64(i)),
+                    kiln_wasi::Value::U64(u) => Ok(Value::I64(u as i64)),
+                    kiln_wasi::Value::F32(f) => Ok(Value::F32(FloatBits32::from_f32(f))),
+                    kiln_wasi::Value::F64(f) => Ok(Value::F64(FloatBits64::from_f64(f))),
+                    kiln_wasi::Value::Bool(b) => Ok(Value::I32(if b { 1 } else { 0 })),
+                    kiln_wasi::Value::U8(u) => Ok(Value::I32(u as i32)),
+                    kiln_wasi::Value::S8(i) => Ok(Value::I32(i as i32)),
+                    kiln_wasi::Value::U16(u) => Ok(Value::I32(u as i32)),
+                    kiln_wasi::Value::S16(i) => Ok(Value::I32(i as i32)),
+                    _other => Err(kiln_error::Error::runtime_execution_error(
+                        "unsupported WASI value type in canon-lowered function result",
+                    )),
                 }
             }).collect();
 
-            Ok(results)
+            results
         } else {
             Err(kiln_error::Error::runtime_error("WASI dispatcher not available for canon-lowered function"))
         }
@@ -780,24 +782,26 @@ impl StacklessEngine {
             let wasi_results = dispatcher.dispatch(&lowered.interface, &lowered.function, &wasi_args)?;
 
             // Convert kiln_wasi::Value back to kiln_foundation::values::Value
-            let results: Vec<Value> = wasi_results.into_iter().map(|v| {
+            let results: Result<Vec<Value>> = wasi_results.into_iter().map(|v| {
                 match v {
-                    kiln_wasi::Value::S32(i) => Value::I32(i),
-                    kiln_wasi::Value::U32(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S64(i) => Value::I64(i),
-                    kiln_wasi::Value::U64(u) => Value::I64(u as i64),
-                    kiln_wasi::Value::F32(f) => Value::F32(FloatBits32::from_f32(f)),
-                    kiln_wasi::Value::F64(f) => Value::F64(FloatBits64::from_f64(f)),
-                    kiln_wasi::Value::Bool(b) => Value::I32(if b { 1 } else { 0 }),
-                    kiln_wasi::Value::U8(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S8(i) => Value::I32(i as i32),
-                    kiln_wasi::Value::U16(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S16(i) => Value::I32(i as i32),
-                    _ => Value::I32(0), // Default for unsupported types
+                    kiln_wasi::Value::S32(i) => Ok(Value::I32(i)),
+                    kiln_wasi::Value::U32(u) => Ok(Value::I32(u as i32)),
+                    kiln_wasi::Value::S64(i) => Ok(Value::I64(i)),
+                    kiln_wasi::Value::U64(u) => Ok(Value::I64(u as i64)),
+                    kiln_wasi::Value::F32(f) => Ok(Value::F32(FloatBits32::from_f32(f))),
+                    kiln_wasi::Value::F64(f) => Ok(Value::F64(FloatBits64::from_f64(f))),
+                    kiln_wasi::Value::Bool(b) => Ok(Value::I32(if b { 1 } else { 0 })),
+                    kiln_wasi::Value::U8(u) => Ok(Value::I32(u as i32)),
+                    kiln_wasi::Value::S8(i) => Ok(Value::I32(i as i32)),
+                    kiln_wasi::Value::U16(u) => Ok(Value::I32(u as i32)),
+                    kiln_wasi::Value::S16(i) => Ok(Value::I32(i as i32)),
+                    _other => Err(kiln_error::Error::runtime_execution_error(
+                        "unsupported WASI value type in lowered function result",
+                    )),
                 }
             }).collect();
 
-            Ok(results)
+            results
         } else {
             Err(kiln_error::Error::runtime_error("WASI dispatcher not available for lowered function"))
         }
@@ -1798,31 +1802,16 @@ impl StacklessEngine {
                                 });
                             },
                             Err(_) => {
-                                // Export not found - fall through to default results
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "unlinked import: export not found in target instance",
+                                ));
                             },
                         }
                     }
-                    // Import not linked or link unresolvable - return correct number of default results
-                    // based on the imported function's type signature
-                    // NOTE: Do NOT decrement here - execute() will decrement on Complete
-                    if let Some(func) = module.functions.get(func_idx) {
-                        if let Some(func_type) = module.types.get(func.type_idx as usize) {
-                            let mut results = Vec::new();
-                            for result_type in &func_type.results {
-                                let default_value = match result_type {
-                                    kiln_foundation::ValueType::I32 => Value::I32(0),
-                                    kiln_foundation::ValueType::I64 => Value::I64(0),
-                                    kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                                    kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
-                                    _ => Value::I32(0),
-                                };
-                                results.push(default_value);
-                            }
-                            return Ok(ExecutionOutcome::Complete(results));
-                        }
-                    }
-                    // Fallback for corrupted module data
-                    return Ok(ExecutionOutcome::Complete(Vec::new()));
+                    // Import not linked - this is an error, not a fallback situation
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "unlinked import: import function is not linked to any target",
+                    ));
                 }
             }
             #[cfg(not(feature = "std"))]
@@ -2354,11 +2343,9 @@ impl StacklessEngine {
                                     operand_stack.push(value);
                                 }
                             } else {
-                                #[cfg(feature = "tracing")]
-
-                                trace!("Warning: Could not resolve import {}", func_idx);
-                                // Push dummy return value to keep stack balanced
-                                operand_stack.push(Value::I32(0));
+                                return Err(kiln_error::Error::runtime_execution_error(
+                                    "unlinked import: could not resolve import function",
+                                ));
                             }
                         } else {
                             // Regular function call - get function signature to know how many args to pop
@@ -4495,7 +4482,8 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I32Store(mem_arg) => {
-                        if let Some(Value::I32(value)) = operand_stack.pop() {
+                        let store_val = operand_stack.pop();
+                        if let Some(Value::I32(value)) = store_val {
                             let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                             #[cfg(feature = "tracing")]
                             trace!("I32Store: writing value {} to address {} (offset={})", value, eff_addr, mem_arg.offset);
@@ -4518,6 +4506,10 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
+                        } else {
+                            return Err(kiln_error::Error::runtime_execution_error(
+                                "type mismatch in i32.store: expected i32 value on stack",
+                            ));
                         }
                     }
                     Instruction::I32Load8S(mem_arg) => {
@@ -4615,7 +4607,8 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I32Store8(mem_arg) => {
-                        if let Some(Value::I32(value)) = operand_stack.pop() {
+                        let store_val = operand_stack.pop();
+                        if let Some(Value::I32(value)) = store_val {
                             let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
 
                             #[cfg(feature = "tracing")]
@@ -4636,10 +4629,15 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
+                        } else {
+                            return Err(kiln_error::Error::runtime_execution_error(
+                                "type mismatch in i32.store8: expected i32 value on stack",
+                            ));
                         }
                     }
                     Instruction::I32Store16(mem_arg) => {
-                        if let Some(Value::I32(value)) = operand_stack.pop() {
+                        let store_val = operand_stack.pop();
+                        if let Some(Value::I32(value)) = store_val {
                             let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -4659,6 +4657,10 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
+                        } else {
+                            return Err(kiln_error::Error::runtime_execution_error(
+                                "type mismatch in i32.store16: expected i32 value on stack",
+                            ));
                         }
                     }
                     Instruction::I64Load(mem_arg) => {
@@ -4704,7 +4706,8 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I64Store(mem_arg) => {
-                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                        let store_val = operand_stack.pop();
+                        if let Some(Value::I64(value)) = store_val {
                             let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -4726,6 +4729,10 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
+                        } else {
+                            return Err(kiln_error::Error::runtime_execution_error(
+                                "type mismatch in i64.store: expected i64 value on stack",
+                            ));
                         }
                     }
                     // ========================================
@@ -4897,7 +4904,8 @@ impl StacklessEngine {
                     // I64 Partial Store Instructions (store lower bits of i64)
                     // ========================================
                     Instruction::I64Store8(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
+                        let (val, addr_val) = (operand_stack.pop(), operand_stack.pop());
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (val, addr_val) {
                             let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -4928,10 +4936,15 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
+                        } else {
+                            return Err(kiln_error::Error::runtime_execution_error(
+                                "type mismatch in i64.store8: expected i64 value and i32 address on stack",
+                            ));
                         }
                     }
                     Instruction::I64Store16(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
+                        let (val, addr_val) = (operand_stack.pop(), operand_stack.pop());
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (val, addr_val) {
                             let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -4962,10 +4975,15 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
+                        } else {
+                            return Err(kiln_error::Error::runtime_execution_error(
+                                "type mismatch in i64.store16: expected i64 value and i32 address on stack",
+                            ));
                         }
                     }
                     Instruction::I64Store32(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
+                        let (val, addr_val) = (operand_stack.pop(), operand_stack.pop());
+                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (val, addr_val) {
                             let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -4996,6 +5014,10 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
+                        } else {
+                            return Err(kiln_error::Error::runtime_execution_error(
+                                "type mismatch in i64.store32: expected i64 value and i32 address on stack",
+                            ));
                         }
                     }
                     // ========================================
@@ -5045,7 +5067,8 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::F32Store(mem_arg) => {
-                        if let (Some(Value::F32(bits)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
+                        let (val, addr_val) = (operand_stack.pop(), operand_stack.pop());
+                        if let (Some(Value::F32(bits)), Some(Value::I32(addr))) = (val, addr_val) {
                             let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -5059,6 +5082,10 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
+                        } else {
+                            return Err(kiln_error::Error::runtime_execution_error(
+                                "type mismatch in f32.store: expected f32 value and i32 address on stack",
+                            ));
                         }
                     }
                     Instruction::F64Load(mem_arg) => {
@@ -5085,7 +5112,8 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::F64Store(mem_arg) => {
-                        if let (Some(Value::F64(bits)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
+                        let (val, addr_val) = (operand_stack.pop(), operand_stack.pop());
+                        if let (Some(Value::F64(bits)), Some(Value::I32(addr))) = (val, addr_val) {
                             let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -5099,6 +5127,10 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
+                        } else {
+                            return Err(kiln_error::Error::runtime_execution_error(
+                                "type mismatch in f64.store: expected f64 value and i32 address on stack",
+                            ));
                         }
                     }
                     // F32 Arithmetic operations
@@ -10959,10 +10991,9 @@ impl StacklessEngine {
                     trace!("Result {}: {:?}", i, value);
                     results.insert(0, value);
                 } else {
-                    #[cfg(feature = "tracing")]
-
-                    trace!("Result {}: missing, using default", i);
-                    results.insert(0, Value::I32(0));
+                    return Err(kiln_error::Error::runtime_execution_error(
+                        "function expected to return a value but operand stack was empty",
+                    ));
                 }
             }
 
@@ -10981,119 +11012,26 @@ impl StacklessEngine {
 
         #[cfg(not(feature = "std"))]
         {
-            // Fallback for no_std - return default values
-            let mut results = {
-                use kiln_foundation::{
-                    budget_aware_provider::CrateId,
-                    safe_managed_alloc,
-                };
-                use crate::bounded_runtime_infra::RUNTIME_MEMORY_SIZE;
-                let provider = safe_managed_alloc!(RUNTIME_MEMORY_SIZE, CrateId::Runtime)?;
-                BoundedVec::new(provider)?
-            };
-            for result_type in &func_type.results {
-                let default_value = match result_type {
-                    kiln_foundation::ValueType::I32 => Value::I32(0),
-                    kiln_foundation::ValueType::I64 => Value::I64(0),
-                    kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                    kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
-                    _ => Value::I32(0),
-                };
-                results.push(default_value)?;
-            }
-            // Return completed execution - call depth is handled by the trampoline wrapper
-            Ok(ExecutionOutcome::Complete(results))
+            // no_std: execution should have produced results on the stack
+            // If we reach here without having executed, that's an error
+            return Err(kiln_error::Error::runtime_execution_error(
+                "function execution not supported in no_std without stack results",
+            ));
         }
     }
 
     #[cfg(not(any(feature = "std", feature = "alloc")))]
     pub fn execute(
         &self,
-        instance_id: usize,
-        func_idx: usize,
-        args: Vec<Value>,
+        _instance_id: usize,
+        _func_idx: usize,
+        _args: Vec<Value>,
     ) -> Result<Vec<Value>> {
-        #[cfg(feature = "std")]
-        #[cfg(feature = "tracing")]
-
-        trace!("DEBUG StacklessEngine::execute: instance_id={}, func_idx={}", instance_id, func_idx);
-
-        let instance = self
-            .instances
-            .get(&instance_id)?
-            .ok_or_else(|| kiln_error::Error::runtime_execution_error("Instance not found"))?;
-
-        // For now, implement a basic execution that validates the function exists
-        // and returns appropriate results
-        let module = instance.module();
-
-        #[cfg(feature = "std")]
-        #[cfg(feature = "tracing")]
-
-        debug!("Got module, functions.len()={}", module.functions.len());
-
-        // Validate function index
-        if func_idx >= module.functions.len() {
-            return Err(kiln_error::Error::runtime_function_not_found(
-                "Function index out of bounds",
-            ));
-        }
-
-        let func = module
-            .functions
-            .get(func_idx)
-            .map_err(|_| kiln_error::Error::runtime_error("Failed to get function"))?;
-
-        #[cfg(feature = "std")]
-        #[cfg(feature = "tracing")]
-
-        debug!("Retrieved func, body.instructions.len()={}", func.body.instructions.len());
-
-        #[cfg(feature = "std")]
-        #[cfg(feature = "tracing")]
-
-        trace!("DEBUG execute: func.type_idx={}, module.types.len()={}", func.type_idx, module.types.len());
-
-        // In std mode, types is Vec so get() returns Option<&T>
-        #[cfg(feature = "std")]
-        let func_type = module
-            .types
-            .get(func.type_idx as usize)
-            .ok_or_else(|| kiln_error::Error::runtime_error("Failed to get function type"))?;
-
-        // In no_std mode, types is BoundedVec so get() returns Result<T>
-        #[cfg(not(feature = "std"))]
-        let func_type = &module
-            .types
-            .get(func.type_idx as usize)
-            .map_err(|_| kiln_error::Error::runtime_error("Failed to get function type"))?;
-
-        // Return appropriate default values based on function signature
-        let mut results = {
-            use kiln_foundation::{
-                budget_aware_provider::CrateId,
-                safe_managed_alloc,
-            };
-
-            let provider = safe_managed_alloc!(4096, CrateId::Runtime)?;
-            BoundedVec::new(provider)
-                .map_err(|_| kiln_error::Error::runtime_error("Failed to create results vector"))?
-        };
-        for result_type in &func_type.results {
-            let default_value = match result_type {
-                kiln_foundation::ValueType::I32 => Value::I32(0),
-                kiln_foundation::ValueType::I64 => Value::I64(0),
-                kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0.0f32.to_bits())),
-                kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0.0f64.to_bits())),
-                // Add other types as needed
-                _ => Value::I32(0), // Default fallback
-            };
-            results
-                .push(default_value)
-                .map_err(|_| kiln_error::Error::runtime_error("Failed to push result value"))?;
-        }
-
-        Ok(results)
+        // Execution in no_std/no_alloc mode is not yet implemented.
+        // Returning default values would silently mask this gap.
+        Err(kiln_error::Error::runtime_execution_error(
+            "function execution not implemented in no_std/no_alloc configuration",
+        ))
     }
 
     /// Get the remaining fuel for execution
@@ -11109,77 +11047,16 @@ impl StacklessEngine {
     /// Execute a single step of function execution with instruction limit
     pub fn execute_function_step(
         &mut self,
-        instance: &ModuleInstance,
-        func_idx: usize,
-        params: &[Value],
-        max_instructions: u32,
+        _instance: &ModuleInstance,
+        _func_idx: usize,
+        _params: &[Value],
+        _max_instructions: u32,
     ) -> Result<crate::stackless::ExecutionResult> {
-        use kiln_foundation::{
-            budget_aware_provider::CrateId,
-            safe_managed_alloc,
-        };
-
-        // Validate function exists
-        let module = instance.module();
-        if func_idx >= module.functions.len() {
-            return Err(kiln_error::Error::runtime_function_not_found(
-                "Function index out of bounds",
-            ));
-        }
-
-        // Get function type
-        let func = module
-            .functions
-            .get(func_idx)
-            .ok_or_else(|| kiln_error::Error::runtime_function_not_found("Failed to get function"))?;
-        // In std mode, types is Vec so get() returns Option<&T>
-        #[cfg(feature = "std")]
-        let func_type = module
-            .types
-            .get(func.type_idx as usize)
-            .ok_or_else(|| kiln_error::Error::runtime_error("Failed to get function type"))?;
-
-        // In no_std mode, types is BoundedVec so get() returns Result<T>
-        #[cfg(not(feature = "std"))]
-        let func_type = &module
-            .types
-            .get(func.type_idx as usize)
-            .map_err(|_| kiln_error::Error::runtime_error("Failed to get function type"))?;
-
-        // Simulate step execution - in real implementation would execute instructions
-        // For now, return completed with default values
-        let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
-        let mut results = kiln_foundation::bounded::BoundedVec::new(provider)
-            .map_err(|_| kiln_error::Error::runtime_error("Failed to create results vector"))?;
-
-        for result_type in &func_type.results {
-            let default_value = match result_type {
-                kiln_foundation::ValueType::I32 => Value::I32(0),
-                kiln_foundation::ValueType::I64 => Value::I64(0),
-                kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0.0f32.to_bits())),
-                kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0.0f64.to_bits())),
-                _ => Value::I32(0),
-            };
-            results
-                .push(default_value)
-                .map_err(|_| kiln_error::Error::runtime_error("Failed to push result value"))?;
-        }
-
-        // Update instruction pointer
-        self.instruction_pointer
-            .fetch_add(max_instructions as u64, Ordering::Relaxed);
-
-        // Consume some fuel
-        let fuel_to_consume = max_instructions.min(100) as u64;
-        let current_fuel = self.fuel.load(Ordering::Relaxed);
-        if current_fuel < fuel_to_consume {
-            self.fuel.store(0, Ordering::Relaxed);
-            return Ok(crate::stackless::ExecutionResult::FuelExhausted);
-        }
-        self.fuel
-            .fetch_sub(fuel_to_consume, Ordering::Relaxed);
-
-        Ok(crate::stackless::ExecutionResult::Completed(results))
+        // Step execution is not yet implemented - returning default values
+        // would silently mask this gap
+        Err(kiln_error::Error::runtime_execution_error(
+            "execute_function_step is not yet implemented",
+        ))
     }
 
     /// Restore engine state from a saved state
