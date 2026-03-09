@@ -1402,6 +1402,417 @@ mod tests {
     }
 
     #[test]
+    fn test_exception_basic_throw_catch() {
+        // Test basic throw + catch with i32 value passing
+        // Pattern: (block $h (result i32) (try_table (catch $e $h) (throw $e (i32.const 5))) (i32.const 0))
+        // Expected: throw fires, catch matches, pushes 5 to block $h, returns 5
+        let wast_content = r#"
+            (module
+              (tag $e0 (param i32))
+              (func (export "catch-i32") (result i32)
+                (block $h (result i32)
+                  (try_table (catch $e0 $h)
+                    (throw $e0 (i32.const 5))
+                  )
+                  (i32.const 0)
+                )
+              )
+            )
+            (assert_return (invoke "catch-i32") (i32.const 5))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Basic throw/catch failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_no_throw() {
+        // Test try_table where no exception is thrown (normal flow)
+        let wast_content = r#"
+            (module
+              (tag $e0 (param i32))
+              (func (export "no-throw") (result i32)
+                (block $h (result i32)
+                  (try_table (catch $e0 $h)
+                    (i32.const 42)
+                    (br 1)
+                  )
+                  (i32.const 0)
+                )
+              )
+            )
+            (assert_return (invoke "no-throw") (i32.const 42))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "No-throw flow failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_catch_all() {
+        // Test catch_all handler
+        let wast_content = r#"
+            (module
+              (tag $e0 (param i32))
+              (func (export "catch-all") (result i32)
+                (block $h
+                  (try_table (catch_all $h)
+                    (throw $e0 (i32.const 5))
+                  )
+                  (i32.const 0)
+                  (return)
+                )
+                (i32.const 1)
+              )
+            )
+            (assert_return (invoke "catch-all") (i32.const 1))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Catch-all failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_catch_ref() {
+        // Test catch_ref handler (pushes payload + exnref)
+        let wast_content = r#"
+            (module
+              (tag $e0 (param i32))
+              (func (export "catch-ref") (result i32)
+                (block $h (result i32 exnref)
+                  (try_table (catch_ref $e0 $h)
+                    (throw $e0 (i32.const 7))
+                  )
+                  (i32.const 0)
+                  (ref.null exn)
+                )
+                (drop)
+              )
+            )
+            (assert_return (invoke "catch-ref") (i32.const 7))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Catch-ref failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_throw_ref() {
+        // Test throw_ref: catch an exception with catch_all_ref, then re-throw via throw_ref
+        // Inner try_table catches with catch_all_ref, producing exnref on $h1
+        // The exnref is then re-thrown with throw_ref
+        // Outer try_table catches with catch, producing i32 on $h2
+        let wast_content = r#"
+            (module
+              (tag $e0 (param i32))
+              (func (export "throw-ref") (result i32)
+                (block $h2 (result i32)
+                  (try_table (catch $e0 $h2)
+                    (block $h1 (result exnref)
+                      (try_table (catch_all_ref $h1)
+                        (throw $e0 (i32.const 9))
+                      )
+                      (ref.null exn)
+                    )
+                    (throw_ref)
+                    (unreachable)
+                  )
+                  (unreachable)
+                )
+              )
+            )
+            (assert_return (invoke "throw-ref") (i32.const 9))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Throw-ref failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_cross_function() {
+        // Test exception propagation across function calls
+        let wast_content = r#"
+            (module
+              (tag $e0 (param i32))
+              (func $thrower (throw $e0 (i32.const 11)))
+              (func (export "cross-func") (result i32)
+                (block $h (result i32)
+                  (try_table (catch $e0 $h)
+                    (call $thrower)
+                  )
+                  (i32.const 0)
+                )
+              )
+            )
+            (assert_return (invoke "cross-func") (i32.const 11))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Cross-function exception failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_uncaught_trap() {
+        // Test that uncaught exception causes a trap
+        let wast_content = r#"
+            (module
+              (tag $e0 (param i32))
+              (func (export "uncaught") (result i32)
+                (throw $e0 (i32.const 42))
+              )
+            )
+            (assert_trap (invoke "uncaught") "unhandled exception")
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Uncaught exception trap failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_try_table_normal_end() {
+        // Test try_table where body completes normally (falls through to end)
+        // The catch handler branches to $h which expects no values (matching the empty tag)
+        let wast_content = r#"
+            (module
+              (tag $e0)
+              (func (export "normal-end") (result i32)
+                (block $h
+                  (try_table (catch $e0 $h)
+                    (nop)
+                  )
+                )
+                (i32.const 99)
+              )
+            )
+            (assert_return (invoke "normal-end") (i32.const 99))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Normal try_table end failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_catch_all_ref() {
+        // Test catch_all_ref handler
+        let wast_content = r#"
+            (module
+              (tag $e0 (param i32))
+              (func (export "catch-all-ref") (result i32)
+                (block $h (result exnref)
+                  (try_table (catch_all_ref $h)
+                    (throw $e0 (i32.const 13))
+                  )
+                  (ref.null exn)
+                )
+                (drop)
+                (i32.const 1)
+              )
+            )
+            (assert_return (invoke "catch-all-ref") (i32.const 1))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Catch-all-ref failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_null_throw_ref_trap() {
+        // Test that throw_ref with null exnref traps
+        let wast_content = r#"
+            (module
+              (func (export "null-throw-ref")
+                (throw_ref (ref.null exn))
+              )
+            )
+            (assert_trap (invoke "null-throw-ref") "null exception reference")
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Null throw_ref trap failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_multi_param_tag() {
+        // Test throw + catch with multiple parameter tag
+        let wast_content = r#"
+            (module
+              (tag $e (param i32 i32))
+              (func (export "multi-param") (result i32)
+                (block $h (result i32 i32)
+                  (try_table (catch $e $h)
+                    (throw $e (i32.const 3) (i32.const 4))
+                  )
+                  (i32.const 0)
+                  (i32.const 0)
+                )
+                (i32.add)
+              )
+            )
+            (assert_return (invoke "multi-param") (i32.const 7))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Multi-param tag failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_multiple_handlers() {
+        // Test try_table with multiple catch handlers
+        // First matching handler should be used
+        let wast_content = r#"
+            (module
+              (tag $e0 (param i32))
+              (tag $e1 (param i32))
+              (func (export "multi-handler") (result i32)
+                (block $h0 (result i32)
+                  (block $h1 (result i32)
+                    (try_table (catch $e0 $h0) (catch $e1 $h1)
+                      (throw $e1 (i32.const 20))
+                    )
+                    (unreachable)
+                  )
+                )
+              )
+            )
+            (assert_return (invoke "multi-handler") (i32.const 20))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Multiple handlers failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_nested_try_table() {
+        // Test nested try_table blocks - inner one catches, outer doesn't fire
+        let wast_content = r#"
+            (module
+              (tag $e (param i32))
+              (func (export "nested") (result i32)
+                (block $outer (result i32)
+                  (try_table (catch $e $outer)
+                    (block $inner (result i32)
+                      (try_table (catch $e $inner)
+                        (throw $e (i32.const 30))
+                      )
+                      (unreachable)
+                    )
+                    (i32.const 1)
+                    (i32.add)
+                    (return)
+                  )
+                  (unreachable)
+                )
+              )
+            )
+            (assert_return (invoke "nested") (i32.const 31))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Nested try_table failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_try_table_with_result() {
+        // Test try_table with non-empty result type (body completes normally)
+        let wast_content = r#"
+            (module
+              (tag $e (param i32))
+              (func (export "try-result") (result i32)
+                (block $h (result i32)
+                  (try_table (result i32) (catch $e $h)
+                    (i32.const 42)
+                  )
+                )
+              )
+            )
+            (assert_return (invoke "try-result") (i32.const 42))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "try_table with result failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_deeply_nested_throw() {
+        // Test exception thrown from deep within nested blocks
+        let wast_content = r#"
+            (module
+              (tag $e (param i32))
+              (func (export "deep") (result i32)
+                (block $h (result i32)
+                  (try_table (catch $e $h)
+                    (block
+                      (block
+                        (throw $e (i32.const 50))
+                      )
+                    )
+                  )
+                  (unreachable)
+                )
+              )
+            )
+            (assert_return (invoke "deep") (i32.const 50))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Deeply nested throw failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_tag_mismatch() {
+        // Test that catch only catches matching tag, not a different one
+        // Inner try_table catches $e1 but we throw $e0 -- should propagate to outer
+        let wast_content = r#"
+            (module
+              (tag $e0 (param i32))
+              (tag $e1 (param i32))
+              (func (export "mismatch") (result i32)
+                (block $outer (result i32)
+                  (try_table (catch $e0 $outer)
+                    (block $inner (result i32)
+                      (try_table (catch $e1 $inner)
+                        (throw $e0 (i32.const 60))
+                      )
+                      (unreachable)
+                    )
+                    (unreachable)
+                  )
+                  (unreachable)
+                )
+              )
+            )
+            (assert_return (invoke "mismatch") (i32.const 60))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Tag mismatch failed: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_exception_empty_tag() {
+        // Test throw/catch with tag that has no parameters
+        let wast_content = r#"
+            (module
+              (tag $e)
+              (func (export "empty-tag") (result i32)
+                (block $h
+                  (try_table (catch $e $h)
+                    (throw $e)
+                  )
+                  (i32.const 1)
+                  (return)
+                )
+                (i32.const 0)
+              )
+            )
+            (assert_return (invoke "empty-tag") (i32.const 0))
+        "#;
+
+        let result = run_simple_wast_test(wast_content);
+        assert!(result.is_ok(), "Empty tag failed: {:?}", result.err());
+    }
+
+    #[test]
     fn test_try_table_gc_module_decode() {
         use wast::{
             Wat,

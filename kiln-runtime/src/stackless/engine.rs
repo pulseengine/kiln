@@ -6708,6 +6708,8 @@ impl StacklessEngine {
                                 Value::FuncRef(Some(_)) => 0i32,
                                 Value::ExternRef(None) => 1i32,
                                 Value::ExternRef(Some(_)) => 0i32,
+                                Value::ExnRef(None) => 1i32,
+                                Value::ExnRef(Some(_)) => 0i32,
                                 _ => {
                                     #[cfg(feature = "tracing")]
                                     error!("RefIsNull: expected reference type, got {:?}", ref_val);
@@ -6725,14 +6727,14 @@ impl StacklessEngine {
                         // Pop reference, trap if null, push back if not null
                         if let Some(ref_val) = operand_stack.pop() {
                             match &ref_val {
-                                Value::FuncRef(None) | Value::ExternRef(None) => {
+                                Value::FuncRef(None) | Value::ExternRef(None) | Value::ExnRef(None) => {
                                     #[cfg(feature = "tracing")]
                                     error!("RefAsNonNull: null reference");
                                     return Err(kiln_error::Error::runtime_trap(
                                         "null reference in ref.as_non_null",
                                     ));
                                 }
-                                Value::FuncRef(Some(_)) | Value::ExternRef(Some(_)) => {
+                                Value::FuncRef(Some(_)) | Value::ExternRef(Some(_)) | Value::ExnRef(Some(_)) => {
                                     #[cfg(feature = "tracing")]
                                     trace!("RefAsNonNull: non-null reference");
                                     operand_stack.push(ref_val);

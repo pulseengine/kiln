@@ -2879,8 +2879,8 @@ impl WastModuleValidator {
                         0x73 | -13 => stack.push(StackType::NullFuncRef),
                         // extern, noextern → ExternRef
                         0x6F | -17 | 0x72 | -14 => stack.push(StackType::ExternRef),
-                        // exn → ExnRef
-                        0x69 | -23 => stack.push(StackType::ExnRef),
+                        // exn, noexn → ExnRef
+                        0x69 | -23 | 0x74 | -12 => stack.push(StackType::ExnRef),
                         // Concrete type index → nullable typed reference
                         _ if heap_type_val >= 0 => {
                             stack.push(StackType::TypedFuncRef(heap_type_val as u32, true));
@@ -4938,6 +4938,7 @@ impl WastModuleValidator {
             0x6C => BlockType::ValueType(ValueType::I31Ref),
             0x6B => BlockType::ValueType(ValueType::StructRef(0)), // abstract structref
             0x6A => BlockType::ValueType(ValueType::ArrayRef(0)),  // abstract arrayref
+            0x74 => BlockType::ValueType(ValueType::ExnRef),        // noexn (bottom for exn)
             0x73 => BlockType::ValueType(ValueType::NullFuncRef),   // nullfuncref = (ref null nofunc)
             0x72 => BlockType::ValueType(ValueType::ExternRef),    // nullexternref = (ref null noextern)
             0x71 => BlockType::ValueType(ValueType::AnyRef),       // nullref = (ref null none)

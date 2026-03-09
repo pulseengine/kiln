@@ -1072,16 +1072,21 @@ impl Checksummable for CatchHandler {
 
 impl Default for CatchHandler {
     fn default() -> Self {
-        Self::CatchAll { label: 0 }
+        // Use Catch variant as default since all variants now serialize to the
+        // same fixed size (9 bytes). This ensures BoundedVec's item_serialized_size
+        // computed from default().serialized_size() matches all variants.
+        Self::Catch { tag_idx: 0, label: 0 }
     }
 }
 
 impl ToBytes for CatchHandler {
     fn serialized_size(&self) -> usize {
-        match self {
-            Self::Catch { .. } | Self::CatchRef { .. } => 1 + 4 + 4, // discriminant + tag_idx + label
-            Self::CatchAll { .. } | Self::CatchAllRef { .. } => 1 + 4, // discriminant + label
-        }
+        // All variants use the same fixed size for BoundedVec compatibility.
+        // BoundedVec uses a fixed item_serialized_size computed from Default,
+        // so all variants must serialize to the same number of bytes.
+        // Format: discriminant(1) + tag_idx(4) + label(4) = 9 bytes
+        // CatchAll/CatchAllRef write 0 for the unused tag_idx field.
+        1 + 4 + 4
     }
 
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
@@ -1102,10 +1107,12 @@ impl ToBytes for CatchHandler {
             }
             Self::CatchAll { label } => {
                 writer.write_u8(0x02)?;
+                writer.write_u32_le(0)?; // padding for fixed-size layout
                 writer.write_u32_le(*label)?;
             }
             Self::CatchAllRef { label } => {
                 writer.write_u8(0x03)?;
+                writer.write_u32_le(0)?; // padding for fixed-size layout
                 writer.write_u32_le(*label)?;
             }
         }
@@ -1131,10 +1138,12 @@ impl FromBytes for CatchHandler {
                 Ok(Self::CatchRef { tag_idx, label })
             }
             0x02 => {
+                let _padding = reader.read_u32_le()?; // skip fixed-size padding
                 let label = reader.read_u32_le()?;
                 Ok(Self::CatchAll { label })
             }
             0x03 => {
+                let _padding = reader.read_u32_le()?; // skip fixed-size padding
                 let label = reader.read_u32_le()?;
                 Ok(Self::CatchAllRef { label })
             }
