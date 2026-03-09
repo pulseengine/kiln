@@ -2957,6 +2957,64 @@ impl WastModuleValidator {
                     let func_type_idx = Self::get_function_type_idx(module, func_idx)?;
                     stack.push(StackType::TypedFuncRef(func_type_idx, false));
                 },
+                // ref.as_non_null (0xD3)
+                0xD3 => {
+                    // Pop a reference, trap if null, push the non-null reference
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+                    if !unreachable {
+                        if stack.len() <= frame_height {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        let ref_type = stack.pop().unwrap();
+                        if !ref_type.is_reference() && ref_type != StackType::Unknown {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        // Push back same type (now known to be non-null at runtime)
+                        stack.push(ref_type);
+                    }
+                },
+                // br_on_null (0xD4)
+                0xD4 => {
+                    // Pop reference, branch if null, push non-null reference if not null
+                    let (label, new_offset) = Self::parse_varuint32(code, offset)?;
+                    offset = new_offset;
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+                    if !unreachable {
+                        if stack.len() <= frame_height {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        let ref_type = stack.pop().unwrap();
+                        if !ref_type.is_reference() && ref_type != StackType::Unknown {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        // Branch validation (null case)
+                        let _ = Self::validate_branch(&stack, label, &frames, false);
+                        // Push back non-null reference (non-null case continues)
+                        stack.push(ref_type);
+                    }
+                },
+                // br_on_non_null (0xD5)
+                0xD5 => {
+                    // Pop reference, branch if NOT null (with ref), continue if null
+                    let (label, new_offset) = Self::parse_varuint32(code, offset)?;
+                    offset = new_offset;
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+                    if !unreachable {
+                        if stack.len() <= frame_height {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        let ref_type = stack.pop().unwrap();
+                        if !ref_type.is_reference() && ref_type != StackType::Unknown {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        // Validate branch target (non-null case branches with ref)
+                        let _ = Self::validate_branch(&stack, label, &frames, false);
+                        // Null case: reference is consumed, not pushed back
+                    }
+                },
 
                 // Multi-byte prefix (0xFC) - saturating truncations, bulk memory, etc.
                 0xFC => {

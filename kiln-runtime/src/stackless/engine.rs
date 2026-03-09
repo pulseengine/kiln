@@ -6992,6 +6992,7 @@ impl StacklessEngine {
                                     if block_type == "loop" {
                                         pc = start_pc;
                                     } else {
+                                        // Skip to end of block
                                         let mut depth = 1;
                                         let mut search_pc = pc + 1;
                                         while depth > 0 && search_pc < instructions.len() {
