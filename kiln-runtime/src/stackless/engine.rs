@@ -5673,7 +5673,9 @@ impl StacklessEngine {
                                         if let Some(func_type) = module.types.get(block_type_idx as usize) {
                                             func_type.results.len()
                                         } else {
-                                            1 // Fallback if type not found
+                                            return Err(kiln_error::Error::runtime_error(
+                                                "Br: block type index not found in module types"
+                                            ));
                                         }
                                     }
                                 }
@@ -5880,7 +5882,9 @@ impl StacklessEngine {
                                                 if let Some(func_type) = module.types.get(block_type_idx as usize) {
                                                     func_type.results.len()
                                                 } else {
-                                                    1
+                                                    return Err(kiln_error::Error::runtime_error(
+                                                        "BrIf: block type index not found in module types"
+                                                    ));
                                                 }
                                             }
                                         }
@@ -6421,7 +6425,9 @@ impl StacklessEngine {
                                             if let Some(func_type) = module.types.get(block_type_idx as usize) {
                                                 func_type.results.len()
                                             } else {
-                                                1
+                                                return Err(kiln_error::Error::runtime_error(
+                                                    "BrTable: block type index not found in module types"
+                                                ));
                                             }
                                         }
                                     }
@@ -6537,21 +6543,37 @@ impl StacklessEngine {
                     }
                     Instruction::Return => {
                         #[cfg(feature = "tracing")]
-                        trace!("🔙 Return at pc={}", pc);
+                        trace!("Return at pc={}", pc);
                         #[cfg(feature = "tracing")]
                         trace!("  Operand stack size: {}", operand_stack.len());
                         #[cfg(feature = "tracing")]
                         trace!("  Instructions executed: {}", instruction_count);
-                        // Trace return from specific functions for debugging
-                        #[cfg(feature = "tracing")]
-                        if func_idx == 76 {
-                            trace!(
-                                func_idx = func_idx,
-                                pc = pc,
-                                stack_size = operand_stack.len(),
-                                "[RETURN] Function returning"
-                            );
+
+                        // Determine how many values to preserve based on function's return type
+                        let values_to_preserve = if let Some(func_type) = module.types.get(func.type_idx as usize) {
+                            func_type.results.len()
+                        } else {
+                            return Err(kiln_error::Error::runtime_error(
+                                "Return: function type not found in module types"
+                            ));
+                        };
+
+                        // Save the return values from top of stack
+                        let mut preserved_values = Vec::new();
+                        for _ in 0..values_to_preserve {
+                            if let Some(v) = operand_stack.pop() {
+                                preserved_values.push(v);
+                            }
                         }
+
+                        // Clear the rest of the stack
+                        operand_stack.clear();
+
+                        // Restore preserved values (in reverse order)
+                        for v in preserved_values.into_iter().rev() {
+                            operand_stack.push(v);
+                        }
+
                         break; // Exit function
                     }
                     Instruction::End => {
