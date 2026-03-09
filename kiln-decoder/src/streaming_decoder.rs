@@ -19,7 +19,7 @@ use kiln_foundation::limits;
 #[cfg(feature = "allocation-tracing")]
 use kiln_foundation::{AllocationPhase, trace_alloc};
 
-use kiln_format::module::{CompositeTypeKind, Function, Module as KilnModule, RecGroup, SubType};
+use kiln_format::module::{CompositeTypeKind, Function, GcFieldType, GcStorageType, Module as KilnModule, RecGroup, SubType};
 use kiln_foundation::{bounded::BoundedVec, safe_memory::NoStdProvider, types::TagType};
 
 use crate::{
@@ -649,20 +649,28 @@ impl<'a> StreamingDecoder<'a> {
                 #[cfg(feature = "tracing")]
                 trace!(field_count = field_count, "parse_composite_type: struct");
 
+                let mut gc_fields = Vec::with_capacity(field_count as usize);
                 for _ in 0..field_count {
                     // Parse storage type (value type or packed type)
-                    let (_, new_offset) = self.parse_storage_type(data, offset)?;
+                    let (storage_byte, new_offset) = self.parse_storage_type(data, offset)?;
                     offset = new_offset;
 
                     // Parse mutability flag
                     if offset >= data.len() {
                         return Err(Error::parse_error("Unexpected end of struct field"));
                     }
-                    offset += 1; // mut flag
+                    let mutable = data[offset] != 0;
+                    offset += 1;
+
+                    let storage_type = match storage_byte {
+                        0x78 => GcStorageType::I8,
+                        0x77 => GcStorageType::I16,
+                        other => GcStorageType::Value(other),
+                    };
+                    gc_fields.push(GcFieldType { storage_type, mutable });
                 }
 
-                // TODO: Store struct type when we have proper GC type storage
-                // For now, we add a placeholder func type to maintain index alignment
+                // Add a placeholder func type to maintain index alignment
                 #[cfg(feature = "std")]
                 {
                     use kiln_foundation::CleanCoreFuncType;
@@ -680,24 +688,31 @@ impl<'a> StreamingDecoder<'a> {
                     let _ = self.module.types.push(placeholder);
                 }
 
-                CompositeTypeKind::Struct
+                CompositeTypeKind::StructWithFields(gc_fields)
             },
             COMPOSITE_TYPE_ARRAY => {
                 // Parse array type: storage_type mutability
-                let (_, new_offset) = self.parse_storage_type(data, offset)?;
+                let (storage_byte, new_offset) = self.parse_storage_type(data, offset)?;
                 offset = new_offset;
 
                 // Parse mutability flag
                 if offset >= data.len() {
                     return Err(Error::parse_error("Unexpected end of array type"));
                 }
-                offset += 1; // mut flag
+                let mutable = data[offset] != 0;
+                offset += 1;
+
+                let storage_type = match storage_byte {
+                    0x78 => GcStorageType::I8,
+                    0x77 => GcStorageType::I16,
+                    other => GcStorageType::Value(other),
+                };
+                let gc_element = GcFieldType { storage_type, mutable };
 
                 #[cfg(feature = "tracing")]
                 trace!("parse_composite_type: array");
 
-                // TODO: Store array type when we have proper GC type storage
-                // For now, we add a placeholder func type to maintain index alignment
+                // Add a placeholder func type to maintain index alignment
                 #[cfg(feature = "std")]
                 {
                     use kiln_foundation::CleanCoreFuncType;
@@ -715,7 +730,7 @@ impl<'a> StreamingDecoder<'a> {
                     let _ = self.module.types.push(placeholder);
                 }
 
-                CompositeTypeKind::Array
+                CompositeTypeKind::ArrayWithElement(gc_element)
             },
             _ => {
                 return Err(Error::parse_error("Invalid composite type marker"));
