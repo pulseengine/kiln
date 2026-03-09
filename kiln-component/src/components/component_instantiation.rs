@@ -1342,7 +1342,9 @@ impl ComponentInstance {
                         let module_idx = *module_idx as usize;
 
                         if module_idx >= module_binaries.len() {
-                            continue;
+                            return Err(kiln_error::Error::component_linking_error(
+                                "Core instance references module index out of bounds",
+                            ));
                         }
 
                         let binary = &module_binaries[module_idx];
@@ -1444,7 +1446,14 @@ impl ComponentInstance {
                                                     {
                                                         // Resolve the provider handle for this specific export
                                                         let provider_handle = if let Some(src_idx) = source_instance {
-                                                            core_instances_map.get(src_idx).copied().unwrap_or(handle)
+                                                            match core_instances_map.get(src_idx) {
+                                                                Some(&h) => h,
+                                                                None => {
+                                                                    return Err(kiln_error::Error::component_linking_error(
+                                                                        "InlineExports export references source instance which is not instantiated",
+                                                                    ));
+                                                                }
+                                                            }
                                                         } else {
                                                             handle
                                                         };
@@ -1686,12 +1695,17 @@ impl ComponentInstance {
                                         }
 
                                     },
-                                    Err(e) => {
-                                        // Continue with other modules
+                                    Err(_e) => {
+                                        return Err(kiln_error::Error::component_linking_error(
+                                            "Failed to instantiate core module during component instantiation",
+                                        ));
                                     },
                                 }
                             },
-                            Err(e) => {
+                            Err(_e) => {
+                                return Err(kiln_error::Error::component_linking_error(
+                                    "Failed to load core module during component instantiation",
+                                ));
                             },
                         }
                     },
