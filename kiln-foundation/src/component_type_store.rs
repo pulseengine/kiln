@@ -62,6 +62,10 @@ impl crate::traits::Checksummable for TypeRef {
 }
 
 impl ToBytes for TypeRef {
+    fn serialized_size(&self) -> usize {
+        self.0.serialized_size()
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,

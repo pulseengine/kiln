@@ -3766,6 +3766,10 @@ impl<const N_BYTES: usize> WasmName<N_BYTES> {
 
 // Trait implementations for WasmName
 impl<const N_BYTES: usize> ToBytes for WasmName<N_BYTES> {
+    fn serialized_size(&self) -> usize {
+        self.inner.serialized_size()
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
