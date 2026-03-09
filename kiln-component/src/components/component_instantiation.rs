@@ -3918,7 +3918,7 @@ impl ComponentInstance {
 
                 for entry_point in entry_points {
                     match engine.execute(instance_handle, entry_point, &wasm_args) {
-                        Ok(results) => {
+                        Ok(_results) => {
                             return Ok(vec![]); // wasi:cli/run returns nothing on success
                         },
                         Err(e) => {

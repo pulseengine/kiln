@@ -1770,15 +1770,24 @@ impl StacklessEngine {
                     if let Some((target_instance_id, export_name)) = linked
                     {
                         // Check if this is a canon-lowered function
+                        // Route through call_wasi_function (which uses host_handler)
+                        // to ensure consistent resource handle management.
                         #[cfg(all(feature = "std", feature = "wasi"))]
                         if export_name.starts_with("__canon_lower_") {
                             let canon_suffix = &export_name["__canon_lower_".len()..];
                             if let Some(sep_pos) = canon_suffix.rfind("::") {
                                 let interface = &canon_suffix[..sep_pos];
                                 let function = &canon_suffix[sep_pos + 2..];
-                                let results = self.dispatch_canon_lowered(
-                                    instance_id, interface, function, args,
+                                // Use a temporary stack for call_wasi_function
+                                let mut temp_stack = args;
+                                let result = self.call_wasi_function(
+                                    interface, function, &mut temp_stack, &module, instance_id,
                                 )?;
+                                let results = if let Some(value) = result {
+                                    vec![value]
+                                } else {
+                                    vec![]
+                                };
                                 return Ok(ExecutionOutcome::Complete(results));
                             }
                         }
@@ -2178,26 +2187,28 @@ impl StacklessEngine {
                             // dispatch to the canonical executor instead of using import_links.
                             // This prevents infinite recursion when adapter modules import canon-lowered
                             // functions that are backed by InlineExports with no real module.
+                            // CHECK FOR LOWERED FUNCTION: If this import was created by canon.lower,
+                            // dispatch through call_wasi_function (which uses host_handler)
+                            // to ensure consistent resource handle management.
                             #[cfg(all(feature = "std", feature = "wasi"))]
                             {
-                            let is_lowered = self.is_lowered_function(instance_id, func_idx as usize);
-                            if is_lowered {
+                            if let Some(lowered) = self.lowered_functions.get(&(instance_id, func_idx as usize)).cloned() {
                                 #[cfg(feature = "tracing")]
                                 trace!(
                                     instance_id = instance_id,
                                     func_idx = func_idx,
+                                    interface = %lowered.interface,
+                                    function = %lowered.function,
                                     "[CALL] Import is a canon.lower synthesized function - dispatching to WASI"
                                 );
 
-                                // Collect args from operand stack based on function signature
-                                let args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
-
-                                // Execute the lowered function via WASI dispatcher
-                                let results = self.execute_lowered_function(instance_id, func_idx as usize, args)?;
-
-                                // Push results back onto stack
-                                for result in results {
-                                    operand_stack.push(result);
+                                // Route through call_wasi_function for consistent resource management
+                                let result = self.call_wasi_function(
+                                    &lowered.interface, &lowered.function,
+                                    &mut operand_stack, &module, instance_id,
+                                )?;
+                                if let Some(value) = result {
+                                    operand_stack.push(value);
                                 }
 
                                 // Skip the normal import handling
@@ -2244,17 +2255,30 @@ impl StacklessEngine {
                                         #[cfg(all(feature = "std", feature = "wasi"))]
                                         if export_name.starts_with("__canon_lower_") {
                                             // Parse interface::function from __canon_lower_{interface}::{function}
+                                            // Route through call_wasi_function which handles
+                                            // canonical ABI lowering (memory-based returns for
+                                            // complex types like list<string>)
                                             let canon_suffix = &export_name["__canon_lower_".len()..];
                                             if let Some(sep_pos) = canon_suffix.rfind("::") {
                                                 let interface = &canon_suffix[..sep_pos];
                                                 let function = &canon_suffix[sep_pos + 2..];
-                                                // Collect args and dispatch to WASI
-                                                let args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
-                                                let results = self.dispatch_canon_lowered(
-                                                    instance_id, interface, function, args,
+
+                                                #[cfg(feature = "tracing")]
+                                                trace!(
+                                                    interface = %interface,
+                                                    function = %function,
+                                                    "[CANON_LOWER] Routing to call_wasi_function"
+                                                );
+
+                                                let result = self.call_wasi_function(
+                                                    interface,
+                                                    function,
+                                                    &mut operand_stack,
+                                                    &module,
+                                                    instance_id,
                                                 )?;
-                                                for result in results {
-                                                    operand_stack.push(result);
+                                                if let Some(value) = result {
+                                                    operand_stack.push(value);
                                                 }
                                                 pc += 1;
                                                 continue;
@@ -11400,9 +11424,11 @@ impl StacklessEngine {
         #[cfg(feature = "tracing")]
         trace!(args = ?args, "[CABI_REALLOC] Arguments prepared");
 
-        // Use execute_leaf_function instead of execute() to avoid nested trampolines.
-        // cabi_realloc is guaranteed by canonical ABI to be a leaf function (no calls).
-        let results = self.execute_leaf_function(instance_id, func_idx, args)?;
+        // Use full execute() trampoline - cabi_realloc in real components (e.g., Rust
+        // components using dlmalloc) makes internal calls, so the leaf function restriction
+        // is too strict. The canonical ABI only specifies the signature, not that it must
+        // be a leaf function.
+        let results = self.execute(instance_id, func_idx, args)?;
 
         if let Some(Value::I32(ptr)) = results.first() {
             Ok(*ptr as u32)

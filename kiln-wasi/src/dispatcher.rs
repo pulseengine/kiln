@@ -1171,8 +1171,8 @@ impl WasiDispatcher {
 
         let base_interface = Self::strip_version(interface);
 
-        // DEBUG: trace WASI calls
-        eprintln!("[WASI-TRACE] {}::{} args={:?}", base_interface, function, args);
+        #[cfg(feature = "tracing")]
+        trace!(interface = %base_interface, function = %function, args = ?args, "[WASI] dispatch_core");
 
         match (base_interface, function) {
             // Simple functions that don't need memory
