@@ -2932,6 +2932,116 @@ impl StacklessEngine {
                             });
                         }
                     }
+                    Instruction::CallRef(_type_idx) => {
+                        // call_ref: call function via typed function reference
+                        // Pop funcref from stack, trap if null, then call
+                        let func_ref_val = operand_stack.pop()
+                            .ok_or_else(|| kiln_error::Error::runtime_error("call_ref: stack underflow"))?;
+
+                        let func_idx = match &func_ref_val {
+                            Value::FuncRef(Some(fref)) => fref.index as usize,
+                            Value::FuncRef(None) => {
+                                return Err(kiln_error::Error::runtime_trap("null function reference"));
+                            }
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap("call_ref: expected funcref on stack"));
+                            }
+                        };
+
+                        #[cfg(feature = "tracing")]
+                        trace!("call_ref: type_idx={}, resolved func_idx={}", _type_idx, func_idx);
+
+                        // Validate function index
+                        if func_idx >= module.functions.len() {
+                            return Err(kiln_error::Error::runtime_trap("call_ref: function index out of bounds"));
+                        }
+
+                        // Get function type to determine parameter count
+                        let func = &module.functions[func_idx];
+                        let func_type = module.types.get(func.type_idx as usize)
+                            .ok_or_else(|| kiln_error::Error::runtime_error("call_ref: invalid function type"))?;
+                        let param_count = func_type.params.len();
+
+                        // Pop arguments from the stack
+                        let mut call_args = Vec::new();
+                        for _ in 0..param_count {
+                            if let Some(arg) = operand_stack.pop() {
+                                call_args.push(arg);
+                            } else {
+                                return Err(kiln_error::Error::runtime_error("call_ref: stack underflow for args"));
+                            }
+                        }
+                        call_args.reverse();
+
+                        // Dispatch via trampoline
+                        let saved_state = SuspendedFrame {
+                            instance_id,
+                            func_idx: caller_func_idx,
+                            pc: pc + 1,
+                            locals,
+                            operand_stack,
+                            block_stack,
+                            block_depth,
+                            instruction_count,
+                        };
+                        return Ok(ExecutionOutcome::Call {
+                            instance_id,
+                            func_idx,
+                            args: call_args,
+                            return_state: Some(saved_state),
+                        });
+                    }
+                    Instruction::ReturnCallRef(_type_idx) => {
+                        // return_call_ref: tail call function via typed function reference
+                        let func_ref_val = operand_stack.pop()
+                            .ok_or_else(|| kiln_error::Error::runtime_error("return_call_ref: stack underflow"))?;
+
+                        let func_idx = match &func_ref_val {
+                            Value::FuncRef(Some(fref)) => fref.index as usize,
+                            Value::FuncRef(None) => {
+                                return Err(kiln_error::Error::runtime_trap("null function reference"));
+                            }
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap("return_call_ref: expected funcref on stack"));
+                            }
+                        };
+
+                        #[cfg(feature = "tracing")]
+                        trace!("return_call_ref: type_idx={}, resolved func_idx={}", _type_idx, func_idx);
+
+                        // Validate function index
+                        if func_idx >= module.functions.len() {
+                            return Err(kiln_error::Error::runtime_trap("return_call_ref: function index out of bounds"));
+                        }
+
+                        // Get function type to determine parameter count
+                        let func = &module.functions[func_idx];
+                        let func_type = module.types.get(func.type_idx as usize)
+                            .ok_or_else(|| kiln_error::Error::runtime_error("return_call_ref: invalid function type"))?;
+                        let param_count = func_type.params.len();
+
+                        // Pop arguments from the stack
+                        let mut call_args = Vec::new();
+                        for _ in 0..param_count {
+                            if let Some(arg) = operand_stack.pop() {
+                                call_args.push(arg);
+                            } else {
+                                return Err(kiln_error::Error::runtime_error("return_call_ref: stack underflow for args"));
+                            }
+                        }
+                        call_args.reverse();
+
+                        // Restore debugger before returning for tail call
+                        #[cfg(all(feature = "std", feature = "debugger"))]
+                        {
+                            self.debugger = debugger_opt;
+                        }
+
+                        return Ok(ExecutionOutcome::TailCall {
+                            func_idx,
+                            args: call_args,
+                        });
+                    }
                     Instruction::ReturnCall(func_idx) => {
                         // ReturnCall: tail call to another function
                         // Similar to Call, but the results become the current function's return value
