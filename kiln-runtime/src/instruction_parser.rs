@@ -919,14 +919,15 @@ fn parse_instruction_with_provider(
             consumed += bytes;
             Instruction::RefFunc(func_idx)
         },
-        0xD3 => Instruction::RefAsNonNull,
-        0xD4 => {
+        0xD3 => Instruction::RefEq,
+        0xD4 => Instruction::RefAsNonNull,
+        0xD5 => {
             // br_on_null l - branch to label if reference is null
             let (label_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
             consumed += bytes;
             Instruction::BrOnNull(label_idx)
         },
-        0xD5 => {
+        0xD6 => {
             // br_on_non_null l - branch to label if reference is not null
             let (label_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
             consumed += bytes;

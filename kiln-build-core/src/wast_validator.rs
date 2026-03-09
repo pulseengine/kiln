@@ -2957,8 +2957,20 @@ impl WastModuleValidator {
                     let func_type_idx = Self::get_function_type_idx(module, func_idx)?;
                     stack.push(StackType::TypedFuncRef(func_type_idx, false));
                 },
-                // ref.as_non_null (0xD3)
+                // ref.eq (0xD3): [eqref eqref] -> [i32]
                 0xD3 => {
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+                    if !Self::pop_type(&mut stack, StackType::EqRef, frame_height, unreachable) {
+                        return Err(anyhow!("type mismatch"));
+                    }
+                    if !Self::pop_type(&mut stack, StackType::EqRef, frame_height, unreachable) {
+                        return Err(anyhow!("type mismatch"));
+                    }
+                    stack.push(StackType::I32);
+                },
+                // ref.as_non_null (0xD4)
+                0xD4 => {
                     // Pop a reference, trap if null, push the non-null reference
                     let frame_height = Self::current_frame_height(&frames);
                     let unreachable = Self::is_unreachable(&frames);
@@ -2974,8 +2986,8 @@ impl WastModuleValidator {
                         stack.push(ref_type);
                     }
                 },
-                // br_on_null (0xD4)
-                0xD4 => {
+                // br_on_null (0xD5)
+                0xD5 => {
                     // Pop reference, branch if null, push non-null reference if not null
                     let (label, new_offset) = Self::parse_varuint32(code, offset)?;
                     offset = new_offset;
@@ -2995,8 +3007,8 @@ impl WastModuleValidator {
                         stack.push(ref_type);
                     }
                 },
-                // br_on_non_null (0xD5)
-                0xD5 => {
+                // br_on_non_null (0xD6)
+                0xD6 => {
                     // Pop reference, branch if NOT null (with ref), continue if null
                     let (label, new_offset) = Self::parse_varuint32(code, offset)?;
                     offset = new_offset;

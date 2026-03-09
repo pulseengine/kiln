@@ -2124,10 +2124,10 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq + D
                 checksum.update_slice(&[0xD1]); // ref.is_null opcode
             },
             Instruction::RefAsNonNull => {
-                checksum.update_slice(&[0xD3]); // ref.as_non_null opcode
+                checksum.update_slice(&[0xD4]); // ref.as_non_null opcode
             },
             Instruction::RefEq => {
-                checksum.update_slice(&[0xD2]); // ref.eq opcode
+                checksum.update_slice(&[0xD3]); // ref.eq opcode
             },
             Instruction::LocalGet(idx)
             | Instruction::LocalSet(idx)
@@ -2592,8 +2592,8 @@ impl<PInstr: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + E
                 writer.write_u32_le(*label_idx)?;
             },
             Instruction::RefIsNull => writer.write_u8(0xD1)?, // ref.is_null opcode
-            Instruction::RefAsNonNull => writer.write_u8(0xD3)?, // ref.as_non_null opcode
-            Instruction::RefEq => writer.write_u8(0xD2)?,     // ref.eq opcode
+            Instruction::RefAsNonNull => writer.write_u8(0xD4)?, // ref.as_non_null opcode
+            Instruction::RefEq => writer.write_u8(0xD3)?,     // ref.eq opcode
             Instruction::LocalGet(idx) => {
                 writer.write_u8(0x20)?;
                 writer.write_u32_le(*idx)?;
