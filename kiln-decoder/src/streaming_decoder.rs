@@ -2370,21 +2370,10 @@ impl<'a> StreamingDecoder<'a> {
                     return Err(Error::parse_error("END opcode expected"));
                 }
 
-                // Scan for data.drop (0xFC 0x09) and memory.init (0xFC 0x08) instructions
-                // These require data count section to be present
-                if !self.uses_data_count_instructions {
-                    let mut scan_pos = 0;
-                    while scan_pos < instructions_data.len() {
-                        if instructions_data[scan_pos] == 0xFC && scan_pos + 1 < instructions_data.len() {
-                            let sub_opcode = instructions_data[scan_pos + 1];
-                            if sub_opcode == 0x08 || sub_opcode == 0x09 {
-                                self.uses_data_count_instructions = true;
-                                break;
-                            }
-                        }
-                        scan_pos += 1;
-                    }
-                }
+                // Note: data count section validation (memory.init/data.drop require
+                // section 12) is handled at the validator level, not the decoder.
+                // Raw byte scanning here produced false positives from LEB128 immediates
+                // containing 0xFC 0x08/0x09 byte sequences.
 
                 #[cfg(feature = "allocation-tracing")]
                 trace_alloc!(
@@ -2746,11 +2735,8 @@ impl<'a> StreamingDecoder<'a> {
             }
         }
 
-        // WebAssembly spec: if code uses memory.init or data.drop, the data count
-        // section (section 12) must be present
-        if self.uses_data_count_instructions && self.data_count_value.is_none() {
-            return Err(Error::parse_error("data count section required"));
-        }
+        // Note: data count section requirement (when memory.init/data.drop are used)
+        // is validated at the instruction validation level, not during decoding.
 
         Ok(())
     }

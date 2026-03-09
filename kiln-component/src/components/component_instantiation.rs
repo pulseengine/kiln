@@ -1703,6 +1703,8 @@ impl ComponentInstance {
                                 }
                             },
                             Err(_e) => {
+                                #[cfg(feature = "tracing")]
+                                tracing::error!(error = %_e, "Failed to load core module");
                                 return Err(kiln_error::Error::component_linking_error(
                                     "Failed to load core module during component instantiation",
                                 ));
