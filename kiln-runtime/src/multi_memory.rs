@@ -204,6 +204,7 @@ impl MultiMemoryInstance {
         let core_mem_type = CoreMemoryType {
             limits: memory_type.limits,
             shared: memory_type.shared,
+            memory64: memory_type.memory64,
         };
         let memory = Memory::new(core_mem_type)
             .map_err(|_| Error::runtime_execution_error("Failed to create memory instance"))?;

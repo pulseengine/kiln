@@ -336,6 +336,7 @@ impl WastEngine {
                     let core_mem_type = CoreMemoryType {
                         limits: Limits { min: 1, max: Some(2) },
                         shared: false,
+                        memory64: false,
                     };
 
                     let memory = Memory::new(core_mem_type).map_err(|e| {

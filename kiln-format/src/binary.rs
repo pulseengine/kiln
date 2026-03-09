@@ -1945,8 +1945,12 @@ pub mod with_alloc {
         Ok((name_slice, pos + len_size + name_len as usize))
     }
 
-    // STUB for parsing limits - to be fully implemented in kiln-format
-    // Should parse kiln_format::types::Limits
+    /// Parse WebAssembly limits encoding with proper handling of shared and memory64 flags.
+    ///
+    /// Limits flags byte encoding:
+    /// - bit 0 (0x01): has maximum
+    /// - bit 1 (0x02): shared memory
+    /// - bit 2 (0x04): memory64 (uses i64 for min/max)
     pub fn parse_limits(
         bytes: &[u8],
         offset: usize,
@@ -1957,27 +1961,42 @@ pub mod with_alloc {
         }
         let flags = bytes[offset];
         let mut current_offset = offset + 1;
+        let is_memory64 = (flags & 0x04) != 0;
+        let is_shared = (flags & 0x02) != 0;
 
-        let (min, new_offset) = read_leb128_u32(bytes, current_offset)?;
-        current_offset = new_offset;
-
-        let max = if (flags & 0x01) != 0 {
+        // Parse min: memory64 uses u64, regular uses u32
+        let min: u64 = if is_memory64 {
+            let (val, new_offset) = read_leb128_u64(bytes, current_offset)?;
+            current_offset = new_offset;
+            val
+        } else {
             let (val, new_offset) = read_leb128_u32(bytes, current_offset)?;
             current_offset = new_offset;
-            Some(val)
+            val as u64
+        };
+
+        // Parse max if present
+        let max: Option<u64> = if (flags & 0x01) != 0 {
+            if is_memory64 {
+                let (val, new_offset) = read_leb128_u64(bytes, current_offset)?;
+                current_offset = new_offset;
+                Some(val)
+            } else {
+                let (val, new_offset) = read_leb128_u32(bytes, current_offset)?;
+                current_offset = new_offset;
+                Some(val as u64)
+            }
         } else {
             None
         };
-        // Ignoring shared and memory64 flags for now as they are not in
-        // kiln_format::types::Limits directly
 
         Ok((
             crate::types::Limits {
-                min: min.into(),
-                max: max.map(Into::into),
-                shared: false,
-                memory64: false,
-            }, // Assuming default shared/memory64
+                min,
+                max,
+                shared: is_shared,
+                memory64: is_memory64,
+            },
             current_offset,
         ))
     }

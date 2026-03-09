@@ -153,6 +153,7 @@ fn to_core_memory_type(memory_type: KilnMemoryType) -> CoreMemoryType {
     CoreMemoryType {
         limits: memory_type.limits,
         shared: memory_type.shared,
+        memory64: memory_type.memory64,
     }
 }
 

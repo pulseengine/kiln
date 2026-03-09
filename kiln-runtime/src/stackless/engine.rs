@@ -523,6 +523,19 @@ fn pop_atomic_address(operand_stack: &mut Vec<Value>, memarg_offset: u32) -> kil
     }
 }
 
+/// Pop a memory operand from the operand stack for bulk memory operations.
+/// For memory64 memories, the operand is i64; for memory32, it is i32.
+/// Returns the value as u64 for uniform bounds checking.
+#[inline]
+fn pop_memory_operand(operand_stack: &mut Vec<Value>, is_memory64: bool) -> kiln_error::Result<u64> {
+    match operand_stack.pop() {
+        Some(Value::I64(v)) if is_memory64 => Ok(v as u64),
+        Some(Value::I32(v)) if !is_memory64 => Ok(v as u32 as u64),
+        Some(_) => Err(kiln_error::Error::runtime_trap("type mismatch")),
+        None => Err(kiln_error::Error::runtime_trap("operand stack underflow")),
+    }
+}
+
 impl StacklessEngine {
     /// Create a new stackless engine
     #[cfg(any(feature = "std", feature = "alloc"))]
@@ -6060,13 +6073,19 @@ impl StacklessEngine {
                             Ok(memory_wrapper) => {
                                 let memory = &memory_wrapper.0;
                                 let size_in_pages = memory.size();
+                                let is_memory64 = memory.ty.memory64;
                                 #[cfg(feature = "tracing")]
                                 trace!(
                                     memory_idx = memory_idx,
                                     size_in_pages = size_in_pages,
+                                    is_memory64 = is_memory64,
                                     "[MemorySize] Retrieved memory size"
                                 );
-                                operand_stack.push(Value::I32(size_in_pages as i32));
+                                if is_memory64 {
+                                    operand_stack.push(Value::I64(size_in_pages as i64));
+                                } else {
+                                    operand_stack.push(Value::I32(size_in_pages as i32));
+                                }
                             }
                             Err(e) => {
                                 #[cfg(feature = "tracing")]
@@ -6076,51 +6095,94 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::MemoryGrow(memory_idx) => {
-                        // Pop the number of pages to grow
-                        if let Some(Value::I32(delta)) = operand_stack.pop() {
-                            if delta < 0 {
-                                // Negative delta is invalid, return -1 (failure)
-                                #[cfg(feature = "tracing")]
-                                trace!("MemoryGrow: negative delta {}, pushing -1", delta);
-                                operand_stack.push(Value::I32(-1));
-                            } else {
-                                // Use instance memory for grow (has initialized data segments)
-                                match instance.memory(memory_idx as u32) {
-                                    Ok(memory_wrapper) => {
-                                        let memory = &memory_wrapper.0;
-                                        let current_size = memory.size();
+                        // Determine if memory is 64-bit to know the operand type
+                        let is_memory64 = instance.memory(memory_idx as u32)
+                            .map(|mw| mw.0.ty.memory64)
+                            .unwrap_or(false);
+
+                        // Pop the number of pages to grow (i64 for memory64, i32 for memory32)
+                        let delta_u32 = if is_memory64 {
+                            match operand_stack.pop() {
+                                Some(Value::I64(delta)) => {
+                                    if delta < 0 {
                                         #[cfg(feature = "tracing")]
-                                        trace!(
-                                            memory_idx = memory_idx,
-                                            delta = delta,
-                                            current_size = current_size,
-                                            "[MemoryGrow] Attempting to grow memory"
-                                        );
-                                        match memory.grow_shared(delta as u32) {
-                                            Ok(prev_pages) => {
-                                                #[cfg(feature = "tracing")]
-                                                trace!(
-                                                    memory_idx = memory_idx,
-                                                    prev_pages = prev_pages,
-                                                    new_pages = prev_pages + delta as u32,
-                                                    "[MemoryGrow] Success"
-                                                );
+                                        trace!("MemoryGrow: negative delta {}, pushing -1", delta);
+                                        operand_stack.push(Value::I64(-1));
+                                        continue;
+                                    }
+                                    // Memory64 delta must fit in u32 for page count
+                                    if delta as u64 > u32::MAX as u64 {
+                                        operand_stack.push(Value::I64(-1));
+                                        continue;
+                                    }
+                                    Some(delta as u32)
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            match operand_stack.pop() {
+                                Some(Value::I32(delta)) => {
+                                    if delta < 0 {
+                                        #[cfg(feature = "tracing")]
+                                        trace!("MemoryGrow: negative delta {}, pushing -1", delta);
+                                        operand_stack.push(Value::I32(-1));
+                                        continue;
+                                    }
+                                    Some(delta as u32)
+                                }
+                                _ => None,
+                            }
+                        };
+
+                        if let Some(delta) = delta_u32 {
+                            // Use instance memory for grow (has initialized data segments)
+                            match instance.memory(memory_idx as u32) {
+                                Ok(memory_wrapper) => {
+                                    let memory = &memory_wrapper.0;
+                                    let current_size = memory.size();
+                                    #[cfg(feature = "tracing")]
+                                    trace!(
+                                        memory_idx = memory_idx,
+                                        delta = delta,
+                                        current_size = current_size,
+                                        "[MemoryGrow] Attempting to grow memory"
+                                    );
+                                    match memory.grow_shared(delta) {
+                                        Ok(prev_pages) => {
+                                            #[cfg(feature = "tracing")]
+                                            trace!(
+                                                memory_idx = memory_idx,
+                                                prev_pages = prev_pages,
+                                                new_pages = prev_pages + delta,
+                                                "[MemoryGrow] Success"
+                                            );
+                                            if is_memory64 {
+                                                operand_stack.push(Value::I64(prev_pages as i64));
+                                            } else {
                                                 operand_stack.push(Value::I32(prev_pages as i32));
                                             }
-                                            Err(e) => {
-                                                #[cfg(feature = "tracing")]
-                                                warn!(
-                                                    memory_idx = memory_idx,
-                                                    error = ?e,
-                                                    "[MemoryGrow] Failed"
-                                                );
+                                        }
+                                        Err(e) => {
+                                            #[cfg(feature = "tracing")]
+                                            warn!(
+                                                memory_idx = memory_idx,
+                                                error = ?e,
+                                                "[MemoryGrow] Failed"
+                                            );
+                                            if is_memory64 {
+                                                operand_stack.push(Value::I64(-1));
+                                            } else {
                                                 operand_stack.push(Value::I32(-1));
                                             }
                                         }
                                     }
-                                    Err(e) => {
-                                        #[cfg(feature = "tracing")]
-                                        trace!("MemoryGrow: memory[{}] not found: {:?}", memory_idx, e);
+                                }
+                                Err(e) => {
+                                    #[cfg(feature = "tracing")]
+                                    trace!("MemoryGrow: memory[{}] not found: {:?}", memory_idx, e);
+                                    if is_memory64 {
+                                        operand_stack.push(Value::I64(-1));
+                                    } else {
                                         operand_stack.push(Value::I32(-1));
                                     }
                                 }
@@ -6128,250 +6190,256 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::MemoryCopy(dst_mem_idx, src_mem_idx) => {
+                        // Determine memory64 status for both memories
+                        let dst_is_64 = instance.memory(dst_mem_idx)
+                            .map(|mw| mw.0.ty.memory64).unwrap_or(false);
+                        let src_is_64 = instance.memory(src_mem_idx as u32)
+                            .map(|mw| mw.0.ty.memory64).unwrap_or(false);
+
                         // Pop size, src, dest from stack (in that order per wasm spec)
-                        if let (Some(Value::I32(size)), Some(Value::I32(src)), Some(Value::I32(dest))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
+                        // Per spec: n type = dst index type, s type = src index type, d type = dst index type
+                        let size = pop_memory_operand(&mut operand_stack, dst_is_64)?;
+                        let src = pop_memory_operand(&mut operand_stack, src_is_64)?;
+                        let dest = pop_memory_operand(&mut operand_stack, dst_is_64)?;
+
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            dest = format_args!("{:#x}", dest),
+                            src = format_args!("{:#x}", src),
+                            size = size,
+                            dst_mem_idx = dst_mem_idx,
+                            src_mem_idx = src_mem_idx,
+                            "[MemoryCopy] Starting copy operation"
+                        );
+
+                        // For now, only support same-memory copy (most common case)
+                        // Multi-memory support can be added later
+                        if dst_mem_idx != src_mem_idx as u32 {
                             #[cfg(feature = "tracing")]
-                            trace!(
-                                dest = format_args!("{:#x}", dest),
-                                src = format_args!("{:#x}", src),
-                                size = size,
-                                dst_mem_idx = dst_mem_idx,
-                                src_mem_idx = src_mem_idx,
-                                "[MemoryCopy] Starting copy operation"
-                            );
-
-                            // For now, only support same-memory copy (most common case)
-                            // Multi-memory support can be added later
-                            if dst_mem_idx != src_mem_idx {
-                                #[cfg(feature = "tracing")]
-                                trace!("MemoryCopy: cross-memory copy not yet implemented");
-                                return Err(kiln_error::Error::runtime_error("Cross-memory copy not yet implemented"));
-                            }
-
-                            // Per WebAssembly spec: bounds check MUST happen before checking size==0
-                            // If size == 0 AND (dest > memory.size OR src > memory.size): TRAP
-                            // If size > 0 AND ((dest + size) > memory.size OR (src + size) > memory.size): TRAP
-                            #[cfg(any(feature = "std", feature = "alloc"))]
-                            {
-                                let memory_wrapper = instance.memory(dst_mem_idx)?;
-                                let memory = &memory_wrapper.0;
-                                let memory_size = memory.size_in_bytes() as u32;
-                                let dest_u32 = dest as u32;
-                                let src_u32 = src as u32;
-                                let size_u32 = size as u32;
-
-                                if size_u32 == 0 {
-                                    // For size 0, check if offsets are within bounds (can be equal to size)
-                                    if dest_u32 > memory_size || src_u32 > memory_size {
-                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                    }
-                                    // No-op for zero size copy after bounds check passes
-                                    pc += 1;
-                                    continue;
-                                }
-
-                                // For size > 0, check if (offset + size) overflows or exceeds memory size
-                                let dest_end = dest_u32.checked_add(size_u32)
-                                    .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-                                let src_end = src_u32.checked_add(size_u32)
-                                    .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-
-                                if dest_end > memory_size || src_end > memory_size {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
-
-                                let size_usize = size_u32 as usize;
-
-                                // Read source data into temp buffer (handles overlapping regions)
-                                let mut buffer = vec![0u8; size_usize];
-                                if let Err(e) = memory.read(src_u32, &mut buffer) {
-                                    #[cfg(feature = "tracing")]
-                                    trace!("MemoryCopy: read failed: {:?}", e);
-                                    return Err(e);
-                                }
-
-                                // Write to destination using write_shared (thread-safe)
-                                if let Err(e) = memory.write_shared(dest_u32, &buffer) {
-                                    #[cfg(feature = "tracing")]
-                                    trace!("MemoryCopy: write failed: {:?}", e);
-                                    return Err(e);
-                                }
-
-                                #[cfg(feature = "tracing")]
-                                {
-                                    trace!(
-                                        size = size,
-                                        src = format_args!("{:#x}", src),
-                                        dest = format_args!("{:#x}", dest),
-                                        "[MemoryCopy] SUCCESS"
-                                    );
-                                    // Show copied data as string if ASCII
-                                    if size <= 50 && buffer.iter().all(|&b| b >= 0x20 && b <= 0x7e || b == 0) {
-                                        if let Ok(s) = core::str::from_utf8(&buffer) {
-                                            trace!(data = %s, "[MemoryCopy] Copied ASCII data");
-                                        }
-                                    }
-                                }
-                            }
-                            #[cfg(not(any(feature = "std", feature = "alloc")))]
-                            return Err(kiln_error::Error::runtime_error("MemoryCopy requires std or alloc feature"));
-                        } else {
-                            #[cfg(feature = "tracing")]
-                            trace!("MemoryCopy: insufficient values on stack");
+                            trace!("MemoryCopy: cross-memory copy not yet implemented");
+                            return Err(kiln_error::Error::runtime_error("Cross-memory copy not yet implemented"));
                         }
-                    }
-                    Instruction::MemoryFill(mem_idx) => {
-                        // Pop size, value, dest from stack (in that order per wasm spec)
-                        if let (Some(Value::I32(size)), Some(Value::I32(value)), Some(Value::I32(dest))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
+
+                        // Per WebAssembly spec: bounds check MUST happen before checking size==0
+                        #[cfg(any(feature = "std", feature = "alloc"))]
                         {
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                dest = format_args!("{:#x}", dest),
-                                value = format_args!("{:#x}", value),
-                                size = size,
-                                mem_idx = mem_idx,
-                                "[MemoryFill] Starting fill operation"
-                            );
-
-                            // Per WebAssembly spec: bounds check MUST happen before checking size==0
-                            // If size == 0 AND dest > memory.size: TRAP
-                            // If size > 0 AND (dest + size) > memory.size: TRAP
-                            let memory_wrapper = instance.memory(mem_idx)?;
+                            let memory_wrapper = instance.memory(dst_mem_idx)?;
                             let memory = &memory_wrapper.0;
-                            let memory_size = memory.size_in_bytes() as u32;
-                            let dest_u32 = dest as u32;
-                            let size_u32 = size as u32;
+                            let memory_size = memory.size_in_bytes() as u64;
 
-                            if size_u32 == 0 {
-                                // For size 0, check if offset is within bounds (can be equal to size)
-                                if dest_u32 > memory_size {
+                            if size == 0 {
+                                // For size 0, check if offsets are within bounds (can be equal to size)
+                                if dest > memory_size || src > memory_size {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
-                                // No-op for zero size fill after bounds check passes
-                                pc += 1;
+                                // No-op for zero size copy after bounds check passes
                                 continue;
                             }
 
                             // For size > 0, check if (offset + size) overflows or exceeds memory size
-                            let dest_end = dest_u32.checked_add(size_u32)
+                            let dest_end = dest.checked_add(size)
+                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                            let src_end = src.checked_add(size)
                                 .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
-                            if dest_end > memory_size {
+                            if dest_end > memory_size || src_end > memory_size {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
 
-                            let size_usize = size_u32 as usize;
-                            let fill_byte = (value & 0xFF) as u8;
+                            let size_usize = size as usize;
+                            let src_u32 = src as u32;
+                            let dest_u32 = dest as u32;
 
-                            // Create buffer filled with the value
-                            let buffer = vec![fill_byte; size_usize];
+                            // Read source data into temp buffer (handles overlapping regions)
+                            let mut buffer = vec![0u8; size_usize];
+                            if let Err(e) = memory.read(src_u32, &mut buffer) {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryCopy: read failed: {:?}", e);
+                                return Err(e);
+                            }
 
                             // Write to destination using write_shared (thread-safe)
                             if let Err(e) = memory.write_shared(dest_u32, &buffer) {
                                 #[cfg(feature = "tracing")]
-                                trace!("MemoryFill: write failed: {:?}", e);
+                                trace!("MemoryCopy: write failed: {:?}", e);
                                 return Err(e);
                             }
 
                             #[cfg(feature = "tracing")]
-                            trace!(
-                                size = size,
-                                dest = format_args!("{:#x}", dest),
-                                fill_byte = format_args!("{:#x}", fill_byte),
-                                "[MemoryFill] SUCCESS"
-                            );
-                        } else {
-                            #[cfg(feature = "tracing")]
-                            trace!("MemoryFill: insufficient values on stack");
+                            {
+                                trace!(
+                                    size = size,
+                                    src = format_args!("{:#x}", src),
+                                    dest = format_args!("{:#x}", dest),
+                                    "[MemoryCopy] SUCCESS"
+                                );
+                                // Show copied data as string if ASCII
+                                if size <= 50 && buffer.iter().all(|&b| b >= 0x20 && b <= 0x7e || b == 0) {
+                                    if let Ok(s) = core::str::from_utf8(&buffer) {
+                                        trace!(data = %s, "[MemoryCopy] Copied ASCII data");
+                                    }
+                                }
+                            }
                         }
+                        #[cfg(not(any(feature = "std", feature = "alloc")))]
+                        return Err(kiln_error::Error::runtime_error("MemoryCopy requires std or alloc feature"));
+                    }
+                    Instruction::MemoryFill(mem_idx) => {
+                        // Determine memory64 status
+                        let is_memory64 = instance.memory(mem_idx)
+                            .map(|mw| mw.0.ty.memory64).unwrap_or(false);
+
+                        // Pop size, value, dest from stack (in that order per wasm spec)
+                        // Per spec: n (size) = index type, val = i32, d (dest) = index type
+                        let size = pop_memory_operand(&mut operand_stack, is_memory64)?;
+                        let value = match operand_stack.pop() {
+                            Some(Value::I32(v)) => v,
+                            _ => return Err(kiln_error::Error::runtime_trap("type mismatch")),
+                        };
+                        let dest = pop_memory_operand(&mut operand_stack, is_memory64)?;
+
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            dest = format_args!("{:#x}", dest),
+                            value = format_args!("{:#x}", value),
+                            size = size,
+                            mem_idx = mem_idx,
+                            "[MemoryFill] Starting fill operation"
+                        );
+
+                        // Per WebAssembly spec: bounds check MUST happen before checking size==0
+                        let memory_wrapper = instance.memory(mem_idx)?;
+                        let memory = &memory_wrapper.0;
+                        let memory_size = memory.size_in_bytes() as u64;
+
+                        if size == 0 {
+                            // For size 0, check if offset is within bounds (can be equal to size)
+                            if dest > memory_size {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                            }
+                            // No-op for zero size fill after bounds check passes
+                            continue;
+                        }
+
+                        // For size > 0, check if (offset + size) overflows or exceeds memory size
+                        let dest_end = dest.checked_add(size)
+                            .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+
+                        if dest_end > memory_size {
+                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                        }
+
+                        let size_usize = size as usize;
+                        let fill_byte = (value & 0xFF) as u8;
+
+                        // Create buffer filled with the value
+                        let buffer = vec![fill_byte; size_usize];
+
+                        // Write to destination using write_shared (thread-safe)
+                        let dest_u32 = dest as u32;
+                        if let Err(e) = memory.write_shared(dest_u32, &buffer) {
+                            #[cfg(feature = "tracing")]
+                            trace!("MemoryFill: write failed: {:?}", e);
+                            return Err(e);
+                        }
+
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            size = size,
+                            dest = format_args!("{:#x}", dest),
+                            fill_byte = format_args!("{:#x}", fill_byte),
+                            "[MemoryFill] SUCCESS"
+                        );
                     }
                     Instruction::MemoryInit(data_idx, mem_idx) => {
+                        // Determine memory64 status for destination memory
+                        let is_memory64 = instance.memory(mem_idx)
+                            .map(|mw| mw.0.ty.memory64).unwrap_or(false);
+
                         // Pop n (length), s (source offset in data), d (dest offset in memory)
-                        if let (Some(Value::I32(n)), Some(Value::I32(s)), Some(Value::I32(d))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
-                        {
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                dest = format_args!("{:#x}", d),
-                                src = format_args!("{:#x}", s),
-                                len = n,
-                                data_idx = data_idx,
-                                mem_idx = mem_idx,
-                                "[MemoryInit] Starting memory init operation"
-                            );
+                        // Per spec: n = i32, s = i32, d = index type of memory
+                        let n = match operand_stack.pop() {
+                            Some(Value::I32(v)) => v as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("type mismatch")),
+                        };
+                        let s = match operand_stack.pop() {
+                            Some(Value::I32(v)) => v as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("type mismatch")),
+                        };
+                        let d = pop_memory_operand(&mut operand_stack, is_memory64)?;
 
-                            // Check if this data segment has been dropped
-                            // Per WebAssembly spec, a dropped segment behaves as if it has zero length
-                            let is_dropped = self.dropped_data_segments
-                                .get(&instance_id)
-                                .and_then(|v| v.get(data_idx as usize))
-                                .copied()
-                                .unwrap_or(false);
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            dest = format_args!("{:#x}", d),
+                            src = format_args!("{:#x}", s),
+                            len = n,
+                            data_idx = data_idx,
+                            mem_idx = mem_idx,
+                            "[MemoryInit] Starting memory init operation"
+                        );
 
-                            // Get data segment from module (for length calculation)
-                            let data_segment = module.data.get(data_idx as usize)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                        // Check if this data segment has been dropped
+                        // Per WebAssembly spec, a dropped segment behaves as if it has zero length
+                        let is_dropped = self.dropped_data_segments
+                            .get(&instance_id)
+                            .and_then(|v| v.get(data_idx as usize))
+                            .copied()
+                            .unwrap_or(false);
 
-                            // If dropped, treat as zero-length segment
-                            let data_len = if is_dropped { 0u32 } else { data_segment.init.len() as u32 };
-                            let s_u32 = s as u32;
-                            let d_u32 = d as u32;
-                            let n_u32 = n as u32;
+                        // Get data segment from module (for length calculation)
+                        let data_segment = module.data.get(data_idx as usize)
+                            .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
-                            // Per WebAssembly spec: bounds check MUST happen before checking n==0
-                            // Get memory for bounds checking
-                            let memory_wrapper = instance.memory(mem_idx)?;
-                            let memory = &memory_wrapper.0;
-                            let memory_size = memory.size_in_bytes() as u32;
+                        // If dropped, treat as zero-length segment
+                        let data_len = if is_dropped { 0u32 } else { data_segment.init.len() as u32 };
 
-                            if n_u32 == 0 {
-                                // For n == 0, check if offsets are within bounds (can be equal to size)
-                                if s_u32 > data_len || d_u32 > memory_size {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
-                                // No-op for zero size init after bounds check passes
-                                pc += 1;
-                                continue;
-                            }
+                        // Per WebAssembly spec: bounds check MUST happen before checking n==0
+                        // Get memory for bounds checking
+                        let memory_wrapper = instance.memory(mem_idx)?;
+                        let memory = &memory_wrapper.0;
+                        let memory_size = memory.size_in_bytes() as u64;
 
-                            // For n > 0, check if (offset + n) overflows or exceeds bounds
-                            let src_end = s_u32.checked_add(n_u32)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-                            let dest_end = d_u32.checked_add(n_u32)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-
-                            if src_end > data_len {
+                        if n == 0 {
+                            // For n == 0, check if offsets are within bounds (can be equal to size)
+                            if s > data_len || d > memory_size {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
-                            if dest_end > memory_size {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
-
-                            // Copy data from segment to memory
-                            #[cfg(any(feature = "std", feature = "alloc"))]
-                            {
-                                let src_slice = &data_segment.init[s_u32 as usize..src_end as usize];
-                                if let Err(e) = memory.write_shared(d_u32, src_slice) {
-                                    #[cfg(feature = "tracing")]
-                                    trace!("MemoryInit: write failed: {:?}", e);
-                                    return Err(e);
-                                }
-                            }
-
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                dest = format_args!("{:#x}", d),
-                                src = format_args!("{:#x}", s),
-                                len = n,
-                                "[MemoryInit] SUCCESS"
-                            );
-                        } else {
-                            #[cfg(feature = "tracing")]
-                            trace!("MemoryInit: insufficient values on stack");
+                            // No-op for zero size init after bounds check passes
+                            continue;
                         }
+
+                        // For n > 0, check if (offset + n) overflows or exceeds bounds
+                        let src_end = s.checked_add(n)
+                            .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                        let dest_end = d.checked_add(n as u64)
+                            .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+
+                        if src_end > data_len {
+                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                        }
+                        if dest_end > memory_size {
+                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                        }
+
+                        // Copy data from segment to memory
+                        #[cfg(any(feature = "std", feature = "alloc"))]
+                        {
+                            let src_slice = &data_segment.init[s as usize..src_end as usize];
+                            let d_u32 = d as u32;
+                            if let Err(e) = memory.write_shared(d_u32, src_slice) {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryInit: write failed: {:?}", e);
+                                return Err(e);
+                            }
+                        }
+
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            dest = format_args!("{:#x}", d),
+                            src = format_args!("{:#x}", s),
+                            len = n,
+                            "[MemoryInit] SUCCESS"
+                        );
                     }
                     Instruction::DataDrop(data_idx) => {
                         #[cfg(feature = "tracing")]
