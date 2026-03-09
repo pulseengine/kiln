@@ -12265,6 +12265,51 @@ fn execute_simd_op(opcode: u32, stack: &mut Vec<Value>) -> Result<()> {
         0x5E => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_demote_f64x2_zero(&a)); }
         0x5F => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_promote_low_f32x4(&a)); }
 
+        // ============================================================
+        // Relaxed SIMD operations (opcodes >= 0x100)
+        // ============================================================
+
+        // i8x16.relaxed_swizzle (0x100): [v128, v128] -> [v128]
+        0x100 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_relaxed_swizzle(&a, &b)); }
+        // i32x4.relaxed_trunc_f32x4_s (0x101): [v128] -> [v128]
+        0x101 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f32x4_s(&a)); }
+        // i32x4.relaxed_trunc_f32x4_u (0x102): [v128] -> [v128]
+        0x102 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f32x4_u(&a)); }
+        // i32x4.relaxed_trunc_f64x2_s_zero (0x103): [v128] -> [v128]
+        0x103 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f64x2_s_zero(&a)); }
+        // i32x4.relaxed_trunc_f64x2_u_zero (0x104): [v128] -> [v128]
+        0x104 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f64x2_u_zero(&a)); }
+        // f32x4.relaxed_madd (0x105): [v128, v128, v128] -> [v128]
+        0x105 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_madd(&a, &b, &c)); }
+        // f32x4.relaxed_nmadd (0x106): [v128, v128, v128] -> [v128]
+        0x106 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_nmadd(&a, &b, &c)); }
+        // f64x2.relaxed_madd (0x107): [v128, v128, v128] -> [v128]
+        0x107 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_madd(&a, &b, &c)); }
+        // f64x2.relaxed_nmadd (0x108): [v128, v128, v128] -> [v128]
+        0x108 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_nmadd(&a, &b, &c)); }
+        // i8x16.relaxed_laneselect (0x109): [v128, v128, v128] -> [v128]
+        0x109 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        // i16x8.relaxed_laneselect (0x10A): [v128, v128, v128] -> [v128]
+        0x10A => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        // i32x4.relaxed_laneselect (0x10B): [v128, v128, v128] -> [v128]
+        0x10B => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        // i64x2.relaxed_laneselect (0x10C): [v128, v128, v128] -> [v128]
+        0x10C => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        // f32x4.relaxed_min (0x10D): [v128, v128] -> [v128]
+        0x10D => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_min(&a, &b)); }
+        // f32x4.relaxed_max (0x10E): [v128, v128] -> [v128]
+        0x10E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_max(&a, &b)); }
+        // f64x2.relaxed_min (0x10F): [v128, v128] -> [v128]
+        0x10F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_min(&a, &b)); }
+        // f64x2.relaxed_max (0x110): [v128, v128] -> [v128]
+        0x110 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_max(&a, &b)); }
+        // i16x8.relaxed_q15mulr_s (0x111): [v128, v128] -> [v128]
+        0x111 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_relaxed_q15mulr_s(&a, &b)); }
+        // i16x8.relaxed_dot_i8x16_i7x16_s (0x112): [v128, v128] -> [v128]
+        0x112 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_relaxed_dot_i8x16_i7x16_s(&a, &b)); }
+        // i32x4.relaxed_dot_i8x16_i7x16_add_s (0x113): [v128, v128, v128] -> [v128]
+        0x113 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_dot_i8x16_i7x16_add_s(&a, &b, &c)); }
+
         _ => {
             return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD opcode"));
         }

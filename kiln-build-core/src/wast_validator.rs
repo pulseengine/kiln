@@ -3591,6 +3591,20 @@ impl WastModuleValidator {
                             }
                             stack.push(StackType::V128);
                         },
+                        // Relaxed SIMD ternary ops [v128, v128, v128] -> [v128]:
+                        // f32x4.relaxed_madd(0x105), f32x4.relaxed_nmadd(0x106),
+                        // f64x2.relaxed_madd(0x107), f64x2.relaxed_nmadd(0x108),
+                        // i8x16.relaxed_laneselect(0x109), i16x8.relaxed_laneselect(0x10A),
+                        // i32x4.relaxed_laneselect(0x10B), i64x2.relaxed_laneselect(0x10C),
+                        // i32x4.relaxed_dot_i8x16_i7x16_add_s(0x113)
+                        0x105..=0x10C | 0x113 => {
+                            for _ in 0..3 {
+                                if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
+                                    return Err(anyhow!("type mismatch"));
+                                }
+                            }
+                            stack.push(StackType::V128);
+                        },
                         // All other ops: classify as unary [v128]->[v128] or binary [v128,v128]->[v128]
                         _ => {
                             let is_unary = matches!(simd_opcode,
@@ -3599,7 +3613,11 @@ impl WastModuleValidator {
                                 0x80 | 0x81 | 0x87..=0x8A | 0x94 |
                                 0xA0 | 0xA1 | 0xA7..=0xAA |
                                 0xC0 | 0xC1 | 0xC7..=0xCA |
-                                0xE0..=0xE3 | 0xEC..=0xEF | 0xF8..=0xFF
+                                0xE0..=0xE3 | 0xEC..=0xEF | 0xF8..=0xFF |
+                                // Relaxed SIMD unary ops:
+                                // i32x4.relaxed_trunc_f32x4_s/u (0x101-0x102),
+                                // i32x4.relaxed_trunc_f64x2_s/u_zero (0x103-0x104)
+                                0x101..=0x104
                             );
                             if is_unary {
                                 if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
