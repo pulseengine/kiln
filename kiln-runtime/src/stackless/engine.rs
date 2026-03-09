@@ -6888,22 +6888,13 @@ impl StacklessEngine {
                                     (Value::I31Ref(Some(a)), Value::I31Ref(Some(b))) => {
                                         if a == b { 1i32 } else { 0i32 }
                                     }
-                                    // Struct references: equal only if same allocation (pointer identity)
+                                    // Struct references: equal only if same allocation (alloc_id identity)
                                     (Value::StructRef(Some(s1)), Value::StructRef(Some(s2))) => {
-                                        // Compare by identity - same allocation index
-                                        if core::ptr::eq(s1 as *const _, s2 as *const _) || s1 == s2 {
-                                            1i32
-                                        } else {
-                                            0i32
-                                        }
+                                        if s1.alloc_id == s2.alloc_id { 1i32 } else { 0i32 }
                                     }
-                                    // Array references: equal only if same allocation (pointer identity)
+                                    // Array references: equal only if same allocation (alloc_id identity)
                                     (Value::ArrayRef(Some(a1)), Value::ArrayRef(Some(a2))) => {
-                                        if core::ptr::eq(a1 as *const _, a2 as *const _) || a1 == a2 {
-                                            1i32
-                                        } else {
-                                            0i32
-                                        }
+                                        if a1.alloc_id == a2.alloc_id { 1i32 } else { 0i32 }
                                     }
                                     // Different types or null vs non-null are not equal
                                     _ => 0i32,
@@ -7061,7 +7052,17 @@ impl StacklessEngine {
                                     match table.element_type() {
                                         kiln_foundation::types::RefType::Funcref => Value::FuncRef(None),
                                         kiln_foundation::types::RefType::Externref => Value::ExternRef(None),
-                                        kiln_foundation::types::RefType::Gc(_) => Value::ExternRef(None),
+                                        kiln_foundation::types::RefType::Gc(gc) => {
+                                            match gc.heap_type {
+                                                kiln_foundation::types::HeapType::I31 => Value::I31Ref(None),
+                                                kiln_foundation::types::HeapType::Struct | kiln_foundation::types::HeapType::Concrete(_) => Value::StructRef(None),
+                                                kiln_foundation::types::HeapType::Array => Value::ArrayRef(None),
+                                                kiln_foundation::types::HeapType::Func | kiln_foundation::types::HeapType::NoFunc => Value::FuncRef(None),
+                                                kiln_foundation::types::HeapType::Extern | kiln_foundation::types::HeapType::NoExtern => Value::ExternRef(None),
+                                                // eq, any, none, exn: use I31Ref(None) as canonical null for eqref hierarchy
+                                                _ => Value::I31Ref(None),
+                                            }
+                                        }
                                     }
                                 }
                             };
@@ -7109,6 +7110,9 @@ impl StacklessEngine {
                             let table_value = match &value {
                                 Value::FuncRef(fr) => Some(Value::FuncRef(fr.clone())),
                                 Value::ExternRef(er) => Some(Value::ExternRef(er.clone())),
+                                Value::I31Ref(_) => Some(value.clone()),
+                                Value::StructRef(_) => Some(value.clone()),
+                                Value::ArrayRef(_) => Some(value.clone()),
                                 _ => {
                                     return Err(kiln_error::Error::runtime_trap(
                                         "table.set: value must be a reference type",
@@ -7179,7 +7183,8 @@ impl StacklessEngine {
                             } else {
                                 // Validate init value is a reference type
                                 match &init_value {
-                                    Value::FuncRef(_) | Value::ExternRef(_) => {}
+                                    Value::FuncRef(_) | Value::ExternRef(_)
+                                    | Value::I31Ref(_) | Value::StructRef(_) | Value::ArrayRef(_) => {}
                                     _ => {
                                         return Err(kiln_error::Error::runtime_trap(
                                             "table.grow: init value must be a reference type",
@@ -7249,6 +7254,9 @@ impl StacklessEngine {
                             let fill_value = match &value {
                                 Value::FuncRef(fr) => Some(Value::FuncRef(fr.clone())),
                                 Value::ExternRef(er) => Some(Value::ExternRef(er.clone())),
+                                Value::I31Ref(_) => Some(value.clone()),
+                                Value::StructRef(_) => Some(value.clone()),
+                                Value::ArrayRef(_) => Some(value.clone()),
                                 _ => {
                                     return Err(kiln_error::Error::runtime_trap(
                                         "table.fill: value must be a reference type",

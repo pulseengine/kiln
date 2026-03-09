@@ -49,6 +49,8 @@ use crate::types::{
     MAX_ARRAY_ELEMENTS,
     MAX_STRUCT_FIELDS,
 }; // Import ValueType and RefType
+use core::sync::atomic::{AtomicU64, Ordering};
+
 use crate::{
     bounded::BoundedVec,
     prelude::{
@@ -60,22 +62,48 @@ use crate::{
     MemoryProvider,
 }; // Added for Checksummable
 
+/// Global counter for GC allocation identity.
+/// Each struct/array allocation gets a unique ID for ref.eq identity comparison.
+static GC_ALLOC_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+/// Generate a new unique allocation ID for GC objects.
+/// Returns a u32 that fits within the serialized representation.
+/// Wraps around at u32::MAX which is acceptable for identity comparison
+/// (4 billion allocations before potential collision).
+fn next_alloc_id() -> u32 {
+    (GC_ALLOC_COUNTER.fetch_add(1, Ordering::Relaxed) & 0xFFFF_FFFF) as u32
+}
+
 /// GC-managed struct reference for WebAssembly 3.0
-#[derive(Debug, Clone, PartialEq, Eq, core::hash::Hash)]
+#[derive(Debug, Clone, Eq)]
 pub struct StructRef<
     P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq = DefaultMemoryProvider,
 > {
+    /// Unique allocation identity for ref.eq comparison
+    pub alloc_id: u32,
     /// Type index of the struct
     pub type_index: u32,
     /// Field values
     pub fields:     BoundedVec<Value, MAX_STRUCT_FIELDS, P>,
 }
 
+impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> PartialEq for StructRef<P> {
+    fn eq(&self, other: &Self) -> bool {
+        self.alloc_id == other.alloc_id
+    }
+}
+
+impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> core::hash::Hash for StructRef<P> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.alloc_id.hash(state);
+    }
+}
+
 impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> StructRef<P> {
-    /// Create a new struct reference
+    /// Create a new struct reference with a unique allocation ID
     pub fn new(type_index: u32, provider: P) -> kiln_error::Result<Self> {
         let fields = BoundedVec::new(provider).map_err(Error::from)?;
-        Ok(Self { type_index, fields })
+        Ok(Self { alloc_id: next_alloc_id(), type_index, fields })
     }
 
     /// Set a field value
@@ -103,26 +131,42 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> De
 {
     fn default() -> Self {
         let provider = P::default();
-        Self::new(0, provider).expect("Default StructRef creation failed")
+        let fields = BoundedVec::new(provider).expect("Default StructRef creation failed");
+        Self { alloc_id: 0, type_index: 0, fields }
     }
 }
 
 /// GC-managed array reference for WebAssembly 3.0
-#[derive(Debug, Clone, PartialEq, Eq, core::hash::Hash)]
+#[derive(Debug, Clone, Eq)]
 pub struct ArrayRef<
     P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq = DefaultMemoryProvider,
 > {
+    /// Unique allocation identity for ref.eq comparison
+    pub alloc_id: u32,
     /// Type index of the array
     pub type_index: u32,
     /// Array elements
     pub elements:   BoundedVec<Value, MAX_ARRAY_ELEMENTS, P>,
 }
 
+impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> PartialEq for ArrayRef<P> {
+    fn eq(&self, other: &Self) -> bool {
+        self.alloc_id == other.alloc_id
+    }
+}
+
+impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> core::hash::Hash for ArrayRef<P> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.alloc_id.hash(state);
+    }
+}
+
 impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> ArrayRef<P> {
-    /// Create a new array reference
+    /// Create a new array reference with a unique allocation ID
     pub fn new(type_index: u32, provider: P) -> kiln_error::Result<Self> {
         let elements = BoundedVec::new(provider).map_err(Error::from)?;
         Ok(Self {
+            alloc_id: next_alloc_id(),
             type_index,
             elements,
         })
@@ -140,6 +184,7 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Ar
             elements.push(init_value.clone()).map_err(Error::from)?;
         }
         Ok(Self {
+            alloc_id: next_alloc_id(),
             type_index,
             elements,
         })
@@ -180,7 +225,8 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> De
 {
     fn default() -> Self {
         let provider = P::default();
-        Self::new(0, provider).expect("Default ArrayRef creation failed")
+        let elements = BoundedVec::new(provider).expect("Default ArrayRef creation failed");
+        Self { alloc_id: 0, type_index: 0, elements }
     }
 }
 
@@ -280,12 +326,9 @@ impl Eq for Value {}
 
 impl Default for Value {
     fn default() -> Self {
-        // Return FuncRef(None) as default because:
-        // 1. Tables store Option<Value> and commonly use FuncRef values
-        // 2. Option<T>::serialized_size() uses T::default().serialized_size()
-        // 3. FuncRef has size 6 (1 disc + 1 flag + 4 padding), larger than I32's size 5
-        // 4. This ensures BoundedVec slots are large enough for all reference types
-        Value::FuncRef(None)
+        // Return I32(0) as default - Value::serialized_size() returns a fixed maximum
+        // across all variants, ensuring BoundedVec slots are always large enough.
+        Value::I32(0)
     }
 }
 
@@ -1236,40 +1279,19 @@ impl Checksummable for Value {
     }
 }
 
+/// Fixed serialized size for Value in BoundedVec.
+/// Must be large enough for the largest Value variant serialization:
+/// - V128: 1 disc + 16 bytes = 17
+/// - StructRef(Some(empty)): 1 disc + 1 flag + 4 alloc_id + 4 type_idx + 4 field_count = 14
+/// - FuncRef(Some): 1 disc + 1 flag + 8 bytes = 10
+/// Use 18 bytes to comfortably accommodate all variants.
+const VALUE_SERIALIZED_SIZE: usize = 18;
+
 impl ToBytes for Value {
     fn serialized_size(&self) -> usize {
-        // 1 byte for discriminant + variant-specific size
-        1 + match self {
-            Value::I32(_) => 4,
-            Value::I64(_) => 8,
-            Value::F32(_) => 4,
-            Value::F64(_) => 8,
-            Value::V128(_) | Value::I16x8(_) => 16,
-            // Reference types with Option: always use max size for BoundedVec compatibility
-            // 1 byte for Some/None flag + 4 bytes for index (always reserved)
-            Value::FuncRef(_) => 1 + 8, // 1 flag + 4 index + 4 instance_id
-            Value::ExternRef(_) => 1 + 4,
-            Value::ExnRef(_) => 1 + 4,
-            Value::I31Ref(_) => 1 + 4,
-            Value::Ref(_) => 4,
-            Value::StructRef(_) => 1 + 4,
-            Value::ArrayRef(_) => 1 + 4,
-            Value::Bool(_) => 1,
-            Value::S8(_) | Value::U8(_) => 1,
-            Value::S16(_) | Value::U16(_) => 2,
-            Value::S32(_) | Value::U32(_) => 4,
-            Value::S64(_) | Value::U64(_) => 8,
-            Value::Char(_) => 4,
-            // String: length (4) + content (variable, use a reasonable max)
-            Value::String(s) => 4 + s.len(),
-            // Complex types - use conservative estimate
-            Value::List(_) | Value::Tuple(_) | Value::Record(_) => 64,
-            Value::Variant(_, _) | Value::Enum(_) => 8,
-            Value::Option(_) | Value::Result(_) => 16,
-            Value::Flags(_) => 8,
-            Value::Own(_) | Value::Borrow(_) | Value::Stream(_) | Value::Future(_) => 4,
-            Value::Void => 0,
-        }
+        // Return a fixed maximum size for all variants to ensure BoundedVec
+        // slots are always large enough regardless of which variant is stored.
+        VALUE_SERIALIZED_SIZE
     }
 
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
@@ -1561,6 +1583,8 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> To
         writer: &mut WriteStream<'a>,
         provider: &PStream,
     ) -> kiln_error::Result<()> {
+        // Write allocation identity for ref.eq
+        writer.write_u32_le(self.alloc_id)?;
         // Write type index
         self.type_index.to_bytes_with_provider(writer, provider)?;
         // Write field count
@@ -1580,12 +1604,15 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Fr
         reader: &mut ReadStream<'a>,
         provider: &PStream,
     ) -> kiln_error::Result<Self> {
+        // Read allocation identity
+        let alloc_id = reader.read_u32_le()?;
         // Read type index
         let type_index = u32::from_bytes_with_provider(reader, provider)?;
         // Read field count
         let field_count = reader.read_u32_le()?;
-        // Create struct with default provider
-        let mut struct_ref = StructRef::new(type_index, P::default())?;
+        // Create struct with preserved alloc_id
+        let fields = BoundedVec::new(P::default()).map_err(Error::from)?;
+        let mut struct_ref = StructRef { alloc_id, type_index, fields };
         // Read fields
         for _ in 0..field_count {
             let field = Value::from_bytes_with_provider(reader, provider)?;
@@ -1612,6 +1639,8 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> To
         writer: &mut WriteStream<'a>,
         provider: &PStream,
     ) -> kiln_error::Result<()> {
+        // Write allocation identity for ref.eq
+        writer.write_u32_le(self.alloc_id)?;
         // Write type index
         self.type_index.to_bytes_with_provider(writer, provider)?;
         // Write element count
@@ -1631,12 +1660,15 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Fr
         reader: &mut ReadStream<'a>,
         provider: &PStream,
     ) -> kiln_error::Result<Self> {
+        // Read allocation identity
+        let alloc_id = reader.read_u32_le()?;
         // Read type index
         let type_index = u32::from_bytes_with_provider(reader, provider)?;
         // Read element count
         let element_count = reader.read_u32_le()?;
-        // Create array with default provider
-        let mut array_ref = ArrayRef::new(type_index, P::default())?;
+        // Create array with preserved alloc_id
+        let elements = BoundedVec::new(P::default()).map_err(Error::from)?;
+        let mut array_ref = ArrayRef { alloc_id, type_index, elements };
         // Read elements
         for _ in 0..element_count {
             let element = Value::from_bytes_with_provider(reader, provider)?;
