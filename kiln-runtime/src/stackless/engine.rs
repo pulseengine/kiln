@@ -5715,6 +5715,8 @@ impl StacklessEngine {
                                     0x40 => 0, // empty type - no params
                                     0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 0, // inline value types: 0 params
                                     0x70 | 0x6F => 0, // funcref, externref: 0 params
+                                    // GC reference types: single value type, 0 params
+                                    0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 | 0x72 | 0x71 | 0x69 => 0,
                                     _ => {
                                         // Type index - look up actual param count from module types
                                         if let Some(func_type) = module.types.get(block_type_idx as usize) {
@@ -5729,6 +5731,8 @@ impl StacklessEngine {
                                     0x40 => 0, // empty type - no return
                                     0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1, // i32, i64, f32, f64, v128
                                     0x70 | 0x6F => 1, // funcref, externref
+                                    // GC reference types: single value type, 1 result
+                                    0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 | 0x72 | 0x71 | 0x69 => 1,
                                     _ => {
                                         // Type index - look up actual result count from module types
                                         if let Some(func_type) = module.types.get(block_type_idx as usize) {
@@ -5924,6 +5928,8 @@ impl StacklessEngine {
                                             0x40 => 0, // empty type - no params
                                             0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 0, // inline value types: 0 params
                                             0x70 | 0x6F => 0, // funcref, externref: 0 params
+                                            // GC reference types: single value type, 0 params
+                                            0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 | 0x72 | 0x71 | 0x69 => 0,
                                             _ => {
                                                 // Type index - look up actual param count from module types
                                                 if let Some(func_type) = module.types.get(block_type_idx as usize) {
@@ -5938,6 +5944,8 @@ impl StacklessEngine {
                                             0x40 => 0, // empty type - no return
                                             0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1, // i32, i64, f32, f64, v128
                                             0x70 | 0x6F => 1, // funcref, externref
+                                            // GC reference types: single value type, 1 result
+                                            0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 | 0x72 | 0x71 | 0x69 => 1,
                                             _ => {
                                                 // Type index - look up actual result count
                                                 if let Some(func_type) = module.types.get(block_type_idx as usize) {
@@ -6522,6 +6530,8 @@ impl StacklessEngine {
                                         0x40 => 0, // empty type - no params
                                         0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 0, // inline value types: 0 params
                                         0x70 | 0x6F => 0, // funcref, externref: 0 params
+                                        // GC reference types: single value type, 0 params
+                                        0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 | 0x72 | 0x71 | 0x69 => 0,
                                         _ => {
                                             // Type index - look up actual param count from module types
                                             if let Some(func_type) = module.types.get(block_type_idx as usize) {
@@ -6536,6 +6546,8 @@ impl StacklessEngine {
                                         0x40 => 0, // empty type - no return
                                         0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1, // i32, i64, f32, f64, v128
                                         0x70 | 0x6F => 1, // funcref, externref
+                                        // GC reference types: single value type, 1 result
+                                        0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 | 0x72 | 0x71 | 0x69 => 1,
                                         _ => {
                                             // Type index - look up actual result count
                                             if let Some(func_type) = module.types.get(block_type_idx as usize) {
@@ -6773,14 +6785,17 @@ impl StacklessEngine {
                         let null_value = match value_type {
                             // Standard reference types
                             ValueType::FuncRef => Value::FuncRef(None),
+                            ValueType::NullFuncRef => Value::FuncRef(None),
                             ValueType::ExternRef => Value::ExternRef(None),
-                            // GC abstract heap types (using their Value representations)
-                            ValueType::AnyRef => Value::ExternRef(None),   // anyref uses externref repr
-                            ValueType::EqRef => Value::I31Ref(None),       // eqref uses i31ref repr
+                            // GC abstract heap types
+                            ValueType::AnyRef => Value::I31Ref(None),
+                            ValueType::EqRef => Value::I31Ref(None),
                             ValueType::I31Ref => Value::I31Ref(None),
                             ValueType::StructRef(_) => Value::StructRef(None),
                             ValueType::ArrayRef(_) => Value::ArrayRef(None),
                             ValueType::ExnRef => Value::ExnRef(None),
+                            // Typed func ref: null typed function reference
+                            ValueType::TypedFuncRef(_, _) => Value::FuncRef(None),
                             // Non-reference types shouldn't reach here, default to externref
                             _ => Value::ExternRef(None),
                         };
@@ -6800,6 +6815,13 @@ impl StacklessEngine {
                                 Value::FuncRef(Some(_)) => 0i32,
                                 Value::ExternRef(None) => 1i32,
                                 Value::ExternRef(Some(_)) => 0i32,
+                                // GC reference types
+                                Value::I31Ref(None) => 1i32,
+                                Value::I31Ref(Some(_)) => 0i32,
+                                Value::StructRef(None) => 1i32,
+                                Value::StructRef(Some(_)) => 0i32,
+                                Value::ArrayRef(None) => 1i32,
+                                Value::ArrayRef(Some(_)) => 0i32,
                                 Value::ExnRef(None) => 1i32,
                                 Value::ExnRef(Some(_)) => 0i32,
                                 _ => {
@@ -6819,14 +6841,18 @@ impl StacklessEngine {
                         // Pop reference, trap if null, push back if not null
                         if let Some(ref_val) = operand_stack.pop() {
                             match &ref_val {
-                                Value::FuncRef(None) | Value::ExternRef(None) | Value::ExnRef(None) => {
+                                Value::FuncRef(None) | Value::ExternRef(None)
+                                | Value::I31Ref(None) | Value::StructRef(None)
+                                | Value::ArrayRef(None) | Value::ExnRef(None) => {
                                     #[cfg(feature = "tracing")]
                                     error!("RefAsNonNull: null reference");
                                     return Err(kiln_error::Error::runtime_trap(
                                         "null reference in ref.as_non_null",
                                     ));
                                 }
-                                Value::FuncRef(Some(_)) | Value::ExternRef(Some(_)) | Value::ExnRef(Some(_)) => {
+                                Value::FuncRef(Some(_)) | Value::ExternRef(Some(_))
+                                | Value::I31Ref(Some(_)) | Value::StructRef(Some(_))
+                                | Value::ArrayRef(Some(_)) | Value::ExnRef(Some(_)) => {
                                     #[cfg(feature = "tracing")]
                                     trace!("RefAsNonNull: non-null reference");
                                     operand_stack.push(ref_val);
@@ -6842,22 +6868,46 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::RefEq => {
-                        // Pop two references, push 1 if equal, 0 if not
+                        // Pop two eqref values, push 1 if equal, 0 if not
+                        // Per spec: ref.eq compares two eqref values for identity
                         if let (Some(ref2), Some(ref1)) = (operand_stack.pop(), operand_stack.pop()) {
-                            let result = match (&ref1, &ref2) {
-                                // Two null funcref/externref are equal
-                                (Value::FuncRef(None), Value::FuncRef(None)) => 1i32,
-                                (Value::ExternRef(None), Value::ExternRef(None)) => 1i32,
-                                // Two non-null funcrefs are equal if they reference the same function
-                                (Value::FuncRef(Some(f1)), Value::FuncRef(Some(f2))) => {
-                                    if f1.index == f2.index { 1i32 } else { 0i32 }
+                            // Helper: check if a value is a null reference
+                            let is_null = |v: &Value| -> bool {
+                                matches!(v,
+                                    Value::FuncRef(None) | Value::ExternRef(None)
+                                    | Value::I31Ref(None) | Value::StructRef(None)
+                                    | Value::ArrayRef(None) | Value::ExnRef(None)
+                                )
+                            };
+                            let result = if is_null(&ref1) && is_null(&ref2) {
+                                // Two null references are equal regardless of type
+                                1i32
+                            } else {
+                                match (&ref1, &ref2) {
+                                    // i31ref equality: equal if they contain the same value
+                                    (Value::I31Ref(Some(a)), Value::I31Ref(Some(b))) => {
+                                        if a == b { 1i32 } else { 0i32 }
+                                    }
+                                    // Struct references: equal only if same allocation (pointer identity)
+                                    (Value::StructRef(Some(s1)), Value::StructRef(Some(s2))) => {
+                                        // Compare by identity - same allocation index
+                                        if core::ptr::eq(s1 as *const _, s2 as *const _) || s1 == s2 {
+                                            1i32
+                                        } else {
+                                            0i32
+                                        }
+                                    }
+                                    // Array references: equal only if same allocation (pointer identity)
+                                    (Value::ArrayRef(Some(a1)), Value::ArrayRef(Some(a2))) => {
+                                        if core::ptr::eq(a1 as *const _, a2 as *const _) || a1 == a2 {
+                                            1i32
+                                        } else {
+                                            0i32
+                                        }
+                                    }
+                                    // Different types or null vs non-null are not equal
+                                    _ => 0i32,
                                 }
-                                // Two non-null externrefs are equal if they're the same object
-                                (Value::ExternRef(Some(e1)), Value::ExternRef(Some(e2))) => {
-                                    if e1 == e2 { 1i32 } else { 0i32 }
-                                }
-                                // Different types or null vs non-null are not equal
-                                _ => 0i32,
                             };
                             #[cfg(feature = "tracing")]
                             trace!("RefEq: {:?} == {:?} => {}", ref1, ref2, result);
@@ -10589,11 +10639,12 @@ impl StacklessEngine {
 
                     Instruction::RefI31 => {
                         // ref.i31: [i32] -> [i31ref]
+                        // Store the lower 31 bits of the i32 value
                         #[cfg(feature = "tracing")]
                         trace!("RefI31");
                         if let Some(Value::I32(n)) = operand_stack.pop() {
-                            // Truncate to 31 bits (sign-extend from 31 bits)
-                            let i31_val = (n << 1) >> 1;
+                            // Mask to lower 31 bits (unsigned representation)
+                            let i31_val = n & 0x7FFFFFFF;
                             operand_stack.push(Value::I31Ref(Some(i31_val)));
                         } else {
                             return Err(kiln_error::Error::runtime_trap("ref.i31: expected i32"));
@@ -10601,12 +10652,19 @@ impl StacklessEngine {
                     }
 
                     Instruction::I31GetS => {
-                        // i31.get_s: [i31ref] -> [i32] (sign-extended)
+                        // i31.get_s: [i31ref] -> [i32] (sign-extended from 31 bits)
                         #[cfg(feature = "tracing")]
                         trace!("I31GetS");
                         match operand_stack.pop() {
                             Some(Value::I31Ref(Some(n))) => {
-                                operand_stack.push(Value::I32(n));
+                                // Sign-extend from bit 30: if bit 30 is set, the value is negative
+                                let sign_extended = if n & 0x40000000 != 0 {
+                                    // Set the upper bit (sign extend)
+                                    n | !0x7FFFFFFF_u32 as i32
+                                } else {
+                                    n
+                                };
+                                operand_stack.push(Value::I32(sign_extended));
                             }
                             Some(Value::I31Ref(None)) => {
                                 return Err(kiln_error::Error::runtime_trap("null i31 reference"));
