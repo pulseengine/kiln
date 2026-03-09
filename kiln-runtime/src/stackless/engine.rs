@@ -6374,7 +6374,7 @@ impl StacklessEngine {
                     Instruction::BrOnNull(br_label_idx) => {
                         // Pop reference, branch if null, push back if not null
                         if let Some(ref_val) = operand_stack.pop() {
-                            let is_null = matches!(&ref_val, Value::FuncRef(None) | Value::ExternRef(None));
+                            let is_null = is_null_ref(&ref_val);
                             #[cfg(feature = "tracing")]
                             trace!("BrOnNull: label={}, is_null={}", br_label_idx, is_null);
                             if is_null {
@@ -6426,6 +6426,64 @@ impl StacklessEngine {
                                 // Not null, push reference back
                                 operand_stack.push(ref_val);
                             }
+                        }
+                    }
+
+                    Instruction::BrOnNonNull(br_label_idx) => {
+                        // Pop reference, branch if NOT null (pushing ref on branch path),
+                        // consume if null
+                        if let Some(ref_val) = operand_stack.pop() {
+                            let is_null = is_null_ref(&ref_val);
+                            #[cfg(feature = "tracing")]
+                            trace!("BrOnNonNull: label={}, is_null={}", br_label_idx, is_null);
+                            if !is_null {
+                                // Not null - push reference and branch
+                                operand_stack.push(ref_val);
+                                if br_label_idx as usize >= block_stack.len() {
+                                    #[cfg(feature = "tracing")]
+                                    trace!("BrOnNonNull: branching out of function");
+                                    break;
+                                }
+                                let target_depth = block_stack.len() - 1 - br_label_idx as usize;
+                                if let Some((block_type, start_pc, _block_type_idx, entry_stack_height)) = block_stack.get(target_depth).copied() {
+                                    if block_type == "loop" {
+                                        pc = start_pc;
+                                    } else {
+                                        let mut depth = 1;
+                                        let mut search_pc = pc + 1;
+                                        while depth > 0 && search_pc < instructions.len() {
+                                            #[cfg(feature = "std")]
+                                            if let Some(search_instr) = instructions.get(search_pc) {
+                                                match search_instr {
+                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
+                                                    Instruction::End => depth -= 1,
+                                                    _ => {}
+                                                }
+                                            }
+                                            #[cfg(not(feature = "std"))]
+                                            if let Ok(search_instr) = instructions.get(search_pc) {
+                                                match search_instr {
+                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
+                                                    Instruction::End => depth -= 1,
+                                                    _ => {}
+                                                }
+                                            }
+                                            if depth > 0 { search_pc += 1; }
+                                        }
+                                        pc = search_pc;
+                                    }
+                                    // Keep branch value, restore stack below
+                                    let branch_val = operand_stack.pop();
+                                    while operand_stack.len() > entry_stack_height {
+                                        operand_stack.pop();
+                                    }
+                                    if let Some(bv) = branch_val {
+                                        operand_stack.push(bv);
+                                    }
+                                }
+                                continue;
+                            }
+                            // Null - consume the reference (don't push back)
                         }
                     }
 
@@ -9750,27 +9808,82 @@ impl StacklessEngine {
 
                     Instruction::StructNew(type_idx) => {
                         // struct.new: [field_values...] -> [structref]
-                        // Pop field values, create struct, push reference
+                        // Pop field values in reverse order, create struct with them
                         #[cfg(feature = "tracing")]
                         trace!("StructNew: type_idx={}", type_idx);
-                        // For now, create an empty struct reference
-                        // Full implementation requires type info to pop correct number of fields
-                        let struct_ref = kiln_foundation::values::StructRef::new(
+
+                        // Determine field count from GC type info
+                        let field_count = {
+                            #[cfg(feature = "std")]
+                            {
+                                match module.gc_types.get(type_idx as usize) {
+                                    Some(crate::module::GcTypeInfo::Struct(fields)) => fields.len(),
+                                    _ => 0, // Unknown type, try with 0 fields
+                                }
+                            }
+                            #[cfg(not(feature = "std"))]
+                            { 0usize }
+                        };
+
+                        let mut struct_ref = kiln_foundation::values::StructRef::new(
                             type_idx,
                             kiln_foundation::traits::DefaultMemoryProvider::default()
                         ).map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
+
+                        // Pop field values (they are on the stack in order, so pop in reverse)
+                        let mut field_values = Vec::new();
+                        for _ in 0..field_count {
+                            let val = operand_stack.pop().ok_or_else(||
+                                kiln_error::Error::runtime_trap("struct.new: not enough values on stack"))?;
+                            field_values.push(val);
+                        }
+                        field_values.reverse();
+
+                        // Add fields to struct
+                        for val in field_values {
+                            struct_ref.add_field(val).map_err(|_|
+                                kiln_error::Error::runtime_error("Failed to add field to struct"))?;
+                        }
+
                         operand_stack.push(Value::StructRef(Some(struct_ref)));
                     }
 
                     Instruction::StructNewDefault(type_idx) => {
                         // struct.new_default: [] -> [structref]
-                        // Create struct with default field values
+                        // Create struct with default (zero) field values
                         #[cfg(feature = "tracing")]
                         trace!("StructNewDefault: type_idx={}", type_idx);
-                        let struct_ref = kiln_foundation::values::StructRef::new(
+
+                        let mut struct_ref = kiln_foundation::values::StructRef::new(
                             type_idx,
                             kiln_foundation::traits::DefaultMemoryProvider::default()
                         ).map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
+
+                        // Determine field types from GC type info and add default values
+                        #[cfg(feature = "std")]
+                        {
+                            if let Some(crate::module::GcTypeInfo::Struct(fields)) = module.gc_types.get(type_idx as usize) {
+                                for field in fields {
+                                    let default_val = match &field.storage {
+                                        crate::module::GcFieldStorage::I8 |
+                                        crate::module::GcFieldStorage::I16 |
+                                        crate::module::GcFieldStorage::Value(0x7F) => Value::I32(0),
+                                        crate::module::GcFieldStorage::Value(0x7E) => Value::I64(0),
+                                        crate::module::GcFieldStorage::Value(0x7D) => Value::F32(FloatBits32::from_f32(0.0)),
+                                        crate::module::GcFieldStorage::Value(0x7C) => Value::F64(FloatBits64::from_f64(0.0)),
+                                        crate::module::GcFieldStorage::Value(0x7B) => Value::V128(V128 { bytes: [0u8; 16] }),
+                                        // Reference types default to null
+                                        crate::module::GcFieldStorage::Value(0x6C) => Value::I31Ref(None),
+                                        crate::module::GcFieldStorage::Value(0x6B) => Value::StructRef(None),
+                                        crate::module::GcFieldStorage::Value(0x6A) => Value::ArrayRef(None),
+                                        _ => Value::I32(0), // Default for other types
+                                    };
+                                    struct_ref.add_field(default_val).map_err(|_|
+                                        kiln_error::Error::runtime_error("Failed to add default field to struct"))?;
+                                }
+                            }
+                        }
+
                         operand_stack.push(Value::StructRef(Some(struct_ref)));
                     }
 
@@ -10029,29 +10142,443 @@ impl StacklessEngine {
                         }
                     }
 
-                    // GC instructions that need more context (type info, etc.)
-                    // These return stubs for now - full implementation requires type section data
-                    Instruction::ArrayNewData(_, _) |
-                    Instruction::ArrayNewElem(_, _) |
-                    Instruction::ArrayFill(_) |
-                    Instruction::ArrayCopy(_, _) |
-                    Instruction::ArrayInitData(_, _) |
-                    Instruction::ArrayInitElem(_, _) |
-                    Instruction::RefTest(_) |
-                    Instruction::RefTestNull(_) |
-                    Instruction::RefCast(_) |
-                    Instruction::RefCastNull(_) |
-                    Instruction::BrOnCast { .. } |
-                    Instruction::BrOnCastFail { .. } |
-                    Instruction::AnyConvertExtern |
-                    Instruction::ExternConvertAny => {
+                    Instruction::ArrayNewData(type_idx, data_idx) => {
+                        // array.new_data: [offset i32, size i32] -> [arrayref]
+                        // Create array from data segment
                         #[cfg(feature = "tracing")]
-                        trace!("GC instruction (stub): {:?}", instruction);
-                        // These instructions require more complex type system integration
-                        // For now, return an error indicating incomplete implementation
-                        return Err(kiln_error::Error::runtime_error(
-                            "GC instruction not yet fully implemented",
-                        ));
+                        trace!("ArrayNewData: type_idx={}, data_idx={}", type_idx, data_idx);
+                        let size = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.new_data: expected i32 size")),
+                        };
+                        let offset_val = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.new_data: expected i32 offset")),
+                        };
+                        // Get element size from GC type info
+                        let elem_size = {
+                            #[cfg(feature = "std")]
+                            {
+                                match module.gc_types.get(type_idx as usize) {
+                                    Some(crate::module::GcTypeInfo::Array(field)) => field.size_in_bytes(),
+                                    _ => 4, // default to 4 bytes if type info unavailable
+                                }
+                            }
+                            #[cfg(not(feature = "std"))]
+                            { 4usize }
+                        };
+                        // Get data segment
+                        let data_segment = module.data.get(data_idx as usize)
+                            .ok_or_else(|| kiln_error::Error::runtime_trap("array.new_data: invalid data index"))?;
+                        let data_bytes = data_segment.data()?;
+                        let byte_offset = offset_val as usize;
+                        let byte_length = size as usize * elem_size;
+                        if byte_offset + byte_length > data_bytes.len() {
+                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                        }
+                        let mut array_ref = kiln_foundation::values::ArrayRef::new(
+                            type_idx,
+                            kiln_foundation::traits::DefaultMemoryProvider::default()
+                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
+                        for i in 0..size as usize {
+                            let start = byte_offset + i * elem_size;
+                            let val = match elem_size {
+                                1 => Value::I32(data_bytes[start] as i32),
+                                2 => Value::I32(i16::from_le_bytes([data_bytes[start], data_bytes[start+1]]) as i32),
+                                4 => Value::I32(i32::from_le_bytes([data_bytes[start], data_bytes[start+1], data_bytes[start+2], data_bytes[start+3]])),
+                                8 => Value::I64(i64::from_le_bytes([
+                                    data_bytes[start], data_bytes[start+1], data_bytes[start+2], data_bytes[start+3],
+                                    data_bytes[start+4], data_bytes[start+5], data_bytes[start+6], data_bytes[start+7],
+                                ])),
+                                _ => Value::I32(0),
+                            };
+                            array_ref.push(val).map_err(|_|
+                                kiln_error::Error::runtime_error("Failed to push to array"))?;
+                        }
+                        operand_stack.push(Value::ArrayRef(Some(array_ref)));
+                    }
+
+                    Instruction::ArrayNewElem(type_idx, elem_idx) => {
+                        // array.new_elem: [offset i32, size i32] -> [arrayref]
+                        #[cfg(feature = "tracing")]
+                        trace!("ArrayNewElem: type_idx={}, elem_idx={}", type_idx, elem_idx);
+                        let size = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.new_elem: expected i32 size")),
+                        };
+                        let offset_val = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.new_elem: expected i32 offset")),
+                        };
+                        let elem_segment = module.elements.get(elem_idx as usize)
+                            .ok_or_else(|| kiln_error::Error::runtime_trap("array.new_elem: invalid elem index"))?;
+                        if offset_val as usize + size as usize > elem_segment.items.len() {
+                            return Err(kiln_error::Error::runtime_trap("out of bounds table access"));
+                        }
+                        let mut array_ref = kiln_foundation::values::ArrayRef::new(
+                            type_idx,
+                            kiln_foundation::traits::DefaultMemoryProvider::default()
+                        ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
+                        for i in 0..size as usize {
+                            let item_idx = elem_segment.items.get(offset_val as usize + i)
+                                .map_err(|_| kiln_error::Error::runtime_trap("array.new_elem: element access failed"))?;
+                            let item_val = Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)));
+                            array_ref.push(item_val).map_err(|_|
+                                kiln_error::Error::runtime_error("Failed to push to array"))?;
+                        }
+                        operand_stack.push(Value::ArrayRef(Some(array_ref)));
+                    }
+
+                    Instruction::ArrayFill(type_idx) => {
+                        // array.fill: [arrayref i32 value i32] -> []
+                        #[cfg(feature = "tracing")]
+                        trace!("ArrayFill: type_idx={}", type_idx);
+                        let size = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.fill: expected i32 size")),
+                        };
+                        let fill_value = operand_stack.pop().ok_or_else(||
+                            kiln_error::Error::runtime_trap("array.fill: expected fill value"))?;
+                        let offset_val = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.fill: expected i32 offset")),
+                        };
+                        if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
+                            let len = a.len() as u32;
+                            if offset_val + size > len {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                            }
+                            for i in 0..size {
+                                a.set((offset_val + i) as usize, fill_value.clone()).map_err(|_|
+                                    kiln_error::Error::runtime_trap("array.fill: set failed"))?;
+                            }
+                        } else {
+                            return Err(kiln_error::Error::runtime_trap("array.fill: null reference"));
+                        }
+                    }
+
+                    Instruction::ArrayCopy(dst_type_idx, src_type_idx) => {
+                        // array.copy: [dst_arrayref dst_offset src_arrayref src_offset len] -> []
+                        #[cfg(feature = "tracing")]
+                        trace!("ArrayCopy: dst={}, src={}", dst_type_idx, src_type_idx);
+                        let len = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.copy: expected i32 len")),
+                        };
+                        let src_offset = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.copy: expected i32 src_offset")),
+                        };
+                        let src_array = match operand_stack.pop() {
+                            Some(Value::ArrayRef(Some(a))) => a,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.copy: null source reference")),
+                        };
+                        let dst_offset = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.copy: expected i32 dst_offset")),
+                        };
+                        if let Some(Value::ArrayRef(Some(mut dst_array))) = operand_stack.pop() {
+                            if src_offset + len > src_array.len() as u32 || dst_offset + len > dst_array.len() as u32 {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                            }
+                            // Copy elements (handle overlap correctly)
+                            let mut elems = Vec::new();
+                            for i in 0..len {
+                                let elem = src_array.get((src_offset + i) as usize).map_err(|_|
+                                    kiln_error::Error::runtime_trap("array.copy: src get failed"))?;
+                                elems.push(elem);
+                            }
+                            for (i, elem) in elems.into_iter().enumerate() {
+                                dst_array.set((dst_offset as usize) + i, elem).map_err(|_|
+                                    kiln_error::Error::runtime_trap("array.copy: dst set failed"))?;
+                            }
+                        } else {
+                            return Err(kiln_error::Error::runtime_trap("array.copy: null destination reference"));
+                        }
+                    }
+
+                    Instruction::ArrayInitData(type_idx, data_idx) => {
+                        // array.init_data: [arrayref dst_offset src_offset len] -> []
+                        #[cfg(feature = "tracing")]
+                        trace!("ArrayInitData: type_idx={}, data_idx={}", type_idx, data_idx);
+                        let len = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.init_data: expected i32 len")),
+                        };
+                        let src_offset = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.init_data: expected i32 src_offset")),
+                        };
+                        let dst_offset = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.init_data: expected i32 dst_offset")),
+                        };
+                        if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
+                            let elem_size = {
+                                #[cfg(feature = "std")]
+                                {
+                                    match module.gc_types.get(type_idx as usize) {
+                                        Some(crate::module::GcTypeInfo::Array(field)) => field.size_in_bytes(),
+                                        _ => 4,
+                                    }
+                                }
+                                #[cfg(not(feature = "std"))]
+                                { 4usize }
+                            };
+                            let data_segment = module.data.get(data_idx as usize)
+                                .ok_or_else(|| kiln_error::Error::runtime_trap("array.init_data: invalid data index"))?;
+                            let data_bytes = data_segment.data()?;
+                            let byte_offset = src_offset as usize;
+                            let byte_length = len as usize * elem_size;
+                            if byte_offset + byte_length > data_bytes.len() {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                            }
+                            if dst_offset + len > a.len() as u32 {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                            }
+                            for i in 0..len as usize {
+                                let start = byte_offset + i * elem_size;
+                                let val = match elem_size {
+                                    1 => Value::I32(data_bytes[start] as i32),
+                                    2 => Value::I32(i16::from_le_bytes([data_bytes[start], data_bytes[start+1]]) as i32),
+                                    4 => Value::I32(i32::from_le_bytes([data_bytes[start], data_bytes[start+1], data_bytes[start+2], data_bytes[start+3]])),
+                                    8 => Value::I64(i64::from_le_bytes([
+                                        data_bytes[start], data_bytes[start+1], data_bytes[start+2], data_bytes[start+3],
+                                        data_bytes[start+4], data_bytes[start+5], data_bytes[start+6], data_bytes[start+7],
+                                    ])),
+                                    _ => Value::I32(0),
+                                };
+                                a.set((dst_offset as usize) + i, val).map_err(|_|
+                                    kiln_error::Error::runtime_trap("array.init_data: set failed"))?;
+                            }
+                        } else {
+                            return Err(kiln_error::Error::runtime_trap("array.init_data: null reference"));
+                        }
+                    }
+
+                    Instruction::ArrayInitElem(type_idx, elem_idx) => {
+                        // array.init_elem: [arrayref dst_offset src_offset len] -> []
+                        #[cfg(feature = "tracing")]
+                        trace!("ArrayInitElem: type_idx={}, elem_idx={}", type_idx, elem_idx);
+                        let len = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.init_elem: expected i32 len")),
+                        };
+                        let src_offset = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.init_elem: expected i32 src_offset")),
+                        };
+                        let dst_offset = match operand_stack.pop() {
+                            Some(Value::I32(n)) => n as u32,
+                            _ => return Err(kiln_error::Error::runtime_trap("array.init_elem: expected i32 dst_offset")),
+                        };
+                        if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
+                            let elem_segment = module.elements.get(elem_idx as usize)
+                                .ok_or_else(|| kiln_error::Error::runtime_trap("array.init_elem: invalid elem index"))?;
+                            if src_offset as usize + len as usize > elem_segment.items.len() {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds table access"));
+                            }
+                            if dst_offset + len > a.len() as u32 {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
+                            }
+                            for i in 0..len as usize {
+                                let item_idx = elem_segment.items.get(src_offset as usize + i)
+                                    .map_err(|_| kiln_error::Error::runtime_trap("array.init_elem: element access failed"))?;
+                                let item_val = Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)));
+                                a.set((dst_offset as usize) + i, item_val).map_err(|_|
+                                    kiln_error::Error::runtime_trap("array.init_elem: set failed"))?;
+                            }
+                        } else {
+                            return Err(kiln_error::Error::runtime_trap("array.init_elem: null reference"));
+                        }
+                    }
+
+                    Instruction::RefTest(heap_type) => {
+                        // ref.test: [ref] -> [i32]
+                        // Test if reference matches heap type (non-null)
+                        #[cfg(feature = "tracing")]
+                        trace!("RefTest: {:?}", heap_type);
+                        let val = operand_stack.pop().ok_or_else(||
+                            kiln_error::Error::runtime_trap("ref.test: expected reference"))?;
+                        let result = ref_test_value(&val, &heap_type, false);
+                        operand_stack.push(Value::I32(if result { 1 } else { 0 }));
+                    }
+
+                    Instruction::RefTestNull(heap_type) => {
+                        // ref.test (nullable): [ref] -> [i32]
+                        // Test if reference matches heap type (nullable variant)
+                        #[cfg(feature = "tracing")]
+                        trace!("RefTestNull: {:?}", heap_type);
+                        let val = operand_stack.pop().ok_or_else(||
+                            kiln_error::Error::runtime_trap("ref.test: expected reference"))?;
+                        let result = ref_test_value(&val, &heap_type, true);
+                        operand_stack.push(Value::I32(if result { 1 } else { 0 }));
+                    }
+
+                    Instruction::RefCast(heap_type) => {
+                        // ref.cast: [ref] -> [ref]
+                        // Cast reference to heap type, trap if fails (non-null)
+                        #[cfg(feature = "tracing")]
+                        trace!("RefCast: {:?}", heap_type);
+                        let val = operand_stack.pop().ok_or_else(||
+                            kiln_error::Error::runtime_trap("ref.cast: expected reference"))?;
+                        if !ref_test_value(&val, &heap_type, false) {
+                            return Err(kiln_error::Error::runtime_trap("cast failure"));
+                        }
+                        operand_stack.push(val);
+                    }
+
+                    Instruction::RefCastNull(heap_type) => {
+                        // ref.cast (nullable): [ref] -> [ref]
+                        // Cast reference, allow null
+                        #[cfg(feature = "tracing")]
+                        trace!("RefCastNull: {:?}", heap_type);
+                        let val = operand_stack.pop().ok_or_else(||
+                            kiln_error::Error::runtime_trap("ref.cast: expected reference"))?;
+                        if !ref_test_value(&val, &heap_type, true) {
+                            return Err(kiln_error::Error::runtime_trap("cast failure"));
+                        }
+                        operand_stack.push(val);
+                    }
+
+                    Instruction::BrOnCast { flags: _, label: label_idx, from_type: _, to_type } => {
+                        // br_on_cast: [ref] -> [ref]
+                        // Branch if cast succeeds, consuming the reference on the branch path
+                        #[cfg(feature = "tracing")]
+                        trace!("BrOnCast: label={}, to_type={:?}", label_idx, to_type);
+                        let val = operand_stack.pop().ok_or_else(||
+                            kiln_error::Error::runtime_trap("br_on_cast: expected reference"))?;
+                        // Test if cast would succeed (nullable based on flags)
+                        if ref_test_value(&val, &to_type, true) {
+                            // Cast succeeds - push value and branch
+                            operand_stack.push(val);
+                            // Branch logic (similar to Br)
+                            if (label_idx as usize) < block_stack.len() {
+                                let target_depth = block_stack.len() - 1 - label_idx as usize;
+                                if let Some((block_type, start_pc, _bti, entry_stack_height)) = block_stack.get(target_depth).copied() {
+                                    if block_type == "loop" {
+                                        pc = start_pc;
+                                    } else {
+                                        let mut depth = 1;
+                                        let mut search_pc = pc + 1;
+                                        while depth > 0 && search_pc < instructions.len() {
+                                            #[cfg(feature = "std")]
+                                            if let Some(si) = instructions.get(search_pc) {
+                                                match si {
+                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
+                                                    Instruction::End => depth -= 1,
+                                                    _ => {}
+                                                }
+                                            }
+                                            #[cfg(not(feature = "std"))]
+                                            if let Ok(si) = instructions.get(search_pc) {
+                                                match si {
+                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
+                                                    Instruction::End => depth -= 1,
+                                                    _ => {}
+                                                }
+                                            }
+                                            if depth > 0 { search_pc += 1; }
+                                        }
+                                        pc = search_pc;
+                                    }
+                                    // Keep branch target values, restore stack below
+                                    let branch_val = operand_stack.pop();
+                                    while operand_stack.len() > entry_stack_height {
+                                        operand_stack.pop();
+                                    }
+                                    if let Some(bv) = branch_val {
+                                        operand_stack.push(bv);
+                                    }
+                                }
+                            } else {
+                                break; // Branch out of function
+                            }
+                            continue;
+                        } else {
+                            // Cast fails - push original value back, don't branch
+                            operand_stack.push(val);
+                        }
+                    }
+
+                    Instruction::BrOnCastFail { flags: _, label: label_idx, from_type: _, to_type } => {
+                        // br_on_cast_fail: [ref] -> [ref]
+                        // Branch if cast FAILS
+                        #[cfg(feature = "tracing")]
+                        trace!("BrOnCastFail: label={}, to_type={:?}", label_idx, to_type);
+                        let val = operand_stack.pop().ok_or_else(||
+                            kiln_error::Error::runtime_trap("br_on_cast_fail: expected reference"))?;
+                        if !ref_test_value(&val, &to_type, true) {
+                            // Cast fails - push value and branch
+                            operand_stack.push(val);
+                            if (label_idx as usize) < block_stack.len() {
+                                let target_depth = block_stack.len() - 1 - label_idx as usize;
+                                if let Some((block_type, start_pc, _bti, entry_stack_height)) = block_stack.get(target_depth).copied() {
+                                    if block_type == "loop" {
+                                        pc = start_pc;
+                                    } else {
+                                        let mut depth = 1;
+                                        let mut search_pc = pc + 1;
+                                        while depth > 0 && search_pc < instructions.len() {
+                                            #[cfg(feature = "std")]
+                                            if let Some(si) = instructions.get(search_pc) {
+                                                match si {
+                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
+                                                    Instruction::End => depth -= 1,
+                                                    _ => {}
+                                                }
+                                            }
+                                            #[cfg(not(feature = "std"))]
+                                            if let Ok(si) = instructions.get(search_pc) {
+                                                match si {
+                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
+                                                    Instruction::End => depth -= 1,
+                                                    _ => {}
+                                                }
+                                            }
+                                            if depth > 0 { search_pc += 1; }
+                                        }
+                                        pc = search_pc;
+                                    }
+                                    let branch_val = operand_stack.pop();
+                                    while operand_stack.len() > entry_stack_height {
+                                        operand_stack.pop();
+                                    }
+                                    if let Some(bv) = branch_val {
+                                        operand_stack.push(bv);
+                                    }
+                                }
+                            } else {
+                                break;
+                            }
+                            continue;
+                        } else {
+                            // Cast succeeds - push value back, don't branch
+                            operand_stack.push(val);
+                        }
+                    }
+
+                    Instruction::AnyConvertExtern => {
+                        // any.convert_extern: [externref] -> [anyref]
+                        // Convert an externref to an anyref (internalize)
+                        #[cfg(feature = "tracing")]
+                        trace!("AnyConvertExtern");
+                        let val = operand_stack.pop().ok_or_else(||
+                            kiln_error::Error::runtime_trap("any.convert_extern: expected reference"))?;
+                        // In our representation, externref and anyref share Value::ExternRef
+                        // The spec says null stays null, non-null wraps
+                        operand_stack.push(val);
+                    }
+
+                    Instruction::ExternConvertAny => {
+                        // extern.convert_any: [anyref] -> [externref]
+                        // Convert an anyref to an externref (externalize)
+                        #[cfg(feature = "tracing")]
+                        trace!("ExternConvertAny");
+                        let val = operand_stack.pop().ok_or_else(||
+                            kiln_error::Error::runtime_trap("extern.convert_any: expected reference"))?;
+                        // In our representation, just pass through
+                        operand_stack.push(val);
                     }
 
                     // ========================================
@@ -11062,6 +11589,54 @@ impl StacklessEngine {
 // ============================================================
 // SIMD helper functions
 // ============================================================
+
+/// Test if a value matches a given heap type for ref.test/ref.cast
+///
+/// The `allow_null` parameter controls whether null references pass the test:
+/// - `false`: ref.test / ref.cast (non-nullable) - null fails
+/// - `true`: ref.test null / ref.cast null (nullable) - null passes
+fn ref_test_value(val: &Value, heap_type: &kiln_foundation::types::HeapType, allow_null: bool) -> bool {
+    use kiln_foundation::types::HeapType;
+
+    // Check if the value is null
+    let is_null = is_null_ref(val);
+
+    if is_null {
+        return allow_null;
+    }
+
+    match heap_type {
+        HeapType::Func => matches!(val, Value::FuncRef(Some(_))),
+        HeapType::Extern => matches!(val, Value::ExternRef(Some(_))),
+        HeapType::Any => matches!(val,
+            Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_)) |
+            Value::ExternRef(Some(_))
+        ),
+        HeapType::Eq => matches!(val,
+            Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_))
+        ),
+        HeapType::I31 => matches!(val, Value::I31Ref(Some(_))),
+        HeapType::Struct => matches!(val, Value::StructRef(Some(_))),
+        HeapType::Array => matches!(val, Value::ArrayRef(Some(_))),
+        HeapType::Exn => matches!(val, Value::ExnRef(Some(_))),
+        HeapType::None | HeapType::NoFunc | HeapType::NoExtern => false,
+        // Concrete type index - check if the value's type index matches
+        HeapType::Concrete(type_idx) => match val {
+            Value::StructRef(Some(sref)) => sref.type_index == *type_idx,
+            Value::ArrayRef(Some(aref)) => aref.type_index == *type_idx,
+            Value::FuncRef(Some(_fref)) => true, // FuncRef doesn't carry type index
+            _ => false,
+        },
+    }
+}
+
+/// Test if a value is a null reference
+fn is_null_ref(val: &Value) -> bool {
+    matches!(val,
+        Value::FuncRef(None) | Value::ExternRef(None) | Value::StructRef(None) |
+        Value::ArrayRef(None) | Value::I31Ref(None) | Value::ExnRef(None)
+    )
+}
 
 /// Pop a v128 value from the stack
 fn pop_v128(stack: &mut Vec<Value>) -> Result<[u8; 16]> {

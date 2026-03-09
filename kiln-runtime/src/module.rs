@@ -673,6 +673,59 @@ impl Data {
     }
 }
 
+/// Storage type for a GC field (packed or full value type)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GcFieldStorage {
+    /// Full value type (identified by wasm byte encoding)
+    Value(u8),
+    /// Packed i8
+    I8,
+    /// Packed i16
+    I16,
+}
+
+/// A single field in a GC struct type
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GcField {
+    /// The storage type of this field
+    pub storage: GcFieldStorage,
+    /// Whether this field is mutable
+    pub mutable: bool,
+}
+
+/// GC composite type information for struct and array types
+///
+/// Stores the parsed field/element type information needed at runtime
+/// for GC instructions like struct.new, array.new, etc.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GcTypeInfo {
+    /// This type index is a function type (no GC info needed)
+    Func,
+    /// Struct type with field definitions
+    Struct(Vec<GcField>),
+    /// Array type with element definition
+    Array(GcField),
+}
+
+impl GcField {
+    /// Get the size of this field's storage type in bytes
+    pub fn size_in_bytes(&self) -> usize {
+        match self.storage {
+            GcFieldStorage::I8 => 1,
+            GcFieldStorage::I16 => 2,
+            GcFieldStorage::Value(byte) => match byte {
+                0x7F => 4,  // i32
+                0x7E => 8,  // i64
+                0x7D => 4,  // f32
+                0x7C => 8,  // f64
+                0x7B => 16, // v128
+                // Reference types are 4 bytes (ref index)
+                _ => 4,
+            },
+        }
+    }
+}
+
 /// Represents a WebAssembly module in the runtime
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
@@ -757,6 +810,10 @@ pub struct Module {
     /// Number of imported functions (set during decoding/loading)
     /// Used by the engine to distinguish import calls from local calls
     pub num_import_functions: usize,
+    /// GC type information indexed by type index
+    /// Stores struct field info and array element info needed for GC instructions
+    #[cfg(feature = "std")]
+    pub gc_types: Vec<GcTypeInfo>,
 }
 
 impl Module {
@@ -1356,6 +1413,8 @@ impl Module {
             #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
+            #[cfg(feature = "std")]
+            gc_types: Vec::new(),
         })
     }
 
@@ -1395,7 +1454,55 @@ impl Module {
             deferred_global_inits: Vec::new(), // Will be populated when processing globals
             import_types: Vec::new(), // Will be populated when processing imports
             num_import_functions: 0, // Will be set after processing imports
+            gc_types: Vec::new(), // Will be populated from rec_groups
         };
+
+        // Populate GC type info from rec_groups
+        {
+            use kiln_format::module::CompositeTypeKind;
+            // First pass: determine size
+            let total_types: usize = kiln_module.rec_groups.iter()
+                .map(|rg| rg.types.len())
+                .sum();
+            runtime_module.gc_types.reserve(total_types);
+
+            // Collect types ordered by type_index
+            let mut gc_type_entries: Vec<(u32, GcTypeInfo)> = Vec::new();
+            for rec_group in &kiln_module.rec_groups {
+                for sub_type in &rec_group.types {
+                    let info = match &sub_type.composite_kind {
+                        CompositeTypeKind::Func => GcTypeInfo::Func,
+                        CompositeTypeKind::Struct => GcTypeInfo::Func, // Legacy variant, treat as func
+                        CompositeTypeKind::Array => GcTypeInfo::Func, // Legacy variant, treat as func
+                        CompositeTypeKind::StructWithFields(fields) => {
+                            let gc_fields: Vec<GcField> = fields.iter().map(|f| {
+                                let storage = match &f.storage_type {
+                                    kiln_format::module::GcStorageType::I8 => GcFieldStorage::I8,
+                                    kiln_format::module::GcStorageType::I16 => GcFieldStorage::I16,
+                                    kiln_format::module::GcStorageType::Value(b) => GcFieldStorage::Value(*b),
+                                };
+                                GcField { storage, mutable: f.mutable }
+                            }).collect();
+                            GcTypeInfo::Struct(gc_fields)
+                        }
+                        CompositeTypeKind::ArrayWithElement(elem) => {
+                            let storage = match &elem.storage_type {
+                                kiln_format::module::GcStorageType::I8 => GcFieldStorage::I8,
+                                kiln_format::module::GcStorageType::I16 => GcFieldStorage::I16,
+                                kiln_format::module::GcStorageType::Value(b) => GcFieldStorage::Value(*b),
+                            };
+                            GcTypeInfo::Array(GcField { storage, mutable: elem.mutable })
+                        }
+                    };
+                    gc_type_entries.push((sub_type.type_index, info));
+                }
+            }
+            // Sort by type index and fill gc_types
+            gc_type_entries.sort_by_key(|(idx, _)| *idx);
+            for (_, info) in gc_type_entries {
+                runtime_module.gc_types.push(info);
+            }
+        }
 
         // Convert types
         #[cfg(feature = "tracing")]
@@ -3565,6 +3672,8 @@ impl Module {
             #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
+            #[cfg(feature = "std")]
+            gc_types: Vec::new(),
         };
 
         // Set start function if present
@@ -4037,6 +4146,8 @@ impl kiln_foundation::traits::FromBytes for Module {
             #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
+            #[cfg(feature = "std")]
+            gc_types: Vec::new(),
         };
 
         Ok(module)

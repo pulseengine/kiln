@@ -1580,15 +1580,39 @@ impl kiln_foundation::traits::FromBytes
     }
 }
 
+/// Storage type for GC fields (matches wasm binary encoding)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GcStorageType {
+    /// Standard value type byte
+    Value(u8),
+    /// Packed i8 (0x78)
+    I8,
+    /// Packed i16 (0x77)
+    I16,
+}
+
+/// A single field in a GC struct type
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GcFieldType {
+    /// The storage type of this field
+    pub storage_type: GcStorageType,
+    /// Whether this field is mutable
+    pub mutable: bool,
+}
+
 /// GC proposal: Composite type kind (func, struct, or array)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompositeTypeKind {
     /// Function type (0x60)
     Func,
-    /// Struct type (0x5F) - fields defined separately
+    /// Struct type (0x5F) with field definitions
     Struct,
-    /// Array type (0x5E) - element type defined separately
+    /// Array type (0x5E) with element type
     Array,
+    /// Struct type with parsed field info for runtime use
+    StructWithFields(Vec<GcFieldType>),
+    /// Array type with parsed element info for runtime use
+    ArrayWithElement(GcFieldType),
 }
 
 /// GC proposal: Sub type declaration
