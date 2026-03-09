@@ -122,12 +122,26 @@ pub enum ResourceType {
 }
 
 /// Model formats supported by WASI-NN
+///
+/// Matches the `graph-encoding` enum from WASI-NN 0.2.0-rc-2024-10-28 spec,
+/// plus Kiln-specific extensions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelFormat {
-    ONNX,
-    TensorFlow,
-    PyTorch,
+    /// OpenVINO IR format
     OpenVINO,
+    /// ONNX format
+    ONNX,
+    /// TensorFlow SavedModel/frozen graph
+    TensorFlow,
+    /// PyTorch TorchScript
+    PyTorch,
+    /// TensorFlow Lite format
+    TensorFlowLite,
+    /// GGML format (used by llama.cpp and similar)
+    GGML,
+    /// Autodetect encoding from model data
+    Autodetect,
+    /// Tract native format (Kiln-specific extension)
     TractNative,
 }
 

@@ -26,20 +26,30 @@ use crate::prelude::*;
 /// Maximum number of graphs that can be loaded
 const MAX_GRAPHS: usize = 16;
 
-/// Graph encoding formats (matches WIT definition)
+/// Graph encoding formats (matches WASI-NN 0.2.0-rc-2024-10-28 WIT definition)
+///
+/// These correspond to the `graph-encoding` enum in the WASI-NN specification.
+/// The spec defines: openvino, onnx, tensorflow, pytorch, tensorflowlite, ggml, autodetect.
+/// We also keep TractNative as a Kiln-specific extension for the Tract backend.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum GraphEncoding {
-    /// ONNX format
-    ONNX,
-    /// TensorFlow SavedModel/frozen graph
-    TensorFlow,
-    /// PyTorch TorchScript
-    PyTorch,
     /// OpenVINO IR format
-    OpenVINO,
-    /// Tract native format
-    TractNative,
+    OpenVINO      = 0,
+    /// ONNX format
+    ONNX          = 1,
+    /// TensorFlow SavedModel/frozen graph
+    TensorFlow    = 2,
+    /// PyTorch TorchScript
+    PyTorch       = 3,
+    /// TensorFlow Lite format
+    TensorFlowLite = 4,
+    /// GGML format (used by llama.cpp and similar)
+    GGML          = 5,
+    /// Autodetect encoding from model data
+    Autodetect    = 6,
+    /// Tract native format (Kiln-specific extension, not in WASI-NN spec)
+    TractNative   = 255,
 }
 
 impl GraphEncoding {
@@ -51,6 +61,9 @@ impl GraphEncoding {
             GraphEncoding::PyTorch => ModelFormat::PyTorch,
             GraphEncoding::OpenVINO => ModelFormat::OpenVINO,
             GraphEncoding::TractNative => ModelFormat::TractNative,
+            GraphEncoding::TensorFlowLite => ModelFormat::TensorFlowLite,
+            GraphEncoding::GGML => ModelFormat::GGML,
+            GraphEncoding::Autodetect => ModelFormat::Autodetect,
         }
     }
 }

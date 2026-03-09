@@ -2006,6 +2006,59 @@ impl WasiDispatcher {
             }
 
             // ================================================================
+            // wasi:nn/* - WASI-NN 0.2.0-rc-2024-10-28 resource-based interface
+            //
+            // The new WASI-NN spec uses resources (graph, tensor,
+            // graph-execution-context, error) instead of flat function calls.
+            // These handlers provide explicit "not configured" errors so that
+            // components that import wasi:nn can link and get a clear error
+            // at runtime rather than a link-time failure.
+            // ================================================================
+
+            // wasi:nn/graph.load(builder, encoding, target) -> result<graph, error>
+            ("wasi:nn/graph", "load") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured. Enable the wasi-nn feature and configure \
+                     an NN backend (e.g., tract, onnx-runtime) to use neural network inference.",
+                ));
+            }
+
+            // wasi:nn/graph.[method]graph.init-execution-context
+            ("wasi:nn/graph", "[method]graph.init-execution-context") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured: cannot create execution context.",
+                ));
+            }
+
+            // wasi:nn/inference.[method]graph-execution-context.compute
+            ("wasi:nn/inference", "[method]graph-execution-context.compute") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured: cannot execute inference.",
+                ));
+            }
+
+            // wasi:nn/tensor.[constructor]tensor
+            ("wasi:nn/tensor", "[constructor]tensor") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured: cannot create tensor.",
+                ));
+            }
+
+            // wasi:nn/tensor.[method]tensor.data
+            ("wasi:nn/tensor", "[method]tensor.data") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured: cannot read tensor data.",
+                ));
+            }
+
+            // wasi:nn/errors.[method]error.code
+            ("wasi:nn/errors", "[method]error.code") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured: cannot get error code.",
+                ));
+            }
+
+            // ================================================================
             // wasi:random/* - Random number generation interfaces
             // ================================================================
 
@@ -2082,6 +2135,27 @@ impl WasiDispatcher {
                 let val = u64::from_le_bytes(bytes);
 
                 Ok(vec![CoreValue::I64(val as i64)])
+            }
+
+            // wasi:random/insecure-seed - provides non-cryptographic seed
+            #[cfg(feature = "wasi-random")]
+            ("wasi:random/insecure-seed", "insecure-seed") => {
+                use kiln_platform::random::PlatformRandom;
+
+                // Return a tuple of (u64, u64) as the insecure seed
+                let mut bytes = [0u8; 16];
+                PlatformRandom::get_secure_bytes(&mut bytes)
+                    .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
+                let val1 = u64::from_le_bytes([
+                    bytes[0], bytes[1], bytes[2], bytes[3],
+                    bytes[4], bytes[5], bytes[6], bytes[7],
+                ]);
+                let val2 = u64::from_le_bytes([
+                    bytes[8], bytes[9], bytes[10], bytes[11],
+                    bytes[12], bytes[13], bytes[14], bytes[15],
+                ]);
+
+                Ok(vec![CoreValue::I64(val1 as i64), CoreValue::I64(val2 as i64)])
             }
 
             _ => {

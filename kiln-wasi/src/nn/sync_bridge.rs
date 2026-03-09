@@ -602,83 +602,40 @@ pub fn wasi_nn_get_output(
 
 /// Validate model data format against claimed encoding
 fn validate_model_format(data: &[u8], encoding: GraphEncoding) -> Result<()> {
-    match encoding {
-        GraphEncoding::ONNX => {
-            // Basic ONNX format validation - check for ONNX magic bytes
-            if data.len() < 8 {
-                return Err(Error::wasi_invalid_argument(
-                    "Model data too short for ONNX format",
-                ));
-            }
+    // All formats require at least a minimal amount of data
+    let min_size = match encoding {
+        GraphEncoding::TensorFlow => 16,
+        GraphEncoding::ONNX | GraphEncoding::PyTorch => 8,
+        GraphEncoding::Autodetect => 4,
+        _ => 4,
+    };
 
-            // ONNX models typically start with protobuf bytes or have specific structure
-            // This is a basic validation - in production you'd use a proper ONNX parser
-            if !data.starts_with(&[0x08]) && !data.starts_with(&[0x08, 0x01]) {
-                // Many ONNX files start with version info
-                // For now, accept if it looks like binary data
-                if data.iter().all(|&b| b == 0) {
-                    return Err(Error::wasi_invalid_argument(
-                        "Model appears to be empty/null data",
-                    ));
-                }
-            }
-        },
-        GraphEncoding::TensorFlow => {
-            // Basic TensorFlow SavedModel validation
-            if data.len() < 16 {
-                return Err(Error::wasi_invalid_argument(
-                    "Model data too short for TensorFlow format",
-                ));
-            }
-            // TensorFlow models are typically in SavedModel format or protobuf
-            // This would require more sophisticated validation in production
-        },
-        GraphEncoding::PyTorch => {
-            // Basic PyTorch model validation - typically pickle format
-            if data.len() < 8 {
-                return Err(Error::wasi_invalid_argument(
-                    "Model data too short for PyTorch format",
-                ));
-            }
-            // PyTorch models often start with pickle protocol bytes
-            if !data.starts_with(&[0x80]) && !data.starts_with(b"PK") {
-                // Could be zip format (which PyTorch also uses)
-                if data.iter().all(|&b| b == 0) {
-                    return Err(Error::wasi_invalid_argument(
-                        "Model appears to be empty/null data",
-                    ));
-                }
-            }
-        },
-        GraphEncoding::OpenVINO => {
-            // OpenVINO IR format validation
-            if data.len() < 4 {
-                return Err(Error::wasi_invalid_argument(
-                    "Model data too short for OpenVINO format",
-                ));
-            }
-            // OpenVINO models are typically XML + bin files
-            // For our purpose, ensure it's not empty/invalid
-            if data.iter().all(|&b| b == 0) {
-                return Err(Error::wasi_invalid_argument(
-                    "Model appears to be empty/null data",
-                ));
-            }
-        },
-        GraphEncoding::TractNative => {
-            // Tract native format validation
-            if data.len() < 4 {
-                return Err(Error::wasi_invalid_argument(
-                    "Model data too short for Tract format",
-                ));
-            }
-            // Tract has its own serialization format
-            // Basic validation to ensure it's not obviously invalid
-            if data.iter().all(|&b| b == 0) {
-                return Err(Error::wasi_invalid_argument(
-                    "Model appears to be empty/null data",
-                ));
-            }
+    if data.len() < min_size {
+        return Err(Error::wasi_invalid_argument(
+            "Model data too short for claimed encoding format",
+        ));
+    }
+
+    // Reject all-zeros data for any format
+    if data.iter().all(|&b| b == 0) {
+        return Err(Error::wasi_invalid_argument(
+            "Model appears to be empty/null data",
+        ));
+    }
+
+    // Format-specific validation is delegated to the backend.
+    // This function performs only basic structural validation that applies
+    // regardless of which backend processes the model.
+    match encoding {
+        GraphEncoding::ONNX
+        | GraphEncoding::TensorFlow
+        | GraphEncoding::PyTorch
+        | GraphEncoding::OpenVINO
+        | GraphEncoding::TensorFlowLite
+        | GraphEncoding::GGML
+        | GraphEncoding::TractNative
+        | GraphEncoding::Autodetect => {
+            // Detailed format validation is performed by the backend during load
         },
     }
 
@@ -707,8 +664,9 @@ mod tests {
 
     #[test]
     fn test_encoding_conversion() {
-        assert_eq!(GraphEncoding::ONNX.to_wit(), 0);
-        assert_eq!(GraphEncoding::from_wit(0).unwrap(), GraphEncoding::ONNX);
+        // ONNX is 1 in the WASI-NN 0.2.0-rc spec (openvino=0, onnx=1, ...)
+        assert_eq!(GraphEncoding::ONNX.to_wit(), 1);
+        assert_eq!(GraphEncoding::from_wit(1).unwrap(), GraphEncoding::ONNX);
     }
 
     #[test]

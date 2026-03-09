@@ -176,7 +176,8 @@ where
 }
 
 /// WASI-NN version information
-pub const WASI_NN_VERSION: &str = "0.2.0";
+/// Tracks the WASI-NN specification version: 0.2.0-rc-2024-10-28
+pub const WASI_NN_VERSION: &str = "0.2.0-rc-2024-10-28";
 
 /// Check if WASI-NN is available with the current configuration
 pub fn is_nn_available() -> bool {
@@ -189,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_wasi_nn_version() {
-        assert_eq!(WASI_NN_VERSION, "0.2.0");
+        assert_eq!(WASI_NN_VERSION, "0.2.0-rc-2024-10-28");
     }
 
     #[test]
