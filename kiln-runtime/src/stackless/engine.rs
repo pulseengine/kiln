@@ -7409,6 +7409,22 @@ impl StacklessEngine {
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
+                            // Validate memory bounds (address + 4 bytes must be within memory)
+                            match instance.memory(memarg.memory_index as u32) {
+                                Ok(memory_wrapper) => {
+                                    let memory = &memory_wrapper.0;
+                                    let mut buffer = [0u8; 4];
+                                    match memory.read(effective_addr, &mut buffer) {
+                                        Ok(()) => {}
+                                        Err(_) => {
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                        }
+                                    }
+                                }
+                                Err(_) => {
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                }
+                            }
                             #[cfg(feature = "tracing")]
                             trace!(
                                 addr = format_args!("0x{:x}", effective_addr),
@@ -7416,7 +7432,6 @@ impl StacklessEngine {
                                 "[AtomicNotify] Notify operation"
                             );
                             // For single-threaded runtime, notify always returns 0 (no waiters)
-                            // A full implementation would use futex-like mechanisms
                             operand_stack.push(Value::I32(0));
                         }
                     }
@@ -7424,7 +7439,7 @@ impl StacklessEngine {
                     Instruction::MemoryAtomicWait32 { memarg } => {
                         // memory.atomic.wait32: [i32, i32, i64] -> [i32]
                         // Wait for i32 value at address to change, with timeout
-                        if let (Some(Value::I64(timeout)), Some(Value::I32(expected)), Some(Value::I32(addr))) =
+                        if let (Some(Value::I64(_timeout)), Some(Value::I32(_expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
@@ -7432,33 +7447,24 @@ impl StacklessEngine {
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                addr = format_args!("0x{:x}", effective_addr),
-                                expected = expected,
-                                timeout = timeout,
-                                "[AtomicWait32] Wait operation"
-                            );
-                            // For single-threaded runtime, return 1 (not equal) or 2 (timed out)
-                            // We'll read the current value and return immediately
+                            // Per the spec, memory.atomic.wait on non-shared memory traps with "expected shared memory"
+                            // Validate memory bounds first
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let mut buffer = [0u8; 4];
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
-                                            let current = i32::from_le_bytes(buffer);
-                                            // Return 1 if value differs, 2 if would timeout (single-threaded)
-                                            let result = if current != expected { 1 } else { 2 };
-                                            operand_stack.push(Value::I32(result));
+                                            // Memory is valid but not shared - trap per spec
+                                            return Err(kiln_error::Error::runtime_trap("expected shared memory"));
                                         }
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
@@ -7467,7 +7473,7 @@ impl StacklessEngine {
                     Instruction::MemoryAtomicWait64 { memarg } => {
                         // memory.atomic.wait64: [i32, i64, i64] -> [i32]
                         // Wait for i64 value at address to change, with timeout
-                        if let (Some(Value::I64(timeout)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
+                        if let (Some(Value::I64(_timeout)), Some(Value::I64(_expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
@@ -7475,30 +7481,24 @@ impl StacklessEngine {
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                addr = format_args!("0x{:x}", effective_addr),
-                                expected = expected,
-                                timeout = timeout,
-                                "[AtomicWait64] Wait operation"
-                            );
+                            // Per the spec, memory.atomic.wait on non-shared memory traps with "expected shared memory"
+                            // Validate memory bounds first
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let mut buffer = [0u8; 8];
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
-                                            let current = i64::from_le_bytes(buffer);
-                                            let result = if current != expected { 1 } else { 2 };
-                                            operand_stack.push(Value::I32(result));
+                                            // Memory is valid but not shared - trap per spec
+                                            return Err(kiln_error::Error::runtime_trap("expected shared memory"));
                                         }
                                         Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("Memory read out of bounds"));
+                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                         }
                                     }
                                 }
                                 Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("Memory access error"));
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                             }
                         }
