@@ -5137,24 +5137,28 @@ impl StacklessEngine {
                     Instruction::F32Add => {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let result = a.value() + b.value();
+                            let result = if result.is_nan() { f32::from_bits(0x7FC0_0000) } else { result };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Sub => {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let result = a.value() - b.value();
+                            let result = if result.is_nan() { f32::from_bits(0x7FC0_0000) } else { result };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Mul => {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let result = a.value() * b.value();
+                            let result = if result.is_nan() { f32::from_bits(0x7FC0_0000) } else { result };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Div => {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let result = a.value() / b.value();
+                            let result = if result.is_nan() { f32::from_bits(0x7FC0_0000) } else { result };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
@@ -5174,18 +5178,21 @@ impl StacklessEngine {
                     Instruction::F32Ceil => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = a.value().ceil();
+                            let result = if result.is_nan() { f32::from_bits(0x7FC0_0000) } else { result };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Floor => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = a.value().floor();
+                            let result = if result.is_nan() { f32::from_bits(0x7FC0_0000) } else { result };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
                     Instruction::F32Trunc => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = a.value().trunc();
+                            let result = if result.is_nan() { f32::from_bits(0x7FC0_0000) } else { result };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
@@ -5193,7 +5200,9 @@ impl StacklessEngine {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let f = a.value();
                             // Round to nearest even (banker's rounding)
-                            let result = if f.fract().abs() == 0.5 {
+                            let result = if f.is_nan() {
+                                f32::from_bits(0x7FC0_0000)
+                            } else if f.fract().abs() == 0.5 {
                                 let floor = f.floor();
                                 if floor as i32 % 2 == 0 { floor } else { f.ceil() }
                             } else {
@@ -5205,6 +5214,7 @@ impl StacklessEngine {
                     Instruction::F32Sqrt => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = a.value().sqrt();
+                            let result = if result.is_nan() { f32::from_bits(0x7FC0_0000) } else { result };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
@@ -5212,10 +5222,10 @@ impl StacklessEngine {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let fa = a.value();
                             let fb = b.value();
-                            // WebAssembly spec: If either operand is NaN, return NaN
+                            // WebAssembly spec: If either operand is NaN, return canonical NaN
                             // If both are zero with different signs, return -0.0
                             let result = if fa.is_nan() || fb.is_nan() {
-                                f32::NAN
+                                f32::from_bits(0x7FC0_0000)
                             } else if fa == 0.0 && fb == 0.0 {
                                 if fa.is_sign_negative() || fb.is_sign_negative() { -0.0 } else { 0.0 }
                             } else {
@@ -5228,10 +5238,10 @@ impl StacklessEngine {
                         if let (Some(Value::F32(b)), Some(Value::F32(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let fa = a.value();
                             let fb = b.value();
-                            // WebAssembly spec: If either operand is NaN, return NaN
+                            // WebAssembly spec: If either operand is NaN, return canonical NaN
                             // If both are zero with different signs, return +0.0
                             let result = if fa.is_nan() || fb.is_nan() {
-                                f32::NAN
+                                f32::from_bits(0x7FC0_0000)
                             } else if fa == 0.0 && fb == 0.0 {
                                 if fa.is_sign_positive() || fb.is_sign_positive() { 0.0 } else { -0.0 }
                             } else {
@@ -5250,24 +5260,28 @@ impl StacklessEngine {
                     Instruction::F64Add => {
                         if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let result = f64::from_bits(a.0) + f64::from_bits(b.0);
+                            let result = if result.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) } else { result };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Sub => {
                         if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let result = f64::from_bits(a.0) - f64::from_bits(b.0);
+                            let result = if result.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) } else { result };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Mul => {
                         if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let result = f64::from_bits(a.0) * f64::from_bits(b.0);
+                            let result = if result.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) } else { result };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Div => {
                         if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let result = f64::from_bits(a.0) / f64::from_bits(b.0);
+                            let result = if result.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) } else { result };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
@@ -5324,25 +5338,30 @@ impl StacklessEngine {
                     Instruction::F64Ceil => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0).ceil();
+                            let result = if result.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) } else { result };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Floor => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0).floor();
+                            let result = if result.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) } else { result };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Trunc => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0).trunc();
+                            let result = if result.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) } else { result };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F64Nearest => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let f = f64::from_bits(a.0);
-                            let result = if f.fract().abs() == 0.5 {
+                            let result = if f.is_nan() {
+                                f64::from_bits(0x7FF8_0000_0000_0000)
+                            } else if f.fract().abs() == 0.5 {
                                 let floor = f.floor();
                                 if floor as i64 % 2 == 0 { floor } else { f.ceil() }
                             } else {
@@ -5354,6 +5373,7 @@ impl StacklessEngine {
                     Instruction::F64Sqrt => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0).sqrt();
+                            let result = if result.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) } else { result };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
@@ -5361,8 +5381,9 @@ impl StacklessEngine {
                         if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let fa = f64::from_bits(a.0);
                             let fb = f64::from_bits(b.0);
+                            // WebAssembly spec: If either operand is NaN, return canonical NaN
                             let result = if fa.is_nan() || fb.is_nan() {
-                                f64::NAN
+                                f64::from_bits(0x7FF8_0000_0000_0000)
                             } else if fa == 0.0 && fb == 0.0 {
                                 if fa.is_sign_negative() || fb.is_sign_negative() { -0.0 } else { 0.0 }
                             } else {
@@ -5375,8 +5396,9 @@ impl StacklessEngine {
                         if let (Some(Value::F64(b)), Some(Value::F64(a))) = (operand_stack.pop(), operand_stack.pop()) {
                             let fa = f64::from_bits(a.0);
                             let fb = f64::from_bits(b.0);
+                            // WebAssembly spec: If either operand is NaN, return canonical NaN
                             let result = if fa.is_nan() || fb.is_nan() {
-                                f64::NAN
+                                f64::from_bits(0x7FF8_0000_0000_0000)
                             } else if fa == 0.0 && fb == 0.0 {
                                 if fa.is_sign_positive() || fb.is_sign_positive() { 0.0 } else { -0.0 }
                             } else {
@@ -5444,12 +5466,14 @@ impl StacklessEngine {
                     Instruction::F64PromoteF32 => {
                         if let Some(Value::F32(a)) = operand_stack.pop() {
                             let result = f32::from_bits(a.0) as f64;
+                            let result = if result.is_nan() { f64::from_bits(0x7FF8_0000_0000_0000) } else { result };
                             operand_stack.push(Value::F64(FloatBits64(result.to_bits())));
                         }
                     }
                     Instruction::F32DemoteF64 => {
                         if let Some(Value::F64(a)) = operand_stack.pop() {
                             let result = f64::from_bits(a.0) as f32;
+                            let result = if result.is_nan() { f32::from_bits(0x7FC0_0000) } else { result };
                             operand_stack.push(Value::F32(FloatBits32(result.to_bits())));
                         }
                     }
