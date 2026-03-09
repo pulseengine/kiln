@@ -1524,7 +1524,16 @@ fn execute_f32x4_min(inputs: &[Value]) -> Result<Value> {
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
         let b_val = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
-        let res_val = canonicalize_f32_nan(a_val.min(b_val));
+        // WebAssembly uses IEEE 754-2019 minimum: propagates NaN, -0 < +0
+        let res_val = if a_val.is_nan() || b_val.is_nan() {
+            canonicalize_f32_nan(f32::NAN)
+        } else if a_val == 0.0 && b_val == 0.0 {
+            if a_val.is_sign_negative() { a_val } else { b_val }
+        } else if a_val < b_val {
+            a_val
+        } else {
+            b_val
+        };
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1540,7 +1549,16 @@ fn execute_f32x4_max(inputs: &[Value]) -> Result<Value> {
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
         let b_val = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
-        let res_val = canonicalize_f32_nan(a_val.max(b_val));
+        // WebAssembly uses IEEE 754-2019 maximum: propagates NaN, +0 > -0
+        let res_val = if a_val.is_nan() || b_val.is_nan() {
+            canonicalize_f32_nan(f32::NAN)
+        } else if a_val == 0.0 && b_val == 0.0 {
+            if a_val.is_sign_positive() { a_val } else { b_val }
+        } else if a_val > b_val {
+            a_val
+        } else {
+            b_val
+        };
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1556,18 +1574,8 @@ fn execute_f32x4_pmin(inputs: &[Value]) -> Result<Value> {
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
         let b_val = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
-        // Pseudo-minimum: IEEE 754-2008 compliant
-        let res_val = if a_val.is_nan() || b_val.is_nan() {
-            f32::NAN
-        } else if a_val == 0.0 && b_val == 0.0 {
-            if a_val.is_sign_negative() {
-                a_val
-            } else {
-                b_val
-            }
-        } else {
-            a_val.min(b_val)
-        };
+        // Pseudo-minimum: pmin(a, b) = b < a ? b : a (no special NaN/zero handling)
+        let res_val = if b_val < a_val { b_val } else { a_val };
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1583,18 +1591,8 @@ fn execute_f32x4_pmax(inputs: &[Value]) -> Result<Value> {
     for i in 0..4 {
         let a_val = f32::from_le_bytes([a[i * 4], a[i * 4 + 1], a[i * 4 + 2], a[i * 4 + 3]]);
         let b_val = f32::from_le_bytes([b[i * 4], b[i * 4 + 1], b[i * 4 + 2], b[i * 4 + 3]]);
-        // Pseudo-maximum: IEEE 754-2008 compliant
-        let res_val = if a_val.is_nan() || b_val.is_nan() {
-            f32::NAN
-        } else if a_val == 0.0 && b_val == 0.0 {
-            if a_val.is_sign_positive() {
-                a_val
-            } else {
-                b_val
-            }
-        } else {
-            a_val.max(b_val)
-        };
+        // Pseudo-maximum: pmax(a, b) = a < b ? b : a (no special NaN/zero handling)
+        let res_val = if a_val < b_val { b_val } else { a_val };
         let res_bytes = res_val.to_le_bytes();
         result[i * 4..i * 4 + 4].copy_from_slice(&res_bytes);
     }
@@ -1772,7 +1770,16 @@ fn execute_f64x2_min(inputs: &[Value]) -> Result<Value> {
             b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
             b_bytes[7],
         ]);
-        let res_val = canonicalize_f64_nan(a_val.min(b_val));
+        // WebAssembly uses IEEE 754-2019 minimum: propagates NaN, -0 < +0
+        let res_val = if a_val.is_nan() || b_val.is_nan() {
+            canonicalize_f64_nan(f64::NAN)
+        } else if a_val == 0.0 && b_val == 0.0 {
+            if a_val.is_sign_negative() { a_val } else { b_val }
+        } else if a_val < b_val {
+            a_val
+        } else {
+            b_val
+        };
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
@@ -1796,7 +1803,16 @@ fn execute_f64x2_max(inputs: &[Value]) -> Result<Value> {
             b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
             b_bytes[7],
         ]);
-        let res_val = canonicalize_f64_nan(a_val.max(b_val));
+        // WebAssembly uses IEEE 754-2019 maximum: propagates NaN, +0 > -0
+        let res_val = if a_val.is_nan() || b_val.is_nan() {
+            canonicalize_f64_nan(f64::NAN)
+        } else if a_val == 0.0 && b_val == 0.0 {
+            if a_val.is_sign_positive() { a_val } else { b_val }
+        } else if a_val > b_val {
+            a_val
+        } else {
+            b_val
+        };
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
@@ -1820,18 +1836,8 @@ fn execute_f64x2_pmin(inputs: &[Value]) -> Result<Value> {
             b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
             b_bytes[7],
         ]);
-        // Pseudo-minimum: IEEE 754-2008 compliant
-        let res_val = if a_val.is_nan() || b_val.is_nan() {
-            f64::NAN
-        } else if a_val == 0.0 && b_val == 0.0 {
-            if a_val.is_sign_negative() {
-                a_val
-            } else {
-                b_val
-            }
-        } else {
-            a_val.min(b_val)
-        };
+        // Pseudo-minimum: pmin(a, b) = b < a ? b : a (no special NaN/zero handling)
+        let res_val = if b_val < a_val { b_val } else { a_val };
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
@@ -1855,18 +1861,8 @@ fn execute_f64x2_pmax(inputs: &[Value]) -> Result<Value> {
             b_bytes[0], b_bytes[1], b_bytes[2], b_bytes[3], b_bytes[4], b_bytes[5], b_bytes[6],
             b_bytes[7],
         ]);
-        // Pseudo-maximum: IEEE 754-2008 compliant
-        let res_val = if a_val.is_nan() || b_val.is_nan() {
-            f64::NAN
-        } else if a_val == 0.0 && b_val == 0.0 {
-            if a_val.is_sign_positive() {
-                a_val
-            } else {
-                b_val
-            }
-        } else {
-            a_val.max(b_val)
-        };
+        // Pseudo-maximum: pmax(a, b) = a < b ? b : a (no special NaN/zero handling)
+        let res_val = if a_val < b_val { b_val } else { a_val };
         let res_bytes = res_val.to_le_bytes();
         result[i * 8..i * 8 + 8].copy_from_slice(&res_bytes);
     }
