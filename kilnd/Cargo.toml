@@ -78,7 +78,7 @@ wasi-cli = ["wasi", "kiln-wasi/wasi-cli"]
 wasi-clocks = ["wasi", "kiln-wasi/wasi-clocks"]
 wasi-io = ["wasi", "kiln-wasi/wasi-io"]
 wasi-random = ["wasi", "kiln-wasi/wasi-random"]
-wasi-nn = ["wasi", "kiln-wasi/wasi-nn"]
+wasi-nn = ["wasi", "kiln-wasi/wasi-nn", "kiln-wasi/nn-preview2", "kiln-wasi/tract"]
 
 # Component model support
 component-model = ["kiln-execution", "dep:kiln-component", "dep:kiln-decoder", "kiln-component/std", "kiln-component/kiln-execution", "kiln-decoder/std"]

@@ -922,6 +922,9 @@ pub struct SimpleArgs {
     /// Component interfaces to register
     #[cfg(feature = "component-model")]
     pub component_interfaces: Vec<String>,
+    /// WASI-NN graph specifications (encoding::path pairs)
+    #[cfg(feature = "wasi-nn")]
+    pub nn_graphs: Vec<String>,
     /// Enable memory profiling
     pub enable_memory_profiling: bool,
     /// Enable platform optimizations
@@ -953,6 +956,8 @@ impl SimpleArgs {
             enable_component_model: true,
             #[cfg(feature = "component-model")]
             component_interfaces: Vec::new(),
+            #[cfg(feature = "wasi-nn")]
+            nn_graphs: Vec::new(),
             enable_memory_profiling: false,
             enable_platform_optimizations: true,
         };
@@ -983,6 +988,12 @@ impl SimpleArgs {
                     {
                         println!("  --component          Enable component model support");
                         println!("  --interface <name>   Register component interface");
+                    }
+                    #[cfg(feature = "wasi-nn")]
+                    {
+                        println!("  --nn-graph <spec>    Pre-load NN model (format: encoding::path)");
+                        println!("                       e.g., --nn-graph onnx::model.onnx");
+                        println!("                       Encodings: onnx, tensorflow, pytorch, openvino");
                     }
                     println!("  --help               Show this help message");
                     process::exit(0);
@@ -1058,6 +1069,13 @@ impl SimpleArgs {
                     i += 1;
                     if i < args.len() {
                         result.component_interfaces.push(args[i].clone());
+                    }
+                },
+                #[cfg(feature = "wasi-nn")]
+                "--nn-graph" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.nn_graphs.push(args[i].clone());
                     }
                 },
                 // Everything after "--" goes to wasi_args
@@ -1218,6 +1236,76 @@ fn main_with_stack() -> Result<()> {
 
     if !config.enable_platform_optimizations {
         println!("! Platform optimizations disabled");
+    }
+
+    // Initialize WASI-NN if graphs are specified
+    #[cfg(feature = "wasi-nn")]
+    {
+        if !args.nn_graphs.is_empty() {
+            use kiln_wasi::nn::{
+                initialize_nn, initialize_backends, initialize_graph_store,
+                initialize_context_store, nn_load,
+                capabilities::DynamicNNCapability,
+                GraphEncoding,
+            };
+
+            // Initialize NN subsystem with default (QM) capability
+            let capability = Box::new(DynamicNNCapability::with_tracking());
+            initialize_nn(capability).map_err(|e| {
+                eprintln!("Failed to initialize WASI-NN: {}", e);
+                e
+            })?;
+
+            // Initialize backends and stores
+            initialize_backends().ok();
+            initialize_graph_store().ok();
+            initialize_context_store().ok();
+
+            println!("✓ WASI-NN enabled:");
+
+            for spec in &args.nn_graphs {
+                // Parse "encoding::path" format
+                let (encoding_str, path) = match spec.split_once("::") {
+                    Some((enc, p)) => (enc, p),
+                    None => {
+                        eprintln!("  ✗ Invalid --nn-graph format: '{}' (expected encoding::path)", spec);
+                        eprintln!("    Example: --nn-graph onnx::model.onnx");
+                        process::exit(1);
+                    }
+                };
+
+                let encoding: u8 = match encoding_str {
+                    "openvino" => 0,
+                    "onnx"     => 1,
+                    "tensorflow" | "tf" => 2,
+                    "pytorch" | "pt"    => 3,
+                    "tflite"   => 4,
+                    "ggml"     => 5,
+                    "autodetect" | "auto" => 6,
+                    _ => {
+                        eprintln!("  ✗ Unknown encoding '{}'. Valid: onnx, tensorflow, pytorch, openvino, tflite, ggml, autodetect", encoding_str);
+                        process::exit(1);
+                    }
+                };
+
+                // Read model file from disk
+                let model_data = std::fs::read(path).map_err(|e| {
+                    eprintln!("  ✗ Failed to read model file '{}': {}", path, e);
+                    kiln_error::Error::runtime_error("Failed to read model file")
+                })?;
+
+                let model_size = model_data.len();
+
+                // Pre-load into graph store
+                let graph_id = nn_load(model_data, encoding, 0).map_err(|e| {
+                    eprintln!("  ✗ Failed to load model '{}': {}", path, e);
+                    e
+                })?;
+
+                println!("  - Loaded {} ({} bytes) as graph_id={} [{}]",
+                    path, model_size, graph_id, encoding_str);
+            }
+        }
     }
 
     // Check if we have a module to execute
