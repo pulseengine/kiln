@@ -1,0 +1,98 @@
+# STPA Step 1a: Losses
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+# System boundary: Kiln accepts WebAssembly core modules and components,
+#   instantiates them with WASI and host functions, and executes them on
+#   gale (RTOS kernel) or std platforms. The system boundary includes
+#   decoding, validation, instantiation, execution, component model
+#   operations, and WASI host implementations. It excludes upstream
+#   build tools (meld, loom, synth), the gale kernel itself, and hardware.
+#
+# Stakeholders:
+#   - Developers building safety-critical systems with WebAssembly
+#   - End-users of systems whose behavior depends on correct execution
+#   - Certification authorities (ISO 26262, DO-178C, IEC 61508)
+#   - PulseEngine toolchain (Meld, Loom, Synth, Sigil, Gale)
+#
+# Relation to BA RFC #46: Kiln implements the runtime-side functionality
+#   that the RFC splits across "Host C API for Lowered Components" and
+#   "Host C API for Embedder Bindings". Where the RFC proposes a
+#   runtime-agnostic C API, Kiln provides a concrete, safety-qualified
+#   Rust implementation targeting embedded/safety-critical platforms.
+
+losses:
+  - id: L-1
+    title: Loss of execution correctness
+    description: >
+      The runtime executes WebAssembly instructions incorrectly. Functions
+      return wrong values, control flow diverges from spec, or traps occur
+      where none should (or vice versa). This includes incorrect numeric
+      operations, wrong branching, incorrect table/memory access semantics,
+      and incorrect component model canonical ABI operations.
+    stakeholders: [developers, end-users, certification-authorities]
+
+  - id: L-2
+    title: Loss of memory isolation
+    description: >
+      One component or module reads or writes memory belonging to another
+      component, the host, or the runtime itself. Bounds checks fail to
+      prevent out-of-bounds access, multi-memory indexing is incorrect, or
+      the memory protection mechanism (MPU, software bounds) has gaps.
+    stakeholders: [developers, end-users, certification-authorities]
+
+  - id: L-3
+    title: Loss of resource containment
+    description: >
+      The runtime fails to bound execution: unbounded fuel consumption,
+      unbounded memory growth, unbounded table growth, stack overflow,
+      or unbounded allocation within the runtime's own data structures.
+      In embedded/safety-critical systems, this causes watchdog timeout,
+      memory exhaustion, or interference with other tasks.
+    stakeholders: [developers, end-users, certification-authorities]
+
+  - id: L-4
+    title: Loss of component model fidelity
+    description: >
+      The Component Model implementation diverges from the spec: canonical
+      lifting/lowering produces wrong values, resource handle lifecycle is
+      incorrect, cross-component calls misroute, type checking at component
+      boundaries is wrong, or async task scheduling violates ordering
+      guarantees.
+    stakeholders: [developers, end-users]
+
+  - id: L-5
+    title: Loss of WASI contract
+    description: >
+      WASI host implementations violate the WASI specification: file I/O
+      returns wrong data, clock reads are non-monotonic, random number
+      generation is predictable, or capability checks are bypassed. In
+      safety-critical systems, WASI violations can cause silent data
+      corruption in the application.
+    stakeholders: [developers, end-users]
+
+  - id: L-6
+    title: Loss of deterministic behavior
+    description: >
+      Identical inputs produce different execution results across runs,
+      platforms, or configurations. Sources include HashMap iteration order,
+      non-deterministic scheduling of async tasks, platform-dependent float
+      semantics, or timing-dependent behavior in the execution engine.
+    stakeholders: [developers, certification-authorities]
+
+  - id: L-7
+    title: Loss of safety-level guarantees
+    description: >
+      The runtime claims a safety integrity level (ASIL-D, SIL-4, DAL-A)
+      but the actual implementation does not meet the standard's requirements.
+      Unbounded allocation in ASIL-D mode, missing error detection codes,
+      insufficient diagnostic coverage, or unsafe Rust in forbidden contexts.
+    stakeholders: [certification-authorities, developers]
+
+  - id: L-8
+    title: Loss of control flow integrity
+    description: >
+      The CFI mechanism (shadow stack, indirect call validation) fails to
+      detect or prevent control flow hijacking. An indirect call reaches a
+      wrong function, a return address is corrupted, or the shadow stack
+      is desynchronized from the real stack.
+    stakeholders: [developers, end-users, certification-authorities]

@@ -1,0 +1,148 @@
+# STPA Step 1b: System-Level Hazards
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Relation to BA RFC #46: Hazards H-4 through H-8 cover the runtime-side
+#   concerns that the RFC's "Host C API" sections leave as TODOs. These
+#   are the hazards that any runtime implementing the RFC must address.
+
+hazards:
+  - id: H-1
+    title: Instruction execution produces wrong result
+    description: >
+      A core WebAssembly instruction (arithmetic, comparison, conversion,
+      memory, table, control flow) produces a result that diverges from
+      the WebAssembly Core Specification. This includes edge cases in
+      float-to-int conversion, saturating arithmetic, SIMD lane operations,
+      and atomic memory ordering.
+    losses: [L-1]
+
+  - id: H-2
+    title: Memory access exceeds linear memory bounds
+    description: >
+      A load, store, memory.grow, memory.copy, or memory.fill operation
+      accesses bytes outside the valid range of the target linear memory.
+      In multi-memory mode, instructions reference the wrong memory index.
+      The bounds check mechanism (software CMP, MPU, masking) has gaps.
+    losses: [L-1, L-2]
+
+  - id: H-3
+    title: Resource budget exceeded without detection
+    description: >
+      Fuel, memory, table, or stack limits are exceeded but the runtime
+      does not trap or report the violation. Execution continues in an
+      unbounded state. The bounded allocation system is bypassed. In
+      ASIL-D mode, the watchdog is not notified of budget exhaustion.
+    losses: [L-3, L-7]
+
+  - id: H-4
+    title: Canonical ABI lifting/lowering produces wrong values
+    description: >
+      The Component Model canonical ABI implementation in kiln-component
+      produces incorrect values during lift (core→component) or lower
+      (component→core) operations. String encoding/decoding is wrong,
+      list element sizing is incorrect, record field alignment is off,
+      or variant discriminant handling is incorrect.
+    losses: [L-4]
+
+  - id: H-5
+    title: Cross-component call misroutes or type-mismatches
+    description: >
+      A call from one component to another is dispatched to the wrong
+      function, or the caller and callee disagree on the function signature.
+      The linker resolves an import to the wrong export, or the
+      cross_component_calls module uses incorrect instance indices.
+    losses: [L-1, L-4]
+
+  - id: H-6
+    title: Resource handle lifecycle violation
+    description: >
+      A resource handle is used after being dropped, dropped twice, or
+      leaked (never dropped). The resource table in kiln-component's
+      resource_management module becomes inconsistent. Handle indices
+      wrap around and alias previous handles.
+    losses: [L-4, L-2]
+
+  - id: H-7
+    title: Async task scheduling violates ordering or fairness
+    description: >
+      The async executor in kiln-component starves a task, delivers
+      stream/future values out of order, or resumes a cancelled task.
+      The fuel-aware waker interferes with deterministic scheduling.
+      Task cancellation leaves dangling references.
+    losses: [L-4, L-6]
+
+  - id: H-8
+    title: WASI host function violates capability boundary
+    description: >
+      A WASI filesystem, socket, or clock operation bypasses the
+      WasiCapabilities security model. A component accesses a file path
+      it was not granted access to, or the capability check uses the
+      wrong component's capability set in a multi-component scenario.
+    losses: [L-5, L-2]
+
+  - id: H-9
+    title: CFI shadow stack desynchronization
+    description: >
+      The shadow stack and the real execution stack diverge: a call pushes
+      to one but not the other, or a return pops from one but not the other.
+      After desync, all subsequent return address validations produce false
+      positives or false negatives. The CFI violation policy (trap/log/
+      continue) determines whether execution continues in a compromised state.
+    losses: [L-8]
+
+  - id: H-10
+    title: Safety-level allocation violation
+    description: >
+      In ASIL-D/static-allocation mode, the runtime performs dynamic
+      allocation. In bounded-allocation mode, a BoundedVec or BoundedMap
+      exceeds its capacity without error. The safe_managed_alloc! macro
+      fails to enforce per-crate budgets. An unsafe block in a
+      #[forbid(unsafe_code)] crate is missed by the audit.
+    losses: [L-3, L-7]
+
+# Sub-hazards for complex areas
+sub-hazards:
+  # Refinements of H-4 (Canonical ABI)
+  - id: H-4.1
+    parent: H-4
+    title: String transcoding produces invalid encoding
+    description: >
+      UTF-8 to UTF-16 or Latin-1 conversion produces invalid sequences,
+      miscounts code units, or doesn't handle surrogate pairs. Matches
+      Meld H-4.4 but at runtime rather than fusion time.
+
+  - id: H-4.2
+    parent: H-4
+    title: List element size computation disagrees with meld
+    description: >
+      Kiln's canonical_abi computes a different element size than Meld's
+      parser.rs canonical_abi_element_size for the same type. When running
+      meld-fused modules, the adapter allocates N bytes but kiln's lift
+      reads M bytes (M ≠ N), causing data corruption.
+
+  - id: H-4.3
+    parent: H-4
+    title: Record field alignment padding differs from spec
+    description: >
+      Record fields are laid out with incorrect alignment, causing
+      loads/stores to read from wrong offsets within the record's
+      linear memory representation.
+
+  # Refinements of H-5 (cross-component)
+  - id: H-5.1
+    parent: H-5
+    title: Blast zone containment fails to isolate fault
+    description: >
+      The blast_zone fault isolation mechanism fails to contain a trap
+      in one component, allowing it to corrupt the state of another
+      component or the runtime itself.
+
+  # Refinements of H-9 (CFI)
+  - id: H-9.1
+    parent: H-9
+    title: Indirect call target validation uses wrong type index
+    description: >
+      call_indirect checks the function signature against the wrong
+      type index, either allowing a type-mismatched call or rejecting
+      a valid one.

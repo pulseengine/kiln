@@ -1,0 +1,317 @@
+# STPA Step 2: Control Structure
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Kiln is a runtime system. Unlike Meld (a build-time tool), Kiln's control
+# structure has real-time feedback loops, concurrent execution paths, and
+# external I/O. The controllers operate during program execution, not during
+# a one-shot transformation.
+#
+# Relation to BA RFC #46: The RFC's "Host C API for Lowered Components" and
+# "Host C API for Embedder Bindings" are implemented by Kiln's controllers.
+# The RFC proposes abstract C API functions; Kiln provides concrete Rust
+# implementations with safety-level guarantees.
+
+controllers:
+  - id: CTRL-HOST
+    name: Host Application / Gale Task
+    type: human-and-automated
+    description: >
+      The host application (or gale RTOS task) that creates a Kiln engine,
+      loads modules/components, configures capabilities, and invokes exports.
+      In embedded systems, this is the main task or an ISR-triggered handler.
+      In std systems, this is the application binary using kiln as a library.
+    control-actions:
+      - ca: CA-HOST-1
+        target: CTRL-ENGINE
+        action: Create engine with configuration (fuel, memory limits, safety level)
+      - ca: CA-HOST-2
+        target: CTRL-ENGINE
+        action: Load and validate module/component bytes
+      - ca: CA-HOST-3
+        target: CTRL-LINKER
+        action: Define host functions and WASI capabilities
+      - ca: CA-HOST-4
+        target: CTRL-ENGINE
+        action: Call exported function with arguments
+      - ca: CA-HOST-5
+        target: CTRL-ENGINE
+        action: Read/write memory and globals
+    feedback:
+      - from: CTRL-ENGINE
+        info: Execution result (return values, trap, fuel exhausted)
+    process-model:
+      - Module/component bytes are valid WebAssembly
+      - Fuel and memory limits are appropriate for the target platform
+      - Safety level matches the system's certification target
+
+  - id: CTRL-ENGINE
+    name: Execution Engine
+    type: automated
+    description: >
+      The core execution engine in kiln-runtime. Interprets or dispatches
+      WebAssembly instructions, manages the value stack and call stack,
+      tracks fuel consumption, and enforces resource budgets. Contains
+      the cfi_engine for control flow integrity.
+    source-crate: kiln-runtime
+    control-actions:
+      - ca: CA-ENG-1
+        target: PROC-INSTRUCTION
+        action: Fetch, decode, and dispatch next instruction
+      - ca: CA-ENG-2
+        target: PROC-MEMORY
+        action: Execute memory load/store with bounds check
+      - ca: CA-ENG-3
+        target: PROC-STACK
+        action: Push/pop values, manage call frames
+      - ca: CA-ENG-4
+        target: CTRL-CFI
+        action: Validate control flow (calls, returns, indirect calls)
+      - ca: CA-ENG-5
+        target: CTRL-CM
+        action: Dispatch cross-component call
+    feedback:
+      - from: PROC-INSTRUCTION
+        info: Instruction result, trap condition
+      - from: PROC-MEMORY
+        info: Loaded value, OOB trap
+      - from: CTRL-CFI
+        info: CFI violation detected / clear
+      - from: CTRL-CM
+        info: Cross-component call result
+    process-model:
+      - Program counter is within valid code range
+      - Value stack depth matches expected type for current instruction
+      - Fuel remaining > 0 (if fuel metering enabled)
+      - Call stack depth < maximum
+
+  - id: CTRL-DECODER
+    name: Module/Component Decoder
+    type: automated
+    description: >
+      Parses WebAssembly binary format (kiln-decoder, kiln-format).
+      Validates section ordering, type consistency, and resource limits.
+      Detects whether input is a core module or component. Enforces
+      configurable limits (max functions, max memories, max types).
+    source-crate: kiln-decoder
+    control-actions:
+      - ca: CA-DEC-1
+        target: PROC-MODULE
+        action: Parse and validate module sections
+      - ca: CA-DEC-2
+        target: PROC-MODULE
+        action: Enforce resource limits from configuration
+      - ca: CA-DEC-3
+        target: PROC-MODULE
+        action: Detect component vs core module format
+    feedback:
+      - from: PROC-MODULE
+        info: Parsed module/component structure, validation errors
+
+  - id: CTRL-LINKER
+    name: Component Linker
+    type: automated
+    description: >
+      Resolves imports to exports across component instances. Manages
+      the instance graph. Maps component-level imports to host functions,
+      WASI implementations, or other component exports. In meld-fused
+      scenarios, the linker handles the remaining host/WASI imports that
+      meld could not resolve at fusion time.
+    source-crate: kiln-component
+    control-actions:
+      - ca: CA-LINK-1
+        target: PROC-INSTANCE
+        action: Resolve import to host function or component export
+      - ca: CA-LINK-2
+        target: PROC-INSTANCE
+        action: Instantiate module with resolved imports
+      - ca: CA-LINK-3
+        target: PROC-INSTANCE
+        action: Verify type compatibility at link boundary
+    feedback:
+      - from: PROC-INSTANCE
+        info: Instantiated module, unresolved imports, type errors
+
+  - id: CTRL-CM
+    name: Component Model Executor
+    type: automated
+    description: >
+      Implements the Component Model canonical ABI. Handles lifting
+      (core→component), lowering (component→core), resource lifecycle,
+      cross-component communication, async task management, and
+      virtualization. The largest and most complex controller.
+    source-crate: kiln-component
+    control-actions:
+      - ca: CA-CM-1
+        target: PROC-CANONICAL
+        action: Lift core values to component values
+      - ca: CA-CM-2
+        target: PROC-CANONICAL
+        action: Lower component values to core values
+      - ca: CA-CM-3
+        target: PROC-RESOURCE
+        action: Create, transfer, or drop resource handle
+      - ca: CA-CM-4
+        target: PROC-ASYNC
+        action: Schedule, suspend, or resume async task
+      - ca: CA-CM-5
+        target: PROC-STREAM
+        action: Read from or write to stream/future
+      - ca: CA-CM-6
+        target: CTRL-BLAST
+        action: Isolate component fault within blast zone
+    feedback:
+      - from: PROC-CANONICAL
+        info: Lifted/lowered values, encoding errors
+      - from: PROC-RESOURCE
+        info: Handle validity, table state
+      - from: PROC-ASYNC
+        info: Task state, completion, cancellation
+    process-model:
+      - Resource table entries are valid (no dangling handles)
+      - Async task DAG has no cycles
+      - Stream/future buffers are exclusively owned by one task
+
+  - id: CTRL-CFI
+    name: Control Flow Integrity Engine
+    type: automated
+    description: >
+      Shadow stack + indirect call validation. Maintains a parallel stack
+      of return addresses. On every call, pushes expected return address.
+      On every return, compares actual vs expected. On indirect calls,
+      validates the target function's type signature. Configurable violation
+      policy: trap, log, or continue.
+    source-crate: kiln-runtime (cfi_engine)
+    control-actions:
+      - ca: CA-CFI-1
+        target: PROC-SHADOW
+        action: Push return address on call
+      - ca: CA-CFI-2
+        target: PROC-SHADOW
+        action: Validate return address on return
+      - ca: CA-CFI-3
+        target: PROC-SHADOW
+        action: Validate indirect call target type
+    feedback:
+      - from: PROC-SHADOW
+        info: Validation pass/fail, violation details
+
+  - id: CTRL-WASI
+    name: WASI Host Implementation
+    type: automated
+    description: >
+      Implements WASI Preview 2 interfaces: filesystem, CLI, clocks, I/O,
+      random, sockets. Enforces capability-based security model. Each
+      component instance has its own WasiCapabilities set. The dispatcher
+      routes WASI calls to the appropriate implementation.
+    source-crate: kiln-wasi
+    control-actions:
+      - ca: CA-WASI-1
+        target: PROC-IO
+        action: Execute filesystem operation with capability check
+      - ca: CA-WASI-2
+        target: PROC-IO
+        action: Execute clock/random operation
+      - ca: CA-WASI-3
+        target: PROC-IO
+        action: Execute socket operation with capability check
+    feedback:
+      - from: PROC-IO
+        info: Operation result, capability denial, I/O error
+
+  - id: CTRL-BLAST
+    name: Blast Zone Fault Isolation
+    type: automated
+    description: >
+      Containment mechanism for component faults. When a component traps,
+      the blast zone prevents the fault from propagating to other components
+      or the runtime. Configurable containment policies.
+    source-crate: kiln-component (blast_zone)
+    control-actions:
+      - ca: CA-BLAST-1
+        target: PROC-INSTANCE
+        action: Isolate faulting component
+      - ca: CA-BLAST-2
+        target: PROC-INSTANCE
+        action: Report fault to host with diagnostic info
+
+  - id: CTRL-ALLOC
+    name: Safety-Level Allocation Manager
+    type: automated
+    description: >
+      Enforces the four-layer memory management strategy. Routes allocation
+      requests through safe_managed_alloc! macro. Tracks per-crate budgets.
+      In ASIL-D mode, rejects dynamic allocation entirely. In bounded mode,
+      enforces capacity limits on all collections.
+    source-crate: kiln-foundation
+    control-actions:
+      - ca: CA-ALLOC-1
+        target: PROC-BUDGET
+        action: Allocate memory within per-crate budget
+      - ca: CA-ALLOC-2
+        target: PROC-BUDGET
+        action: Reject allocation that exceeds budget or safety level
+    feedback:
+      - from: PROC-BUDGET
+        info: Allocation success/failure, remaining budget
+
+controlled-processes:
+  - id: PROC-INSTRUCTION
+    name: Instruction Stream
+    description: WebAssembly bytecode being decoded and executed
+
+  - id: PROC-MEMORY
+    name: Linear Memory
+    description: >
+      WebAssembly linear memory instances (one per memory in multi-memory
+      mode). Protected by bounds checks and optionally MPU regions.
+
+  - id: PROC-STACK
+    name: Value and Call Stack
+    description: >
+      The operand value stack and call frame stack. Bounded by maximum
+      depth configuration.
+
+  - id: PROC-MODULE
+    name: Module/Component Binary
+    description: Raw WebAssembly bytes being parsed and validated
+
+  - id: PROC-INSTANCE
+    name: Module/Component Instance
+    description: >
+      Instantiated module with resolved imports, allocated memories,
+      initialized tables, and executed start function.
+
+  - id: PROC-CANONICAL
+    name: Canonical ABI Values
+    description: >
+      Values being lifted (core→component) or lowered (component→core)
+      through the Component Model canonical ABI.
+
+  - id: PROC-RESOURCE
+    name: Resource Handle Table
+    description: >
+      Table mapping resource handle indices to resource values. Tracks
+      ownership, borrowing, and lifecycle state.
+
+  - id: PROC-ASYNC
+    name: Async Task Queue
+    description: >
+      Queue of async tasks (streams, futures, waitables) managed by the
+      Component Model executor.
+
+  - id: PROC-STREAM
+    name: Stream/Future Buffers
+    description: Buffers for inter-component async data transfer
+
+  - id: PROC-SHADOW
+    name: CFI Shadow Stack
+    description: Parallel stack of expected return addresses for CFI validation
+
+  - id: PROC-IO
+    name: Host I/O Operations
+    description: WASI filesystem, clock, random, and socket operations
+
+  - id: PROC-BUDGET
+    name: Allocation Budget
+    description: Per-crate memory budget tracked by the allocation manager
