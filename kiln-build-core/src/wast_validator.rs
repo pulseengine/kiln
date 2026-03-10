@@ -4005,6 +4005,257 @@ impl WastModuleValidator {
                     }
                 },
 
+                // Threads/Atomics instructions (0xFE prefix) - WebAssembly Threads Proposal
+                0xFE => {
+                    if offset >= code.len() {
+                        return Err(anyhow!("unexpected end of code after 0xFE prefix"));
+                    }
+                    let (sub_opcode, new_offset) = Self::parse_varuint32(code, offset)?;
+                    offset = new_offset;
+
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+
+                    match sub_opcode {
+                        // atomic.fence (0x03) - reserved byte immediate, no stack effect
+                        0x03 => {
+                            if offset >= code.len() {
+                                return Err(anyhow!("unexpected end of code in atomic.fence"));
+                            }
+                            // Skip the reserved byte (must be 0x00)
+                            offset += 1;
+                        }
+
+                        // memory.atomic.notify (0x00): [i32 addr, i32 count] -> [i32]
+                        0x00 => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            // Pop count (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop address (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I32);
+                        }
+                        // memory.atomic.wait32 (0x01): [i32 addr, i32 expected, i64 timeout] -> [i32]
+                        0x01 => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            // Pop timeout (i64)
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop expected (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop address (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I32);
+                        }
+                        // memory.atomic.wait64 (0x02): [i32 addr, i64 expected, i64 timeout] -> [i32]
+                        0x02 => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            // Pop timeout (i64)
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop expected (i64)
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop address (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I32);
+                        }
+
+                        // i32 atomic loads: [i32 addr] -> [i32]
+                        // i32.atomic.load (0x10), i32.atomic.load8_u (0x12), i32.atomic.load16_u (0x13)
+                        0x10 | 0x12 | 0x13 => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I32);
+                        }
+                        // i64 atomic loads: [i32 addr] -> [i64]
+                        // i64.atomic.load (0x11), i64.atomic.load8_u (0x14), i64.atomic.load16_u (0x15), i64.atomic.load32_u (0x16)
+                        0x11 | 0x14 | 0x15 | 0x16 => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I64);
+                        }
+
+                        // i32 atomic stores: [i32 addr, i32 value] -> []
+                        // i32.atomic.store (0x17), i32.atomic.store8 (0x19), i32.atomic.store16 (0x1A)
+                        0x17 | 0x19 | 0x1A => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            // Pop value (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop address (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                        }
+                        // i64 atomic stores: [i32 addr, i64 value] -> []
+                        // i64.atomic.store (0x18), i64.atomic.store8 (0x1B), i64.atomic.store16 (0x1C), i64.atomic.store32 (0x1D)
+                        0x18 | 0x1B | 0x1C | 0x1D => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            // Pop value (i64)
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop address (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                        }
+
+                        // i32 atomic RMW (add/sub/and/or/xor/xchg): [i32 addr, i32 value] -> [i32]
+                        // i32.atomic.rmw.add (0x1E), i32.atomic.rmw8.add_u (0x20), i32.atomic.rmw16.add_u (0x21)
+                        // i32.atomic.rmw.sub (0x25), i32.atomic.rmw8.sub_u (0x27), i32.atomic.rmw16.sub_u (0x28)
+                        // i32.atomic.rmw.and (0x2C), i32.atomic.rmw8.and_u (0x2E), i32.atomic.rmw16.and_u (0x2F)
+                        // i32.atomic.rmw.or (0x33), i32.atomic.rmw8.or_u (0x35), i32.atomic.rmw16.or_u (0x36)
+                        // i32.atomic.rmw.xor (0x3A), i32.atomic.rmw8.xor_u (0x3C), i32.atomic.rmw16.xor_u (0x3D)
+                        // i32.atomic.rmw.xchg (0x41), i32.atomic.rmw8.xchg_u (0x43), i32.atomic.rmw16.xchg_u (0x44)
+                        0x1E | 0x20 | 0x21 |
+                        0x25 | 0x27 | 0x28 |
+                        0x2C | 0x2E | 0x2F |
+                        0x33 | 0x35 | 0x36 |
+                        0x3A | 0x3C | 0x3D |
+                        0x41 | 0x43 | 0x44 => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            // Pop value (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop address (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I32);
+                        }
+
+                        // i64 atomic RMW (add/sub/and/or/xor/xchg): [i32 addr, i64 value] -> [i64]
+                        // i64.atomic.rmw.add (0x1F), i64.atomic.rmw8.add_u (0x22), i64.atomic.rmw16.add_u (0x23), i64.atomic.rmw32.add_u (0x24)
+                        // i64.atomic.rmw.sub (0x26), i64.atomic.rmw8.sub_u (0x29), i64.atomic.rmw16.sub_u (0x2A), i64.atomic.rmw32.sub_u (0x2B)
+                        // i64.atomic.rmw.and (0x2D), i64.atomic.rmw8.and_u (0x30), i64.atomic.rmw16.and_u (0x31), i64.atomic.rmw32.and_u (0x32)
+                        // i64.atomic.rmw.or (0x34), i64.atomic.rmw8.or_u (0x37), i64.atomic.rmw16.or_u (0x38), i64.atomic.rmw32.or_u (0x39)
+                        // i64.atomic.rmw.xor (0x3B), i64.atomic.rmw8.xor_u (0x3E), i64.atomic.rmw16.xor_u (0x3F), i64.atomic.rmw32.xor_u (0x40)
+                        // i64.atomic.rmw.xchg (0x42), i64.atomic.rmw8.xchg_u (0x45), i64.atomic.rmw16.xchg_u (0x46), i64.atomic.rmw32.xchg_u (0x47)
+                        0x1F | 0x22 | 0x23 | 0x24 |
+                        0x26 | 0x29 | 0x2A | 0x2B |
+                        0x2D | 0x30 | 0x31 | 0x32 |
+                        0x34 | 0x37 | 0x38 | 0x39 |
+                        0x3B | 0x3E | 0x3F | 0x40 |
+                        0x42 | 0x45 | 0x46 | 0x47 => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            // Pop value (i64)
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop address (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I64);
+                        }
+
+                        // i32.atomic.rmw.cmpxchg (0x48): [i32 addr, i32 expected, i32 replacement] -> [i32]
+                        // i32.atomic.rmw8.cmpxchg_u (0x4A), i32.atomic.rmw16.cmpxchg_u (0x4B)
+                        0x48 | 0x4A | 0x4B => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            // Pop replacement (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop expected (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop address (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I32);
+                        }
+                        // i64.atomic.rmw.cmpxchg (0x49): [i32 addr, i64 expected, i64 replacement] -> [i64]
+                        // i64.atomic.rmw8.cmpxchg_u (0x4C), i64.atomic.rmw16.cmpxchg_u (0x4D), i64.atomic.rmw32.cmpxchg_u (0x4E)
+                        0x49 | 0x4C | 0x4D | 0x4E => {
+                            if !Self::has_memory(module) {
+                                return Err(anyhow!("unknown memory"));
+                            }
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            // Pop replacement (i64)
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop expected (i64)
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Pop address (i32)
+                            if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            stack.push(StackType::I64);
+                        }
+
+                        // Unknown atomic sub-opcode - skip
+                        _ => {}
+                    }
+                },
+
                 // Skip other opcodes for now (will be handled by instruction executor)
                 _ => {
                     // For all other opcodes, try to skip variable-length immediates

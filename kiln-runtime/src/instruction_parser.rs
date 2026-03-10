@@ -1107,6 +1107,134 @@ fn parse_instruction_with_provider(
             }
         }
 
+        // Threads/Atomics instructions (0xFE prefix) - WebAssembly Threads Proposal
+        0xFE => {
+            // Atomic instructions use 0xFE prefix followed by LEB128-encoded sub-opcode
+            let (atomic_opcode, opcode_bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += opcode_bytes;
+
+            match atomic_opcode {
+                // atomic.fence (0x03) - has a reserved 0x00 byte immediate
+                0x03 => {
+                    if offset + consumed >= bytecode.len() {
+                        return Err(Error::parse_error("Unexpected end in atomic.fence"));
+                    }
+                    let reserved = bytecode[offset + consumed];
+                    consumed += 1;
+                    if reserved != 0x00 {
+                        return Err(Error::parse_error("Invalid reserved byte in atomic.fence"));
+                    }
+                    Instruction::AtomicFence
+                }
+
+                // All other atomic instructions take a memarg
+                _ => {
+                    let (memarg, memarg_bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += memarg_bytes;
+
+                    match atomic_opcode {
+                        // memory.atomic.notify (0x00)
+                        0x00 => Instruction::MemoryAtomicNotify { memarg },
+                        // memory.atomic.wait32 (0x01)
+                        0x01 => Instruction::MemoryAtomicWait32 { memarg },
+                        // memory.atomic.wait64 (0x02)
+                        0x02 => Instruction::MemoryAtomicWait64 { memarg },
+
+                        // Atomic loads
+                        0x10 => Instruction::I32AtomicLoad { memarg },
+                        0x11 => Instruction::I64AtomicLoad { memarg },
+                        0x12 => Instruction::I32AtomicLoad8U { memarg },
+                        0x13 => Instruction::I32AtomicLoad16U { memarg },
+                        0x14 => Instruction::I64AtomicLoad8U { memarg },
+                        0x15 => Instruction::I64AtomicLoad16U { memarg },
+                        0x16 => Instruction::I64AtomicLoad32U { memarg },
+
+                        // Atomic stores
+                        0x17 => Instruction::I32AtomicStore { memarg },
+                        0x18 => Instruction::I64AtomicStore { memarg },
+                        0x19 => Instruction::I32AtomicStore8 { memarg },
+                        0x1A => Instruction::I32AtomicStore16 { memarg },
+                        0x1B => Instruction::I64AtomicStore8 { memarg },
+                        0x1C => Instruction::I64AtomicStore16 { memarg },
+                        0x1D => Instruction::I64AtomicStore32 { memarg },
+
+                        // Atomic RMW: add
+                        0x1E => Instruction::I32AtomicRmwAdd { memarg },
+                        0x1F => Instruction::I64AtomicRmwAdd { memarg },
+                        0x20 => Instruction::I32AtomicRmw8AddU { memarg },
+                        0x21 => Instruction::I32AtomicRmw16AddU { memarg },
+                        0x22 => Instruction::I64AtomicRmw8AddU { memarg },
+                        0x23 => Instruction::I64AtomicRmw16AddU { memarg },
+                        0x24 => Instruction::I64AtomicRmw32AddU { memarg },
+
+                        // Atomic RMW: sub
+                        0x25 => Instruction::I32AtomicRmwSub { memarg },
+                        0x26 => Instruction::I64AtomicRmwSub { memarg },
+                        0x27 => Instruction::I32AtomicRmw8SubU { memarg },
+                        0x28 => Instruction::I32AtomicRmw16SubU { memarg },
+                        0x29 => Instruction::I64AtomicRmw8SubU { memarg },
+                        0x2A => Instruction::I64AtomicRmw16SubU { memarg },
+                        0x2B => Instruction::I64AtomicRmw32SubU { memarg },
+
+                        // Atomic RMW: and
+                        0x2C => Instruction::I32AtomicRmwAnd { memarg },
+                        0x2D => Instruction::I64AtomicRmwAnd { memarg },
+                        0x2E => Instruction::I32AtomicRmw8AndU { memarg },
+                        0x2F => Instruction::I32AtomicRmw16AndU { memarg },
+                        0x30 => Instruction::I64AtomicRmw8AndU { memarg },
+                        0x31 => Instruction::I64AtomicRmw16AndU { memarg },
+                        0x32 => Instruction::I64AtomicRmw32AndU { memarg },
+
+                        // Atomic RMW: or
+                        0x33 => Instruction::I32AtomicRmwOr { memarg },
+                        0x34 => Instruction::I64AtomicRmwOr { memarg },
+                        0x35 => Instruction::I32AtomicRmw8OrU { memarg },
+                        0x36 => Instruction::I32AtomicRmw16OrU { memarg },
+                        0x37 => Instruction::I64AtomicRmw8OrU { memarg },
+                        0x38 => Instruction::I64AtomicRmw16OrU { memarg },
+                        0x39 => Instruction::I64AtomicRmw32OrU { memarg },
+
+                        // Atomic RMW: xor
+                        0x3A => Instruction::I32AtomicRmwXor { memarg },
+                        0x3B => Instruction::I64AtomicRmwXor { memarg },
+                        0x3C => Instruction::I32AtomicRmw8XorU { memarg },
+                        0x3D => Instruction::I32AtomicRmw16XorU { memarg },
+                        0x3E => Instruction::I64AtomicRmw8XorU { memarg },
+                        0x3F => Instruction::I64AtomicRmw16XorU { memarg },
+                        0x40 => Instruction::I64AtomicRmw32XorU { memarg },
+
+                        // Atomic RMW: xchg
+                        0x41 => Instruction::I32AtomicRmwXchg { memarg },
+                        0x42 => Instruction::I64AtomicRmwXchg { memarg },
+                        0x43 => Instruction::I32AtomicRmw8XchgU { memarg },
+                        0x44 => Instruction::I32AtomicRmw16XchgU { memarg },
+                        0x45 => Instruction::I64AtomicRmw8XchgU { memarg },
+                        0x46 => Instruction::I64AtomicRmw16XchgU { memarg },
+                        0x47 => Instruction::I64AtomicRmw32XchgU { memarg },
+
+                        // Atomic RMW: cmpxchg
+                        0x48 => Instruction::I32AtomicRmwCmpxchg { memarg },
+                        0x49 => Instruction::I64AtomicRmwCmpxchg { memarg },
+                        0x4A => Instruction::I32AtomicRmw8CmpxchgU { memarg },
+                        0x4B => Instruction::I32AtomicRmw16CmpxchgU { memarg },
+                        0x4C => Instruction::I64AtomicRmw8CmpxchgU { memarg },
+                        0x4D => Instruction::I64AtomicRmw16CmpxchgU { memarg },
+                        0x4E => Instruction::I64AtomicRmw32CmpxchgU { memarg },
+
+                        _ => {
+                            #[cfg(feature = "tracing")]
+                            kiln_foundation::tracing::warn!(
+                                subopcode = format!("0xFE 0x{:02X}", atomic_opcode),
+                                offset = offset,
+                                "Unknown atomic sub-opcode"
+                            );
+                            return Err(Error::parse_error("Unknown atomic instruction opcode"));
+                        }
+                    }
+                }
+            }
+        }
+
         // GC instructions (0xFB prefix) - WebAssembly GC Proposal
         0xFB => {
             // GC instructions use 0xFB prefix followed by LEB128-encoded opcode
