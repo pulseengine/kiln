@@ -6083,21 +6083,19 @@ impl StacklessEngine {
                             .unwrap_or(false);
 
                         // Pop the number of pages to grow (i64 for memory64, i32 for memory32)
+                        let mut _grow_failed_early = false;
                         let delta_u32 = if is_memory64 {
                             match operand_stack.pop() {
                                 Some(Value::I64(delta)) => {
-                                    if delta < 0 {
+                                    if delta < 0 || delta as u64 > u32::MAX as u64 {
                                         #[cfg(feature = "tracing")]
-                                        trace!("MemoryGrow: negative delta {}, pushing -1", delta);
+                                        trace!("MemoryGrow: invalid delta {}, pushing -1", delta);
                                         operand_stack.push(Value::I64(-1));
-                                        continue;
+                                        _grow_failed_early = true;
+                                        None
+                                    } else {
+                                        Some(delta as u32)
                                     }
-                                    // Memory64 delta must fit in u32 for page count
-                                    if delta as u64 > u32::MAX as u64 {
-                                        operand_stack.push(Value::I64(-1));
-                                        continue;
-                                    }
-                                    Some(delta as u32)
                                 }
                                 _ => None,
                             }
@@ -6108,9 +6106,11 @@ impl StacklessEngine {
                                         #[cfg(feature = "tracing")]
                                         trace!("MemoryGrow: negative delta {}, pushing -1", delta);
                                         operand_stack.push(Value::I32(-1));
-                                        continue;
+                                        _grow_failed_early = true;
+                                        None
+                                    } else {
+                                        Some(delta as u32)
                                     }
-                                    Some(delta as u32)
                                 }
                                 _ => None,
                             }
@@ -6215,50 +6215,49 @@ impl StacklessEngine {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
                                 // No-op for zero size copy after bounds check passes
-                                continue;
-                            }
+                            } else {
+                                // For size > 0, check if (offset + size) overflows or exceeds memory size
+                                let dest_end = dest.checked_add(size)
+                                    .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                                let src_end = src.checked_add(size)
+                                    .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
-                            // For size > 0, check if (offset + size) overflows or exceeds memory size
-                            let dest_end = dest.checked_add(size)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-                            let src_end = src.checked_add(size)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                                if dest_end > memory_size || src_end > memory_size {
+                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                                }
 
-                            if dest_end > memory_size || src_end > memory_size {
-                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                            }
+                                let size_usize = size as usize;
+                                let src_u32 = src as u32;
+                                let dest_u32 = dest as u32;
 
-                            let size_usize = size as usize;
-                            let src_u32 = src as u32;
-                            let dest_u32 = dest as u32;
+                                // Read source data into temp buffer (handles overlapping regions)
+                                let mut buffer = vec![0u8; size_usize];
+                                if let Err(e) = memory.read(src_u32, &mut buffer) {
+                                    #[cfg(feature = "tracing")]
+                                    trace!("MemoryCopy: read failed: {:?}", e);
+                                    return Err(e);
+                                }
 
-                            // Read source data into temp buffer (handles overlapping regions)
-                            let mut buffer = vec![0u8; size_usize];
-                            if let Err(e) = memory.read(src_u32, &mut buffer) {
+                                // Write to destination using write_shared (thread-safe)
+                                if let Err(e) = memory.write_shared(dest_u32, &buffer) {
+                                    #[cfg(feature = "tracing")]
+                                    trace!("MemoryCopy: write failed: {:?}", e);
+                                    return Err(e);
+                                }
+
                                 #[cfg(feature = "tracing")]
-                                trace!("MemoryCopy: read failed: {:?}", e);
-                                return Err(e);
-                            }
-
-                            // Write to destination using write_shared (thread-safe)
-                            if let Err(e) = memory.write_shared(dest_u32, &buffer) {
-                                #[cfg(feature = "tracing")]
-                                trace!("MemoryCopy: write failed: {:?}", e);
-                                return Err(e);
-                            }
-
-                            #[cfg(feature = "tracing")]
-                            {
-                                trace!(
-                                    size = size,
-                                    src = format_args!("{:#x}", src),
-                                    dest = format_args!("{:#x}", dest),
-                                    "[MemoryCopy] SUCCESS"
-                                );
-                                // Show copied data as string if ASCII
-                                if size <= 50 && buffer.iter().all(|&b| b >= 0x20 && b <= 0x7e || b == 0) {
-                                    if let Ok(s) = core::str::from_utf8(&buffer) {
-                                        trace!(data = %s, "[MemoryCopy] Copied ASCII data");
+                                {
+                                    trace!(
+                                        size = size,
+                                        src = format_args!("{:#x}", src),
+                                        dest = format_args!("{:#x}", dest),
+                                        "[MemoryCopy] SUCCESS"
+                                    );
+                                    // Show copied data as string if ASCII
+                                    if size <= 50 && buffer.iter().all(|&b| b >= 0x20 && b <= 0x7e || b == 0) {
+                                        if let Ok(s) = core::str::from_utf8(&buffer) {
+                                            trace!(data = %s, "[MemoryCopy] Copied ASCII data");
+                                        }
                                     }
                                 }
                             }
@@ -6300,38 +6299,37 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                             // No-op for zero size fill after bounds check passes
-                            continue;
-                        }
+                        } else {
+                            // For size > 0, check if (offset + size) overflows or exceeds memory size
+                            let dest_end = dest.checked_add(size)
+                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
-                        // For size > 0, check if (offset + size) overflows or exceeds memory size
-                        let dest_end = dest.checked_add(size)
-                            .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                            if dest_end > memory_size {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                            }
 
-                        if dest_end > memory_size {
-                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                        }
+                            let size_usize = size as usize;
+                            let fill_byte = (value & 0xFF) as u8;
 
-                        let size_usize = size as usize;
-                        let fill_byte = (value & 0xFF) as u8;
+                            // Create buffer filled with the value
+                            let buffer = vec![fill_byte; size_usize];
 
-                        // Create buffer filled with the value
-                        let buffer = vec![fill_byte; size_usize];
+                            // Write to destination using write_shared (thread-safe)
+                            let dest_u32 = dest as u32;
+                            if let Err(e) = memory.write_shared(dest_u32, &buffer) {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryFill: write failed: {:?}", e);
+                                return Err(e);
+                            }
 
-                        // Write to destination using write_shared (thread-safe)
-                        let dest_u32 = dest as u32;
-                        if let Err(e) = memory.write_shared(dest_u32, &buffer) {
                             #[cfg(feature = "tracing")]
-                            trace!("MemoryFill: write failed: {:?}", e);
-                            return Err(e);
+                            trace!(
+                                size = size,
+                                dest = format_args!("{:#x}", dest),
+                                fill_byte = format_args!("{:#x}", fill_byte),
+                                "[MemoryFill] SUCCESS"
+                            );
                         }
-
-                        #[cfg(feature = "tracing")]
-                        trace!(
-                            size = size,
-                            dest = format_args!("{:#x}", dest),
-                            fill_byte = format_args!("{:#x}", fill_byte),
-                            "[MemoryFill] SUCCESS"
-                        );
                     }
                     Instruction::MemoryInit(data_idx, mem_idx) => {
                         // Determine memory64 status for destination memory
@@ -6387,41 +6385,40 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                             // No-op for zero size init after bounds check passes
-                            continue;
-                        }
+                        } else {
+                            // For n > 0, check if (offset + n) overflows or exceeds bounds
+                            let src_end = s.checked_add(n)
+                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
+                            let dest_end = d.checked_add(n as u64)
+                                .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
-                        // For n > 0, check if (offset + n) overflows or exceeds bounds
-                        let src_end = s.checked_add(n)
-                            .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-                        let dest_end = d.checked_add(n as u64)
-                            .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-
-                        if src_end > data_len {
-                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                        }
-                        if dest_end > memory_size {
-                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                        }
-
-                        // Copy data from segment to memory
-                        #[cfg(any(feature = "std", feature = "alloc"))]
-                        {
-                            let src_slice = &data_segment.init[s as usize..src_end as usize];
-                            let d_u32 = d as u32;
-                            if let Err(e) = memory.write_shared(d_u32, src_slice) {
-                                #[cfg(feature = "tracing")]
-                                trace!("MemoryInit: write failed: {:?}", e);
-                                return Err(e);
+                            if src_end > data_len {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
-                        }
+                            if dest_end > memory_size {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                            }
 
-                        #[cfg(feature = "tracing")]
-                        trace!(
-                            dest = format_args!("{:#x}", d),
-                            src = format_args!("{:#x}", s),
-                            len = n,
-                            "[MemoryInit] SUCCESS"
-                        );
+                            // Copy data from segment to memory
+                            #[cfg(any(feature = "std", feature = "alloc"))]
+                            {
+                                let src_slice = &data_segment.init[s as usize..src_end as usize];
+                                let d_u32 = d as u32;
+                                if let Err(e) = memory.write_shared(d_u32, src_slice) {
+                                    #[cfg(feature = "tracing")]
+                                    trace!("MemoryInit: write failed: {:?}", e);
+                                    return Err(e);
+                                }
+                            }
+
+                            #[cfg(feature = "tracing")]
+                            trace!(
+                                dest = format_args!("{:#x}", d),
+                                src = format_args!("{:#x}", s),
+                                len = n,
+                                "[MemoryInit] SUCCESS"
+                            );
+                        }
                     }
                     Instruction::DataDrop(data_idx) => {
                         #[cfg(feature = "tracing")]
@@ -7540,7 +7537,7 @@ impl StacklessEngine {
                     Instruction::MemoryAtomicWait32 { memarg } => {
                         // memory.atomic.wait32: [i32, i32, i64] -> [i32]
                         // Wait for i32 value at address to change, with timeout
-                        if let (Some(Value::I64(_timeout)), Some(Value::I32(_expected)), Some(Value::I32(addr))) =
+                        if let (Some(Value::I64(_timeout)), Some(Value::I32(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
@@ -7548,16 +7545,25 @@ impl StacklessEngine {
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
-                            // Per the spec, memory.atomic.wait on non-shared memory traps with "expected shared memory"
-                            // Validate memory bounds first
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
+                                    // Per the spec, memory.atomic.wait on non-shared memory traps
+                                    if !memory.ty.shared {
+                                        return Err(kiln_error::Error::runtime_trap("expected shared memory"));
+                                    }
                                     let mut buffer = [0u8; 4];
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
-                                            // Memory is valid but not shared - trap per spec
-                                            return Err(kiln_error::Error::runtime_trap("expected shared memory"));
+                                            let current = i32::from_le_bytes(buffer);
+                                            if current != expected {
+                                                // Value differs from expected: return 1 (not-equal)
+                                                operand_stack.push(Value::I32(1));
+                                            } else {
+                                                // In single-threaded runtime, no other thread will notify,
+                                                // so wait always times out: return 2 (timed-out)
+                                                operand_stack.push(Value::I32(2));
+                                            }
                                         }
                                         Err(_) => {
                                             return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
@@ -7574,7 +7580,7 @@ impl StacklessEngine {
                     Instruction::MemoryAtomicWait64 { memarg } => {
                         // memory.atomic.wait64: [i32, i64, i64] -> [i32]
                         // Wait for i64 value at address to change, with timeout
-                        if let (Some(Value::I64(_timeout)), Some(Value::I64(_expected)), Some(Value::I32(addr))) =
+                        if let (Some(Value::I64(_timeout)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
                             let effective_addr = (addr as u32).wrapping_add(memarg.offset);
@@ -7582,16 +7588,25 @@ impl StacklessEngine {
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
-                            // Per the spec, memory.atomic.wait on non-shared memory traps with "expected shared memory"
-                            // Validate memory bounds first
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
+                                    // Per the spec, memory.atomic.wait on non-shared memory traps
+                                    if !memory.ty.shared {
+                                        return Err(kiln_error::Error::runtime_trap("expected shared memory"));
+                                    }
                                     let mut buffer = [0u8; 8];
                                     match memory.read(effective_addr, &mut buffer) {
                                         Ok(()) => {
-                                            // Memory is valid but not shared - trap per spec
-                                            return Err(kiln_error::Error::runtime_trap("expected shared memory"));
+                                            let current = i64::from_le_bytes(buffer);
+                                            if current != expected {
+                                                // Value differs from expected: return 1 (not-equal)
+                                                operand_stack.push(Value::I32(1));
+                                            } else {
+                                                // In single-threaded runtime, no other thread will notify,
+                                                // so wait always times out: return 2 (timed-out)
+                                                operand_stack.push(Value::I32(2));
+                                            }
                                         }
                                         Err(_) => {
                                             return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));

@@ -5495,3 +5495,4 @@ pub enum BlockType {
     ValueType(ValueType),
     FuncType(u32),
 }
+
