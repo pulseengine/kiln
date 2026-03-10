@@ -153,6 +153,7 @@ fn to_core_memory_type(memory_type: KilnMemoryType) -> CoreMemoryType {
     CoreMemoryType {
         limits: memory_type.limits,
         shared: memory_type.shared,
+        memory64: memory_type.memory64,
     }
 }
 
@@ -673,6 +674,59 @@ impl Data {
     }
 }
 
+/// Storage type for a GC field (packed or full value type)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GcFieldStorage {
+    /// Full value type (identified by wasm byte encoding)
+    Value(u8),
+    /// Packed i8
+    I8,
+    /// Packed i16
+    I16,
+}
+
+/// A single field in a GC struct type
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GcField {
+    /// The storage type of this field
+    pub storage: GcFieldStorage,
+    /// Whether this field is mutable
+    pub mutable: bool,
+}
+
+/// GC composite type information for struct and array types
+///
+/// Stores the parsed field/element type information needed at runtime
+/// for GC instructions like struct.new, array.new, etc.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GcTypeInfo {
+    /// This type index is a function type (no GC info needed)
+    Func,
+    /// Struct type with field definitions
+    Struct(Vec<GcField>),
+    /// Array type with element definition
+    Array(GcField),
+}
+
+impl GcField {
+    /// Get the size of this field's storage type in bytes
+    pub fn size_in_bytes(&self) -> usize {
+        match self.storage {
+            GcFieldStorage::I8 => 1,
+            GcFieldStorage::I16 => 2,
+            GcFieldStorage::Value(byte) => match byte {
+                0x7F => 4,  // i32
+                0x7E => 8,  // i64
+                0x7D => 4,  // f32
+                0x7C => 8,  // f64
+                0x7B => 16, // v128
+                // Reference types are 4 bytes (ref index)
+                _ => 4,
+            },
+        }
+    }
+}
+
 /// Represents a WebAssembly module in the runtime
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
@@ -709,6 +763,10 @@ pub struct Module {
     #[cfg(not(feature = "std"))]
     pub memories:        BoundedMemoryVec,
     /// Global variable instances
+    /// In std mode, use Vec to avoid BoundedVec serialization which loses GC reference data
+    #[cfg(feature = "std")]
+    pub globals:         Vec<GlobalWrapper>,
+    #[cfg(not(feature = "std"))]
     pub globals:         BoundedGlobalVec,
     /// Exception tag definitions (exception handling proposal)
     #[cfg(feature = "std")]
@@ -757,6 +815,10 @@ pub struct Module {
     /// Number of imported functions (set during decoding/loading)
     /// Used by the engine to distinguish import calls from local calls
     pub num_import_functions: usize,
+    /// GC type information indexed by type index
+    /// Stores struct field info and array element info needed for GC instructions
+    #[cfg(feature = "std")]
+    pub gc_types: Vec<GcTypeInfo>,
 }
 
 impl Module {
@@ -813,8 +875,12 @@ impl Module {
         init_bytes: &[u8],
         num_global_imports: usize,
         global_import_types: &[kiln_foundation::types::GlobalType],
+        #[cfg(feature = "std")]
+        defined_globals: &Vec<GlobalWrapper>,
+        #[cfg(not(feature = "std"))]
         defined_globals: &BoundedGlobalVec,
         current_global_idx: usize,
+        gc_types: &[GcTypeInfo],
     ) -> Result<kiln_foundation::values::Value> {
         use kiln_foundation::values::{Value, FloatBits32, FloatBits64};
 
@@ -895,12 +961,25 @@ impl Module {
                     } else {
                         let defined_idx = ref_idx - num_global_imports;
                         if defined_idx < current_global_idx && defined_idx < defined_globals.len() {
-                            match defined_globals.get(defined_idx) {
-                                Ok(ref_global) => {
-                                    let value = ref_global.get()?;
-                                    stack.push(value);
-                                },
-                                Err(_) => return Err(Error::validation_error("global.get references non-existent global")),
+                            #[cfg(feature = "std")]
+                            {
+                                match defined_globals.get(defined_idx) {
+                                    Some(ref_global) => {
+                                        let value = ref_global.get()?;
+                                        stack.push(value);
+                                    },
+                                    None => return Err(Error::validation_error("global.get references non-existent global")),
+                                }
+                            }
+                            #[cfg(not(feature = "std"))]
+                            {
+                                match defined_globals.get(defined_idx) {
+                                    Ok(ref_global) => {
+                                        let value = ref_global.get()?;
+                                        stack.push(value);
+                                    },
+                                    Err(_) => return Err(Error::validation_error("global.get references non-existent global")),
+                                }
                             }
                         } else {
                             return Err(Error::validation_error("global.get forward reference"));
@@ -1018,40 +1097,121 @@ impl Module {
                     match sub_opcode {
                         // struct.new $t: pops field values, pushes structref
                         0x00 => {
-                            let (_type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            let (type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
                             pos += consumed2;
-                            // Pop field values and create struct (simplified: just create null for now)
-                            stack.clear();
-                            stack.push(Value::StructRef(None));
+                            // Look up field count from gc_types
+                            let field_count = match gc_types.get(type_idx as usize) {
+                                Some(GcTypeInfo::Struct(fields)) => fields.len(),
+                                _ => return Err(Error::parse_error(
+                                    "struct.new in const expr: type index is not a struct type"
+                                )),
+                            };
+                            // Pop field values in reverse order
+                            let mut fields = Vec::with_capacity(field_count);
+                            for _ in 0..field_count {
+                                let val = stack.pop().ok_or_else(|| Error::parse_error(
+                                    "struct.new in const expr: stack underflow"
+                                ))?;
+                                fields.push(val);
+                            }
+                            fields.reverse();
+                            let mut struct_ref = kiln_foundation::values::StructRef::new(
+                                type_idx,
+                                kiln_foundation::traits::DefaultMemoryProvider::default(),
+                            ).map_err(|_| Error::parse_error("Failed to create struct in const expr"))?;
+                            for field in fields {
+                                struct_ref.add_field(field).map_err(|_|
+                                    Error::parse_error("Failed to add struct field in const expr"))?;
+                            }
+                            stack.push(Value::StructRef(Some(struct_ref)));
                         }
                         // struct.new_default $t: pushes structref with default fields
                         0x01 => {
-                            let (_type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            let (type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
                             pos += consumed2;
-                            stack.push(Value::StructRef(None));
+                            let mut struct_ref = kiln_foundation::values::StructRef::new(
+                                type_idx,
+                                kiln_foundation::traits::DefaultMemoryProvider::default(),
+                            ).map_err(|_| Error::parse_error("Failed to create struct in const expr"))?;
+                            if let Some(GcTypeInfo::Struct(gc_fields)) = gc_types.get(type_idx as usize) {
+                                for field in gc_fields {
+                                    let default_val = Self::gc_field_default_value_const(field);
+                                    struct_ref.add_field(default_val).map_err(|_|
+                                        Error::parse_error("Failed to add default struct field in const expr"))?;
+                                }
+                            }
+                            stack.push(Value::StructRef(Some(struct_ref)));
                         }
                         // array.new $t: [val i32] -> [(ref $t)]
                         0x06 => {
-                            let (_type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            let (type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
                             pos += consumed2;
-                            stack.clear();
-                            stack.push(Value::ArrayRef(None));
+                            let length = match stack.pop() {
+                                Some(Value::I32(n)) => n as u32,
+                                _ => return Err(Error::parse_error(
+                                    "array.new in const expr: expected i32 length"
+                                )),
+                            };
+                            let init_value = stack.pop().ok_or_else(|| Error::parse_error(
+                                "array.new in const expr: expected init value"
+                            ))?;
+                            let mut array_ref = kiln_foundation::values::ArrayRef::new(
+                                type_idx,
+                                kiln_foundation::traits::DefaultMemoryProvider::default(),
+                            ).map_err(|_| Error::parse_error("Failed to create array in const expr"))?;
+                            for _ in 0..length {
+                                array_ref.push(init_value.clone()).map_err(|_|
+                                    Error::parse_error("Failed to push to array in const expr"))?;
+                            }
+                            stack.push(Value::ArrayRef(Some(array_ref)));
                         }
                         // array.new_default $t: [i32] -> [(ref $t)]
                         0x07 => {
-                            let (_type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            let (type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
                             pos += consumed2;
-                            stack.clear();
-                            stack.push(Value::ArrayRef(None));
+                            let length = match stack.pop() {
+                                Some(Value::I32(n)) => n as u32,
+                                _ => return Err(Error::parse_error(
+                                    "array.new_default in const expr: expected i32 length"
+                                )),
+                            };
+                            let default_val = match gc_types.get(type_idx as usize) {
+                                Some(GcTypeInfo::Array(field)) => Self::gc_field_default_value_const(field),
+                                _ => Value::I32(0),
+                            };
+                            let mut array_ref = kiln_foundation::values::ArrayRef::new(
+                                type_idx,
+                                kiln_foundation::traits::DefaultMemoryProvider::default(),
+                            ).map_err(|_| Error::parse_error("Failed to create array in const expr"))?;
+                            for _ in 0..length {
+                                array_ref.push(default_val.clone()).map_err(|_|
+                                    Error::parse_error("Failed to push to array in const expr"))?;
+                            }
+                            stack.push(Value::ArrayRef(Some(array_ref)));
                         }
                         // array.new_fixed $t $n: [val*n] -> [(ref $t)]
                         0x08 => {
-                            let (_type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            let (type_idx, consumed2) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
                             pos += consumed2;
-                            let (_count, consumed3) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
+                            let (count, consumed3) = crate::instruction_parser::read_leb128_u32(init_bytes, pos)?;
                             pos += consumed3;
-                            stack.clear();
-                            stack.push(Value::ArrayRef(None));
+                            let mut values = Vec::with_capacity(count as usize);
+                            for _ in 0..count {
+                                let val = stack.pop().ok_or_else(|| Error::parse_error(
+                                    "array.new_fixed in const expr: stack underflow"
+                                ))?;
+                                values.push(val);
+                            }
+                            values.reverse();
+                            let mut array_ref = kiln_foundation::values::ArrayRef::new(
+                                type_idx,
+                                kiln_foundation::traits::DefaultMemoryProvider::default(),
+                            ).map_err(|_| Error::parse_error("Failed to create array in const expr"))?;
+                            for val in values {
+                                array_ref.push(val).map_err(|_|
+                                    Error::parse_error("Failed to push to array in const expr"))?;
+                            }
+                            stack.push(Value::ArrayRef(Some(array_ref)));
                         }
                         // ref.i31: [i32] -> [(ref i31)]
                         0x1C => {
@@ -1106,6 +1266,30 @@ impl Module {
         }
 
         Err(Error::parse_error("Constant expression missing end opcode"))
+    }
+
+    /// Get the default value for a GC field type (for use in constant expressions).
+    fn gc_field_default_value_const(field: &GcField) -> kiln_foundation::values::Value {
+        use kiln_foundation::values::{Value, FloatBits32, FloatBits64};
+        match &field.storage {
+            GcFieldStorage::I8 | GcFieldStorage::I16 => Value::I32(0),
+            GcFieldStorage::Value(byte) => match byte {
+                0x7F => Value::I32(0),       // i32
+                0x7E => Value::I64(0),       // i64
+                0x7D => Value::F32(FloatBits32::from_f32(0.0)), // f32
+                0x7C => Value::F64(FloatBits64::from_f64(0.0)), // f64
+                0x7B => Value::V128(kiln_foundation::values::V128::zero()), // v128
+                0x70 | 0x6F => Value::FuncRef(None),    // funcref / externref
+                0x63 | 0x64 => Value::FuncRef(None),    // ref null / ref
+                0x6E => Value::I31Ref(None),             // anyref
+                0x6D => Value::I31Ref(None),             // eqref
+                0x6C => Value::I31Ref(None),             // i31ref
+                0x6B => Value::StructRef(None),          // structref
+                0x6A => Value::ArrayRef(None),           // arrayref
+                0x69 => Value::ExnRef(None),             // exnref
+                _ => Value::I32(0),
+            },
+        }
     }
 
     /// Re-evaluate globals that depend on imported globals.
@@ -1329,6 +1513,9 @@ impl Module {
             #[cfg(not(feature = "std"))]
             tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
+            #[cfg(feature = "std")]
+            globals: Vec::new(),
+            #[cfg(not(feature = "std"))]
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             tags: Vec::new(),
@@ -1356,6 +1543,8 @@ impl Module {
             #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
+            #[cfg(feature = "std")]
+            gc_types: Vec::new(),
         })
     }
 
@@ -1371,7 +1560,6 @@ impl Module {
 
         // Create initial empty module with proper providers
         let imports_map = kiln_foundation::bounded_collections::BoundedMap::new(shared_provider.clone())?;
-        let globals_vec = kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
         let custom_sections_map = kiln_foundation::bounded_collections::BoundedMap::new(shared_provider.clone())?;
         let mut runtime_module = Self {
             types: Vec::new(),
@@ -1380,7 +1568,7 @@ impl Module {
             functions: Vec::new(),
             tables: Vec::new(), // Vec in std mode to avoid serialization issues with Arc<Table>
             memories: Vec::new(),
-            globals: globals_vec,
+            globals: Vec::new(),
             tags: Vec::new(), // Exception tags (exception handling proposal)
             elements: Vec::new(), // Vec in std mode for variable-size Element items
             data: Vec::new(), // Vec in std mode for large data segments
@@ -1395,7 +1583,55 @@ impl Module {
             deferred_global_inits: Vec::new(), // Will be populated when processing globals
             import_types: Vec::new(), // Will be populated when processing imports
             num_import_functions: 0, // Will be set after processing imports
+            gc_types: Vec::new(), // Will be populated from rec_groups
         };
+
+        // Populate GC type info from rec_groups
+        {
+            use kiln_format::module::CompositeTypeKind;
+            // First pass: determine size
+            let total_types: usize = kiln_module.rec_groups.iter()
+                .map(|rg| rg.types.len())
+                .sum();
+            runtime_module.gc_types.reserve(total_types);
+
+            // Collect types ordered by type_index
+            let mut gc_type_entries: Vec<(u32, GcTypeInfo)> = Vec::new();
+            for rec_group in &kiln_module.rec_groups {
+                for sub_type in &rec_group.types {
+                    let info = match &sub_type.composite_kind {
+                        CompositeTypeKind::Func => GcTypeInfo::Func,
+                        CompositeTypeKind::Struct => GcTypeInfo::Func, // Legacy variant, treat as func
+                        CompositeTypeKind::Array => GcTypeInfo::Func, // Legacy variant, treat as func
+                        CompositeTypeKind::StructWithFields(fields) => {
+                            let gc_fields: Vec<GcField> = fields.iter().map(|f| {
+                                let storage = match &f.storage_type {
+                                    kiln_format::module::GcStorageType::I8 => GcFieldStorage::I8,
+                                    kiln_format::module::GcStorageType::I16 => GcFieldStorage::I16,
+                                    kiln_format::module::GcStorageType::Value(b) => GcFieldStorage::Value(*b),
+                                };
+                                GcField { storage, mutable: f.mutable }
+                            }).collect();
+                            GcTypeInfo::Struct(gc_fields)
+                        }
+                        CompositeTypeKind::ArrayWithElement(elem) => {
+                            let storage = match &elem.storage_type {
+                                kiln_format::module::GcStorageType::I8 => GcFieldStorage::I8,
+                                kiln_format::module::GcStorageType::I16 => GcFieldStorage::I16,
+                                kiln_format::module::GcStorageType::Value(b) => GcFieldStorage::Value(*b),
+                            };
+                            GcTypeInfo::Array(GcField { storage, mutable: elem.mutable })
+                        }
+                    };
+                    gc_type_entries.push((sub_type.type_index, info));
+                }
+            }
+            // Sort by type index and fill gc_types
+            gc_type_entries.sort_by_key(|(idx, _)| *idx);
+            for (_, info) in gc_type_entries {
+                runtime_module.gc_types.push(info);
+            }
+        }
 
         // Convert types
         #[cfg(feature = "tracing")]
@@ -1776,6 +2012,7 @@ impl Module {
                     &runtime_module.global_import_types,
                     &runtime_module.globals,
                     global_idx,
+                    &runtime_module.gc_types,
                 )?
             } else {
                 // No init expression - this is an error, globals must be initialized
@@ -1795,6 +2032,9 @@ impl Module {
                 global.global_type.mutable,
                 initial_value,
             )?;
+            #[cfg(feature = "std")]
+            runtime_module.globals.push(GlobalWrapper(Arc::new(RwLock::new(new_global))));
+            #[cfg(not(feature = "std"))]
             runtime_module.globals.push(GlobalWrapper(Arc::new(RwLock::new(new_global))))?;
         }
 
@@ -1822,6 +2062,10 @@ impl Module {
                     let offset: u32 = if !offset_bytes.is_empty() && offset_bytes[0] == 0x41 {
                         // i32.const - parse LEB128 value
                         let (value, _) = crate::instruction_parser::read_leb128_i32(offset_bytes, 1)?;
+                        value as u32
+                    } else if !offset_bytes.is_empty() && offset_bytes[0] == 0x42 {
+                        // i64.const - parse LEB128 value (memory64 data segment offsets)
+                        let (value, _) = crate::instruction_parser::read_leb128_i64(offset_bytes, 1)?;
                         value as u32
                     } else {
                         0
@@ -1921,8 +2165,12 @@ impl Module {
                     // Parse the offset expression bytes
                     let offset_bytes = &elem_seg.offset_expr_bytes;
                     let offset: u32 = if !offset_bytes.is_empty() && offset_bytes[0] == 0x41 {
-                        // i32.const - parse LEB128 value
+                        // i32.const (0x41) - parse LEB128 value
                         let (value, _) = crate::instruction_parser::read_leb128_i32(offset_bytes, 1)?;
+                        value as u32
+                    } else if !offset_bytes.is_empty() && offset_bytes[0] == 0x42 {
+                        // i64.const (0x42) - parse LEB128 i64 value (table64 element offset)
+                        let (value, _) = crate::instruction_parser::read_leb128_i64(offset_bytes, 1)?;
                         value as u32
                     } else {
                         0
@@ -2017,10 +2265,23 @@ impl Module {
                                 }
                             }
                             _ => {
-                                // Unknown expression type - push null sentinel
-                                #[cfg(feature = "tracing")]
-                                trace!(elem_offset = offset_value + i as u32, opcode = format_args!("0x{:02X}", expr[0]), "Element item = unknown opcode (treating as null)");
-                                items.push(u32::MAX)?;  // Default to null for unknown expressions
+                                // Other const expressions (ref.i31, struct.new, etc.)
+                                // Defer to item_exprs for evaluation during instantiation
+                                #[cfg(feature = "std")]
+                                {
+                                    #[cfg(feature = "tracing")]
+                                    trace!(elem_offset = offset_value + i as u32, opcode = format_args!("0x{:02X}", expr[0]), "Element item = const expr (deferred)");
+                                    let expr_insts = crate::instruction_parser::parse_instructions_with_provider(
+                                        expr.as_slice(),
+                                        shared_provider.clone()
+                                    )?;
+                                    deferred_item_exprs.push((i as u32, KilnExpr { instructions: expr_insts }));
+                                    items.push(u32::MAX - 1)?;  // Sentinel for deferred evaluation
+                                }
+                                #[cfg(not(feature = "std"))]
+                                {
+                                    items.push(u32::MAX)?;
+                                }
                             }
                         }
                     }
@@ -2256,6 +2517,9 @@ impl Module {
                 global.global_type.mutable,
                 initial_value,
             )?;
+            #[cfg(feature = "std")]
+            runtime_module.globals.push(GlobalWrapper(Arc::new(RwLock::new(new_global))));
+            #[cfg(not(feature = "std"))]
             runtime_module.globals.push(GlobalWrapper(Arc::new(RwLock::new(new_global))))?;
         }
 
@@ -2503,11 +2767,15 @@ impl Module {
                 },
             };
 
-            runtime_module.globals.push(GlobalWrapper::new(Global::new(
+            let new_global = GlobalWrapper::new(Global::new(
                 global_def.value_type,
                 global_def.mutable,
                 default_value,
-            )?))?;
+            )?);
+            #[cfg(feature = "std")]
+            runtime_module.globals.push(new_global);
+            #[cfg(not(feature = "std"))]
+            runtime_module.globals.push(new_global)?;
         }
 
         // Convert tags (exception handling proposal)
@@ -2616,6 +2884,16 @@ impl Module {
     }
 
     /// Gets a global by index
+    #[cfg(feature = "std")]
+    pub fn get_global(&self, idx: usize) -> Result<GlobalWrapper> {
+        self.globals
+            .get(idx)
+            .cloned()
+            .ok_or_else(|| Error::runtime_execution_error("Global index out of bounds"))
+    }
+
+    /// Gets a global by index
+    #[cfg(not(feature = "std"))]
     pub fn get_global(&self, idx: usize) -> Result<GlobalWrapper> {
         self.globals
             .get(idx)
@@ -3024,6 +3302,9 @@ impl Module {
     /// Add a global to the module
     pub fn add_global(&mut self, global_type: KilnGlobalType, init: KilnValue) -> Result<()> {
         let global = Global::new(global_type.value_type, global_type.mutable, init)?;
+        #[cfg(feature = "std")]
+        self.globals.push(GlobalWrapper::new(global));
+        #[cfg(not(feature = "std"))]
         self.globals.push(GlobalWrapper::new(global))?;
         Ok(())
     }
@@ -3538,6 +3819,9 @@ impl Module {
             #[cfg(not(feature = "std"))]
             tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
+            #[cfg(feature = "std")]
+            globals: Vec::new(),
+            #[cfg(not(feature = "std"))]
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             tags: Vec::new(),
@@ -3565,6 +3849,8 @@ impl Module {
             #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
+            #[cfg(feature = "std")]
+            gc_types: Vec::new(),
         };
 
         // Set start function if present
@@ -4010,6 +4296,9 @@ impl kiln_foundation::traits::FromBytes for Module {
             #[cfg(not(feature = "std"))]
             tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
+            #[cfg(feature = "std")]
+            globals: Vec::new(),
+            #[cfg(not(feature = "std"))]
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             tags: Vec::new(),
@@ -4037,6 +4326,8 @@ impl kiln_foundation::traits::FromBytes for Module {
             #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
+            #[cfg(feature = "std")]
+            gc_types: Vec::new(),
         };
 
         Ok(module)
@@ -4116,6 +4407,12 @@ impl TableWrapper {
     /// Grow table using interior mutability
     pub fn grow(&self, delta: u32, init_value: KilnValue) -> Result<u32> {
         self.0.grow_shared(delta, init_value)
+    }
+
+    /// Check if this table uses table64 (64-bit indices)
+    #[must_use]
+    pub fn is_table64(&self) -> bool {
+        self.0.ty.table64
     }
 
     /// Initialize table using interior mutability
@@ -4648,7 +4945,7 @@ impl Checksummable for GlobalWrapper {
 
 impl ToBytes for GlobalWrapper {
     fn serialized_size(&self) -> usize {
-        12 // value type (1) + mutable flag (1) + padding (2) + value (8)
+        20 // value type (1) + mutable flag (1) + padding (2) + value (16 bytes for V128 compatibility)
     }
 
     fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
@@ -4673,80 +4970,79 @@ impl ToBytes for GlobalWrapper {
         writer.write_u8(0)?;
         writer.write_u8(0)?;
 
-        // Write value (8 bytes)
+        // Write value (16 bytes - supports V128 which needs all 16 bytes)
         let value = guard.get();
         match value {
             KilnValue::I32(v) => {
                 writer.write_all(&(*v as u32).to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::I64(v) => {
                 writer.write_all(&(*v as u64).to_le_bytes())?;
+                writer.write_all(&[0u8; 8])?; // pad to 16
             },
             KilnValue::F32(kiln_foundation::values::FloatBits32(bits)) => {
                 writer.write_all(&bits.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::F64(kiln_foundation::values::FloatBits64(bits)) => {
                 writer.write_all(&bits.to_le_bytes())?;
+                writer.write_all(&[0u8; 8])?; // pad to 16
+            },
+            KilnValue::V128(v128) => {
+                writer.write_all(&v128.bytes)?; // all 16 bytes
             },
             KilnValue::FuncRef(ref_opt) => {
-                // FuncRef: store 0xFFFFFFFF for None, or the index for Some
                 let value = match ref_opt {
                     Some(func_ref) => func_ref.index,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::ExternRef(ref_opt) => {
-                // ExternRef: store 0xFFFFFFFF for None, or the index for Some
                 let value = match ref_opt {
                     Some(extern_ref) => extern_ref.index,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::ExnRef(ref_opt) => {
-                // ExnRef: store 0xFFFFFFFF for None, or the index for Some
                 let value = match ref_opt {
                     Some(exn_ref) => *exn_ref as u32,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::I31Ref(ref_opt) => {
-                // I31Ref: store 0xFFFFFFFF for None, or the value for Some
                 let value = match ref_opt {
                     Some(i31_ref) => *i31_ref as u32,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::StructRef(ref_opt) => {
-                // StructRef: store 0xFFFFFFFF for None, or the type_index for Some
                 let value = match ref_opt {
                     Some(struct_ref) => struct_ref.type_index,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::ArrayRef(ref_opt) => {
-                // ArrayRef: store 0xFFFFFFFF for None, or the type_index for Some
                 let value = match ref_opt {
                     Some(array_ref) => array_ref.type_index,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             _ => {
                 // For other types, write zeros
-                writer.write_all(&0u64.to_le_bytes())?;
+                writer.write_all(&[0u8; 16])?;
             }
         }
         Ok(())
@@ -4790,9 +5086,14 @@ impl FromBytes for GlobalWrapper {
         let _ = reader.read_u8()?;
         let _ = reader.read_u8()?;
 
-        // Read value (8 bytes - i64/f64 size for maximum compatibility)
-        let value_low = reader.read_u32_le()?;
-        let value_high = reader.read_u32_le()?;
+        // Read value (16 bytes - supports V128 which needs all 16 bytes)
+        let mut value_bytes = [0u8; 16];
+        for i in 0..16 {
+            value_bytes[i] = reader.read_u8()?;
+        }
+
+        let value_low = u32::from_le_bytes([value_bytes[0], value_bytes[1], value_bytes[2], value_bytes[3]]);
+        let value_high = u32::from_le_bytes([value_bytes[4], value_bytes[5], value_bytes[6], value_bytes[7]]);
 
         let value = match value_type {
             ValueType::I32 => Value::I32(value_low as i32),
@@ -4804,6 +5105,9 @@ impl FromBytes for GlobalWrapper {
             ValueType::F64 => {
                 let v = ((value_high as u64) << 32) | (value_low as u64);
                 Value::F64(kiln_foundation::values::FloatBits64(v))
+            },
+            ValueType::V128 => {
+                Value::V128(kiln_foundation::values::V128 { bytes: value_bytes })
             },
             ValueType::FuncRef => {
                 // 0xFFFFFFFF means None, otherwise it's an index

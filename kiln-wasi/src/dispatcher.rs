@@ -829,6 +829,72 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/types", "[method]descriptor.stat-at") => {
+                // Check filesystem capability
+                if !self.capabilities.filesystem.metadata_access {
+                    return Err(Error::wasi_permission_denied("Metadata access denied"));
+                }
+
+                // Args: [descriptor_handle, path_flags, path]
+                let base_handle = match args.first() {
+                    Some(Value::U32(h)) => *h,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid descriptor")),
+                };
+
+                let path = match args.get(1) {
+                    Some(Value::String(s)) => s.clone(),
+                    _ => {
+                        // Try arg index 2 if path_flags is present
+                        match args.get(2) {
+                            Some(Value::String(s)) => s.clone(),
+                            _ => return Err(Error::wasi_invalid_argument("Invalid path")),
+                        }
+                    }
+                };
+
+                // Look up the base descriptor
+                let base_entry = self.fd_table.get(&base_handle)
+                    .ok_or_else(|| Error::wasi_invalid_fd("Bad descriptor"))?;
+
+                // Get the base path
+                let base_path = match &base_entry.fd_type {
+                    FileDescriptorType::PreopenDirectory(p) => p.clone(),
+                    FileDescriptorType::RegularFile(p) => {
+                        // If it's a file, use its parent directory
+                        p.parent().map(|p| p.to_path_buf())
+                            .unwrap_or_else(|| p.clone())
+                    }
+                    _ => return Err(Error::wasi_invalid_argument("Not a directory descriptor")),
+                };
+
+                // Construct full path
+                let full_path = base_path.join(&path);
+
+                match std::fs::metadata(&full_path) {
+                    Ok(meta) => {
+                        let file_type = if meta.is_dir() { 3u8 } else if meta.is_file() { 6u8 } else { 0u8 };
+                        let size = meta.len();
+
+                        let stat_record = Value::Record(vec![
+                            ("type".to_string(), Value::U8(file_type)),
+                            ("size".to_string(), Value::U64(size)),
+                        ]);
+
+                        #[cfg(feature = "tracing")]
+                        trace!(path = %full_path.display(), file_type = file_type, size = size, "stat-at completed");
+
+                        Ok(vec![Value::Result(Ok(Box::new(stat_record)))])
+                    }
+                    Err(_e) => {
+                        #[cfg(feature = "tracing")]
+                        warn!(path = %full_path.display(), error = %_e, "stat-at failed");
+                        // Return error code - ENOENT
+                        Ok(vec![Value::Result(Err(Box::new(Value::U32(2))))])
+                    }
+                }
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
             ("wasi:filesystem/types", "[method]descriptor.read-via-stream") => {
                 // Check read capability
                 if !self.capabilities.filesystem.read_access {
@@ -1171,8 +1237,8 @@ impl WasiDispatcher {
 
         let base_interface = Self::strip_version(interface);
 
-        // DEBUG: trace WASI calls
-        eprintln!("[WASI-TRACE] {}::{} args={:?}", base_interface, function, args);
+        #[cfg(feature = "tracing")]
+        trace!(interface = %base_interface, function = %function, args = ?args, "[WASI] dispatch_core");
 
         match (base_interface, function) {
             // Simple functions that don't need memory
@@ -2006,6 +2072,59 @@ impl WasiDispatcher {
             }
 
             // ================================================================
+            // wasi:nn/* - WASI-NN 0.2.0-rc-2024-10-28 resource-based interface
+            //
+            // The new WASI-NN spec uses resources (graph, tensor,
+            // graph-execution-context, error) instead of flat function calls.
+            // These handlers provide explicit "not configured" errors so that
+            // components that import wasi:nn can link and get a clear error
+            // at runtime rather than a link-time failure.
+            // ================================================================
+
+            // wasi:nn/graph.load(builder, encoding, target) -> result<graph, error>
+            ("wasi:nn/graph", "load") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured. Enable the wasi-nn feature and configure \
+                     an NN backend (e.g., tract, onnx-runtime) to use neural network inference.",
+                ));
+            }
+
+            // wasi:nn/graph.[method]graph.init-execution-context
+            ("wasi:nn/graph", "[method]graph.init-execution-context") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured: cannot create execution context.",
+                ));
+            }
+
+            // wasi:nn/inference.[method]graph-execution-context.compute
+            ("wasi:nn/inference", "[method]graph-execution-context.compute") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured: cannot execute inference.",
+                ));
+            }
+
+            // wasi:nn/tensor.[constructor]tensor
+            ("wasi:nn/tensor", "[constructor]tensor") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured: cannot create tensor.",
+                ));
+            }
+
+            // wasi:nn/tensor.[method]tensor.data
+            ("wasi:nn/tensor", "[method]tensor.data") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured: cannot read tensor data.",
+                ));
+            }
+
+            // wasi:nn/errors.[method]error.code
+            ("wasi:nn/errors", "[method]error.code") => {
+                return Err(kiln_error::Error::wasi_unsupported_operation(
+                    "WASI-NN backend not configured: cannot get error code.",
+                ));
+            }
+
+            // ================================================================
             // wasi:random/* - Random number generation interfaces
             // ================================================================
 
@@ -2082,6 +2201,449 @@ impl WasiDispatcher {
                 let val = u64::from_le_bytes(bytes);
 
                 Ok(vec![CoreValue::I64(val as i64)])
+            }
+
+            // wasi:random/insecure-seed - provides non-cryptographic seed
+            #[cfg(feature = "wasi-random")]
+            ("wasi:random/insecure-seed", "insecure-seed") => {
+                use kiln_platform::random::PlatformRandom;
+
+                // Return a tuple of (u64, u64) as the insecure seed
+                let mut bytes = [0u8; 16];
+                PlatformRandom::get_secure_bytes(&mut bytes)
+                    .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
+                let val1 = u64::from_le_bytes([
+                    bytes[0], bytes[1], bytes[2], bytes[3],
+                    bytes[4], bytes[5], bytes[6], bytes[7],
+                ]);
+                let val2 = u64::from_le_bytes([
+                    bytes[8], bytes[9], bytes[10], bytes[11],
+                    bytes[12], bytes[13], bytes[14], bytes[15],
+                ]);
+
+                Ok(vec![CoreValue::I64(val1 as i64), CoreValue::I64(val2 as i64)])
+            }
+
+            // ================================================================
+            // wasi:filesystem/* - Filesystem interfaces (core ABI)
+            // ================================================================
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/preopens", "get-directories") => {
+                // Canonical ABI: get-directories() -> list<tuple<own<descriptor>, string>>
+                // Lowered: (retptr: i32) -> void
+                // At retptr, write (list_ptr: i32, list_len: i32)
+                // Each list element: (descriptor: i32, string_ptr: i32, string_len: i32) = 12 bytes
+
+                if !self.capabilities.filesystem.directory_access {
+                    return Err(Error::wasi_permission_denied("Filesystem access denied"));
+                }
+
+                let retptr = match args.first() {
+                    Some(CoreValue::I32(p)) => *p as u32,
+                    _ => return Ok(vec![]),
+                };
+
+                let mem = memory.ok_or_else(||
+                    Error::wasi_capability_unavailable("Memory required for get-directories"))?;
+
+                if self.preopens.is_empty() {
+                    // Empty list: write (0, 0)
+                    mem.write_bytes(retptr, &0u32.to_le_bytes())?;
+                    mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
+                    return Ok(vec![]);
+                }
+
+                // Calculate total memory needed
+                let count = self.preopens.len();
+                let list_elem_size = 12u32; // (handle: i32, str_ptr: i32, str_len: i32)
+                let list_data_size = count as u32 * list_elem_size;
+
+                // Collect path bytes
+                let path_bytes: Vec<Vec<u8>> = self.preopens.iter()
+                    .map(|(_, p)| p.to_string_lossy().as_bytes().to_vec())
+                    .collect();
+                let total_string_bytes: u32 = path_bytes.iter().map(|b| b.len() as u32).sum();
+
+                // Use a simple allocation scheme: pack everything after retptr + 8
+                // Layout: [list_elements...][string_data...]
+                let list_base = retptr + 8;
+                let string_base = list_base + list_data_size;
+
+                // Check memory bounds
+                let total_needed = string_base + total_string_bytes;
+                if total_needed > mem.size() as u32 {
+                    return Err(Error::wasi_invalid_argument("Not enough memory for get-directories result"));
+                }
+
+                // Write list elements and string data
+                let mut string_offset = string_base;
+                for (i, (handle, _)) in self.preopens.iter().enumerate() {
+                    let elem_offset = list_base + (i as u32) * list_elem_size;
+                    let str_bytes = &path_bytes[i];
+                    let str_len = str_bytes.len() as u32;
+
+                    // Write handle
+                    mem.write_bytes(elem_offset, &(*handle as i32).to_le_bytes())?;
+                    // Write string ptr
+                    mem.write_bytes(elem_offset + 4, &string_offset.to_le_bytes())?;
+                    // Write string len
+                    mem.write_bytes(elem_offset + 8, &str_len.to_le_bytes())?;
+
+                    // Write string data
+                    mem.write_bytes(string_offset, str_bytes)?;
+                    string_offset += str_len;
+                }
+
+                // Write (list_ptr, list_len) at retptr
+                mem.write_bytes(retptr, &list_base.to_le_bytes())?;
+                mem.write_bytes(retptr + 4, &(count as u32).to_le_bytes())?;
+
+                #[cfg(feature = "tracing")]
+                trace!(
+                    count = count,
+                    retptr = format_args!("0x{:x}", retptr),
+                    list_base = format_args!("0x{:x}", list_base),
+                    "get-directories wrote to memory"
+                );
+
+                Ok(vec![])
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/types", "[method]descriptor.stat-at") => {
+                // Canonical ABI: stat-at(self, path-flags, path) -> result<descriptor-stat, error-code>
+                // Lowered: (handle: i32, path_flags: i32, path_ptr: i32, path_len: i32, retptr: i32)
+                // Result layout at retptr: (discriminant: i32, payload...)
+                // Ok: (0, type: i32, ..padding.., size: i64, ...)
+                // Err: (1, error_code: i32)
+
+                if !self.capabilities.filesystem.metadata_access {
+                    return Err(Error::wasi_permission_denied("Metadata access denied"));
+                }
+
+                let mem = memory.ok_or_else(||
+                    Error::wasi_capability_unavailable("Memory required for stat-at"))?;
+
+                // Parse args: handle, path_flags, path_ptr, path_len, retptr
+                let base_handle = match args.first() {
+                    Some(CoreValue::I32(h)) => *h as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid descriptor handle")),
+                };
+
+                let path_ptr = match args.get(2) {
+                    Some(CoreValue::I32(p)) => *p as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid path pointer")),
+                };
+
+                let path_len = match args.get(3) {
+                    Some(CoreValue::I32(l)) => *l as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid path length")),
+                };
+
+                let retptr = match args.get(4) {
+                    Some(CoreValue::I32(p)) => *p as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Missing retptr for stat-at")),
+                };
+
+                // Read path from memory
+                let mut path_bytes = vec![0u8; path_len as usize];
+                mem.read_bytes(path_ptr, &mut path_bytes)?;
+                let path_str = String::from_utf8_lossy(&path_bytes);
+
+                // Look up base descriptor
+                let base_entry = self.fd_table.get(&base_handle)
+                    .ok_or_else(|| Error::wasi_invalid_fd("Bad descriptor"))?;
+
+                let base_path = match &base_entry.fd_type {
+                    FileDescriptorType::PreopenDirectory(p) => p.clone(),
+                    FileDescriptorType::RegularFile(p) => {
+                        p.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| p.clone())
+                    }
+                    _ => return Err(Error::wasi_invalid_argument("Not a directory descriptor")),
+                };
+
+                let full_path = base_path.join(path_str.as_ref());
+
+                match std::fs::metadata(&full_path) {
+                    Ok(meta) => {
+                        let file_type: u8 = if meta.is_dir() { 3 } else if meta.is_file() { 6 } else { 0 };
+                        let size = meta.len();
+
+                        // Write Ok result: discriminant=0
+                        mem.write_bytes(retptr, &0u32.to_le_bytes())?;
+                        // descriptor-stat record: type (u8 as i32), then padding, then size (u64)
+                        // WASI descriptor-stat layout:
+                        //   type: descriptor-type (1 byte, aligned to 1)
+                        //   link-count: u64 (8 bytes, aligned to 8)
+                        //   size: u64 (8 bytes, aligned to 8)
+                        //   data-access-timestamp: option<datetime>
+                        //   data-modification-timestamp: option<datetime>
+                        //   status-change-timestamp: option<datetime>
+                        // Simplified: write type at offset 8, link-count at 16, size at 24
+                        mem.write_bytes(retptr + 8, &(file_type as u64).to_le_bytes())?;
+                        mem.write_bytes(retptr + 16, &1u64.to_le_bytes())?; // link-count
+                        mem.write_bytes(retptr + 24, &size.to_le_bytes())?; // size
+                        // timestamps: write 0 (none) for all three option<datetime>
+                        mem.write_bytes(retptr + 32, &0u64.to_le_bytes())?;
+                        mem.write_bytes(retptr + 40, &0u64.to_le_bytes())?;
+                        mem.write_bytes(retptr + 48, &0u64.to_le_bytes())?;
+
+                        #[cfg(feature = "tracing")]
+                        trace!(path = %full_path.display(), file_type = file_type, size = size, "stat-at OK");
+                    }
+                    Err(_e) => {
+                        // Write Err result: discriminant=1, error_code
+                        mem.write_bytes(retptr, &1u32.to_le_bytes())?;
+                        let error_code: u32 = if _e.kind() == std::io::ErrorKind::NotFound { 2 } else { 28 }; // ENOENT or EINVAL
+                        mem.write_bytes(retptr + 4, &error_code.to_le_bytes())?;
+
+                        #[cfg(feature = "tracing")]
+                        trace!(path = %full_path.display(), error = %_e, "stat-at Err");
+                    }
+                }
+
+                Ok(vec![])
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/types", "[method]descriptor.stat") => {
+                // Canonical ABI: stat(self) -> result<descriptor-stat, error-code>
+                // Lowered: (handle: i32, retptr: i32)
+
+                if !self.capabilities.filesystem.metadata_access {
+                    return Err(Error::wasi_permission_denied("Metadata access denied"));
+                }
+
+                let mem = memory.ok_or_else(||
+                    Error::wasi_capability_unavailable("Memory required for stat"))?;
+
+                let handle = match args.first() {
+                    Some(CoreValue::I32(h)) => *h as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid descriptor")),
+                };
+
+                let retptr = match args.get(1) {
+                    Some(CoreValue::I32(p)) => *p as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Missing retptr for stat")),
+                };
+
+                let entry = self.fd_table.get(&handle)
+                    .ok_or_else(|| Error::wasi_invalid_fd("Bad descriptor"))?;
+
+                let path = match &entry.fd_type {
+                    FileDescriptorType::RegularFile(p) | FileDescriptorType::PreopenDirectory(p) => p,
+                    _ => return Err(Error::wasi_invalid_argument("Cannot stat this descriptor type")),
+                };
+
+                match std::fs::metadata(path) {
+                    Ok(meta) => {
+                        let file_type: u8 = if meta.is_dir() { 3 } else if meta.is_file() { 6 } else { 0 };
+                        let size = meta.len();
+                        mem.write_bytes(retptr, &0u32.to_le_bytes())?; // Ok discriminant
+                        mem.write_bytes(retptr + 8, &(file_type as u64).to_le_bytes())?;
+                        mem.write_bytes(retptr + 16, &1u64.to_le_bytes())?;
+                        mem.write_bytes(retptr + 24, &size.to_le_bytes())?;
+                        mem.write_bytes(retptr + 32, &0u64.to_le_bytes())?;
+                        mem.write_bytes(retptr + 40, &0u64.to_le_bytes())?;
+                        mem.write_bytes(retptr + 48, &0u64.to_le_bytes())?;
+                    }
+                    Err(_e) => {
+                        mem.write_bytes(retptr, &1u32.to_le_bytes())?;
+                        let error_code: u32 = if _e.kind() == std::io::ErrorKind::NotFound { 2 } else { 28 };
+                        mem.write_bytes(retptr + 4, &error_code.to_le_bytes())?;
+                    }
+                }
+
+                Ok(vec![])
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/types", "[method]descriptor.open-at") => {
+                // Canonical ABI: open-at(self, path-flags, path, open-flags, descriptor-flags)
+                //   -> result<own<descriptor>, error-code>
+                // Lowered: (handle, path_flags, path_ptr, path_len, open_flags, desc_flags, retptr)
+
+                if !self.capabilities.filesystem.read_access && !self.capabilities.filesystem.write_access {
+                    return Err(Error::wasi_permission_denied("Filesystem access denied"));
+                }
+
+                let mem = memory.ok_or_else(||
+                    Error::wasi_capability_unavailable("Memory required for open-at"))?;
+
+                let base_handle = match args.first() {
+                    Some(CoreValue::I32(h)) => *h as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid descriptor")),
+                };
+
+                let path_ptr = match args.get(2) {
+                    Some(CoreValue::I32(p)) => *p as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid path pointer")),
+                };
+
+                let path_len = match args.get(3) {
+                    Some(CoreValue::I32(l)) => *l as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid path length")),
+                };
+
+                let retptr = match args.last() {
+                    Some(CoreValue::I32(p)) => *p as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Missing retptr for open-at")),
+                };
+
+                // Read path from memory
+                let mut path_bytes = vec![0u8; path_len as usize];
+                mem.read_bytes(path_ptr, &mut path_bytes)?;
+                let path_str = String::from_utf8_lossy(&path_bytes);
+
+                let base_entry = self.fd_table.get(&base_handle)
+                    .ok_or_else(|| Error::wasi_invalid_fd("Bad descriptor"))?;
+
+                let base_path = match &base_entry.fd_type {
+                    FileDescriptorType::PreopenDirectory(p) => p.clone(),
+                    _ => return Err(Error::wasi_invalid_argument("Not a directory descriptor")),
+                };
+
+                let full_path = base_path.join(path_str.as_ref());
+
+                // Safety check - path should not escape sandbox
+                if let Ok(canonical) = full_path.canonicalize() {
+                    if !canonical.starts_with(&base_path) {
+                        return Err(Error::wasi_permission_denied("Path escapes sandbox"));
+                    }
+                }
+
+                // Allocate new handle
+                let path_str_owned = full_path.to_string_lossy();
+                let new_handle = self.resource_manager.create_file_descriptor(
+                    &path_str_owned,
+                    self.capabilities.filesystem.read_access,
+                    self.capabilities.filesystem.write_access,
+                )?;
+
+                self.fd_table.insert(new_handle, FileDescriptorEntry {
+                    fd_type: if full_path.is_dir() {
+                        FileDescriptorType::PreopenDirectory(full_path.clone())
+                    } else {
+                        FileDescriptorType::RegularFile(full_path.clone())
+                    },
+                    read: self.capabilities.filesystem.read_access,
+                    write: self.capabilities.filesystem.write_access,
+                });
+
+                // Write result<own<descriptor>, error-code> to retptr
+                // Ok: discriminant=0, handle
+                mem.write_bytes(retptr, &0u32.to_le_bytes())?;
+                mem.write_bytes(retptr + 4, &(new_handle as i32).to_le_bytes())?;
+
+                #[cfg(feature = "tracing")]
+                trace!(path = %full_path.display(), handle = new_handle, "open-at OK");
+
+                Ok(vec![])
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/types", "[method]descriptor.read-via-stream") => {
+                // Canonical ABI: read-via-stream(self, offset) -> result<own<input-stream>, error-code>
+                // Lowered: (handle: i32, offset: i64, retptr: i32)
+
+                if !self.capabilities.filesystem.read_access {
+                    return Err(Error::wasi_permission_denied("Read access denied"));
+                }
+
+                let handle = match args.first() {
+                    Some(CoreValue::I32(h)) => *h as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid descriptor")),
+                };
+
+                let retptr = match args.last() {
+                    Some(CoreValue::I32(p)) => *p as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Missing retptr")),
+                };
+
+                let _entry = self.fd_table.get(&handle)
+                    .ok_or_else(|| Error::wasi_invalid_fd("Bad descriptor"))?;
+
+                // Return the same handle as a stream handle
+                if let Some(mem) = memory {
+                    mem.write_bytes(retptr, &0u32.to_le_bytes())?; // Ok discriminant
+                    mem.write_bytes(retptr + 4, &(handle as i32).to_le_bytes())?;
+                }
+
+                Ok(vec![])
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/types", "[method]descriptor.write-via-stream") => {
+                // Canonical ABI: write-via-stream(self, offset) -> result<own<output-stream>, error-code>
+                // Lowered: (handle: i32, offset: i64, retptr: i32)
+
+                if !self.capabilities.filesystem.write_access {
+                    return Err(Error::wasi_permission_denied("Write access denied"));
+                }
+
+                let handle = match args.first() {
+                    Some(CoreValue::I32(h)) => *h as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid descriptor")),
+                };
+
+                let retptr = match args.last() {
+                    Some(CoreValue::I32(p)) => *p as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Missing retptr")),
+                };
+
+                let _entry = self.fd_table.get(&handle)
+                    .ok_or_else(|| Error::wasi_invalid_fd("Bad descriptor"))?;
+
+                if let Some(mem) = memory {
+                    mem.write_bytes(retptr, &0u32.to_le_bytes())?; // Ok discriminant
+                    mem.write_bytes(retptr + 4, &(handle as i32).to_le_bytes())?;
+                }
+
+                Ok(vec![])
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/types", "[method]descriptor.get-type") => {
+                // Canonical ABI: get-type(self) -> result<descriptor-type, error-code>
+                // Lowered: (handle: i32, retptr: i32)
+
+                let handle = match args.first() {
+                    Some(CoreValue::I32(h)) => *h as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Invalid descriptor")),
+                };
+
+                let retptr = match args.get(1) {
+                    Some(CoreValue::I32(p)) => *p as u32,
+                    _ => return Err(Error::wasi_invalid_argument("Missing retptr")),
+                };
+
+                let entry = self.fd_table.get(&handle)
+                    .ok_or_else(|| Error::wasi_invalid_fd("Bad descriptor"))?;
+
+                let dtype: u8 = match &entry.fd_type {
+                    FileDescriptorType::PreopenDirectory(_) => 3, // directory
+                    FileDescriptorType::RegularFile(_) => 6,     // regular-file
+                    _ => 0,                                       // unknown
+                };
+
+                if let Some(mem) = memory {
+                    mem.write_bytes(retptr, &0u32.to_le_bytes())?; // Ok discriminant
+                    mem.write_bytes(retptr + 4, &(dtype as u32).to_le_bytes())?;
+                }
+
+                Ok(vec![])
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/types", "[resource-drop]descriptor") => {
+                // Drop a filesystem descriptor
+                if let Some(CoreValue::I32(h)) = args.first() {
+                    let handle = *h as u32;
+                    self.fd_table.remove(&handle);
+                    let _ = self.resource_manager.remove_resource(handle);
+                }
+                Ok(vec![])
             }
 
             _ => {

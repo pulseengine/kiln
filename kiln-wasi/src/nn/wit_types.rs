@@ -11,24 +11,32 @@ use super::{
 };
 use crate::prelude::*;
 
-/// Error codes from WIT interface
+/// Error codes from WASI-NN 0.2.0-rc-2024-10-28 WIT interface
+///
+/// These match the `error-code` enum in the spec:
+///   invalid-argument, invalid-encoding, timeout, runtime-error,
+///   unsupported-operation, too-large, not-found, security, unknown
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ErrorCode {
     /// Invalid argument provided
-    InvalidArgument      = 1,
+    InvalidArgument      = 0,
     /// Invalid model encoding
-    InvalidEncoding      = 2,
+    InvalidEncoding      = 1,
+    /// Operation timed out
+    Timeout              = 2,
     /// Runtime error during execution
     RuntimeError         = 3,
-    /// Resource limits exceeded
-    ResourceExhausted    = 4,
-    /// Operation not supported
-    UnsupportedOperation = 5,
-    /// Model verification failed
-    VerificationFailed   = 6,
-    /// Timeout during execution
-    Timeout              = 7,
+    /// Operation not supported by this backend
+    UnsupportedOperation = 4,
+    /// Input or model too large for available resources
+    TooLarge             = 5,
+    /// Requested resource not found (graph, context, etc.)
+    NotFound             = 6,
+    /// Security policy violation
+    Security             = 7,
+    /// Unknown or unclassified error
+    Unknown              = 8,
 }
 
 impl From<Error> for ErrorCode {
@@ -39,9 +47,8 @@ impl From<Error> for ErrorCode {
             codes::UNSUPPORTED => ErrorCode::UnsupportedOperation,
             codes::RESOURCE_LIMIT_EXCEEDED
             | codes::WASI_RESOURCE_EXHAUSTED
-            | codes::WASI_RESOURCE_LIMIT => ErrorCode::ResourceExhausted,
-            // codes::TIMEOUT => ErrorCode::Timeout, // No timeout code exists yet
-            codes::VERIFICATION_FAILED => ErrorCode::VerificationFailed,
+            | codes::WASI_RESOURCE_LIMIT => ErrorCode::TooLarge,
+            codes::VERIFICATION_FAILED => ErrorCode::Security,
             _ => ErrorCode::RuntimeError,
         }
     }
@@ -52,13 +59,15 @@ impl From<ErrorCode> for Error {
         match code {
             ErrorCode::InvalidArgument => Error::wasi_invalid_argument("Invalid argument"),
             ErrorCode::InvalidEncoding => Error::wasi_invalid_argument("Invalid encoding"),
+            ErrorCode::Timeout => Error::wasi_timeout("Operation timeout"),
             ErrorCode::RuntimeError => Error::wasi_runtime_error("Runtime error"),
-            ErrorCode::ResourceExhausted => Error::wasi_resource_exhausted("Resource exhausted"),
             ErrorCode::UnsupportedOperation => {
                 Error::wasi_unsupported_operation("Unsupported operation")
             },
-            ErrorCode::VerificationFailed => Error::wasi_verification_failed("Verification failed"),
-            ErrorCode::Timeout => Error::wasi_timeout("Operation timeout"),
+            ErrorCode::TooLarge => Error::wasi_resource_exhausted("Input or model too large"),
+            ErrorCode::NotFound => Error::wasi_invalid_argument("Resource not found"),
+            ErrorCode::Security => Error::wasi_verification_failed("Security policy violation"),
+            ErrorCode::Unknown => Error::wasi_runtime_error("Unknown error"),
         }
     }
 }
@@ -76,6 +85,9 @@ pub trait WitTypeConversion: Sized {
 }
 
 // Implement conversions for tensor types
+// Matches WASI-NN 0.2.0-rc-2024-10-28 spec enum order:
+//   FP16=0, FP32=1, FP64=2, BF16=3, U8=4, I32=5, I64=6
+// Extended with additional types for Kiln backend support
 impl WitTypeConversion for TensorType {
     type WitType = u8;
 
@@ -84,15 +96,17 @@ impl WitTypeConversion for TensorType {
             0 => Ok(TensorType::F16),
             1 => Ok(TensorType::F32),
             2 => Ok(TensorType::F64),
-            3 => Ok(TensorType::U8),
-            4 => Ok(TensorType::I8),
-            5 => Ok(TensorType::U16),
-            6 => Ok(TensorType::I16),
-            7 => Ok(TensorType::U32),
-            8 => Ok(TensorType::I32),
-            9 => Ok(TensorType::U64),
-            10 => Ok(TensorType::I64),
-            11 => Ok(TensorType::Bool),
+            3 => Ok(TensorType::BF16),
+            4 => Ok(TensorType::U8),
+            5 => Ok(TensorType::I32),
+            6 => Ok(TensorType::I64),
+            // Extended types (Kiln extensions, not in base spec)
+            128 => Ok(TensorType::I8),
+            129 => Ok(TensorType::U16),
+            130 => Ok(TensorType::I16),
+            131 => Ok(TensorType::U32),
+            132 => Ok(TensorType::U64),
+            133 => Ok(TensorType::Bool),
             _ => Err(Error::wasi_invalid_argument("Invalid tensor type")),
         }
     }
@@ -102,41 +116,51 @@ impl WitTypeConversion for TensorType {
             TensorType::F16 => 0,
             TensorType::F32 => 1,
             TensorType::F64 => 2,
-            TensorType::U8 => 3,
-            TensorType::I8 => 4,
-            TensorType::U16 => 5,
-            TensorType::I16 => 6,
-            TensorType::U32 => 7,
-            TensorType::I32 => 8,
-            TensorType::U64 => 9,
-            TensorType::I64 => 10,
-            TensorType::Bool => 11,
+            TensorType::BF16 => 3,
+            TensorType::U8 => 4,
+            TensorType::I32 => 5,
+            TensorType::I64 => 6,
+            // Extended types
+            TensorType::I8 => 128,
+            TensorType::U16 => 129,
+            TensorType::I16 => 130,
+            TensorType::U32 => 131,
+            TensorType::U64 => 132,
+            TensorType::Bool => 133,
         }
     }
 }
 
 // Implement conversions for graph encoding
+// Matches WASI-NN 0.2.0-rc-2024-10-28 spec enum order:
+//   openvino=0, onnx=1, tensorflow=2, pytorch=3, tensorflowlite=4, ggml=5, autodetect=6
 impl WitTypeConversion for GraphEncoding {
     type WitType = u8;
 
     fn from_wit(wit: u8) -> Result<Self> {
         match wit {
-            0 => Ok(GraphEncoding::ONNX),
-            1 => Ok(GraphEncoding::TensorFlow),
-            2 => Ok(GraphEncoding::PyTorch),
-            3 => Ok(GraphEncoding::OpenVINO),
-            4 => Ok(GraphEncoding::TractNative),
+            0 => Ok(GraphEncoding::OpenVINO),
+            1 => Ok(GraphEncoding::ONNX),
+            2 => Ok(GraphEncoding::TensorFlow),
+            3 => Ok(GraphEncoding::PyTorch),
+            4 => Ok(GraphEncoding::TensorFlowLite),
+            5 => Ok(GraphEncoding::GGML),
+            6 => Ok(GraphEncoding::Autodetect),
+            255 => Ok(GraphEncoding::TractNative),
             _ => Err(Error::wasi_invalid_encoding("Invalid graph encoding")),
         }
     }
 
     fn to_wit(&self) -> u8 {
         match self {
-            GraphEncoding::ONNX => 0,
-            GraphEncoding::TensorFlow => 1,
-            GraphEncoding::PyTorch => 2,
-            GraphEncoding::OpenVINO => 3,
-            GraphEncoding::TractNative => 4,
+            GraphEncoding::OpenVINO => 0,
+            GraphEncoding::ONNX => 1,
+            GraphEncoding::TensorFlow => 2,
+            GraphEncoding::PyTorch => 3,
+            GraphEncoding::TensorFlowLite => 4,
+            GraphEncoding::GGML => 5,
+            GraphEncoding::Autodetect => 6,
+            GraphEncoding::TractNative => 255,
         }
     }
 }
@@ -291,11 +315,42 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_tensor_type_conversion() {
-        let tensor_type = TensorType::F32;
-        let wit_type = tensor_type.to_wit();
-        let converted = TensorType::from_wit(wit_type).unwrap();
-        assert_eq!(tensor_type, converted);
+    fn test_tensor_type_roundtrip() {
+        // Test all spec types roundtrip correctly
+        let spec_types = [
+            TensorType::F16,
+            TensorType::F32,
+            TensorType::F64,
+            TensorType::BF16,
+            TensorType::U8,
+            TensorType::I32,
+            TensorType::I64,
+        ];
+        for tt in &spec_types {
+            let wit = tt.to_wit();
+            let converted = TensorType::from_wit(wit).unwrap();
+            assert_eq!(*tt, converted, "Roundtrip failed for {:?}", tt);
+        }
+    }
+
+    #[test]
+    fn test_graph_encoding_roundtrip() {
+        // Test all spec encodings roundtrip correctly
+        let encodings = [
+            GraphEncoding::OpenVINO,
+            GraphEncoding::ONNX,
+            GraphEncoding::TensorFlow,
+            GraphEncoding::PyTorch,
+            GraphEncoding::TensorFlowLite,
+            GraphEncoding::GGML,
+            GraphEncoding::Autodetect,
+            GraphEncoding::TractNative,
+        ];
+        for enc in &encodings {
+            let wit = enc.to_wit();
+            let converted = GraphEncoding::from_wit(wit).unwrap();
+            assert_eq!(*enc, converted, "Roundtrip failed for {:?}", enc);
+        }
     }
 
     #[test]
@@ -306,6 +361,20 @@ mod tests {
 
         let error2: Error = code.into();
         assert_eq!(error2.category, ErrorCategory::Validation);
+    }
+
+    #[test]
+    fn test_error_code_spec_values() {
+        // Verify error code discriminant values match the WASI-NN spec
+        assert_eq!(ErrorCode::InvalidArgument as u8, 0);
+        assert_eq!(ErrorCode::InvalidEncoding as u8, 1);
+        assert_eq!(ErrorCode::Timeout as u8, 2);
+        assert_eq!(ErrorCode::RuntimeError as u8, 3);
+        assert_eq!(ErrorCode::UnsupportedOperation as u8, 4);
+        assert_eq!(ErrorCode::TooLarge as u8, 5);
+        assert_eq!(ErrorCode::NotFound as u8, 6);
+        assert_eq!(ErrorCode::Security as u8, 7);
+        assert_eq!(ErrorCode::Unknown as u8, 8);
     }
 
     #[test]

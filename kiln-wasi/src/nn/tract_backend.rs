@@ -243,6 +243,12 @@ impl ComputeCapable for TractContext {
                             |_| Error::wasi_runtime_error("Failed to create i32 Tract tensor"),
                         )?
                     },
+                    dt if dt == u8::datum_type() => {
+                        let u8_data: Vec<u8> = data.to_vec();
+                        tract_onnx::prelude::Tensor::from_shape(&shape, &u8_data).map_err(
+                            |_| Error::wasi_runtime_error("Failed to create u8 Tract tensor"),
+                        )?
+                    },
                     _ => {
                         return Err(Error::wasi_unsupported_operation(
                             "Unsupported tensor type for safe conversion",
@@ -336,8 +342,9 @@ fn datum_to_tensor_type(datum_factoid: DatumType) -> Result<TensorType> {
     } else if datum_factoid == u8::datum_type() {
         Ok(TensorType::U8)
     } else {
-        // Default fallback for unknown types
-        Ok(TensorType::F32)
+        Err(Error::wasi_unsupported_operation(
+            "Unsupported Tract datum type for WASI-NN tensor conversion",
+        ))
     }
 }
 
@@ -388,36 +395,6 @@ impl<C: NeuralNetworkCapability + 'static> NeuralNetworkBackend for TractBackend
                 },
             };
 
-            // Analyze the model to get input/output info
-            let mut input_info = Vec::new();
-            let mut output_info = Vec::new();
-
-            // Get input facts
-            for (idx, input) in model.inputs.iter().enumerate() {
-                let fact = model
-                    .outlet_fact(*input)
-                    .map_err(|_| Error::wasi_runtime_error("Failed to get input fact"))?;
-
-                // For now, use a simple approach with default shapes
-                // In a full implementation, we'd properly parse the model metadata
-                let tensor_dims = TensorDimensions::new(&[1, 224, 224, 3])?; // Common image input
-                let tensor_type = TensorType::F32; // Default to F32
-                input_info.push((tensor_dims, tensor_type));
-            }
-
-            // Get output facts
-            for output in model.outputs.iter() {
-                let fact = model
-                    .outlet_fact(*output)
-                    .map_err(|_| Error::wasi_runtime_error("Failed to get output fact"))?;
-
-                // For now, use a simple approach with default shapes
-                // In a full implementation, we'd properly parse the model metadata
-                let tensor_dims = TensorDimensions::new(&[1, 1000])?; // Common classification output
-                let tensor_type = TensorType::F32; // Default to F32
-                output_info.push((tensor_dims, tensor_type));
-            }
-
             // Optimize and make runnable
             let optimized = model
                 .into_optimized()
@@ -426,6 +403,52 @@ impl<C: NeuralNetworkCapability + 'static> NeuralNetworkBackend for TractBackend
             let runnable = optimized
                 .into_runnable()
                 .map_err(|_| Error::wasi_runtime_error("Failed to make model runnable"))?;
+
+            // Extract input/output metadata from the optimized typed model
+            // where shapes and types are fully resolved
+            let typed_model = runnable.model();
+            let mut input_info = Vec::new();
+            let mut output_info = Vec::new();
+
+            // Get input facts from the typed (optimized) model
+            for input in typed_model.inputs.iter() {
+                let fact = typed_model
+                    .outlet_fact(*input)
+                    .map_err(|_| Error::wasi_runtime_error("Failed to get input fact"))?;
+
+                let shape: Vec<u32> = fact
+                    .shape
+                    .iter()
+                    .map(|d| {
+                        d.to_i64()
+                            .map(|v| v as u32)
+                            .unwrap_or(1) // symbolic dims default to 1 (batch size)
+                    })
+                    .collect();
+                let tensor_dims = TensorDimensions::new(&shape)?;
+                let tensor_type = datum_to_tensor_type(fact.datum_type)?;
+                input_info.push((tensor_dims, tensor_type));
+            }
+
+            // Get output facts from the typed (optimized) model
+            for output in typed_model.outputs.iter() {
+                let fact = typed_model
+                    .outlet_fact(*output)
+                    .map_err(|_| Error::wasi_runtime_error("Failed to get output fact"))?;
+
+                let shape: Vec<u32> = fact
+                    .shape
+                    .iter()
+                    .map(|d| {
+                        d.to_i64()
+                            .map(|v| v as u32)
+                            .unwrap_or(1) // symbolic dims default to 1 (batch size)
+                    })
+                    .collect();
+                let tensor_dims = TensorDimensions::new(&shape)?;
+                let tensor_type = datum_to_tensor_type(fact.datum_type)?;
+                output_info.push((tensor_dims, tensor_type));
+            }
 
             Ok(TractModel {
                 id: 1, // Would be assigned by graph store in real usage
@@ -440,14 +463,9 @@ impl<C: NeuralNetworkCapability + 'static> NeuralNetworkBackend for TractBackend
 
         #[cfg(not(feature = "tract"))]
         {
-            // Fallback for when tract feature is not enabled
-            Ok(TractModel {
-                id: 1,
-                size: data.len(),
-                hash,
-                input_info: vec![(TensorDimensions::new(&[1, 224, 224, 3])?, TensorType::F32)],
-                output_info: vec![(TensorDimensions::new(&[1, 1000])?, TensorType::F32)],
-            })
+            Err(Error::wasi_unsupported_operation(
+                "Tract backend requires the 'tract' feature to be enabled",
+            ))
         }
     }
 
@@ -542,6 +560,12 @@ impl<C: NeuralNetworkCapability + 'static> NeuralNetworkBackend for TractBackend
                         Error::wasi_runtime_error("Failed to create i32 Tract tensor")
                     })?
                 },
+                dt if dt == u8::datum_type() => {
+                    let u8_data: Vec<u8> = tensor.data.clone();
+                    tract_onnx::prelude::Tensor::from_shape(&shape, &u8_data).map_err(|_| {
+                        Error::wasi_runtime_error("Failed to create u8 Tract tensor")
+                    })?
+                },
                 _ => {
                     return Err(Error::wasi_unsupported_operation(
                         "Unsupported tensor type for safe conversion",
@@ -629,9 +653,9 @@ impl<C: NeuralNetworkCapability + 'static> NeuralNetworkBackend for TractBackend
 
         #[cfg(not(feature = "tract"))]
         {
-            // For now, return dummy output
-            let dims = TensorDimensions::new(&[1, 1000])?;
-            self.create_tensor(dims, TensorType::F32)
+            Err(Error::wasi_unsupported_operation(
+                "Tract backend requires the 'tract' feature to be enabled",
+            ))
         }
     }
 

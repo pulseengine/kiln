@@ -363,6 +363,61 @@ impl ModuleInstance {
         }
     }
 
+    /// Evaluate a const expression from an element segment.
+    /// Supports: I32Const, I64Const, RefNull, RefFunc, RefI31, GlobalGet, End.
+    #[cfg(feature = "std")]
+    fn evaluate_elem_const_expr(
+        instructions: &[kiln_foundation::types::Instruction<crate::bounded_runtime_infra::RuntimeProvider>],
+        globals: &[crate::module::GlobalWrapper],
+    ) -> Result<kiln_foundation::values::Value> {
+        use kiln_foundation::values::{Value as ElemValue, FuncRef as ElemFuncRef};
+        type Instr = kiln_foundation::types::Instruction<crate::bounded_runtime_infra::RuntimeProvider>;
+        let mut result = ElemValue::FuncRef(None);
+
+        for instr in instructions {
+            match instr {
+                Instr::I32Const(v) => {
+                    result = ElemValue::I32(*v);
+                }
+                Instr::I64Const(v) => {
+                    result = ElemValue::I64(*v);
+                }
+                Instr::RefNull(_) => {
+                    result = ElemValue::FuncRef(None);
+                }
+                Instr::RefFunc(func_idx) => {
+                    let fref = ElemFuncRef::from_index(*func_idx);
+                    result = ElemValue::FuncRef(Some(fref));
+                }
+                Instr::RefI31 => {
+                    if let ElemValue::I32(n) = result {
+                        let i31_val = n & 0x7FFFFFFF;
+                        result = ElemValue::I31Ref(Some(i31_val));
+                    } else {
+                        return Err(Error::runtime_error("ref.i31: expected i32 operand in const expr"));
+                    }
+                }
+                Instr::GlobalGet(global_idx) => {
+                    if let Some(global_wrapper) = globals.iter().nth(*global_idx as usize) {
+                        match global_wrapper.0.read() {
+                            Ok(global) => {
+                                result = global.get().clone();
+                            }
+                            Err(_) => {
+                                return Err(Error::runtime_error("Failed to read global in elem const expr"));
+                            }
+                        }
+                    } else {
+                        return Err(Error::runtime_error("Global index out of bounds in elem const expr"));
+                    }
+                }
+                Instr::End => break,
+                _ => {}
+            }
+        }
+        Ok(result)
+    }
+
     /// Re-evaluate globals that depend on imported globals after import values are set.
     /// This fixes the deferred initialization problem where globals using global.get
     /// of imported globals were evaluated before import values were known.
@@ -638,7 +693,8 @@ impl ModuleInstance {
 
             // Now copy defined globals
             for idx in 0..self.module.globals.len() {
-                if let Ok(global_wrapper) = self.module.globals.get(idx) {
+                let global_opt = self.module.globals.get(idx);
+                if let Some(global_wrapper) = global_opt {
                     #[cfg(feature = "tracing")]
                     debug!(
                         "Copying defined global {} (global index {}) to instance",
@@ -956,6 +1012,12 @@ impl ModuleInstance {
                                 debug!("Data segment {} has I32Const offset: {}", idx, value);
                                 *value as u32
                             }
+                            kiln_foundation::types::Instruction::I64Const(value) => {
+                                // memory64: data segment offsets use i64.const
+                                #[cfg(feature = "tracing")]
+                                debug!("Data segment {} has I64Const offset: {}", idx, value);
+                                *value as u32
+                            }
                             kiln_foundation::types::Instruction::GlobalGet(global_idx) => {
                                 // Look up the global value for the offset
                                 #[cfg(feature = "tracing")]
@@ -1117,6 +1179,12 @@ impl ModuleInstance {
                                     debug!("Element segment {} has I32Const offset: {}", idx, value);
                                     *value as u32
                                 }
+                                kiln_foundation::types::Instruction::I64Const(value) => {
+                                    // table64: element segment offset is i64
+                                    #[cfg(feature = "tracing")]
+                                    debug!("Element segment {} has I64Const offset: {}", idx, value);
+                                    *value as u32
+                                }
                                 kiln_foundation::types::Instruction::GlobalGet(global_idx) => {
                                     // Look up the global value for the offset
                                     #[cfg(feature = "tracing")]
@@ -1128,6 +1196,12 @@ impl ModuleInstance {
                                                     kiln_foundation::values::Value::I32(v) => {
                                                         #[cfg(feature = "tracing")]
                                                         debug!("Element segment {} global offset value: {}", idx, v);
+                                                        *v as u32
+                                                    },
+                                                    kiln_foundation::values::Value::I64(v) => {
+                                                        // table64: global offset is i64
+                                                        #[cfg(feature = "tracing")]
+                                                        debug!("Element segment {} global i64 offset value: {}", idx, v);
                                                         *v as u32
                                                     },
                                                     _ => *mode_offset
@@ -1170,6 +1244,15 @@ impl ModuleInstance {
                     let table_wrapper = &tables[table_idx];
                     let table = table_wrapper.inner();
 
+                    // Per WebAssembly spec: check bounds for the ENTIRE segment before
+                    // writing any elements. If the segment is out of bounds, none of its
+                    // elements are written, but previously processed segments persist.
+                    let segment_len = elem_segment.items.len() as u32;
+                    let table_size = table.size();
+                    if actual_offset.checked_add(segment_len).map_or(true, |end| end > table_size) {
+                        return Err(Error::runtime_trap("out of bounds table access"));
+                    }
+
                     // Set each element in the table
                     // Use the element segment's type to determine if we're dealing with
                     // funcref or externref elements
@@ -1207,42 +1290,12 @@ impl ModuleInstance {
                         }
                     }
 
-                    // Evaluate and set deferred item expressions (e.g., global.get $gf)
+                    // Evaluate and set deferred item expressions (ref.i31, global.get, etc.)
                     #[cfg(feature = "std")]
                     for (item_idx, expr) in elem_segment.item_exprs.iter() {
                         let table_offset = actual_offset + *item_idx;
-                        // Evaluate the expression to get the funcref
-                        if let Some(instr) = expr.instructions.first() {
-                            if let kiln_foundation::types::Instruction::GlobalGet(global_idx) = instr {
-                                // Look up the global value
-                                if let Some(global_wrapper) = globals.iter().nth(*global_idx as usize) {
-                                    match global_wrapper.0.read() {
-                                        Ok(global) => {
-                                            match global.get() {
-                                                KilnValue::FuncRef(func_ref_opt) => {
-                                                    #[cfg(feature = "tracing")]
-                                                    kiln_foundation::tracing::trace!(
-                                                        table_offset = table_offset,
-                                                        func_ref = ?func_ref_opt,
-                                                        global_idx = global_idx,
-                                                        "Set table element from global.get"
-                                                    );
-                                                    table.set_shared(table_offset, Some(KilnValue::FuncRef(func_ref_opt.clone())))?;
-                                                },
-                                                _ => {
-                                                    #[cfg(feature = "tracing")]
-                                                    kiln_foundation::tracing::warn!(table_offset = table_offset, global_idx = global_idx, "Global has non-funcref type");
-                                                }
-                                            }
-                                        },
-                                        Err(_) => {
-                                            #[cfg(feature = "tracing")]
-                                            kiln_foundation::tracing::warn!(table_offset = table_offset, global_idx = global_idx, "Failed to read global");
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        let value = Self::evaluate_elem_const_expr(&expr.instructions, &globals)?;
+                        table.set_shared(table_offset, Some(value))?;
                     }
 
                     #[cfg(feature = "tracing")]
@@ -1705,6 +1758,9 @@ impl FromBytes for ModuleInstance {
             #[cfg(not(feature = "std"))]
             tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
+            #[cfg(feature = "std")]
+            globals: Vec::new(),
+            #[cfg(not(feature = "std"))]
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             tags: Vec::new(),
@@ -1732,6 +1788,8 @@ impl FromBytes for ModuleInstance {
             #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
+            #[cfg(feature = "std")]
+            gc_types: Vec::new(),
         };
 
         // Create the instance using the new method

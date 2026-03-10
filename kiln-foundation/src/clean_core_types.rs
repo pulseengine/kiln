@@ -34,6 +34,8 @@ mod types {
         pub limits: crate::types::Limits,
         /// Whether the memory is shared
         pub shared: bool,
+        /// Whether this memory uses 64-bit addressing (memory64 proposal)
+        pub memory64: bool,
     }
 
     /// Clean core WebAssembly table type without provider parameters

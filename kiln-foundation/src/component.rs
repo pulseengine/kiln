@@ -61,6 +61,10 @@ impl Checksummable for TypeRef {
 
 #[cfg(not(feature = "std"))]
 impl ToBytes for TypeRef {
+    fn serialized_size(&self) -> usize {
+        self.0.serialized_size()
+    }
+
     fn to_bytes_with_provider<P: MemoryProvider>(
         &self,
         writer: &mut WriteStream,
@@ -307,6 +311,10 @@ impl Checksummable for ComponentAliasOuterKind {
 }
 
 impl ToBytes for ComponentAliasOuterKind {
+    fn serialized_size(&self) -> usize {
+        1 // single byte discriminant
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -440,6 +448,10 @@ impl Checksummable for ExternKind {
 }
 
 impl ToBytes for ExternKind {
+    fn serialized_size(&self) -> usize {
+        1 // single byte discriminant
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -700,6 +712,10 @@ macro_rules! impl_checksummable_struct {
 macro_rules! impl_tobytes_struct {
     ($type:ident < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),* >, P: $pbound:ident, $($field:ident),+) => {
         impl<P: $pbound + Default + Clone $(, $lt $( : $clt $(+ $dlt )* )? )* > ToBytes for $type<P $(, $lt)* > {
+            fn serialized_size(&self) -> usize {
+                0 $( + self.$field.serialized_size() )+
+            }
+
             fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
                 &self,
                 writer: &mut WriteStream<'a>,
@@ -713,6 +729,10 @@ macro_rules! impl_tobytes_struct {
     };
      ($type:ident < $( $lt:tt $( : $clt:tt $(+ $dlt:tt )* )? ),* >, $($field:ident),+) => {
         impl< $( $lt $( : $clt $(+ $dlt )* )? ),* > ToBytes for $type< $( $lt),* > {
+            fn serialized_size(&self) -> usize {
+                0 $( + self.$field.serialized_size() )+
+            }
+
             fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
                 &self,
                 writer: &mut WriteStream<'a>,
@@ -726,6 +746,10 @@ macro_rules! impl_tobytes_struct {
     };
     ($type:ident, $($field:ident),+) => {
         impl ToBytes for $type {
+            fn serialized_size(&self) -> usize {
+                0 $( + self.$field.serialized_size() )+
+            }
+
             fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
                 &self,
                 writer: &mut WriteStream<'a>,
@@ -806,6 +830,10 @@ impl<P> ToBytes for Export<P>
 where
     P: MemoryProvider + Clone + Default + Eq + core::fmt::Debug,
 {
+    fn serialized_size(&self) -> usize {
+        self.name.serialized_size() + self.ty.serialized_size() + self.desc.serialized_size()
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -885,6 +913,22 @@ impl<P> ToBytes for ExternType<P>
 where
     P: MemoryProvider + Clone + Default + Eq + core::fmt::Debug,
 {
+    fn serialized_size(&self) -> usize {
+        // 1 byte for variant tag + inner type's serialized size
+        1 + match self {
+            ExternType::Func(ft) => ft.serialized_size(),
+            ExternType::Table(tt) => tt.serialized_size(),
+            ExternType::Memory(mt) => mt.serialized_size(),
+            ExternType::Global(gt) => gt.serialized_size(),
+            ExternType::Tag(ty) => ty.serialized_size(),
+            ExternType::Component(ct) => ct.serialized_size(),
+            ExternType::Instance(it) => it.serialized_size(),
+            ExternType::CoreModule(cmt) => cmt.serialized_size(),
+            ExternType::TypeDef(tdt) => tdt.serialized_size(),
+            ExternType::Resource(rt) => rt.serialized_size(),
+        }
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -1007,6 +1051,10 @@ impl<P: MemoryProvider> Checksummable for ResourceType<P> {
 }
 
 impl<P: MemoryProvider> ToBytes for ResourceType<P> {
+    fn serialized_size(&self) -> usize {
+        self.0.serialized_size()
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -1036,6 +1084,10 @@ impl Checksummable for ComponentAliasExportKind {
 }
 
 impl ToBytes for ComponentAliasExportKind {
+    fn serialized_size(&self) -> usize {
+        1 // single byte discriminant
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -1111,6 +1163,15 @@ impl<P> ToBytes for ComponentAlias<P>
 where
     P: MemoryProvider + Clone + Default + Eq + core::fmt::Debug,
 {
+    fn serialized_size(&self) -> usize {
+        1 + match self {
+            ComponentAlias::InstanceExport(e) => e.serialized_size(),
+            ComponentAlias::CoreInstanceExport(e) => e.serialized_size(),
+            ComponentAlias::Outer(e) => e.serialized_size(),
+            ComponentAlias::_Phantom(_) => 0,
+        }
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -1206,6 +1267,17 @@ impl<P> ToBytes for ComponentInstanceKind<P>
 where
     P: MemoryProvider + Clone + Default + Eq + core::fmt::Debug,
 {
+    fn serialized_size(&self) -> usize {
+        1 + match self {
+            ComponentInstanceKind::Unknown => 0,
+            ComponentInstanceKind::Instantiate {
+                component_idx,
+                args,
+            } => component_idx.serialized_size() + args.serialized_size(),
+            ComponentInstanceKind::FromExports { exports } => exports.serialized_size(),
+        }
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -1311,6 +1383,16 @@ impl<P> ToBytes for CoreInstanceKind<P>
 where
     P: MemoryProvider + Clone + Default + Eq + core::fmt::Debug,
 {
+    fn serialized_size(&self) -> usize {
+        1 + match self {
+            CoreInstanceKind::Unknown => 0,
+            CoreInstanceKind::Instantiate { module_idx, args } => {
+                module_idx.serialized_size() + args.serialized_size()
+            },
+            CoreInstanceKind::FromExports { exports } => exports.serialized_size(),
+        }
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -1393,6 +1475,17 @@ impl Checksummable for CoreType {
 }
 
 impl ToBytes for CoreType {
+    fn serialized_size(&self) -> usize {
+        1 + match self {
+            CoreType::Unknown => 0,
+            CoreType::Func(ft) => ft.serialized_size(),
+            CoreType::Table(tt) => tt.serialized_size(),
+            CoreType::Memory(mt) => mt.serialized_size(),
+            CoreType::Global(gt) => gt.serialized_size(),
+            CoreType::Tag(tag_ft) => tag_ft.serialized_size(),
+        }
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -1472,6 +1565,10 @@ impl Checksummable for ComponentAliasOuter {
     }
 }
 impl ToBytes for ComponentAliasOuter {
+    fn serialized_size(&self) -> usize {
+        self.count.serialized_size() + self.index.serialized_size() + self.kind.serialized_size()
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -1508,6 +1605,10 @@ impl<P> Checksummable for ComponentInstantiationArg<P> {
 }
 
 impl<P> ToBytes for ComponentInstantiationArg<P> {
+    fn serialized_size(&self) -> usize {
+        self.name.serialized_size() + self.index.serialized_size() + self.kind.serialized_size()
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,
@@ -1548,6 +1649,10 @@ impl<P> Checksummable for CoreInstantiationArg<P> {
 }
 
 impl<P> ToBytes for CoreInstantiationArg<P> {
+    fn serialized_size(&self) -> usize {
+        self.name.serialized_size() + self.index.serialized_size() + self.kind.serialized_size()
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,

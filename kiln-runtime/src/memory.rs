@@ -105,7 +105,7 @@
 extern crate alloc;
 
 // Core/std library imports
-#[cfg(not(feature = "std"))]
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
 use alloc::vec;
 #[cfg(not(feature = "std"))]
 use core::borrow::BorrowMut;
@@ -192,6 +192,7 @@ fn to_core_memory_type(memory_type: &MemoryType) -> CoreMemoryType {
     CoreMemoryType {
         limits: memory_type.limits,
         shared: memory_type.shared,
+        memory64: memory_type.memory64,
     }
 }
 

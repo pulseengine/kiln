@@ -572,6 +572,14 @@ impl RefType {
             ValueType::ArrayRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
             ValueType::NullFuncRef => Ok(RefType::Gc(GcRefType::NULLFUNCREF)),
             ValueType::ExnRef => Ok(RefType::Gc(GcRefType::EXNREF)),
+            ValueType::TypedFuncRef(idx, nullable) => {
+                if idx == u32::MAX {
+                    // Sentinel for abstract func heap type
+                    Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Func)))
+                } else {
+                    Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Concrete(idx))))
+                }
+            }
             _ => Err(Error::runtime_execution_error(
                 "Invalid ValueType for RefType conversion",
             )),
@@ -640,7 +648,14 @@ impl TryFrom<ValueType> for RefType {
             ValueType::ArrayRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
             ValueType::NullFuncRef => Ok(RefType::Gc(GcRefType::NULLFUNCREF)),
             ValueType::ExnRef => Ok(RefType::Gc(GcRefType::EXNREF)),
-            ValueType::TypedFuncRef(idx, nullable) => Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Concrete(idx)))),
+            ValueType::TypedFuncRef(idx, nullable) => {
+                if idx == u32::MAX {
+                    // Sentinel for abstract func heap type (ref func)/(ref null func)
+                    Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Func)))
+                } else {
+                    Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Concrete(idx))))
+                }
+            }
             _ => Err(Error::runtime_execution_error(
                 "Invalid ValueType for RefType try_from conversion",
             )),
@@ -1072,16 +1087,21 @@ impl Checksummable for CatchHandler {
 
 impl Default for CatchHandler {
     fn default() -> Self {
-        Self::CatchAll { label: 0 }
+        // Use Catch variant as default since all variants now serialize to the
+        // same fixed size (9 bytes). This ensures BoundedVec's item_serialized_size
+        // computed from default().serialized_size() matches all variants.
+        Self::Catch { tag_idx: 0, label: 0 }
     }
 }
 
 impl ToBytes for CatchHandler {
     fn serialized_size(&self) -> usize {
-        match self {
-            Self::Catch { .. } | Self::CatchRef { .. } => 1 + 4 + 4, // discriminant + tag_idx + label
-            Self::CatchAll { .. } | Self::CatchAllRef { .. } => 1 + 4, // discriminant + label
-        }
+        // All variants use the same fixed size for BoundedVec compatibility.
+        // BoundedVec uses a fixed item_serialized_size computed from Default,
+        // so all variants must serialize to the same number of bytes.
+        // Format: discriminant(1) + tag_idx(4) + label(4) = 9 bytes
+        // CatchAll/CatchAllRef write 0 for the unused tag_idx field.
+        1 + 4 + 4
     }
 
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
@@ -1102,10 +1122,12 @@ impl ToBytes for CatchHandler {
             }
             Self::CatchAll { label } => {
                 writer.write_u8(0x02)?;
+                writer.write_u32_le(0)?; // padding for fixed-size layout
                 writer.write_u32_le(*label)?;
             }
             Self::CatchAllRef { label } => {
                 writer.write_u8(0x03)?;
+                writer.write_u32_le(0)?; // padding for fixed-size layout
                 writer.write_u32_le(*label)?;
             }
         }
@@ -1131,10 +1153,12 @@ impl FromBytes for CatchHandler {
                 Ok(Self::CatchRef { tag_idx, label })
             }
             0x02 => {
+                let _padding = reader.read_u32_le()?; // skip fixed-size padding
                 let label = reader.read_u32_le()?;
                 Ok(Self::CatchAll { label })
             }
             0x03 => {
+                let _padding = reader.read_u32_le()?; // skip fixed-size padding
                 let label = reader.read_u32_le()?;
                 Ok(Self::CatchAllRef { label })
             }
@@ -1444,6 +1468,12 @@ pub enum Instruction<P: MemoryProvider + Clone + core::fmt::Debug + PartialEq + 
     // Tail call instructions (0x12 and 0x13 opcodes)
     ReturnCall(FuncIdx),
     ReturnCallIndirect(TypeIdx, TableIdx),
+
+    // Typed function references (0x14 and 0x15 opcodes)
+    /// call_ref: call function via typed function reference (opcode 0x14)
+    CallRef(TypeIdx),
+    /// return_call_ref: tail call function via typed function reference (opcode 0x15)
+    ReturnCallRef(TypeIdx),
 
     // Exception handling instructions (exception handling proposal)
     /// Throw exception with specified tag (opcode 0x08)
@@ -2089,6 +2119,14 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq + D
                 type_idx.update_checksum(checksum);
                 table_idx.update_checksum(checksum);
             },
+            Instruction::CallRef(type_idx) => {
+                checksum.update_slice(&[0x14]); // call_ref opcode
+                type_idx.update_checksum(checksum);
+            },
+            Instruction::ReturnCallRef(type_idx) => {
+                checksum.update_slice(&[0x15]); // return_call_ref opcode
+                type_idx.update_checksum(checksum);
+            },
             Instruction::BrOnNull(label_idx) => {
                 checksum.update_slice(&[0xD5]); // br_on_null opcode
                 label_idx.update_checksum(checksum);
@@ -2101,10 +2139,10 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq + D
                 checksum.update_slice(&[0xD1]); // ref.is_null opcode
             },
             Instruction::RefAsNonNull => {
-                checksum.update_slice(&[0xD3]); // ref.as_non_null opcode
+                checksum.update_slice(&[0xD4]); // ref.as_non_null opcode
             },
             Instruction::RefEq => {
-                checksum.update_slice(&[0xD2]); // ref.eq opcode
+                checksum.update_slice(&[0xD3]); // ref.eq opcode
             },
             Instruction::LocalGet(idx)
             | Instruction::LocalSet(idx)
@@ -2569,8 +2607,8 @@ impl<PInstr: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + E
                 writer.write_u32_le(*label_idx)?;
             },
             Instruction::RefIsNull => writer.write_u8(0xD1)?, // ref.is_null opcode
-            Instruction::RefAsNonNull => writer.write_u8(0xD3)?, // ref.as_non_null opcode
-            Instruction::RefEq => writer.write_u8(0xD2)?,     // ref.eq opcode
+            Instruction::RefAsNonNull => writer.write_u8(0xD4)?, // ref.as_non_null opcode
+            Instruction::RefEq => writer.write_u8(0xD3)?,     // ref.eq opcode
             Instruction::LocalGet(idx) => {
                 writer.write_u8(0x20)?;
                 writer.write_u32_le(*idx)?;

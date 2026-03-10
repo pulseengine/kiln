@@ -111,4 +111,111 @@ mod tests {
         // Empty bytecode should fail since we need at least an End instruction
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_parse_atomic_fence() {
+        // 0xFE 0x03 0x00 0x0B (atomic.fence + zero byte + end)
+        let bytecode = vec![0xFE, 0x03, 0x00, 0x0B];
+        let instructions = parse_instructions(&bytecode).unwrap();
+        assert_eq!(instructions.len(), 2);
+        assert!(matches!(instructions.get(0).unwrap(), Instruction::AtomicFence));
+    }
+
+    #[test]
+    fn test_parse_i32_atomic_load() {
+        // 0xFE 0x10 align=0x02 offset=0x00 0x0B (i32.atomic.load align=4 offset=0 + end)
+        let bytecode = vec![0xFE, 0x10, 0x02, 0x00, 0x0B];
+        let instructions = parse_instructions(&bytecode).unwrap();
+        assert_eq!(instructions.len(), 2);
+        match instructions.get(0).unwrap() {
+            Instruction::I32AtomicLoad { memarg } => {
+                assert_eq!(memarg.align_exponent, 2);
+                assert_eq!(memarg.offset, 0);
+            }
+            _ => panic!("Expected I32AtomicLoad instruction"),
+        }
+    }
+
+    #[test]
+    fn test_parse_i32_atomic_store() {
+        // 0xFE 0x17 align=0x02 offset=0x04 0x0B (i32.atomic.store align=4 offset=4 + end)
+        let bytecode = vec![0xFE, 0x17, 0x02, 0x04, 0x0B];
+        let instructions = parse_instructions(&bytecode).unwrap();
+        assert_eq!(instructions.len(), 2);
+        match instructions.get(0).unwrap() {
+            Instruction::I32AtomicStore { memarg } => {
+                assert_eq!(memarg.align_exponent, 2);
+                assert_eq!(memarg.offset, 4);
+            }
+            _ => panic!("Expected I32AtomicStore instruction"),
+        }
+    }
+
+    #[test]
+    fn test_parse_i32_atomic_rmw_add() {
+        // 0xFE 0x1E align=0x02 offset=0x00 0x0B (i32.atomic.rmw.add align=4 offset=0 + end)
+        let bytecode = vec![0xFE, 0x1E, 0x02, 0x00, 0x0B];
+        let instructions = parse_instructions(&bytecode).unwrap();
+        assert_eq!(instructions.len(), 2);
+        match instructions.get(0).unwrap() {
+            Instruction::I32AtomicRmwAdd { memarg } => {
+                assert_eq!(memarg.align_exponent, 2);
+                assert_eq!(memarg.offset, 0);
+            }
+            _ => panic!("Expected I32AtomicRmwAdd instruction"),
+        }
+    }
+
+    #[test]
+    fn test_parse_i32_atomic_rmw_cmpxchg() {
+        // 0xFE 0x48 align=0x02 offset=0x00 0x0B (i32.atomic.rmw.cmpxchg align=4 offset=0 + end)
+        let bytecode = vec![0xFE, 0x48, 0x02, 0x00, 0x0B];
+        let instructions = parse_instructions(&bytecode).unwrap();
+        assert_eq!(instructions.len(), 2);
+        match instructions.get(0).unwrap() {
+            Instruction::I32AtomicRmwCmpxchg { memarg } => {
+                assert_eq!(memarg.align_exponent, 2);
+                assert_eq!(memarg.offset, 0);
+            }
+            _ => panic!("Expected I32AtomicRmwCmpxchg instruction"),
+        }
+    }
+
+    #[test]
+    fn test_parse_memory_atomic_notify() {
+        // 0xFE 0x00 align=0x02 offset=0x00 0x0B (memory.atomic.notify align=4 offset=0 + end)
+        let bytecode = vec![0xFE, 0x00, 0x02, 0x00, 0x0B];
+        let instructions = parse_instructions(&bytecode).unwrap();
+        assert_eq!(instructions.len(), 2);
+        match instructions.get(0).unwrap() {
+            Instruction::MemoryAtomicNotify { memarg } => {
+                assert_eq!(memarg.align_exponent, 2);
+                assert_eq!(memarg.offset, 0);
+            }
+            _ => panic!("Expected MemoryAtomicNotify instruction"),
+        }
+    }
+
+    #[test]
+    fn test_parse_i64_atomic_rmw_xchg() {
+        // 0xFE 0x42 align=0x03 offset=0x08 0x0B (i64.atomic.rmw.xchg align=8 offset=8 + end)
+        let bytecode = vec![0xFE, 0x42, 0x03, 0x08, 0x0B];
+        let instructions = parse_instructions(&bytecode).unwrap();
+        assert_eq!(instructions.len(), 2);
+        match instructions.get(0).unwrap() {
+            Instruction::I64AtomicRmwXchg { memarg } => {
+                assert_eq!(memarg.align_exponent, 3);
+                assert_eq!(memarg.offset, 8);
+            }
+            _ => panic!("Expected I64AtomicRmwXchg instruction"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unknown_atomic_opcode() {
+        // 0xFE with invalid sub-opcode
+        let bytecode = vec![0xFE, 0x7F, 0x0B];
+        let result = parse_instructions(&bytecode);
+        assert!(result.is_err());
+    }
 }

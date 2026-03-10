@@ -1342,7 +1342,9 @@ impl ComponentInstance {
                         let module_idx = *module_idx as usize;
 
                         if module_idx >= module_binaries.len() {
-                            continue;
+                            return Err(kiln_error::Error::component_linking_error(
+                                "Core instance references module index out of bounds",
+                            ));
                         }
 
                         let binary = &module_binaries[module_idx];
@@ -1444,7 +1446,14 @@ impl ComponentInstance {
                                                     {
                                                         // Resolve the provider handle for this specific export
                                                         let provider_handle = if let Some(src_idx) = source_instance {
-                                                            core_instances_map.get(src_idx).copied().unwrap_or(handle)
+                                                            match core_instances_map.get(src_idx) {
+                                                                Some(&h) => h,
+                                                                None => {
+                                                                    return Err(kiln_error::Error::component_linking_error(
+                                                                        "InlineExports export references source instance which is not instantiated",
+                                                                    ));
+                                                                }
+                                                            }
                                                         } else {
                                                             handle
                                                         };
@@ -1467,10 +1476,10 @@ impl ComponentInstance {
                                                         ) {
                                                             Ok(()) => {
                                                             },
-                                                            Err(e) => println!(
-                                                                "    │  │  │  └─ Note: {:?}",
-                                                                e
-                                                            ),
+                                                            Err(_e) => {
+                                                                #[cfg(feature = "tracing")]
+                                                                trace!(error = ?_e, "Import link note");
+                                                            },
                                                         }
                                                     }
                                                     // Skip the normal single-link below since we linked everything
@@ -1686,12 +1695,19 @@ impl ComponentInstance {
                                         }
 
                                     },
-                                    Err(e) => {
-                                        // Continue with other modules
+                                    Err(_e) => {
+                                        return Err(kiln_error::Error::component_linking_error(
+                                            "Failed to instantiate core module during component instantiation",
+                                        ));
                                     },
                                 }
                             },
-                            Err(e) => {
+                            Err(_e) => {
+                                #[cfg(feature = "tracing")]
+                                tracing::error!(error = %_e, "Failed to load core module");
+                                return Err(kiln_error::Error::component_linking_error(
+                                    "Failed to load core module during component instantiation",
+                                ));
                             },
                         }
                     },
@@ -2486,7 +2502,8 @@ impl ComponentInstance {
         for (idx, canon) in canonicals.iter().enumerate() {
             use kiln_format::component::CanonOperation;
 
-            print!("  Canon[{}]: ", idx);
+            #[cfg(feature = "tracing")]
+            trace!(idx = idx, "Processing canonical operation");
 
             match &canon.operation {
                 CanonOperation::Lift {
@@ -3886,8 +3903,15 @@ impl ComponentInstance {
 
                 // Try _initialize first (important for TinyGo components)
                 match engine.execute(instance_handle, "_initialize", &[]) {
-                    Ok(_) => println!("[CALL_NATIVE] ✓ _initialize completed"),
-                    Err(e) => println!("[CALL_NATIVE] ⚠ _initialize skipped: {:?}", e),
+                    Ok(_) => {
+                        #[cfg(feature = "tracing")]
+                        trace!("_initialize completed successfully");
+                    },
+                    Err(_) => {
+                        // _initialize is optional - not all components have it
+                        #[cfg(feature = "tracing")]
+                        trace!("_initialize not found, skipping");
+                    },
                 }
 
                 // Try entry point functions in order of preference:
@@ -3910,7 +3934,7 @@ impl ComponentInstance {
 
                 for entry_point in entry_points {
                     match engine.execute(instance_handle, entry_point, &wasm_args) {
-                        Ok(results) => {
+                        Ok(_results) => {
                             return Ok(vec![]); // wasi:cli/run returns nothing on success
                         },
                         Err(e) => {
@@ -3919,27 +3943,8 @@ impl ComponentInstance {
                     }
                 }
 
-                // All entry points failed - check available exports for debugging
+                // All entry points failed
                 if let Some(e) = last_error {
-                    // Debug: check for common exports (core module exports only)
-                    let common_exports = [
-                        "_start",
-                        "_initialize",
-                        "run",
-                        "main",
-                        "memory",
-                        "__heap_base",
-                        "__data_end",
-                        "cabi_realloc",
-                        "__wasm_call_ctors",
-                    ];
-                    for name in common_exports {
-                        match engine.has_function(instance_handle, name) {
-                            Ok(true) => println!("    ✓ {} - EXISTS", name),
-                            Ok(false) => println!("    ✗ {} - not found", name),
-                            Err(_) => println!("    ? {} - error checking", name),
-                        }
-                    }
                     return Err(e);
                 }
             } else {
@@ -3987,6 +3992,9 @@ impl ComponentInstance {
                             Error::runtime_execution_error("Failed to create tables")
                         })?,
                         memories: Vec::new(),
+                        #[cfg(feature = "std")]
+                        globals: Vec::new(),
+                        #[cfg(not(feature = "std"))]
                         globals: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
                             Error::runtime_execution_error("Failed to create globals")
                         })?,
@@ -4024,6 +4032,8 @@ impl ComponentInstance {
                         #[cfg(feature = "std")]
                         import_types: Vec::new(),
                         num_import_functions: 0,
+                        #[cfg(feature = "std")]
+                        gc_types: Vec::new(),
                     };
                     m.load_from_binary(&binary_clone)
                 }

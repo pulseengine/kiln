@@ -7,7 +7,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 #[cfg(feature = "tracing")]
 use kiln_foundation::tracing::trace;
@@ -19,7 +19,7 @@ use kiln_foundation::limits;
 #[cfg(feature = "allocation-tracing")]
 use kiln_foundation::{AllocationPhase, trace_alloc};
 
-use kiln_format::module::{Function, Module as KilnModule};
+use kiln_format::module::{CompositeTypeKind, Function, GcFieldType, GcStorageType, Module as KilnModule, RecGroup, SubType};
 use kiln_foundation::{bounded::BoundedVec, safe_memory::NoStdProvider, types::TagType};
 
 use crate::{
@@ -45,7 +45,7 @@ fn decode_heap_type(val: i64) -> kiln_foundation::types::HeapType {
         -0x0E => HeapType::NoExtern,  // 0x72
         -0x0F => HeapType::None,      // 0x71
         -0x0C => HeapType::Exn,       // 0x74 noexn (mapped to Exn for now)
-        _ => HeapType::Func,          // fallback
+        _ => HeapType::Func,          // unknown heap types default to func for forward compat
     }
 }
 
@@ -183,6 +183,8 @@ pub struct StreamingDecoder<'a> {
     data_section_count: Option<u32>,
     /// Last non-custom section ID seen (for ordering validation)
     last_non_custom_section_id: u8,
+    /// Whether code section uses data.drop or memory.init (requires data count section)
+    uses_data_count_instructions: bool,
     /// The module being built (std version)
     #[cfg(feature = "std")]
     module: KilnModule,
@@ -234,6 +236,7 @@ impl<'a> StreamingDecoder<'a> {
             data_count_value: None,
             data_section_count: None,
             last_non_custom_section_id: 0,
+            uses_data_count_instructions: false,
             module,
         })
     }
@@ -258,6 +261,7 @@ impl<'a> StreamingDecoder<'a> {
             data_count_value: None,
             data_section_count: None,
             last_non_custom_section_id: 0,
+            uses_data_count_instructions: false,
             module,
         })
     }
@@ -390,7 +394,10 @@ impl<'a> StreamingDecoder<'a> {
 
         // Process each type entry one at a time
         // Note: A type entry can be a single composite type, a subtype, or a rec group
+        // Track the current type index separately from the entry count, since rec groups
+        // can define multiple types with consecutive indices.
         let mut i = 0u32;
+        let mut type_index = self.module.types.len() as u32;
         while i < count {
             if offset >= data.len() {
                 return Err(Error::parse_error("Unexpected end of type section"));
@@ -408,26 +415,56 @@ impl<'a> StreamingDecoder<'a> {
                     #[cfg(feature = "tracing")]
                     trace!(rec_count = rec_count, "process_type_section: rec group");
 
+                    let start_type_index = type_index;
+                    let mut rec_sub_types = Vec::with_capacity(rec_count as usize);
+
                     // Process each subtype in the recursive group
                     for _j in 0..rec_count {
-                        offset = self.parse_subtype_entry(data, offset)?;
+                        let (new_offset, sub_type) = self.parse_subtype_entry(data, offset, type_index)?;
+                        offset = new_offset;
+                        rec_sub_types.push(sub_type);
+                        type_index += 1;
                     }
-                    // A rec group with N types counts as N type entries
-                    // But the loop already counted as 1, so we need to account for the rest
-                    // Actually, for type indexing, the rec group entries each get their own index
-                    // The outer count counts rec groups as single entries, but we need to adjust
-                    // For now, treat rec as consuming one entry (the spec says rec is one type entry
-                    // that defines multiple types with consecutive indices)
+
+                    self.module.rec_groups.push(RecGroup {
+                        types: rec_sub_types,
+                        start_type_index,
+                    });
+
+                    // A rec group counts as one entry in the type section count
                     i += 1;
                 },
                 COMPOSITE_TYPE_SUB | COMPOSITE_TYPE_SUB_FINAL => {
                     // subtype: 0x50/0x4F supertype* comptype
-                    offset = self.parse_subtype_entry(data, offset)?;
+                    // A standalone subtype is an implicit single-element rec group
+                    let (new_offset, sub_type) = self.parse_subtype_entry(data, offset, type_index)?;
+                    offset = new_offset;
+
+                    self.module.rec_groups.push(RecGroup {
+                        types: vec![sub_type],
+                        start_type_index: type_index,
+                    });
+
+                    type_index += 1;
                     i += 1;
                 },
                 COMPOSITE_TYPE_FUNC | COMPOSITE_TYPE_STRUCT | COMPOSITE_TYPE_ARRAY => {
                     // Direct composite type without subtype wrapper
-                    offset = self.parse_composite_type(data, offset)?;
+                    // Implicitly final with no supertypes, in its own implicit rec group
+                    let (new_offset, composite_kind) = self.parse_composite_type(data, offset)?;
+                    offset = new_offset;
+
+                    self.module.rec_groups.push(RecGroup {
+                        types: vec![SubType {
+                            is_final: true,
+                            supertype_indices: Vec::new(),
+                            composite_kind,
+                            type_index,
+                        }],
+                        start_type_index: type_index,
+                    });
+
+                    type_index += 1;
                     i += 1;
                 },
                 _ => {
@@ -436,7 +473,7 @@ impl<'a> StreamingDecoder<'a> {
             }
 
             #[cfg(feature = "tracing")]
-            trace!(type_index = i - 1, "process_type_section: parsed type");
+            trace!(type_index = type_index - 1, "process_type_section: parsed type");
         }
 
         #[cfg(feature = "tracing")]
@@ -449,7 +486,9 @@ impl<'a> StreamingDecoder<'a> {
     }
 
     /// Parse a subtype entry (sub, sub final, or bare composite type)
-    fn parse_subtype_entry(&mut self, data: &[u8], mut offset: usize) -> Result<usize> {
+    /// Returns the new offset and the parsed SubType metadata.
+    /// The `type_index` parameter is the type index to assign to this entry.
+    fn parse_subtype_entry(&mut self, data: &[u8], mut offset: usize, type_index: u32) -> Result<(usize, SubType)> {
         use kiln_format::binary::{
             COMPOSITE_TYPE_ARRAY, COMPOSITE_TYPE_FUNC, COMPOSITE_TYPE_STRUCT, COMPOSITE_TYPE_SUB,
             COMPOSITE_TYPE_SUB_FINAL, read_leb128_u32,
@@ -461,36 +500,56 @@ impl<'a> StreamingDecoder<'a> {
 
         let marker = data[offset];
 
-        match marker {
+        let sub_type = match marker {
             COMPOSITE_TYPE_SUB | COMPOSITE_TYPE_SUB_FINAL => {
+                let is_final = marker == COMPOSITE_TYPE_SUB_FINAL;
                 // sub/sub_final: marker supertype_count supertype* comptype
                 offset += 1;
                 let (supertype_count, bytes_read) = read_leb128_u32(data, offset)?;
                 offset += bytes_read;
 
-                // Skip supertype indices
+                // Collect supertype indices
+                let mut supertype_indices = Vec::with_capacity(supertype_count as usize);
                 for _ in 0..supertype_count {
-                    let (_supertype_idx, bytes_read) = read_leb128_u32(data, offset)?;
+                    let (supertype_idx, bytes_read) = read_leb128_u32(data, offset)?;
                     offset += bytes_read;
+                    supertype_indices.push(supertype_idx);
                 }
 
                 // Parse the composite type
-                offset = self.parse_composite_type(data, offset)?;
+                let (new_offset, composite_kind) = self.parse_composite_type(data, offset)?;
+                offset = new_offset;
+
+                SubType {
+                    is_final,
+                    supertype_indices,
+                    composite_kind,
+                    type_index,
+                }
             },
             COMPOSITE_TYPE_FUNC | COMPOSITE_TYPE_STRUCT | COMPOSITE_TYPE_ARRAY => {
                 // Direct composite type (implicitly final with no supertypes)
-                offset = self.parse_composite_type(data, offset)?;
+                let (new_offset, composite_kind) = self.parse_composite_type(data, offset)?;
+                offset = new_offset;
+
+                SubType {
+                    is_final: true,
+                    supertype_indices: Vec::new(),
+                    composite_kind,
+                    type_index,
+                }
             },
             _ => {
                 return Err(Error::parse_error("Invalid subtype marker"));
             },
-        }
+        };
 
-        Ok(offset)
+        Ok((offset, sub_type))
     }
 
     /// Parse a composite type (func, struct, or array)
-    fn parse_composite_type(&mut self, data: &[u8], mut offset: usize) -> Result<usize> {
+    /// Returns the new offset and the composite type kind parsed.
+    fn parse_composite_type(&mut self, data: &[u8], mut offset: usize) -> Result<(usize, CompositeTypeKind)> {
         use kiln_format::binary::{
             COMPOSITE_TYPE_ARRAY, COMPOSITE_TYPE_FUNC, COMPOSITE_TYPE_STRUCT, read_leb128_u32,
         };
@@ -503,7 +562,7 @@ impl<'a> StreamingDecoder<'a> {
         let type_marker = data[offset];
         offset += 1;
 
-        match type_marker {
+        let kind = match type_marker {
             COMPOSITE_TYPE_FUNC => {
                 // Parse function type: param_count param* result_count result*
                 let (param_count, bytes_read) = read_leb128_u32(data, offset)?;
@@ -578,6 +637,8 @@ impl<'a> StreamingDecoder<'a> {
                     let func_type = FuncType::new(params.into_iter(), results.into_iter())?;
                     let _ = self.module.types.push(func_type);
                 }
+
+                CompositeTypeKind::Func
             },
             COMPOSITE_TYPE_STRUCT => {
                 // Parse struct type: field_count field*
@@ -588,25 +649,66 @@ impl<'a> StreamingDecoder<'a> {
                 #[cfg(feature = "tracing")]
                 trace!(field_count = field_count, "parse_composite_type: struct");
 
+                let mut gc_fields = Vec::with_capacity(field_count as usize);
+                // Collect field types so struct.new knows how many values to pop
+                #[cfg(feature = "std")]
+                let mut field_types = Vec::with_capacity(field_count as usize);
+                #[cfg(not(feature = "std"))]
+                let mut field_types = alloc::vec::Vec::with_capacity(field_count as usize);
+
                 for _ in 0..field_count {
                     // Parse storage type (value type or packed type)
-                    let (_, new_offset) = self.parse_storage_type(data, offset)?;
+                    let (storage_byte, new_offset) = self.parse_storage_type(data, offset)?;
                     offset = new_offset;
+
+                    // Convert storage type to ValueType for the placeholder
+                    // Packed types (i8=0x78, i16=0x77) are stored as I32
+                    let field_vt = match storage_byte {
+                        0x78 | 0x77 => ValueType::I32, // packed i8/i16 -> i32
+                        _ => {
+                            // Re-parse as value type to get the proper type
+                            // The parse_storage_type already advanced offset, so use the byte
+                            match storage_byte {
+                                0x7F => ValueType::I32,
+                                0x7E => ValueType::I64,
+                                0x7D => ValueType::F32,
+                                0x7C => ValueType::F64,
+                                0x7B => ValueType::V128,
+                                0x70 => ValueType::FuncRef,
+                                0x6F => ValueType::ExternRef,
+                                0x6E => ValueType::AnyRef,
+                                0x6D => ValueType::EqRef,
+                                0x6C => ValueType::I31Ref,
+                                0x6B => ValueType::StructRef(0),
+                                0x6A => ValueType::ArrayRef(0),
+                                _ => ValueType::I32, // default for complex ref types
+                            }
+                        }
+                    };
+                    field_types.push(field_vt);
 
                     // Parse mutability flag
                     if offset >= data.len() {
                         return Err(Error::parse_error("Unexpected end of struct field"));
                     }
-                    offset += 1; // mut flag
+                    let mutable = data[offset] != 0;
+                    offset += 1;
+
+                    let storage_type = match storage_byte {
+                        0x78 => GcStorageType::I8,
+                        0x77 => GcStorageType::I16,
+                        other => GcStorageType::Value(other),
+                    };
+                    gc_fields.push(GcFieldType { storage_type, mutable });
                 }
 
-                // TODO: Store struct type when we have proper GC type storage
-                // For now, we add a placeholder func type to maintain index alignment
+                // Store struct type as a placeholder func type with fields in params
+                // This lets struct.new know the field count via params.len()
                 #[cfg(feature = "std")]
                 {
                     use kiln_foundation::CleanCoreFuncType;
                     let placeholder = CleanCoreFuncType {
-                        params: Vec::new(),
+                        params: field_types,
                         results: Vec::new(),
                     };
                     self.module.types.push(placeholder);
@@ -615,31 +717,59 @@ impl<'a> StreamingDecoder<'a> {
                 #[cfg(not(feature = "std"))]
                 {
                     use kiln_foundation::types::FuncType;
-                    let placeholder = FuncType::new(core::iter::empty(), core::iter::empty())?;
+                    let placeholder = FuncType::new(field_types.into_iter(), core::iter::empty())?;
                     let _ = self.module.types.push(placeholder);
                 }
+
+                CompositeTypeKind::StructWithFields(gc_fields)
             },
             COMPOSITE_TYPE_ARRAY => {
                 // Parse array type: storage_type mutability
-                let (_, new_offset) = self.parse_storage_type(data, offset)?;
+                let (storage_byte, new_offset) = self.parse_storage_type(data, offset)?;
                 offset = new_offset;
 
                 // Parse mutability flag
                 if offset >= data.len() {
                     return Err(Error::parse_error("Unexpected end of array type"));
                 }
-                offset += 1; // mut flag
+                let mutable = data[offset] != 0;
+                offset += 1;
+
+                let storage_type = match storage_byte {
+                    0x78 => GcStorageType::I8,
+                    0x77 => GcStorageType::I16,
+                    other => GcStorageType::Value(other),
+                };
+                let gc_element = GcFieldType { storage_type, mutable };
 
                 #[cfg(feature = "tracing")]
                 trace!("parse_composite_type: array");
 
-                // TODO: Store array type when we have proper GC type storage
-                // For now, we add a placeholder func type to maintain index alignment
+                // Convert element storage type to ValueType
+                let elem_vt = match storage_byte {
+                    0x78 | 0x77 => ValueType::I32,
+                    0x7F => ValueType::I32,
+                    0x7E => ValueType::I64,
+                    0x7D => ValueType::F32,
+                    0x7C => ValueType::F64,
+                    0x7B => ValueType::V128,
+                    0x70 => ValueType::FuncRef,
+                    0x6F => ValueType::ExternRef,
+                    0x6E => ValueType::AnyRef,
+                    0x6D => ValueType::EqRef,
+                    0x6C => ValueType::I31Ref,
+                    0x6B => ValueType::StructRef(0),
+                    0x6A => ValueType::ArrayRef(0),
+                    _ => ValueType::I32,
+                };
+
+                // Store array type as a placeholder func type with element type in params
+                // This lets array.new know the element type via params[0]
                 #[cfg(feature = "std")]
                 {
                     use kiln_foundation::CleanCoreFuncType;
                     let placeholder = CleanCoreFuncType {
-                        params: Vec::new(),
+                        params: vec![elem_vt],
                         results: Vec::new(),
                     };
                     self.module.types.push(placeholder);
@@ -648,16 +778,19 @@ impl<'a> StreamingDecoder<'a> {
                 #[cfg(not(feature = "std"))]
                 {
                     use kiln_foundation::types::FuncType;
-                    let placeholder = FuncType::new(core::iter::empty(), core::iter::empty())?;
+                    let elem_iter = core::iter::once(elem_vt);
+                    let placeholder = FuncType::new(elem_iter, core::iter::empty())?;
                     let _ = self.module.types.push(placeholder);
                 }
+
+                CompositeTypeKind::ArrayWithElement(gc_element)
             },
             _ => {
                 return Err(Error::parse_error("Invalid composite type marker"));
             },
-        }
+        };
 
-        Ok(offset)
+        Ok((offset, kind))
     }
 
     /// Parse a storage type (value type or packed type)
@@ -738,20 +871,24 @@ impl<'a> StreamingDecoder<'a> {
                 // Concrete type indices are non-negative.
 
                 if heap_type_idx < 0 {
-                    // Abstract heap type
-                    match heap_type_idx {
-                        -16 => Ok((ValueType::FuncRef, new_offset)), // func (0x70)
-                        -17 => Ok((ValueType::ExternRef, new_offset)), // extern (0x6F)
-                        -18 => Ok((ValueType::AnyRef, new_offset)),  // any (0x6E)
-                        -19 => Ok((ValueType::EqRef, new_offset)),   // eq (0x6D)
-                        -20 => Ok((ValueType::I31Ref, new_offset)),  // i31 (0x6C)
-                        -21 => Ok((ValueType::StructRef(0), new_offset)), // struct (0x6B)
-                        -22 => Ok((ValueType::ArrayRef(0), new_offset)), // array (0x6A)
-                        -23 => Ok((ValueType::ExnRef, new_offset)),  // exn (0x69)
-                        -13 => Ok((ValueType::NullFuncRef, new_offset)), // nofunc (0x73) - bottom for func
-                        -14 => Ok((ValueType::ExternRef, new_offset)),   // noextern (0x72)
-                        -15 => Ok((ValueType::AnyRef, new_offset)), // none (0x71) - bottom for any
-                        -12 => Ok((ValueType::ExnRef, new_offset)), // noexn (0x74) - bottom for exn
+                    // Abstract heap type - must respect nullability
+                    // The shorthand forms (FuncRef, ExternRef, etc.) are nullable by definition.
+                    // Non-nullable abstract refs use TypedFuncRef with a sentinel index (u32::MAX)
+                    // to distinguish (ref func) from (ref null func) = FuncRef.
+                    match (heap_type_idx, nullable) {
+                        (-16, true) => Ok((ValueType::FuncRef, new_offset)), // (ref null func) = funcref
+                        (-16, false) => Ok((ValueType::TypedFuncRef(u32::MAX, false), new_offset)), // (ref func) - non-nullable abstract funcref
+                        (-17, _) => Ok((ValueType::ExternRef, new_offset)), // extern (0x6F)
+                        (-18, _) => Ok((ValueType::AnyRef, new_offset)),  // any (0x6E)
+                        (-19, _) => Ok((ValueType::EqRef, new_offset)),   // eq (0x6D)
+                        (-20, _) => Ok((ValueType::I31Ref, new_offset)),  // i31 (0x6C)
+                        (-21, _) => Ok((ValueType::StructRef(0), new_offset)), // struct (0x6B)
+                        (-22, _) => Ok((ValueType::ArrayRef(0), new_offset)), // array (0x6A)
+                        (-23, _) => Ok((ValueType::ExnRef, new_offset)),  // exn (0x69)
+                        (-13, _) => Ok((ValueType::NullFuncRef, new_offset)), // nofunc (0x73) - bottom for func
+                        (-14, _) => Ok((ValueType::ExternRef, new_offset)),   // noextern (0x72)
+                        (-15, _) => Ok((ValueType::AnyRef, new_offset)), // none (0x71) - bottom for any
+                        (-12, _) => Ok((ValueType::ExnRef, new_offset)), // noexn (0x74) - bottom for exn
                         _ => Ok((ValueType::AnyRef, new_offset)),   // fallback for unknown
                     }
                 } else {
@@ -899,6 +1036,12 @@ impl<'a> StreamingDecoder<'a> {
                     }
                     let flags = data[offset];
                     offset += 1;
+
+                    // Validate table limits flags: bit 0 (has max), bit 2 (table64)
+                    if flags > 0x05 || (flags & 0x02) != 0 {
+                        return Err(Error::parse_error("malformed limits flags"));
+                    }
+
                     let (min, bytes_read) = read_leb128_u32(data, offset)?;
                     offset += bytes_read;
                     let max = if flags & 0x01 != 0 {
@@ -965,11 +1108,20 @@ impl<'a> StreamingDecoder<'a> {
                     let flags = data[offset];
                     offset += 1;
 
+                    // Validate limits flags per WebAssembly spec:
+                    // Maximum valid flag for memory is 0x07 (has_max | shared | memory64)
+                    if flags > 0x07 {
+                        return Err(Error::parse_error("malformed limits flags"));
+                    }
+
                     // Check for memory64 flag (bit 2)
                     let is_memory64 = (flags & 0x04) != 0;
 
-                    // WebAssembly spec: memory size must be at most 65536 pages (4GB)
-                    const MAX_MEMORY_PAGES: u32 = 65536;
+                    // WebAssembly spec limits:
+                    // - memory32: max 65536 pages (4 GiB)
+                    // - memory64: max 0x1_0000_0000_0000 pages (2^48 pages)
+                    const MAX_MEMORY32_PAGES: u64 = 65536;
+                    const MAX_MEMORY64_PAGES: u64 = 0x1_0000_0000_0000;
 
                     // Parse limits - memory64 uses u64, regular memory uses u32
                     let (min, max) = if is_memory64 {
@@ -985,15 +1137,15 @@ impl<'a> StreamingDecoder<'a> {
                         };
 
                         // Validate memory64 limits
-                        if min64 > MAX_MEMORY_PAGES as u64 {
+                        if min64 > MAX_MEMORY64_PAGES {
                             return Err(Error::validation_error(
-                                "memory size must be at most 65536 pages (4 GiB)",
+                                "memory size must be at most 281474976710656 pages (16 EiB)",
                             ));
                         }
                         if let Some(max64) = max64 {
-                            if max64 > MAX_MEMORY_PAGES as u64 {
+                            if max64 > MAX_MEMORY64_PAGES {
                                 return Err(Error::validation_error(
-                                    "memory size must be at most 65536 pages (4 GiB)",
+                                    "memory size must be at most 281474976710656 pages (16 EiB)",
                                 ));
                             }
                         }
@@ -1011,13 +1163,13 @@ impl<'a> StreamingDecoder<'a> {
                         };
 
                         // Validate regular memory limits
-                        if min > MAX_MEMORY_PAGES {
+                        if min as u64 > MAX_MEMORY32_PAGES {
                             return Err(Error::validation_error(
                                 "memory size must be at most 65536 pages (4 GiB)",
                             ));
                         }
                         if let Some(max_val) = max {
-                            if max_val > MAX_MEMORY_PAGES {
+                            if max_val as u64 > MAX_MEMORY32_PAGES {
                                 return Err(Error::validation_error(
                                     "memory size must be at most 65536 pages (4 GiB)",
                                 ));
@@ -1057,12 +1209,19 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 0x03 => {
                     // Global import - need to parse global type
-                    // value_type (1 byte) + mutability (1 byte)
-                    if offset + 1 >= data.len() {
+                    // value_type (variable length for ref types) + mutability (1 byte)
+                    if offset >= data.len() {
                         return Err(Error::parse_error("Unexpected end of global import"));
                     }
-                    let value_type_byte = data[offset];
-                    offset += 1;
+
+                    // Parse value type using full GC-aware parser (handles multi-byte ref types)
+                    let (value_type, new_offset) = self.parse_value_type(data, offset)?;
+                    offset = new_offset;
+
+                    // Parse mutability byte
+                    if offset >= data.len() {
+                        return Err(Error::parse_error("Unexpected end of global import mutability"));
+                    }
                     let mutability_byte = data[offset];
                     offset += 1;
 
@@ -1070,19 +1229,6 @@ impl<'a> StreamingDecoder<'a> {
                     if mutability_byte != 0x00 && mutability_byte != 0x01 {
                         return Err(Error::parse_error("malformed mutability"));
                     }
-
-                    // Parse value type
-                    let value_type = match value_type_byte {
-                        0x7F => kiln_foundation::ValueType::I32,
-                        0x7E => kiln_foundation::ValueType::I64,
-                        0x7D => kiln_foundation::ValueType::F32,
-                        0x7C => kiln_foundation::ValueType::F64,
-                        0x7B => kiln_foundation::ValueType::V128,
-                        0x70 => kiln_foundation::ValueType::FuncRef,
-                        0x6F => kiln_foundation::ValueType::ExternRef,
-                        0x69 => kiln_foundation::ValueType::ExnRef,
-                        _ => return Err(Error::parse_error("Invalid global import value type")),
-                    };
 
                     #[cfg(feature = "tracing")]
                     trace!(import_index = i, value_type = ?value_type, mutable = (mutability_byte != 0), "import: global");
@@ -1284,6 +1430,14 @@ impl<'a> StreamingDecoder<'a> {
             let flags = data[offset];
             offset += 1;
 
+            // Validate table limits flags per WebAssembly spec:
+            // - Bit 0: has max (0x01)
+            // - Bit 2: table64 (0x04)
+            // All other bits must be zero. Maximum valid flag is 0x05.
+            if flags > 0x05 || (flags & 0x02) != 0 {
+                return Err(Error::parse_error("malformed limits flags"));
+            }
+
             let (min, bytes_read) = read_leb128_u32(data, offset)?;
             offset += bytes_read;
 
@@ -1418,12 +1572,23 @@ impl<'a> StreamingDecoder<'a> {
             let flags = data[offset];
             offset += 1;
 
+            // Validate limits flags per WebAssembly spec:
+            // - Bits 0: has max (0x01)
+            // - Bit 1: shared (0x02) - threads proposal
+            // - Bit 2: memory64 (0x04)
+            // All other bits must be zero. Maximum valid flag is 0x07.
+            if flags > 0x07 {
+                return Err(Error::parse_error("malformed limits flags"));
+            }
+
             // Check for memory64 flag (bit 2)
             let is_memory64 = (flags & 0x04) != 0;
 
-            // WebAssembly spec: memory size must be at most 65536 pages (4GB)
-            // for non-memory64 memories (and memory64 has its own limit)
-            const MAX_MEMORY_PAGES: u32 = 65536;
+            // WebAssembly spec limits:
+            // - memory32: max 65536 pages (4 GiB)
+            // - memory64: max 0x1_0000_0000_0000 pages (2^48 pages)
+            const MAX_MEMORY32_PAGES: u64 = 65536;
+            const MAX_MEMORY64_PAGES: u64 = 0x1_0000_0000_0000;
 
             // Parse limits - memory64 uses u64, regular memory uses u32
             let (min, max) = if is_memory64 {
@@ -1438,21 +1603,21 @@ impl<'a> StreamingDecoder<'a> {
                     None
                 };
 
-                // Validate memory64 limits (still have a limit, though higher)
-                // For non-memory64 tests, values > 65536 pages should fail
-                if min64 > MAX_MEMORY_PAGES as u64 {
+                // Validate memory64 limits
+                if min64 > MAX_MEMORY64_PAGES {
                     return Err(Error::validation_error(
-                        "memory size must be at most 65536 pages (4 GiB)",
+                        "memory size must be at most 281474976710656 pages (16 EiB)",
                     ));
                 }
                 if let Some(max64) = max64 {
-                    if max64 > MAX_MEMORY_PAGES as u64 {
+                    if max64 > MAX_MEMORY64_PAGES {
                         return Err(Error::validation_error(
-                            "memory size must be at most 65536 pages (4 GiB)",
+                            "memory size must be at most 281474976710656 pages (16 EiB)",
                         ));
                     }
                 }
 
+                // Safe to truncate to u32 for page counts within our runtime's capacity
                 (min64 as u32, max64.map(|v| v as u32))
             } else {
                 let (min, bytes_read) = read_leb128_u32(data, offset)?;
@@ -1475,16 +1640,19 @@ impl<'a> StreamingDecoder<'a> {
                 return Err(Error::validation_error("shared memory must have maximum"));
             }
 
-            if min > MAX_MEMORY_PAGES {
-                return Err(Error::validation_error(
-                    "memory size must be at most 65536 pages (4 GiB)",
-                ));
-            }
-            if let Some(max_val) = max {
-                if max_val > MAX_MEMORY_PAGES {
+            // Apply memory32 limits for non-memory64 memories
+            if !is_memory64 {
+                if min as u64 > MAX_MEMORY32_PAGES {
                     return Err(Error::validation_error(
                         "memory size must be at most 65536 pages (4 GiB)",
                     ));
+                }
+                if let Some(max_val) = max {
+                    if max_val as u64 > MAX_MEMORY32_PAGES {
+                        return Err(Error::validation_error(
+                            "memory size must be at most 65536 pages (4 GiB)",
+                        ));
+                    }
                 }
             }
 
@@ -2196,8 +2364,13 @@ impl<'a> StreamingDecoder<'a> {
 
             // Code section index i corresponds to module-defined function at index (num_imports + i)
             let func_index = num_imports + i as usize;
-            if let Some(func) = self.module.functions.get_mut(func_index) {
-                // Parse local variable declarations
+
+            // First pass: parse all local declarations into a temporary vec.
+            // This avoids borrow conflicts between self.parse_value_type (immutable borrow)
+            // and self.module.functions.get_mut (mutable borrow).
+            let mut local_decls: Vec<(u32, kiln_foundation::types::ValueType)> = Vec::new();
+            {
+                let mut total_locals: u64 = 0;
                 for _ in 0..local_count {
                     let (count, bytes) = read_leb128_u32(&data[body_start..body_end], body_offset)?;
                     body_offset += bytes;
@@ -2206,24 +2379,30 @@ impl<'a> StreamingDecoder<'a> {
                         return Err(Error::parse_error("Unexpected end of function body"));
                     }
 
-                    let value_type = data[body_start + body_offset];
-                    body_offset += 1;
+                    // Parse local value type using the full parse_value_type method,
+                    // which handles GC reference types (0x63/0x64 prefixed) as well
+                    // as standard value types.
+                    let (vt, new_offset) = self.parse_value_type(
+                        &data[body_start..body_end],
+                        body_offset,
+                    )?;
+                    body_offset = new_offset;
 
-                    // Convert to ValueType and add to locals
-                    let vt = match value_type {
-                        0x7F => kiln_foundation::types::ValueType::I32,
-                        0x7E => kiln_foundation::types::ValueType::I64,
-                        0x7D => kiln_foundation::types::ValueType::F32,
-                        0x7C => kiln_foundation::types::ValueType::F64,
-                        0x7B => kiln_foundation::types::ValueType::V128,
-                        0x70 => kiln_foundation::types::ValueType::FuncRef,
-                        0x6F => kiln_foundation::types::ValueType::ExternRef,
-                        0x69 => kiln_foundation::types::ValueType::ExnRef,
-                        _ => return Err(Error::parse_error("Invalid local type")),
-                    };
+                    // Validate total locals: sum of all declared locals must fit in u32
+                    total_locals += count as u64;
+                    if total_locals > u32::MAX as u64 {
+                        return Err(Error::parse_error("too many locals"));
+                    }
 
+                    local_decls.push((count, vt));
+                }
+            }
+
+            if let Some(func) = self.module.functions.get_mut(func_index) {
+                // Apply parsed local declarations to the function
+                for (count, vt) in &local_decls {
                     // Validate total locals against platform limits before allocation
-                    let new_total = func.locals.len() + count as usize;
+                    let new_total = func.locals.len() + *count as usize;
                     if new_total > limits::MAX_FUNCTION_LOCALS {
                         return Err(Error::parse_error(
                             "Function exceeds maximum local count for platform",
@@ -2235,18 +2414,28 @@ impl<'a> StreamingDecoder<'a> {
                         AllocationPhase::Decode,
                         "streaming_decoder:func_locals",
                         "locals",
-                        count as usize
+                        *count as usize
                     );
 
                     // Add 'count' locals of this type
-                    for _ in 0..count {
-                        func.locals.push(vt);
+                    for _ in 0..*count {
+                        func.locals.push(*vt);
                     }
                 }
 
                 // Now copy only the instruction bytes (after locals, before the implicit 'end')
                 let instructions_start = body_start + body_offset;
                 let instructions_data = &data[instructions_start..body_end];
+
+                // Validate function body ends with END opcode (0x0B)
+                if instructions_data.is_empty() || instructions_data[instructions_data.len() - 1] != 0x0B {
+                    return Err(Error::parse_error("END opcode expected"));
+                }
+
+                // Note: data count section validation (memory.init/data.drop require
+                // section 12) is handled at the validator level, not the decoder.
+                // Raw byte scanning here produced false positives from LEB128 immediates
+                // containing 0xFC 0x08/0x09 byte sequences.
 
                 #[cfg(feature = "allocation-tracing")]
                 trace_alloc!(
@@ -2607,6 +2796,9 @@ impl<'a> StreamingDecoder<'a> {
                 _ => {}
             }
         }
+
+        // Note: data count section requirement (when memory.init/data.drop are used)
+        // is validated at the instruction validation level, not during decoding.
 
         Ok(())
     }

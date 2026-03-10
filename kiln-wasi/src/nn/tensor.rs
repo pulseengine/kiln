@@ -23,15 +23,21 @@ use crate::prelude::*;
 pub const MAX_TENSOR_DIMS: usize = 8;
 
 /// Tensor data types supported by WASI-NN
+///
+/// The first 7 types match the WASI-NN 0.2.0-rc-2024-10-28 spec:
+///   FP16, FP32, FP64, BF16, U8, I32, I64
+/// Additional types are Kiln extensions for broader backend support.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TensorType {
-    /// 16-bit floating point
+    /// 16-bit floating point (IEEE 754)
     F16,
-    /// 32-bit floating point
+    /// 32-bit floating point (IEEE 754)
     F32,
-    /// 64-bit floating point
+    /// 64-bit floating point (IEEE 754)
     F64,
+    /// Brain floating point (16-bit, used in ML training/inference)
+    BF16,
     /// Unsigned 8-bit integer
     U8,
     /// Signed 8-bit integer
@@ -56,7 +62,7 @@ impl TensorType {
     /// Get the size in bytes of this tensor type
     pub fn size_bytes(&self) -> usize {
         match self {
-            TensorType::F16 => 2,
+            TensorType::F16 | TensorType::BF16 => 2,
             TensorType::F32 => 4,
             TensorType::F64 => 8,
             TensorType::U8 | TensorType::I8 | TensorType::Bool => 1,
@@ -68,7 +74,10 @@ impl TensorType {
 
     /// Check if this is a floating point type
     pub fn is_float(&self) -> bool {
-        matches!(self, TensorType::F16 | TensorType::F32 | TensorType::F64)
+        matches!(
+            self,
+            TensorType::F16 | TensorType::F32 | TensorType::F64 | TensorType::BF16
+        )
     }
 
     /// Check if this is an integer type

@@ -737,8 +737,12 @@ where
             write_stream.position()
         };
 
+        // Write the full item_serialized_size bytes to ensure each slot is
+        // exactly item_serialized_size bytes in the provider. The buffer is
+        // zero-initialized, so any bytes beyond bytes_written are zero padding.
+        let write_len = core::cmp::max(bytes_written, self.item_serialized_size);
         self.handler
-            .write_data(offset, &item_bytes_buffer[..bytes_written])
+            .write_data(offset, &item_bytes_buffer[..write_len])
             .map_err(|e| BoundedError::runtime_execution_error("Operation failed"))?;
 
         self.length += 1;
@@ -1216,8 +1220,15 @@ where
             write_stream.position()
         };
 
+        // Write the full item_serialized_size bytes to ensure each slot is
+        // exactly item_serialized_size bytes in the provider. The buffer is
+        // zero-initialized, so any bytes beyond bytes_written are zero padding.
+        // This is critical because get() reads item_serialized_size bytes at
+        // offset = index * item_serialized_size, so the provider must have
+        // enough data for all slots.
+        let write_len = core::cmp::max(bytes_written, self.item_serialized_size);
         self.provider
-            .write_data(offset, &item_bytes_buffer[..bytes_written])
+            .write_data(offset, &item_bytes_buffer[..write_len])
             .map_err(|e| {
                 BoundedError::new(BoundedErrorKind::SliceError, "Slice operation failed")
             })?;
@@ -1751,9 +1762,11 @@ where
             write_stream.position()
         };
 
-        // Write new value to memory
+        // Write the full item_serialized_size bytes to ensure the slot is
+        // fully written, matching what get() expects to read.
+        let write_len = core::cmp::max(bytes_written, self.item_serialized_size);
         self.provider
-            .write_data(offset, &item_bytes_buffer[..bytes_written])
+            .write_data(offset, &item_bytes_buffer[..write_len])
             .map_err(|e| BoundedError::runtime_execution_error("Operation failed"))?;
 
         // Update checksum if needed
@@ -3766,6 +3779,10 @@ impl<const N_BYTES: usize> WasmName<N_BYTES> {
 
 // Trait implementations for WasmName
 impl<const N_BYTES: usize> ToBytes for WasmName<N_BYTES> {
+    fn serialized_size(&self) -> usize {
+        self.inner.serialized_size()
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,

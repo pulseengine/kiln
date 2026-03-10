@@ -231,6 +231,10 @@ impl fmt::Display for Checksum {
 }
 
 impl ToBytes for Checksum {
+    fn serialized_size(&self) -> usize {
+        core::mem::size_of::<u32>() // Checksum is stored as a single u32
+    }
+
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
         &self,
         writer: &mut WriteStream<'a>,

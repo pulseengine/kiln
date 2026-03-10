@@ -132,6 +132,9 @@ pub struct KilndConfig {
     /// WASI capabilities
     #[cfg(feature = "wasi")]
     pub wasi_capabilities: Option<WasiCapabilities>,
+    /// Filesystem paths to preopen for WASI
+    #[cfg(feature = "wasi")]
+    pub wasi_fs_paths: Vec<String>,
 }
 
 impl Default for KilndConfig {
@@ -153,6 +156,8 @@ impl Default for KilndConfig {
             wasi_env_vars: Vec::new(),
             #[cfg(feature = "wasi")]
             wasi_args: Vec::new(),
+            #[cfg(feature = "wasi")]
+            wasi_fs_paths: Vec::new(),
             #[cfg(feature = "component-model")]
             enable_component_model: true,
             #[cfg(feature = "component-model")]
@@ -475,20 +480,16 @@ impl KilndEngine {
                 "Component parsed successfully"
             );
 
-            eprintln!("DEBUG: About to call ComponentInstance::from_parsed");
-
             // Create and initialize component instance (passes by reference to avoid stack overflow)
             // This includes executing start functions and transitioning to Running state
             // Note: WASI functions are already registered in host_registry from init_wasi()
             use kiln_component::components::component_instantiation::ComponentInstance;
-
-            eprintln!("DEBUG: Calling from_parsed...");
             // Wrap host_registry in Arc for passing to component
             use std::sync::Arc;
             let registry_arc = Arc::new(self.host_registry.clone());
             let mut instance = ComponentInstance::from_parsed(0, &mut *parsed_component, Some(registry_arc))
                 .map_err(|e| {
-                    eprintln!("[DEBUG] ComponentInstance::from_parsed failed: {:?}", e);
+                    eprintln!("Component instantiation error: {}", e);
                     Error::runtime_error("Failed to create and initialize component instance")
                 })?;
             // parsed_component is now dropped - we only keep runtime instance
@@ -499,7 +500,16 @@ impl KilndEngine {
             if self.config.enable_wasi {
                 use kiln_wasi::WasiDispatcher;
                 match WasiDispatcher::with_defaults() {
-                    Ok(dispatcher) => {
+                    Ok(mut dispatcher) => {
+                        // Register filesystem preopens
+                        for path in &self.config.wasi_fs_paths {
+                            if let Err(_e) = dispatcher.add_preopen(path) {
+                                let _ = self.logger.handle_minimal_log(
+                                    LogLevel::Warn,
+                                    "Failed to add preopen path"
+                                );
+                            }
+                        }
                         instance.set_host_handler(Box::new(dispatcher));
                         let _ = self.logger.handle_minimal_log(
                             LogLevel::Info,
@@ -526,25 +536,12 @@ impl KilndEngine {
             );
 
             // Check for WASI CLI entry point and invoke it
-            // Debug: print available exports
-            #[cfg(feature = "std")]
-            {
-                println!("\n=== Available Exports ===");
-                println!("Total exports: {}", instance.exports.len());
-                for (idx, export) in instance.exports.iter().enumerate() {
-                    println!("  Export[{}]: \"{}\"", idx, export.name);
-                }
-                println!();
-            }
-
             // Find wasi:cli/run export with any version
             let run_export = instance.exports.iter()
                 .find(|e| e.name.starts_with("wasi:cli/run@"))
                 .map(|e| e.name.clone());
 
             if let Some(export_name) = run_export {
-                #[cfg(feature = "std")]
-                eprintln!("[INFO] Calling {} entry point", export_name);
                 let _ = self.logger.handle_minimal_log(
                     LogLevel::Info,
                     "Calling wasi:cli/run entry point"
@@ -653,7 +650,11 @@ impl KilndEngine {
             #[cfg(feature = "wasi")]
             if self.config.enable_wasi {
                 match WasiDispatcher::with_defaults() {
-                    Ok(dispatcher) => {
+                    Ok(mut dispatcher) => {
+                        // Register filesystem preopens
+                        for path in &self.config.wasi_fs_paths {
+                            let _ = dispatcher.add_preopen(path);
+                        }
                         engine.set_host_handler(Box::new(dispatcher));
                         let _ = self.logger.handle_minimal_log(LogLevel::Info, "WASI dispatcher connected");
                     }
@@ -880,7 +881,11 @@ impl KilndEngine {
         }
 
         // Update statistics
-        self.stats.modules_executed += 1;
+        if is_component {
+            self.stats.components_executed += 1;
+        } else {
+            self.stats.modules_executed += 1;
+        }
         self.stats.fuel_consumed += estimated_fuel;
         self.stats.peak_memory = self.stats.peak_memory.max(estimated_memory);
 
@@ -935,6 +940,9 @@ pub struct SimpleArgs {
     /// Component interfaces to register
     #[cfg(feature = "component-model")]
     pub component_interfaces: Vec<String>,
+    /// WASI-NN graph specifications (encoding::path pairs)
+    #[cfg(feature = "wasi-nn")]
+    pub nn_graphs: Vec<String>,
     /// Enable memory profiling
     pub enable_memory_profiling: bool,
     /// Enable platform optimizations
@@ -966,6 +974,8 @@ impl SimpleArgs {
             enable_component_model: true,
             #[cfg(feature = "component-model")]
             component_interfaces: Vec::new(),
+            #[cfg(feature = "wasi-nn")]
+            nn_graphs: Vec::new(),
             enable_memory_profiling: false,
             enable_platform_optimizations: true,
         };
@@ -996,6 +1006,12 @@ impl SimpleArgs {
                     {
                         println!("  --component          Enable component model support");
                         println!("  --interface <name>   Register component interface");
+                    }
+                    #[cfg(feature = "wasi-nn")]
+                    {
+                        println!("  --nn-graph <spec>    Pre-load NN model (format: encoding::path)");
+                        println!("                       e.g., --nn-graph onnx::model.onnx");
+                        println!("                       Encodings: onnx, tensorflow, pytorch, openvino");
                     }
                     println!("  --help               Show this help message");
                     process::exit(0);
@@ -1071,6 +1087,13 @@ impl SimpleArgs {
                     i += 1;
                     if i < args.len() {
                         result.component_interfaces.push(args[i].clone());
+                    }
+                },
+                #[cfg(feature = "wasi-nn")]
+                "--nn-graph" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.nn_graphs.push(args[i].clone());
                     }
                 },
                 // Everything after "--" goes to wasi_args
@@ -1202,6 +1225,7 @@ fn main_with_stack() -> Result<()> {
             config.wasi_capabilities = Some(capabilities);
             config.wasi_env_vars = args.wasi_env_vars.clone();
             config.wasi_args = args.wasi_args.clone();
+            config.wasi_fs_paths = args.wasi_fs_paths.clone();
 
             println!("✓ WASI enabled:");
             println!("  - Version: {:?}", config.wasi_version);
@@ -1231,6 +1255,76 @@ fn main_with_stack() -> Result<()> {
 
     if !config.enable_platform_optimizations {
         println!("! Platform optimizations disabled");
+    }
+
+    // Initialize WASI-NN if graphs are specified
+    #[cfg(feature = "wasi-nn")]
+    {
+        if !args.nn_graphs.is_empty() {
+            use kiln_wasi::nn::{
+                initialize_nn, initialize_backends, initialize_graph_store,
+                initialize_context_store, nn_load,
+                capabilities::DynamicNNCapability,
+                GraphEncoding,
+            };
+
+            // Initialize NN subsystem with default (QM) capability
+            let capability = Box::new(DynamicNNCapability::with_tracking());
+            initialize_nn(capability).map_err(|e| {
+                eprintln!("Failed to initialize WASI-NN: {}", e);
+                e
+            })?;
+
+            // Initialize backends and stores
+            initialize_backends().ok();
+            initialize_graph_store().ok();
+            initialize_context_store().ok();
+
+            println!("✓ WASI-NN enabled:");
+
+            for spec in &args.nn_graphs {
+                // Parse "encoding::path" format
+                let (encoding_str, path) = match spec.split_once("::") {
+                    Some((enc, p)) => (enc, p),
+                    None => {
+                        eprintln!("  ✗ Invalid --nn-graph format: '{}' (expected encoding::path)", spec);
+                        eprintln!("    Example: --nn-graph onnx::model.onnx");
+                        process::exit(1);
+                    }
+                };
+
+                let encoding: u8 = match encoding_str {
+                    "openvino" => 0,
+                    "onnx"     => 1,
+                    "tensorflow" | "tf" => 2,
+                    "pytorch" | "pt"    => 3,
+                    "tflite"   => 4,
+                    "ggml"     => 5,
+                    "autodetect" | "auto" => 6,
+                    _ => {
+                        eprintln!("  ✗ Unknown encoding '{}'. Valid: onnx, tensorflow, pytorch, openvino, tflite, ggml, autodetect", encoding_str);
+                        process::exit(1);
+                    }
+                };
+
+                // Read model file from disk
+                let model_data = std::fs::read(path).map_err(|e| {
+                    eprintln!("  ✗ Failed to read model file '{}': {}", path, e);
+                    kiln_error::Error::runtime_error("Failed to read model file")
+                })?;
+
+                let model_size = model_data.len();
+
+                // Pre-load into graph store
+                let graph_id = nn_load(model_data, encoding, 0).map_err(|e| {
+                    eprintln!("  ✗ Failed to load model '{}': {}", path, e);
+                    e
+                })?;
+
+                println!("  - Loaded {} ({} bytes) as graph_id={} [{}]",
+                    path, model_size, graph_id, encoding_str);
+            }
+        }
     }
 
     // Check if we have a module to execute

@@ -1,7 +1,8 @@
 //! WASI instance provider for Component Model
 //!
 //! Creates component instances that satisfy WASI Preview 2 imports.
-//! This is a stub implementation - instances don't have actual WASI logic yet.
+//! Each WASI interface is represented as a component instance with
+//! function exports that map to the WIT-defined interface.
 
 use crate::bounded_component_infra::ComponentProvider;
 use crate::instantiation::{ExportValue, FunctionExport, InstanceImport};
@@ -12,6 +13,10 @@ use kiln_error::Result;
 use alloc::boxed::Box;
 #[cfg(feature = "std")]
 use std::boxed::Box;
+
+// Tracing imports for structured logging
+#[cfg(feature = "tracing")]
+use kiln_foundation::tracing::{trace, warn};
 
 /// Provides WASI component instances
 ///
@@ -50,11 +55,8 @@ impl WasiInstanceProvider {
         let id = self.next_instance_id;
         self.next_instance_id += 1;
 
-        #[cfg(feature = "std")]
-        println!(
-            "[WASI-PROVIDER] Creating instance {} for {}",
-            id, interface_name
-        );
+        #[cfg(feature = "tracing")]
+        trace!(id = id, interface = %interface_name, "Creating WASI instance");
 
         // Create instance with exports based on interface
         let mut instance = InstanceImport {
@@ -123,21 +125,37 @@ impl WasiInstanceProvider {
                 // Resource-only interface - no function exports needed
                 // The resource-drop is handled by canonical ABI
             },
+            // WASI-NN interfaces (wasi:nn@0.2.0-rc-2024-10-28)
+            // These provide neural network inference for ML workloads
+            name if name.starts_with("wasi:nn/errors") => {
+                self.add_nn_errors_exports(&mut instance)?;
+            },
+            name if name.starts_with("wasi:nn/tensor") => {
+                self.add_nn_tensor_exports(&mut instance)?;
+            },
+            name if name.starts_with("wasi:nn/inference") => {
+                self.add_nn_inference_exports(&mut instance)?;
+            },
+            name if name.starts_with("wasi:nn/graph") => {
+                self.add_nn_graph_exports(&mut instance)?;
+            },
+            // WASI sockets interfaces (stub for components that import them)
+            name if name.starts_with("wasi:sockets/") => {
+                // Sockets are imported by some components but not yet implemented.
+                // Provide empty instance so linking succeeds; calls will error at runtime.
+            },
+            // WASI random/insecure-seed (used by some components)
+            name if name.starts_with("wasi:random/insecure-seed") => {
+                self.add_simple_export(&mut instance, "insecure-seed")?;
+            },
             _ => {
-                #[cfg(feature = "std")]
-                println!(
-                    "[WASI-PROVIDER] Warning: No exports for unknown interface '{}'",
-                    interface_name
-                );
+                #[cfg(feature = "tracing")]
+                warn!(interface = %interface_name, "No exports for unknown WASI interface");
             },
         }
 
-        #[cfg(feature = "std")]
-        println!(
-            "[WASI-PROVIDER] Instance {} created with {} exports",
-            id,
-            instance.exports.len()
-        );
+        #[cfg(feature = "tracing")]
+        trace!(id = id, export_count = instance.exports.len(), "WASI instance created");
 
         Ok(instance)
     }
@@ -148,11 +166,11 @@ impl WasiInstanceProvider {
         let get_stdout_index = self.next_function_index;
         self.next_function_index += 1;
 
-        let provider = ComponentProvider::default();
-        let signature = KilnComponentType::Unit(provider)?;
-
+        // Use Default::default() for signature since the WASI provider only needs the
+        // function index for dispatch - the full ComponentType is not used at runtime.
+        // ComponentType::Unit(provider) fails because BoundedVec::new rejects zero-sized items.
         let func_export = FunctionExport {
-            signature,
+            signature: KilnComponentType::<ComponentProvider>::default(),
             index: get_stdout_index,
         };
 
@@ -172,11 +190,8 @@ impl WasiInstanceProvider {
                 .map_err(|_| kiln_error::Error::resource_exhausted("Too many exports"))?;
         }
 
-        #[cfg(feature = "std")]
-        println!(
-            "[WASI-PROVIDER] Added export: get-stdout (index {})",
-            get_stdout_index
-        );
+        #[cfg(feature = "tracing")]
+        trace!(index = get_stdout_index, "Added export: get-stdout");
 
         Ok(())
     }
@@ -296,16 +311,57 @@ impl WasiInstanceProvider {
         self.add_simple_export(instance, "get-terminal-stderr")
     }
 
+    /// Add WASI-NN errors interface exports (wasi:nn/errors@0.2.0-rc-2024-10-28)
+    ///
+    /// The errors interface defines a resource `error` with a `code` method
+    /// that returns an `error-code` enum.
+    fn add_nn_errors_exports(&mut self, instance: &mut InstanceImport) -> Result<()> {
+        // Resource method: [method]error.code() -> error-code
+        self.add_simple_export(instance, "[method]error.code")
+    }
+
+    /// Add WASI-NN tensor interface exports (wasi:nn/tensor@0.2.0-rc-2024-10-28)
+    ///
+    /// The tensor interface defines a resource `tensor` with constructor and
+    /// data accessor. Tensor types: FP16, FP32, FP64, BF16, U8, I32, I64.
+    fn add_nn_tensor_exports(&mut self, instance: &mut InstanceImport) -> Result<()> {
+        // Constructor: [constructor]tensor(dimensions, ty, data) -> tensor
+        self.add_simple_export(instance, "[constructor]tensor")?;
+        // Method: [method]tensor.data() -> tensor-data
+        self.add_simple_export(instance, "[method]tensor.data")
+    }
+
+    /// Add WASI-NN inference interface exports (wasi:nn/inference@0.2.0-rc-2024-10-28)
+    ///
+    /// The inference interface provides graph-execution-context resource with a
+    /// compute method that takes named tensors and returns named tensors.
+    fn add_nn_inference_exports(&mut self, instance: &mut InstanceImport) -> Result<()> {
+        // Method: [method]graph-execution-context.compute(inputs) -> result<list<named-tensor>, error>
+        self.add_simple_export(instance, "[method]graph-execution-context.compute")
+    }
+
+    /// Add WASI-NN graph interface exports (wasi:nn/graph@0.2.0-rc-2024-10-28)
+    ///
+    /// The graph interface provides model loading and execution context creation.
+    /// Supports encodings: openvino, onnx, tensorflow, pytorch, tensorflowlite, ggml, autodetect.
+    /// Execution targets: cpu, gpu, tpu.
+    fn add_nn_graph_exports(&mut self, instance: &mut InstanceImport) -> Result<()> {
+        // Function: load(builder, encoding, target) -> result<graph, error>
+        self.add_simple_export(instance, "load")?;
+        // Method: [method]graph.init-execution-context() -> result<graph-execution-context, error>
+        self.add_simple_export(instance, "[method]graph.init-execution-context")
+    }
+
     /// Helper to add a simple function export
     fn add_simple_export(&mut self, instance: &mut InstanceImport, name: &str) -> Result<()> {
         let func_index = self.next_function_index;
         self.next_function_index += 1;
 
-        let provider = ComponentProvider::default();
-        let signature = KilnComponentType::Unit(provider)?;
-
+        // Use Default::default() for signature since the WASI provider only needs the
+        // function index for dispatch - the full ComponentType is not used at runtime.
+        // ComponentType::Unit(provider) fails because BoundedVec::new rejects zero-sized items.
         let func_export = FunctionExport {
-            signature,
+            signature: KilnComponentType::<ComponentProvider>::default(),
             index: func_index,
         };
 
@@ -325,11 +381,8 @@ impl WasiInstanceProvider {
                 .map_err(|_| kiln_error::Error::resource_exhausted("Too many exports"))?;
         }
 
-        #[cfg(feature = "std")]
-        println!(
-            "[WASI-PROVIDER] Added export: {} (index {})",
-            name, func_index
-        );
+        #[cfg(feature = "tracing")]
+        trace!(name = %name, index = func_index, "Added WASI export");
 
         Ok(())
     }
@@ -353,6 +406,10 @@ impl WasiInstanceProvider {
             "wasi:filesystem/types@0.2.0",
             "wasi:filesystem/preopens@0.2.0",
             "wasi:random/random@0.2.0",
+            "wasi:nn/errors@0.2.0-rc-2024-10-28",
+            "wasi:nn/tensor@0.2.0-rc-2024-10-28",
+            "wasi:nn/inference@0.2.0-rc-2024-10-28",
+            "wasi:nn/graph@0.2.0-rc-2024-10-28",
         ]
     }
 }

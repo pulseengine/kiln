@@ -619,7 +619,7 @@ impl WastTestRunner {
     /// Handle assert_return directive
     fn handle_assert_return_directive(
         &mut self,
-        exec: &WastExecute,
+        exec: &mut WastExecute,
         results: &[WastRet],
         _file_path: &Path,
     ) -> Result<WastDirectiveInfo> {
@@ -725,7 +725,7 @@ impl WastTestRunner {
     /// Handle assert_trap directive
     fn handle_assert_trap_directive(
         &mut self,
-        exec: &WastExecute,
+        exec: &mut WastExecute,
         expected_message: &str,
         _file_path: &Path,
     ) -> Result<WastDirectiveInfo> {
@@ -821,7 +821,7 @@ impl WastTestRunner {
     /// This expects the execution to throw an uncaught exception
     fn handle_assert_exception_directive(
         &mut self,
-        exec: &WastExecute,
+        exec: &mut WastExecute,
         _file_path: &Path,
     ) -> Result<WastDirectiveInfo> {
         self.stats.assert_trap_count += 1; // Count with trap tests
@@ -1415,7 +1415,7 @@ impl WastTestRunner {
     /// Handle invoke directive (standalone function call)
     fn handle_invoke_directive(
         &mut self,
-        exec: &WastExecute,
+        exec: &mut WastExecute,
         _file_path: &Path,
     ) -> Result<WastDirectiveInfo> {
         // Execute the function using the real engine

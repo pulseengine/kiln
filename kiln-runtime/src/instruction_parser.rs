@@ -289,6 +289,18 @@ fn parse_instruction_with_provider(
             consumed += table_bytes;
             Instruction::ReturnCallIndirect(type_idx, table_idx)
         },
+        0x14 => {
+            // call_ref: type_idx (LEB128 u32) - typed function reference call
+            let (type_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::CallRef(type_idx)
+        },
+        0x15 => {
+            // return_call_ref: type_idx (LEB128 u32) - typed function reference tail call
+            let (type_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::ReturnCallRef(type_idx)
+        },
 
         // Exception handling instructions (continued)
         0x18 => {
@@ -430,247 +442,136 @@ fn parse_instruction_with_provider(
 
         // Memory instructions
         0x28 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Load(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I32Load(memarg)
         },
         0x29 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Load(memarg)
         },
         0x2A => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::F32Load(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::F32Load(memarg)
         },
         0x2B => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::F64Load(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::F64Load(memarg)
         },
         0x2C => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Load8S(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I32Load8S(memarg)
         },
         0x2D => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Load8U(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I32Load8U(memarg)
         },
         0x2E => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Load16S(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I32Load16S(memarg)
         },
         0x2F => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Load16U(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I32Load16U(memarg)
         },
         0x30 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load8S(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Load8S(memarg)
         },
         0x31 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load8U(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Load8U(memarg)
         },
         0x32 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load16S(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Load16S(memarg)
         },
         0x33 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load16U(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Load16U(memarg)
         },
         0x34 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load32S(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Load32S(memarg)
         },
         0x35 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load32U(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Load32U(memarg)
         },
         0x36 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Store(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I32Store(memarg)
         },
         0x37 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Store(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Store(memarg)
         },
         0x38 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::F32Store(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::F32Store(memarg)
         },
         0x39 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::F64Store(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::F64Store(memarg)
         },
         0x3A => {
             // i32.store8
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Store8(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I32Store8(memarg)
         },
         0x3B => {
             // i32.store16
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Store16(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I32Store16(memarg)
         },
         0x3C => {
             // i64.store8
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Store8(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Store8(memarg)
         },
         0x3D => {
             // i64.store16
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Store16(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Store16(memarg)
         },
         0x3E => {
             // i64.store32
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Store32(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
+            let (memarg, bytes) = parse_memarg(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::I64Store32(memarg)
         },
         0x3F => {
-            consumed += 1; // Skip reserved byte
-            Instruction::MemorySize(0)
+            // memory.size: the byte is the memory index (0x00 for single memory)
+            let (mem_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::MemorySize(mem_idx)
         },
         0x40 => {
-            consumed += 1; // Skip reserved byte
-            Instruction::MemoryGrow(0)
+            // memory.grow: the byte is the memory index (0x00 for single memory)
+            let (mem_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::MemoryGrow(mem_idx)
         },
 
         // Numeric instructions - Constants
@@ -907,6 +808,20 @@ fn parse_instruction_with_provider(
             consumed += bytes;
             Instruction::RefFunc(func_idx)
         },
+        0xD3 => Instruction::RefEq,
+        0xD4 => Instruction::RefAsNonNull,
+        0xD5 => {
+            // br_on_null l - branch to label if reference is null
+            let (label_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::BrOnNull(label_idx)
+        },
+        0xD6 => {
+            // br_on_non_null l - branch to label if reference is not null
+            let (label_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::BrOnNonNull(label_idx)
+        },
 
         // Multi-byte opcodes (bulk memory, SIMD, etc.)
         0xFC => {
@@ -1077,6 +992,134 @@ fn parse_instruction_with_provider(
                 // All other SIMD operations (no additional immediates)
                 _ => {
                     Instruction::SimdOp { opcode: simd_opcode }
+                }
+            }
+        }
+
+        // Threads/Atomics instructions (0xFE prefix) - WebAssembly Threads Proposal
+        0xFE => {
+            // Atomic instructions use 0xFE prefix followed by LEB128-encoded sub-opcode
+            let (atomic_opcode, opcode_bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += opcode_bytes;
+
+            match atomic_opcode {
+                // atomic.fence (0x03) - has a reserved 0x00 byte immediate
+                0x03 => {
+                    if offset + consumed >= bytecode.len() {
+                        return Err(Error::parse_error("Unexpected end in atomic.fence"));
+                    }
+                    let reserved = bytecode[offset + consumed];
+                    consumed += 1;
+                    if reserved != 0x00 {
+                        return Err(Error::parse_error("Invalid reserved byte in atomic.fence"));
+                    }
+                    Instruction::AtomicFence
+                }
+
+                // All other atomic instructions take a memarg
+                _ => {
+                    let (memarg, memarg_bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += memarg_bytes;
+
+                    match atomic_opcode {
+                        // memory.atomic.notify (0x00)
+                        0x00 => Instruction::MemoryAtomicNotify { memarg },
+                        // memory.atomic.wait32 (0x01)
+                        0x01 => Instruction::MemoryAtomicWait32 { memarg },
+                        // memory.atomic.wait64 (0x02)
+                        0x02 => Instruction::MemoryAtomicWait64 { memarg },
+
+                        // Atomic loads
+                        0x10 => Instruction::I32AtomicLoad { memarg },
+                        0x11 => Instruction::I64AtomicLoad { memarg },
+                        0x12 => Instruction::I32AtomicLoad8U { memarg },
+                        0x13 => Instruction::I32AtomicLoad16U { memarg },
+                        0x14 => Instruction::I64AtomicLoad8U { memarg },
+                        0x15 => Instruction::I64AtomicLoad16U { memarg },
+                        0x16 => Instruction::I64AtomicLoad32U { memarg },
+
+                        // Atomic stores
+                        0x17 => Instruction::I32AtomicStore { memarg },
+                        0x18 => Instruction::I64AtomicStore { memarg },
+                        0x19 => Instruction::I32AtomicStore8 { memarg },
+                        0x1A => Instruction::I32AtomicStore16 { memarg },
+                        0x1B => Instruction::I64AtomicStore8 { memarg },
+                        0x1C => Instruction::I64AtomicStore16 { memarg },
+                        0x1D => Instruction::I64AtomicStore32 { memarg },
+
+                        // Atomic RMW: add
+                        0x1E => Instruction::I32AtomicRmwAdd { memarg },
+                        0x1F => Instruction::I64AtomicRmwAdd { memarg },
+                        0x20 => Instruction::I32AtomicRmw8AddU { memarg },
+                        0x21 => Instruction::I32AtomicRmw16AddU { memarg },
+                        0x22 => Instruction::I64AtomicRmw8AddU { memarg },
+                        0x23 => Instruction::I64AtomicRmw16AddU { memarg },
+                        0x24 => Instruction::I64AtomicRmw32AddU { memarg },
+
+                        // Atomic RMW: sub
+                        0x25 => Instruction::I32AtomicRmwSub { memarg },
+                        0x26 => Instruction::I64AtomicRmwSub { memarg },
+                        0x27 => Instruction::I32AtomicRmw8SubU { memarg },
+                        0x28 => Instruction::I32AtomicRmw16SubU { memarg },
+                        0x29 => Instruction::I64AtomicRmw8SubU { memarg },
+                        0x2A => Instruction::I64AtomicRmw16SubU { memarg },
+                        0x2B => Instruction::I64AtomicRmw32SubU { memarg },
+
+                        // Atomic RMW: and
+                        0x2C => Instruction::I32AtomicRmwAnd { memarg },
+                        0x2D => Instruction::I64AtomicRmwAnd { memarg },
+                        0x2E => Instruction::I32AtomicRmw8AndU { memarg },
+                        0x2F => Instruction::I32AtomicRmw16AndU { memarg },
+                        0x30 => Instruction::I64AtomicRmw8AndU { memarg },
+                        0x31 => Instruction::I64AtomicRmw16AndU { memarg },
+                        0x32 => Instruction::I64AtomicRmw32AndU { memarg },
+
+                        // Atomic RMW: or
+                        0x33 => Instruction::I32AtomicRmwOr { memarg },
+                        0x34 => Instruction::I64AtomicRmwOr { memarg },
+                        0x35 => Instruction::I32AtomicRmw8OrU { memarg },
+                        0x36 => Instruction::I32AtomicRmw16OrU { memarg },
+                        0x37 => Instruction::I64AtomicRmw8OrU { memarg },
+                        0x38 => Instruction::I64AtomicRmw16OrU { memarg },
+                        0x39 => Instruction::I64AtomicRmw32OrU { memarg },
+
+                        // Atomic RMW: xor
+                        0x3A => Instruction::I32AtomicRmwXor { memarg },
+                        0x3B => Instruction::I64AtomicRmwXor { memarg },
+                        0x3C => Instruction::I32AtomicRmw8XorU { memarg },
+                        0x3D => Instruction::I32AtomicRmw16XorU { memarg },
+                        0x3E => Instruction::I64AtomicRmw8XorU { memarg },
+                        0x3F => Instruction::I64AtomicRmw16XorU { memarg },
+                        0x40 => Instruction::I64AtomicRmw32XorU { memarg },
+
+                        // Atomic RMW: xchg
+                        0x41 => Instruction::I32AtomicRmwXchg { memarg },
+                        0x42 => Instruction::I64AtomicRmwXchg { memarg },
+                        0x43 => Instruction::I32AtomicRmw8XchgU { memarg },
+                        0x44 => Instruction::I32AtomicRmw16XchgU { memarg },
+                        0x45 => Instruction::I64AtomicRmw8XchgU { memarg },
+                        0x46 => Instruction::I64AtomicRmw16XchgU { memarg },
+                        0x47 => Instruction::I64AtomicRmw32XchgU { memarg },
+
+                        // Atomic RMW: cmpxchg
+                        0x48 => Instruction::I32AtomicRmwCmpxchg { memarg },
+                        0x49 => Instruction::I64AtomicRmwCmpxchg { memarg },
+                        0x4A => Instruction::I32AtomicRmw8CmpxchgU { memarg },
+                        0x4B => Instruction::I32AtomicRmw16CmpxchgU { memarg },
+                        0x4C => Instruction::I64AtomicRmw8CmpxchgU { memarg },
+                        0x4D => Instruction::I64AtomicRmw16CmpxchgU { memarg },
+                        0x4E => Instruction::I64AtomicRmw32CmpxchgU { memarg },
+
+                        _ => {
+                            #[cfg(feature = "tracing")]
+                            kiln_foundation::tracing::warn!(
+                                subopcode = format!("0xFE 0x{:02X}", atomic_opcode),
+                                offset = offset,
+                                "Unknown atomic sub-opcode"
+                            );
+                            return Err(Error::parse_error("Unknown atomic instruction opcode"));
+                        }
+                    }
                 }
             }
         }
@@ -1330,6 +1373,440 @@ fn parse_instruction_with_provider(
             }
         }
 
+        // Atomic instructions (0xFE prefix) - WebAssembly Threads Proposal
+        0xFE => {
+            // Atomic instructions use 0xFE prefix followed by LEB128-encoded sub-opcode
+            let (atomic_opcode, opcode_bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += opcode_bytes;
+
+            match atomic_opcode {
+                // memory.atomic.notify
+                0x00 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::MemoryAtomicNotify { memarg }
+                }
+                // memory.atomic.wait32
+                0x01 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::MemoryAtomicWait32 { memarg }
+                }
+                // memory.atomic.wait64
+                0x02 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::MemoryAtomicWait64 { memarg }
+                }
+                // atomic.fence
+                0x03 => {
+                    // atomic.fence has a single zero byte immediate
+                    if offset + consumed >= bytecode.len() {
+                        return Err(Error::parse_error("Unexpected end of bytecode in atomic.fence"));
+                    }
+                    let fence_byte = bytecode[offset + consumed];
+                    consumed += 1;
+                    if fence_byte != 0x00 {
+                        return Err(Error::parse_error("Invalid atomic.fence immediate (must be 0x00)"));
+                    }
+                    Instruction::AtomicFence
+                }
+
+                // i32.atomic.load
+                0x10 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicLoad { memarg }
+                }
+                // i64.atomic.load
+                0x11 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicLoad { memarg }
+                }
+                // i32.atomic.load8_u
+                0x12 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicLoad8U { memarg }
+                }
+                // i32.atomic.load16_u
+                0x13 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicLoad16U { memarg }
+                }
+                // i64.atomic.load8_u
+                0x14 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicLoad8U { memarg }
+                }
+                // i64.atomic.load16_u
+                0x15 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicLoad16U { memarg }
+                }
+                // i64.atomic.load32_u
+                0x16 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicLoad32U { memarg }
+                }
+
+                // i32.atomic.store
+                0x17 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicStore { memarg }
+                }
+                // i64.atomic.store
+                0x18 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicStore { memarg }
+                }
+                // i32.atomic.store8
+                0x19 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicStore8 { memarg }
+                }
+                // i32.atomic.store16
+                0x1A => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicStore16 { memarg }
+                }
+                // i64.atomic.store8
+                0x1B => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicStore8 { memarg }
+                }
+                // i64.atomic.store16
+                0x1C => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicStore16 { memarg }
+                }
+                // i64.atomic.store32
+                0x1D => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicStore32 { memarg }
+                }
+
+                // i32.atomic.rmw.add
+                0x1E => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmwAdd { memarg }
+                }
+                // i64.atomic.rmw.add
+                0x1F => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmwAdd { memarg }
+                }
+                // i32.atomic.rmw8.add_u
+                0x20 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw8AddU { memarg }
+                }
+                // i32.atomic.rmw16.add_u
+                0x21 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw16AddU { memarg }
+                }
+                // i64.atomic.rmw8.add_u
+                0x22 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw8AddU { memarg }
+                }
+                // i64.atomic.rmw16.add_u
+                0x23 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw16AddU { memarg }
+                }
+                // i64.atomic.rmw32.add_u
+                0x24 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw32AddU { memarg }
+                }
+
+                // i32.atomic.rmw.sub
+                0x25 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmwSub { memarg }
+                }
+                // i64.atomic.rmw.sub
+                0x26 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmwSub { memarg }
+                }
+                // i32.atomic.rmw8.sub_u
+                0x27 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw8SubU { memarg }
+                }
+                // i32.atomic.rmw16.sub_u
+                0x28 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw16SubU { memarg }
+                }
+                // i64.atomic.rmw8.sub_u
+                0x29 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw8SubU { memarg }
+                }
+                // i64.atomic.rmw16.sub_u
+                0x2A => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw16SubU { memarg }
+                }
+                // i64.atomic.rmw32.sub_u
+                0x2B => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw32SubU { memarg }
+                }
+
+                // i32.atomic.rmw.and
+                0x2C => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmwAnd { memarg }
+                }
+                // i64.atomic.rmw.and
+                0x2D => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmwAnd { memarg }
+                }
+                // i32.atomic.rmw8.and_u
+                0x2E => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw8AndU { memarg }
+                }
+                // i32.atomic.rmw16.and_u
+                0x2F => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw16AndU { memarg }
+                }
+                // i64.atomic.rmw8.and_u
+                0x30 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw8AndU { memarg }
+                }
+                // i64.atomic.rmw16.and_u
+                0x31 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw16AndU { memarg }
+                }
+                // i64.atomic.rmw32.and_u
+                0x32 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw32AndU { memarg }
+                }
+
+                // i32.atomic.rmw.or
+                0x33 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmwOr { memarg }
+                }
+                // i64.atomic.rmw.or
+                0x34 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmwOr { memarg }
+                }
+                // i32.atomic.rmw8.or_u
+                0x35 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw8OrU { memarg }
+                }
+                // i32.atomic.rmw16.or_u
+                0x36 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw16OrU { memarg }
+                }
+                // i64.atomic.rmw8.or_u
+                0x37 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw8OrU { memarg }
+                }
+                // i64.atomic.rmw16.or_u
+                0x38 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw16OrU { memarg }
+                }
+                // i64.atomic.rmw32.or_u
+                0x39 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw32OrU { memarg }
+                }
+
+                // i32.atomic.rmw.xor
+                0x3A => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmwXor { memarg }
+                }
+                // i64.atomic.rmw.xor
+                0x3B => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmwXor { memarg }
+                }
+                // i32.atomic.rmw8.xor_u
+                0x3C => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw8XorU { memarg }
+                }
+                // i32.atomic.rmw16.xor_u
+                0x3D => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw16XorU { memarg }
+                }
+                // i64.atomic.rmw8.xor_u
+                0x3E => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw8XorU { memarg }
+                }
+                // i64.atomic.rmw16.xor_u
+                0x3F => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw16XorU { memarg }
+                }
+                // i64.atomic.rmw32.xor_u
+                0x40 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw32XorU { memarg }
+                }
+
+                // i32.atomic.rmw.xchg
+                0x41 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmwXchg { memarg }
+                }
+                // i64.atomic.rmw.xchg
+                0x42 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmwXchg { memarg }
+                }
+                // i32.atomic.rmw8.xchg_u
+                0x43 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw8XchgU { memarg }
+                }
+                // i32.atomic.rmw16.xchg_u
+                0x44 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw16XchgU { memarg }
+                }
+                // i64.atomic.rmw8.xchg_u
+                0x45 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw8XchgU { memarg }
+                }
+                // i64.atomic.rmw16.xchg_u
+                0x46 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw16XchgU { memarg }
+                }
+                // i64.atomic.rmw32.xchg_u
+                0x47 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw32XchgU { memarg }
+                }
+
+                // i32.atomic.rmw.cmpxchg
+                0x48 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmwCmpxchg { memarg }
+                }
+                // i64.atomic.rmw.cmpxchg
+                0x49 => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmwCmpxchg { memarg }
+                }
+                // i32.atomic.rmw8.cmpxchg_u
+                0x4A => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw8CmpxchgU { memarg }
+                }
+                // i32.atomic.rmw16.cmpxchg_u
+                0x4B => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I32AtomicRmw16CmpxchgU { memarg }
+                }
+                // i64.atomic.rmw8.cmpxchg_u
+                0x4C => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw8CmpxchgU { memarg }
+                }
+                // i64.atomic.rmw16.cmpxchg_u
+                0x4D => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw16CmpxchgU { memarg }
+                }
+                // i64.atomic.rmw32.cmpxchg_u
+                0x4E => {
+                    let (memarg, bytes) = parse_memarg(bytecode, offset + consumed)?;
+                    consumed += bytes;
+                    Instruction::I64AtomicRmw32CmpxchgU { memarg }
+                }
+
+                _ => {
+                    #[cfg(feature = "tracing")]
+                    kiln_foundation::tracing::warn!(atomic_opcode = format!("0xFE 0x{:02X}", atomic_opcode), offset = offset, "Unknown atomic opcode");
+                    return Err(Error::parse_error("Unknown atomic instruction opcode"));
+                }
+            }
+        }
+
         _ => {
             // Show context around the unknown opcode
             #[cfg(feature = "tracing")]
@@ -1345,13 +1822,6 @@ fn parse_instruction_with_provider(
     };
 
     Ok((instruction, consumed))
-}
-
-/// Parse a memory argument (align + offset) from bytecode
-fn parse_memarg(bytecode: &[u8], offset: usize) -> Result<(MemArg, usize)> {
-    let (align, bytes1) = read_leb128_u32(bytecode, offset)?;
-    let (mem_offset, bytes2) = read_leb128_u32(bytecode, offset + bytes1)?;
-    Ok((MemArg { align_exponent: align, offset: mem_offset, memory_index: 0 }, bytes1 + bytes2))
 }
 
 /// Decode a value type from its binary encoding
@@ -1441,6 +1911,36 @@ fn parse_block_type(bytecode: &[u8], offset: usize) -> Result<BlockType> {
             }
         },
     }
+}
+
+/// Parse a memarg from bytecode, supporting the multi-memory encoding.
+///
+/// In the standard encoding, memarg is `align:u32 offset:u32`.
+/// In the multi-memory proposal, when bit 6 (0x40) of the alignment byte is set,
+/// a memory index follows: `(align | 0x40):u32 memory_index:u32 offset:u32`.
+/// When bit 6 is not set, memory index defaults to 0.
+fn parse_memarg(bytecode: &[u8], start: usize) -> Result<(MemArg, usize)> {
+    let (raw_align, bytes1) = read_leb128_u32(bytecode, start)?;
+    let has_mem_idx = (raw_align & 0x40) != 0;
+    let align_exponent = raw_align & !(0x40);
+
+    let (memory_index, bytes_mem) = if has_mem_idx {
+        read_leb128_u32(bytecode, start + bytes1)?
+    } else {
+        (0u32, 0)
+    };
+
+    let (offset, bytes2) = read_leb128_u32(bytecode, start + bytes1 + bytes_mem)?;
+
+    let total_bytes = bytes1 + bytes_mem + bytes2;
+    Ok((
+        MemArg {
+            align_exponent,
+            offset,
+            memory_index,
+        },
+        total_bytes,
+    ))
 }
 
 /// Read a LEB128 encoded u32
