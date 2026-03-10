@@ -1,0 +1,276 @@
+# STPA Step 3: Unsafe Control Actions
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Format: Controller provides/doesn't-provide action → hazardous condition
+
+ucas:
+  # =========================================================================
+  # Execution Engine (CTRL-ENGINE)
+  # =========================================================================
+  - id: UCA-E-1
+    controller: CTRL-ENGINE
+    description: >
+      Engine executes arithmetic instruction with incorrect semantics for
+      edge cases (NaN propagation, saturating conversion, division by zero
+      rounding).
+    context: "Numeric instruction with boundary input values"
+    hazards: [H-1]
+
+  - id: UCA-E-2
+    controller: CTRL-ENGINE
+    description: >
+      Engine does not check fuel budget before executing instruction,
+      allowing unbounded execution past the configured fuel limit.
+    context: "Fuel metering enabled, long-running loop"
+    hazards: [H-3]
+
+  - id: UCA-E-3
+    controller: CTRL-ENGINE
+    description: >
+      Engine performs memory access with incorrect bounds check: off-by-one
+      in the comparison, or check uses wrong memory size after memory.grow.
+    context: "Memory load/store near page boundary after grow"
+    hazards: [H-2]
+
+  - id: UCA-E-4
+    controller: CTRL-ENGINE
+    description: >
+      Engine dispatches to wrong instruction handler due to opcode decoding
+      error, executing a different instruction than what is encoded.
+    context: "Multi-byte opcode (SIMD, atomics) decoding"
+    hazards: [H-1]
+
+  - id: UCA-E-5
+    controller: CTRL-ENGINE
+    description: >
+      Engine does not trap on stack overflow, allowing call stack to exceed
+      maximum depth and corrupt adjacent memory.
+    context: "Deeply recursive function call chain"
+    hazards: [H-2, H-3]
+
+  - id: UCA-E-6
+    controller: CTRL-ENGINE
+    description: >
+      Engine uses wrong memory index in multi-memory mode, reading from or
+      writing to the wrong component's linear memory.
+    context: "Multi-memory module with memory.copy between memories"
+    hazards: [H-2]
+
+  # =========================================================================
+  # Decoder (CTRL-DECODER)
+  # =========================================================================
+  - id: UCA-D-1
+    controller: CTRL-DECODER
+    description: >
+      Decoder accepts a malformed module that should be rejected, allowing
+      execution of invalid bytecode that causes undefined behavior in the
+      engine.
+    context: "Fuzzer-generated or adversarial module input"
+    hazards: [H-1, H-2]
+
+  - id: UCA-D-2
+    controller: CTRL-DECODER
+    description: >
+      Decoder does not enforce resource limits (max functions, max memories,
+      max types), allowing a module to exhaust the runtime's allocation budget
+      during parsing.
+    context: "Module with millions of type definitions"
+    hazards: [H-3]
+
+  - id: UCA-D-3
+    controller: CTRL-DECODER
+    description: >
+      Decoder misidentifies a component as a core module (or vice versa),
+      causing the wrong instantiation path to be taken.
+    context: "Component binary with version byte differences"
+    hazards: [H-4, H-5]
+
+  # =========================================================================
+  # Component Model Executor (CTRL-CM)
+  # =========================================================================
+  - id: UCA-CM-1
+    controller: CTRL-CM
+    description: >
+      Canonical lift produces wrong string value: UTF-8 to UTF-16 conversion
+      miscounts code units or produces invalid sequences.
+    context: "String containing multi-byte UTF-8 characters"
+    hazards: [H-4]
+
+  - id: UCA-CM-2
+    controller: CTRL-CM
+    description: >
+      Canonical lower computes wrong byte offset for record field due to
+      incorrect alignment calculation.
+    context: "Record with mixed-size fields (u8, u32, u64)"
+    hazards: [H-4]
+
+  - id: UCA-CM-3
+    controller: CTRL-CM
+    description: >
+      Canonical lift/lower for list type uses wrong element size, reading
+      past the end of the list buffer or leaving uninitialized gaps.
+    context: "list<tuple<u8, u32, u8>> where element_size ≠ sum of field sizes"
+    hazards: [H-4]
+
+  - id: UCA-CM-4
+    controller: CTRL-CM
+    description: >
+      Resource handle creation returns a handle index that aliases a
+      previously-dropped but not-yet-reclaimed handle.
+    context: "Rapid create/drop cycle filling resource table"
+    hazards: [H-6]
+
+  - id: UCA-CM-5
+    controller: CTRL-CM
+    description: >
+      Resource drop is called twice for the same handle, corrupting the
+      resource table's free list or dropping the wrong resource.
+    context: "Component error path that drops handle in both normal and cleanup code"
+    hazards: [H-6]
+
+  - id: UCA-CM-6
+    controller: CTRL-CM
+    description: >
+      Async task is resumed after cancellation, executing with stale or
+      freed state.
+    context: "Task cancellation racing with stream data arrival"
+    hazards: [H-7]
+
+  - id: UCA-CM-7
+    controller: CTRL-CM
+    description: >
+      Cross-component call dispatches to wrong function due to incorrect
+      instance index lookup in the linker's resolution table.
+    context: "Multiple component instances with same export name"
+    hazards: [H-5]
+
+  - id: UCA-CM-8
+    controller: CTRL-CM
+    description: >
+      Canonical ABI element size computation disagrees with Meld's
+      fusion-time computation for the same type, causing meld-fused
+      modules to corrupt data at the kiln lift/lower boundary.
+    context: "Running a meld-fused component through kiln with P2 wrapper"
+    hazards: [H-4]
+    rationale: >
+      This is a cross-tool consistency hazard. Meld computes CopyLayout
+      at fusion time; Kiln computes canonical ABI layout at runtime. If
+      they disagree, the data is silently corrupted. This must be tested
+      with shared test fixtures (wit-bindgen composed-runner components).
+
+  # =========================================================================
+  # Linker (CTRL-LINKER)
+  # =========================================================================
+  - id: UCA-L-1
+    controller: CTRL-LINKER
+    description: >
+      Linker resolves import to wrong export due to name collision between
+      component instances.
+    context: "Two components exporting same interface name"
+    hazards: [H-5]
+
+  - id: UCA-L-2
+    controller: CTRL-LINKER
+    description: >
+      Linker does not verify type compatibility between import and export,
+      allowing a function with signature (i32)->i32 to be linked to a
+      function with signature (i32,i32)->i32.
+    context: "Component upgrade changes function signature"
+    hazards: [H-5]
+
+  - id: UCA-L-3
+    controller: CTRL-LINKER
+    description: >
+      Linker instantiates module before its dependencies are ready,
+      causing the start function to observe uninitialized state.
+    context: "Circular dependency between component instances"
+    hazards: [H-5]
+
+  # =========================================================================
+  # CFI Engine (CTRL-CFI)
+  # =========================================================================
+  - id: UCA-CFI-1
+    controller: CTRL-CFI
+    description: >
+      Shadow stack push is skipped for a call instruction, causing all
+      subsequent return validations to be off-by-one.
+    context: "Host-to-guest call that bypasses CFI instrumentation"
+    hazards: [H-9]
+
+  - id: UCA-CFI-2
+    controller: CTRL-CFI
+    description: >
+      Indirect call target validation uses wrong type index (e.g., the
+      table element's type vs the call_indirect's type annotation), allowing
+      a type-mismatched indirect call.
+    context: "call_indirect with subtyping"
+    hazards: [H-9]
+
+  - id: UCA-CFI-3
+    controller: CTRL-CFI
+    description: >
+      CFI violation policy is set to "continue" in production, allowing
+      execution to proceed after a detected control flow violation.
+    context: "Deployment misconfiguration"
+    hazards: [H-8, H-9]
+
+  # =========================================================================
+  # WASI Host (CTRL-WASI)
+  # =========================================================================
+  - id: UCA-W-1
+    controller: CTRL-WASI
+    description: >
+      WASI filesystem operation uses wrong component's capability set,
+      granting one component access to another component's allowed paths.
+    context: "Multi-component instance with different filesystem grants"
+    hazards: [H-8]
+
+  - id: UCA-W-2
+    controller: CTRL-WASI
+    description: >
+      WASI clock read returns non-monotonic value, causing application
+      logic that depends on monotonic time to compute negative durations
+      or infinite loops.
+    context: "Platform clock with NTP adjustment"
+    hazards: [H-5]
+
+  - id: UCA-W-3
+    controller: CTRL-WASI
+    description: >
+      WASI random returns predictable sequence (e.g., seeded PRNG in
+      no_std mode without hardware RNG), compromising application
+      cryptographic operations.
+    context: "Embedded platform without hardware entropy source"
+    hazards: [H-5]
+
+  # =========================================================================
+  # Blast Zone (CTRL-BLAST)
+  # =========================================================================
+  - id: UCA-BZ-1
+    controller: CTRL-BLAST
+    description: >
+      Blast zone does not contain fault: a trap in one component corrupts
+      shared runtime state (e.g., the linker's instance table) before the
+      blast zone handler activates.
+    context: "Trap during cross-component call with partially-written state"
+    hazards: [H-2, H-5]
+
+  # =========================================================================
+  # Allocation Manager (CTRL-ALLOC)
+  # =========================================================================
+  - id: UCA-A-1
+    controller: CTRL-ALLOC
+    description: >
+      Allocation succeeds in ASIL-D/static-allocation mode when it should
+      be rejected, violating the no-dynamic-allocation guarantee.
+    context: "Runtime code path that bypasses safe_managed_alloc! macro"
+    hazards: [H-10]
+
+  - id: UCA-A-2
+    controller: CTRL-ALLOC
+    description: >
+      BoundedVec exceeds capacity without returning error, silently
+      dropping the inserted element or corrupting adjacent memory.
+    context: "BoundedVec at capacity with push operation"
+    hazards: [H-3, H-10]
