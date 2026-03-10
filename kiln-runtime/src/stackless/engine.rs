@@ -6169,15 +6169,6 @@ impl StacklessEngine {
                                     }
                                 }
                             }
-                            Err(e) => {
-                                #[cfg(feature = "tracing")]
-                                trace!("MemoryGrow: memory[{}] not found: {:?}", memory_idx, e);
-                                if is_memory64 {
-                                    operand_stack.push(Value::I64(-1));
-                                } else {
-                                    operand_stack.push(Value::I32(-1));
-                                }
-                            }
                         }
                     }
                     Instruction::MemoryCopy(dst_mem_idx, src_mem_idx) => {
