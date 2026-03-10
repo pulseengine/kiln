@@ -1327,7 +1327,7 @@ impl StacklessEngine {
 
         #[cfg(feature = "tracing")]
         if !links_to_remap.is_empty() {
-            tracing::debug!(
+            debug!(
                 old_id = old_id,
                 new_id = new_id,
                 count = links_to_remap.len(),
