@@ -1931,6 +1931,10 @@ impl Module {
                         // i32.const - parse LEB128 value
                         let (value, _) = crate::instruction_parser::read_leb128_i32(offset_bytes, 1)?;
                         value as u32
+                    } else if !offset_bytes.is_empty() && offset_bytes[0] == 0x42 {
+                        // i64.const - parse LEB128 value (memory64 data segment offsets)
+                        let (value, _) = crate::instruction_parser::read_leb128_i64(offset_bytes, 1)?;
+                        value as u32
                     } else {
                         0
                     };
@@ -4760,7 +4764,7 @@ impl Checksummable for GlobalWrapper {
 
 impl ToBytes for GlobalWrapper {
     fn serialized_size(&self) -> usize {
-        12 // value type (1) + mutable flag (1) + padding (2) + value (8)
+        20 // value type (1) + mutable flag (1) + padding (2) + value (16 bytes for V128 compatibility)
     }
 
     fn to_bytes_with_provider<P: kiln_foundation::MemoryProvider>(
@@ -4785,80 +4789,79 @@ impl ToBytes for GlobalWrapper {
         writer.write_u8(0)?;
         writer.write_u8(0)?;
 
-        // Write value (8 bytes)
+        // Write value (16 bytes - supports V128 which needs all 16 bytes)
         let value = guard.get();
         match value {
             KilnValue::I32(v) => {
                 writer.write_all(&(*v as u32).to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::I64(v) => {
                 writer.write_all(&(*v as u64).to_le_bytes())?;
+                writer.write_all(&[0u8; 8])?; // pad to 16
             },
             KilnValue::F32(kiln_foundation::values::FloatBits32(bits)) => {
                 writer.write_all(&bits.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::F64(kiln_foundation::values::FloatBits64(bits)) => {
                 writer.write_all(&bits.to_le_bytes())?;
+                writer.write_all(&[0u8; 8])?; // pad to 16
+            },
+            KilnValue::V128(v128) => {
+                writer.write_all(&v128.bytes)?; // all 16 bytes
             },
             KilnValue::FuncRef(ref_opt) => {
-                // FuncRef: store 0xFFFFFFFF for None, or the index for Some
                 let value = match ref_opt {
                     Some(func_ref) => func_ref.index,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::ExternRef(ref_opt) => {
-                // ExternRef: store 0xFFFFFFFF for None, or the index for Some
                 let value = match ref_opt {
                     Some(extern_ref) => extern_ref.index,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::ExnRef(ref_opt) => {
-                // ExnRef: store 0xFFFFFFFF for None, or the index for Some
                 let value = match ref_opt {
                     Some(exn_ref) => *exn_ref as u32,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::I31Ref(ref_opt) => {
-                // I31Ref: store 0xFFFFFFFF for None, or the value for Some
                 let value = match ref_opt {
                     Some(i31_ref) => *i31_ref as u32,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::StructRef(ref_opt) => {
-                // StructRef: store 0xFFFFFFFF for None, or the type_index for Some
                 let value = match ref_opt {
                     Some(struct_ref) => struct_ref.type_index,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             KilnValue::ArrayRef(ref_opt) => {
-                // ArrayRef: store 0xFFFFFFFF for None, or the type_index for Some
                 let value = match ref_opt {
                     Some(array_ref) => array_ref.type_index,
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
-                writer.write_all(&0u32.to_le_bytes())?;
+                writer.write_all(&[0u8; 12])?; // pad to 16
             },
             _ => {
                 // For other types, write zeros
-                writer.write_all(&0u64.to_le_bytes())?;
+                writer.write_all(&[0u8; 16])?;
             }
         }
         Ok(())
@@ -4902,9 +4905,14 @@ impl FromBytes for GlobalWrapper {
         let _ = reader.read_u8()?;
         let _ = reader.read_u8()?;
 
-        // Read value (8 bytes - i64/f64 size for maximum compatibility)
-        let value_low = reader.read_u32_le()?;
-        let value_high = reader.read_u32_le()?;
+        // Read value (16 bytes - supports V128 which needs all 16 bytes)
+        let mut value_bytes = [0u8; 16];
+        for i in 0..16 {
+            value_bytes[i] = reader.read_u8()?;
+        }
+
+        let value_low = u32::from_le_bytes([value_bytes[0], value_bytes[1], value_bytes[2], value_bytes[3]]);
+        let value_high = u32::from_le_bytes([value_bytes[4], value_bytes[5], value_bytes[6], value_bytes[7]]);
 
         let value = match value_type {
             ValueType::I32 => Value::I32(value_low as i32),
@@ -4916,6 +4924,9 @@ impl FromBytes for GlobalWrapper {
             ValueType::F64 => {
                 let v = ((value_high as u64) << 32) | (value_low as u64);
                 Value::F64(kiln_foundation::values::FloatBits64(v))
+            },
+            ValueType::V128 => {
+                Value::V128(kiln_foundation::values::V128 { bytes: value_bytes })
             },
             ValueType::FuncRef => {
                 // 0xFFFFFFFF means None, otherwise it's an index

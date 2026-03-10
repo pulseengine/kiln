@@ -4941,14 +4941,12 @@ impl StacklessEngine {
                     // I64 Partial Store Instructions (store lower bits of i64)
                     // ========================================
                     Instruction::I64Store8(mem_arg) => {
-                        let (val, addr_val) = (operand_stack.pop(), operand_stack.pop());
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (val, addr_val) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
                             #[cfg(feature = "tracing")]
                             trace!(
                                 instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
+                                offset = format_args!("{:#x}", eff_addr),
                                 value = value & 0xFF,
                                 "[I64Store8] Store low 8 bits of i64"
                             );
@@ -4956,11 +4954,10 @@ impl StacklessEngine {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = [(value & 0xFF) as u8];
-                                    // ASIL-B COMPLIANT: Use write_shared for thread-safe writes
-                                    match memory.write_shared(offset, &bytes) {
+                                    match memory.write_shared(eff_addr, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I64Store8: successfully wrote value {} to address {}", value & 0xFF, offset);
+                                            trace!("I64Store8: successfully wrote value {} to address {}", value & 0xFF, eff_addr);
                                         }
                                         Err(_e) => {
                                             return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
@@ -4980,14 +4977,12 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I64Store16(mem_arg) => {
-                        let (val, addr_val) = (operand_stack.pop(), operand_stack.pop());
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (val, addr_val) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
                             #[cfg(feature = "tracing")]
                             trace!(
                                 instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
+                                offset = format_args!("{:#x}", eff_addr),
                                 value = value & 0xFFFF,
                                 "[I64Store16] Store low 16 bits of i64"
                             );
@@ -4995,11 +4990,10 @@ impl StacklessEngine {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = (value as u16).to_le_bytes();
-                                    // ASIL-B COMPLIANT: Use write_shared for thread-safe writes
-                                    match memory.write_shared(offset, &bytes) {
+                                    match memory.write_shared(eff_addr, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I64Store16: successfully wrote value {} to address {}", value & 0xFFFF, offset);
+                                            trace!("I64Store16: successfully wrote value {} to address {}", value & 0xFFFF, eff_addr);
                                         }
                                         Err(_e) => {
                                             return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
@@ -5019,14 +5013,12 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I64Store32(mem_arg) => {
-                        let (val, addr_val) = (operand_stack.pop(), operand_stack.pop());
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (val, addr_val) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                             #[cfg(feature = "tracing")]
                             trace!(
                                 instance_id = instance_id,
-                                addr = addr,
-                                offset = format_args!("{:#x}", offset),
+                                offset = format_args!("{:#x}", eff_addr),
                                 value = value & 0xFFFFFFFF,
                                 "[I64Store32] Store low 32 bits of i64"
                             );
@@ -5034,11 +5026,10 @@ impl StacklessEngine {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = (value as u32).to_le_bytes();
-                                    // ASIL-B COMPLIANT: Use write_shared for thread-safe writes
-                                    match memory.write_shared(offset, &bytes) {
+                                    match memory.write_shared(eff_addr, &bytes) {
                                         Ok(()) => {
                                             #[cfg(feature = "tracing")]
-                                            trace!("I64Store32: successfully wrote value {} to address {}", value & 0xFFFFFFFF, offset);
+                                            trace!("I64Store32: successfully wrote value {} to address {}", value & 0xFFFFFFFF, eff_addr);
                                         }
                                         Err(_e) => {
                                             return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
@@ -5066,52 +5057,38 @@ impl StacklessEngine {
                         operand_stack.push(Value::F64(FloatBits64(bits)));
                     }
                     Instruction::F32Load(mem_arg) => {
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                         #[cfg(feature = "tracing")]
-                        trace!("F32Load: stack before pop has {} elements", operand_stack.len());
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!("F32Load: addr={}, offset={}, mem_idx={}", addr, offset, mem_arg.memory_index);
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 4];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let bits = u32::from_le_bytes(buffer);
-                                            #[cfg(feature = "tracing")]
-                                            trace!("F32Load: read bytes {:?}, bits={:#x}, pushing F32", buffer, bits);
-                                            operand_stack.push(Value::F32(FloatBits32(bits)));
-                                            #[cfg(feature = "tracing")]
-                                            trace!("F32Load: stack after push has {} elements", operand_stack.len());
-                                        }
-                                        Err(e) => {
-                                            #[cfg(feature = "tracing")]
-                                            error!("F32Load: memory read error: {:?}", e);
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        trace!("F32Load: eff_addr={}, mem_idx={}", eff_addr, mem_arg.memory_index);
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 4];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let bits = u32::from_le_bytes(buffer);
+                                        #[cfg(feature = "tracing")]
+                                        trace!("F32Load: read bytes {:?}, bits={:#x}, pushing F32", buffer, bits);
+                                        operand_stack.push(Value::F32(FloatBits32(bits)));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(e) => {
-                                    #[cfg(feature = "tracing")]
-                                    error!("F32Load: memory access error: {:?}", e);
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
                             }
-                        } else {
-                            #[cfg(feature = "tracing")]
-                            error!("F32Load: stack was empty or top was not I32!");
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                            }
                         }
                     }
                     Instruction::F32Store(mem_arg) => {
-                        let (val, addr_val) = (operand_stack.pop(), operand_stack.pop());
-                        if let (Some(Value::F32(bits)), Some(Value::I32(addr))) = (val, addr_val) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
+                        if let Some(Value::F32(bits)) = operand_stack.pop() {
+                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = bits.0.to_le_bytes();
-                                    if memory.write_shared(offset, &bytes).is_err() {
+                                    if memory.write_shared(eff_addr, &bytes).is_err() {
                                         return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
@@ -5126,37 +5103,34 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::F64Load(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 8];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let bits = u64::from_le_bytes(buffer);
-                                            operand_stack.push(Value::F64(FloatBits64(bits)));
-                                        }
-                                        Err(_) => {
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 8];
+                                match memory.read(eff_addr, &mut buffer) {
+                                    Ok(()) => {
+                                        let bits = u64::from_le_bytes(buffer);
+                                        operand_stack.push(Value::F64(FloatBits64(bits)));
+                                    }
+                                    Err(_) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(_) => {
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
+                            }
+                            Err(_) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                         }
                     }
                     Instruction::F64Store(mem_arg) => {
-                        let (val, addr_val) = (operand_stack.pop(), operand_stack.pop());
-                        if let (Some(Value::F64(bits)), Some(Value::I32(addr))) = (val, addr_val) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
+                        if let Some(Value::F64(bits)) = operand_stack.pop() {
+                            let eff_addr = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
                                     let bytes = bits.0.to_le_bytes();
-                                    if memory.write_shared(offset, &bytes).is_err() {
+                                    if memory.write_shared(eff_addr, &bytes).is_err() {
                                         return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
@@ -6193,6 +6167,15 @@ impl StacklessEngine {
                                     } else {
                                         operand_stack.push(Value::I32(-1));
                                     }
+                                }
+                            }
+                            Err(e) => {
+                                #[cfg(feature = "tracing")]
+                                trace!("MemoryGrow: memory[{}] not found: {:?}", memory_idx, e);
+                                if is_memory64 {
+                                    operand_stack.push(Value::I64(-1));
+                                } else {
+                                    operand_stack.push(Value::I32(-1));
                                 }
                             }
                         }

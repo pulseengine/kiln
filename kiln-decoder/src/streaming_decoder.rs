@@ -1113,8 +1113,11 @@ impl<'a> StreamingDecoder<'a> {
                     // Check for memory64 flag (bit 2)
                     let is_memory64 = (flags & 0x04) != 0;
 
-                    // WebAssembly spec: memory size must be at most 65536 pages (4GB)
-                    const MAX_MEMORY_PAGES: u32 = 65536;
+                    // WebAssembly spec limits:
+                    // - memory32: max 65536 pages (4 GiB)
+                    // - memory64: max 0x1_0000_0000_0000 pages (2^48 pages)
+                    const MAX_MEMORY32_PAGES: u64 = 65536;
+                    const MAX_MEMORY64_PAGES: u64 = 0x1_0000_0000_0000;
 
                     // Parse limits - memory64 uses u64, regular memory uses u32
                     let (min, max) = if is_memory64 {
@@ -1130,15 +1133,15 @@ impl<'a> StreamingDecoder<'a> {
                         };
 
                         // Validate memory64 limits
-                        if min64 > MAX_MEMORY_PAGES as u64 {
+                        if min64 > MAX_MEMORY64_PAGES {
                             return Err(Error::validation_error(
-                                "memory size must be at most 65536 pages (4 GiB)",
+                                "memory size must be at most 281474976710656 pages (16 EiB)",
                             ));
                         }
                         if let Some(max64) = max64 {
-                            if max64 > MAX_MEMORY_PAGES as u64 {
+                            if max64 > MAX_MEMORY64_PAGES {
                                 return Err(Error::validation_error(
-                                    "memory size must be at most 65536 pages (4 GiB)",
+                                    "memory size must be at most 281474976710656 pages (16 EiB)",
                                 ));
                             }
                         }
@@ -1156,13 +1159,13 @@ impl<'a> StreamingDecoder<'a> {
                         };
 
                         // Validate regular memory limits
-                        if min > MAX_MEMORY_PAGES {
+                        if min as u64 > MAX_MEMORY32_PAGES {
                             return Err(Error::validation_error(
                                 "memory size must be at most 65536 pages (4 GiB)",
                             ));
                         }
                         if let Some(max_val) = max {
-                            if max_val > MAX_MEMORY_PAGES {
+                            if max_val as u64 > MAX_MEMORY32_PAGES {
                                 return Err(Error::validation_error(
                                     "memory size must be at most 65536 pages (4 GiB)",
                                 ));
@@ -1583,9 +1586,11 @@ impl<'a> StreamingDecoder<'a> {
             // Check for memory64 flag (bit 2)
             let is_memory64 = (flags & 0x04) != 0;
 
-            // WebAssembly spec: memory size must be at most 65536 pages (4GB)
-            // for non-memory64 memories (and memory64 has its own limit)
-            const MAX_MEMORY_PAGES: u32 = 65536;
+            // WebAssembly spec limits:
+            // - memory32: max 65536 pages (4 GiB)
+            // - memory64: max 0x1_0000_0000_0000 pages (2^48 pages)
+            const MAX_MEMORY32_PAGES: u64 = 65536;
+            const MAX_MEMORY64_PAGES: u64 = 0x1_0000_0000_0000;
 
             // Parse limits - memory64 uses u64, regular memory uses u32
             let (min, max) = if is_memory64 {
@@ -1600,21 +1605,21 @@ impl<'a> StreamingDecoder<'a> {
                     None
                 };
 
-                // Validate memory64 limits (still have a limit, though higher)
-                // For non-memory64 tests, values > 65536 pages should fail
-                if min64 > MAX_MEMORY_PAGES as u64 {
+                // Validate memory64 limits
+                if min64 > MAX_MEMORY64_PAGES {
                     return Err(Error::validation_error(
-                        "memory size must be at most 65536 pages (4 GiB)",
+                        "memory size must be at most 281474976710656 pages (16 EiB)",
                     ));
                 }
                 if let Some(max64) = max64 {
-                    if max64 > MAX_MEMORY_PAGES as u64 {
+                    if max64 > MAX_MEMORY64_PAGES {
                         return Err(Error::validation_error(
-                            "memory size must be at most 65536 pages (4 GiB)",
+                            "memory size must be at most 281474976710656 pages (16 EiB)",
                         ));
                     }
                 }
 
+                // Safe to truncate to u32 for page counts within our runtime's capacity
                 (min64 as u32, max64.map(|v| v as u32))
             } else {
                 let (min, bytes_read) = read_leb128_u32(data, offset)?;
@@ -1637,16 +1642,19 @@ impl<'a> StreamingDecoder<'a> {
                 return Err(Error::validation_error("shared memory must have maximum"));
             }
 
-            if min > MAX_MEMORY_PAGES {
-                return Err(Error::validation_error(
-                    "memory size must be at most 65536 pages (4 GiB)",
-                ));
-            }
-            if let Some(max_val) = max {
-                if max_val > MAX_MEMORY_PAGES {
+            // Apply memory32 limits for non-memory64 memories
+            if !is_memory64 {
+                if min as u64 > MAX_MEMORY32_PAGES {
                     return Err(Error::validation_error(
                         "memory size must be at most 65536 pages (4 GiB)",
                     ));
+                }
+                if let Some(max_val) = max {
+                    if max_val as u64 > MAX_MEMORY32_PAGES {
+                        return Err(Error::validation_error(
+                            "memory size must be at most 65536 pages (4 GiB)",
+                        ));
+                    }
                 }
             }
 
