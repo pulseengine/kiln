@@ -572,6 +572,14 @@ impl RefType {
             ValueType::ArrayRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
             ValueType::NullFuncRef => Ok(RefType::Gc(GcRefType::NULLFUNCREF)),
             ValueType::ExnRef => Ok(RefType::Gc(GcRefType::EXNREF)),
+            ValueType::TypedFuncRef(idx, nullable) => {
+                if idx == u32::MAX {
+                    // Sentinel for abstract func heap type
+                    Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Func)))
+                } else {
+                    Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Concrete(idx))))
+                }
+            }
             _ => Err(Error::runtime_execution_error(
                 "Invalid ValueType for RefType conversion",
             )),
@@ -640,7 +648,14 @@ impl TryFrom<ValueType> for RefType {
             ValueType::ArrayRef(idx) => Ok(RefType::Gc(GcRefType::new(true, HeapType::Concrete(idx)))),
             ValueType::NullFuncRef => Ok(RefType::Gc(GcRefType::NULLFUNCREF)),
             ValueType::ExnRef => Ok(RefType::Gc(GcRefType::EXNREF)),
-            ValueType::TypedFuncRef(idx, nullable) => Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Concrete(idx)))),
+            ValueType::TypedFuncRef(idx, nullable) => {
+                if idx == u32::MAX {
+                    // Sentinel for abstract func heap type (ref func)/(ref null func)
+                    Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Func)))
+                } else {
+                    Ok(RefType::Gc(GcRefType::new(nullable, HeapType::Concrete(idx))))
+                }
+            }
             _ => Err(Error::runtime_execution_error(
                 "Invalid ValueType for RefType try_from conversion",
             )),

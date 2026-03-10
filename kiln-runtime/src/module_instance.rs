@@ -693,7 +693,8 @@ impl ModuleInstance {
 
             // Now copy defined globals
             for idx in 0..self.module.globals.len() {
-                if let Ok(global_wrapper) = self.module.globals.get(idx) {
+                let global_opt = self.module.globals.get(idx);
+                if let Some(global_wrapper) = global_opt {
                     #[cfg(feature = "tracing")]
                     debug!(
                         "Copying defined global {} (global index {}) to instance",
@@ -1243,6 +1244,15 @@ impl ModuleInstance {
                     let table_wrapper = &tables[table_idx];
                     let table = table_wrapper.inner();
 
+                    // Per WebAssembly spec: check bounds for the ENTIRE segment before
+                    // writing any elements. If the segment is out of bounds, none of its
+                    // elements are written, but previously processed segments persist.
+                    let segment_len = elem_segment.items.len() as u32;
+                    let table_size = table.size();
+                    if actual_offset.checked_add(segment_len).map_or(true, |end| end > table_size) {
+                        return Err(Error::runtime_trap("out of bounds table access"));
+                    }
+
                     // Set each element in the table
                     // Use the element segment's type to determine if we're dealing with
                     // funcref or externref elements
@@ -1748,6 +1758,9 @@ impl FromBytes for ModuleInstance {
             #[cfg(not(feature = "std"))]
             tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
+            #[cfg(feature = "std")]
+            globals: Vec::new(),
+            #[cfg(not(feature = "std"))]
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             #[cfg(feature = "std")]
             tags: Vec::new(),

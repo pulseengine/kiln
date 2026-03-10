@@ -92,7 +92,13 @@ fn usize_to_wasm_u32(size: usize) -> Result<u32> {
     })
 }
 
-/// Type alias for the inner elements storage
+/// Type alias for the inner elements storage.
+/// In std mode, use Vec to avoid BoundedVec serialization issues with
+/// variable-size GC types (StructRef, ArrayRef) that exceed the fixed
+/// VALUE_SERIALIZED_SIZE when serialized.
+#[cfg(feature = "std")]
+type TableElements = Vec<Option<KilnValue>>;
+#[cfg(not(feature = "std"))]
 type TableElements = kiln_foundation::bounded::BoundedVec<Option<KilnValue>, 1024, TableProvider>;
 
 /// A WebAssembly table is a vector of opaque values of a single type.
@@ -130,10 +136,6 @@ impl Debug for Table {
 
 impl Clone for Table {
     fn clone(&self) -> Self {
-        let mut new_elements: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default())
-                .expect("Failed to allocate table elements during clone");
-
         // Lock the source elements for reading
         #[cfg(feature = "std")]
         let source_elements = self.elements.lock()
@@ -141,15 +143,22 @@ impl Clone for Table {
         #[cfg(not(feature = "std"))]
         let source_elements = self.elements.lock();
 
-        for i in 0..source_elements.len() {
-            // Use BoundedVec get method for safe access
-            if let Ok(elem) = source_elements.get(i) {
-                assert!(
-                    new_elements.push(elem.clone()).is_ok(),
-                    "Failed to clone table: out of memory"
-                );
+        #[cfg(feature = "std")]
+        let new_elements: TableElements = source_elements.clone();
+        #[cfg(not(feature = "std"))]
+        let new_elements: TableElements = {
+            let mut ne = kiln_foundation::bounded::BoundedVec::new(TableProvider::default())
+                .expect("Failed to allocate table elements during clone");
+            for i in 0..source_elements.len() {
+                if let Ok(elem) = source_elements.get(i) {
+                    assert!(
+                        ne.push(elem.clone()).is_ok(),
+                        "Failed to clone table: out of memory"
+                    );
+                }
             }
-        }
+            ne
+        };
 
         Self {
             ty:                 self.ty.clone(),
@@ -185,18 +194,27 @@ impl PartialEq for Table {
         #[cfg(not(feature = "std"))]
         let other_elements = other.elements.lock();
 
-        // Compare elements manually since BoundedStack doesn't have to_vec()
         if self_elements.len() != other_elements.len() {
             return false;
         }
-        for i in 0..self_elements.len() {
-            // Use get() method instead of direct indexing for BoundedVec
-            let (self_elem, other_elem) = match (self_elements.get(i), other_elements.get(i)) {
-                (Ok(a), Ok(b)) => (a, b),
-                _ => return false,
-            };
-            if self_elem != other_elem {
-                return false;
+        #[cfg(feature = "std")]
+        {
+            for i in 0..self_elements.len() {
+                if self_elements[i] != other_elements[i] {
+                    return false;
+                }
+            }
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            for i in 0..self_elements.len() {
+                let (self_elem, other_elem) = match (self_elements.get(i), other_elements.get(i)) {
+                    (Ok(a), Ok(b)) => (a, b),
+                    _ => return false,
+                };
+                if self_elem != other_elem {
+                    return false;
+                }
             }
         }
         true
@@ -306,24 +324,31 @@ impl Table {
         #[cfg(feature = "tracing")]
         kiln_foundation::tracing::trace!(capacity = 1024, elements = initial_size, "Creating Table BoundedVec");
 
-        let mut elements: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).map_err(|e| {
-                #[cfg(feature = "tracing")]
-                kiln_foundation::tracing::error!(error = ?e, "BoundedVec::new failed");
-                e
-            })?;
-        // Note: BoundedVec doesn't have set_verification_level method
-
-        #[cfg(feature = "tracing")]
-        kiln_foundation::tracing::trace!(elements = initial_size, "Pushing elements to table");
-
-        for i in 0..initial_size {
-            if let Err(e) = elements.push(init_val.clone()) {
-                #[cfg(feature = "tracing")]
-                kiln_foundation::tracing::error!(index = i, error = ?e, "Failed to push element");
-                return Err(e.into());
+        #[cfg(feature = "std")]
+        let elements: TableElements = {
+            let mut elems = Vec::with_capacity(initial_size);
+            for _ in 0..initial_size {
+                elems.push(init_val.clone());
             }
-        }
+            elems
+        };
+        #[cfg(not(feature = "std"))]
+        let elements: TableElements = {
+            let mut elems: TableElements =
+                kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).map_err(|e| {
+                    #[cfg(feature = "tracing")]
+                    kiln_foundation::tracing::error!(error = ?e, "BoundedVec::new failed");
+                    e
+                })?;
+            for i in 0..initial_size {
+                if let Err(e) = elems.push(init_val.clone()) {
+                    #[cfg(feature = "tracing")]
+                    kiln_foundation::tracing::error!(index = i, error = ?e, "Failed to push element");
+                    return Err(e.into());
+                }
+            }
+            elems
+        };
 
         Ok(Self {
             ty,
@@ -410,10 +435,16 @@ impl Table {
             }
         }
 
-        // Use BoundedVec's get method for direct access
-        elements
-            .get(idx_usize)
-            .map_err(|_| Error::invalid_function_index("Table index out of bounds"))
+        #[cfg(feature = "std")]
+        {
+            Ok(elements[idx_usize].clone())
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            elements
+                .get(idx_usize)
+                .map_err(|_| Error::invalid_function_index("Table index out of bounds"))
+        }
     }
 
     /// Sets an element at the specified index
@@ -461,7 +492,14 @@ impl Table {
                 ));
             }
         }
-        elements.set(idx_usize, value)?;
+        #[cfg(feature = "std")]
+        {
+            elements[idx_usize] = value;
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            elements.set(idx_usize, value)?;
+        }
         Ok(())
     }
 
@@ -512,7 +550,14 @@ impl Table {
                 ));
             }
         }
-        elements.set(idx_usize, value)?;
+        #[cfg(feature = "std")]
+        {
+            elements[idx_usize] = value;
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            elements.set(idx_usize, value)?;
+        }
         Ok(())
     }
 
@@ -572,6 +617,9 @@ impl Table {
         let mut elements = self.elements.lock();
 
         for _ in 0..delta {
+            #[cfg(feature = "std")]
+            elements.push(Some(init_value_from_arg.clone()));
+            #[cfg(not(feature = "std"))]
             elements.push(Some(init_value_from_arg.clone()))?;
         }
 
@@ -605,23 +653,25 @@ impl Table {
             return Ok(());
         }
 
-        // Create a new stack with the filled elements
-        let mut result_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-
-        // Copy elements with fill applied
-        for i in 0..elements.len() {
-            if i >= offset && i < offset + len {
-                // This is in the fill range
-                result_vec.push(value.clone())?;
-            } else {
-                // Outside fill range, use original value
-                result_vec.push(elements.get(i)?)?;
+        #[cfg(feature = "std")]
+        {
+            for i in offset..offset + len {
+                elements[i] = value.clone();
             }
         }
-
-        // Replace the elements stack
-        *elements = result_vec;
+        #[cfg(not(feature = "std"))]
+        {
+            let mut result_vec: TableElements =
+                kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            for i in 0..elements.len() {
+                if i >= offset && i < offset + len {
+                    result_vec.push(value.clone())?;
+                } else {
+                    result_vec.push(elements.get(i)?)?;
+                }
+            }
+            *elements = result_vec;
+        }
 
         Ok(())
     }
@@ -650,32 +700,32 @@ impl Table {
             return Ok(());
         }
 
-        // Create temporary stack to store elements during copy
-        let mut temp_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-
-        // Read source elements into temporary stack
-        for i in 0..len {
-            temp_vec.push(elements.get(src + i)?)?;
-        }
-
-        // Create a new stack for the full result
-        let mut result_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-
-        // Copy elements with the updated values
-        for i in 0..elements.len() {
-            if i >= dst && i < dst + len {
-                // This is in the destination range, use value from temp_vec
-                result_vec.push(temp_vec.get(i - dst)?)?;
-            } else {
-                // Outside destination range, use original value
-                result_vec.push(elements.get(i)?)?;
+        #[cfg(feature = "std")]
+        {
+            // Copy source elements to temp buffer, then write to destination
+            let temp: Vec<_> = (0..len).map(|i| elements[src + i].clone()).collect();
+            for i in 0..len {
+                elements[dst + i] = temp[i].clone();
             }
         }
-
-        // Replace the elements stack
-        *elements = result_vec;
+        #[cfg(not(feature = "std"))]
+        {
+            let mut temp_vec: TableElements =
+                kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            for i in 0..len {
+                temp_vec.push(elements.get(src + i)?)?;
+            }
+            let mut result_vec: TableElements =
+                kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            for i in 0..elements.len() {
+                if i >= dst && i < dst + len {
+                    result_vec.push(temp_vec.get(i - dst)?)?;
+                } else {
+                    result_vec.push(elements.get(i)?)?;
+                }
+            }
+            *elements = result_vec;
+        }
 
         Ok(())
     }
@@ -702,6 +752,9 @@ impl Table {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }
             }
+            #[cfg(feature = "std")]
+            { elements[(offset as usize) + i] = val_opt.clone(); }
+            #[cfg(not(feature = "std"))]
             elements.set((offset as usize) + i, val_opt.clone())?;
         }
         Ok(())
@@ -762,11 +815,11 @@ impl Table {
         let mut elements = self.elements.lock();
 
         for _ in 0..delta {
+            #[cfg(feature = "std")]
+            elements.push(Some(init_value_from_arg.clone()));
+            #[cfg(not(feature = "std"))]
             elements.push(Some(init_value_from_arg.clone()))?;
         }
-        // Update the min limit in the table type if it changes due to growth (spec is a
-        // bit unclear if ty should reflect current size) For now, ty.limits.min
-        // reflects the *initial* min. Current size is self.size().
 
         Ok(old_size)
     }
@@ -831,6 +884,9 @@ impl Table {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }
             }
+            #[cfg(feature = "std")]
+            { elements[(offset as usize) + i] = val_opt.clone(); }
+            #[cfg(not(feature = "std"))]
             elements.set((offset as usize) + i, val_opt.clone())?;
         }
         Ok(())
@@ -858,34 +914,31 @@ impl Table {
             return Ok(());
         }
 
-        // Create temporary stack to store elements during copy
-        let mut temp_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-        // Note: verification level handled by provider
-
-        // Read source elements into temporary stack
-        for i in 0..len {
-            temp_vec.push(elements.get(src + i)?)?;
-        }
-
-        // Create a new stack for the full result
-        let mut result_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-        // Note: verification level handled by provider
-
-        // Copy elements with the updated values
-        for i in 0..elements.len() {
-            if i >= dst && i < dst + len {
-                // This is in the destination range, use value from temp_vec
-                result_vec.push(temp_vec.get(i - dst)?)?;
-            } else {
-                // Outside destination range, use original value
-                result_vec.push(elements.get(i)?)?;
+        #[cfg(feature = "std")]
+        {
+            let temp: Vec<_> = (0..len).map(|i| elements[src + i].clone()).collect();
+            for i in 0..len {
+                elements[dst + i] = temp[i].clone();
             }
         }
-
-        // Replace the elements stack
-        *elements = result_vec;
+        #[cfg(not(feature = "std"))]
+        {
+            let mut temp_vec: TableElements =
+                kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            for i in 0..len {
+                temp_vec.push(elements.get(src + i)?)?;
+            }
+            let mut result_vec: TableElements =
+                kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            for i in 0..elements.len() {
+                if i >= dst && i < dst + len {
+                    result_vec.push(temp_vec.get(i - dst)?)?;
+                } else {
+                    result_vec.push(elements.get(i)?)?;
+                }
+            }
+            *elements = result_vec;
+        }
 
         Ok(())
     }
@@ -915,23 +968,25 @@ impl Table {
             return Ok(());
         }
 
-        // Create a new stack with the filled elements
-        let mut result_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-
-        // Copy elements with fill applied
-        for i in 0..elements.len() {
-            if i >= offset && i < offset + len {
-                // This is in the fill range
-                result_vec.push(value.clone())?;
-            } else {
-                // Outside fill range, use original value
-                result_vec.push(elements.get(i)?)?;
+        #[cfg(feature = "std")]
+        {
+            for i in offset..offset + len {
+                elements[i] = value.clone();
             }
         }
-
-        // Replace the elements stack
-        *elements = result_vec;
+        #[cfg(not(feature = "std"))]
+        {
+            let mut result_vec: TableElements =
+                kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+            for i in 0..elements.len() {
+                if i >= offset && i < offset + len {
+                    result_vec.push(value.clone())?;
+                } else {
+                    result_vec.push(elements.get(i)?)?;
+                }
+            }
+            *elements = result_vec;
+        }
 
         Ok(())
     }
@@ -970,8 +1025,14 @@ impl Table {
             return Err(Error::runtime_trap("out of bounds table access"));
         }
 
-        // Set the element directly using BoundedVec's set method
-        elements.set(idx, value)?;
+        #[cfg(feature = "std")]
+        {
+            elements[idx] = value;
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            elements.set(idx, value)?;
+        }
 
         Ok(())
     }

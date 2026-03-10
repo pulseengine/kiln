@@ -6749,12 +6749,20 @@ impl StacklessEngine {
                                     0x40 => 0, // empty type - no results
                                     0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1, // i32, i64, f32, f64, v128
                                     0x70 | 0x6F => 1, // funcref, externref
+                                    // GC abstract reference types (all produce 1 result)
+                                    0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x69 => 1, // anyref, eqref, i31ref, structref, arrayref, exnref
+                                    0x73 | 0x72 | 0x71 | 0x74 => 1, // nofunc, noextern, none, noexn
                                     _ => {
                                         // Type index - look up actual result count
                                         if let Some(ft) = module.types.get(block_type_idx as usize) {
                                             ft.results.len()
-                                        } else {
+                                        } else if (block_type_idx as i32) < 0 {
+                                            // Negative values might be abstract types encoded differently
                                             0
+                                        } else {
+                                            // Positive type index that isn't in types table
+                                            // Could be a GC type - assume 1 result
+                                            1
                                         }
                                     }
                                 };
@@ -10350,10 +10358,20 @@ impl StacklessEngine {
                         // Pop field values in reverse order, create struct, push reference
                         #[cfg(feature = "tracing")]
                         trace!("StructNew: type_idx={}", type_idx);
-                        // Look up field count from module type section
-                        let field_count = module.types.get(type_idx as usize)
-                            .map(|t| t.params.len())
-                            .unwrap_or(0);
+                        // Look up field count from gc_types (struct field definitions)
+                        let field_count = {
+                            #[cfg(feature = "std")]
+                            {
+                                match module.gc_types.get(type_idx as usize) {
+                                    Some(crate::module::GcTypeInfo::Struct(fields)) => fields.len(),
+                                    _ => return Err(kiln_error::Error::runtime_trap(
+                                        "struct.new: type index is not a struct type"
+                                    )),
+                                }
+                            }
+                            #[cfg(not(feature = "std"))]
+                            { 0usize }
+                        };
                         // Pop field values (they're on the stack in order, so pop in reverse)
                         let mut fields = Vec::with_capacity(field_count);
                         for _ in 0..field_count {
@@ -10375,32 +10393,28 @@ impl StacklessEngine {
 
                     Instruction::StructNewDefault(type_idx) => {
                         // struct.new_default: [] -> [structref]
-                        // Create struct with default field values based on type
+                        // Create struct with default field values based on gc_types
                         #[cfg(feature = "tracing")]
                         trace!("StructNewDefault: type_idx={}", type_idx);
                         let mut struct_ref = kiln_foundation::values::StructRef::new(
                             type_idx,
                             kiln_foundation::traits::DefaultMemoryProvider::default()
                         ).map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
-                        // Add default values for each field based on type info
-                        if let Some(type_info) = module.types.get(type_idx as usize) {
-                            for param_type in &type_info.params {
-                                let default_val = match param_type {
-                                    kiln_foundation::types::ValueType::I32 => Value::I32(0),
-                                    kiln_foundation::types::ValueType::I64 => Value::I64(0),
-                                    kiln_foundation::types::ValueType::F32 => Value::F32(kiln_foundation::values::FloatBits32::from_f32(0.0)),
-                                    kiln_foundation::types::ValueType::F64 => Value::F64(kiln_foundation::values::FloatBits64::from_f64(0.0)),
-                                    kiln_foundation::types::ValueType::V128 => Value::V128(kiln_foundation::values::V128::zero()),
-                                    kiln_foundation::types::ValueType::FuncRef | kiln_foundation::types::ValueType::NullFuncRef => Value::FuncRef(None),
-                                    kiln_foundation::types::ValueType::ExternRef => Value::ExternRef(None),
-                                    kiln_foundation::types::ValueType::I31Ref | kiln_foundation::types::ValueType::EqRef | kiln_foundation::types::ValueType::AnyRef => Value::I31Ref(None),
-                                    kiln_foundation::types::ValueType::StructRef(_) => Value::StructRef(None),
-                                    kiln_foundation::types::ValueType::ArrayRef(_) => Value::ArrayRef(None),
-                                    kiln_foundation::types::ValueType::ExnRef => Value::ExnRef(None),
-                                    _ => Value::I32(0),
-                                };
-                                struct_ref.add_field(default_val).map_err(|_|
-                                    kiln_error::Error::runtime_error("Failed to add default struct field"))?;
+                        #[cfg(feature = "std")]
+                        {
+                            match module.gc_types.get(type_idx as usize) {
+                                Some(crate::module::GcTypeInfo::Struct(fields)) => {
+                                    for field in fields {
+                                        let default_val = gc_field_default_value(field);
+                                        struct_ref.add_field(default_val).map_err(|_|
+                                            kiln_error::Error::runtime_error(
+                                                "Failed to add default struct field"
+                                            ))?;
+                                    }
+                                }
+                                _ => return Err(kiln_error::Error::runtime_trap(
+                                    "struct.new_default: type index is not a struct type"
+                                )),
                             }
                         }
                         operand_stack.push(Value::StructRef(Some(struct_ref)));
@@ -10417,7 +10431,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("struct.get: field index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("struct.get: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
                         }
                     }
 
@@ -10427,12 +10441,43 @@ impl StacklessEngine {
                         trace!("StructGetS: type_idx={}, field_idx={}", type_idx, field_idx);
                         if let Some(Value::StructRef(Some(s))) = operand_stack.pop() {
                             if let Ok(field) = s.get_field(field_idx as usize) {
-                                operand_stack.push(field.clone());
+                                // Sign-extend packed field based on storage type
+                                let result = match field {
+                                    Value::I32(v) => {
+                                        #[cfg(feature = "std")]
+                                        {
+                                            match module.gc_types.get(type_idx as usize) {
+                                                Some(crate::module::GcTypeInfo::Struct(fields)) => {
+                                                    if let Some(gc_field) = fields.get(field_idx as usize) {
+                                                        match gc_field.storage {
+                                                            crate::module::GcFieldStorage::I8 => {
+                                                                // Sign-extend from 8 bits
+                                                                Value::I32(((v as u8) as i8) as i32)
+                                                            }
+                                                            crate::module::GcFieldStorage::I16 => {
+                                                                // Sign-extend from 16 bits
+                                                                Value::I32(((v as u16) as i16) as i32)
+                                                            }
+                                                            _ => field.clone(),
+                                                        }
+                                                    } else {
+                                                        field.clone()
+                                                    }
+                                                }
+                                                _ => field.clone(),
+                                            }
+                                        }
+                                        #[cfg(not(feature = "std"))]
+                                        { field.clone() }
+                                    }
+                                    _ => field.clone(),
+                                };
+                                operand_stack.push(result);
                             } else {
                                 return Err(kiln_error::Error::runtime_trap("struct.get_s: field index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("struct.get_s: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
                         }
                     }
 
@@ -10442,12 +10487,43 @@ impl StacklessEngine {
                         trace!("StructGetU: type_idx={}, field_idx={}", type_idx, field_idx);
                         if let Some(Value::StructRef(Some(s))) = operand_stack.pop() {
                             if let Ok(field) = s.get_field(field_idx as usize) {
-                                operand_stack.push(field.clone());
+                                // Zero-extend packed field based on storage type
+                                let result = match field {
+                                    Value::I32(v) => {
+                                        #[cfg(feature = "std")]
+                                        {
+                                            match module.gc_types.get(type_idx as usize) {
+                                                Some(crate::module::GcTypeInfo::Struct(fields)) => {
+                                                    if let Some(gc_field) = fields.get(field_idx as usize) {
+                                                        match gc_field.storage {
+                                                            crate::module::GcFieldStorage::I8 => {
+                                                                // Zero-extend from 8 bits
+                                                                Value::I32((v as u8) as i32)
+                                                            }
+                                                            crate::module::GcFieldStorage::I16 => {
+                                                                // Zero-extend from 16 bits
+                                                                Value::I32((v as u16) as i32)
+                                                            }
+                                                            _ => field.clone(),
+                                                        }
+                                                    } else {
+                                                        field.clone()
+                                                    }
+                                                }
+                                                _ => field.clone(),
+                                            }
+                                        }
+                                        #[cfg(not(feature = "std"))]
+                                        { field.clone() }
+                                    }
+                                    _ => field.clone(),
+                                };
+                                operand_stack.push(result);
                             } else {
                                 return Err(kiln_error::Error::runtime_trap("struct.get_u: field index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("struct.get_u: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
                         }
                     }
 
@@ -10461,7 +10537,7 @@ impl StacklessEngine {
                             s.set_field(field_idx as usize, value).map_err(|_|
                                 kiln_error::Error::runtime_trap("struct.set: field index out of bounds"))?;
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("struct.set: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
                         }
                     }
 
@@ -10494,27 +10570,19 @@ impl StacklessEngine {
                             Some(Value::I32(n)) => n as u32,
                             _ => return Err(kiln_error::Error::runtime_trap("array.new_default: expected i32 length")),
                         };
-                        // Determine default value based on element type from module type section
-                        let default_val = if let Some(type_info) = module.types.get(type_idx as usize) {
-                            if let Some(elem_type) = type_info.params.first() {
-                                match elem_type {
-                                    kiln_foundation::types::ValueType::I32 => Value::I32(0),
-                                    kiln_foundation::types::ValueType::I64 => Value::I64(0),
-                                    kiln_foundation::types::ValueType::F32 => Value::F32(kiln_foundation::values::FloatBits32::from_f32(0.0)),
-                                    kiln_foundation::types::ValueType::F64 => Value::F64(kiln_foundation::values::FloatBits64::from_f64(0.0)),
-                                    kiln_foundation::types::ValueType::V128 => Value::V128(kiln_foundation::values::V128::zero()),
-                                    kiln_foundation::types::ValueType::FuncRef | kiln_foundation::types::ValueType::NullFuncRef => Value::FuncRef(None),
-                                    kiln_foundation::types::ValueType::ExternRef => Value::ExternRef(None),
-                                    kiln_foundation::types::ValueType::I31Ref | kiln_foundation::types::ValueType::EqRef | kiln_foundation::types::ValueType::AnyRef => Value::I31Ref(None),
-                                    kiln_foundation::types::ValueType::StructRef(_) => Value::StructRef(None),
-                                    kiln_foundation::types::ValueType::ArrayRef(_) => Value::ArrayRef(None),
-                                    _ => Value::I32(0),
+                        // Determine default value based on element type from gc_types
+                        let default_val = {
+                            #[cfg(feature = "std")]
+                            {
+                                match module.gc_types.get(type_idx as usize) {
+                                    Some(crate::module::GcTypeInfo::Array(field)) => gc_field_default_value(field),
+                                    _ => return Err(kiln_error::Error::runtime_trap(
+                                        "array.new_default: type index is not an array type"
+                                    )),
                                 }
-                            } else {
-                                Value::I32(0)
                             }
-                        } else {
-                            Value::I32(0)
+                            #[cfg(not(feature = "std"))]
+                            { Value::I32(0) }
                         };
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
@@ -10564,7 +10632,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("array.get: index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.get: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10583,7 +10651,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("array.get_s: index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.get_s: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10602,7 +10670,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("array.get_u: index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.get_u: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10620,7 +10688,7 @@ impl StacklessEngine {
                             a.set(index, value).map_err(|_|
                                 kiln_error::Error::runtime_trap("array.set: index out of bounds"))?;
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.set: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10631,7 +10699,7 @@ impl StacklessEngine {
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             operand_stack.push(Value::I32(a.len() as i32));
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.len: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10802,7 +10870,7 @@ impl StacklessEngine {
                                     kiln_error::Error::runtime_trap("array.fill: set failed"))?;
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.fill: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10820,7 +10888,7 @@ impl StacklessEngine {
                         };
                         let src_array = match operand_stack.pop() {
                             Some(Value::ArrayRef(Some(a))) => a,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.copy: null source reference")),
+                            _ => return Err(kiln_error::Error::runtime_trap("null array reference")),
                         };
                         let dst_offset = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
@@ -10842,7 +10910,7 @@ impl StacklessEngine {
                                     kiln_error::Error::runtime_trap("array.copy: dst set failed"))?;
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.copy: null destination reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10901,7 +10969,7 @@ impl StacklessEngine {
                                     kiln_error::Error::runtime_trap("array.init_data: set failed"))?;
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.init_data: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10938,7 +11006,7 @@ impl StacklessEngine {
                                     kiln_error::Error::runtime_trap("array.init_elem: set failed"))?;
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.init_elem: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -11003,44 +11071,111 @@ impl StacklessEngine {
                         if ref_test_value(&val, &to_type, target_nullable) {
                             // Cast succeeds - push value and branch
                             operand_stack.push(val);
-                            // Branch logic (similar to Br)
+                            // Branch logic (same as Br instruction)
                             if (label_idx as usize) < block_stack.len() {
-                                let target_depth = block_stack.len() - 1 - label_idx as usize;
-                                if let Some((block_type, start_pc, _bti, entry_stack_height)) = block_stack.get(target_depth).copied() {
-                                    if block_type == "loop" {
-                                        pc = start_pc;
-                                    } else {
-                                        let mut depth = 1;
-                                        let mut search_pc = pc + 1;
-                                        while depth > 0 && search_pc < instructions.len() {
-                                            #[cfg(feature = "std")]
-                                            if let Some(si) = instructions.get(search_pc) {
-                                                match si {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
+                                let stack_idx = block_stack.len() - 1 - label_idx as usize;
+                                let (block_type, start_pc, block_type_idx, entry_stack_height) = block_stack[stack_idx];
+
+                                // Determine how many values to preserve based on block type
+                                let values_to_preserve = if block_type == "loop" {
+                                    match block_type_idx {
+                                        0x40 => 0,
+                                        0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 0,
+                                        0x70 | 0x6F => 0,
+                                        0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 | 0x72 | 0x71 | 0x69 => 0,
+                                        _ => {
+                                            if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                                func_type.params.len()
+                                            } else {
+                                                0
                                             }
-                                            #[cfg(not(feature = "std"))]
-                                            if let Ok(si) = instructions.get(search_pc) {
-                                                match si {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
-                                            }
-                                            if depth > 0 { search_pc += 1; }
                                         }
-                                        pc = search_pc;
                                     }
-                                    // Keep branch target values, restore stack below
-                                    let branch_val = operand_stack.pop();
-                                    while operand_stack.len() > entry_stack_height {
-                                        operand_stack.pop();
+                                } else {
+                                    match block_type_idx {
+                                        0x40 => 0,
+                                        0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1,
+                                        0x70 | 0x6F => 1,
+                                        0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 | 0x72 | 0x71 | 0x69 => 1,
+                                        _ => {
+                                            if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                                func_type.results.len()
+                                            } else {
+                                                1 // br_on_cast always has at least the ref value
+                                            }
+                                        }
                                     }
-                                    if let Some(bv) = branch_val {
-                                        operand_stack.push(bv);
+                                };
+
+                                // Save the values to preserve from top of stack
+                                let mut preserved_values = Vec::new();
+                                for _ in 0..values_to_preserve {
+                                    if let Some(v) = operand_stack.pop() {
+                                        preserved_values.push(v);
                                     }
+                                }
+
+                                // Clear stack down to the entry height
+                                while operand_stack.len() > entry_stack_height {
+                                    let _ = operand_stack.pop();
+                                }
+
+                                if block_type == "loop" {
+                                    // Pop inner blocks from block stack
+                                    let blocks_to_pop = label_idx as usize;
+                                    for _ in 0..blocks_to_pop {
+                                        if !block_stack.is_empty() {
+                                            block_stack.pop();
+                                            block_depth -= 1;
+                                        }
+                                    }
+                                    pc = start_pc;
+                                } else {
+                                    // Pop inner blocks from block stack
+                                    let blocks_to_pop = label_idx as usize;
+                                    for _ in 0..blocks_to_pop {
+                                        if !block_stack.is_empty() {
+                                            block_stack.pop();
+                                            block_depth -= 1;
+                                        }
+                                    }
+
+                                    // Scan forward to find the target block's End
+                                    let mut target_depth = label_idx as i32 + 1;
+                                    let mut new_pc = pc + 1;
+                                    let mut depth = 0;
+
+                                    while new_pc < instructions.len() && target_depth > 0 {
+                                        if let Some(instr) = instructions.get(new_pc) {
+                                            match instr {
+                                                Instruction::Block { .. } |
+                                                Instruction::Loop { .. } |
+                                                Instruction::If { .. } |
+                                                Instruction::Try { .. } |
+                                                Instruction::TryTable { .. } => {
+                                                    depth += 1;
+                                                }
+                                                Instruction::End => {
+                                                    if depth == 0 {
+                                                        target_depth -= 1;
+                                                        if target_depth == 0 {
+                                                            pc = new_pc;
+                                                            break;
+                                                        }
+                                                    } else {
+                                                        depth -= 1;
+                                                    }
+                                                }
+                                                _ => {}
+                                            }
+                                        }
+                                        new_pc += 1;
+                                    }
+                                }
+
+                                // Restore preserved values back to stack (in reverse order)
+                                for v in preserved_values.into_iter().rev() {
+                                    operand_stack.push(v);
                                 }
                             } else {
                                 break; // Branch out of function
@@ -11064,42 +11199,111 @@ impl StacklessEngine {
                         if !ref_test_value(&val, &to_type, target_nullable) {
                             // Cast fails - push value and branch
                             operand_stack.push(val);
+                            // Branch logic (same as Br instruction)
                             if (label_idx as usize) < block_stack.len() {
-                                let target_depth = block_stack.len() - 1 - label_idx as usize;
-                                if let Some((block_type, start_pc, _bti, entry_stack_height)) = block_stack.get(target_depth).copied() {
-                                    if block_type == "loop" {
-                                        pc = start_pc;
-                                    } else {
-                                        let mut depth = 1;
-                                        let mut search_pc = pc + 1;
-                                        while depth > 0 && search_pc < instructions.len() {
-                                            #[cfg(feature = "std")]
-                                            if let Some(si) = instructions.get(search_pc) {
-                                                match si {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
+                                let stack_idx = block_stack.len() - 1 - label_idx as usize;
+                                let (block_type, start_pc, block_type_idx, entry_stack_height) = block_stack[stack_idx];
+
+                                // Determine how many values to preserve based on block type
+                                let values_to_preserve = if block_type == "loop" {
+                                    match block_type_idx {
+                                        0x40 => 0,
+                                        0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 0,
+                                        0x70 | 0x6F => 0,
+                                        0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 | 0x72 | 0x71 | 0x69 => 0,
+                                        _ => {
+                                            if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                                func_type.params.len()
+                                            } else {
+                                                0
                                             }
-                                            #[cfg(not(feature = "std"))]
-                                            if let Ok(si) = instructions.get(search_pc) {
-                                                match si {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
-                                            }
-                                            if depth > 0 { search_pc += 1; }
                                         }
-                                        pc = search_pc;
                                     }
-                                    let branch_val = operand_stack.pop();
-                                    while operand_stack.len() > entry_stack_height {
-                                        operand_stack.pop();
+                                } else {
+                                    match block_type_idx {
+                                        0x40 => 0,
+                                        0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1,
+                                        0x70 | 0x6F => 1,
+                                        0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 | 0x72 | 0x71 | 0x69 => 1,
+                                        _ => {
+                                            if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                                func_type.results.len()
+                                            } else {
+                                                1 // br_on_cast_fail always has at least the ref value
+                                            }
+                                        }
                                     }
-                                    if let Some(bv) = branch_val {
-                                        operand_stack.push(bv);
+                                };
+
+                                // Save the values to preserve from top of stack
+                                let mut preserved_values = Vec::new();
+                                for _ in 0..values_to_preserve {
+                                    if let Some(v) = operand_stack.pop() {
+                                        preserved_values.push(v);
                                     }
+                                }
+
+                                // Clear stack down to the entry height
+                                while operand_stack.len() > entry_stack_height {
+                                    let _ = operand_stack.pop();
+                                }
+
+                                if block_type == "loop" {
+                                    // Pop inner blocks from block stack
+                                    let blocks_to_pop = label_idx as usize;
+                                    for _ in 0..blocks_to_pop {
+                                        if !block_stack.is_empty() {
+                                            block_stack.pop();
+                                            block_depth -= 1;
+                                        }
+                                    }
+                                    pc = start_pc;
+                                } else {
+                                    // Pop inner blocks from block stack
+                                    let blocks_to_pop = label_idx as usize;
+                                    for _ in 0..blocks_to_pop {
+                                        if !block_stack.is_empty() {
+                                            block_stack.pop();
+                                            block_depth -= 1;
+                                        }
+                                    }
+
+                                    // Scan forward to find the target block's End
+                                    let mut target_depth = label_idx as i32 + 1;
+                                    let mut new_pc = pc + 1;
+                                    let mut depth = 0;
+
+                                    while new_pc < instructions.len() && target_depth > 0 {
+                                        if let Some(instr) = instructions.get(new_pc) {
+                                            match instr {
+                                                Instruction::Block { .. } |
+                                                Instruction::Loop { .. } |
+                                                Instruction::If { .. } |
+                                                Instruction::Try { .. } |
+                                                Instruction::TryTable { .. } => {
+                                                    depth += 1;
+                                                }
+                                                Instruction::End => {
+                                                    if depth == 0 {
+                                                        target_depth -= 1;
+                                                        if target_depth == 0 {
+                                                            pc = new_pc;
+                                                            break;
+                                                        }
+                                                    } else {
+                                                        depth -= 1;
+                                                    }
+                                                }
+                                                _ => {}
+                                            }
+                                        }
+                                        new_pc += 1;
+                                    }
+                                }
+
+                                // Restore preserved values back to stack (in reverse order)
+                                for v in preserved_values.into_iter().rev() {
+                                    operand_stack.push(v);
                                 }
                             } else {
                                 break;

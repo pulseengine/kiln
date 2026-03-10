@@ -80,10 +80,13 @@ impl WastEngine {
         // or incompatible type), instantiation must fail with a link error.
         self.validate_imports(&module)?;
 
-        // Create a module instance from the module
-        // Use Arc::clone to share the module reference without copying data
+        // Create a module instance from the module.
+        // Use the engine's next instance ID so FuncRefs stored during element
+        // segment initialization have the correct instance_id for cross-instance
+        // call_indirect dispatch.
+        let engine_instance_id = self.engine.peek_next_instance_id();
         let module_instance = Arc::new(
-            ModuleInstance::new(Arc::clone(&module), 0)
+            ModuleInstance::new(Arc::clone(&module), engine_instance_id)
                 .context("Failed to create module instance")?,
         );
 
@@ -131,18 +134,10 @@ impl WastEngine {
             .initialize_dropped_segments()
             .context("Failed to initialize dropped segments")?;
 
-        // Initialize active data segments (writes data to memory)
-        #[cfg(feature = "std")]
-        module_instance
-            .initialize_data_segments()
-            .context("Failed to initialize data segments")?;
-
-        // Initialize element segments
-        module_instance
-            .initialize_element_segments()
-            .context("Failed to initialize element segments")?;
-
-        // Set the current module in the engine
+        // Register the instance with the engine BEFORE data/element initialization.
+        // Per WebAssembly spec (v2+), active segments written before an out-of-bounds
+        // access persist after instantiation failure. The instance must be registered
+        // so that FuncRefs written to shared tables can resolve their target instance.
         let instance_idx = self
             .engine
             .set_current_module(module_instance)
@@ -156,6 +151,34 @@ impl WastEngine {
         // Per WebAssembly spec: if any import cannot be resolved, the module
         // is unlinkable and instantiation must fail.
         self.validate_imports(&module)?;
+
+        // Initialize active data segments (writes data to memory).
+        // This happens after instance registration so shared memory writes persist
+        // even if a later segment causes an out-of-bounds error.
+        #[cfg(feature = "std")]
+        {
+            let inst = self.engine.get_instance(instance_idx)
+                .ok_or_else(|| anyhow::anyhow!("Instance not found after registration"))?;
+            inst.initialize_data_segments()
+                .context("Failed to initialize data segments")?;
+        }
+
+        // Initialize element segments (writes to tables).
+        // Same persistence semantics as data segments.
+        {
+            let inst = self.engine.get_instance(instance_idx)
+                .ok_or_else(|| anyhow::anyhow!("Instance not found after registration"))?;
+            inst.initialize_element_segments()
+                .context("Failed to initialize element segments")?;
+        }
+
+        // Execute the start function if one is defined
+        if let Some(start_func_idx) = module.start {
+            self.engine.reset_call_depth();
+            self.engine
+                .execute(instance_idx, start_func_idx as usize, vec![])
+                .map_err(|e| anyhow::Error::from(e))?;
+        }
 
         // Store the module and instance ID for later reference
         let module_name = name.unwrap_or("current").to_string();
@@ -561,41 +584,64 @@ impl WastEngine {
                         if export.kind == ExportKind::Global {
                             let source_global_idx = export.index as usize;
 
-                            // Get the source global value, either from the module instance
-                            // or from the module's globals array
-                            let source_value = self.get_source_global_value(
-                                mod_name,
-                                source_module,
-                                source_global_idx,
-                            );
+                            // Share the GlobalWrapper from the source instance directly.
+                            // This ensures mutable globals are shared (not copied) so that
+                            // mutations in one module are visible in the other.
+                            let shared = if let Some(&inst_id) = self.instance_ids.get(mod_name) {
+                                if let Some(inst) = self.engine.get_instance(inst_id) {
+                                    inst.global(source_global_idx as u32).ok()
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            };
 
-                            if let Some(value) = source_value {
-                                if let Some(global_type) =
-                                    module.global_import_types.get(global_import_idx)
-                                {
-                                    let global = Global::new(
-                                        global_type.value_type,
-                                        global_type.mutable,
-                                        value,
-                                    )
+                            if let Some(wrapper) = shared {
+                                module_instance
+                                    .set_global(global_import_idx, wrapper)
                                     .map_err(|e| {
                                         anyhow::anyhow!(
-                                            "Failed to create imported global: {:?}",
+                                            "Failed to set imported global: {:?}",
                                             e
                                         )
                                     })?;
+                            } else {
+                                // Fallback: create from value (only if instance not found)
+                                let source_value = self.get_source_global_value(
+                                    mod_name,
+                                    source_module,
+                                    source_global_idx,
+                                );
 
-                                    module_instance
-                                        .set_global(
-                                            global_import_idx,
-                                            GlobalWrapper(StdArc::new(RwLock::new(global))),
+                                if let Some(value) = source_value {
+                                    if let Some(global_type) =
+                                        module.global_import_types.get(global_import_idx)
+                                    {
+                                        let global = Global::new(
+                                            global_type.value_type,
+                                            global_type.mutable,
+                                            value,
                                         )
                                         .map_err(|e| {
                                             anyhow::anyhow!(
-                                                "Failed to set imported global: {:?}",
+                                                "Failed to create imported global: {:?}",
                                                 e
                                             )
                                         })?;
+
+                                        module_instance
+                                            .set_global(
+                                                global_import_idx,
+                                                GlobalWrapper(StdArc::new(RwLock::new(global))),
+                                            )
+                                            .map_err(|e| {
+                                                anyhow::anyhow!(
+                                                    "Failed to set imported global: {:?}",
+                                                    e
+                                                )
+                                            })?;
+                                    }
                                 }
                             }
                         }
@@ -627,7 +673,7 @@ impl WastEngine {
             }
         }
         // Fall back to the module's globals array (static init values)
-        if let Ok(global_wrapper) = source_module.globals.get(source_global_idx) {
+        if let Some(global_wrapper) = source_module.globals.get(source_global_idx) {
             if let Ok(guard) = global_wrapper.0.read() {
                 return Some(guard.get().clone());
             }
@@ -1329,7 +1375,40 @@ fn value_type_is_subtype_of(sub: &ValueType, sup: &ValueType) -> bool {
         (ValueType::FuncRef, ValueType::FuncRef) => true,
         // ExternRef is a subtype of ExternRef
         (ValueType::ExternRef, ValueType::ExternRef) => true,
-        // Numeric types must match exactly
+        // TypedFuncRef(idx, _) <: FuncRef (= ref null func)
+        // Any typed function reference is a subtype of the nullable abstract funcref.
+        // This covers:
+        //   (ref null $t) <: (ref null func) when $t is a function type
+        //   (ref $t) <: (ref null func)
+        //   (ref func) <: (ref null func)
+        (ValueType::TypedFuncRef(_, _), ValueType::FuncRef) => true,
+        // TypedFuncRef(idx, false) <: TypedFuncRef(idx, true)
+        // Non-nullable is a subtype of nullable for the same type index
+        (ValueType::TypedFuncRef(idx1, false), ValueType::TypedFuncRef(idx2, true))
+            if idx1 == idx2 =>
+        {
+            true
+        }
+        // TypedFuncRef(concrete_idx, _) <: TypedFuncRef(u32::MAX, _)
+        // Any concrete func ref is a subtype of the abstract (ref func) or (ref null func).
+        // u32::MAX is a sentinel for abstract func heap type.
+        // Non-nullable concrete <: non-nullable abstract
+        (ValueType::TypedFuncRef(idx, false), ValueType::TypedFuncRef(u32::MAX, false))
+            if *idx != u32::MAX =>
+        {
+            true
+        }
+        // Any concrete (nullable or not) <: nullable abstract
+        (ValueType::TypedFuncRef(idx, _), ValueType::TypedFuncRef(u32::MAX, true))
+            if *idx != u32::MAX =>
+        {
+            true
+        }
+        // NullFuncRef (ref null nofunc) is the bottom type for the func hierarchy
+        // It is a subtype of any nullable funcref type
+        (ValueType::NullFuncRef, ValueType::FuncRef) => true,
+        (ValueType::NullFuncRef, ValueType::TypedFuncRef(_, true)) => true,
+        // Numeric types and all other cases must match exactly
         _ => false,
     }
 }

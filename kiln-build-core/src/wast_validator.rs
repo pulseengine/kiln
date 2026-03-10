@@ -12,7 +12,7 @@
 
 use anyhow::{Context, Result, anyhow};
 use std::collections::HashSet;
-use kiln_format::module::{ExportKind, Function, Global, ImportDesc, Module};
+use kiln_format::module::{CompositeTypeKind, ExportKind, Function, Global, ImportDesc, Module};
 use kiln_format::pure_format_types::{PureElementInit, PureElementMode, PureElementSegment};
 use kiln_format::types::RefType;
 use kiln_foundation::ValueType;
@@ -137,7 +137,17 @@ impl StackType {
             (StackType::NullFuncRef, StackType::TypedFuncRef(_, nullable)) => *nullable,
             (StackType::TypedFuncRef(_, _), StackType::FuncRef) => true,
             (StackType::TypedFuncRef(t1, n1), StackType::TypedFuncRef(t2, n2)) => {
-                t1 == t2 && (*n1 == *n2 || (!*n1 && *n2))
+                if t1 == t2 {
+                    // Same type index: non-nullable <: nullable, or exact match
+                    *n1 == *n2 || (!*n1 && *n2)
+                } else if *t2 == u32::MAX {
+                    // u32::MAX is sentinel for abstract func heap type.
+                    // Any concrete typed funcref is a subtype of abstract (ref func)/(ref null func).
+                    // Check nullability: non-nullable <: nullable, or both match
+                    *n1 == *n2 || (!*n1 && *n2)
+                } else {
+                    false
+                }
             },
             (StackType::FuncRef, StackType::TypedFuncRef(_, _)) => false,
 
@@ -158,6 +168,8 @@ impl StackType {
             (StackType::NullRef, StackType::ArrayRef) => true,
             (StackType::NullRef, StackType::EqRef) => true,
             (StackType::NullRef, StackType::AnyRef) => true,
+            // NullRef (none) is also subtype of concrete typed refs when nullable
+            (StackType::NullRef, StackType::TypedFuncRef(_, nullable)) => *nullable,
 
             // i31ref <: eqref <: anyref
             (StackType::I31Ref, StackType::EqRef) => true,
@@ -173,6 +185,18 @@ impl StackType {
 
             // eqref <: anyref
             (StackType::EqRef, StackType::AnyRef) => true,
+
+            // Concrete typed references (TypedFuncRef) can be struct, array, or func types.
+            // TypedFuncRef is used for ALL concrete type references (ref $t).
+            // Concrete struct types are subtypes of structref, eqref, anyref.
+            // Concrete array types are subtypes of arrayref, eqref, anyref.
+            // Without module context we cannot distinguish, so we accept all
+            // concrete types as subtypes of the GC hierarchy. This is slightly
+            // overpermissive but prevents false "type mismatch" rejections.
+            (StackType::TypedFuncRef(_, _), StackType::StructRef) => true,
+            (StackType::TypedFuncRef(_, _), StackType::ArrayRef) => true,
+            (StackType::TypedFuncRef(_, _), StackType::EqRef) => true,
+            (StackType::TypedFuncRef(_, _), StackType::AnyRef) => true,
 
             _ => false,
         }
@@ -638,8 +662,14 @@ impl WastModuleValidator {
     /// Check if a ValueType contains a type index reference and validate it
     fn check_value_type_ref(vt: &ValueType, num_types: usize) -> Result<()> {
         match vt {
-            ValueType::TypedFuncRef(idx, _)
-            | ValueType::StructRef(idx)
+            ValueType::TypedFuncRef(idx, _) => {
+                // u32::MAX is a sentinel for abstract func heap type (ref func)/(ref null func)
+                // and does not reference a concrete type index
+                if *idx != u32::MAX && (*idx as usize) >= num_types {
+                    return Err(anyhow!("unknown type"));
+                }
+            }
+            ValueType::StructRef(idx)
             | ValueType::ArrayRef(idx) => {
                 if (*idx as usize) >= num_types {
                     return Err(anyhow!("unknown type"));
@@ -3749,18 +3779,20 @@ impl WastModuleValidator {
                     match sub_opcode {
                         // struct.new $t: [field_types...] -> [(ref $t)]
                         0x00 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            // Pop fields (we don't know how many without type info), push ref
-                            // For now, just push the result - the type section would tell us field count
-                            // but we approximate by not popping (avoids false negatives)
-                            stack.push(StackType::Unknown);
+                            // Pop field values based on struct field count from rec_groups
+                            let field_count = Self::struct_field_count(module, type_idx);
+                            for _ in 0..field_count {
+                                Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            }
+                            stack.push(StackType::TypedFuncRef(type_idx, false));
                         },
                         // struct.new_default $t: [] -> [(ref $t)]
                         0x01 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            stack.push(StackType::Unknown);
+                            stack.push(StackType::TypedFuncRef(type_idx, false));
                         },
                         // struct.get $t $f: [(ref null $t)] -> [field_type]
                         0x02 => {
@@ -3800,49 +3832,49 @@ impl WastModuleValidator {
                         },
                         // array.new $t: [elem_type i32] -> [(ref $t)]
                         0x06 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
-                            stack.push(StackType::Unknown);
+                            stack.push(StackType::TypedFuncRef(type_idx, false));
                         },
                         // array.new_default $t: [i32] -> [(ref $t)]
                         0x07 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
-                            stack.push(StackType::Unknown);
+                            stack.push(StackType::TypedFuncRef(type_idx, false));
                         },
                         // array.new_fixed $t $n: [elem_type * n] -> [(ref $t)]
                         0x08 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
                             let (count, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
                             for _ in 0..count {
                                 Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                             }
-                            stack.push(StackType::Unknown);
+                            stack.push(StackType::TypedFuncRef(type_idx, false));
                         },
                         // array.new_data $t $d: [i32 i32] -> [(ref $t)]
                         0x09 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
                             let (_data_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
-                            stack.push(StackType::Unknown);
+                            stack.push(StackType::TypedFuncRef(type_idx, false));
                         },
                         // array.new_elem $t $e: [i32 i32] -> [(ref $t)]
                         0x0A => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
                             let (_elem_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
-                            stack.push(StackType::Unknown);
+                            stack.push(StackType::TypedFuncRef(type_idx, false));
                         },
                         // array.get $t: [(ref null $t) i32] -> [elem_type]
                         0x0B => {
@@ -5135,6 +5167,22 @@ impl WastModuleValidator {
     /// Get the current frame's stack height (the base of the current control frame)
     fn current_frame_height(frames: &[ControlFrame]) -> usize {
         frames.last().map_or(0, |f| f.stack_height)
+    }
+
+    /// Get the number of fields in a struct type by looking up rec_groups.
+    fn struct_field_count(module: &Module, type_idx: u32) -> usize {
+        for rec_group in &module.rec_groups {
+            for sub_type in &rec_group.types {
+                if sub_type.type_index == type_idx {
+                    return match &sub_type.composite_kind {
+                        CompositeTypeKind::StructWithFields(fields) => fields.len(),
+                        CompositeTypeKind::Struct => 0,
+                        _ => 0,
+                    };
+                }
+            }
+        }
+        0
     }
 
     /// Check if the current code path is unreachable

@@ -141,9 +141,38 @@ pub fn convert_wast_ret_core_to_value(ret: &WastRetCore) -> Result<Value> {
                 },
             }
         },
-        WastRetCore::RefI31 => {
+        WastRetCore::RefI31 | WastRetCore::RefI31Shared => {
             // (ref.i31) - any non-null i31 reference
             // Use a sentinel value to indicate "any non-null i31ref"
+            Ok(Value::I31Ref(Some(i32::MAX)))
+        },
+        WastRetCore::RefStruct => {
+            // (ref.struct) - any non-null struct reference
+            // Use a sentinel StructRef with alloc_id = u32::MAX
+            let sentinel = kiln_foundation::values::StructRef::new(
+                u32::MAX,
+                kiln_foundation::traits::DefaultMemoryProvider::default(),
+            ).map_err(|e| anyhow::anyhow!("Failed to create sentinel StructRef: {}", e))?;
+            Ok(Value::StructRef(Some(sentinel)))
+        },
+        WastRetCore::RefArray => {
+            // (ref.array) - any non-null array reference
+            // Use a sentinel ArrayRef with alloc_id = u32::MAX
+            let mut sentinel = kiln_foundation::values::ArrayRef::new(
+                u32::MAX,
+                kiln_foundation::traits::DefaultMemoryProvider::default(),
+            ).map_err(|e| anyhow::anyhow!("Failed to create sentinel ArrayRef: {}", e))?;
+            sentinel.alloc_id = u32::MAX;
+            Ok(Value::ArrayRef(Some(sentinel)))
+        },
+        WastRetCore::RefEq => {
+            // (ref.eq) - any non-null eqref (i31, struct, or array)
+            // Use I31Ref sentinel with i32::MAX - values_equal handles cross-type matching
+            Ok(Value::I31Ref(Some(i32::MAX)))
+        },
+        WastRetCore::RefAny => {
+            // (ref.any) - any non-null anyref (i31, struct, array)
+            // Use I31Ref sentinel with i32::MAX - values_equal handles cross-type matching
             Ok(Value::I31Ref(Some(i32::MAX)))
         },
         _ => {
@@ -332,10 +361,22 @@ pub fn values_equal(actual: &Value, expected: &Value) -> bool {
         // GC reference type comparisons
         (Value::ExnRef(a), Value::ExnRef(b)) => a == b,
         // I31Ref: i32::MAX sentinel means "any non-null i31ref" (from (ref.i31) in WAST)
+        // Also matches eqref/anyref sentinels for cross-type GC reference matching
         (Value::I31Ref(Some(_)), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => true,
         (Value::I31Ref(None), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => false,
+        // eqref/anyref sentinel (i32::MAX) matches any non-null struct/array/i31
+        (Value::StructRef(Some(_)), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => true,
+        (Value::ArrayRef(Some(_)), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => true,
+        (Value::StructRef(None), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => false,
+        (Value::ArrayRef(None), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => false,
         (Value::I31Ref(a), Value::I31Ref(b)) => a == b,
+        // StructRef: type_index = u32::MAX sentinel means "any non-null structref"
+        (Value::StructRef(Some(_)), Value::StructRef(Some(sentinel))) if sentinel.type_index == u32::MAX => true,
+        (Value::StructRef(None), Value::StructRef(Some(sentinel))) if sentinel.type_index == u32::MAX => false,
         (Value::StructRef(a), Value::StructRef(b)) => a == b,
+        // ArrayRef: type_index = u32::MAX sentinel means "any non-null arrayref"
+        (Value::ArrayRef(Some(_)), Value::ArrayRef(Some(sentinel))) if sentinel.type_index == u32::MAX => true,
+        (Value::ArrayRef(None), Value::ArrayRef(Some(sentinel))) if sentinel.type_index == u32::MAX => false,
         (Value::ArrayRef(a), Value::ArrayRef(b)) => a == b,
         // Cross-type null reference comparisons for WAST testing
         // In GC spec, (ref.null) without type is polymorphic and matches any null reference

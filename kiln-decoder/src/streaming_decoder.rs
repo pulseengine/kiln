@@ -871,20 +871,24 @@ impl<'a> StreamingDecoder<'a> {
                 // Concrete type indices are non-negative.
 
                 if heap_type_idx < 0 {
-                    // Abstract heap type
-                    match heap_type_idx {
-                        -16 => Ok((ValueType::FuncRef, new_offset)), // func (0x70)
-                        -17 => Ok((ValueType::ExternRef, new_offset)), // extern (0x6F)
-                        -18 => Ok((ValueType::AnyRef, new_offset)),  // any (0x6E)
-                        -19 => Ok((ValueType::EqRef, new_offset)),   // eq (0x6D)
-                        -20 => Ok((ValueType::I31Ref, new_offset)),  // i31 (0x6C)
-                        -21 => Ok((ValueType::StructRef(0), new_offset)), // struct (0x6B)
-                        -22 => Ok((ValueType::ArrayRef(0), new_offset)), // array (0x6A)
-                        -23 => Ok((ValueType::ExnRef, new_offset)),  // exn (0x69)
-                        -13 => Ok((ValueType::NullFuncRef, new_offset)), // nofunc (0x73) - bottom for func
-                        -14 => Ok((ValueType::ExternRef, new_offset)),   // noextern (0x72)
-                        -15 => Ok((ValueType::AnyRef, new_offset)), // none (0x71) - bottom for any
-                        -12 => Ok((ValueType::ExnRef, new_offset)), // noexn (0x74) - bottom for exn
+                    // Abstract heap type - must respect nullability
+                    // The shorthand forms (FuncRef, ExternRef, etc.) are nullable by definition.
+                    // Non-nullable abstract refs use TypedFuncRef with a sentinel index (u32::MAX)
+                    // to distinguish (ref func) from (ref null func) = FuncRef.
+                    match (heap_type_idx, nullable) {
+                        (-16, true) => Ok((ValueType::FuncRef, new_offset)), // (ref null func) = funcref
+                        (-16, false) => Ok((ValueType::TypedFuncRef(u32::MAX, false), new_offset)), // (ref func) - non-nullable abstract funcref
+                        (-17, _) => Ok((ValueType::ExternRef, new_offset)), // extern (0x6F)
+                        (-18, _) => Ok((ValueType::AnyRef, new_offset)),  // any (0x6E)
+                        (-19, _) => Ok((ValueType::EqRef, new_offset)),   // eq (0x6D)
+                        (-20, _) => Ok((ValueType::I31Ref, new_offset)),  // i31 (0x6C)
+                        (-21, _) => Ok((ValueType::StructRef(0), new_offset)), // struct (0x6B)
+                        (-22, _) => Ok((ValueType::ArrayRef(0), new_offset)), // array (0x6A)
+                        (-23, _) => Ok((ValueType::ExnRef, new_offset)),  // exn (0x69)
+                        (-13, _) => Ok((ValueType::NullFuncRef, new_offset)), // nofunc (0x73) - bottom for func
+                        (-14, _) => Ok((ValueType::ExternRef, new_offset)),   // noextern (0x72)
+                        (-15, _) => Ok((ValueType::AnyRef, new_offset)), // none (0x71) - bottom for any
+                        (-12, _) => Ok((ValueType::ExnRef, new_offset)), // noexn (0x74) - bottom for exn
                         _ => Ok((ValueType::AnyRef, new_offset)),   // fallback for unknown
                     }
                 } else {
@@ -1205,12 +1209,19 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 0x03 => {
                     // Global import - need to parse global type
-                    // value_type (1 byte) + mutability (1 byte)
-                    if offset + 1 >= data.len() {
+                    // value_type (variable length for ref types) + mutability (1 byte)
+                    if offset >= data.len() {
                         return Err(Error::parse_error("Unexpected end of global import"));
                     }
-                    let value_type_byte = data[offset];
-                    offset += 1;
+
+                    // Parse value type using full GC-aware parser (handles multi-byte ref types)
+                    let (value_type, new_offset) = self.parse_value_type(data, offset)?;
+                    offset = new_offset;
+
+                    // Parse mutability byte
+                    if offset >= data.len() {
+                        return Err(Error::parse_error("Unexpected end of global import mutability"));
+                    }
                     let mutability_byte = data[offset];
                     offset += 1;
 
@@ -1218,19 +1229,6 @@ impl<'a> StreamingDecoder<'a> {
                     if mutability_byte != 0x00 && mutability_byte != 0x01 {
                         return Err(Error::parse_error("malformed mutability"));
                     }
-
-                    // Parse value type
-                    let value_type = match value_type_byte {
-                        0x7F => kiln_foundation::ValueType::I32,
-                        0x7E => kiln_foundation::ValueType::I64,
-                        0x7D => kiln_foundation::ValueType::F32,
-                        0x7C => kiln_foundation::ValueType::F64,
-                        0x7B => kiln_foundation::ValueType::V128,
-                        0x70 => kiln_foundation::ValueType::FuncRef,
-                        0x6F => kiln_foundation::ValueType::ExternRef,
-                        0x69 => kiln_foundation::ValueType::ExnRef,
-                        _ => return Err(Error::parse_error("Invalid global import value type")),
-                    };
 
                     #[cfg(feature = "tracing")]
                     trace!(import_index = i, value_type = ?value_type, mutable = (mutability_byte != 0), "import: global");
@@ -2366,10 +2364,13 @@ impl<'a> StreamingDecoder<'a> {
 
             // Code section index i corresponds to module-defined function at index (num_imports + i)
             let func_index = num_imports + i as usize;
-            if let Some(func) = self.module.functions.get_mut(func_index) {
-                // Parse local variable declarations and track total count
-                let mut total_locals: u64 = 0;
 
+            // First pass: parse all local declarations into a temporary vec.
+            // This avoids borrow conflicts between self.parse_value_type (immutable borrow)
+            // and self.module.functions.get_mut (mutable borrow).
+            let mut local_decls: Vec<(u32, kiln_foundation::types::ValueType)> = Vec::new();
+            {
+                let mut total_locals: u64 = 0;
                 for _ in 0..local_count {
                     let (count, bytes) = read_leb128_u32(&data[body_start..body_end], body_offset)?;
                     body_offset += bytes;
@@ -2378,21 +2379,14 @@ impl<'a> StreamingDecoder<'a> {
                         return Err(Error::parse_error("Unexpected end of function body"));
                     }
 
-                    let value_type = data[body_start + body_offset];
-                    body_offset += 1;
-
-                    // Convert to ValueType and add to locals
-                    let vt = match value_type {
-                        0x7F => kiln_foundation::types::ValueType::I32,
-                        0x7E => kiln_foundation::types::ValueType::I64,
-                        0x7D => kiln_foundation::types::ValueType::F32,
-                        0x7C => kiln_foundation::types::ValueType::F64,
-                        0x7B => kiln_foundation::types::ValueType::V128,
-                        0x70 => kiln_foundation::types::ValueType::FuncRef,
-                        0x6F => kiln_foundation::types::ValueType::ExternRef,
-                        0x69 => kiln_foundation::types::ValueType::ExnRef,
-                        _ => return Err(Error::parse_error("Invalid local type")),
-                    };
+                    // Parse local value type using the full parse_value_type method,
+                    // which handles GC reference types (0x63/0x64 prefixed) as well
+                    // as standard value types.
+                    let (vt, new_offset) = self.parse_value_type(
+                        &data[body_start..body_end],
+                        body_offset,
+                    )?;
+                    body_offset = new_offset;
 
                     // Validate total locals: sum of all declared locals must fit in u32
                     total_locals += count as u64;
@@ -2400,8 +2394,15 @@ impl<'a> StreamingDecoder<'a> {
                         return Err(Error::parse_error("too many locals"));
                     }
 
+                    local_decls.push((count, vt));
+                }
+            }
+
+            if let Some(func) = self.module.functions.get_mut(func_index) {
+                // Apply parsed local declarations to the function
+                for (count, vt) in &local_decls {
                     // Validate total locals against platform limits before allocation
-                    let new_total = func.locals.len() + count as usize;
+                    let new_total = func.locals.len() + *count as usize;
                     if new_total > limits::MAX_FUNCTION_LOCALS {
                         return Err(Error::parse_error(
                             "Function exceeds maximum local count for platform",
@@ -2413,12 +2414,12 @@ impl<'a> StreamingDecoder<'a> {
                         AllocationPhase::Decode,
                         "streaming_decoder:func_locals",
                         "locals",
-                        count as usize
+                        *count as usize
                     );
 
                     // Add 'count' locals of this type
-                    for _ in 0..count {
-                        func.locals.push(vt);
+                    for _ in 0..*count {
+                        func.locals.push(*vt);
                     }
                 }
 

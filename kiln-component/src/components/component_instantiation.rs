@@ -3992,6 +3992,9 @@ impl ComponentInstance {
                             Error::runtime_execution_error("Failed to create tables")
                         })?,
                         memories: Vec::new(),
+                        #[cfg(feature = "std")]
+                        globals: Vec::new(),
+                        #[cfg(not(feature = "std"))]
                         globals: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
                             Error::runtime_execution_error("Failed to create globals")
                         })?,

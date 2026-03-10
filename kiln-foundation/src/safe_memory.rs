@@ -732,6 +732,14 @@ impl PartialEq for StdProvider {
 impl Eq for StdProvider {}
 
 #[cfg(feature = "std")]
+impl core::hash::Hash for StdProvider {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.data.hash(state);
+        self.verification_level.hash(state);
+    }
+}
+
+#[cfg(feature = "std")]
 impl Default for StdProvider {
     fn default() -> Self {
         Self {
@@ -931,31 +939,17 @@ impl Provider for StdProvider {
     /// lengths match and slices are valid, which `verify_access` and slice
     /// creation ensure.
     fn write_data(&mut self, offset: usize, data_to_write: &[u8]) -> Result<()> {
-        self.verify_access(offset, data_to_write.len())?;
-        self.track_access(offset, data_to_write.len());
-        debug_assert!(
-            offset
-                .checked_add(data_to_write.len())
-                .map_or(false, |end| end <= self.data.len()),
-            "StdProvider::write_data: offset+len must be <= self.data.len() after verify_access. \
-             Offset: {}, Len: {}, DataLen: {}",
-            offset,
-            data_to_write.len(),
-            self.data.len()
-        );
-
-        // Safety: verify_access ensures offset + data_to_write.len() is within
-        // self.data.capacity(). And also ensures offset + data_to_write.len()
-        // <= self.data.len() (current initialized part for Vec)
+        // StdProvider is heap-backed and growable, so we resize before access
+        // rather than failing with verify_access on an empty Vec.
         let required_len = offset
             .checked_add(data_to_write.len())
             .ok_or_else(|| Error::memory_error("Write offset + length calculation overflow"))?;
 
         if required_len > self.data.len() {
-            // Binary std/no_std choice
-            self.data.resize(required_len, 0u8); // Or some other default byte
+            self.data.resize(required_len, 0u8);
         }
 
+        self.track_access(offset, data_to_write.len());
         self.data[offset..required_len].copy_from_slice(data_to_write);
         // If StdProvider maintained its own checksum for the whole data Vec, it would
         // need updating.

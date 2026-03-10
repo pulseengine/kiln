@@ -814,39 +814,125 @@ impl FromBytes for char {
     // from_bytes is provided by the trait
 }
 
-// NEW: DefaultMemoryProvider
-/// A default memory provider for contexts where no specific provider is given.
-/// Binary std/no_std choice
-// const DEFAULT_NO_STD_PROVIDER_CAPACITY: usize = 0; // Capacity defined by NoStdProvider itself
+// DefaultMemoryProvider: uses StdProvider (heap-backed, growable) in std mode,
+// NoStdProvider with fixed buffer in no_std mode.
 
-/// Default memory provider for no_std environments when no specific provider is
-/// given. Wraps `NoStdProvider` with a fixed-size backing array.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)] // Removed Copy
-pub struct DefaultMemoryProvider(NoStdProvider<0>); // Use 0 for default capacity of NoStdProvider
+#[cfg(feature = "std")]
+use crate::safe_memory::StdProvider;
 
+/// Default memory provider for GC struct/array values.
+/// In std mode, wraps heap-backed `StdProvider` for dynamic growth.
+/// In no_std mode, wraps `NoStdProvider` with a fixed-size backing array.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DefaultMemoryProvider(StdProvider);
+
+#[cfg(not(feature = "std"))]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DefaultMemoryProvider(NoStdProvider<1152>);
+
+#[cfg(feature = "std")]
 impl Default for DefaultMemoryProvider {
     fn default() -> Self {
-        // Note: Using NoStdProvider::<0>::default() here is legitimate as this is
-        // the default memory provider implementation for trait-level fallbacks
-        Self(NoStdProvider::<0>::default())
+        Self(StdProvider::default())
     }
 }
 
-impl RootMemoryProvider for DefaultMemoryProvider {
-    type Allocator = NoStdProvider<0>;
+#[cfg(not(feature = "std"))]
+impl Default for DefaultMemoryProvider {
+    fn default() -> Self {
+        Self(NoStdProvider::<1152>::default())
+    }
+}
 
-    // Binary std/no_std choice
+#[cfg(feature = "std")]
+impl RootMemoryProvider for DefaultMemoryProvider {
+    type Allocator = StdProvider;
+
+    fn acquire_memory(&self, layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
+        self.0.acquire_memory(layout)
+    }
+
+    fn release_memory(&self, ptr: *mut u8, layout: core::alloc::Layout) -> kiln_error::Result<()> {
+        self.0.release_memory(ptr, layout)
+    }
+
+    fn get_allocator(&self) -> &Self::Allocator {
+        &self.0
+    }
+
+    fn new_handler(&self) -> kiln_error::Result<SafeMemoryHandler<Self>>
+    where
+        Self: Sized,
+    {
+        Ok(SafeMemoryHandler::new(self.clone()))
+    }
+
+    fn borrow_slice(&self, offset: usize, len: usize) -> kiln_error::Result<Slice<'_>> {
+        self.0.borrow_slice(offset, len)
+    }
+
+    fn write_data(&mut self, offset: usize, data: &[u8]) -> kiln_error::Result<()> {
+        self.0.write_data(offset, data)
+    }
+
+    fn verify_access(&self, offset: usize, len: usize) -> kiln_error::Result<()> {
+        self.0.verify_access(offset, len)
+    }
+
+    fn size(&self) -> usize {
+        self.0.size()
+    }
+
+    fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+
+    fn verify_integrity(&self) -> kiln_error::Result<()> {
+        self.0.verify_integrity()
+    }
+
+    fn set_verification_level(&mut self, level: VerificationLevel) {
+        self.0.set_verification_level(level)
+    }
+
+    fn verification_level(&self) -> VerificationLevel {
+        self.0.verification_level()
+    }
+
+    fn memory_stats(&self) -> Stats {
+        self.0.memory_stats()
+    }
+
+    fn get_slice_mut(&mut self, offset: usize, len: usize) -> kiln_error::Result<SliceMut<'_>> {
+        self.0.get_slice_mut(offset, len)
+    }
+
+    fn copy_within(
+        &mut self,
+        src_offset: usize,
+        dst_offset: usize,
+        len: usize,
+    ) -> kiln_error::Result<()> {
+        self.0.copy_within(src_offset, dst_offset, len)
+    }
+
+    fn ensure_used_up_to(&mut self, byte_offset: usize) -> kiln_error::Result<()> {
+        self.0.ensure_used_up_to(byte_offset)
+    }
+}
+
+#[cfg(not(feature = "std"))]
+impl RootMemoryProvider for DefaultMemoryProvider {
+    type Allocator = NoStdProvider<1152>;
 
     fn acquire_memory(&self, _layout: core::alloc::Layout) -> kiln_error::Result<*mut u8> {
-        // Binary std/no_std choice
         Err(KilnError::memory_error(
-            "DefaultMemoryProvider (NoStdProvider<0>) cannot dynamically allocate memory.",
+            "DefaultMemoryProvider (no_std) cannot dynamically allocate memory.",
         ))
     }
 
     fn release_memory(&self, _ptr: *mut u8, _layout: core::alloc::Layout) -> kiln_error::Result<()> {
-        // Binary std/no_std choice
-        // Safety: This encapsulates unsafe operations internally
         Ok(())
     }
 
@@ -861,9 +947,8 @@ impl RootMemoryProvider for DefaultMemoryProvider {
         Ok(SafeMemoryHandler::new(self.clone()))
     }
 
-    // Implement missing methods from crate::safe_memory::Provider
     fn borrow_slice(&self, offset: usize, len: usize) -> kiln_error::Result<Slice<'_>> {
-        self.0.borrow_slice(offset, len) // Delegate to inner NoStdProvider
+        self.0.borrow_slice(offset, len)
     }
 
     fn write_data(&mut self, offset: usize, data: &[u8]) -> kiln_error::Result<()> {
