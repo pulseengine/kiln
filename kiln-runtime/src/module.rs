@@ -2033,8 +2033,12 @@ impl Module {
                     // Parse the offset expression bytes
                     let offset_bytes = &elem_seg.offset_expr_bytes;
                     let offset: u32 = if !offset_bytes.is_empty() && offset_bytes[0] == 0x41 {
-                        // i32.const - parse LEB128 value
+                        // i32.const (0x41) - parse LEB128 value
                         let (value, _) = crate::instruction_parser::read_leb128_i32(offset_bytes, 1)?;
+                        value as u32
+                    } else if !offset_bytes.is_empty() && offset_bytes[0] == 0x42 {
+                        // i64.const (0x42) - parse LEB128 i64 value (table64 element offset)
+                        let (value, _) = crate::instruction_parser::read_leb128_i64(offset_bytes, 1)?;
                         value as u32
                     } else {
                         0
@@ -2129,10 +2133,23 @@ impl Module {
                                 }
                             }
                             _ => {
-                                // Unknown expression type - push null sentinel
-                                #[cfg(feature = "tracing")]
-                                trace!(elem_offset = offset_value + i as u32, opcode = format_args!("0x{:02X}", expr[0]), "Element item = unknown opcode (treating as null)");
-                                items.push(u32::MAX)?;  // Default to null for unknown expressions
+                                // Other const expressions (ref.i31, struct.new, etc.)
+                                // Defer to item_exprs for evaluation during instantiation
+                                #[cfg(feature = "std")]
+                                {
+                                    #[cfg(feature = "tracing")]
+                                    trace!(elem_offset = offset_value + i as u32, opcode = format_args!("0x{:02X}", expr[0]), "Element item = const expr (deferred)");
+                                    let expr_insts = crate::instruction_parser::parse_instructions_with_provider(
+                                        expr.as_slice(),
+                                        shared_provider.clone()
+                                    )?;
+                                    deferred_item_exprs.push((i as u32, KilnExpr { instructions: expr_insts }));
+                                    items.push(u32::MAX - 1)?;  // Sentinel for deferred evaluation
+                                }
+                                #[cfg(not(feature = "std"))]
+                                {
+                                    items.push(u32::MAX)?;
+                                }
                             }
                         }
                     }
@@ -4232,6 +4249,12 @@ impl TableWrapper {
     /// Grow table using interior mutability
     pub fn grow(&self, delta: u32, init_value: KilnValue) -> Result<u32> {
         self.0.grow_shared(delta, init_value)
+    }
+
+    /// Check if this table uses table64 (64-bit indices)
+    #[must_use]
+    pub fn is_table64(&self) -> bool {
+        self.0.ty.table64
     }
 
     /// Initialize table using interior mutability

@@ -219,11 +219,6 @@ struct ControlFrame {
     stack_height: usize,
     /// Stack height when frame became unreachable (for polymorphic base tracking)
     unreachable_height: Option<usize>,
-    /// Count of concrete values pushed after the frame became unreachable.
-    /// This tracks real pushes (i32.const, local.get, call results, etc.)
-    /// but NOT phantom values from polymorphic underflow.
-    /// Used to reject blocks that push too many concrete values in unreachable code.
-    concrete_push_count: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -785,7 +780,6 @@ impl WastModuleValidator {
             reachable: true,
             stack_height: 0,
             unreachable_height: None,
-            concrete_push_count: 0,
         }];
 
         // Parse bytecode
@@ -799,12 +793,13 @@ impl WastModuleValidator {
             match opcode {
                 // Control flow
                 0x00 => {
-                    // unreachable
+                    // unreachable — per spec, stack becomes polymorphic.
+                    // Always truncate stack to frame base, even if already
+                    // unreachable, to discard concrete values pushed since
+                    // the last terminating instruction.
                     if let Some(frame) = frames.last_mut() {
+                        stack.truncate(frame.stack_height);
                         if frame.reachable {
-                            // Truncate stack to frame base — per spec, stack becomes
-                            // polymorphic after a terminating instruction
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
@@ -844,7 +839,6 @@ impl WastModuleValidator {
                         reachable: true,
                         stack_height,
                         unreachable_height: None,
-                        concrete_push_count: 0,
                     });
 
                     // Push inputs back - they're now on the block's stack
@@ -883,7 +877,6 @@ impl WastModuleValidator {
                         reachable: true,
                         stack_height,
                         unreachable_height: None,
-                        concrete_push_count: 0,
                     });
 
                     // Push inputs back - they're now on the loop's stack
@@ -932,7 +925,6 @@ impl WastModuleValidator {
                         reachable: true,
                         stack_height,
                         unreachable_height: None,
-                        concrete_push_count: 0,
                     });
 
                     // Push inputs back - they're now on the if's stack
@@ -969,11 +961,17 @@ impl WastModuleValidator {
                                 }
                             }
                         } else {
-                            // Unreachable then-branch: check for excess concrete values
+                            // Unreachable then-branch: pop output types with
+                            // polymorphic matching, then check for excess values.
                             let unreachable_height =
                                 frame.unreachable_height.unwrap_or(frame.stack_height);
-                            let concrete_count = stack.len().saturating_sub(unreachable_height);
-                            if concrete_count > frame.output_types.len() {
+                            let output_types = frame.output_types.clone();
+                            for &expected in output_types.iter().rev() {
+                                if !Self::pop_type(&mut stack, expected, unreachable_height, true) {
+                                    return Err(anyhow!("type mismatch"));
+                                }
+                            }
+                            if stack.len() > frame.stack_height {
                                 return Err(anyhow!("type mismatch"));
                             }
                         }
@@ -993,7 +991,6 @@ impl WastModuleValidator {
                         frame.frame_type = FrameType::Else;
                         frame.reachable = true;
                         frame.unreachable_height = None;
-                        frame.concrete_push_count = 0;
                     }
                 },
 
@@ -1027,7 +1024,6 @@ impl WastModuleValidator {
                         reachable: true,
                         stack_height,
                         unreachable_height: None,
-                        concrete_push_count: 0,
                     });
 
                     for input_type in &input_types {
@@ -1103,8 +1099,8 @@ impl WastModuleValidator {
 
                     // throw is a terminating instruction — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
+                        stack.truncate(frame.stack_height);
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
@@ -1126,8 +1122,8 @@ impl WastModuleValidator {
 
                     // rethrow is a terminating instruction — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
+                        stack.truncate(frame.stack_height);
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
@@ -1149,8 +1145,8 @@ impl WastModuleValidator {
 
                     // throw_ref is a terminating instruction — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
+                        stack.truncate(frame.stack_height);
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
@@ -1167,25 +1163,21 @@ impl WastModuleValidator {
                         let unreachable = !frame.reachable;
 
                         if unreachable {
-                            // In unreachable code, the stack is polymorphic for underflow.
-                            // Values pushed after unreachable are concrete and must type-check.
+                            // In unreachable code, the stack is polymorphic.
+                            // Pop expected output types with polymorphic matching.
                             let unreachable_height =
                                 frame.unreachable_height.unwrap_or(frame_height);
-
-                            // Check for excess concrete values above the polymorphic base.
-                            // The concrete values pushed after unreachable must not exceed
-                            // the expected output count.
-                            let concrete_count = stack.len().saturating_sub(unreachable_height);
-                            if concrete_count > frame.output_types.len() {
-                                return Err(anyhow!("type mismatch"));
-                            }
 
                             for &expected in frame.output_types.iter().rev() {
                                 if !Self::pop_type(&mut stack, expected, unreachable_height, true) {
                                     return Err(anyhow!("type mismatch"));
                                 }
                             }
-                            stack.truncate(frame_height);
+                            // After popping output types, reject excess concrete
+                            // values above the frame base.
+                            if stack.len() > frame_height {
+                                return Err(anyhow!("type mismatch"));
+                            }
                         } else {
                             // In reachable code, check exact stack height and types
                             let expected_height = frame_height + frame.output_types.len();
@@ -1218,25 +1210,19 @@ impl WastModuleValidator {
                     let unreachable = !frame.reachable;
 
                     if unreachable {
-                        // In unreachable code, the stack is polymorphic for underflow.
-                        // Values pushed after unreachable are concrete and must type-check.
+                        // In unreachable code, the stack is polymorphic.
+                        // Pop expected output types with polymorphic matching.
                         let unreachable_height = frame.unreachable_height.unwrap_or(frame_height);
-
-                        // Check for excess concrete values above the polymorphic base.
-                        // The concrete values pushed after unreachable must not exceed
-                        // the expected output count.
-                        let concrete_count = stack.len().saturating_sub(unreachable_height);
-                        if concrete_count > frame.output_types.len() {
-                            return Err(anyhow!("type mismatch"));
-                        }
 
                         for &expected in frame.output_types.iter().rev() {
                             if !Self::pop_type(&mut stack, expected, unreachable_height, true) {
                                 return Err(anyhow!("type mismatch"));
                             }
                         }
-                        // Truncate stack to frame height
-                        stack.truncate(frame_height);
+                        // After popping output types, reject excess concrete values
+                        if stack.len() > frame_height {
+                            return Err(anyhow!("type mismatch"));
+                        }
                     } else {
                         // In reachable code, check exact stack height and types
                         let expected_height = frame_height + frame.output_types.len();
@@ -1268,8 +1254,8 @@ impl WastModuleValidator {
 
                     // Mark current frame as unreachable — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
+                        stack.truncate(frame.stack_height);
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
@@ -1392,8 +1378,8 @@ impl WastModuleValidator {
 
                     // Mark current frame as unreachable — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
+                        stack.truncate(frame.stack_height);
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
@@ -1416,8 +1402,8 @@ impl WastModuleValidator {
                     }
 
                     if let Some(frame) = frames.last_mut() {
+                        stack.truncate(frame.stack_height);
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
@@ -1482,10 +1468,11 @@ impl WastModuleValidator {
                     let func_type = &module.types[type_idx as usize];
                     let frame_height = Self::current_frame_height(&frames);
 
-                    // Pop table index (must be i32)
+                    // Pop table index (i64 if table64, i32 otherwise)
+                    let ci_it = if Self::is_table64(module, table_idx) { StackType::I64 } else { StackType::I32 };
                     if !Self::pop_type(
                         &mut stack,
-                        StackType::I32,
+                        ci_it,
                         frame_height,
                         Self::is_unreachable(&frames),
                     ) {
@@ -1549,8 +1536,8 @@ impl WastModuleValidator {
 
                     // return_call is a terminating instruction (like return)
                     if let Some(frame) = frames.last_mut() {
+                        stack.truncate(frame.stack_height);
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
@@ -1599,10 +1586,11 @@ impl WastModuleValidator {
 
                     let frame_height = Self::current_frame_height(&frames);
 
-                    // Pop table index (must be i32)
+                    // Pop table index (i64 if table64, i32 otherwise)
+                    let rci_it = if Self::is_table64(module, table_idx) { StackType::I64 } else { StackType::I32 };
                     if !Self::pop_type(
                         &mut stack,
-                        StackType::I32,
+                        rci_it,
                         frame_height,
                         Self::is_unreachable(&frames),
                     ) {
@@ -1624,8 +1612,8 @@ impl WastModuleValidator {
 
                     // return_call_indirect is a terminating instruction (like return)
                     if let Some(frame) = frames.last_mut() {
+                        stack.truncate(frame.stack_height);
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
                         frame.reachable = false;
@@ -1776,7 +1764,6 @@ impl WastModuleValidator {
                         reachable: true,
                         stack_height,
                         unreachable_height: None,
-                        concrete_push_count: 0,
                     });
 
                     for input_type in &input_types {
@@ -2924,7 +2911,16 @@ impl WastModuleValidator {
                     // Pops a reference, pushes i32
                     let frame_height = Self::current_frame_height(&frames);
                     let unreachable = Self::is_unreachable(&frames);
-                    if !unreachable {
+                    if unreachable {
+                        // In unreachable code, pop with polymorphic underflow
+                        if stack.len() > frame_height {
+                            let ref_type = stack.pop().unwrap();
+                            if ref_type != StackType::Unknown && !ref_type.is_reference() {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                        }
+                        // Underflow is OK in unreachable code
+                    } else {
                         if stack.len() <= frame_height {
                             return Err(anyhow!("type mismatch"));
                         }

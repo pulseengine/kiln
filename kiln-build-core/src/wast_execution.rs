@@ -1372,12 +1372,23 @@ pub fn execute_wast_invoke(engine: &mut WastEngine, invoke: &WastInvoke) -> Resu
 }
 
 /// Helper function to execute a WAST execute directive
-pub fn execute_wast_execute(engine: &mut WastEngine, execute: &WastExecute) -> Result<Vec<Value>> {
+///
+/// Takes `&mut WastExecute` because `WastExecute::Wat` modules need to be
+/// encoded via `encode()` which requires `&mut self`.
+pub fn execute_wast_execute(engine: &mut WastEngine, execute: &mut WastExecute) -> Result<Vec<Value>> {
     match execute {
         WastExecute::Invoke(invoke) => execute_wast_invoke(engine, invoke),
-        WastExecute::Wat(_) => {
-            // WAT modules need to be compiled and executed
-            Err(anyhow::anyhow!("WAT execution not yet implemented"))
+        WastExecute::Wat(wat) => {
+            // WAT modules in assert_trap need to be compiled and instantiated.
+            // The trap occurs during instantiation (e.g., out-of-bounds table/memory
+            // access during element/data segment initialization, or start function trap).
+            let binary = wat.encode().map_err(|e| {
+                anyhow::anyhow!("Failed to encode WAT module: {}", e)
+            })?;
+            // Load the module - this triggers instantiation which may trap
+            engine.load_module(None, &binary)?;
+            // If we get here, the module loaded successfully (no trap)
+            Ok(vec![])
         },
         WastExecute::Get { module, global, .. } => {
             // Global variable access
@@ -1449,9 +1460,9 @@ pub fn run_simple_wast_test(wast_content: &str) -> Result<()> {
                     ));
                 },
             },
-            WastDirective::AssertTrap { exec, message, .. } => {
+            WastDirective::AssertTrap { mut exec, message, .. } => {
                 // Test that execution traps with expected error
-                match execute_wast_execute(&mut engine, &exec) {
+                match execute_wast_execute(&mut engine, &mut exec) {
                     Err(_) => {
                         // Expected trap occurred
                     },
