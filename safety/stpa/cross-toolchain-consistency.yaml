@@ -1,0 +1,151 @@
+# Cross-Toolchain Canonical ABI Consistency Hazards
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Three independent implementations of the Component Model Canonical ABI
+# must agree on layout computations. Disagreement causes silent data
+# corruption at tool boundaries.
+#
+# This analysis mirrors and extends:
+#   pulseengine/meld/safety/stpa/cross-toolchain-consistency.yaml
+#
+# Spec baselines (shared across all tools):
+#   Core: WebAssembly Specification 3.0 (2025-12-03)
+#   Component Model: commit deb0b0a (2025-05-19)
+#   WASI: v0.2.3 (2024-12-17)
+
+cross-toolchain-hazards:
+  # =========================================================================
+  # XH-1: Meld ↔ Kiln element size disagreement
+  # =========================================================================
+  - id: XH-1
+    title: Canonical ABI element size disagreement (Meld ↔ Kiln)
+    tools: [meld, kiln]
+    description: >
+      Meld's parser.rs::canonical_abi_element_size() and Kiln's
+      kiln-component canonical_abi compute different element sizes for
+      the same component type. When running a Meld-fused P2 component,
+      adapters (computed by Meld) allocate buffers with wrong sizes vs.
+      what Kiln's lift/lower expects.
+    affected-types:
+      - "list<tuple<...>> with non-trivial padding"
+      - "record with mixed-size fields (u8, u32, u64)"
+      - "variant with differently-sized payloads"
+    impact: >
+      Silent data corruption: after the first list element, all subsequent
+      elements are read at wrong offsets. The corruption produces plausible
+      but incorrect values (no trap, no error).
+    mitigation:
+      primary: "Shared wit-bindgen composed-runner fixtures run through both tool paths"
+      secondary: "Shared Rocq formal spec for canonical_abi_element_size"
+      tertiary: "Minimal, auditable canonical ABI implementation in both tools"
+    kiln-implementation: kiln-component/src/canonical_abi/
+    meld-implementation: meld-core/src/parser.rs::canonical_abi_element_size()
+    requirement: SR-11
+
+  # =========================================================================
+  # XH-3: Synth ↔ Kiln element size disagreement
+  # =========================================================================
+  - id: XH-3
+    title: Canonical ABI element size disagreement (Synth ↔ Kiln)
+    tools: [synth, kiln]
+    description: >
+      Synth's synth-abi crate computes element sizes for AOT compilation.
+      When Synth-compiled code runs on Kiln (via Gale), the import dispatch
+      argument layout must match what Kiln expects to read.
+    affected-types:
+      - "Import arguments with composite types"
+      - "Return values written via retptr"
+    impact: >
+      Synth-compiled binary calls Kiln host function with misaligned
+      arguments. Kiln reads wrong values from the argument buffer.
+    mitigation:
+      primary: "End-to-end fixtures: compile with Synth, run on Kiln"
+      secondary: "Shared Rocq spec for element sizing"
+    kiln-implementation: kiln-component/src/canonical_abi/
+    synth-implementation: synth-abi/src/layout.rs
+    requirement: SR-24
+
+  # =========================================================================
+  # XH-4: String encoding disagreement
+  # =========================================================================
+  - id: XH-4
+    title: String encoding disagreement (Meld, Kiln, Synth)
+    tools: [meld, kiln, synth]
+    description: >
+      Each tool implements string transcoding (UTF-8, UTF-16, Latin-1)
+      independently. If encoding boundaries are handled differently
+      (surrogate pairs, BOM, NUL termination), strings corrupt at tool
+      boundaries.
+    affected-types:
+      - "string (all encodings)"
+      - "list<char> as string representation"
+    impact: >
+      String data corrupted when crossing tool boundaries. Particularly
+      dangerous for non-ASCII content (multi-byte characters, emoji, CJK).
+    mitigation:
+      primary: "Shared wit-bindgen strings fixture with non-BMP characters"
+      secondary: "Shared Rocq spec for string transcoding"
+    kiln-implementation: kiln-component/src/canonical_abi/
+    kiln-status: "UTF-8 only; no UTF-16 or Latin-1 tests"
+    requirement: SR-9
+
+  # =========================================================================
+  # XH-5: Record field alignment disagreement
+  # =========================================================================
+  - id: XH-5
+    title: Record field alignment disagreement (Meld, Kiln, Synth)
+    tools: [meld, kiln, synth]
+    description: >
+      The canonical ABI spec's align_up function must be implemented
+      identically in all tools. Field offsets computed by Kiln's
+      canonical ABI must match Meld's field layout calculations.
+    affected-types:
+      - "record with mixed-size fields"
+      - "variant with alignment-sensitive payloads"
+    impact: >
+      Fields read at wrong offsets. First field correct, subsequent
+      fields shifted by alignment padding difference.
+    mitigation:
+      primary: "Shared wit-bindgen records fixture"
+      secondary: "Shared Rocq spec for align_up and field layout"
+    kiln-implementation: kiln-component/src/canonical_abi/
+    requirement: SR-10
+
+# =========================================================================
+# Fixture Coverage Matrix
+# =========================================================================
+# Status of shared wit-bindgen fixtures across tool paths
+#
+# Fixtures: numbers, strings, lists, records, variants, options,
+#   many-arguments, flavorful, resources, results, lists-alias,
+#   strings-alias, strings-simple, fixed-length-lists
+
+fixture-coverage:
+  meld-core:
+    status: "All 14 passing"
+    fixtures: [numbers, strings, lists, records, variants, options,
+               many-arguments, flavorful, resources, results,
+               lists-alias, strings-alias, strings-simple, fixed-length-lists]
+
+  meld-component:
+    status: "13 passing, 1 graceful degradation"
+    fixtures: [numbers, strings, lists, records, variants, options,
+               many-arguments, flavorful, results,
+               lists-alias, strings-alias, strings-simple]
+    degraded: [fixed-length-lists]
+
+  kiln-runtime:
+    status: "TODO"
+    fixtures: []
+    note: "Blocking gap — no shared fixtures run through Kiln yet"
+
+  synth-aot:
+    status: "TODO"
+    fixtures: []
+    note: "Pending Synth AOT compilation stabilization"
+
+  synth-kiln-bridge:
+    status: "TODO"
+    fixtures: []
+    note: "End-to-end: AOT compile → run on Kiln/Gale"

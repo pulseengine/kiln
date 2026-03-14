@@ -1,0 +1,303 @@
+# STPA Step 3b: Controller Constraints
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Each controller constraint is derived from one or more UCAs. It specifies
+# the required behavior of a controller to prevent the unsafe control action.
+
+controller-constraints:
+  # =========================================================================
+  # Execution Engine constraints
+  # =========================================================================
+  - id: CC-E-1
+    controller: CTRL-ENGINE
+    constraint: >
+      Engine shall implement all numeric instructions with correct edge-case
+      semantics, including NaN propagation (canonical NaN vs arithmetic NaN),
+      saturating conversions (clamp, not trap), and division (truncation toward
+      zero for signed, trap on div-by-zero and INT_MIN/-1 overflow).
+    ucas: [UCA-E-1]
+    hazards: [H-1]
+
+  - id: CC-E-2
+    controller: CTRL-ENGINE
+    constraint: >
+      Engine shall decrement the fuel counter before each instruction dispatch
+      and trap immediately when fuel reaches zero. No instruction shall execute
+      with fuel <= 0.
+    ucas: [UCA-E-2]
+    hazards: [H-3]
+
+  - id: CC-E-3
+    controller: CTRL-ENGINE
+    constraint: >
+      Every memory access shall check offset + size <= memory.size * PAGE_SIZE.
+      After memory.grow, the bounds check shall use the updated size. The check
+      shall handle u32 overflow (offset + size wrapping).
+    ucas: [UCA-E-3]
+    hazards: [H-2]
+
+  - id: CC-E-4
+    controller: CTRL-ENGINE
+    constraint: >
+      Opcode dispatch shall use the exact byte sequence from the instruction
+      stream. Multi-byte opcodes (0xFC, 0xFD, 0xFE prefixes) shall decode the
+      full opcode before dispatch. Unknown opcodes shall trap, not fall through.
+    ucas: [UCA-E-4]
+    hazards: [H-1]
+
+  - id: CC-E-5
+    controller: CTRL-ENGINE
+    constraint: >
+      Call stack depth shall be checked before every call instruction. When the
+      maximum depth is reached, the engine shall trap with stack overflow. The
+      maximum depth shall be configurable and default to a safe value.
+    ucas: [UCA-E-5]
+    hazards: [H-2, H-3]
+
+  - id: CC-E-6
+    controller: CTRL-ENGINE
+    constraint: >
+      In multi-memory mode, the memory index operand of every memory instruction
+      shall be validated against the module's declared memory count. The engine
+      shall not default to memory 0 when an invalid index is provided.
+    ucas: [UCA-E-6]
+    hazards: [H-2]
+
+  # =========================================================================
+  # Decoder constraints
+  # =========================================================================
+  - id: CC-D-1
+    controller: CTRL-DECODER
+    constraint: >
+      Decoder shall reject all modules and components that fail any validation
+      check defined in the WebAssembly spec. Section ordering, type consistency,
+      function body validation, and all custom section constraints shall be
+      enforced. No invalid bytecode shall reach the engine.
+    ucas: [UCA-D-1]
+    hazards: [H-1, H-2]
+
+  - id: CC-D-2
+    controller: CTRL-DECODER
+    constraint: >
+      Decoder shall enforce configurable resource limits (max functions, max
+      memories, max types, max globals, max tables, max elements) and reject
+      modules that exceed any limit. Default limits shall be safe for the
+      target platform's memory budget.
+    ucas: [UCA-D-2]
+    hazards: [H-3]
+
+  - id: CC-D-3
+    controller: CTRL-DECODER
+    constraint: >
+      Decoder shall correctly distinguish core modules (magic + version 1) from
+      components (magic + version 0x0d00) and route to the appropriate
+      instantiation path. Ambiguous or unknown version bytes shall be rejected.
+    ucas: [UCA-D-3]
+    hazards: [H-4, H-5]
+
+  # =========================================================================
+  # Component Model constraints
+  # =========================================================================
+  - id: CC-CM-1
+    controller: CTRL-CM
+    constraint: >
+      String transcoding shall correctly handle all UTF-8 encodings including
+      multi-byte characters (2, 3, 4 bytes), surrogate pairs in UTF-16, and
+      the full Unicode range. Code unit counts shall match the encoded length.
+    ucas: [UCA-CM-1]
+    hazards: [H-4]
+
+  - id: CC-CM-2
+    controller: CTRL-CM
+    constraint: >
+      Record field offsets shall be computed using the canonical ABI's align_up
+      function: offset = align_up(current_offset, field_alignment). The
+      implementation shall match the spec's pseudocode exactly.
+    ucas: [UCA-CM-2]
+    hazards: [H-4]
+
+  - id: CC-CM-3
+    controller: CTRL-CM
+    constraint: >
+      List element size shall be computed as align_up(sum_of_field_sizes,
+      max_alignment) for composite elements. This shall be tested against
+      Meld's canonical_abi_element_size() for all type families.
+    ucas: [UCA-CM-3]
+    hazards: [H-4]
+
+  - id: CC-CM-4
+    controller: CTRL-CM
+    constraint: >
+      Resource handle allocation shall never reuse an index that is still live.
+      The resource table shall use generation counters or a free list that
+      guarantees no aliasing between create and the previous drop.
+    ucas: [UCA-CM-4]
+    hazards: [H-6]
+
+  - id: CC-CM-5
+    controller: CTRL-CM
+    constraint: >
+      Resource drop shall validate the handle is live before dropping. A
+      second drop of the same handle shall trap, not corrupt the table.
+      The table shall track which handles are live vs dropped.
+    ucas: [UCA-CM-5]
+    hazards: [H-6]
+
+  - id: CC-CM-6
+    controller: CTRL-CM
+    constraint: >
+      Async task state machine shall track task lifecycle (created, running,
+      suspended, completed, cancelled). A cancelled task shall never transition
+      to running. The state machine shall be enforced by the type system or
+      runtime checks.
+    ucas: [UCA-CM-6]
+    hazards: [H-7]
+
+  - id: CC-CM-7
+    controller: CTRL-CM
+    constraint: >
+      Cross-component call dispatch shall use the linker's resolution table
+      to map (source_instance, import_index) to (target_instance, export_index).
+      The dispatch shall not use hardcoded instance indices or fallback logic.
+    ucas: [UCA-CM-7]
+    hazards: [H-5]
+
+  - id: CC-CM-8
+    controller: CTRL-CM
+    constraint: >
+      Canonical ABI element size, field alignment, and string encoding shall
+      produce results identical to Meld's and Synth's implementations. This
+      shall be verified by running the shared wit-bindgen fixture suite through
+      Kiln. Any disagreement is a blocking defect.
+    ucas: [UCA-CM-8]
+    hazards: [H-4]
+
+  # =========================================================================
+  # Linker constraints
+  # =========================================================================
+  - id: CC-L-1
+    controller: CTRL-LINKER
+    constraint: >
+      Import resolution shall use fully-qualified names (module:field) and
+      shall reject ambiguous matches. When multiple exports match, the linker
+      shall report an error rather than choosing arbitrarily.
+    ucas: [UCA-L-1]
+    hazards: [H-5]
+
+  - id: CC-L-2
+    controller: CTRL-LINKER
+    constraint: >
+      Type compatibility between import and export shall be verified at link
+      time. Function signatures shall match exactly (parameter types and
+      result types). Type-mismatched links shall be rejected with a diagnostic.
+    ucas: [UCA-L-2]
+    hazards: [H-5]
+
+  - id: CC-L-3
+    controller: CTRL-LINKER
+    constraint: >
+      Module instantiation order shall respect the dependency graph. The
+      linker shall topologically sort instances and reject cycles. No module
+      shall be instantiated before all its imports are resolved.
+    ucas: [UCA-L-3]
+    hazards: [H-5]
+
+  # =========================================================================
+  # CFI constraints
+  # =========================================================================
+  - id: CC-CFI-1
+    controller: CTRL-CFI
+    constraint: >
+      Every call instruction (call, call_indirect, call_ref, return_call)
+      shall push the expected return address to the shadow stack. This
+      includes host-to-guest calls and cross-component calls.
+    ucas: [UCA-CFI-1]
+    hazards: [H-9]
+
+  - id: CC-CFI-2
+    controller: CTRL-CFI
+    constraint: >
+      call_indirect type validation shall use the type annotation from the
+      instruction, not the table element's declared type. The comparison
+      shall account for subtyping if GC types are enabled.
+    ucas: [UCA-CFI-2]
+    hazards: [H-9]
+
+  - id: CC-CFI-3
+    controller: CTRL-CFI
+    constraint: >
+      CFI violation policy shall default to "trap" in all safety-critical
+      configurations (ASIL-A and above). The "continue" policy shall only
+      be available in QM/development mode and shall emit a warning at
+      configuration time.
+    ucas: [UCA-CFI-3]
+    hazards: [H-8, H-9]
+
+  # =========================================================================
+  # WASI constraints
+  # =========================================================================
+  - id: CC-W-1
+    controller: CTRL-WASI
+    constraint: >
+      Every WASI operation shall check the calling component's WasiCapabilities
+      before execution. The capability set shall be resolved from the component
+      instance ID, not from a global or shared state. In multi-component
+      scenarios, capability isolation shall be verified.
+    ucas: [UCA-W-1]
+    hazards: [H-8]
+
+  - id: CC-W-2
+    controller: CTRL-WASI
+    constraint: >
+      Clock reads shall be monotonic (each read >= previous read for the same
+      clock). The implementation shall use platform-specific monotonic clock
+      sources. If the platform clock is not monotonic, the implementation shall
+      clamp to the previous value.
+    ucas: [UCA-W-2]
+    hazards: [H-5]
+
+  - id: CC-W-3
+    controller: CTRL-WASI
+    constraint: >
+      Random number generation shall use a cryptographically secure source.
+      On platforms without hardware entropy, the implementation shall return
+      an error rather than falling back to a predictable PRNG.
+    ucas: [UCA-W-3]
+    hazards: [H-5]
+
+  # =========================================================================
+  # Blast Zone constraints
+  # =========================================================================
+  - id: CC-BZ-1
+    controller: CTRL-BLAST
+    constraint: >
+      Fault isolation shall be atomic: either the faulting component's state
+      is fully rolled back, or no shared runtime state is modified. The blast
+      zone shall use a pre-fault snapshot or copy-on-write strategy to prevent
+      partial state corruption.
+    ucas: [UCA-BZ-1]
+    hazards: [H-2, H-5]
+
+  # =========================================================================
+  # Allocation Manager constraints
+  # =========================================================================
+  - id: CC-A-1
+    controller: CTRL-ALLOC
+    constraint: >
+      In ASIL-D mode, all allocation paths shall be statically verified to
+      use only pre-allocated buffers. The safe_managed_alloc! macro shall
+      reject calls at compile time (or at runtime initialization) in ASIL-D
+      configuration. No code path shall bypass the macro.
+    ucas: [UCA-A-1]
+    hazards: [H-10]
+
+  - id: CC-A-2
+    controller: CTRL-ALLOC
+    constraint: >
+      BoundedVec::push, BoundedMap::insert, and all bounded collection
+      operations shall return Result::Err when at capacity. The caller
+      shall handle the error. No bounded collection operation shall
+      silently drop data or corrupt internal state.
+    ucas: [UCA-A-2]
+    hazards: [H-3, H-10]

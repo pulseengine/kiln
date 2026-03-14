@@ -1,0 +1,774 @@
+# Safety Requirements — Consolidated
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# This file merges:
+#   1. STPA-derived requirements (SR-1 through SR-24) from hazard analysis
+#   2. Sphinx-needs safety requirements (REQ_SAFETY_*, REQ_MEM_SAFETY_*, etc.)
+#      migrated from docs/source/safety_manual/requirements.rst
+#
+# Merge strategy:
+#   - Where sphinx-needs overlaps with STPA: keep SR-* ID, add previous-id
+#   - Where sphinx-needs has no STPA equivalent: preserve original ID
+#   - ISO 26262 traceability preserved from sphinx-needs
+#
+# Format: rivet generic-yaml
+
+artifacts:
+  # =========================================================================
+  # STPA-derived: Execution correctness (from CC-E-*, LS-E-*)
+  # =========================================================================
+  - id: SR-1
+    type: requirement
+    title: Numeric instruction edge-case correctness
+    description: >
+      All numeric instructions shall produce results matching the WebAssembly
+      reference interpreter for boundary inputs: NaN propagation, saturating
+      conversions, signed division overflow (INT_MIN / -1), and division by
+      zero. Rust's "as" cast shall not be used for float-to-int conversion
+      without explicit boundary handling.
+    status: draft
+    tags: [execution, numeric, asil-d, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-E-1
+      - type: derives-from
+        target: LS-E-1
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs
+      spec-reference: "WebAssembly Core Spec 3.0, Section 4.3.1-4.3.3"
+      verification-method: test
+      verification-description: >
+        WAST test suite (i32.wast, i64.wast, f32.wast, f64.wast, conversions.wast)
+        with zero assertion failures; property-based tests for all 12 conversion
+        instructions with boundary values
+
+  - id: SR-2
+    type: requirement
+    title: Fuel metering at all control flow points
+    description: >
+      Fuel shall be checked before every instruction dispatch when fuel
+      metering is enabled. This includes loop back-edges, not just block
+      and function entry. The fuel counter shall be atomic in multi-threaded
+      configurations.
+    status: partial
+    tags: [execution, resource-containment, asil-c, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-E-2
+      - type: derives-from
+        target: LS-E-2
+    fields:
+      previous-id: REQ_TEMPORAL_002, REQ_LFUNC_007
+      iso-26262: "ISO 26262-6:7.4.5"
+      implementation: kiln-runtime/src/stackless/engine.rs
+      verification-method: test
+      verification-description: >
+        Infinite loop exhausts fuel within configured limit; code review that
+        all branch targets include fuel check
+      note: "Fuel mechanism exists (REQ_LFUNC_007 implemented); loop back-edge check not verified"
+
+  - id: SR-3
+    type: requirement
+    title: Memory bounds check uses current size
+    description: >
+      Memory bounds checks shall read the memory's current size at each
+      access, not a cached value. If caching is used for performance, the
+      cache shall be invalidated on every memory.grow, memory.copy, and
+      memory.fill that changes memory size.
+    status: partial
+    tags: [execution, memory-safety, asil-d, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-E-3
+      - type: derives-from
+        target: LS-E-3
+    fields:
+      previous-id: REQ_MEM_SAFETY_001
+      iso-26262: "ISO 26262-6:7.4.14"
+      implementation: kiln-runtime/src/stackless/engine.rs
+      spec-reference: "WebAssembly Core Spec 3.0, Section 4.4.7"
+      verification-method: test
+      verification-description: >
+        WAST tests memory.wast, memory_grow.wast; regression test for access
+        at old_size..new_size after grow
+      note: "Bounds checking infrastructure exists; post-grow cache invalidation not verified"
+
+  - id: SR-4
+    type: requirement
+    title: Unknown opcodes trap unconditionally
+    description: >
+      Any opcode or opcode prefix+suffix combination not defined in the
+      WebAssembly spec shall cause an immediate trap. The default match arm
+      in opcode dispatch shall return Err, not Ok.
+    status: draft
+    tags: [execution, correctness, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-E-4
+      - type: derives-from
+        target: LS-E-4
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs
+      verification-method: test
+      verification-description: >
+        All undefined opcodes (0x06-0x09 legacy, reserved ranges) produce
+        a trap, not a silent no-op
+
+  - id: SR-5
+    type: requirement
+    title: Call stack depth limit enforced for all call types
+    description: >
+      Maximum call depth shall be checked before call, call_indirect,
+      call_ref, and return_call instructions. The check shall measure
+      actual call depth (not frame count) to correctly handle tail calls.
+    status: partial
+    tags: [execution, stack-safety, asil-d, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-E-5
+      - type: derives-from
+        target: LS-E-5
+    fields:
+      previous-id: REQ_MEM_SAFETY_003
+      iso-26262: "ISO 26262-6:7.4.14"
+      implementation: kiln-runtime/src/stackless/engine.rs
+      verification-method: test
+      verification-description: >
+        WAST tests call.wast; tail-call regression for deep return_call chain
+      note: "Stack overflow protection exists; tail-call depth tracking not verified"
+
+  - id: SR-6
+    type: requirement
+    title: Multi-memory index validation
+    description: >
+      In multi-memory modules, every memory instruction's memory index
+      operand shall be validated against the module's declared memory count.
+      Invalid indices shall trap. The engine shall not default to memory 0.
+    status: draft
+    tags: [execution, memory-safety, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-E-6
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs
+      spec-reference: "WebAssembly Multi-Memory Proposal"
+      verification-method: test
+      verification-description: >
+        Instruction referencing non-existent memory index traps
+
+  # =========================================================================
+  # STPA-derived: Decoder correctness (from CC-D-*, LS-D-*)
+  # =========================================================================
+  - id: SR-7
+    type: requirement
+    title: Reject all malformed modules
+    description: >
+      The decoder shall reject modules with duplicate sections, out-of-order
+      sections, invalid LEB128 encodings, and all other malformation checks
+      defined in the WebAssembly spec.
+    status: partial
+    tags: [decoder, validation, asil-d, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-D-1
+      - type: derives-from
+        target: LS-D-1
+    fields:
+      previous-id: REQ_VERIFY_001
+      iso-26262: "ISO 26262-6:9.4.2"
+      implementation: kiln-decoder/src/streaming_decoder.rs
+      spec-reference: "WebAssembly Core Spec 3.0, Binary Format"
+      verification-method: test
+      verification-description: >
+        WAST test suite: all assert_malformed tests pass with zero failures
+      note: "~35 failures remain (Issue 148)"
+
+  - id: SR-8
+    type: requirement
+    title: Resource limits enforced before allocation
+    description: >
+      Decoder shall check configured resource limits before allocating
+      structures for types, functions, memories, tables, globals, and
+      elements. The limit check shall occur before the allocation, not after.
+    status: partial
+    tags: [decoder, resource-containment, asil-d, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-D-2
+      - type: derives-from
+        target: LS-D-2
+    fields:
+      previous-id: REQ_RESOURCE_002
+      iso-26262: "ISO 26262-6:7.4.3"
+      implementation: kiln-decoder/src/streaming_decoder.rs
+      verification-method: test
+      verification-description: >
+        Module with count > limit for each section type is rejected
+        without allocating the full count
+      note: "Resource limits exist; pre-allocation check order not verified"
+
+  # =========================================================================
+  # STPA-derived: Canonical ABI correctness (from CC-CM-*, LS-CM-*)
+  # =========================================================================
+  - id: SR-9
+    type: requirement
+    title: String transcoding handles all encodings correctly
+    description: >
+      Canonical ABI string transcoding shall correctly handle UTF-8 (1-4 byte
+      sequences), UTF-16 (including surrogate pairs), and Latin-1. Multi-byte
+      characters shall not be split across buffer boundaries. Code unit counts
+      shall match the encoding.
+    status: draft
+    tags: [component-model, canonical-abi, strings, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-CM-1
+      - type: derives-from
+        target: LS-CM-1
+    fields:
+      implementation: kiln-component/src/canonical_abi/
+      spec-reference: "Component Model Canonical ABI, String section"
+      verification-method: test
+      verification-description: >
+        Shared wit-bindgen strings fixture with multi-byte characters;
+        property-based roundtrip test
+
+  - id: SR-10
+    type: requirement
+    title: Record field alignment matches canonical ABI spec
+    description: >
+      Record field offsets shall be computed using align_up(current_offset,
+      field_alignment) as defined in the canonical ABI spec. The align_up
+      function shall be: align_up(x, a) = (x + a - 1) & !(a - 1).
+    status: draft
+    tags: [component-model, canonical-abi, alignment, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-CM-2
+      - type: derives-from
+        target: LS-CM-2
+    fields:
+      implementation: kiln-component/src/canonical_abi/
+      spec-reference: "Component Model Canonical ABI, Record section"
+      verification-method: test
+      verification-description: >
+        Shared wit-bindgen records fixture; unit tests for align_up
+
+  - id: SR-11
+    type: requirement
+    title: List element size matches canonical ABI and Meld
+    description: >
+      List element size shall be computed as align_up(sum_of_field_sizes,
+      max_alignment). This shall match Meld's canonical_abi_element_size()
+      for all type families. Disagreement is a blocking defect.
+    status: draft
+    tags: [component-model, canonical-abi, cross-toolchain, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-CM-3
+      - type: derives-from
+        target: LS-CM-3
+      - type: derives-from
+        target: LS-CM-6
+    fields:
+      implementation: kiln-component/src/canonical_abi/
+      spec-reference: "Component Model Canonical ABI, List section; XH-1"
+      verification-method: test
+      verification-description: >
+        Shared wit-bindgen fixtures run through Kiln; cross-validation of
+        element sizes for 50+ type patterns vs Meld output
+
+  - id: SR-12
+    type: requirement
+    title: Resource handle no-aliasing guarantee
+    description: >
+      Resource table shall guarantee that no two live handles share the same
+      index. Generation counters or equivalent mechanism shall prevent aliasing
+      even after rapid create/drop cycles.
+    status: draft
+    tags: [component-model, resources, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-CM-4
+      - type: derives-from
+        target: LS-CM-4
+    fields:
+      previous-id: REQ_CMP_020
+      implementation: kiln-component/src/components/resource_management.rs
+      verification-method: test
+      verification-description: >
+        Create/drop/create cycle verifies no aliasing; 10000-cycle stress test
+
+  - id: SR-13
+    type: requirement
+    title: Double-drop detection and trap
+    description: >
+      Dropping a resource handle that has already been dropped shall produce
+      a trap, not corrupt the resource table.
+    status: draft
+    tags: [component-model, resources, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-CM-5
+    fields:
+      implementation: kiln-component/src/components/resource_management.rs
+      verification-method: test
+      verification-description: >
+        Create, drop, drop again: verify trap on second drop
+
+  # =========================================================================
+  # STPA-derived: Cross-component correctness (from CC-L-*, LS-L-*)
+  # =========================================================================
+  - id: SR-14
+    type: requirement
+    title: Import resolution uses fully-qualified versioned names
+    status: draft
+    tags: [linker, component-model, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-L-1
+      - type: derives-from
+        target: LS-L-1
+    fields:
+      implementation: kiln-component/src/components/component_instantiation.rs
+
+  - id: SR-15
+    type: requirement
+    title: Type compatibility verified at link time
+    status: partial
+    tags: [linker, type-safety, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-L-2
+      - type: derives-from
+        target: LS-L-2
+    fields:
+      implementation: kiln-component/src/components/component_instantiation.rs
+      note: "~235 assert_unlinkable failures remain (Issue 149)"
+
+  - id: SR-16
+    type: requirement
+    title: Instantiation order respects dependency graph
+    status: draft
+    tags: [linker, component-model, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-L-3
+    fields:
+      implementation: kiln-component/src/components/component_instantiation.rs
+
+  # =========================================================================
+  # STPA-derived: WASI correctness (from CC-W-*, LS-W-*)
+  # =========================================================================
+  - id: SR-17
+    type: requirement
+    title: Per-component capability isolation
+    status: draft
+    tags: [wasi, capability-isolation, asil-d, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-W-1
+      - type: derives-from
+        target: LS-W-1
+    fields:
+      implementation: kiln-wasi/src/dispatcher.rs
+
+  - id: SR-18
+    type: requirement
+    title: Monotonic clock enforcement
+    status: draft
+    tags: [wasi, clocks, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-W-2
+      - type: derives-from
+        target: LS-W-2
+    fields:
+      implementation: kiln-wasi/src/dispatcher.rs
+      spec-reference: "WASI v0.2.3, wasi:clocks/monotonic-clock"
+
+  - id: SR-19
+    type: requirement
+    title: Cryptographic random or explicit error
+    status: draft
+    tags: [wasi, random, security, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-W-3
+    fields:
+      implementation: kiln-wasi/src/dispatcher.rs
+
+  # =========================================================================
+  # STPA-derived: CFI correctness (from CC-CFI-*, LS-CFI-*)
+  # =========================================================================
+  - id: SR-20
+    type: requirement
+    title: Shadow stack instrumented for all call paths
+    status: draft
+    tags: [cfi, control-flow-integrity, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-CFI-1
+      - type: derives-from
+        target: LS-CFI-1
+    fields:
+      implementation: kiln-runtime/src/cfi_engine.rs
+
+  - id: SR-21
+    type: requirement
+    title: call_indirect validates against instruction type_idx
+    status: draft
+    tags: [cfi, type-safety, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-CFI-2
+      - type: derives-from
+        target: LS-CFI-2
+    fields:
+      previous-id: REQ_DATAFLOW_001
+      implementation: kiln-runtime/src/stackless/engine.rs
+
+  # =========================================================================
+  # STPA-derived: Allocation correctness (from CC-A-*, LS-A-*)
+  # =========================================================================
+  - id: SR-22
+    type: requirement
+    title: ASIL-D mode rejects dynamic allocation
+    status: partial
+    tags: [allocation, asil-d, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-A-1
+      - type: derives-from
+        target: LS-A-1
+    fields:
+      previous-id: REQ_RESOURCE_001
+      iso-26262: "ISO 26262-6:7.4.4"
+      implementation: kiln-foundation/src/capabilities/memory_factory.rs
+      note: "safe_managed_alloc! macro in place; transitive dependency analysis not automated"
+
+  - id: SR-23
+    type: requirement
+    title: BoundedVec uses configured capacity, not allocator capacity
+    status: draft
+    tags: [allocation, bounded-collections, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-A-2
+      - type: derives-from
+        target: LS-A-2
+    fields:
+      implementation: kiln-foundation/src/collections/bounded_vec.rs
+
+  # =========================================================================
+  # STPA-derived: Cross-toolchain consistency
+  # =========================================================================
+  - id: SR-24
+    type: requirement
+    title: Shared wit-bindgen fixtures pass through Kiln
+    status: draft
+    tags: [cross-toolchain, canonical-abi, integration, stpa-derived]
+    links:
+      - type: derives-from
+        target: CC-CM-8
+      - type: derives-from
+        target: LS-CM-6
+    fields:
+      implementation: kiln-component/src/canonical_abi/
+      note: "Blocking: kiln-runtime fixture coverage currently empty"
+
+  # =========================================================================
+  # Migrated from sphinx-needs: General Safety (no STPA equivalent)
+  # These are operational/design-level safety properties not directly
+  # derived from STPA hazard analysis.
+  # =========================================================================
+  - id: REQ_SAFETY_001
+    type: requirement
+    title: Safety-critical operation mode
+    description: >
+      The runtime shall provide a safety-critical operation mode with
+      deterministic behavior, disabled dynamic features, and comprehensive
+      error detection.
+    status: implemented
+    tags: [safety-policy, asil-d, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.2"
+      implementation: kiln-runtime (feature flags)
+      verification-method: test, analysis
+
+  - id: REQ_SAFETY_003
+    type: requirement
+    title: Fail-safe behavior
+    description: >
+      Upon detection of any safety-critical fault, the runtime shall
+      transition to a fail-safe state and notify the system-level error
+      handler.
+    status: implemented
+    tags: [safety-policy, asil-d, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.3"
+      verification-method: test, analysis
+
+  - id: REQ_SAFETY_004
+    type: requirement
+    title: Safety mechanism independence
+    description: >
+      Safety mechanisms shall be independent from the functionality they
+      protect to avoid common cause failures.
+    status: implemented
+    tags: [safety-policy, asil-d, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.10"
+      verification-method: analysis
+
+  # =========================================================================
+  # Migrated from sphinx-needs: Memory Safety (supplements STPA SR-3, SR-5)
+  # =========================================================================
+  - id: REQ_MEM_SAFETY_002
+    type: requirement
+    title: Memory isolation between module instances
+    description: >
+      WebAssembly module instances shall be isolated from each other with
+      no shared mutable state except through explicit, validated interfaces.
+    status: implemented
+    tags: [memory-safety, asil-d, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.13"
+      implementation: kiln-runtime/src/memory.rs
+      verification-method: test, analysis
+
+  - id: REQ_MEM_SAFETY_004
+    type: requirement
+    title: Memory initialization enforcement
+    description: >
+      All allocated memory shall be initialized to a known safe state
+      before use. Uninitialized memory access shall be prevented.
+    status: implemented
+    tags: [memory-safety, asil-c, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:8.4.4"
+      verification-method: test, inspection
+
+  - id: REQ_MEM_SAFETY_005
+    type: requirement
+    title: Memory lifetime management
+    description: >
+      Memory lifetime shall be explicitly managed. Use-after-free and
+      double-free conditions shall be prevented through RAII and
+      capability-based allocation (safe_managed_alloc!).
+    status: implemented
+    tags: [memory-safety, asil-c, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.13"
+      implementation: kiln-foundation/src/capabilities/memory_factory.rs
+      verification-method: analysis, test
+
+  # =========================================================================
+  # Migrated from sphinx-needs: Resource Management (supplements SR-8, SR-22)
+  # =========================================================================
+  - id: REQ_RESOURCE_003
+    type: requirement
+    title: Resource exhaustion handling
+    description: >
+      Resource exhaustion shall be detected before system destabilization.
+      Graceful degradation strategies shall be implemented for non-critical
+      resources.
+    status: implemented
+    tags: [resource-management, asil-c, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.3"
+      verification-method: test
+
+  - id: REQ_RESOURCE_004
+    type: requirement
+    title: Resource usage monitoring
+    description: >
+      Resource usage shall be continuously monitored and reported. High
+      watermarks shall be tracked for capacity planning.
+    status: partial
+    tags: [resource-management, asil-b, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:8.4.8"
+      implementation: kiln-foundation/src/monitoring.rs
+      note: "~1800 lines of monitoring infrastructure exist but not yet wired to allocations"
+
+  # =========================================================================
+  # Migrated from sphinx-needs: Error Handling
+  # =========================================================================
+  - id: REQ_ERROR_001
+    type: requirement
+    title: Comprehensive error detection
+    description: >
+      All detectable error conditions shall be explicitly checked. Error
+      detection coverage shall be measured and documented.
+    status: implemented
+    tags: [error-handling, asil-d, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.6"
+      implementation: kiln-error/src/lib.rs
+      verification-method: test, analysis
+
+  - id: REQ_ERROR_002
+    type: requirement
+    title: Error propagation control
+    description: >
+      Errors shall be propagated through explicit return values (Result types).
+      Exception-based error handling shall not be used in safety-critical paths.
+    status: implemented
+    tags: [error-handling, asil-d, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.7"
+      verification-method: analysis
+
+  - id: REQ_ERROR_003
+    type: requirement
+    title: Error recovery actions
+    description: >
+      For each error category, specific recovery actions shall be defined.
+      Transient: retry with backoff. Resource: graceful degradation.
+      Logic: fail-safe shutdown. Hardware: system notification.
+    status: implemented
+    tags: [error-handling, asil-c, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.3"
+      verification-method: test
+
+  # =========================================================================
+  # Migrated from sphinx-needs: Verification
+  # =========================================================================
+  - id: REQ_VERIFY_002
+    type: requirement
+    title: Runtime integrity checks
+    description: >
+      Critical data structures shall include integrity checks (checksums,
+      magic values, redundancy) to detect corruption.
+    status: implemented
+    tags: [verification, asil-d, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.8"
+      verification-method: test
+
+  - id: REQ_VERIFY_004
+    type: requirement
+    title: Continuous monitoring
+    description: >
+      Safety-critical invariants shall be continuously monitored during
+      operation. Violations shall trigger immediate safety actions.
+    status: implemented
+    tags: [verification, asil-c, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.8"
+      verification-method: test, analysis
+
+  # =========================================================================
+  # Migrated from sphinx-needs: Temporal Safety
+  # =========================================================================
+  - id: REQ_TEMPORAL_001
+    type: requirement
+    title: Bounded execution time
+    description: >
+      All operations shall complete within bounded time. Worst-case
+      execution time (WCET) shall be determinable through static analysis.
+    status: implemented
+    tags: [temporal, asil-d, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.5"
+      implementation: kiln-runtime/src/stackless/engine.rs
+      verification-method: test, analysis
+
+  - id: REQ_TEMPORAL_003
+    type: requirement
+    title: Deadline monitoring
+    description: >
+      Time-critical operations shall be monitored for deadline compliance.
+      Deadline misses shall be reported to the system scheduler.
+    status: partial
+    tags: [temporal, asil-c, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.5"
+      verification-method: test
+
+  - id: REQ_TEMPORAL_004
+    type: requirement
+    title: Interrupt latency bounds
+    description: >
+      Maximum interrupt disable time shall be bounded and documented.
+      Critical sections shall be minimized.
+    status: implemented
+    tags: [temporal, asil-b, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.5"
+      verification-method: test, measurement
+
+  # =========================================================================
+  # Migrated from sphinx-needs: Data Flow Safety
+  # =========================================================================
+  - id: REQ_DATAFLOW_002
+    type: requirement
+    title: Information flow control
+    description: >
+      Information flow between different criticality levels shall be
+      controlled and validated. High-criticality data shall not flow
+      to low-criticality domains without explicit authorization.
+    status: partial
+    tags: [data-flow, asil-c, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.13"
+      verification-method: analysis
+
+  - id: REQ_DATAFLOW_003
+    type: requirement
+    title: Data validation at system boundaries
+    description: >
+      All external inputs shall be validated before use. Range checks,
+      format checks, and consistency checks shall be applied.
+    status: implemented
+    tags: [data-flow, asil-c, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:8.4.4"
+      implementation: kiln-decoder/src/streaming_decoder.rs
+      verification-method: test
+
+  # =========================================================================
+  # Migrated from sphinx-needs: Configuration Safety
+  # =========================================================================
+  - id: REQ_CONFIG_001
+    type: requirement
+    title: Configuration validation
+    description: >
+      Configuration parameters shall be validated against safety constraints
+      before activation. Invalid configurations shall be rejected.
+    status: implemented
+    tags: [configuration, asil-d, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:9.4.4"
+      verification-method: test, analysis
+
+  - id: REQ_CONFIG_003
+    type: requirement
+    title: Safe defaults
+    description: >
+      All configuration parameters shall have safe default values. The
+      system shall operate safely with default configuration.
+    status: implemented
+    tags: [configuration, asil-b, migrated-from-sphinx]
+    fields:
+      iso-26262: "ISO 26262-6:7.4.2"
+      verification-method: review, test
+
+  # =========================================================================
+  # REMOVED from sphinx-needs (with rationale):
+  #
+  # REQ_SAFETY_002 (Safety Manual Compliance) — process requirement, not
+  #   a code property; tracked in qualification documentation
+  #
+  # REQ_ERROR_004 (Error Logging and Reporting) — operational; covered by
+  #   kiln_foundation::tracing framework (implemented)
+  #
+  # REQ_VERIFY_003 (Built-In Test / POST) — not applicable to a library
+  #   runtime; POST is the embedder's responsibility
+  #
+  # REQ_CONFIG_002 (Configuration Integrity) — checksums/redundancy for
+  #   config data is the embedder's responsibility in SEooC model
+  # =========================================================================

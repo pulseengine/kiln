@@ -1,0 +1,345 @@
+# STPA Step 4: Loss Scenarios
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Each scenario explains WHY a specific UCA might occur. Scenarios identify
+# causal factors that can be addressed through design, testing, or verification.
+
+loss-scenarios:
+  # =========================================================================
+  # Engine scenarios
+  # =========================================================================
+  - id: LS-E-1
+    title: Float-to-int saturating conversion uses wrong rounding
+    uca: UCA-E-1
+    hazards: [H-1]
+    type: inadequate-control-algorithm
+    scenario: >
+      The engine's i32.trunc_sat_f64_s implementation rounds toward negative
+      infinity instead of toward zero for negative values near the boundary.
+      Input -2147483648.5 should produce -2147483648 but instead produces
+      -2147483649 (overflow). The saturating variant should clamp to INT_MIN
+      but the implementation wraps.
+    causal-factors:
+      - Rust's "as" cast uses different rounding than WebAssembly spec
+      - Saturating conversion boundary conditions not tested exhaustively
+
+  - id: LS-E-2
+    title: Fuel counter not checked on loop back-edge
+    uca: UCA-E-2
+    hazards: [H-3]
+    type: inadequate-control-algorithm
+    scenario: >
+      The fuel check is performed at function entry and block entry but
+      not at loop back-edges (br to loop header). An infinite loop within
+      a single block body consumes unbounded fuel. The watchdog eventually
+      fires but the response time exceeds the safety budget.
+    causal-factors:
+      - Loop back-edges treated as branch instructions, not fuel checkpoints
+      - Fuel check only at block/function boundaries, not at all branches
+
+  - id: LS-E-3
+    title: Bounds check uses stale memory size after grow
+    uca: UCA-E-3
+    hazards: [H-2]
+    type: inadequate-process-model
+    scenario: >
+      The engine caches the memory size at function entry for performance.
+      A memory.grow in the middle of the function updates the actual memory
+      but not the cached size. Subsequent loads/stores use the stale cached
+      size, allowing access to the newly-grown region to be incorrectly
+      rejected, or failing to reject access to the old boundary.
+    causal-factors:
+      - Performance optimization caches memory size
+      - memory.grow handler does not invalidate the cache
+    process-model-flaw: >
+      Engine assumes memory size is constant within a function body
+
+  - id: LS-E-4
+    title: Multi-byte opcode prefix consumed but suffix not validated
+    uca: UCA-E-4
+    hazards: [H-1]
+    type: inadequate-control-algorithm
+    scenario: >
+      The 0xFC prefix is consumed, then the suffix byte is read but not
+      validated against the set of known 0xFC-prefixed opcodes. An unknown
+      suffix falls through to the default case which does nothing (no-op)
+      instead of trapping. The instruction appears to succeed silently.
+    causal-factors:
+      - Default match arm in opcode dispatch returns Ok(()) instead of Err
+      - Missing exhaustive opcode validation after prefix decode
+
+  - id: LS-E-5
+    title: Stack overflow check uses wrong limit in nested calls
+    uca: UCA-E-5
+    hazards: [H-2, H-3]
+    type: inadequate-control-algorithm
+    scenario: >
+      Maximum call depth is configured as 1000 but the check compares
+      against frame count, not call depth. Tail-call-optimized functions
+      don't push frames but do push to the call stack, causing the counts
+      to diverge. Deep tail-call chains bypass the limit.
+    causal-factors:
+      - Frame count != call depth when tail calls are present
+      - Stack overflow check measures wrong quantity
+
+  # =========================================================================
+  # Decoder scenarios
+  # =========================================================================
+  - id: LS-D-1
+    title: Decoder accepts module with overlapping sections
+    uca: UCA-D-1
+    hazards: [H-1, H-2]
+    type: inadequate-control-algorithm
+    scenario: >
+      The decoder processes sections sequentially but does not track whether
+      a section ID has already been seen. A module with two type sections is
+      accepted; the second silently overwrites the first. Functions referencing
+      types from the first section now have wrong signatures.
+    causal-factors:
+      - Section deduplication check missing
+      - Stream parser processes sections independently without global state
+
+  - id: LS-D-2
+    title: Resource limits not enforced during LEB128 decoding
+    uca: UCA-D-2
+    hazards: [H-3]
+    type: inadequate-control-algorithm
+    scenario: >
+      A module declares 2^32 - 1 function types via a large LEB128 count.
+      The decoder begins allocating type structures before checking the
+      configured limit. The allocation exhausts the per-crate budget,
+      causing an OOM in a safety-critical system before the limit check fires.
+    causal-factors:
+      - Limit check occurs after allocation, not before
+      - LEB128 count is trusted for allocation sizing
+
+  # =========================================================================
+  # Component Model scenarios
+  # =========================================================================
+  - id: LS-CM-1
+    title: UTF-8 multi-byte character split across buffer boundary
+    uca: UCA-CM-1
+    hazards: [H-4]
+    type: inadequate-control-algorithm
+    scenario: >
+      The canonical lift reads string data from linear memory in chunks.
+      A 4-byte UTF-8 character straddles two chunks. The first chunk is
+      decoded as if complete, producing an invalid character. The second
+      chunk starts mid-character, producing a decoding error.
+    causal-factors:
+      - Chunked reading does not handle multi-byte character boundaries
+      - String transcoding assumes aligned character boundaries
+
+  - id: LS-CM-2
+    title: Record alignment uses natural alignment instead of spec alignment
+    uca: UCA-CM-2
+    hazards: [H-4]
+    type: inadequate-control-algorithm
+    scenario: >
+      The canonical ABI spec defines alignment for each type (e.g., i32 is
+      4-aligned, i64 is 8-aligned). The implementation uses Rust's natural
+      alignment (which may differ due to platform conventions or #[repr(C)]
+      rules). For a record {u8, u32}, the spec says offset 4 for the u32
+      but the implementation uses offset 1 (packed) or offset 8 (over-aligned).
+    causal-factors:
+      - Using Rust struct layout instead of canonical ABI layout
+      - align_up implementation differs from spec's definition
+
+  - id: LS-CM-3
+    title: List element size disagrees with Meld at fusion time
+    uca: UCA-CM-3
+    hazards: [H-4]
+    type: inadequate-process-model
+    scenario: >
+      Meld computes list<tuple<u8, u32>> element size as 8 bytes (align_up(5, 4))
+      at fusion time. Kiln computes it as 5 bytes (raw sum without alignment).
+      When a meld-fused module runs on Kiln, the adapter writes 8-byte elements
+      but Kiln reads 5-byte elements. After the first element, all subsequent
+      elements are offset by 3 bytes, producing garbage data.
+    causal-factors:
+      - Kiln and Meld implement element size computation independently
+      - No shared test fixtures verify agreement
+    process-model-flaw: >
+      Kiln assumes its own element size is correct; does not verify against Meld
+
+  - id: LS-CM-4
+    title: Resource table generation counter overflow causes aliasing
+    uca: UCA-CM-4
+    hazards: [H-6]
+    type: inadequate-control-algorithm
+    scenario: >
+      The resource table uses a 32-bit generation counter. After 2^32
+      create/drop cycles, the counter wraps to 0. A handle with generation 0
+      now matches a new allocation's generation. The old handle (which should
+      be invalid) passes the generation check and accesses the wrong resource.
+    causal-factors:
+      - Generation counter is 32-bit with no overflow detection
+      - Rapid create/drop cycles in long-running embedded systems
+
+  - id: LS-CM-5
+    title: Cross-component dispatch uses wrong instance after component reload
+    uca: UCA-CM-7
+    hazards: [H-5]
+    type: inadequate-process-model
+    scenario: >
+      Component A is unloaded and Component C is loaded in its place. The
+      linker's resolution table still maps Component B's import to
+      instance index 0 (which was A, now C). Component B calls what it
+      thinks is Component A's export but reaches Component C's function
+      with a different signature.
+    causal-factors:
+      - Instance index reuse after unload
+      - Resolution table not invalidated on component unload
+    process-model-flaw: >
+      Linker assumes instance indices are stable across the component lifecycle
+
+  - id: LS-CM-6
+    title: Cross-toolchain element size disagreement causes silent corruption
+    uca: UCA-CM-8
+    hazards: [H-4]
+    type: inadequate-process-model
+    scenario: >
+      A wit-bindgen composed-runner fixture using list<record{u8, u64}> passes
+      through Meld (element size = 16 due to alignment), is then executed on
+      Kiln which computes element size = 9 (sum without alignment). The list
+      roundtrip corrupts every element after the first. The corruption is
+      silent because the values are plausible (just wrong).
+    causal-factors:
+      - No shared fixture test suite run through Kiln
+      - Element size computation not derived from shared specification
+      - Corruption is silent (no trap, no error, just wrong values)
+    process-model-flaw: >
+      Each tool implements canonical ABI independently without cross-validation
+
+  # =========================================================================
+  # Linker scenarios
+  # =========================================================================
+  - id: LS-L-1
+    title: Import resolved to wrong export due to version-insensitive matching
+    uca: UCA-L-1
+    hazards: [H-5]
+    type: inadequate-control-algorithm
+    scenario: >
+      Component A imports "wasi:http/handler@0.2.0". Two components export
+      "wasi:http/handler" — one at @0.2.0 and one at @0.3.0. The linker
+      strips version suffixes for matching and picks the first match, which
+      is @0.3.0. The signatures differ, causing a runtime trap or data
+      corruption on the first call.
+    causal-factors:
+      - Version suffix not included in import resolution matching
+      - First-match strategy without version comparison
+
+  - id: LS-L-2
+    title: Type compatibility check uses structural equality instead of nominal
+    uca: UCA-L-2
+    hazards: [H-5]
+    type: inadequate-control-algorithm
+    scenario: >
+      Two components define structurally identical but nominally different
+      types: Component A's "Handle" and Component B's "Index" are both u32.
+      The linker considers them compatible because their structures match.
+      At runtime, Component B passes an Index where A expects a Handle,
+      and the semantic mismatch causes incorrect behavior.
+    causal-factors:
+      - Structural type comparison instead of nominal
+      - Component Model requires nominal type matching for resources
+
+  # =========================================================================
+  # CFI scenarios
+  # =========================================================================
+  - id: LS-CFI-1
+    title: Host-to-guest call skips shadow stack push
+    uca: UCA-CFI-1
+    hazards: [H-9]
+    type: inadequate-control-algorithm
+    scenario: >
+      The host calls a guest export function directly through the engine API.
+      The call bypasses the normal instruction dispatch path and does not
+      trigger the shadow stack push. All subsequent returns within the guest
+      function are off-by-one on the shadow stack, producing false positives.
+    causal-factors:
+      - Host call entry point separate from instruction dispatch
+      - Shadow stack instrumentation only in instruction dispatch path
+
+  - id: LS-CFI-2
+    title: call_indirect uses table element type instead of instruction type
+    uca: UCA-CFI-2
+    hazards: [H-9]
+    type: inadequate-control-algorithm
+    scenario: >
+      call_indirect should validate that the function at table[index] has the
+      type specified by the instruction's type_idx. Instead, the implementation
+      checks the function's own type against its own declaration (always true).
+      Any function in the table passes the check regardless of the instruction's
+      expected type.
+    causal-factors:
+      - Type validation compares function against itself, not against expectation
+      - The instruction's type_idx operand is ignored
+
+  # =========================================================================
+  # WASI scenarios
+  # =========================================================================
+  - id: LS-W-1
+    title: Capability check uses global state instead of per-component state
+    uca: UCA-W-1
+    hazards: [H-8]
+    type: inadequate-process-model
+    scenario: >
+      The WASI dispatcher stores capabilities in a single WasiCapabilities
+      struct shared across all component instances. Component A is granted
+      filesystem access to /data. Component B should have no filesystem access.
+      Both components use the same dispatcher, so Component B inherits A's
+      capabilities.
+    causal-factors:
+      - Single WasiDispatcher instance shared across components
+      - Capability set not keyed by component instance ID
+    process-model-flaw: >
+      Dispatcher assumes single-component mode; multi-component requires
+      per-instance capability isolation
+
+  - id: LS-W-2
+    title: Platform clock wraps or adjusts backward
+    uca: UCA-W-2
+    hazards: [H-5]
+    type: sensor-failure
+    scenario: >
+      On an embedded platform without RTC, the monotonic clock is implemented
+      as a 32-bit microsecond counter. After ~71 minutes, the counter wraps
+      to 0. The WASI implementation returns the raw counter value without
+      overflow detection. The application observes a time jump backward.
+    causal-factors:
+      - 32-bit counter overflow on long-running embedded systems
+      - No monotonicity enforcement in the WASI implementation
+
+  # =========================================================================
+  # Allocation scenarios
+  # =========================================================================
+  - id: LS-A-1
+    title: ASIL-D mode bypassed through optional dependency
+    uca: UCA-A-1
+    hazards: [H-10]
+    type: inadequate-control-algorithm
+    scenario: >
+      A crate has an optional dependency that uses dynamic allocation. The
+      crate is compiled with the optional dependency enabled. The ASIL-D
+      check looks at the crate's own code but not transitive dependencies.
+      Dynamic allocation occurs in the dependency, violating ASIL-D.
+    causal-factors:
+      - ASIL-D check is crate-local, not transitive
+      - Feature flags can enable allocation in dependencies
+
+  - id: LS-A-2
+    title: BoundedVec capacity silently truncated to power of two
+    uca: UCA-A-2
+    hazards: [H-3, H-10]
+    type: inadequate-control-algorithm
+    scenario: >
+      BoundedVec is initialized with capacity 100 but the underlying
+      allocator rounds to the next power of two (128). When the vector
+      reaches 100 elements, the capacity check passes (100 < 128). Elements
+      101-128 are accepted, exceeding the intended budget. At 129, the
+      allocator fails instead of the bounded check.
+    causal-factors:
+      - Capacity check uses allocator capacity, not configured capacity
+      - Allocator over-provisions without notifying the bounded collection
