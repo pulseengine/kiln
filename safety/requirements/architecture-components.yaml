@@ -172,18 +172,38 @@ artifacts:
   # =========================================================================
   - id: AC-WASI
     type: feature
-    title: WASI Preview 2 dispatcher
+    title: Unified WASI Preview 2 dispatcher
     description: >
-      WASI logging support with all log levels (Error, Warn, Info, Debug,
-      Trace), context-based logging, stderr integration, and thread-safe
-      operations. Crate: kiln-wasi.
+      Implements HostImportHandler (kiln-foundation) to serve as the single
+      WASI entry point. Internal dispatch tiers: dispatch_core (canonical
+      ABI lowered i32/i64 + memory pointers) and dispatch_core_v2 (two-phase
+      allocation for host-side cabi_realloc). Covers cli (args, env, exit,
+      stdio, terminal), clocks (wall, monotonic), filesystem (stat, open,
+      read/write streams, preopens), io (streams, poll, error), random
+      (secure and insecure), and sockets (TCP, UDP, DNS — std-only). Per-
+      component WasiCapabilities enforce capability-based security.
+      WasiResourceManager provides Preview 2 resource handle semantics.
+      Crate: kiln-wasi. Engine accesses only via Box<dyn HostImportHandler>.
     status: implemented
-    tags: [component, wasi]
+    tags: [component, wasi, canonical-abi, capability-isolation]
     links:
       - type: satisfies
         target: REQ_FUNC_015
+      - type: satisfies
+        target: REQ_FUNC_034
+      - type: satisfies
+        target: REQ_FUNC_035
+      - type: satisfies
+        target: REQ_FUNC_036
+      - type: satisfies
+        target: SR-17
+      - type: satisfies
+        target: SR-18
+      - type: satisfies
+        target: SR-19
     fields:
       implementation: kiln-wasi/src/dispatcher.rs
+      note: "Dual dispatch path removed; engine uses HostImportHandler trait only"
 
   - id: AC-ASYNC
     type: feature

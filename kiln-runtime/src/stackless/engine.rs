@@ -337,9 +337,6 @@ pub struct StacklessEngine {
     /// Tracks which instance an aliased function actually comes from
     #[cfg(feature = "std")]
     aliased_functions:     HashMap<(usize, usize), usize>,
-    /// WASI dispatcher for proper WASI host function implementations
-    #[cfg(feature = "wasi")]
-    wasi_dispatcher:       Option<kiln_wasi::WasiDispatcher>,
     /// Generic host import handler for all host function calls
     #[cfg(feature = "std")]
     host_handler:          Option<Box<dyn kiln_foundation::HostImportHandler>>,
@@ -544,8 +541,6 @@ impl StacklessEngine {
             import_links:        HashMap::new(),
             #[cfg(feature = "std")]
             aliased_functions:   HashMap::new(),
-            #[cfg(feature = "wasi")]
-            wasi_dispatcher:     kiln_wasi::WasiDispatcher::with_defaults().ok(),
             #[cfg(feature = "std")]
             host_handler:        None,
             #[cfg(all(feature = "std", feature = "debugger"))]
@@ -590,26 +585,6 @@ impl StacklessEngine {
     #[cfg(feature = "std")]
     pub fn set_host_handler(&mut self, handler: Box<dyn kiln_foundation::HostImportHandler>) {
         self.host_handler = Some(handler);
-    }
-
-    /// Set WASI command-line arguments
-    ///
-    /// These arguments will be returned by `wasi:cli/environment::get-arguments`
-    #[cfg(feature = "wasi")]
-    pub fn set_wasi_args(&mut self, args: Vec<String>) {
-        if let Some(ref mut dispatcher) = self.wasi_dispatcher {
-            dispatcher.set_args(args);
-        }
-    }
-
-    /// Set WASI environment variables
-    ///
-    /// These will be returned by `wasi:cli/environment::get-environment`
-    #[cfg(feature = "wasi")]
-    pub fn set_wasi_env(&mut self, env_vars: Vec<(String, String)>) {
-        if let Some(ref mut dispatcher) = self.wasi_dispatcher {
-            dispatcher.set_env(env_vars);
-        }
     }
 
     /// Register a lowered function from a canon.lower operation
@@ -708,45 +683,40 @@ impl StacklessEngine {
         function: &str,
         args: Vec<Value>,
     ) -> Result<Vec<Value>> {
-        // Lift args based on the function being called
-        let wasi_args = self.lift_lowered_function_args(
-            instance_id, interface, function, &args,
-        )?;
+        // Dispatch through HostImportHandler trait (same path as call_wasi_function)
+        if let Some(ref mut handler) = self.host_handler {
+            // Get instance and memory for the handler
+            let instance = self.instances.get(&instance_id)
+                .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found for canon-lowered dispatch"))?
+                .clone();
 
-        // Dispatch to WASI
-        if let Some(ref mut dispatcher) = self.wasi_dispatcher {
-            let wasi_results = dispatcher.dispatch(interface, function, &wasi_args)?;
+            let mem_wrapper = instance.memory(0).ok();
+            let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+                .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
 
-            let results: Vec<Value> = wasi_results.into_iter().map(|v| {
-                match v {
-                    kiln_wasi::Value::S32(i) => Value::I32(i),
-                    kiln_wasi::Value::U32(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S64(i) => Value::I64(i),
-                    kiln_wasi::Value::U64(u) => Value::I64(u as i64),
-                    kiln_wasi::Value::F32(f) => Value::F32(FloatBits32::from_f32(f)),
-                    kiln_wasi::Value::F64(f) => Value::F64(FloatBits64::from_f64(f)),
-                    kiln_wasi::Value::Bool(b) => Value::I32(if b { 1 } else { 0 }),
-                    kiln_wasi::Value::U8(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S8(i) => Value::I32(i as i32),
-                    kiln_wasi::Value::U16(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S16(i) => Value::I32(i as i32),
-                    _ => Value::I32(0),
-                }
-            }).collect();
+            #[cfg(feature = "tracing")]
+            trace!(
+                interface = %interface,
+                function = %function,
+                args_count = args.len(),
+                has_memory = memory.is_some(),
+                "[CANON_LOWER] Dispatching via HostImportHandler"
+            );
 
+            let results = handler.call_import(interface, function, &args, memory)?;
             Ok(results)
         } else {
-            Err(kiln_error::Error::runtime_error("WASI dispatcher not available for canon-lowered function"))
+            Err(kiln_error::Error::runtime_error(
+                "Canon-lowered function called but no host_handler configured. \
+                 Use engine.set_host_handler() with a WasiDispatcher to enable WASI support."
+            ))
         }
     }
 
-    /// Execute a lowered function via the WASI dispatcher
+    /// Execute a lowered function via the host import handler
     ///
-    /// This is called when the engine detects that a function is a lowered function.
-    /// It extracts the target interface/function and dispatches to the WASI system.
-    ///
-    /// Implements canonical ABI lifting: converts core WASM values (i32 pointers/lengths)
-    /// to component values (lists, records, etc.) by reading from instance memory.
+    /// Looks up the lowered function metadata and delegates to `dispatch_canon_lowered`
+    /// which routes through the HostImportHandler trait.
     #[cfg(all(feature = "std", feature = "wasi"))]
     fn execute_lowered_function(
         &mut self,
@@ -758,188 +728,7 @@ impl StacklessEngine {
             .cloned()
             .ok_or_else(|| kiln_error::Error::runtime_error("Lowered function not found"))?;
 
-        #[cfg(feature = "tracing")]
-        trace!(
-            interface = %lowered.interface,
-            function = %lowered.function,
-            args_count = args.len(),
-            "[CANON_LOWER] Executing lowered function"
-        );
-
-        // Lift args based on the function being called
-        // Some functions need memory access to convert pointers to actual data
-        let wasi_args = self.lift_lowered_function_args(
-            instance_id,
-            &lowered.interface,
-            &lowered.function,
-            &args,
-        )?;
-
-        // Dispatch to WASI using the standard dispatch interface
-        if let Some(ref mut dispatcher) = self.wasi_dispatcher {
-            let wasi_results = dispatcher.dispatch(&lowered.interface, &lowered.function, &wasi_args)?;
-
-            // Convert kiln_wasi::Value back to kiln_foundation::values::Value
-            let results: Vec<Value> = wasi_results.into_iter().map(|v| {
-                match v {
-                    kiln_wasi::Value::S32(i) => Value::I32(i),
-                    kiln_wasi::Value::U32(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S64(i) => Value::I64(i),
-                    kiln_wasi::Value::U64(u) => Value::I64(u as i64),
-                    kiln_wasi::Value::F32(f) => Value::F32(FloatBits32::from_f32(f)),
-                    kiln_wasi::Value::F64(f) => Value::F64(FloatBits64::from_f64(f)),
-                    kiln_wasi::Value::Bool(b) => Value::I32(if b { 1 } else { 0 }),
-                    kiln_wasi::Value::U8(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S8(i) => Value::I32(i as i32),
-                    kiln_wasi::Value::U16(u) => Value::I32(u as i32),
-                    kiln_wasi::Value::S16(i) => Value::I32(i as i32),
-                    _ => Value::I32(0), // Default for unsupported types
-                }
-            }).collect();
-
-            Ok(results)
-        } else {
-            Err(kiln_error::Error::runtime_error("WASI dispatcher not available for lowered function"))
-        }
-    }
-
-    /// Lift core WASM args to component-level WASI args
-    ///
-    /// This implements the canonical ABI "lift" operation for function arguments.
-    /// For functions that take list<u8> parameters (like write operations), we need
-    /// to read the actual bytes from memory using the pointer and length.
-    #[cfg(all(feature = "std", feature = "wasi"))]
-    fn lift_lowered_function_args(
-        &self,
-        instance_id: usize,
-        interface: &str,
-        function: &str,
-        args: &[Value],
-    ) -> Result<Vec<kiln_wasi::Value>> {
-        // Check if this function needs special ABI lifting
-        let needs_write_lifting = function.contains("blocking-write")
-            || function.contains("write-zeroes")
-            || function == "write";
-
-        if needs_write_lifting && args.len() >= 3 {
-            // blocking-write-and-flush ABI: (handle: u32, data_ptr: i32, data_len: i32, retptr: i32)
-            // We need to read the bytes from memory at data_ptr for data_len bytes
-            return self.lift_write_args(instance_id, args);
-        }
-
-        // For other functions, do simple value conversion
-        let wasi_args: Vec<kiln_wasi::Value> = args.iter().map(|v| {
-            match v {
-                Value::I32(i) => kiln_wasi::Value::S32(*i),
-                Value::I64(i) => kiln_wasi::Value::S64(*i),
-                Value::F32(f) => kiln_wasi::Value::F32(f.to_f32()),
-                Value::F64(f) => kiln_wasi::Value::F64(f.to_f64()),
-                _ => kiln_wasi::Value::U32(0),
-            }
-        }).collect();
-
-        Ok(wasi_args)
-    }
-
-    /// Lift write operation arguments by reading data from memory
-    ///
-    /// For blocking-write-and-flush: (handle, data_ptr, data_len, retptr)
-    /// Returns: [handle, List<U8>(actual bytes)]
-    #[cfg(all(feature = "std", feature = "wasi"))]
-    fn lift_write_args(
-        &self,
-        instance_id: usize,
-        args: &[Value],
-    ) -> Result<Vec<kiln_wasi::Value>> {
-        // Extract the pointer and length from args
-        let handle = match args.get(0) {
-            Some(Value::I32(h)) => *h as u32,
-            _ => return Err(kiln_error::Error::runtime_error("Missing handle argument for write")),
-        };
-
-        let data_ptr = match args.get(1) {
-            Some(Value::I32(p)) => *p as u32,
-            _ => return Err(kiln_error::Error::runtime_error("Missing data pointer for write")),
-        };
-
-        let data_len = match args.get(2) {
-            Some(Value::I32(l)) => *l as u32,
-            _ => return Err(kiln_error::Error::runtime_error("Missing data length for write")),
-        };
-
-        #[cfg(feature = "tracing")]
-        trace!(
-            handle = handle,
-            data_ptr = data_ptr,
-            data_len = data_len,
-            instance_id = instance_id,
-            "[CANON_LIFT] Lifting write args from memory"
-        );
-
-        // Find an instance with memory - the shim doesn't have memory, but the main module does.
-        // In Component Model, the memory comes from the module that imports the lowered function,
-        // not the shim. We search for an instance that has memory.
-        let memory = self.find_instance_with_memory(instance_id)?;
-
-        let mut data = Vec::with_capacity(data_len as usize);
-        for i in 0..data_len {
-            let addr = data_ptr + i;
-            let mut buffer = [0u8; 1];
-            memory.0.read(addr, &mut buffer)
-                .map_err(|_| kiln_error::Error::runtime_error("Failed to read memory for write data"))?;
-            data.push(buffer[0]);
-        }
-
-        #[cfg(feature = "tracing")]
-        trace!(
-            bytes_read = data.len(),
-            "[CANON_LIFT] Read {} bytes from memory",
-            data.len()
-        );
-
-        // Convert to WASI values: handle and list of bytes
-        let byte_list: Vec<kiln_wasi::Value> = data.into_iter()
-            .map(kiln_wasi::Value::U8)
-            .collect();
-
-        Ok(vec![
-            kiln_wasi::Value::U32(handle),
-            kiln_wasi::Value::List(byte_list),
-        ])
-    }
-
-    /// Find an instance that has memory for ABI lifting
-    ///
-    /// In Component Model, the shim module doesn't have memory - the main module does.
-    /// This function first checks the given instance, then searches other instances.
-    #[cfg(all(feature = "std", feature = "wasi"))]
-    fn find_instance_with_memory(&self, preferred_instance_id: usize) -> Result<crate::module::MemoryWrapper> {
-        // First, try the preferred instance
-        if let Some(instance) = self.instances.get(&preferred_instance_id) {
-            if let Ok(memory) = instance.memory(0) {
-                #[cfg(feature = "tracing")]
-                trace!(
-                    instance_id = preferred_instance_id,
-                    "[CANON_LIFT] Found memory in preferred instance"
-                );
-                return Ok(memory);
-            }
-        }
-
-        // Search all instances for one with memory
-        // Typically the main module (instance 2 in component model) has memory
-        for (&id, instance) in &self.instances {
-            if let Ok(memory) = instance.memory(0) {
-                #[cfg(feature = "tracing")]
-                trace!(
-                    instance_id = id,
-                    "[CANON_LIFT] Found memory in instance"
-                );
-                return Ok(memory);
-            }
-        }
-
-        Err(kiln_error::Error::runtime_error("No instance with memory found for ABI lifting"))
+        self.dispatch_canon_lowered(instance_id, &lowered.interface, &lowered.function, args)
     }
 
     /// Register a cross-instance import link
@@ -10947,13 +10736,7 @@ impl StacklessEngine {
                     "[WASI-PREALLOC] Allocated successfully with SEPARATE string allocations"
                 );
 
-                // Store in internal dispatcher (for backwards compatibility)
-                if let Some(ref mut dispatcher) = self.wasi_dispatcher {
-                    dispatcher.set_args_alloc(list_ptr, string_ptrs.clone());
-                }
-
-                // CRITICAL: Also set on host_handler (the actual dispatch target)
-                // This is the dispatcher that receives get-arguments calls
+                // Set on host_handler (the dispatch target for get-arguments calls)
                 #[cfg(feature = "std")]
                 if let Some(ref mut handler) = self.host_handler {
                     handler.set_args_allocation(list_ptr, string_ptrs);

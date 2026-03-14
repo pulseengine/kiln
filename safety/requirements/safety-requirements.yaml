@@ -364,7 +364,12 @@ artifacts:
   - id: SR-17
     type: requirement
     title: Per-component capability isolation
-    status: draft
+    description: >
+      Each component instance shall have its own WasiCapabilities that
+      restrict which WASI interfaces it may call. The dispatcher checks
+      capabilities before each operation. Capabilities are set at
+      instantiation time and cannot be escalated at runtime.
+    status: implemented
     tags: [wasi, capability-isolation, asil-d, stpa-derived]
     links:
       - type: derives-from
@@ -373,11 +378,16 @@ artifacts:
         target: LS-W-1
     fields:
       implementation: kiln-wasi/src/dispatcher.rs
+      note: "WasiCapabilities struct with per-interface permission checks in all dispatch tiers"
 
   - id: SR-18
     type: requirement
     title: Monotonic clock enforcement
-    status: draft
+    description: >
+      The wasi:clocks/monotonic-clock implementation shall use the platform
+      monotonic clock source and never return a value less than a previously
+      returned value within the same component instance.
+    status: implemented
     tags: [wasi, clocks, stpa-derived]
     links:
       - type: derives-from
@@ -391,13 +401,20 @@ artifacts:
   - id: SR-19
     type: requirement
     title: Cryptographic random or explicit error
-    status: draft
+    description: >
+      The wasi:random/random implementation shall use a cryptographically
+      secure source (platform CSPRNG). If no secure source is available,
+      it shall return an explicit error rather than falling back to a
+      weaker source. The insecure variants shall be clearly separated
+      under wasi:random/insecure.
+    status: implemented
     tags: [wasi, random, security, stpa-derived]
     links:
       - type: derives-from
         target: CC-W-3
     fields:
       implementation: kiln-wasi/src/dispatcher.rs
+      note: "get-random-bytes and get-random-u64 use platform CSPRNG; insecure variants separate"
 
   # =========================================================================
   # STPA-derived: CFI correctness (from CC-CFI-*, LS-CFI-*)

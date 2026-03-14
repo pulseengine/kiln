@@ -185,3 +185,44 @@ artifacts:
         trade-offs between coverage and performance.
       previous-id: SPEC_VERIFY_001, IMPL_VERIFICATION_001
       implementation: kiln-foundation/src/verification.rs
+
+  # =========================================================================
+  # WASI Architecture
+  # =========================================================================
+  - id: AD-WASI-001
+    type: design-decision
+    title: Trait-based WASI dispatch via HostImportHandler
+    description: >
+      All host function dispatch goes through the HostImportHandler trait
+      defined in kiln-foundation. The engine (kiln-runtime) has no direct
+      dependency on kiln-wasi types — it holds a Box<dyn HostImportHandler>.
+      WasiDispatcher implements this trait and provides the WASI Preview 2
+      host functions. This design enables: (1) meld and synth to provide
+      their own HostImportHandler implementations for custom host functions,
+      (2) composing multiple host handlers (WASI + domain-specific),
+      (3) testing with mock host handlers. The prior architecture had a
+      direct wasi_dispatcher field on the engine which created a dual
+      dispatch path, resource handle mismatches, and prevented cross-repo
+      reuse.
+    status: implemented
+    tags: [wasi, architecture, host-interface, cross-repo]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_034
+    fields:
+      rationale: >
+        Trait-based dispatch decouples the engine from any specific host
+        implementation. This is essential for the PulseEngine ecosystem
+        where meld (component lowering) and synth (stub generation) need
+        to inject their own host functions alongside or instead of WASI.
+        The dual-dispatcher bug (LS-W-1) proved that direct type references
+        between engine and host crates create architectural fragility.
+        The HostImportHandler trait boundary provides a clean, testable,
+        extensible interface.
+      alternatives-considered: >
+        (1) Direct kiln_wasi dependency — rejected, couples engine to WASI
+        and prevents cross-repo reuse. (2) Generic type parameter on engine —
+        rejected, makes engine non-object-safe and complicates multi-handler
+        composition. (3) Function pointer table — rejected, less safe and
+        harder to extend with new methods.
+      implementation: kiln-foundation/src/traits.rs, kiln-runtime/src/stackless/engine.rs

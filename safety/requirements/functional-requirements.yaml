@@ -175,6 +175,62 @@ artifacts:
     fields:
       implementation: kiln-wasi/src/dispatcher.rs
 
+  - id: REQ_FUNC_034
+    type: requirement
+    title: WASI Preview 2 unified dispatch via HostImportHandler
+    description: >
+      The runtime shall route all WASI calls through the HostImportHandler
+      trait (kiln-foundation). The engine shall have no direct dependency
+      on kiln-wasi types. WasiDispatcher implements HostImportHandler and
+      provides dispatch_core (canonical ABI lowered i32/i64 + memory
+      pointers) and dispatch_core_v2 (two-phase allocation for host-side
+      cabi_realloc). Both regular import calls and Component Model lowered
+      function calls shall use the same host_handler dispatch path. The
+      trait interface shall be reusable by external runtimes (meld, synth).
+    status: implemented
+    tags: [wasi, dispatcher, canonical-abi, cross-repo]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_014
+    fields:
+      implementation: kiln-wasi/src/dispatcher.rs, kiln-foundation/src/traits.rs
+      note: "Dual dispatch path (wasi_dispatcher field) removed 2026-03"
+
+  - id: REQ_FUNC_035
+    type: requirement
+    title: WASI filesystem access with preopens
+    description: >
+      The runtime shall implement wasi:filesystem/types and
+      wasi:filesystem/preopens interfaces including stat-at, open-at,
+      read-via-stream, write-via-stream, get-type, get-directories,
+      and resource descriptor lifecycle. Filesystem access shall be
+      restricted to pre-opened directories passed via CLI (--wasi-fs).
+    status: implemented
+    tags: [wasi, filesystem, capability-isolation]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_014
+    fields:
+      implementation: kiln-wasi/src/dispatcher.rs
+      note: "428+ lines of canonical ABI lowered filesystem handlers added 2026-03"
+
+  - id: REQ_FUNC_036
+    type: requirement
+    title: WASI CLI, clocks, random, and I/O interfaces
+    description: >
+      The runtime shall implement WASI cli (environment, exit, stdin/stdout/
+      stderr, terminal detection), clocks (wall-clock, monotonic-clock),
+      random (secure get-random-bytes/u64 and insecure variants), and
+      io (streams with blocking-write-and-flush, poll, error) interfaces
+      as defined by WASI Preview 2.
+    status: implemented
+    tags: [wasi, cli, clocks, random, io]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_014
+    fields:
+      implementation: kiln-wasi/src/dispatcher.rs
+
   # =========================================================================
   # Low-Level Implementation
   # =========================================================================

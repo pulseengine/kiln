@@ -297,6 +297,13 @@ loss-scenarios:
     process-model-flaw: >
       Dispatcher assumes single-component mode; multi-component requires
       per-instance capability isolation
+    mitigation: >
+      Addressed by SM-WASI-001: each ComponentInstance creates its own
+      WasiDispatcher with its own WasiCapabilities. The engine holds a
+      single host_handler per instance. The dual-dispatcher path that
+      could cause handle aliasing has been removed. Residual risk:
+      multi-component scenarios within a single engine are not yet tested
+      end-to-end.
 
   - id: LS-W-2
     title: Platform clock wraps or adjusts backward
