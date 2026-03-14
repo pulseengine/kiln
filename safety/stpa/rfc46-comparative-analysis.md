@@ -87,7 +87,7 @@ create them:
 | MG-1: Async CM | P2-only; no P3 async | Wait for stack-switching ecosystem |
 | MG-2: Resource types | Partial (kiln-component) | Track with SR-12, SR-13 |
 | MG-3: Multiply-instantiated modules | Not supported | Track with Meld GAP-P2-1 |
-| MG-4: Host bindings generation | Manual (dispatcher) | Dispatcher redesign in progress |
+| MG-4: Host bindings generation | Manual (dispatcher) | Unified via HostImportHandler trait (SM-WASI-001) |
 
 ## Gaps in RFC vs PulseEngine
 

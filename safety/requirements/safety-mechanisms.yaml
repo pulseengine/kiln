@@ -290,3 +290,40 @@ artifacts:
         ensure no unbounded computation while resources are held.
         kiln_sync::Mutex provides platform-appropriate locking.
       implementation: kiln-sync/src/mutex.rs, kiln-runtime/src/stackless/engine.rs
+
+  # =========================================================================
+  # WASI Safety Mechanisms
+  # =========================================================================
+  - id: SM-WASI-001
+    type: design-decision
+    title: Unified dispatcher with capability-gated WASI access
+    description: >
+      All WASI calls route through the HostImportHandler trait — the engine
+      has no direct reference to kiln-wasi types. A single WasiDispatcher
+      instance per component implements HostImportHandler. The dispatcher
+      checks WasiCapabilities before each operation — unauthorized interface
+      calls return an error, never silently succeed. Filesystem access
+      restricted to pre-opened directories only. The engine field
+      `wasi_dispatcher` (which previously created a dual dispatch path with
+      resource handle mismatches) has been removed; all dispatch goes through
+      `host_handler: Box<dyn HostImportHandler>`.
+    status: implemented
+    tags: [wasi, capability-isolation, asil-d, mechanism]
+    links:
+      - type: satisfies
+        target: SR-17
+      - type: satisfies
+        target: SR-18
+      - type: satisfies
+        target: SR-19
+    fields:
+      rationale: >
+        A single dispatcher instance per component prevents resource handle
+        aliasing between separate resource managers. Capability checks at
+        the dispatch boundary enforce least-privilege — components can only
+        use WASI interfaces explicitly granted at instantiation. The
+        HostImportHandler trait abstraction allows meld and synth externals
+        to plug in custom host functions using the same interface. This is
+        unique to PulseEngine and directly addresses STPA loss scenarios
+        LS-W-1 (unauthorized resource access) and LS-W-2 (clock manipulation).
+      implementation: kiln-wasi/src/dispatcher.rs, kiln-foundation/src/traits.rs
