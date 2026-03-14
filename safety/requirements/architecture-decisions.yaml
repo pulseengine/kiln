@@ -1,0 +1,187 @@
+# Architecture Decisions — Migrated from sphinx-needs
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Migrated from:
+#   docs/source/architecture/01_architectural_design/overview.rst
+#   docs/source/architecture/01_architectural_design/patterns.rst
+#
+# These are architectural design decisions (design-decision type) that
+# satisfy functional and safety requirements.
+#
+# Architectural constraints (ARCH_CON_001-003) and architectural
+# requirements (ARCH_REQ_001-005) are NOT migrated as separate artifacts —
+# they are subsumed by the existing functional and safety requirements
+# (REQ_PLATFORM_001, REQ_FUNC_002, REQ_LFUNC_006, SR-3, REQ_SAFETY_001, etc.)
+#
+# Format: rivet generic-yaml
+
+artifacts:
+  # =========================================================================
+  # Core Architecture Decisions
+  # =========================================================================
+  - id: AD-COMP-001
+    type: design-decision
+    title: Component-based modular architecture
+    description: >
+      The system is decomposed into independently testable and certifiable
+      components (crates), each with a single well-defined responsibility.
+      Higher layers depend only on lower layers. Platform-specific code is
+      isolated in the Platform Abstraction Layer.
+    status: implemented
+    tags: [architecture, modularity]
+    links:
+      - type: satisfies
+        target: REQ_PLATFORM_001
+      - type: satisfies
+        target: REQ_FUNC_002
+    fields:
+      rationale: >
+        Modular design enables independent testing, certification, and
+        platform-specific optimization. Clear separation of concerns allows
+        selective feature inclusion and minimizes dependencies.
+      previous-id: ARCH_DEC_COMP_001
+      implementation: Cargo workspace with 24 specialized crates
+
+  - id: AD-DEPLOY-001
+    type: design-decision
+    title: Multi-platform deployment strategy
+    description: >
+      Different deployment environments (server, embedded Linux, QNX, VxWorks,
+      Zephyr RTOS, bare-metal) are supported through the platform abstraction
+      layer with environment-specific memory models, security features, and
+      resource constraints.
+    status: partial
+    tags: [architecture, platform, deployment]
+    links:
+      - type: satisfies
+        target: REQ_PLATFORM_001
+      - type: satisfies
+        target: REQ_FUNC_002
+      - type: satisfies
+        target: REQ_FUNC_033
+    fields:
+      rationale: >
+        Different deployment environments require different memory models
+        and security features. Platform abstraction isolates these
+        differences behind common interfaces.
+      previous-id: ARCH_DEC_DEPLOY_001
+      implementation: kiln-platform/src/
+
+  - id: AD-CRATE-001
+    type: design-decision
+    title: Fine-grained crate organization
+    description: >
+      Implementation organized into fine-grained crates (kiln-error,
+      kiln-foundation, kiln-format, kiln-decoder, kiln-runtime,
+      kiln-instructions, kiln-component, kiln-platform, etc.) to enable
+      selective feature inclusion and minimize dependency footprint.
+    status: implemented
+    tags: [architecture, organization]
+    links:
+      - type: satisfies
+        target: REQ_LFUNC_006
+    fields:
+      rationale: >
+        Fine-grained crates enable selective feature compilation (e.g.,
+        exclude Component Model for embedded), clear dependency boundaries
+        for safety analysis, and independent testing/verification.
+      previous-id: ARCH_DEC_CRATE_001
+      implementation: Cargo.toml workspace members
+
+  - id: AD-ENV-001
+    type: design-decision
+    title: Multi-environment architecture (std / no_std+alloc / no_std)
+    description: >
+      Four environment configurations supported via conditional compilation:
+      full std, no_std with alloc, no_std without alloc (bounded collections),
+      and bare-metal. Same interfaces work across all environments with
+      different backing implementations.
+    status: implemented
+    tags: [architecture, no-std, platform]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_002
+      - type: satisfies
+        target: REQ_LFUNC_006
+    fields:
+      rationale: >
+        Different deployment scenarios require different resource trade-offs.
+        Conditional compilation with trait-based abstractions provides full
+        feature parity across environments.
+      previous-id: ARCH_DEC_ENV_001
+      implementation: "#![cfg_attr(not(feature = \"std\"), no_std)] across all crates"
+
+  - id: AD-PATTERNS-001
+    type: design-decision
+    title: Three-tier environment support pattern
+    description: >
+      Trait-based abstractions (MemoryProvider, ComponentFactory, etc.) with
+      environment-specific implementations selected at compile time. BoundedVec,
+      BoundedString, and other bounded collections replace std collections in
+      no_alloc environments.
+    status: implemented
+    tags: [architecture, patterns, no-std]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_002
+      - type: satisfies
+        target: REQ_LFUNC_006
+    fields:
+      rationale: >
+        Trait-based abstractions with conditional compilation enable the same
+        API surface across std, no_std+alloc, and no_std+no_alloc environments
+        without runtime overhead.
+      previous-id: ARCH_DEC_PATTERNS_001
+      implementation: kiln-foundation/src/safe_memory.rs, kiln-foundation/src/bounded.rs
+
+  # =========================================================================
+  # Tooling & Verification Decisions
+  # =========================================================================
+  - id: AD-BUILD-001
+    type: design-decision
+    title: Unified build and verification tooling (cargo-kiln)
+    description: >
+      Single CLI entry point (cargo-kiln) for all build, test, verification,
+      and ASIL compliance operations. Includes: ASIL-level verification
+      (verify --asil d), build matrix verification (verify-matrix --report),
+      no-std validation, requirements traceability (requirements verify),
+      safety feature testing, and diagnostic system with LSP-compatible
+      JSON output.
+    status: implemented
+    tags: [tooling, build-system, verification]
+    links:
+      - type: satisfies
+        target: REQ_CONFIG_001
+      - type: satisfies
+        target: REQ_CONFIG_003
+    fields:
+      rationale: >
+        Single entry point ensures consistent configuration validation and
+        safe defaults across all development activities. Build matrix
+        verification detects ASIL compliance issues before merge.
+        Replaces fragmented shell scripts and justfile recipes.
+      previous-id: IMPL_CONFIG_001
+      implementation: cargo-kiln/src/, kiln-build-core/src/
+
+  - id: AD-VERIFY-001
+    type: design-decision
+    title: Configurable verification level system
+    description: >
+      Multiple verification levels (Off, Basic, Standard, Full, Sampling,
+      Redundant) configurable per-component and per-deployment scenario.
+      Verification operates independently of the functionality it protects —
+      safety mechanisms can be verified without affecting execution behavior.
+    status: implemented
+    tags: [verification, safety-independence, asil-d]
+    links:
+      - type: satisfies
+        target: REQ_SAFETY_004
+    fields:
+      rationale: >
+        Safety mechanism independence (ISO 26262-6:7.4.10) requires that
+        verification systems do not share failure modes with the mechanisms
+        they verify. Configurable levels allow deployment-appropriate
+        trade-offs between coverage and performance.
+      previous-id: SPEC_VERIFY_001, IMPL_VERIFICATION_001
+      implementation: kiln-foundation/src/verification.rs

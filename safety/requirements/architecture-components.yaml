@@ -1,0 +1,344 @@
+# Architecture Components — Migrated from sphinx-needs
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Migrated from:
+#   docs/source/architecture/01_architectural_design/components.rst
+#   docs/source/architecture/01_architectural_design/patterns.rst
+#
+# These are architectural components (feature type) that satisfy
+# functional and safety requirements by providing actual capabilities.
+#
+# Interface catalog (ARCH_IF_*) and specification items (SPEC_*, IMPL_*)
+# are NOT migrated — they describe internal structure better captured in
+# code documentation than in traceability artifacts.
+#
+# Format: rivet generic-yaml
+
+artifacts:
+  # =========================================================================
+  # Core Components (crate-level)
+  # =========================================================================
+  - id: AC-RUNTIME
+    type: feature
+    title: Runtime core execution engine
+    description: >
+      Stackless WebAssembly instruction execution engine with resumable
+      operation, fuel-based bounded execution, and multi-instance support.
+      Crate: kiln-runtime.
+    status: partial
+    tags: [component, runtime, core]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_001
+      - type: satisfies
+        target: REQ_LFUNC_005
+      - type: satisfies
+        target: REQ_LFUNC_018
+    fields:
+      previous-id: ARCH_COMP_001
+      implementation: kiln-runtime/src/stackless/engine.rs
+      note: "Infrastructure implemented; ~1,500 WAST assertion failures remain (Issue 149)"
+
+  - id: AC-MEMORY
+    type: feature
+    title: Memory manager with safe memory provider
+    description: >
+      Safe memory operations with bounds checking, integrity verification,
+      and capability-based allocation via safe_managed_alloc! macro.
+      Supports std, no_std+alloc, and no_alloc environments.
+      Crate: kiln-foundation.
+    status: implemented
+    tags: [component, memory, safety]
+    links:
+      - type: satisfies
+        target: REQ_MEM_SAFETY_005
+      - type: satisfies
+        target: REQ_MEM_SAFETY_002
+    fields:
+      previous-id: ARCH_COMP_002
+      implementation: kiln-foundation/src/safe_memory.rs, kiln-foundation/src/capabilities/
+
+  - id: AC-COMPONENT
+    type: feature
+    title: Component Model runtime
+    description: >
+      WebAssembly Component Model Preview 2 implementation including
+      component instantiation, canonical ABI lifting/lowering, resource
+      lifecycle management, and interface types.
+      Crate: kiln-component.
+    status: partial
+    tags: [component, component-model]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_014
+      - type: satisfies
+        target: REQ_FUNC_021
+      - type: satisfies
+        target: REQ_CMP_020
+    fields:
+      previous-id: ARCH_COMP_003
+      implementation: kiln-component/src/
+
+  - id: AC-DECODER
+    type: feature
+    title: WebAssembly binary decoder
+    description: >
+      Streaming WebAssembly binary format parser with validation.
+      Parses modules and components into internal representation.
+      Crate: kiln-decoder.
+    status: implemented
+    tags: [component, decoder]
+    links:
+      - type: satisfies
+        target: REQ_LFUNC_018
+    fields:
+      previous-id: ARCH_COMP_004
+      implementation: kiln-decoder/src/streaming_decoder.rs
+
+  - id: AC-PLATFORM
+    type: feature
+    title: Platform abstraction layer
+    description: >
+      OS-specific operations abstracted behind common traits (PageAllocator,
+      FutexLike). Backends for macOS, Linux, QNX, Zephyr, and bare-metal.
+      Crate: kiln-platform.
+    status: implemented
+    tags: [component, platform]
+    links:
+      - type: satisfies
+        target: REQ_PLATFORM_001
+    fields:
+      previous-id: ARCH_COMP_005
+      implementation: kiln-platform/src/
+
+  # =========================================================================
+  # Supporting Components
+  # =========================================================================
+  - id: AC-ERROR
+    type: feature
+    title: Unified error management system
+    description: >
+      ASIL-compliant error categorization with factory methods, error
+      propagation through Result types, and no_std compatibility.
+      Crate: kiln-error.
+    status: implemented
+    tags: [component, error-handling]
+    links:
+      - type: satisfies
+        target: REQ_ERROR_001
+    fields:
+      previous-id: ARCH_COMP_010
+      implementation: kiln-error/src/
+
+  - id: AC-INSTRUCTIONS
+    type: feature
+    title: WebAssembly instruction set implementation
+    description: >
+      Instruction execution for arithmetic, control flow, memory operations,
+      variable access, type conversions, table operations, and SIMD.
+      Crate: kiln-instructions.
+    status: implemented
+    tags: [component, instructions]
+    links:
+      - type: satisfies
+        target: REQ_LFUNC_018
+    fields:
+      previous-id: ARCH_COMP_011
+      implementation: kiln-instructions/src/
+
+  - id: AC-BOUNDED
+    type: feature
+    title: Bounded collections for no_alloc environments
+    description: >
+      BoundedVec, BoundedString, and other bounded collections that replace
+      standard collections in no_alloc environments with compile-time
+      capacity limits.
+      Crate: kiln-foundation.
+    status: implemented
+    tags: [component, bounded, no-std]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_002
+      - type: satisfies
+        target: REQ_LFUNC_006
+    fields:
+      previous-id: ARCH_COMP_012
+      implementation: kiln-foundation/src/bounded.rs
+
+  # =========================================================================
+  # Runtime Features (not separate crate-level components in sphinx-needs,
+  # but real implemented capabilities that satisfy requirements)
+  # =========================================================================
+  - id: AC-WASI
+    type: feature
+    title: WASI Preview 2 dispatcher
+    description: >
+      WASI logging support with all log levels (Error, Warn, Info, Debug,
+      Trace), context-based logging, stderr integration, and thread-safe
+      operations. Crate: kiln-wasi.
+    status: implemented
+    tags: [component, wasi]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_015
+    fields:
+      implementation: kiln-wasi/src/dispatcher.rs
+
+  - id: AC-ASYNC
+    type: feature
+    title: Async/await runtime for Component Model
+    description: >
+      Async canonical lifting/lowering, async execution engine with
+      future-based task management, and context preservation across async
+      boundaries. Crate: kiln-runtime.
+    status: implemented
+    tags: [component, async, runtime]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_030
+    fields:
+      implementation: kiln-runtime/src/async_runtime.rs
+
+  - id: AC-DEBUG
+    type: feature
+    title: Debug infrastructure
+    description: >
+      DWARF debug information parsing, WIT-aware debugging with source
+      mapping, runtime breakpoint management, and stack trace generation.
+      Crate: kiln-runtime.
+    status: implemented
+    tags: [component, debugging, tooling]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_032
+    fields:
+      implementation: kiln-runtime/src/debug/
+
+  - id: AC-WAST
+    type: feature
+    title: WAST test suite runner
+    description: >
+      Integration with the official WebAssembly specification (WAST) test
+      suite for conformance and correctness testing. Test runner with
+      result tracking and memory statistics.
+    status: partial
+    tags: [testing, conformance]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_022
+    fields:
+      implementation: kiln-build-core/src/wast_execution.rs
+      note: "Test runner exists; ~1,600 assertion failures across Issues 146-149"
+
+  - id: AC-FUZZ
+    type: feature
+    title: Fuzzing infrastructure
+    description: >
+      Fuzzing coverage for bounded collections, memory adapters, component
+      model parser, type bounds, canonical options, and WIT parser.
+    status: implemented
+    tags: [testing, fuzzing, quality]
+    links:
+      - type: satisfies
+        target: REQ_QA_010
+    fields:
+      implementation: fuzz/
+
+  - id: AC-FORMAL
+    type: feature
+    title: Formal verification via Kani
+    description: >
+      Kani proof harness integration, model checking annotations,
+      invariant specifications, and bounded verification for critical paths.
+    status: implemented
+    tags: [verification, formal-methods]
+    links:
+      - type: satisfies
+        target: REQ_VERIFY_010
+    fields:
+      implementation: "Kani proofs in kiln-foundation, kiln-runtime"
+
+  - id: AC-KILND
+    type: feature
+    title: kilnd daemon with multiple deployment modes
+    description: >
+      Runtime daemon supporting standard mode (kilnd-std), allocation mode
+      (kilnd-alloc), and no-std mode (kilnd-nostd), each with appropriate
+      resource limits and safety constraints.
+    status: implemented
+    tags: [deployment, daemon]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_033
+    fields:
+      implementation: kilnd/src/
+
+  # =========================================================================
+  # Tooling & Monitoring Features
+  # =========================================================================
+  - id: AC-MONITORING
+    type: feature
+    title: Resource usage monitoring infrastructure
+    description: >
+      Memory monitoring via MEMORY_MONITOR global singleton with
+      record_allocation/record_deallocation tracking. SafetyMonitor with
+      AllocationMonitor, CapabilityMonitor, ErrorMonitor, PerformanceMonitor
+      subsystems. Returns SafetyReport with health_score (0-100).
+      High watermark tracking for capacity planning.
+    status: partial
+    tags: [monitoring, resource-management, tooling]
+    links:
+      - type: satisfies
+        target: REQ_RESOURCE_004
+    fields:
+      previous-id: IMPL_RESOURCE_SAFETY_001
+      implementation: kiln-foundation/src/monitoring.rs, kiln-foundation/src/safety_monitor.rs
+      note: "~1,800 lines of infrastructure exist but not yet wired to allocation paths"
+
+  # =========================================================================
+  # NOT MIGRATED (with rationale):
+  #
+  # ARCH_COMP_SYSTEM — meta-level "system" component; covered by rivet
+  #   project definition.
+  #
+  # ARCH_COMP_PATTERNS_001-008 — architectural pattern descriptions;
+  #   these describe HOW components are built, not WHAT capability they
+  #   provide. Patterns captured in AD-PATTERNS-001 and AD-ENV-001.
+  #
+  # ARCH_COMP_TRACE_001, ARCH_COMP_COV_001, ARCH_COMP_SEQ_001,
+  # ARCH_COMP_STATE_001, ARCH_COMP_CPU_001, ARCH_COMP_RES_001 —
+  #   meta-documentation components describing architecture documents,
+  #   not system capabilities.
+  #
+  # ARCH_IF_* (~42 interface items) — internal API specifications;
+  #   captured in Rust trait definitions and code documentation.
+  #
+  # SPEC_005 (CLI), SPEC_009 (Safety), SPEC_010 (Testing),
+  # SPEC_VERIFY_001 (Verification Levels) — architecture-level specs
+  #   covered by: AC-KILND, safety-mechanisms.yaml, AC-WAST/AC-FUZZ/
+  #   AC-FORMAL, AD-VERIFY-001 respectively.
+  #
+  # IMPL_008 (CLI), IMPL_009 (WAST), IMPL_MEMORY_SAFETY_001,
+  # IMPL_RESOURCE_SAFETY_001, IMPL_ERROR_HANDLING_RECOVERY_001,
+  # IMPL_VERIFICATION_001, IMPL_CONFIG_001, IMPL_SAFETY_TESTING_001 —
+  #   implementation tracking items covered by corresponding AC-*/SM-*/AD-*
+  #   artifacts at the proper traceability level.
+  #
+  # QUAL_100-102 (ASIL-D, SIL-3, Class C targets) — certification
+  #   aspirations, not code properties. Tracked in evaluation_plan.rst.
+  #
+  # QUAL_103-108 — process/documentation deliverables (evaluation plan,
+  #   qualification report, traceability matrix, etc.). rivet replaces
+  #   QUAL_105 (traceability matrix) natively.
+  #
+  # KILNQ_001-007 — auto-generated panic registry. Operational defects
+  #   tracked as issues, not traceability artifacts.
+  #
+  # SAFETY_001-004 (pre-STPA hazards) — superseded by STPA analysis
+  #   (H-1 through H-10 in safety/stpa/hazards.yaml).
+  #
+  # FR-001..PER-004 (traceability.rst alternate IDs) — duplicate
+  #   numbering scheme used only in architecture docs. rivet generates
+  #   traceability matrices natively.
+  # =========================================================================

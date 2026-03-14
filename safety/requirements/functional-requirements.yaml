@@ -1,0 +1,321 @@
+# Functional Requirements — Migrated from sphinx-needs
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Migrated from: docs/source/requirements.rst
+#
+# Status key:
+#   implemented — infrastructure exists and works
+#   partial     — partially implemented, gaps remain
+#   planned     — design exists but no implementation
+#   removed     — no longer applicable (with rationale)
+#
+# Format: rivet generic-yaml
+
+artifacts:
+  # =========================================================================
+  # Platform & Runtime Architecture
+  # =========================================================================
+  - id: REQ_PLATFORM_001
+    type: requirement
+    title: Platform abstraction layer
+    description: >
+      The runtime shall provide a platform abstraction layer (PAL) with
+      distinct backends for target operating systems (macOS, Linux, QNX,
+      Zephyr) and bare-metal environments, selectable via compile-time
+      features. The PAL shall abstract OS-specific APIs for memory
+      allocation/protection and synchronization primitives.
+    status: implemented
+    tags: [platform, architecture]
+    fields:
+      implementation: kiln-platform/src/
+
+  - id: REQ_FUNC_001
+    type: requirement
+    title: Resumable interpreter
+    description: >
+      The interpreter shall be resumable, allowing operation with fuel or
+      other bounded run-time mechanisms that require the interpreter to be
+      halted and later resumed as if it was not halted.
+    status: implemented
+    tags: [runtime, core]
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs
+
+  - id: REQ_FUNC_002
+    type: requirement
+    title: Baremetal support
+    description: >
+      The interpreter shall be executable on bare-metal environments with
+      no reliance on any specific functionality from the provided execution
+      environment, ready for embedding to any environment Rust can compile for.
+    status: implemented
+    tags: [platform, no-std]
+    fields:
+      implementation: "All crates support #![no_std]"
+
+  - id: REQ_FUNC_003
+    type: requirement
+    title: Bounded execution
+    description: >
+      The interpreter shall yield back control flow eventually, allowing
+      users to call the interpreter with a bound and expect a result in
+      a finite amount of time or bytecode operations.
+    status: implemented
+    tags: [runtime, safety]
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs (fuel mechanism)
+
+  - id: REQ_FUNC_033
+    type: requirement
+    title: Multiple runtime deployment modes
+    description: >
+      The interpreter shall support multiple runtime deployment modes
+      through the kilnd daemon: standard mode (kilnd-std), allocation
+      mode (kilnd-alloc), and no-std mode (kilnd-nostd), each with
+      appropriate resource limits and safety constraints.
+    status: implemented
+    tags: [runtime, deployment]
+    fields:
+      implementation: kilnd/src/
+
+  # =========================================================================
+  # WebAssembly Spec Conformance
+  # =========================================================================
+  - id: REQ_LFUNC_018
+    type: requirement
+    title: WebAssembly Core Spec 3.0 implementation
+    description: >
+      The interpreter shall implement the WebAssembly Core Spec 3.0,
+      including: module validation, value types and reference types,
+      instructions and control flow, function calls and tables, memory
+      and data segments, global variables, exception handling (modern
+      try_table syntax), and SIMD operations.
+    status: partial
+    tags: [wasm-core, spec-conformance]
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs
+      spec-reference: "WebAssembly Core Spec 3.0 (2025-12-03)"
+      note: "~1,500 assert_return failures remain (Issue 149)"
+
+  - id: REQ_FUNC_022
+    type: requirement
+    title: WAST test suite compatibility
+    description: >
+      The interpreter shall be testable against the official WebAssembly
+      specification (WAST) test suite to ensure conformance and correctness.
+    status: partial
+    tags: [testing, spec-conformance]
+    fields:
+      implementation: kiln-build-core/src/wast_execution.rs
+      note: "Test runner exists; ~1,600 assertion failures across Issues 146-149"
+
+  # =========================================================================
+  # Component Model
+  # =========================================================================
+  - id: REQ_FUNC_014
+    type: requirement
+    title: WebAssembly Component Model support
+    description: >
+      The interpreter shall implement the WebAssembly Component Model
+      Preview 2 specification, including: component model validation,
+      resource type handling, interface types, component instantiation
+      and linking, resource lifetime management, custom section handling,
+      and component model binary format parsing.
+    status: partial
+    tags: [component-model, spec-conformance]
+    fields:
+      implementation: kiln-component/src/
+      spec-reference: "Component Model commit deb0b0a (2025-05-19)"
+
+  - id: REQ_FUNC_021
+    type: requirement
+    title: Component Model binary format
+    description: >
+      The interpreter shall strictly implement the WebAssembly Component
+      Model binary format including magic bytes, component sections,
+      type encoding, import/export handling, core module embedding,
+      canonical ABI encoding/decoding, and LEB128 encoding.
+    status: partial
+    tags: [component-model, decoder]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_014
+    fields:
+      implementation: kiln-decoder/src/streaming_decoder.rs, kiln-component/src/
+
+  - id: REQ_CMP_020
+    type: requirement
+    title: Component resource lifecycle management
+    description: >
+      The component model implementation shall provide comprehensive
+      lifecycle management for resource types, ensuring proper creation,
+      tracking, and disposal of resources.
+    status: partial
+    tags: [component-model, resources]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_014
+    fields:
+      implementation: kiln-component/src/components/resource_management.rs
+      note: "Subsumed by STPA requirements SR-12 (no-aliasing) and SR-13 (double-drop)"
+
+  # =========================================================================
+  # WASI Support
+  # =========================================================================
+  - id: REQ_FUNC_015
+    type: requirement
+    title: WASI logging support
+    description: >
+      The interpreter shall implement WASI logging with support for all
+      defined log levels (Error, Warn, Info, Debug, Trace), context-based
+      logging, stderr integration, and thread-safe logging operations.
+    status: implemented
+    tags: [wasi, logging]
+    fields:
+      implementation: kiln-wasi/src/dispatcher.rs
+
+  # =========================================================================
+  # Low-Level Implementation
+  # =========================================================================
+  - id: REQ_LFUNC_005
+    type: requirement
+    title: Stackless implementation
+    description: >
+      The interpreter shall be stackless, storing the stack of the
+      interpreted bytecode in a traditional data structure rather than
+      using function calls in the host environment.
+    status: implemented
+    tags: [runtime, architecture]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_001
+    fields:
+      implementation: kiln-runtime/src/stackless/
+
+  - id: REQ_LFUNC_006
+    type: requirement
+    title: No standard library dependency
+    description: >
+      The interpreter shall be implemented in no_std Rust, only relying
+      on functionality provided by core/alloc to enable execution on
+      bare environments where no operating system is available.
+    status: implemented
+    tags: [platform, no-std]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_002
+    fields:
+      implementation: "All core crates: #![cfg_attr(not(feature = \"std\"), no_std)]"
+      note: "kiln-runtime/src/memory.rs has a no_std guard bug (Issue in Stream D)"
+
+  # =========================================================================
+  # Advanced Runtime
+  # =========================================================================
+  - id: REQ_FUNC_030
+    type: requirement
+    title: Async/await runtime support
+    description: >
+      The interpreter shall provide async/await runtime support for the
+      Component Model, including async canonical lifting/lowering, async
+      execution engine with future-based task management, and context
+      preservation across async boundaries.
+    status: implemented
+    tags: [runtime, async]
+    fields:
+      implementation: kiln-runtime/src/async_runtime.rs
+
+  - id: REQ_FUNC_032
+    type: requirement
+    title: Debug infrastructure
+    description: >
+      The interpreter shall provide debugging capabilities including
+      DWARF debug information parsing, WIT-aware debugging with source
+      mapping, runtime breakpoint management, and stack trace generation.
+    status: implemented
+    tags: [debugging, tooling]
+    fields:
+      implementation: kiln-runtime/src/debug/
+
+  - id: REQ_QA_010
+    type: requirement
+    title: Fuzzing infrastructure
+    description: >
+      The interpreter shall include fuzzing infrastructure covering
+      bounded collections, memory adapters, component model parser,
+      type bounds, canonical options, and WIT parser fuzzing.
+    status: implemented
+    tags: [testing, quality]
+    fields:
+      implementation: fuzz/
+
+  - id: REQ_VERIFY_010
+    type: requirement
+    title: Formal verification support
+    description: >
+      The interpreter shall include support for formal verification
+      through Kani proof harness integration, model checking annotations,
+      invariant specifications, and bounded verification for critical paths.
+    status: implemented
+    tags: [verification, formal-methods]
+    fields:
+      implementation: "Kani proofs in kiln-foundation, kiln-runtime"
+
+  - id: REQ_HELPER_ABI_001
+    type: requirement
+    title: Helper runtime C ABI exports
+    description: >
+      The AOT helper runtime (libkiln_helper) shall export a stable C
+      ABI including functions for Wasm operations not efficiently inlined
+      by the AOT compiler: kiln_memory_copy, kiln_memory_fill,
+      kiln_memory_grow, kiln_atomic_wait, kiln_atomic_notify.
+    status: planned
+    tags: [aot, synth-integration]
+    fields:
+      note: "Related to BA RFC #46 host-wit-bindgen equivalent"
+
+  # =========================================================================
+  # REMOVED from sphinx-needs (with rationale):
+  #
+  # REQ_FUNC_004 (State Migration) — planned, never started, low priority.
+  #   Re-add when state migration becomes active work.
+  #
+  # REQ_FUNC_016 (Platform-Specific Logging) — planned, never started.
+  #   syslog/os_log integration is an embedder concern in SEooC model.
+  #
+  # REQ_LFUNC_008 (State Serialization) — planned, never started. Same as
+  #   REQ_FUNC_004.
+  #
+  # REQ_LFUNC_023 (Optimized Instruction Dispatch) — optimization goal,
+  #   not a functional requirement. Track as a performance objective.
+  #
+  # REQ_LFUNC_024 (Efficient Operand Stack) — same as above.
+  #
+  # REQ_LFUNC_025 (Efficient Branch Pre-calculation) — same as above.
+  #
+  # REQ_LFUNC_026 (Minimize Code Complexity) — design principle, not a
+  #   requirement. Captured in CLAUDE.md guidelines.
+  #
+  # REQ_DEP_009 (Logging crate dependency) — dependency management belongs
+  #   in Cargo.toml, not requirements.
+  #
+  # REQ_DEP_010 (libm dependency) — same as above.
+  #
+  # REQ_DEP_011 (Rust version 1.76.0) — MSRV belongs in Cargo.toml and
+  #   rust-toolchain.toml.
+  #
+  # REQ_OBS_012 (Instrumentation Support) — partially implemented via
+  #   kiln_foundation::tracing; operational concern.
+  #
+  # REQ_OBS_013 (Coverage Measurement) — DO-178C coverage is a
+  #   certification process concern, not a code requirement.
+  #
+  # REQ_FUNC_031 (Advanced Threading) — partially implemented; re-add
+  #   when threading becomes active work.
+  #
+  # REQ_PERF_010 (Hardware Optimization) — SIMD/MTE/CET are platform
+  #   features, not functional requirements.
+  #
+  # REQ_LFUNC_019 (Component Model Implementation) — duplicates
+  #   REQ_FUNC_014 at a lower level.
+  # =========================================================================

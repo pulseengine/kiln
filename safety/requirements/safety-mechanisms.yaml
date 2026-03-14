@@ -1,0 +1,292 @@
+# Safety Mechanisms — Migrated from sphinx-needs
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Migrated from: docs/source/safety_manual/mechanisms.rst
+#
+# These are design decisions describing HOW safety requirements are
+# satisfied. Each mechanism links back to the requirement(s) it addresses.
+#
+# The 4 pre-STPA hazards (SAFETY_001-004 from qualification/safety_analysis.rst)
+# are NOT migrated — they are superseded by the comprehensive STPA hazard
+# analysis (H-1 through H-10 in safety/stpa/hazards.yaml).
+#
+# Format: rivet generic-yaml
+
+artifacts:
+  # =========================================================================
+  # Memory Safety Mechanisms
+  # =========================================================================
+  - id: SM-MEM-001
+    type: design-decision
+    title: Memory bounds checking via SafeSlice
+    description: >
+      All memory accesses are validated against allocation boundaries before
+      execution. Pre-access and in-access dual-check strategy. SafeSlice
+      wrapper enforces bounds on all slice operations with integer overflow
+      detection in offset calculations.
+    status: implemented
+    tags: [memory-safety, asil-d, mechanism]
+    links:
+      - type: satisfies
+        target: SR-3
+      - type: satisfies
+        target: REQ_MEM_SAFETY_002
+      - type: satisfies
+        target: REQ_MEM_SAFETY_004
+    fields:
+      rationale: >
+        99% diagnostic coverage for out-of-bounds accesses. Always enabled in
+        safety-critical mode. Performance mode allows selective bounds elision.
+      previous-id: SAFETY_MEM_001, SAFETY_MEM_002, SAFETY_MEM_004
+      implementation: kiln-foundation/src/safe_memory.rs
+
+  - id: SM-MEM-002
+    type: design-decision
+    title: Stack overflow protection via depth counter and guard pages
+    description: >
+      Stack depth counter with configurable limit, guard pages when platform
+      supports, stack canary values for corruption detection, and
+      pre-allocation of maximum stack space.
+    status: implemented
+    tags: [memory-safety, asil-d, mechanism]
+    links:
+      - type: satisfies
+        target: SR-5
+    fields:
+      rationale: >
+        90% diagnostic coverage. Cannot detect all forms of stack corruption.
+        Guard pages require platform support.
+      previous-id: SAFETY_MEM_003
+      implementation: kiln-runtime/src/stackless/engine.rs
+
+  # =========================================================================
+  # Control Flow Integrity Mechanisms
+  # =========================================================================
+  - id: SM-CFI-001
+    type: design-decision
+    title: Indirect call type signature validation
+    description: >
+      All indirect calls validated against function table before execution.
+      Type signature validation on every indirect call, function index bounds
+      checking, table element initialization tracking. No function pointer
+      arithmetic allowed.
+    status: implemented
+    tags: [cfi, asil-d, mechanism]
+    links:
+      - type: satisfies
+        target: SR-20
+      - type: satisfies
+        target: SR-21
+    fields:
+      rationale: >
+        100% diagnostic coverage for invalid indirect calls. ~5-10% overhead
+        on indirect-call-heavy workloads.
+      previous-id: SAFETY_CFI_001
+      implementation: kiln-runtime/src/cfi_engine.rs
+
+  - id: SM-CFI-002
+    type: design-decision
+    title: Shadow control stack with return validation
+    description: >
+      Shadow control stack protects against control stack corruption through
+      redundancy and validation checks. Return address validation on unwind.
+      Structured control flow enforcement.
+    status: implemented
+    tags: [cfi, asil-d, mechanism]
+    links:
+      - type: satisfies
+        target: SR-20
+    fields:
+      rationale: >
+        >85% diagnostic coverage. Hardware CET support provides additional
+        protection. Software-only mode available with reduced coverage.
+      previous-id: SAFETY_CFI_002
+      implementation: kiln-runtime/src/cfi_engine.rs
+
+  # =========================================================================
+  # Resource Protection Mechanisms
+  # =========================================================================
+  - id: SM-RES-001
+    type: design-decision
+    title: Per-module memory quotas via safe_managed_alloc!
+    description: >
+      Memory usage limited per module with strict enforcement. Per-module
+      memory quotas (default 1MB, configurable). Allocation tracking with
+      O(1) quota checks. Hierarchical quotas for module groups. No dynamic
+      allocation after initialization in ASIL-D.
+    status: implemented
+    tags: [resource-management, asil-d, mechanism]
+    links:
+      - type: satisfies
+        target: SR-22
+      - type: satisfies
+        target: SR-23
+      - type: satisfies
+        target: SR-8
+      - type: satisfies
+        target: REQ_RESOURCE_003
+    fields:
+      rationale: >
+        100% diagnostic coverage for quota violations. Uses capability-based
+        allocation via safe_managed_alloc! macro exclusively.
+      previous-id: SAFETY_RESOURCE_001
+      implementation: kiln-foundation/src/capabilities/memory_factory.rs
+
+  - id: SM-RES-002
+    type: design-decision
+    title: Fuel-based execution limiting
+    description: >
+      Execution limited through fuel mechanism. Fuel consumption per
+      instruction (configurable costs). Fuel checks at loop headers and
+      function entries. Interruptible execution for external timeout.
+      Deterministic fuel consumption for WCET analysis.
+    status: implemented
+    tags: [resource-management, asil-c, mechanism]
+    links:
+      - type: satisfies
+        target: SR-2
+      - type: satisfies
+        target: REQ_TEMPORAL_001
+      - type: satisfies
+        target: REQ_FUNC_003
+    fields:
+      rationale: >
+        100% diagnostic coverage for fuel exhaustion. Basic arithmetic: 1 fuel,
+        memory access: 2, function call: 10, indirect call: 15.
+      previous-id: SAFETY_RESOURCE_002
+      implementation: kiln-runtime/src/stackless/engine.rs
+
+  # =========================================================================
+  # Data Integrity Mechanisms
+  # =========================================================================
+  - id: SM-DATA-001
+    type: design-decision
+    title: Static and runtime type safety enforcement
+    description: >
+      WebAssembly type system strictly enforced. Static type checking during
+      validation. Runtime type checks for indirect calls. No type casts or
+      unions allowed. Memory typed only as bytes.
+    status: implemented
+    tags: [type-safety, asil-d, mechanism]
+    links:
+      - type: satisfies
+        target: SR-1
+      - type: satisfies
+        target: SR-7
+      - type: satisfies
+        target: REQ_DATAFLOW_003
+    fields:
+      rationale: >
+        100% diagnostic coverage for type violations. No undefined behavior
+        from type errors. Predictable trap on type mismatch.
+      previous-id: SAFETY_DATA_001
+      implementation: kiln-decoder/src/streaming_decoder.rs, kiln-runtime/src/stackless/engine.rs
+
+  # =========================================================================
+  # Fault Detection Mechanisms
+  # =========================================================================
+  - id: SM-DETECT-001
+    type: design-decision
+    title: Runtime assertion checking with precondition/postcondition verification
+    description: >
+      Critical invariants continuously verified during execution with
+      immediate detection of violations. Precondition checks on
+      safety-critical functions, postcondition verification, invariant
+      checks at key points, diagnostic information collection.
+    status: implemented
+    tags: [verification, asil-d, mechanism]
+    links:
+      - type: satisfies
+        target: REQ_ERROR_001
+      - type: satisfies
+        target: REQ_VERIFY_002
+      - type: satisfies
+        target: REQ_VERIFY_004
+    fields:
+      rationale: >
+        100% diagnostic coverage for assertion violations. Can be selectively
+        disabled for QM components. Always enabled for ASIL components.
+      previous-id: SAFETY_DETECT_002
+      implementation: kiln-foundation/src/
+
+  # =========================================================================
+  # Error Recovery Mechanisms
+  # =========================================================================
+  - id: SM-RECOVERY-001
+    type: design-decision
+    title: Fail-safe state transition on fault detection
+    description: >
+      Upon detection of any safety-critical fault, runtime transitions to
+      fail-safe state and notifies system-level error handler. Error
+      propagation through explicit Result types only; no exceptions in
+      safety-critical paths.
+    status: implemented
+    tags: [error-handling, asil-d, mechanism]
+    links:
+      - type: satisfies
+        target: REQ_SAFETY_001
+      - type: satisfies
+        target: REQ_SAFETY_003
+      - type: satisfies
+        target: REQ_ERROR_002
+      - type: satisfies
+        target: REQ_ERROR_003
+    fields:
+      rationale: >
+        Degradation levels: full operation → safe mode → limp mode → shutdown.
+        I/O operations cannot be rolled back.
+      previous-id: SAFETY_RECOVERY_001, SAFETY_RECOVERY_002
+      implementation: kiln-error/src/lib.rs
+
+  # =========================================================================
+  # Isolation Mechanisms
+  # =========================================================================
+  - id: SM-ISOLATION-001
+    type: design-decision
+    title: Module memory isolation via linear memory sandbox
+    description: >
+      Each WebAssembly module instance executes in its own linear memory
+      sandbox. No shared mutable state between instances except through
+      explicit, validated import/export interfaces. Memory isolation
+      enforced by the WebAssembly execution model — modules cannot
+      address memory outside their linear memory. Combined with per-module
+      quotas (SM-RES-001) and link-time type checking (SR-15) to provide
+      criticality-level information flow control.
+    status: implemented
+    tags: [isolation, information-flow, asil-c, mechanism]
+    links:
+      - type: satisfies
+        target: REQ_DATAFLOW_002
+    fields:
+      rationale: >
+        WebAssembly's linear memory model provides hardware-independent
+        memory isolation. Each module's memory is a contiguous byte array
+        inaccessible to other modules. Cross-module data flow requires
+        explicit import/export declarations validated at link time.
+      implementation: kiln-runtime/src/memory.rs, kiln-runtime/src/module_instance.rs
+
+  # =========================================================================
+  # Temporal Safety Mechanisms
+  # =========================================================================
+  - id: SM-TEMPORAL-001
+    type: design-decision
+    title: Bounded critical sections and interrupt latency control
+    description: >
+      Critical sections minimized through capability-based locking
+      (kiln_sync::Mutex). Lock-free algorithms preferred where possible.
+      Maximum interrupt disable time bounded by design — no unbounded
+      loops while holding locks. Fuel mechanism (SM-RES-002) provides
+      additional temporal bounding at instruction level.
+    status: implemented
+    tags: [temporal, interrupt-latency, asil-b, mechanism]
+    links:
+      - type: satisfies
+        target: REQ_TEMPORAL_004
+    fields:
+      rationale: >
+        ISO 26262-6:7.4.5 requires bounded interrupt latency. Critical
+        sections are bounded by design — fuel checks at loop back-edges
+        ensure no unbounded computation while resources are held.
+        kiln_sync::Mutex provides platform-appropriate locking.
+      implementation: kiln-sync/src/mutex.rs, kiln-runtime/src/stackless/engine.rs

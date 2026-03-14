@@ -1,0 +1,61 @@
+project:
+  name: kiln
+  version: "0.1.0"
+  description: >
+    WebAssembly runtime for safety-critical systems. Implements the
+    WebAssembly Core Spec 3.0, Component Model, and WASI Preview 2
+    with ASIL-D through QM safety level support.
+  schemas:
+    - common
+    - stpa
+    - dev
+
+sources:
+  - path: safety/stpa
+    format: stpa-yaml
+  - path: safety/requirements
+    format: generic-yaml
+
+docs:
+  - docs
+
+commits:
+  format: trailers
+  trailers:
+    Trace: traces-to
+    Implements: implements
+    Fixes: fixes
+    Verifies: verifies
+  exempt-types:
+    - chore
+    - style
+    - ci
+    - docs
+    - build
+  traced-paths:
+    - kiln-runtime/
+    - kiln-decoder/
+    - kiln-foundation/
+    - kiln-component/
+    - kiln-platform/
+    - kiln-error/
+    - kiln-instructions/
+    - kiln-sync/
+    - kiln-host/
+    - kiln-intercept/
+    - kiln-wasi/
+    - kilnd/
+    - safety/
+
+externals:
+  meld:
+    git: https://github.com/pulseengine/meld.git
+    path: /Volumes/Home/git/pulseengine/meld
+    ref: main
+    prefix: meld
+
+  synth:
+    git: https://github.com/pulseengine/synth.git
+    path: /Volumes/Home/git/pulseengine/synth
+    ref: main
+    prefix: synth

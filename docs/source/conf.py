@@ -103,17 +103,12 @@ def setup(app):
     # Add our custom JavaScript for code copy
     app.add_js_file('js/code-copy.js')
     
-    # Register the dynamic function for extracting requirements
-    from sphinx_needs.api.configuration import add_dynamic_function
-    add_dynamic_function(app, extract_reqs)
-    
     return {'version': '0.1', 'parallel_read_safe': True}
 
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
-    'sphinx_needs',
     'myst_parser',
     'sphinxcontrib.plantuml',
     "sphinxcontrib_rust",
@@ -188,103 +183,9 @@ elif platform.system() == "Linux":
 # Allow customization through environment variables
 plantuml_output_format = os.environ.get('PLANTUML_FORMAT', 'svg')
 
-# Sphinx-needs configuration
-needs_types = [
-    dict(directive="req", title="Requirement", prefix="REQ_", color="#BFD8D2", style="node"),
-    dict(directive="spec", title="Specification", prefix="SPEC_", color="#FEDCD2", style="node"),
-    dict(directive="impl", title="Implementation", prefix="IMPL_", color="#DF744A", style="node"),
-    dict(directive="test", title="Test Case", prefix="T_", color="#DCB239", style="node"),
-    dict(directive="safety", title="Safety", prefix="SAFETY_", color="#FF5D73", style="node"),
-    dict(directive="qual", title="Qualification", prefix="QUAL_", color="#9370DB", style="node"),
-    dict(directive="constraint", title="Constraint", prefix="CNST_", color="#4682B4", style="node"),
-    dict(directive="panic", title="Panic", prefix="KILNQ_", color="#E74C3C", style="node"),
-    dict(directive="src",  title="Source file",  prefix="SRC_", color="#C6C6FF", style="node"),
-    # Architecture-specific types
-    dict(directive="arch_component", title="Architectural Component", prefix="ARCH_COMP_", color="#FF6B6B", style="node"),
-    dict(directive="arch_interface", title="Interface", prefix="ARCH_IF_", color="#4ECDC4", style="node"),
-    dict(directive="arch_decision", title="Design Decision", prefix="ARCH_DEC_", color="#45B7D1", style="node"),
-    dict(directive="arch_constraint", title="Design Constraint", prefix="ARCH_CON_", color="#96CEB4", style="node"),
-    dict(directive="arch_pattern", title="Design Pattern", prefix="ARCH_PAT_", color="#FECA57", style="node"),
-]
 
-# Add ID regex pattern for sphinx-needs
-needs_id_regex = '^[A-Z0-9_]{5,}$'
-
-# Add option specs to register additional options for directives
-needs_extra_options = [
-    'rationale', 
-    'verification', 
-    'mitigation', 
-    'implementation', 
-    'safety_impact',
-    'item_status',
-    'handling_strategy',
-    'last_updated',
-    'file',
-    'implements',
-    # Architecture-specific options
-    'crate',
-    'provides',
-    'requires',
-    'allocated_requirements',
-    'environment',
-    'variant_of',
-    'impacts',
-    'deciders',
-    'alternatives',
-    'stability',
-    'protocol',
-]
-
-# Allow all sphinx-needs options for all directives
-needs_allow_unsafe_options = True
-
-# Disable warnings for unknown link targets to avoid the many outgoing link warnings
-needs_warnings_always_warn = False
-
-# Custom sphinx-needs templates for qualification and safety
-needs_templates = {
-    'safety_template': '**Hazard**: {{content}}\n\n**Mitigation**: {{mitigation}}',
-    'qualification_template': '**Status**: {{item_status}}\n\n**Implementation**: {{implementation}}',
-    'constraint_template': '**Constraint**: {{content}}\n\n**Rationale**: {{rationale}}\n\n**Verification**: {{verification}}',
-    'panic_template': '**Panic Condition**: {{content}}\n\n**Safety Impact**: {{safety_impact}}\n\n**Status**: {{item_status}}\n\n**Handling Strategy**: {{handling_strategy}}',
-}
-
-# Tags for filtering and displaying panic entries
-needs_tags = [
-    dict(name="panic", description="Panic documentation entry", bgcolor="#E74C3C"),
-    dict(name="low", description="Low safety impact", bgcolor="#2ECC71"),
-    dict(name="medium", description="Medium safety impact", bgcolor="#F39C12"),
-    dict(name="high", description="High safety impact", bgcolor="#E74C3C"),
-    dict(name="unknown", description="Unknown safety impact", bgcolor="#95A5A6"),
-    # Architecture tags
-    dict(name="core", description="Core architecture component", bgcolor="#FF6B6B"),
-    dict(name="portability", description="Multi-platform portability", bgcolor="#4ECDC4"),
-    dict(name="safety", description="Safety-critical component", bgcolor="#FF5D73"),
-    dict(name="performance", description="Performance-critical component", bgcolor="#FECA57"),
-    dict(name="testing", description="Testing and verification", bgcolor="#96CEB4"),
-]
-
-# Configure needs roles for referencing 
-needs_role_need_template = "{title} ({id})"
-needs_role_need_max_title_length = 30
-
-needs_id_length = 7
-needs_title_optional = True
-needs_file_pattern = '**/*.rst'
-
-# New extra links configuration
-needs_extra_links = [
-    dict(
-        option   = "realizes",
-        incoming = "is realized by",
-        outgoing = "realizes",
-        style    = "solid,#006A6A",
-    ),
-]
-
-# Regular expression for finding requirement IDs
-REQ_RE = re.compile(r"SW-REQ-ID\\s*:\\s*(REQ_\\w+)", re.I)
+# Requirement/safety traceability has been migrated to rivet (safety/ directory).
+# See: rivet validate, rivet coverage, rivet serve
 
 # Initialize source_suffix before attempting to modify it
 source_suffix = {
@@ -308,50 +209,6 @@ else: # if it's a single string or not set as expected
         '.md': 'markdown',
     }
 
-# Dynamic function to extract requirement IDs from a file
-def extract_reqs(app, need, needs, *args, **kwargs):
-    """
-    Return all REQ_xxx IDs that occur in the file given via :file:.
-    Called as a *dynamic function* during the build.
-    """
-    relative_file_path_from_doc_source = need.get("file")
-    if not relative_file_path_from_doc_source:
-        return ""
-
-    # Construct the absolute path to the source file.
-    # app.confdir is the directory of conf.py (e.g., /path/to/workspace/docs/source)
-    # relative_file_path_from_doc_source is like '../../kiln/src/some_file.rs'
-    # So, Path(app.confdir) / relative_file_path_from_doc_source gives the absolute path.
-    absolute_src_file_path = (pathlib.Path(app.confdir) / relative_file_path_from_doc_source).resolve()
-    
-    try:
-        text = absolute_src_file_path.read_text(errors="ignore")
-        ids  = REQ_RE.findall(text)
-        return ";".join(sorted(set(ids)))  # needs wants ';' as separator
-    except FileNotFoundError:
-        print(f"WARNING: [extract_reqs] File not found: {absolute_src_file_path} (original path in need: {relative_file_path_from_doc_source})")
-        return ""
-    except Exception as e:
-        print(f"ERROR: [extract_reqs] Could not read file {absolute_src_file_path}: {e}")
-        return ""
-
-# Configuration to make specific strings in RST linkable
-needs_string_links = {
-    # Link REQ_XXX to its definition
-    "req_inline": {
-        "regex": r"(?P<value>REQ_\w+)",
-        "link_url": "#{{value}}",
-        "link_name": "{{value}}",
-        "options": [],
-    },
-    # Link file paths in :file: option to GitHub
-    "source_file_link": {
-        "regex": r"^(?P<value>(?:\.\.\/)*[a-zA-Z0-9_\-\/]+\.rs)$",
-        "link_url": "https://github.com/pulseengine/kiln/blob/main/{{value.replace('../../', '')}}",
-        "link_name": "{{value}}",
-        "options": ["file"],
-    }
-}
 
 # Rust documentation configuration
 # Start with core working crates first

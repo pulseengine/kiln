@@ -1,0 +1,124 @@
+# STPA Step 1c: System-Level Constraints
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Each constraint is the inversion of a hazard: it specifies the condition
+# that must be enforced to prevent the hazard.
+#
+# Spec baselines:
+#   Core: WebAssembly Specification 3.0 (2025-12-03)
+#   Component Model: commit deb0b0a (2025-05-19)
+#   WASI: v0.2.3 (2024-12-17)
+
+system-constraints:
+  - id: SC-1
+    title: Instruction execution must match WebAssembly spec
+    description: >
+      Every core WebAssembly instruction shall produce a result identical
+      to the reference interpreter for all inputs, including edge cases
+      (NaN propagation, saturating conversion, division by zero rounding,
+      SIMD lane operations, atomic ordering).
+    hazards: [H-1]
+    spec-baseline: "WebAssembly Core Specification 3.0"
+
+  - id: SC-2
+    title: Memory access must be within linear memory bounds
+    description: >
+      All load, store, memory.grow, memory.copy, and memory.fill operations
+      shall be bounds-checked against the current memory size. In multi-memory
+      mode, the memory index shall be validated against the module's declared
+      memories. No access shall read or write bytes outside the target memory.
+    hazards: [H-2]
+    spec-baseline: "WebAssembly Core Specification 3.0, Section 4.4.7"
+
+  - id: SC-3
+    title: Resource budgets must be enforced with detection
+    description: >
+      Fuel, memory, table, and stack limits shall be checked before every
+      operation that could exceed them. When a limit is reached, the runtime
+      shall trap or return an error immediately. In ASIL-D mode, budget
+      violations shall notify the watchdog. No execution shall continue
+      in an unbounded state.
+    hazards: [H-3]
+    spec-baseline: "ISO 26262, kiln-foundation memory budget system"
+
+  - id: SC-4
+    title: Canonical ABI lifting/lowering must produce correct values
+    description: >
+      The canonical ABI implementation shall produce identical values to the
+      Component Model spec's canonical definitions for all type families:
+      integers, floats, strings (all encodings), lists, records, variants,
+      options, results, flags, enums, and resource handles. Element sizing,
+      field alignment, and padding must match the spec exactly.
+    hazards: [H-4]
+    spec-baseline: "Component Model commit deb0b0a, Canonical ABI"
+
+  - id: SC-5
+    title: Cross-component calls must route to correct function with matching type
+    description: >
+      The linker shall resolve every import to the correct export. The resolved
+      function's signature shall be type-compatible with the import declaration.
+      Instance indices used in cross-component dispatch shall correctly identify
+      the target component. No call shall be dispatched to the wrong function.
+    hazards: [H-5]
+    spec-baseline: "Component Model commit deb0b0a, Instantiation"
+
+  - id: SC-6
+    title: Resource handle lifecycle must be correct
+    description: >
+      Resource handles shall not alias (same index, different resource),
+      shall not be used after drop, and shall not be dropped twice.
+      The resource table shall maintain consistent state across all
+      create/transfer/drop operations.
+    hazards: [H-6]
+    spec-baseline: "Component Model commit deb0b0a, Resources"
+
+  - id: SC-7
+    title: Async task scheduling must preserve ordering and fairness
+    description: >
+      No async task shall be starved. Stream and future values shall be
+      delivered in order. Cancelled tasks shall not be resumed. The
+      fuel-aware waker shall not interfere with deterministic scheduling.
+    hazards: [H-7]
+    spec-baseline: "Component Model commit deb0b0a, Async"
+
+  - id: SC-8
+    title: WASI operations must respect capability boundaries
+    description: >
+      Every WASI filesystem, socket, and clock operation shall check
+      the calling component's WasiCapabilities before execution. No
+      component shall access resources (paths, sockets, clocks) outside
+      its granted capability set. In multi-component scenarios, each
+      component's capability set shall be isolated.
+    hazards: [H-8]
+    spec-baseline: "WASI v0.2.3"
+
+  - id: SC-9
+    title: CFI shadow stack must remain synchronized with execution stack
+    description: >
+      Every call instruction shall push to the shadow stack. Every return
+      shall validate against the shadow stack. No execution path (including
+      host-to-guest calls, cross-component calls, and exception handling)
+      shall skip a push or pop operation.
+    hazards: [H-9]
+
+  - id: SC-10
+    title: Safety-level allocation constraints must be enforced
+    description: >
+      In ASIL-D/static-allocation mode, no dynamic allocation shall occur
+      after initialization. In bounded-allocation mode, all BoundedVec and
+      BoundedMap operations shall return errors at capacity rather than
+      silently failing. The safe_managed_alloc! macro shall enforce per-crate
+      budgets. No code path shall bypass the allocation manager.
+    hazards: [H-10]
+    spec-baseline: "ISO 26262, kiln-foundation allocation system"
+
+  - id: SC-11
+    title: Canonical ABI computation must be consistent across toolchain
+    description: >
+      Kiln's canonical ABI element size, field alignment, and string encoding
+      implementations shall produce identical results to Meld's fusion-time
+      computations and Synth's AOT compilation for every type. This shall be
+      verified by running shared wit-bindgen test fixtures through all tool paths.
+    hazards: [H-4]
+    spec-baseline: "Cross-toolchain consistency (XH-1 through XH-5)"

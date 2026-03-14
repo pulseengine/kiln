@@ -1,5 +1,4 @@
 sphinx>=7.1.2
-sphinx-needs>=1.2.1
 sphinx-book-theme>=0.0.1
 myst-parser>=2.0.0
 sphinxcontrib-plantuml>=0.25.0
