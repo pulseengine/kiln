@@ -515,22 +515,6 @@ impl CapabilityAwareEngine {
         self.inner.pre_allocate_wasi_args(*instance_idx)
     }
 
-    /// Set WASI command-line arguments
-    ///
-    /// These arguments will be returned by `wasi:cli/environment::get-arguments`
-    #[cfg(feature = "wasi")]
-    pub fn set_wasi_args(&mut self, args: Vec<String>) {
-        self.inner.set_wasi_args(args);
-    }
-
-    /// Set WASI environment variables
-    ///
-    /// These will be returned by `wasi:cli/environment::get-environment`
-    #[cfg(feature = "wasi")]
-    pub fn set_wasi_env(&mut self, env_vars: Vec<(String, String)>) {
-        self.inner.set_wasi_env(env_vars);
-    }
-
     /// Register a lowered function from a canon.lower operation
     ///
     /// When a module calls a function at this (instance_id, func_idx), the engine
