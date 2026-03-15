@@ -289,6 +289,18 @@ fn parse_instruction_with_provider(
             consumed += table_bytes;
             Instruction::ReturnCallIndirect(type_idx, table_idx)
         },
+        0x14 => {
+            // call_ref: type_idx (LEB128 u32) - typed function reference call
+            let (type_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::CallRef(type_idx)
+        },
+        0x15 => {
+            // return_call_ref: type_idx (LEB128 u32) - typed function reference tail call
+            let (type_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::ReturnCallRef(type_idx)
+        },
 
         // Exception handling instructions (continued)
         0x18 => {
@@ -906,6 +918,19 @@ fn parse_instruction_with_provider(
             let (func_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
             consumed += bytes;
             Instruction::RefFunc(func_idx)
+        },
+        0xD3 => Instruction::RefAsNonNull,
+        0xD4 => {
+            // br_on_null: takes a label index
+            let (label_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::BrOnNull(label_idx)
+        },
+        0xD5 => {
+            // br_on_non_null: takes a label index
+            let (label_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::BrOnNonNull(label_idx)
         },
 
         // Multi-byte opcodes (bulk memory, SIMD, etc.)

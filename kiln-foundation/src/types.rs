@@ -1445,6 +1445,12 @@ pub enum Instruction<P: MemoryProvider + Clone + core::fmt::Debug + PartialEq + 
     ReturnCall(FuncIdx),
     ReturnCallIndirect(TypeIdx, TableIdx),
 
+    // Typed function references (0x14 and 0x15 opcodes)
+    /// call_ref: call function via typed function reference (opcode 0x14)
+    CallRef(TypeIdx),
+    /// return_call_ref: tail call function via typed function reference (opcode 0x15)
+    ReturnCallRef(TypeIdx),
+
     // Exception handling instructions (exception handling proposal)
     /// Throw exception with specified tag (opcode 0x08)
     Throw(TagIdx),
@@ -2088,6 +2094,14 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq + D
                 checksum.update_slice(&[0x13]); // Tail call indirect opcode
                 type_idx.update_checksum(checksum);
                 table_idx.update_checksum(checksum);
+            },
+            Instruction::CallRef(type_idx) => {
+                checksum.update_slice(&[0x14]); // call_ref opcode
+                type_idx.update_checksum(checksum);
+            },
+            Instruction::ReturnCallRef(type_idx) => {
+                checksum.update_slice(&[0x15]); // return_call_ref opcode
+                type_idx.update_checksum(checksum);
             },
             Instruction::BrOnNull(label_idx) => {
                 checksum.update_slice(&[0xD5]); // br_on_null opcode

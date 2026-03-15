@@ -1467,10 +1467,10 @@ impl ComponentInstance {
                                                         ) {
                                                             Ok(()) => {
                                                             },
-                                                            Err(e) => println!(
-                                                                "    │  │  │  └─ Note: {:?}",
-                                                                e
-                                                            ),
+                                                            Err(_e) => {
+                                                                #[cfg(feature = "tracing")]
+                                                                trace!(error = ?_e, "Import link note");
+                                                            },
                                                         }
                                                     }
                                                     // Skip the normal single-link below since we linked everything
@@ -2486,7 +2486,8 @@ impl ComponentInstance {
         for (idx, canon) in canonicals.iter().enumerate() {
             use kiln_format::component::CanonOperation;
 
-            print!("  Canon[{}]: ", idx);
+            #[cfg(feature = "tracing")]
+            trace!(idx = idx, "Processing canonical operation");
 
             match &canon.operation {
                 CanonOperation::Lift {
@@ -3886,8 +3887,15 @@ impl ComponentInstance {
 
                 // Try _initialize first (important for TinyGo components)
                 match engine.execute(instance_handle, "_initialize", &[]) {
-                    Ok(_) => println!("[CALL_NATIVE] ✓ _initialize completed"),
-                    Err(e) => println!("[CALL_NATIVE] ⚠ _initialize skipped: {:?}", e),
+                    Ok(_) => {
+                        #[cfg(feature = "tracing")]
+                        trace!("_initialize completed successfully");
+                    },
+                    Err(_) => {
+                        // _initialize is optional - not all components have it
+                        #[cfg(feature = "tracing")]
+                        trace!("_initialize not found, skipping");
+                    },
                 }
 
                 // Try entry point functions in order of preference:
@@ -3919,27 +3927,8 @@ impl ComponentInstance {
                     }
                 }
 
-                // All entry points failed - check available exports for debugging
+                // All entry points failed
                 if let Some(e) = last_error {
-                    // Debug: check for common exports (core module exports only)
-                    let common_exports = [
-                        "_start",
-                        "_initialize",
-                        "run",
-                        "main",
-                        "memory",
-                        "__heap_base",
-                        "__data_end",
-                        "cabi_realloc",
-                        "__wasm_call_ctors",
-                    ];
-                    for name in common_exports {
-                        match engine.has_function(instance_handle, name) {
-                            Ok(true) => println!("    ✓ {} - EXISTS", name),
-                            Ok(false) => println!("    ✗ {} - not found", name),
-                            Err(_) => println!("    ? {} - error checking", name),
-                        }
-                    }
                     return Err(e);
                 }
             } else {
@@ -4024,6 +4013,8 @@ impl ComponentInstance {
                         #[cfg(feature = "std")]
                         import_types: Vec::new(),
                         num_import_functions: 0,
+                        #[cfg(feature = "std")]
+                        gc_types: Vec::new(),
                     };
                     m.load_from_binary(&binary_clone)
                 }

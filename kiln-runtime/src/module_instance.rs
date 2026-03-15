@@ -1732,6 +1732,8 @@ impl FromBytes for ModuleInstance {
             #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
+            #[cfg(feature = "std")]
+            gc_types: Vec::new(),
         };
 
         // Create the instance using the new method

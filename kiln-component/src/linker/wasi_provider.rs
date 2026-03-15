@@ -1,7 +1,8 @@
 //! WASI instance provider for Component Model
 //!
 //! Creates component instances that satisfy WASI Preview 2 imports.
-//! This is a stub implementation - instances don't have actual WASI logic yet.
+//! Each WASI interface is represented as a component instance with
+//! function exports that map to the WIT-defined interface.
 
 use crate::bounded_component_infra::ComponentProvider;
 use crate::instantiation::{ExportValue, FunctionExport, InstanceImport};
@@ -12,6 +13,10 @@ use kiln_error::Result;
 use alloc::boxed::Box;
 #[cfg(feature = "std")]
 use std::boxed::Box;
+
+// Tracing imports for structured logging
+#[cfg(feature = "tracing")]
+use kiln_foundation::tracing::{trace, warn};
 
 /// Provides WASI component instances
 ///
@@ -50,11 +55,8 @@ impl WasiInstanceProvider {
         let id = self.next_instance_id;
         self.next_instance_id += 1;
 
-        #[cfg(feature = "std")]
-        println!(
-            "[WASI-PROVIDER] Creating instance {} for {}",
-            id, interface_name
-        );
+        #[cfg(feature = "tracing")]
+        trace!(id = id, interface = %interface_name, "Creating WASI instance");
 
         // Create instance with exports based on interface
         let mut instance = InstanceImport {
@@ -124,20 +126,13 @@ impl WasiInstanceProvider {
                 // The resource-drop is handled by canonical ABI
             },
             _ => {
-                #[cfg(feature = "std")]
-                println!(
-                    "[WASI-PROVIDER] Warning: No exports for unknown interface '{}'",
-                    interface_name
-                );
+                #[cfg(feature = "tracing")]
+                warn!(interface = %interface_name, "No exports for unknown WASI interface");
             },
         }
 
-        #[cfg(feature = "std")]
-        println!(
-            "[WASI-PROVIDER] Instance {} created with {} exports",
-            id,
-            instance.exports.len()
-        );
+        #[cfg(feature = "tracing")]
+        trace!(id = id, export_count = instance.exports.len(), "WASI instance created");
 
         Ok(instance)
     }
@@ -148,11 +143,11 @@ impl WasiInstanceProvider {
         let get_stdout_index = self.next_function_index;
         self.next_function_index += 1;
 
-        let provider = ComponentProvider::default();
-        let signature = KilnComponentType::Unit(provider)?;
-
+        // Use Default::default() for signature since the WASI provider only needs the
+        // function index for dispatch - the full ComponentType is not used at runtime.
+        // ComponentType::Unit(provider) fails because BoundedVec::new rejects zero-sized items.
         let func_export = FunctionExport {
-            signature,
+            signature: KilnComponentType::<ComponentProvider>::default(),
             index: get_stdout_index,
         };
 
@@ -172,11 +167,8 @@ impl WasiInstanceProvider {
                 .map_err(|_| kiln_error::Error::resource_exhausted("Too many exports"))?;
         }
 
-        #[cfg(feature = "std")]
-        println!(
-            "[WASI-PROVIDER] Added export: get-stdout (index {})",
-            get_stdout_index
-        );
+        #[cfg(feature = "tracing")]
+        trace!(index = get_stdout_index, "Added export: get-stdout");
 
         Ok(())
     }
@@ -301,11 +293,11 @@ impl WasiInstanceProvider {
         let func_index = self.next_function_index;
         self.next_function_index += 1;
 
-        let provider = ComponentProvider::default();
-        let signature = KilnComponentType::Unit(provider)?;
-
+        // Use Default::default() for signature since the WASI provider only needs the
+        // function index for dispatch - the full ComponentType is not used at runtime.
+        // ComponentType::Unit(provider) fails because BoundedVec::new rejects zero-sized items.
         let func_export = FunctionExport {
-            signature,
+            signature: KilnComponentType::<ComponentProvider>::default(),
             index: func_index,
         };
 
@@ -325,11 +317,8 @@ impl WasiInstanceProvider {
                 .map_err(|_| kiln_error::Error::resource_exhausted("Too many exports"))?;
         }
 
-        #[cfg(feature = "std")]
-        println!(
-            "[WASI-PROVIDER] Added export: {} (index {})",
-            name, func_index
-        );
+        #[cfg(feature = "tracing")]
+        trace!(name = %name, index = func_index, "Added WASI export");
 
         Ok(())
     }

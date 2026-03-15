@@ -121,6 +121,7 @@ fn build_module_from_sections(sections: Vec<crate::sections::Section>) -> Result
         core_version: kiln_format::types::CoreWasmVersion::default(),
         type_info_section: None,
         tags: Vec::new(),
+        rec_groups: Vec::new(),
     };
 
     for section in sections {
