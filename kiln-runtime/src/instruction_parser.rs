@@ -711,14 +711,15 @@ fn parse_instruction_with_provider(
             consumed += bytes;
             Instruction::RefFunc(func_idx)
         },
-        0xD3 => Instruction::RefAsNonNull,
-        0xD4 => {
+        0xD3 => Instruction::RefEq,
+        0xD4 => Instruction::RefAsNonNull,
+        0xD5 => {
             // br_on_null: takes a label index
             let (label_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
             consumed += bytes;
             Instruction::BrOnNull(label_idx)
         },
-        0xD5 => {
+        0xD6 => {
             // br_on_non_null: takes a label index
             let (label_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
             consumed += bytes;
@@ -727,12 +728,9 @@ fn parse_instruction_with_provider(
 
         // Multi-byte opcodes (bulk memory, SIMD, etc.)
         0xFC => {
-            // Read the second byte to determine the actual instruction
-            if offset + 1 >= bytecode.len() {
-                return Err(Error::parse_error("Unexpected end of bytecode in multi-byte opcode"));
-            }
-            let subopcode = bytecode[offset + 1];
-            consumed += 1;  // For the subopcode byte
+            // Read the sub-opcode as LEB128 (per WebAssembly spec, 0xFC sub-opcodes are LEB128)
+            let (subopcode, subop_bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += subop_bytes;
 
             match subopcode {
                 // Saturating truncation operations (0xFC 0x00 - 0xFC 0x07)
@@ -748,9 +746,9 @@ fn parse_instruction_with_provider(
                 // Bulk memory operations
                 0x08 => {
                     // memory.init: data_idx, mem_idx
-                    let (data_idx, bytes_read) = read_leb128_u32(bytecode, offset + 2)?;
+                    let (data_idx, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
                     consumed += bytes_read;
-                    // mem_idx is always 0 in MVP
+                    // mem_idx
                     if offset + consumed >= bytecode.len() {
                         return Err(Error::parse_error("Unexpected end in memory.init"));
                     }
@@ -760,71 +758,70 @@ fn parse_instruction_with_provider(
                 }
                 0x09 => {
                     // data.drop: data_idx
-                    let (data_idx, bytes_read) = read_leb128_u32(bytecode, offset + 2)?;
+                    let (data_idx, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
                     consumed += bytes_read;
                     Instruction::DataDrop(data_idx)
                 }
                 0x0A => {
                     // memory.copy: dst_mem_idx, src_mem_idx
-                    // Both are typically 0x00 in MVP
-                    if offset + 3 >= bytecode.len() {
-                        return Err(Error::parse_error("Unexpected end in memory.copy"));
-                    }
-                    let dst_mem = bytecode[offset + 2];
-                    let src_mem = bytecode[offset + 3];
-                    consumed += 2;
-                    Instruction::MemoryCopy(dst_mem as u32, src_mem as u32)
+                    let (dst_mem, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
+                    consumed += bytes_read;
+                    let (src_mem, bytes_read2) = read_leb128_u32(bytecode, offset + consumed)?;
+                    consumed += bytes_read2;
+                    Instruction::MemoryCopy(dst_mem, src_mem)
                 }
                 0x0B => {
                     // memory.fill: mem_idx
-                    if offset + 2 >= bytecode.len() {
-                        return Err(Error::parse_error("Unexpected end in memory.fill"));
-                    }
-                    let mem_idx = bytecode[offset + 2];
-                    consumed += 1;
-                    Instruction::MemoryFill(mem_idx as u32)
+                    let (mem_idx, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
+                    consumed += bytes_read;
+                    Instruction::MemoryFill(mem_idx)
                 }
                 // Table operations (bulk memory proposal)
                 0x0C => {
                     // table.init: elem_idx, table_idx
-                    let (elem_idx, bytes_read) = read_leb128_u32(bytecode, offset + 2)?;
+                    let (elem_idx, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
                     consumed += bytes_read;
-                    let (table_idx, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
-                    consumed += bytes_read;
+                    let (table_idx, bytes_read2) = read_leb128_u32(bytecode, offset + consumed)?;
+                    consumed += bytes_read2;
                     Instruction::TableInit(elem_idx, table_idx)
                 }
                 0x0D => {
                     // elem.drop: elem_idx
-                    let (elem_idx, bytes_read) = read_leb128_u32(bytecode, offset + 2)?;
+                    let (elem_idx, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
                     consumed += bytes_read;
                     Instruction::ElemDrop(elem_idx)
                 }
                 0x0E => {
                     // table.copy: dst_table_idx, src_table_idx
-                    let (dst_table, bytes_read) = read_leb128_u32(bytecode, offset + 2)?;
+                    let (dst_table, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
                     consumed += bytes_read;
-                    let (src_table, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
-                    consumed += bytes_read;
+                    let (src_table, bytes_read2) = read_leb128_u32(bytecode, offset + consumed)?;
+                    consumed += bytes_read2;
                     Instruction::TableCopy(dst_table, src_table)
                 }
                 0x0F => {
                     // table.grow: table_idx
-                    let (table_idx, bytes_read) = read_leb128_u32(bytecode, offset + 2)?;
+                    let (table_idx, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
                     consumed += bytes_read;
                     Instruction::TableGrow(table_idx)
                 }
                 0x10 => {
                     // table.size: table_idx
-                    let (table_idx, bytes_read) = read_leb128_u32(bytecode, offset + 2)?;
+                    let (table_idx, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
                     consumed += bytes_read;
                     Instruction::TableSize(table_idx)
                 }
                 0x11 => {
                     // table.fill: table_idx
-                    let (table_idx, bytes_read) = read_leb128_u32(bytecode, offset + 2)?;
+                    let (table_idx, bytes_read) = read_leb128_u32(bytecode, offset + consumed)?;
                     consumed += bytes_read;
                     Instruction::TableFill(table_idx)
                 }
+                // Wide-arithmetic proposal (0xFC 0x13-0x16)
+                0x13 => Instruction::I64Add128,
+                0x14 => Instruction::I64Sub128,
+                0x15 => Instruction::I64MulWideS,
+                0x16 => Instruction::I64MulWideU,
                 _ => {
                     #[cfg(feature = "tracing")]
                     kiln_foundation::tracing::warn!(subopcode = format!("0xFC 0x{:02X}", subopcode), offset = offset, "Unknown FC subopcode");

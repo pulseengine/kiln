@@ -1767,6 +1767,10 @@ impl StacklessEngine {
                             kiln_foundation::ValueType::I64 => Value::I64(0),
                             kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
                             kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                            kiln_foundation::ValueType::V128 => Value::V128(V128 { bytes: [0u8; 16] }),
+                            kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                            kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
+                            kiln_foundation::ValueType::ExnRef => Value::ExnRef(None),
                             _ => Value::I32(0),
                         };
                         locals.push(default_value);
@@ -1786,6 +1790,10 @@ impl StacklessEngine {
                             kiln_foundation::ValueType::I64 => Value::I64(0),
                             kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
                             kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
+                            kiln_foundation::ValueType::V128 => Value::V128(V128 { bytes: [0u8; 16] }),
+                            kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                            kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
+                            kiln_foundation::ValueType::ExnRef => Value::ExnRef(None),
                             _ => Value::I32(0),
                         };
                         for _ in 0..local_decl.count {
@@ -3766,6 +3774,48 @@ impl StacklessEngine {
                             };
                             operand_stack.push(Value::I64(result as i64));
                         }
+                    }
+
+                    // Wide-arithmetic operations (0xFC prefix, sub-opcodes 0x13-0x16)
+                    Instruction::I64Add128 => {
+                        // [a_lo, a_hi, b_lo, b_hi] -> [result_lo, result_hi]
+                        let b_hi = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.add128: expected i64")) };
+                        let b_lo = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.add128: expected i64")) };
+                        let a_hi = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.add128: expected i64")) };
+                        let a_lo = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.add128: expected i64")) };
+                        let a = ((a_hi as u64 as u128) << 64) | (a_lo as u64 as u128);
+                        let b = ((b_hi as u64 as u128) << 64) | (b_lo as u64 as u128);
+                        let result = a.wrapping_add(b);
+                        operand_stack.push(Value::I64(result as u64 as i64));
+                        operand_stack.push(Value::I64((result >> 64) as u64 as i64));
+                    }
+                    Instruction::I64Sub128 => {
+                        // [a_lo, a_hi, b_lo, b_hi] -> [result_lo, result_hi]
+                        let b_hi = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.sub128: expected i64")) };
+                        let b_lo = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.sub128: expected i64")) };
+                        let a_hi = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.sub128: expected i64")) };
+                        let a_lo = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.sub128: expected i64")) };
+                        let a = ((a_hi as u64 as u128) << 64) | (a_lo as u64 as u128);
+                        let b = ((b_hi as u64 as u128) << 64) | (b_lo as u64 as u128);
+                        let result = a.wrapping_sub(b);
+                        operand_stack.push(Value::I64(result as u64 as i64));
+                        operand_stack.push(Value::I64((result >> 64) as u64 as i64));
+                    }
+                    Instruction::I64MulWideS => {
+                        // [a, b] -> [result_lo, result_hi] (signed 64x64->128)
+                        let b = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.mul_wide_s: expected i64")) };
+                        let a = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.mul_wide_s: expected i64")) };
+                        let result = (a as i128).wrapping_mul(b as i128);
+                        operand_stack.push(Value::I64(result as u64 as i64));
+                        operand_stack.push(Value::I64((result >> 64) as u64 as i64));
+                    }
+                    Instruction::I64MulWideU => {
+                        // [a, b] -> [result_lo, result_hi] (unsigned 64x64->128)
+                        let b = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.mul_wide_u: expected i64")) };
+                        let a = match operand_stack.pop() { Some(Value::I64(v)) => v, _ => return Err(kiln_error::Error::runtime_execution_error("i64.mul_wide_u: expected i64")) };
+                        let result = (a as u64 as u128).wrapping_mul(b as u64 as u128);
+                        operand_stack.push(Value::I64(result as u64 as i64));
+                        operand_stack.push(Value::I64((result >> 64) as u64 as i64));
                     }
 
                     // Comparison operations
@@ -6633,10 +6683,19 @@ impl StacklessEngine {
                                 Some(v) => v,
                                 None => {
                                     // Return null reference based on table element type
+                                    use kiln_foundation::types::HeapType;
                                     match table.element_type() {
                                         kiln_foundation::types::RefType::Funcref => Value::FuncRef(None),
                                         kiln_foundation::types::RefType::Externref => Value::ExternRef(None),
-                                        kiln_foundation::types::RefType::Gc(_) => Value::ExternRef(None),
+                                        kiln_foundation::types::RefType::Gc(gc) => match gc.heap_type {
+                                            HeapType::Func | HeapType::NoFunc => Value::FuncRef(None),
+                                            HeapType::Extern | HeapType::NoExtern => Value::ExternRef(None),
+                                            HeapType::I31 | HeapType::Eq | HeapType::Any | HeapType::None => Value::I31Ref(None),
+                                            HeapType::Struct => Value::StructRef(None),
+                                            HeapType::Array => Value::ArrayRef(None),
+                                            HeapType::Exn => Value::ExnRef(None),
+                                            HeapType::Concrete(_) => Value::FuncRef(None),
+                                        },
                                     }
                                 }
                             };
@@ -6682,8 +6741,12 @@ impl StacklessEngine {
 
                             // Validate value is a reference type
                             let table_value = match &value {
-                                Value::FuncRef(fr) => Some(Value::FuncRef(fr.clone())),
-                                Value::ExternRef(er) => Some(Value::ExternRef(er.clone())),
+                                Value::FuncRef(_)
+                                | Value::ExternRef(_)
+                                | Value::I31Ref(_)
+                                | Value::StructRef(_)
+                                | Value::ArrayRef(_)
+                                | Value::Ref(_) => Some(value.clone()),
                                 _ => {
                                     return Err(kiln_error::Error::runtime_trap(
                                         "table.set: value must be a reference type",
@@ -6754,7 +6817,12 @@ impl StacklessEngine {
                             } else {
                                 // Validate init value is a reference type
                                 match &init_value {
-                                    Value::FuncRef(_) | Value::ExternRef(_) => {}
+                                    Value::FuncRef(_)
+                                    | Value::ExternRef(_)
+                                    | Value::I31Ref(_)
+                                    | Value::StructRef(_)
+                                    | Value::ArrayRef(_)
+                                    | Value::Ref(_) => {}
                                     _ => {
                                         return Err(kiln_error::Error::runtime_trap(
                                             "table.grow: init value must be a reference type",
@@ -6822,8 +6890,12 @@ impl StacklessEngine {
 
                             // Validate value is a reference type
                             let fill_value = match &value {
-                                Value::FuncRef(fr) => Some(Value::FuncRef(fr.clone())),
-                                Value::ExternRef(er) => Some(Value::ExternRef(er.clone())),
+                                Value::FuncRef(_)
+                                | Value::ExternRef(_)
+                                | Value::I31Ref(_)
+                                | Value::StructRef(_)
+                                | Value::ArrayRef(_)
+                                | Value::Ref(_) => Some(value.clone()),
                                 _ => {
                                     return Err(kiln_error::Error::runtime_trap(
                                         "table.fill: value must be a reference type",

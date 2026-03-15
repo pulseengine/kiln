@@ -1751,6 +1751,66 @@ impl<'a> StreamingDecoder<'a> {
                         let (_, bytes_read) = kiln_format::binary::read_leb128_u32(data, offset)?;
                         offset += bytes_read;
                     },
+                    0xFD => {
+                        // SIMD prefix - read LEB128 sub-opcode
+                        let (sub_opcode, bytes_read) = kiln_format::binary::read_leb128_u32(data, offset)?;
+                        offset += bytes_read;
+                        if sub_opcode == 12 {
+                            // v128.const - skip 16 bytes
+                            offset += 16;
+                        }
+                        // Other SIMD opcodes in const expressions are not valid
+                    },
+                    0xFC => {
+                        // Multi-byte prefix (wide-arithmetic, bulk memory, etc.)
+                        let (sub_opcode, bytes_read) = kiln_format::binary::read_leb128_u32(data, offset)?;
+                        offset += bytes_read;
+                        // Wide-arithmetic opcodes 0x12-0x15 have no immediates
+                        // Bulk memory/table operations have LEB128 immediates but
+                        // are not valid in constant expressions
+                        match sub_opcode {
+                            0x08 => { // memory.init
+                                let (_, b1) = kiln_format::binary::read_leb128_u32(data, offset)?;
+                                offset += b1;
+                                offset += 1; // mem_idx byte
+                            },
+                            0x09 | 0x0D | 0x0F..=0x11 => { // data.drop, elem.drop, table.grow/size/fill
+                                let (_, b1) = kiln_format::binary::read_leb128_u32(data, offset)?;
+                                offset += b1;
+                            },
+                            0x0A => { offset += 2; }, // memory.copy: 2 bytes
+                            0x0B => { offset += 1; }, // memory.fill: 1 byte
+                            0x0C | 0x0E => { // table.init, table.copy
+                                let (_, b1) = kiln_format::binary::read_leb128_u32(data, offset)?;
+                                offset += b1;
+                                let (_, b2) = kiln_format::binary::read_leb128_u32(data, offset)?;
+                                offset += b2;
+                            },
+                            // 0x00-0x07 (trunc_sat) and 0x12-0x15 (wide-arith) have no immediates
+                            _ => {},
+                        }
+                    },
+                    0xFB => {
+                        // GC prefix - read LEB128 sub-opcode
+                        let (sub_opcode, bytes_read) = kiln_format::binary::read_leb128_u32(data, offset)?;
+                        offset += bytes_read;
+                        match sub_opcode {
+                            // struct.new, struct.new_default, array.new, array.new_default: type_idx
+                            0x00 | 0x01 | 0x06 | 0x07 => {
+                                let (_, b) = kiln_format::binary::read_leb128_u32(data, offset)?;
+                                offset += b;
+                            },
+                            // array.new_fixed: type_idx + count
+                            0x08 => {
+                                let (_, b1) = kiln_format::binary::read_leb128_u32(data, offset)?;
+                                offset += b1;
+                                let (_, b2) = kiln_format::binary::read_leb128_u32(data, offset)?;
+                                offset += b2;
+                            },
+                            // ref.i31 (0x1C), any.convert_extern (0x1A), extern.convert_any (0x1B): no immediates
+                            _ => {},
+                        }
+                    },
                     _ => {
                         // Unknown opcode in init expression - skip to find 0x0b
                         // This is a fallback for any opcodes we don't handle

@@ -619,6 +619,8 @@ impl ModuleInstance {
                     kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
                     kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
                     kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
+                    kiln_foundation::ValueType::V128 => Value::V128(kiln_foundation::values::V128 { bytes: [0u8; 16] }),
+                    kiln_foundation::ValueType::ExnRef => Value::ExnRef(None),
                     _ => Value::I32(0),
                 };
                 let placeholder = Global::new(global_type.value_type, global_type.mutable, default_value)
@@ -1207,41 +1209,65 @@ impl ModuleInstance {
                         }
                     }
 
-                    // Evaluate and set deferred item expressions (e.g., global.get $gf)
+                    // Evaluate and set deferred item expressions (e.g., global.get, ref.i31, struct.new)
                     #[cfg(feature = "std")]
                     for (item_idx, expr) in elem_segment.item_exprs.iter() {
                         let table_offset = actual_offset + *item_idx;
-                        // Evaluate the expression to get the funcref
-                        if let Some(instr) = expr.instructions.first() {
-                            if let kiln_foundation::types::Instruction::GlobalGet(global_idx) = instr {
-                                // Look up the global value
-                                if let Some(global_wrapper) = globals.iter().nth(*global_idx as usize) {
-                                    match global_wrapper.0.read() {
-                                        Ok(global) => {
-                                            match global.get() {
-                                                KilnValue::FuncRef(func_ref_opt) => {
-                                                    #[cfg(feature = "tracing")]
-                                                    kiln_foundation::tracing::trace!(
-                                                        table_offset = table_offset,
-                                                        func_ref = ?func_ref_opt,
-                                                        global_idx = global_idx,
-                                                        "Set table element from global.get"
-                                                    );
-                                                    table.set_shared(table_offset, Some(KilnValue::FuncRef(func_ref_opt.clone())))?;
-                                                },
-                                                _ => {
-                                                    #[cfg(feature = "tracing")]
-                                                    kiln_foundation::tracing::warn!(table_offset = table_offset, global_idx = global_idx, "Global has non-funcref type");
-                                                }
-                                            }
-                                        },
-                                        Err(_) => {
-                                            #[cfg(feature = "tracing")]
-                                            kiln_foundation::tracing::warn!(table_offset = table_offset, global_idx = global_idx, "Failed to read global");
+                        // Evaluate the constant expression by interpreting its instructions
+                        use kiln_foundation::types::Instruction as KilnInstr;
+                        let mut eval_stack: Vec<KilnValue> = Vec::new();
+                        for instr in &expr.instructions {
+                            match instr {
+                                KilnInstr::I32Const(val) => {
+                                    eval_stack.push(KilnValue::I32(*val));
+                                }
+                                KilnInstr::I64Const(val) => {
+                                    eval_stack.push(KilnValue::I64(*val));
+                                }
+                                KilnInstr::GlobalGet(global_idx) => {
+                                    if let Some(global_wrapper) = globals.iter().nth(*global_idx as usize) {
+                                        if let Ok(global) = global_wrapper.0.read() {
+                                            eval_stack.push(global.get().clone());
                                         }
                                     }
                                 }
+                                KilnInstr::RefFunc(func_idx) => {
+                                    let fref = KilnFuncRef::from_index_with_instance(*func_idx, self.instance_id as u32);
+                                    eval_stack.push(KilnValue::FuncRef(Some(fref)));
+                                }
+                                KilnInstr::RefNull(_) => {
+                                    // Push appropriate null based on element type
+                                    eval_stack.push(KilnValue::FuncRef(None));
+                                }
+                                KilnInstr::RefI31 => {
+                                    // ref.i31: pop i32, push i31ref
+                                    if let Some(KilnValue::I32(n)) = eval_stack.pop() {
+                                        eval_stack.push(KilnValue::I31Ref(Some(n & 0x7FFFFFFF)));
+                                    }
+                                }
+                                KilnInstr::End => {
+                                    // End of expression - stop evaluating
+                                    break;
+                                }
+                                _ => {
+                                    #[cfg(feature = "tracing")]
+                                    kiln_foundation::tracing::trace!(
+                                        table_offset = table_offset,
+                                        instr = ?instr,
+                                        "Unhandled instruction in element expression"
+                                    );
+                                }
                             }
+                        }
+                        // Set the final value from the evaluation stack
+                        if let Some(value) = eval_stack.pop() {
+                            #[cfg(feature = "tracing")]
+                            kiln_foundation::tracing::trace!(
+                                table_offset = table_offset,
+                                value = ?value,
+                                "Set table element from expression"
+                            );
+                            table.set_shared(table_offset, Some(value))?;
                         }
                     }
 
