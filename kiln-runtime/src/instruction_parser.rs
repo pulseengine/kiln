@@ -440,249 +440,41 @@ fn parse_instruction_with_provider(
             Instruction::TableSet(table_idx)
         },
 
-        // Memory instructions
-        0x28 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Load(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x29 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x2A => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::F32Load(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x2B => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::F64Load(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x2C => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Load8S(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x2D => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Load8U(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x2E => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Load16S(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x2F => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Load16U(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x30 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load8S(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x31 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load8U(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x32 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load16S(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x33 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load16U(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x34 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load32S(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x35 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Load32U(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x36 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Store(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x37 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Store(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x38 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::F32Store(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x39 => {
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::F64Store(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x3A => {
-            // i32.store8
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Store8(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x3B => {
-            // i32.store16
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I32Store16(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x3C => {
-            // i64.store8
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Store8(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x3D => {
-            // i64.store16
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Store16(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
-        0x3E => {
-            // i64.store32
-            let (align, bytes1) = read_leb128_u32(bytecode, offset + 1)?;
-            let (offset, bytes2) = read_leb128_u32(bytecode, offset + 1 + bytes1)?;
-            consumed += bytes1 + bytes2;
-            Instruction::I64Store32(MemArg {
-                align_exponent: align,
-                offset,
-                memory_index: 0,
-            })
-        },
+        // Memory instructions - load/store with multi-memory memarg
+        0x28 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I32Load(memarg) },
+        0x29 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Load(memarg) },
+        0x2A => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::F32Load(memarg) },
+        0x2B => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::F64Load(memarg) },
+        0x2C => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I32Load8S(memarg) },
+        0x2D => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I32Load8U(memarg) },
+        0x2E => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I32Load16S(memarg) },
+        0x2F => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I32Load16U(memarg) },
+        0x30 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Load8S(memarg) },
+        0x31 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Load8U(memarg) },
+        0x32 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Load16S(memarg) },
+        0x33 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Load16U(memarg) },
+        0x34 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Load32S(memarg) },
+        0x35 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Load32U(memarg) },
+        0x36 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I32Store(memarg) },
+        0x37 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Store(memarg) },
+        0x38 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::F32Store(memarg) },
+        0x39 => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::F64Store(memarg) },
+        0x3A => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I32Store8(memarg) },
+        0x3B => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I32Store16(memarg) },
+        0x3C => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Store8(memarg) },
+        0x3D => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Store16(memarg) },
+        0x3E => { let (memarg, b) = parse_memarg(bytecode, offset + 1)?; consumed += b; Instruction::I64Store32(memarg) },
         0x3F => {
-            consumed += 1; // Skip reserved byte
-            Instruction::MemorySize(0)
+            // Read memory index (LEB128) - supports multi-memory proposal
+            let (mem_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::MemorySize(mem_idx)
         },
         0x40 => {
-            consumed += 1; // Skip reserved byte
-            Instruction::MemoryGrow(0)
+            // Read memory index (LEB128) - supports multi-memory proposal
+            let (mem_idx, bytes) = read_leb128_u32(bytecode, offset + 1)?;
+            consumed += bytes;
+            Instruction::MemoryGrow(mem_idx)
         },
 
         // Numeric instructions - Constants
@@ -1372,12 +1164,7 @@ fn parse_instruction_with_provider(
     Ok((instruction, consumed))
 }
 
-/// Parse a memory argument (align + offset) from bytecode
-fn parse_memarg(bytecode: &[u8], offset: usize) -> Result<(MemArg, usize)> {
-    let (align, bytes1) = read_leb128_u32(bytecode, offset)?;
-    let (mem_offset, bytes2) = read_leb128_u32(bytecode, offset + bytes1)?;
-    Ok((MemArg { align_exponent: align, offset: mem_offset, memory_index: 0 }, bytes1 + bytes2))
-}
+// parse_memarg moved below, supports multi-memory proposal
 
 /// Decode a value type from its binary encoding
 ///
@@ -1465,6 +1252,23 @@ fn parse_block_type(bytecode: &[u8], offset: usize) -> Result<BlockType> {
                 Ok(BlockType::Value(None))
             }
         },
+    }
+}
+
+/// Parse a memarg (alignment + offset + optional memory index for multi-memory)
+///
+/// The multi-memory proposal encodes the memory index in bit 6 of the alignment byte.
+/// When bit 6 is set, a LEB128 memory index follows the offset.
+fn parse_memarg(bytecode: &[u8], offset: usize) -> Result<(MemArg, usize)> {
+    let (align_raw, bytes1) = read_leb128_u32(bytecode, offset)?;
+    let (mem_offset, bytes2) = read_leb128_u32(bytecode, offset + bytes1)?;
+    let has_memory_index = (align_raw & 0x40) != 0;
+    let align_exponent = align_raw & 0x3F;
+    if has_memory_index {
+        let (memory_index, bytes3) = read_leb128_u32(bytecode, offset + bytes1 + bytes2)?;
+        Ok((MemArg { align_exponent, offset: mem_offset, memory_index }, bytes1 + bytes2 + bytes3))
+    } else {
+        Ok((MemArg { align_exponent, offset: mem_offset, memory_index: 0 }, bytes1 + bytes2))
     }
 }
 
