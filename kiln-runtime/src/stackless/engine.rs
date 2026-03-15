@@ -6459,21 +6459,30 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::RefEq => {
-                        // Pop two references, push 1 if equal, 0 if not
+                        // ref.eq: compare two eqref values for equality
                         if let (Some(ref2), Some(ref1)) = (operand_stack.pop(), operand_stack.pop()) {
                             let result = match (&ref1, &ref2) {
-                                // Two null funcref/externref are equal
-                                (Value::FuncRef(None), Value::FuncRef(None)) => 1i32,
-                                (Value::ExternRef(None), Value::ExternRef(None)) => 1i32,
-                                // Two non-null funcrefs are equal if they reference the same function
+                                // Any two null references are equal (regardless of type variant)
+                                (r1, r2) if is_null_ref(r1) && is_null_ref(r2) => 1i32,
+                                // Null vs non-null are never equal
+                                (r1, _) if is_null_ref(r1) => 0i32,
+                                (_, r2) if is_null_ref(r2) => 0i32,
+                                // i31ref: equal if values are equal
+                                (Value::I31Ref(Some(a)), Value::I31Ref(Some(b))) => {
+                                    if a == b { 1i32 } else { 0i32 }
+                                }
+                                // funcref: equal if same function index
                                 (Value::FuncRef(Some(f1)), Value::FuncRef(Some(f2))) => {
                                     if f1.index == f2.index { 1i32 } else { 0i32 }
                                 }
-                                // Two non-null externrefs are equal if they're the same object
-                                (Value::ExternRef(Some(e1)), Value::ExternRef(Some(e2))) => {
-                                    if e1 == e2 { 1i32 } else { 0i32 }
+                                // struct/array refs: identity comparison (pointer equality)
+                                (Value::StructRef(Some(s1)), Value::StructRef(Some(s2))) => {
+                                    if core::ptr::eq(s1 as *const _, s2 as *const _) { 1i32 } else { 0i32 }
                                 }
-                                // Different types or null vs non-null are not equal
+                                (Value::ArrayRef(Some(a1)), Value::ArrayRef(Some(a2))) => {
+                                    if core::ptr::eq(a1 as *const _, a2 as *const _) { 1i32 } else { 0i32 }
+                                }
+                                // Different types are not equal
                                 _ => 0i32,
                             };
                             #[cfg(feature = "tracing")]
@@ -10209,8 +10218,8 @@ impl StacklessEngine {
                         #[cfg(feature = "tracing")]
                         trace!("RefI31");
                         if let Some(Value::I32(n)) = operand_stack.pop() {
-                            // Truncate to 31 bits (sign-extend from 31 bits)
-                            let i31_val = (n << 1) >> 1;
+                            // Truncate to 31 bits using mask
+                            let i31_val = n & 0x7FFFFFFF;
                             operand_stack.push(Value::I31Ref(Some(i31_val)));
                         } else {
                             return Err(kiln_error::Error::runtime_trap("ref.i31: expected i32"));
@@ -10218,12 +10227,18 @@ impl StacklessEngine {
                     }
 
                     Instruction::I31GetS => {
-                        // i31.get_s: [i31ref] -> [i32] (sign-extended)
+                        // i31.get_s: [i31ref] -> [i32] (sign-extended from 31 bits)
                         #[cfg(feature = "tracing")]
                         trace!("I31GetS");
                         match operand_stack.pop() {
                             Some(Value::I31Ref(Some(n))) => {
-                                operand_stack.push(Value::I32(n));
+                                // Sign-extend from bit 30
+                                let sign_extended = if n & 0x40000000 != 0 {
+                                    n | !0x7FFFFFFF_u32 as i32 // Set upper bits
+                                } else {
+                                    n & 0x7FFFFFFF
+                                };
+                                operand_stack.push(Value::I32(sign_extended));
                             }
                             Some(Value::I31Ref(None)) => {
                                 return Err(kiln_error::Error::runtime_trap("null i31 reference"));
