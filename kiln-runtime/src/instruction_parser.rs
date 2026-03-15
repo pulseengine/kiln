@@ -1255,19 +1255,21 @@ fn parse_block_type(bytecode: &[u8], offset: usize) -> Result<BlockType> {
     }
 }
 
-/// Parse a memarg (alignment + offset + optional memory index for multi-memory)
+/// Parse a memarg (alignment + optional memory index + offset for multi-memory)
 ///
 /// The multi-memory proposal encodes the memory index in bit 6 of the alignment byte.
-/// When bit 6 is set, a LEB128 memory index follows the offset.
+/// When bit 6 is set, a LEB128 memory index follows the alignment byte, then the offset.
+/// Binary encoding: align:u32 memidx:u32? offset:u32
 fn parse_memarg(bytecode: &[u8], offset: usize) -> Result<(MemArg, usize)> {
     let (align_raw, bytes1) = read_leb128_u32(bytecode, offset)?;
-    let (mem_offset, bytes2) = read_leb128_u32(bytecode, offset + bytes1)?;
     let has_memory_index = (align_raw & 0x40) != 0;
     let align_exponent = align_raw & 0x3F;
     if has_memory_index {
-        let (memory_index, bytes3) = read_leb128_u32(bytecode, offset + bytes1 + bytes2)?;
+        let (memory_index, bytes2) = read_leb128_u32(bytecode, offset + bytes1)?;
+        let (mem_offset, bytes3) = read_leb128_u32(bytecode, offset + bytes1 + bytes2)?;
         Ok((MemArg { align_exponent, offset: mem_offset, memory_index }, bytes1 + bytes2 + bytes3))
     } else {
+        let (mem_offset, bytes2) = read_leb128_u32(bytecode, offset + bytes1)?;
         Ok((MemArg { align_exponent, offset: mem_offset, memory_index: 0 }, bytes1 + bytes2))
     }
 }
