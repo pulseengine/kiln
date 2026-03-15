@@ -797,11 +797,11 @@ impl WastModuleValidator {
                     // unreachable
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            // Truncate stack to frame base — per spec, stack becomes
-                            // polymorphic after a terminating instruction
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
+                        // Always truncate — per spec, stack becomes polymorphic after
+                        // a terminating instruction, even in already-unreachable code
+                        stack.truncate(frame.stack_height);
                         frame.reachable = false;
                     }
                 },
@@ -1099,9 +1099,9 @@ impl WastModuleValidator {
                     // throw is a terminating instruction — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
+                        stack.truncate(frame.stack_height);
                         frame.reachable = false;
                     }
                 },
@@ -1122,9 +1122,9 @@ impl WastModuleValidator {
                     // rethrow is a terminating instruction — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
+                        stack.truncate(frame.stack_height);
                         frame.reachable = false;
                     }
                 },
@@ -1145,9 +1145,9 @@ impl WastModuleValidator {
                     // throw_ref is a terminating instruction — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
+                        stack.truncate(frame.stack_height);
                         frame.reachable = false;
                     }
                 },
@@ -1264,9 +1264,9 @@ impl WastModuleValidator {
                     // Mark current frame as unreachable — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
+                        stack.truncate(frame.stack_height);
                         frame.reachable = false;
                     }
                 },
@@ -1388,9 +1388,9 @@ impl WastModuleValidator {
                     // Mark current frame as unreachable — stack becomes polymorphic
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
+                        stack.truncate(frame.stack_height);
                         frame.reachable = false;
                     }
                 },
@@ -1412,9 +1412,9 @@ impl WastModuleValidator {
 
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
+                        stack.truncate(frame.stack_height);
                         frame.reachable = false;
                     }
                 },
@@ -1545,9 +1545,9 @@ impl WastModuleValidator {
                     // return_call is a terminating instruction (like return)
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
+                        stack.truncate(frame.stack_height);
                         frame.reachable = false;
                     }
                 },
@@ -1620,9 +1620,9 @@ impl WastModuleValidator {
                     // return_call_indirect is a terminating instruction (like return)
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
-                            stack.truncate(frame.stack_height);
                             frame.unreachable_height = Some(frame.stack_height);
                         }
+                        stack.truncate(frame.stack_height);
                         frame.reachable = false;
                     }
                 },
