@@ -387,6 +387,7 @@ pub mod parsers {
                         },
                         shared: mem_limits.shared,
                         memory64: mem_limits.memory64,
+                        page_size: None,
                     };
                     KilnImportDesc::Memory(memory_type)
                 },
@@ -477,6 +478,7 @@ pub mod parsers {
                 limits: kiln_limits,
                 shared: limits.shared,
                 memory64: limits.memory64,
+                page_size: None,
             };
 
             memories

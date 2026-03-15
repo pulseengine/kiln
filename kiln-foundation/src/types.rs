@@ -3905,16 +3905,20 @@ pub struct MemoryType {
     pub shared: bool,
     /// Memory64 extension - uses i64 addresses instead of i32
     pub memory64: bool,
+    /// Custom page size (custom-page-sizes proposal).
+    /// When `Some`, the page size in bytes; must be a power of two and <= 65536.
+    /// When `None`, the standard 65536-byte page size is used.
+    pub page_size: Option<u32>,
 }
 
 impl MemoryType {
     pub const fn new(limits: Limits, shared: bool) -> Self {
-        Self { limits, shared, memory64: false }
+        Self { limits, shared, memory64: false, page_size: None }
     }
 
     /// Create a memory type with all options
     pub const fn new_with_memory64(limits: Limits, shared: bool, memory64: bool) -> Self {
-        Self { limits, shared, memory64 }
+        Self { limits, shared, memory64, page_size: None }
     }
 }
 
@@ -3923,6 +3927,10 @@ impl Checksummable for MemoryType {
         self.limits.update_checksum(checksum);
         checksum.update(self.shared as u8);
         checksum.update(self.memory64 as u8);
+        let ps = self.page_size.unwrap_or(0);
+        for byte in ps.to_le_bytes() {
+            checksum.update(byte);
+        }
     }
 }
 
@@ -3935,6 +3943,15 @@ impl ToBytes for MemoryType {
         self.limits.to_bytes_with_provider(writer, provider)?;
         writer.write_u8(self.shared as u8)?;
         writer.write_u8(self.memory64 as u8)?;
+        match self.page_size {
+            Some(ps) => {
+                writer.write_u8(1)?;
+                writer.write_u32_le(ps)?;
+            }
+            None => {
+                writer.write_u8(0)?;
+            }
+        }
         Ok(())
     }
     // Default to_bytes method will be used if #cfg(feature = "default-provider") is
@@ -3967,7 +3984,13 @@ impl FromBytes for MemoryType {
                 ));
             },
         };
-        Ok(MemoryType { limits, shared, memory64 })
+        let page_size_flag = reader.read_u8()?;
+        let page_size = if page_size_flag != 0 {
+            Some(reader.read_u32_le()?)
+        } else {
+            None
+        };
+        Ok(MemoryType { limits, shared, memory64, page_size })
     }
     // Default from_bytes method will be used if #cfg(feature = ")
     // is active

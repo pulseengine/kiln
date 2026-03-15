@@ -358,6 +358,7 @@ impl CoreModuleAdapter {
                     },
                     shared: mem_adapter.shared,
                     memory64: false,
+                    page_size: None,
                 })?),
                 kind: ExportKind::Value {
                     value_index: mem_adapter.core_index,

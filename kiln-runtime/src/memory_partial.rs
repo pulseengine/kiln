@@ -406,6 +406,8 @@ impl kiln_foundation::traits::FromBytes for Memory {
         let memory_type = MemoryType {
             limits: Limits { min, max: if max == 0 { None } else { Some(max) } },
             shared: false,
+            memory64: false,
+            page_size: None,
         };
         Self::new(memory_type)
     }
