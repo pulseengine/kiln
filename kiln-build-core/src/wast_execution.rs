@@ -12,8 +12,10 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use wast::{WastExecute, WastInvoke};
 use kiln_decoder::decoder::decode_module;
+use kiln_foundation::types::{GlobalType, Limits, MemoryType, RefType, TableType, ValueType};
 use kiln_foundation::values::Value;
-use kiln_runtime::{module::Module, stackless::StacklessEngine};
+use kiln_runtime::module::{ExportKind, Module, RuntimeImportDesc};
+use kiln_runtime::stackless::StacklessEngine;
 
 // Re-export value conversion utilities from wast_values module
 pub use crate::wast_values::{
@@ -72,6 +74,10 @@ impl WastEngine {
         let module = Arc::new(
             *Module::from_kiln_module(&kiln_module).context("Failed to convert to runtime module")?,
         );
+
+        // Validate all imports against registered modules and spectest
+        // This catches unknown imports and incompatible types BEFORE instantiation
+        self.validate_imports(&module)?;
 
         // Create a module instance from the module
         // Use Arc::clone to share the module reference without copying data
@@ -384,8 +390,8 @@ impl WastEngine {
                     let value = match field_name.as_str() {
                         "global_i32" => Value::I32(666),
                         "global_i64" => Value::I64(666),
-                        "global_f32" => Value::F32(FloatBits32(0x4426_999A)), // 666.6 in f32
-                        "global_f64" => Value::F64(FloatBits64(0x4084_D333_3333_3333)), // 666.6 in f64
+                        "global_f32" => Value::F32(FloatBits32(0x4426_A666)), // 666.6 in f32
+                        "global_f64" => Value::F64(FloatBits64(0x4084_D4CC_CCCC_CCCD)), // 666.6 in f64
                         _ => {
                             global_import_idx += 1;
                             continue;
@@ -803,6 +809,726 @@ impl WastEngine {
 
         Ok(())
     }
+
+    /// Validate that all imports in a module can be resolved against registered modules
+    /// and spectest. This implements the WebAssembly linking validation per the spec:
+    /// - All imports must reference a known module
+    /// - The named export must exist in the source module
+    /// - The export kind must match the import kind (function, global, table, memory, tag)
+    /// - Type signatures must be compatible
+    fn validate_imports(&self, module: &Module) -> Result<()> {
+        let import_order = &module.import_order;
+        let import_types = &module.import_types;
+
+        if import_order.len() != import_types.len() {
+            return Err(anyhow::anyhow!(
+                "Import order/types length mismatch: {} vs {}",
+                import_order.len(),
+                import_types.len()
+            ));
+        }
+
+        for (i, (mod_name, field_name)) in import_order.iter().enumerate() {
+            let import_desc = &import_types[i];
+
+            if mod_name == "spectest" {
+                // Validate against known spectest exports
+                self.validate_spectest_import(field_name, import_desc, module)?;
+            } else {
+                // Validate against registered modules
+                self.validate_registered_import(mod_name, field_name, import_desc, module)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate an import from the spectest module
+    ///
+    /// The spectest module provides these exports:
+    /// - Functions: print_i32, print_i64, print_f32, print_f64, print_i32_f32, print_f64_f64, print
+    /// - Global: global_i32 (i32), global_i64 (i64), global_f32 (f32), global_f64 (f64)
+    /// - Table: table (10 20 funcref)
+    /// - Memory: memory (1 2)
+    fn validate_spectest_import(
+        &self,
+        field_name: &str,
+        import_desc: &RuntimeImportDesc,
+        module: &Module,
+    ) -> Result<()> {
+        match import_desc {
+            RuntimeImportDesc::Function(type_idx) => {
+                // spectest exports these functions (all are valid print functions)
+                let known_functions = [
+                    "print", "print_i32", "print_i64", "print_f32", "print_f64",
+                    "print_i32_f32", "print_f64_f64",
+                ];
+                if !known_functions.contains(&field_name) {
+                    return Err(anyhow::anyhow!(
+                        "unknown import: spectest::{} is not a known spectest function",
+                        field_name
+                    ));
+                }
+                // Validate function signature against spectest definitions
+                self.validate_spectest_function_type(field_name, *type_idx, module)?;
+                Ok(())
+            }
+            RuntimeImportDesc::Global(global_type) => {
+                match field_name {
+                    "global_i32" => {
+                        if global_type.value_type != ValueType::I32 || global_type.mutable {
+                            return Err(anyhow::anyhow!(
+                                "incompatible import type: spectest::global_i32 is (global i32)"
+                            ));
+                        }
+                    }
+                    "global_i64" => {
+                        if global_type.value_type != ValueType::I64 || global_type.mutable {
+                            return Err(anyhow::anyhow!(
+                                "incompatible import type: spectest::global_i64 is (global i64)"
+                            ));
+                        }
+                    }
+                    "global_f32" => {
+                        if global_type.value_type != ValueType::F32 || global_type.mutable {
+                            return Err(anyhow::anyhow!(
+                                "incompatible import type: spectest::global_f32 is (global f32)"
+                            ));
+                        }
+                    }
+                    "global_f64" => {
+                        if global_type.value_type != ValueType::F64 || global_type.mutable {
+                            return Err(anyhow::anyhow!(
+                                "incompatible import type: spectest::global_f64 is (global f64)"
+                            ));
+                        }
+                    }
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "unknown import: spectest::{} is not a known spectest global",
+                            field_name
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            RuntimeImportDesc::Table(table_type) => {
+                if field_name != "table" {
+                    return Err(anyhow::anyhow!(
+                        "unknown import: spectest::{} is not a known spectest table",
+                        field_name
+                    ));
+                }
+                // spectest table is (table 10 20 funcref)
+                let spectest_table = TableType {
+                    element_type: RefType::Funcref,
+                    limits: Limits { min: 10, max: Some(20) },
+                    table64: false,
+                };
+                validate_table_import_compatibility(table_type, &spectest_table)?;
+                Ok(())
+            }
+            RuntimeImportDesc::Memory(mem_type) => {
+                if field_name != "memory" {
+                    return Err(anyhow::anyhow!(
+                        "unknown import: spectest::{} is not a known spectest memory",
+                        field_name
+                    ));
+                }
+                // spectest memory is (memory 1 2)
+                let spectest_mem = MemoryType {
+                    limits: Limits { min: 1, max: Some(2) },
+                    shared: false,
+                    memory64: false,
+                };
+                validate_memory_import_compatibility(mem_type, &spectest_mem)?;
+                Ok(())
+            }
+            RuntimeImportDesc::Tag(_tag_type) => {
+                // spectest does not export tags - any tag import from spectest is unknown
+                Err(anyhow::anyhow!(
+                    "unknown import: spectest::{} is not a known spectest export",
+                    field_name
+                ))
+            }
+            _ => {
+                Err(anyhow::anyhow!(
+                    "unknown import: spectest::{} has unsupported import kind",
+                    field_name
+                ))
+            }
+        }
+    }
+
+    /// Validate a spectest function import's type signature
+    fn validate_spectest_function_type(
+        &self,
+        field_name: &str,
+        type_idx: u32,
+        module: &Module,
+    ) -> Result<()> {
+        let func_type = module.types.get(type_idx as usize).ok_or_else(|| {
+            anyhow::anyhow!("incompatible import type: type index {} out of bounds", type_idx)
+        })?;
+
+        // Define expected signatures for spectest functions
+        let (expected_params, expected_results): (&[ValueType], &[ValueType]) = match field_name {
+            "print" => (&[], &[]),
+            "print_i32" => (&[ValueType::I32], &[]),
+            "print_i64" => (&[ValueType::I64], &[]),
+            "print_f32" => (&[ValueType::F32], &[]),
+            "print_f64" => (&[ValueType::F64], &[]),
+            "print_i32_f32" => (&[ValueType::I32, ValueType::F32], &[]),
+            "print_f64_f64" => (&[ValueType::F64, ValueType::F64], &[]),
+            _ => return Ok(()), // Unknown function already handled
+        };
+
+        if func_type.params.len() != expected_params.len()
+            || func_type.results.len() != expected_results.len()
+        {
+            return Err(anyhow::anyhow!(
+                "incompatible import type: spectest::{} has wrong signature",
+                field_name
+            ));
+        }
+
+        for (i, (actual, expected)) in func_type.params.iter().zip(expected_params).enumerate() {
+            if actual != expected {
+                return Err(anyhow::anyhow!(
+                    "incompatible import type: spectest::{} param {} type mismatch",
+                    field_name, i
+                ));
+            }
+        }
+
+        for (i, (actual, expected)) in func_type.results.iter().zip(expected_results).enumerate() {
+            if actual != expected {
+                return Err(anyhow::anyhow!(
+                    "incompatible import type: spectest::{} result {} type mismatch",
+                    field_name, i
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate an import from a registered (non-spectest) module
+    fn validate_registered_import(
+        &self,
+        mod_name: &str,
+        field_name: &str,
+        import_desc: &RuntimeImportDesc,
+        module: &Module,
+    ) -> Result<()> {
+        // Check if the module is registered
+        let source_module = match self.modules.get(mod_name) {
+            Some(m) => m,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "unknown import: module '{}' is not registered",
+                    mod_name
+                ));
+            }
+        };
+
+        // Find the export in the source module
+        let export = match source_module.get_export(field_name) {
+            Some(e) => e,
+            None => {
+                return Err(anyhow::anyhow!(
+                    "unknown import: {}::{} not found in registered module",
+                    mod_name, field_name
+                ));
+            }
+        };
+
+        // Validate kind and type compatibility
+        match import_desc {
+            RuntimeImportDesc::Function(type_idx) => {
+                if export.kind != ExportKind::Function {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: {}::{} is {:?}, not a function",
+                        mod_name, field_name, export.kind
+                    ));
+                }
+                // Validate function type signature
+                self.validate_function_type_compatibility(
+                    mod_name, field_name, *type_idx, module, source_module, &export,
+                )?;
+            }
+            RuntimeImportDesc::Global(import_global_type) => {
+                if export.kind != ExportKind::Global {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: {}::{} is {:?}, not a global",
+                        mod_name, field_name, export.kind
+                    ));
+                }
+                // Validate global type compatibility
+                self.validate_global_type_compatibility(
+                    mod_name, field_name, import_global_type, source_module, &export,
+                )?;
+            }
+            RuntimeImportDesc::Table(import_table_type) => {
+                if export.kind != ExportKind::Table {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: {}::{} is {:?}, not a table",
+                        mod_name, field_name, export.kind
+                    ));
+                }
+                // Validate table type compatibility
+                self.validate_table_type_compatibility(
+                    mod_name, field_name, import_table_type, source_module, &export,
+                )?;
+            }
+            RuntimeImportDesc::Memory(import_mem_type) => {
+                if export.kind != ExportKind::Memory {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: {}::{} is {:?}, not a memory",
+                        mod_name, field_name, export.kind
+                    ));
+                }
+                // Validate memory type compatibility
+                self.validate_memory_type_compatibility(
+                    mod_name, field_name, import_mem_type, source_module, &export,
+                )?;
+            }
+            RuntimeImportDesc::Tag(import_tag_type) => {
+                if export.kind != ExportKind::Tag {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: {}::{} is {:?}, not a tag",
+                        mod_name, field_name, export.kind
+                    ));
+                }
+                // Validate tag type compatibility
+                self.validate_tag_type_compatibility(
+                    mod_name, field_name, import_tag_type, module, source_module, &export,
+                )?;
+            }
+            _ => {
+                // Extern, Resource, etc. - not yet handled
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate function type compatibility between import and export
+    fn validate_function_type_compatibility(
+        &self,
+        mod_name: &str,
+        field_name: &str,
+        import_type_idx: u32,
+        importing_module: &Module,
+        source_module: &Module,
+        export: &kiln_runtime::module::Export,
+    ) -> Result<()> {
+        // Get the importing module's expected function type
+        let import_func_type = importing_module.types.get(import_type_idx as usize).ok_or_else(|| {
+            anyhow::anyhow!(
+                "incompatible import type: type index {} out of bounds",
+                import_type_idx
+            )
+        })?;
+
+        // Get the exported function's type from the source module
+        let export_func_idx = export.index as usize;
+        let export_func = source_module.functions.get(export_func_idx).ok_or_else(|| {
+            anyhow::anyhow!(
+                "incompatible import type: {}::{} references invalid function index {}",
+                mod_name, field_name, export_func_idx
+            )
+        })?;
+
+        let export_func_type = source_module.types.get(export_func.type_idx as usize).ok_or_else(|| {
+            anyhow::anyhow!(
+                "incompatible import type: {}::{} has invalid type index",
+                mod_name, field_name
+            )
+        })?;
+
+        // Compare function signatures
+        if import_func_type.params.len() != export_func_type.params.len()
+            || import_func_type.results.len() != export_func_type.results.len()
+        {
+            return Err(anyhow::anyhow!(
+                "incompatible import type: {}::{} signature mismatch (params: {} vs {}, results: {} vs {})",
+                mod_name, field_name,
+                import_func_type.params.len(), export_func_type.params.len(),
+                import_func_type.results.len(), export_func_type.results.len()
+            ));
+        }
+
+        for (i, (import_param, export_param)) in import_func_type.params.iter()
+            .zip(export_func_type.params.iter())
+            .enumerate()
+        {
+            if import_param != export_param {
+                return Err(anyhow::anyhow!(
+                    "incompatible import type: {}::{} param {} type mismatch ({:?} vs {:?})",
+                    mod_name, field_name, i, import_param, export_param
+                ));
+            }
+        }
+
+        for (i, (import_result, export_result)) in import_func_type.results.iter()
+            .zip(export_func_type.results.iter())
+            .enumerate()
+        {
+            if import_result != export_result {
+                return Err(anyhow::anyhow!(
+                    "incompatible import type: {}::{} result {} type mismatch ({:?} vs {:?})",
+                    mod_name, field_name, i, import_result, export_result
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate global type compatibility between import and export
+    fn validate_global_type_compatibility(
+        &self,
+        mod_name: &str,
+        field_name: &str,
+        import_global_type: &GlobalType,
+        source_module: &Module,
+        export: &kiln_runtime::module::Export,
+    ) -> Result<()> {
+        let export_global_idx = export.index as usize;
+
+        // Get the source global type - it could be an imported or defined global
+        let source_global_type = self.get_global_type_from_module(source_module, export_global_idx);
+
+        if let Some(source_type) = source_global_type {
+            // For mutable globals, mutability must match exactly
+            if import_global_type.mutable != source_type.mutable {
+                return Err(anyhow::anyhow!(
+                    "incompatible import type: {}::{} mutability mismatch (import: {}, export: {})",
+                    mod_name, field_name, import_global_type.mutable, source_type.mutable
+                ));
+            }
+
+            // For mutable globals, the value type must match exactly
+            // For immutable globals, the import type must be a supertype of the export type
+            if import_global_type.mutable {
+                // Mutable: exact type match required
+                if import_global_type.value_type != source_type.value_type {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: {}::{} value type mismatch ({:?} vs {:?})",
+                        mod_name, field_name, import_global_type.value_type, source_type.value_type
+                    ));
+                }
+            } else {
+                // Immutable: import type must be supertype of export type
+                if !is_value_type_subtype(&source_type.value_type, &import_global_type.value_type) {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: {}::{} value type mismatch ({:?} is not subtype of {:?})",
+                        mod_name, field_name, source_type.value_type, import_global_type.value_type
+                    ));
+                }
+            }
+        }
+        // If we can't find the source global type, we let it pass (best effort)
+
+        Ok(())
+    }
+
+    /// Get the GlobalType for a global by its index in a module
+    /// (accounting for imported vs defined globals)
+    fn get_global_type_from_module(&self, module: &Module, global_idx: usize) -> Option<GlobalType> {
+        let num_global_imports = module.global_import_types.len();
+        if global_idx < num_global_imports {
+            // It's an imported global
+            module.global_import_types.get(global_idx).cloned()
+        } else {
+            // It's a defined global - get from deferred_global_inits
+            let defined_idx = global_idx - num_global_imports;
+            module.deferred_global_inits
+                .get(defined_idx)
+                .map(|(gt, _)| *gt)
+        }
+    }
+
+    /// Validate table type compatibility between import and export
+    fn validate_table_type_compatibility(
+        &self,
+        mod_name: &str,
+        field_name: &str,
+        import_table_type: &TableType,
+        source_module: &Module,
+        export: &kiln_runtime::module::Export,
+    ) -> Result<()> {
+        let export_table_idx = export.index as usize;
+
+        // Get the source table type from the module definition
+        let source_table_type = self.get_table_type_from_module(source_module, export_table_idx);
+
+        if let Some(source_type) = source_table_type {
+            validate_table_import_compatibility(import_table_type, &source_type)?;
+        }
+
+        Ok(())
+    }
+
+    /// Get the TableType for a table by its index in a module
+    fn get_table_type_from_module(&self, module: &Module, table_idx: usize) -> Option<TableType> {
+        // Count table imports to determine if this is imported or defined
+        let num_table_imports = module.import_types.iter()
+            .filter(|desc| matches!(desc, RuntimeImportDesc::Table(_)))
+            .count();
+
+        if table_idx < num_table_imports {
+            // It's an imported table - find the table import at this index
+            let mut table_import_count = 0;
+            for desc in &module.import_types {
+                if let RuntimeImportDesc::Table(tt) = desc {
+                    if table_import_count == table_idx {
+                        return Some(tt.clone());
+                    }
+                    table_import_count += 1;
+                }
+            }
+            None
+        } else {
+            // It's a defined table
+            let defined_idx = table_idx - num_table_imports;
+            // Module.tables contains defined tables (not imports)
+            // Access the inner Table's type directly
+            if let Some(table_wrapper) = module.tables.get(defined_idx) {
+                Some(table_wrapper.0.ty.clone())
+            } else {
+                None
+            }
+        }
+    }
+
+    /// Validate memory type compatibility between import and export
+    fn validate_memory_type_compatibility(
+        &self,
+        mod_name: &str,
+        field_name: &str,
+        import_mem_type: &MemoryType,
+        source_module: &Module,
+        export: &kiln_runtime::module::Export,
+    ) -> Result<()> {
+        let export_mem_idx = export.index as usize;
+
+        // Get the source memory type from the module definition
+        let source_mem_type = self.get_memory_type_from_module(source_module, export_mem_idx);
+
+        if let Some(source_type) = source_mem_type {
+            validate_memory_import_compatibility(import_mem_type, &source_type)?;
+        }
+
+        Ok(())
+    }
+
+    /// Get the MemoryType for a memory by its index in a module
+    fn get_memory_type_from_module(&self, module: &Module, mem_idx: usize) -> Option<MemoryType> {
+        // Count memory imports
+        let num_mem_imports = module.import_types.iter()
+            .filter(|desc| matches!(desc, RuntimeImportDesc::Memory(_)))
+            .count();
+
+        if mem_idx < num_mem_imports {
+            // It's an imported memory
+            let mut mem_import_count = 0;
+            for desc in &module.import_types {
+                if let RuntimeImportDesc::Memory(mt) = desc {
+                    if mem_import_count == mem_idx {
+                        return Some(mt.clone());
+                    }
+                    mem_import_count += 1;
+                }
+            }
+            None
+        } else {
+            // It's a defined memory
+            let defined_idx = mem_idx - num_mem_imports;
+            if let Some(mem_wrapper) = module.memories.get(defined_idx) {
+                // Convert CoreMemoryType to MemoryType
+                let core_ty = &mem_wrapper.0.ty;
+                Some(MemoryType {
+                    limits: core_ty.limits,
+                    shared: core_ty.shared,
+                    memory64: false,
+                })
+            } else {
+                None
+            }
+        }
+    }
+
+    /// Validate tag type compatibility between import and export
+    fn validate_tag_type_compatibility(
+        &self,
+        mod_name: &str,
+        field_name: &str,
+        import_tag_type: &kiln_foundation::types::TagType,
+        importing_module: &Module,
+        source_module: &Module,
+        export: &kiln_runtime::module::Export,
+    ) -> Result<()> {
+        // Get the import's function type from the type index
+        let import_func_type = importing_module.types.get(import_tag_type.type_idx as usize);
+
+        // Get the export's tag type
+        let export_tag_idx = export.index as usize;
+        let num_tag_imports = source_module.count_tag_imports();
+        let export_tag_type = if export_tag_idx < num_tag_imports {
+            // Imported tag
+            let mut tag_import_count = 0;
+            let mut found = None;
+            for desc in &source_module.import_types {
+                if let RuntimeImportDesc::Tag(tt) = desc {
+                    if tag_import_count == export_tag_idx {
+                        found = Some(tt.clone());
+                        break;
+                    }
+                    tag_import_count += 1;
+                }
+            }
+            found
+        } else {
+            let defined_idx = export_tag_idx - num_tag_imports;
+            source_module.tags.get(defined_idx).cloned()
+        };
+
+        if let (Some(import_ft), Some(export_tt)) = (import_func_type, export_tag_type) {
+            let export_func_type = source_module.types.get(export_tt.type_idx as usize);
+            if let Some(export_ft) = export_func_type {
+                // Tag types must match exactly (params only, tags have no results)
+                if import_ft.params.len() != export_ft.params.len() {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: {}::{} tag param count mismatch ({} vs {})",
+                        mod_name, field_name,
+                        import_ft.params.len(), export_ft.params.len()
+                    ));
+                }
+                for (i, (ip, ep)) in import_ft.params.iter().zip(export_ft.params.iter()).enumerate() {
+                    if ip != ep {
+                        return Err(anyhow::anyhow!(
+                            "incompatible import type: {}::{} tag param {} type mismatch ({:?} vs {:?})",
+                            mod_name, field_name, i, ip, ep
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Check if value type `sub` is a subtype of value type `sup`
+///
+/// Per the WebAssembly spec, subtyping rules for reference types:
+/// - funcref <: funcref
+/// - externref <: externref
+/// - (ref null $t) <: funcref (if $t is a function type)
+/// - (ref $t) <: (ref null $t)
+/// - (ref $t) <: funcref (if $t is a function type)
+/// For numeric types, only exact match is allowed.
+fn is_value_type_subtype(sub: &ValueType, sup: &ValueType) -> bool {
+    if sub == sup {
+        return true;
+    }
+
+    // Reference type subtyping
+    match (sub, sup) {
+        // Any concrete function ref is a subtype of funcref
+        (ValueType::FuncRef, ValueType::FuncRef) => true,
+        (ValueType::NullFuncRef, ValueType::FuncRef) => true,
+        // ExternRef subtyping
+        (ValueType::ExternRef, ValueType::ExternRef) => true,
+        // AnyRef hierarchy
+        (ValueType::EqRef, ValueType::AnyRef) => true,
+        (ValueType::I31Ref, ValueType::AnyRef) => true,
+        (ValueType::I31Ref, ValueType::EqRef) => true,
+        (ValueType::StructRef(_), ValueType::AnyRef) => true,
+        (ValueType::StructRef(_), ValueType::EqRef) => true,
+        (ValueType::ArrayRef(_), ValueType::AnyRef) => true,
+        (ValueType::ArrayRef(_), ValueType::EqRef) => true,
+        // Numeric types require exact match
+        _ => false,
+    }
+}
+
+/// Validate table import compatibility per the WebAssembly spec
+///
+/// Import table type must be compatible with the actual table:
+/// - Element types must be the same
+/// - Import min must be <= actual min
+/// - If import has max, actual must have max and actual max <= import max
+fn validate_table_import_compatibility(import: &TableType, actual: &TableType) -> Result<()> {
+    // Element types must match exactly
+    if import.element_type != actual.element_type {
+        return Err(anyhow::anyhow!(
+            "incompatible import type: table element type mismatch ({:?} vs {:?})",
+            import.element_type, actual.element_type
+        ));
+    }
+
+    validate_limits_compatibility(&import.limits, &actual.limits, "table")?;
+    Ok(())
+}
+
+/// Validate memory import compatibility per the WebAssembly spec
+///
+/// Import memory type must be compatible with the actual memory:
+/// - Import min must be <= actual min
+/// - If import has max, actual must have max and actual max <= import max
+/// - shared flag must match
+fn validate_memory_import_compatibility(import: &MemoryType, actual: &MemoryType) -> Result<()> {
+    // Shared flag must match
+    if import.shared != actual.shared {
+        return Err(anyhow::anyhow!(
+            "incompatible import type: memory shared flag mismatch"
+        ));
+    }
+
+    validate_limits_compatibility(&import.limits, &actual.limits, "memory")?;
+    Ok(())
+}
+
+/// Validate limits compatibility for table/memory imports
+///
+/// Per the WebAssembly spec:
+/// - actual.min must be >= import.min (actual provides at least as much as import requires)
+/// - If import has a max, actual must also have a max and actual.max <= import.max
+///   (actual is at least as constrained as import requires)
+fn validate_limits_compatibility(import: &Limits, actual: &Limits, kind: &str) -> Result<()> {
+    // Actual min must be >= import min
+    if actual.min < import.min {
+        return Err(anyhow::anyhow!(
+            "incompatible import type: {} min {} < required {}",
+            kind, actual.min, import.min
+        ));
+    }
+
+    // If import specifies a max, actual must also have a max that is <= import max
+    if let Some(import_max) = import.max {
+        match actual.max {
+            Some(actual_max) => {
+                if actual_max > import_max {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: {} max {} > allowed {}",
+                        kind, actual_max, import_max
+                    ));
+                }
+            }
+            None => {
+                // Import requires a max but actual has no max
+                return Err(anyhow::anyhow!(
+                    "incompatible import type: {} has no max but import requires max {}",
+                    kind, import_max
+                ));
+            }
+        }
+    }
+
+    Ok(())
 }
 
 impl core::fmt::Debug for WastEngine {
