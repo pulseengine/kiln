@@ -1052,8 +1052,12 @@ impl<'a> StreamingDecoder<'a> {
                     offset += 1;
 
                     // Validate limits flags per WebAssembly spec:
-                    // Maximum valid flag for memory is 0x07 (has_max | shared | memory64)
-                    if flags > 0x07 {
+                    // - Bit 0: has max (0x01)
+                    // - Bit 1: shared (0x02) - threads proposal
+                    // - Bit 2: memory64 (0x04)
+                    // - Bit 3: custom page size (0x08) - custom-page-sizes proposal
+                    // All other bits must be zero. Maximum valid flag is 0x0F.
+                    if flags > 0x0F {
                         return Err(Error::parse_error("malformed limits flags"));
                     }
 
@@ -1119,6 +1123,25 @@ impl<'a> StreamingDecoder<'a> {
                         (min, max)
                     };
 
+                    // Custom page size (bit 3): read page size as LEB128 u32
+                    let custom_page_size = if (flags & 0x08) != 0 {
+                        let (ps, bytes_read) = read_leb128_u32(data, offset)?;
+                        offset += bytes_read;
+                        if ps > 65536 {
+                            return Err(Error::validation_error(
+                                "custom page size must be at most 65536",
+                            ));
+                        }
+                        if ps != 0 && (ps & (ps - 1)) != 0 {
+                            return Err(Error::validation_error(
+                                "custom page size must be a power of 2",
+                            ));
+                        }
+                        Some(ps)
+                    } else {
+                        None
+                    };
+
                     #[cfg(feature = "tracing")]
                     trace!(import_index = i, min_pages = min, max_pages = ?max, "import: memory");
 
@@ -1134,6 +1157,7 @@ impl<'a> StreamingDecoder<'a> {
                             limits,
                             shared: flags & 0x02 != 0, // bit 1 = shared
                             memory64: flags & 0x04 != 0, // bit 2 = memory64
+                            page_size: custom_page_size,
                         };
 
                         let import = Import {
@@ -1149,12 +1173,19 @@ impl<'a> StreamingDecoder<'a> {
                 },
                 0x03 => {
                     // Global import - need to parse global type
-                    // value_type (1 byte) + mutability (1 byte)
-                    if offset + 1 >= data.len() {
+                    // value_type (potentially multi-byte for GC ref types) + mutability (1 byte)
+                    if offset >= data.len() {
                         return Err(Error::parse_error("Unexpected end of global import"));
                     }
-                    let value_type_byte = data[offset];
-                    offset += 1;
+
+                    // Parse value type using GC-aware parser to handle multi-byte
+                    // ref type encodings (0x63/0x64 + heap type index)
+                    let (value_type, new_offset) = self.parse_value_type(data, offset)?;
+                    offset = new_offset;
+
+                    if offset >= data.len() {
+                        return Err(Error::parse_error("Unexpected end of global import"));
+                    }
                     let mutability_byte = data[offset];
                     offset += 1;
 
@@ -1162,19 +1193,6 @@ impl<'a> StreamingDecoder<'a> {
                     if mutability_byte != 0x00 && mutability_byte != 0x01 {
                         return Err(Error::parse_error("malformed mutability"));
                     }
-
-                    // Parse value type
-                    let value_type = match value_type_byte {
-                        0x7F => kiln_foundation::ValueType::I32,
-                        0x7E => kiln_foundation::ValueType::I64,
-                        0x7D => kiln_foundation::ValueType::F32,
-                        0x7C => kiln_foundation::ValueType::F64,
-                        0x7B => kiln_foundation::ValueType::V128,
-                        0x70 => kiln_foundation::ValueType::FuncRef,
-                        0x6F => kiln_foundation::ValueType::ExternRef,
-                        0x69 => kiln_foundation::ValueType::ExnRef,
-                        _ => return Err(Error::parse_error("Invalid global import value type")),
-                    };
 
                     #[cfg(feature = "tracing")]
                     trace!(import_index = i, value_type = ?value_type, mutable = (mutability_byte != 0), "import: global");
@@ -1519,11 +1537,12 @@ impl<'a> StreamingDecoder<'a> {
             offset += 1;
 
             // Validate limits flags per WebAssembly spec:
-            // - Bits 0: has max (0x01)
+            // - Bit 0: has max (0x01)
             // - Bit 1: shared (0x02) - threads proposal
             // - Bit 2: memory64 (0x04)
-            // All other bits must be zero. Maximum valid flag is 0x07.
-            if flags > 0x07 {
+            // - Bit 3: custom page size (0x08) - custom-page-sizes proposal
+            // All other bits must be zero. Maximum valid flag is 0x0F.
+            if flags > 0x0F {
                 return Err(Error::parse_error("malformed limits flags"));
             }
 
@@ -1597,11 +1616,31 @@ impl<'a> StreamingDecoder<'a> {
                 }
             }
 
+            // Custom page size (bit 3): read page size as LEB128 u32
+            let custom_page_size = if (flags & 0x08) != 0 {
+                let (ps, bytes_read) = read_leb128_u32(data, offset)?;
+                offset += bytes_read;
+                if ps > 65536 {
+                    return Err(Error::validation_error(
+                        "custom page size must be at most 65536",
+                    ));
+                }
+                if ps != 0 && (ps & (ps - 1)) != 0 {
+                    return Err(Error::validation_error(
+                        "custom page size must be a power of 2",
+                    ));
+                }
+                Some(ps)
+            } else {
+                None
+            };
+
             // Create memory type
             let memory_type = kiln_foundation::types::MemoryType {
                 limits: kiln_foundation::types::Limits { min, max },
                 shared,
                 memory64: is_memory64,
+                page_size: custom_page_size,
             };
 
             // Add to module
@@ -2303,44 +2342,42 @@ impl<'a> StreamingDecoder<'a> {
                 "code section: function locals"
             );
 
+            // Parse local type groups before taking a mutable borrow on self.module.functions,
+            // because parse_value_type borrows &self and get_mut borrows &mut self.module.
+            let mut local_groups = Vec::new();
+            let mut total_locals: u64 = 0;
+            for _ in 0..local_count {
+                let (count, bytes) = read_leb128_u32(&data[body_start..body_end], body_offset)?;
+                body_offset += bytes;
+
+                if body_offset >= body_size as usize {
+                    return Err(Error::parse_error("Unexpected end of function body"));
+                }
+
+                // Parse value type using the full GC-aware parser to handle
+                // multi-byte ref type encodings (0x63/0x64 + heap type index)
+                let (vt, new_body_offset) = self.parse_value_type(
+                    &data[body_start..body_end],
+                    body_offset,
+                )?;
+                body_offset = new_body_offset;
+
+                // Validate total locals: sum of all declared locals must fit in u32
+                total_locals += count as u64;
+                if total_locals > u32::MAX as u64 {
+                    return Err(Error::parse_error("too many locals"));
+                }
+
+                local_groups.push((count, vt));
+            }
+
             // Code section index i corresponds to module-defined function at index (num_imports + i)
             let func_index = num_imports + i as usize;
             if let Some(func) = self.module.functions.get_mut(func_index) {
-                // Parse local variable declarations and track total count
-                let mut total_locals: u64 = 0;
-
-                for _ in 0..local_count {
-                    let (count, bytes) = read_leb128_u32(&data[body_start..body_end], body_offset)?;
-                    body_offset += bytes;
-
-                    if body_offset >= body_size as usize {
-                        return Err(Error::parse_error("Unexpected end of function body"));
-                    }
-
-                    let value_type = data[body_start + body_offset];
-                    body_offset += 1;
-
-                    // Convert to ValueType and add to locals
-                    let vt = match value_type {
-                        0x7F => kiln_foundation::types::ValueType::I32,
-                        0x7E => kiln_foundation::types::ValueType::I64,
-                        0x7D => kiln_foundation::types::ValueType::F32,
-                        0x7C => kiln_foundation::types::ValueType::F64,
-                        0x7B => kiln_foundation::types::ValueType::V128,
-                        0x70 => kiln_foundation::types::ValueType::FuncRef,
-                        0x6F => kiln_foundation::types::ValueType::ExternRef,
-                        0x69 => kiln_foundation::types::ValueType::ExnRef,
-                        _ => return Err(Error::parse_error("Invalid local type")),
-                    };
-
-                    // Validate total locals: sum of all declared locals must fit in u32
-                    total_locals += count as u64;
-                    if total_locals > u32::MAX as u64 {
-                        return Err(Error::parse_error("too many locals"));
-                    }
-
+                // Apply parsed local declarations to the function
+                for (count, vt) in &local_groups {
                     // Validate total locals against platform limits before allocation
-                    let new_total = func.locals.len() + count as usize;
+                    let new_total = func.locals.len() + *count as usize;
                     if new_total > limits::MAX_FUNCTION_LOCALS {
                         return Err(Error::parse_error(
                             "Function exceeds maximum local count for platform",
@@ -2352,12 +2389,12 @@ impl<'a> StreamingDecoder<'a> {
                         AllocationPhase::Decode,
                         "streaming_decoder:func_locals",
                         "locals",
-                        count as usize
+                        *count as usize
                     );
 
                     // Add 'count' locals of this type
-                    for _ in 0..count {
-                        func.locals.push(vt);
+                    for _ in 0..*count {
+                        func.locals.push(*vt);
                     }
                 }
 

@@ -3709,6 +3709,7 @@ impl Module {
                         limits: KilnLimits { min: 0, max: None },  // Will be resolved via linking
                         shared: true,  // Component Model uses shared memory
                         memory64: false,
+                        page_size: None,
                     };
                     ExternType::Memory(memory_type)
                 },
@@ -3836,6 +3837,7 @@ impl Module {
                 },
                 shared: false,
                 memory64: false,
+                page_size: None,
             };
             runtime_module
                 .push_memory(MemoryWrapper::new(Memory::new(to_core_memory_type(

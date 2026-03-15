@@ -795,6 +795,7 @@ impl WastEngine {
                     limits: Limits { min: 1, max: Some(2) },
                     shared: false,
                     memory64: false,
+                    page_size: None,
                 };
                 validate_memory_import_compatibility(mem_type, &spectest_mem)?;
                 Ok(())
@@ -1208,6 +1209,7 @@ impl WastEngine {
                     limits: core_ty.limits,
                     shared: core_ty.shared,
                     memory64: false,
+                    page_size: None,
                 })
             } else {
                 None

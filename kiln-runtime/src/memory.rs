@@ -517,6 +517,7 @@ impl kiln_foundation::traits::FromBytes for Memory {
             },
             shared: false,
             memory64: false,
+            page_size: None,
         };
         Self::new(to_core_memory_type(&memory_type)).map(|boxed| *boxed)
     }
