@@ -20,7 +20,8 @@ use kiln_runtime::stackless::StacklessEngine;
 // Re-export value conversion utilities from wast_values module
 pub use crate::wast_values::{
     convert_wast_arg_to_value, convert_wast_args_to_values, convert_wast_results_to_values,
-    convert_wast_ret_to_value, is_expected_trap, values_equal,
+    convert_wast_ret_to_value, has_either_alternatives, is_expected_trap,
+    results_match_with_either, values_equal,
 };
 
 /// Minimal WAST execution engine for testing
@@ -79,10 +80,15 @@ impl WastEngine {
         // This catches unknown imports and incompatible types BEFORE instantiation
         self.validate_imports(&module)?;
 
+        // Pre-compute the engine instance ID so ModuleInstance.instance_id matches
+        // the engine's key. This ensures FuncRef.instance_id values stamped during
+        // element initialization correctly identify cross-instance references.
+        let engine_instance_id = self.engine.peek_next_instance_id();
+
         // Create a module instance from the module
         // Use Arc::clone to share the module reference without copying data
         let module_instance = Arc::new(
-            ModuleInstance::new(Arc::clone(&module), 0)
+            ModuleInstance::new(Arc::clone(&module), engine_instance_id)
                 .context("Failed to create module instance")?,
         );
 
@@ -353,6 +359,7 @@ impl WastEngine {
                     let core_mem_type = CoreMemoryType {
                         limits: Limits { min: 1, max: Some(2) },
                         shared: false,
+                        page_size: None,
                     };
 
                     let memory = Memory::new(core_mem_type).map_err(|e| {

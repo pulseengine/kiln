@@ -271,11 +271,19 @@ impl ValueType {
             0x7B => Ok(ValueType::V128),
             0x79 => Ok(ValueType::I16x8),
             0x70 => Ok(ValueType::FuncRef),
+            0x73 => Ok(ValueType::NullFuncRef),  // nofunc
             0x6F => Ok(ValueType::ExternRef),
             0x6E => Ok(ValueType::AnyRef),  // GC: any heap type
             0x6D => Ok(ValueType::EqRef),   // GC: eq heap type
             0x6C => Ok(ValueType::I31Ref),  // GC: i31 heap type
+            0x6B => Ok(ValueType::StructRef(0)),  // GC: struct (abstract, index lost in round-trip)
+            0x6A => Ok(ValueType::ArrayRef(0)),   // GC: array (abstract, index lost in round-trip)
             0x69 => Ok(ValueType::ExnRef),
+            // 0x63 = ref null heaptype, 0x64 = ref heaptype
+            // In round-trip serialization, TypedFuncRef loses its type index
+            // Deserialize as FuncRef since the value representation is identical
+            0x63 => Ok(ValueType::FuncRef),
+            0x64 => Ok(ValueType::FuncRef),
             _ => Err(Error::runtime_execution_error("Invalid value type byte")),
         }
     }
@@ -1078,10 +1086,10 @@ impl Default for CatchHandler {
 
 impl ToBytes for CatchHandler {
     fn serialized_size(&self) -> usize {
-        match self {
-            Self::Catch { .. } | Self::CatchRef { .. } => 1 + 4 + 4, // discriminant + tag_idx + label
-            Self::CatchAll { .. } | Self::CatchAllRef { .. } => 1 + 4, // discriminant + label
-        }
+        // All variants use the same fixed size (1 + 4 + 4 = 9 bytes) so that
+        // BoundedVec, which assumes uniform item sizes, can store any mix of
+        // CatchHandler variants correctly.
+        1 + 4 + 4 // discriminant + tag_idx (or padding) + label
     }
 
     fn to_bytes_with_provider<'a, PStream: crate::MemoryProvider>(
@@ -1102,10 +1110,12 @@ impl ToBytes for CatchHandler {
             }
             Self::CatchAll { label } => {
                 writer.write_u8(0x02)?;
+                writer.write_u32_le(0)?; // padding for uniform size
                 writer.write_u32_le(*label)?;
             }
             Self::CatchAllRef { label } => {
                 writer.write_u8(0x03)?;
+                writer.write_u32_le(0)?; // padding for uniform size
                 writer.write_u32_le(*label)?;
             }
         }
@@ -1131,10 +1141,12 @@ impl FromBytes for CatchHandler {
                 Ok(Self::CatchRef { tag_idx, label })
             }
             0x02 => {
+                let _padding = reader.read_u32_le()?; // skip padding
                 let label = reader.read_u32_le()?;
                 Ok(Self::CatchAll { label })
             }
             0x03 => {
+                let _padding = reader.read_u32_le()?; // skip padding
                 let label = reader.read_u32_le()?;
                 Ok(Self::CatchAllRef { label })
             }

@@ -1534,3 +1534,209 @@ fn wasm_nearest_f64(f: f64) -> f64 {
         result
     }
 }
+
+// ============================================================
+// Relaxed SIMD operations
+// ============================================================
+
+/// `i8x16.relaxed_swizzle`: like i8x16.swizzle but out-of-range indices
+/// have implementation-defined behavior. We use the same behavior as
+/// regular swizzle (return 0 for out-of-range).
+#[inline]
+pub fn i8x16_relaxed_swizzle(a: &[u8; 16], s: &[u8; 16]) -> [u8; 16] {
+    i8x16_swizzle(a, s)
+}
+
+/// `i32x4.relaxed_trunc_f32x4_s`: relaxed truncation of f32x4 to i32x4 signed.
+/// For NaN and out-of-range, behavior is implementation-defined.
+/// We use saturating truncation (same as i32x4.trunc_sat_f32x4_s).
+#[inline]
+pub fn i32x4_relaxed_trunc_f32x4_s(v: &[u8; 16]) -> [u8; 16] {
+    i32x4_trunc_sat_f32x4_s(v)
+}
+
+/// `i32x4.relaxed_trunc_f32x4_u`: relaxed truncation of f32x4 to i32x4 unsigned.
+/// For NaN and out-of-range, behavior is implementation-defined.
+/// We use saturating truncation (same as i32x4.trunc_sat_f32x4_u).
+#[inline]
+pub fn i32x4_relaxed_trunc_f32x4_u(v: &[u8; 16]) -> [u8; 16] {
+    i32x4_trunc_sat_f32x4_u(v)
+}
+
+/// `i32x4.relaxed_trunc_f64x2_s_zero`: relaxed truncation of f64x2 to i32x4
+/// signed with zero extension. For NaN and out-of-range, behavior is
+/// implementation-defined. We use saturating truncation.
+#[inline]
+pub fn i32x4_relaxed_trunc_f64x2_s_zero(v: &[u8; 16]) -> [u8; 16] {
+    i32x4_trunc_sat_f64x2_s_zero(v)
+}
+
+/// `i32x4.relaxed_trunc_f64x2_u_zero`: relaxed truncation of f64x2 to i32x4
+/// unsigned with zero extension. For NaN and out-of-range, behavior is
+/// implementation-defined. We use saturating truncation.
+#[inline]
+pub fn i32x4_relaxed_trunc_f64x2_u_zero(v: &[u8; 16]) -> [u8; 16] {
+    i32x4_trunc_sat_f64x2_u_zero(v)
+}
+
+/// `f32x4.relaxed_madd(a, b, c)` = `a * b + c` per lane (fused multiply-add).
+#[inline]
+pub fn f32x4_relaxed_madd(a: &[u8; 16], b: &[u8; 16], c: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_f32(a, i);
+        let vb = get_f32(b, i);
+        let vc = get_f32(c, i);
+        set_f32(&mut r, i, canonicalize_f32(va.mul_add(vb, vc)));
+    }
+    r
+}
+
+/// `f32x4.relaxed_nmadd(a, b, c)` = `-a * b + c` per lane (negated fused multiply-add).
+#[inline]
+pub fn f32x4_relaxed_nmadd(a: &[u8; 16], b: &[u8; 16], c: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_f32(a, i);
+        let vb = get_f32(b, i);
+        let vc = get_f32(c, i);
+        set_f32(&mut r, i, canonicalize_f32((-va).mul_add(vb, vc)));
+    }
+    r
+}
+
+/// `f64x2.relaxed_madd(a, b, c)` = `a * b + c` per lane (fused multiply-add).
+#[inline]
+pub fn f64x2_relaxed_madd(a: &[u8; 16], b: &[u8; 16], c: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let va = get_f64(a, i);
+        let vb = get_f64(b, i);
+        let vc = get_f64(c, i);
+        set_f64(&mut r, i, canonicalize_f64(va.mul_add(vb, vc)));
+    }
+    r
+}
+
+/// `f64x2.relaxed_nmadd(a, b, c)` = `-a * b + c` per lane (negated fused multiply-add).
+#[inline]
+pub fn f64x2_relaxed_nmadd(a: &[u8; 16], b: &[u8; 16], c: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let va = get_f64(a, i);
+        let vb = get_f64(b, i);
+        let vc = get_f64(c, i);
+        set_f64(&mut r, i, canonicalize_f64((-va).mul_add(vb, vc)));
+    }
+    r
+}
+
+/// Relaxed lane select: for each bit position, if the corresponding bit in `c`
+/// is 1, select the bit from `a`, otherwise select the bit from `b`.
+/// This is identical to v128.bitselect.
+#[inline]
+pub fn relaxed_laneselect(a: &[u8; 16], b: &[u8; 16], c: &[u8; 16]) -> [u8; 16] {
+    v128_bitselect(a, b, c)
+}
+
+/// `f32x4.relaxed_min`: relaxed min where NaN handling is implementation-defined.
+/// We return the second operand when the first is NaN (like x86 minps behavior).
+#[inline]
+pub fn f32x4_relaxed_min(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_f32(a, i);
+        let vb = get_f32(b, i);
+        set_f32(&mut r, i, if va < vb { va } else { vb });
+    }
+    r
+}
+
+/// `f32x4.relaxed_max`: relaxed max where NaN handling is implementation-defined.
+/// We return the second operand when the first is NaN (like x86 maxps behavior).
+#[inline]
+pub fn f32x4_relaxed_max(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let va = get_f32(a, i);
+        let vb = get_f32(b, i);
+        set_f32(&mut r, i, if va > vb { va } else { vb });
+    }
+    r
+}
+
+/// `f64x2.relaxed_min`: relaxed min where NaN handling is implementation-defined.
+#[inline]
+pub fn f64x2_relaxed_min(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let va = get_f64(a, i);
+        let vb = get_f64(b, i);
+        set_f64(&mut r, i, if va < vb { va } else { vb });
+    }
+    r
+}
+
+/// `f64x2.relaxed_max`: relaxed max where NaN handling is implementation-defined.
+#[inline]
+pub fn f64x2_relaxed_max(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..2 {
+        let va = get_f64(a, i);
+        let vb = get_f64(b, i);
+        set_f64(&mut r, i, if va > vb { va } else { vb });
+    }
+    r
+}
+
+/// `i16x8.relaxed_q15mulr_s`: relaxed Q15 fixed-point multiply with rounding.
+/// Same as i16x8.q15mulr_sat_s but behavior for i16::MIN * i16::MIN is
+/// implementation-defined.
+#[inline]
+pub fn i16x8_relaxed_q15mulr_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    i16x8_q15mulr_sat_s(a, b)
+}
+
+/// `i16x8.relaxed_dot_i8x16_i7x16_s`: dot product of signed i8 and unsigned-clamped
+/// i7 (i.e., signed i8 treated as 0..127) lanes, producing i16 results.
+/// Each pair of i8 lanes is multiplied and adjacent products are added.
+#[inline]
+pub fn i16x8_relaxed_dot_i8x16_i7x16_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
+    let mut r = [0u8; 16];
+    for i in 0..8 {
+        let a0 = a[i * 2] as i8 as i16;
+        let a1 = a[i * 2 + 1] as i8 as i16;
+        let b0 = b[i * 2] as i8 as i16;
+        let b1 = b[i * 2 + 1] as i8 as i16;
+        set_i16(&mut r, i, (a0 * b0).wrapping_add(a1 * b1));
+    }
+    r
+}
+
+/// `i32x4.relaxed_dot_i8x16_i7x16_add_s`: dot product of signed i8 and i7 lanes
+/// producing i32 results with accumulator addition. Groups of 4 i8 lanes are
+/// multiplied pairwise with i7 lanes and accumulated into i32 lanes.
+#[inline]
+pub fn i32x4_relaxed_dot_i8x16_i7x16_add_s(
+    a: &[u8; 16],
+    b: &[u8; 16],
+    c: &[u8; 16],
+) -> [u8; 16] {
+    // First compute i16x8 dot products
+    let mut intermediate = [0i16; 8];
+    for i in 0..8 {
+        let a0 = a[i * 2] as i8 as i16;
+        let a1 = a[i * 2 + 1] as i8 as i16;
+        let b0 = b[i * 2] as i8 as i16;
+        let b1 = b[i * 2 + 1] as i8 as i16;
+        intermediate[i] = (a0 * b0).wrapping_add(a1 * b1);
+    }
+    // Then pairwise add to i32x4 and add accumulator
+    let mut r = [0u8; 16];
+    for i in 0..4 {
+        let sum = intermediate[i * 2] as i32 + intermediate[i * 2 + 1] as i32;
+        let acc = get_i32(c, i);
+        set_i32(&mut r, i, sum.wrapping_add(acc));
+    }
+    r
+}

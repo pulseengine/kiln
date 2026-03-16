@@ -640,6 +640,7 @@ impl MemoryValue {
         let core_ty = kiln_runtime::CoreMemoryType {
             limits: ty.limits,
             shared: ty.shared,
+            page_size: ty.page_size,
         };
         let memory = Memory::new(core_ty)?;
         Ok(Self {
@@ -667,6 +668,7 @@ impl MemoryValue {
         let core_ty = kiln_runtime::CoreMemoryType {
             limits: ty.limits,
             shared: ty.shared,
+            page_size: ty.page_size,
         };
         let memory = Memory::new_with_name(core_ty, name)?;
         Ok(Self {

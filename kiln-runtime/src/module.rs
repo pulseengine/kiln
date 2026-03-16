@@ -153,6 +153,7 @@ fn to_core_memory_type(memory_type: KilnMemoryType) -> CoreMemoryType {
     CoreMemoryType {
         limits: memory_type.limits,
         shared: memory_type.shared,
+        page_size: memory_type.page_size,
     }
 }
 
@@ -4752,7 +4753,10 @@ fn value_type_to_u8(vt: KilnValueType) -> u8 {
         KilnValueType::I31Ref => 11,
         KilnValueType::AnyRef => 12,
         KilnValueType::EqRef => 13,
-        _ => 255, // fallback for other types
+        // TypedFuncRef is a concrete function reference type (ref null? $type)
+        // Serialize as FuncRef (4) since the value representation is identical
+        KilnValueType::TypedFuncRef(_, _) => 4,
+        KilnValueType::NullFuncRef => 4,
     }
 }
 

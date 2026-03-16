@@ -620,6 +620,7 @@ pub fn create_shared_memory(
             max: memory_type.max_pages(),
         },
         shared: memory_type.is_shared(),
+        page_size: None,
     };
 
     let memory_impl = Memory::new(core_mem_type)

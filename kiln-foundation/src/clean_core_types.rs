@@ -34,6 +34,10 @@ mod types {
         pub limits: crate::types::Limits,
         /// Whether the memory is shared
         pub shared: bool,
+        /// Custom page size (custom-page-sizes proposal).
+        /// When `Some`, the page size in bytes; must be a power of two and <= 65536.
+        /// When `None`, the standard 65536-byte page size is used.
+        pub page_size: Option<u32>,
     }
 
     /// Clean core WebAssembly table type without provider parameters

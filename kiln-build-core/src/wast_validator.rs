@@ -12,7 +12,7 @@
 
 use anyhow::{Context, Result, anyhow};
 use std::collections::HashSet;
-use kiln_format::module::{ExportKind, Function, Global, ImportDesc, Module};
+use kiln_format::module::{CompositeTypeKind, ExportKind, Function, Global, ImportDesc, Module};
 use kiln_format::pure_format_types::{PureElementInit, PureElementMode, PureElementSegment};
 use kiln_format::types::RefType;
 use kiln_foundation::ValueType;
@@ -537,6 +537,33 @@ impl WastModuleValidator {
                 .get(func_idx as usize)
                 .ok_or_else(|| anyhow!("unknown function"))?;
             Ok(func.type_idx)
+        }
+    }
+
+    /// Look up a GC composite type kind by type index from the module's rec_groups.
+    /// Returns the CompositeTypeKind for the given type index, or None if not found
+    /// in rec_groups (which means it's only a plain function type in module.types).
+    fn get_composite_type_kind(module: &Module, type_idx: u32) -> Option<&CompositeTypeKind> {
+        for group in &module.rec_groups {
+            let start = group.start_type_index;
+            let end = start + group.types.len() as u32;
+            if type_idx >= start && type_idx < end {
+                let local_idx = (type_idx - start) as usize;
+                return Some(&group.types[local_idx].composite_kind);
+            }
+        }
+        None
+    }
+
+    /// Get the number of fields for a struct type, or None if not a struct type.
+    fn get_struct_field_count(module: &Module, type_idx: u32) -> Option<usize> {
+        match Self::get_composite_type_kind(module, type_idx)? {
+            CompositeTypeKind::StructWithFields(fields) => Some(fields.len()),
+            CompositeTypeKind::Struct => {
+                // Abstract struct without parsed fields -- we don't know the count
+                None
+            },
+            _ => None,
         }
     }
 
@@ -1618,6 +1645,91 @@ impl WastModuleValidator {
                     }
 
                     // return_call_indirect is a terminating instruction (like return)
+                    if let Some(frame) = frames.last_mut() {
+                        if frame.reachable {
+                            frame.unreachable_height = Some(frame.stack_height);
+                        }
+                        stack.truncate(frame.stack_height);
+                        frame.reachable = false;
+                    }
+                },
+                0x14 => {
+                    // call_ref $t: [(params...) (ref null $t)] -> [(results...)]
+                    let (type_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                    offset = new_offset;
+
+                    if type_idx as usize >= module.types.len() {
+                        return Err(anyhow!("unknown type"));
+                    }
+
+                    let called_type = &module.types[type_idx as usize];
+                    let frame_height = Self::current_frame_height(&frames);
+
+                    // Pop the typed function reference (top of stack)
+                    Self::pop_type(&mut stack, StackType::Unknown, frame_height, Self::is_unreachable(&frames));
+
+                    // Pop arguments in reverse order
+                    for param in called_type.params.iter().rev() {
+                        let expected = StackType::from_value_type(*param);
+                        if !Self::pop_type(
+                            &mut stack,
+                            expected,
+                            frame_height,
+                            Self::is_unreachable(&frames),
+                        ) {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                    }
+
+                    // Push results
+                    for result in &called_type.results {
+                        stack.push(StackType::from_value_type(*result));
+                    }
+                },
+                0x15 => {
+                    // return_call_ref $t: [(params...) (ref null $t)] -> []
+                    let (type_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                    offset = new_offset;
+
+                    if type_idx as usize >= module.types.len() {
+                        return Err(anyhow!("unknown type"));
+                    }
+
+                    let called_type = &module.types[type_idx as usize];
+
+                    // Verify called function type's results match current function's results
+                    if called_type.results.len() != func_type.results.len() {
+                        return Err(anyhow!("type mismatch"));
+                    }
+                    for (called_result, current_result) in
+                        called_type.results.iter().zip(func_type.results.iter())
+                    {
+                        let called_st = StackType::from_value_type(*called_result);
+                        let current_st = StackType::from_value_type(*current_result);
+                        if !called_st.is_subtype_of(&current_st) && !current_st.is_subtype_of(&called_st) {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                    }
+
+                    let frame_height = Self::current_frame_height(&frames);
+
+                    // Pop the typed function reference (top of stack)
+                    Self::pop_type(&mut stack, StackType::Unknown, frame_height, Self::is_unreachable(&frames));
+
+                    // Pop arguments in reverse order
+                    for param in called_type.params.iter().rev() {
+                        let expected = StackType::from_value_type(*param);
+                        if !Self::pop_type(
+                            &mut stack,
+                            expected,
+                            frame_height,
+                            Self::is_unreachable(&frames),
+                        ) {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                    }
+
+                    // return_call_ref is a terminating instruction
                     if let Some(frame) = frames.last_mut() {
                         if frame.reachable {
                             frame.unreachable_height = Some(frame.stack_height);
@@ -3770,11 +3882,14 @@ impl WastModuleValidator {
                     match sub_opcode {
                         // struct.new $t: [field_types...] -> [(ref $t)]
                         0x00 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            // Pop fields (we don't know how many without type info), push ref
-                            // For now, just push the result - the type section would tell us field count
-                            // but we approximate by not popping (avoids false negatives)
+                            // Pop one value per struct field
+                            if let Some(field_count) = Self::get_struct_field_count(module, type_idx) {
+                                for _ in 0..field_count {
+                                    Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                                }
+                            }
                             stack.push(StackType::Unknown);
                         },
                         // struct.new_default $t: [] -> [(ref $t)]

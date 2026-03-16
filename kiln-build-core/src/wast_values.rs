@@ -54,9 +54,59 @@ pub fn convert_wast_arg_core_to_value(arg: &WastArgCore) -> Result<Value> {
     }
 }
 
-/// Convert WAST expected results to Kiln values for comparison
+/// Convert WAST expected results to Kiln values for comparison.
+/// Note: This does not handle `either` alternatives. Use
+/// `results_match_with_either` for assertions that may contain `either`.
 pub fn convert_wast_results_to_values(results: &[WastRet]) -> Result<Vec<Value>> {
     results.iter().map(convert_wast_ret_to_value).collect()
+}
+
+/// Check if actual results match expected results, handling `either` alternatives.
+/// Returns true if all actual results match the corresponding expected results.
+/// For `either` results, the actual value must match at least one alternative.
+pub fn results_match_with_either(actual_results: &[Value], expected_results: &[WastRet]) -> Result<bool> {
+    if actual_results.len() != expected_results.len() {
+        return Ok(false);
+    }
+    for (actual, expected) in actual_results.iter().zip(expected_results.iter()) {
+        if !value_matches_wast_ret(actual, expected)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// Check if a single actual value matches a WastRet, handling `either`.
+fn value_matches_wast_ret(actual: &Value, expected: &WastRet) -> Result<bool> {
+    match expected {
+        WastRet::Core(core_ret) => value_matches_wast_ret_core(actual, core_ret),
+        _ => Err(anyhow::anyhow!("Unsupported WAST return type")),
+    }
+}
+
+/// Check if a single actual value matches a WastRetCore, handling `either`.
+fn value_matches_wast_ret_core(actual: &Value, expected: &WastRetCore) -> Result<bool> {
+    match expected {
+        WastRetCore::Either(alternatives) => {
+            // The actual value must match at least one alternative
+            for alt in alternatives {
+                if value_matches_wast_ret_core(actual, alt)? {
+                    return Ok(true);
+                }
+            }
+            Ok(false)
+        }
+        other => {
+            // Convert to Value and use standard comparison
+            let expected_value = convert_wast_ret_core_to_value(other)?;
+            Ok(values_equal(actual, &expected_value))
+        }
+    }
+}
+
+/// Check if expected results contain any `either` alternatives.
+pub fn has_either_alternatives(results: &[WastRet]) -> bool {
+    results.iter().any(|r| matches!(r, WastRet::Core(WastRetCore::Either(_))))
 }
 
 /// Convert a single WAST return value to a Kiln value

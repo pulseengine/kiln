@@ -1014,13 +1014,20 @@ impl StacklessEngine {
         let ends_to_skip = original_block_count - 1 - target_block_idx;
         let mut depth = ends_to_skip as i32;
         let mut new_pc = frame.pc; // frame.pc points to instruction after the Call
+        eprintln!("[DEBUG-EXN-HANDLER] ends_to_skip={}, depth={}, starting_pc={}, instructions.len()={}", ends_to_skip, depth, new_pc, instructions.len());
+        eprintln!("[DEBUG-EXN-HANDLER] original_block_count={}, target_block_idx={}, try_block_idx={}", original_block_count, target_block_idx, try_block_idx);
+        eprintln!("[DEBUG-EXN-HANDLER] handler_label={}, handler_is_ref={}", handler_label, handler_is_ref);
+        eprintln!("[DEBUG-EXN-HANDLER] stack_len={}", frame.operand_stack.len());
+        eprintln!("[DEBUG-EXN-HANDLER] block_stack_len={}, block_depth={}", frame.block_stack.len(), frame.block_depth);
         while new_pc < instructions.len() && depth >= 0 {
+            eprintln!("[DEBUG-EXN-HANDLER] scan pc={}, depth={}, instr={:?}", new_pc, depth, core::mem::discriminant(&instructions[new_pc]));
             match &instructions[new_pc] {
                 Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::TryTable { .. } | Instruction::Try { .. } => {
                     depth += 1;
                 }
                 Instruction::End => {
                     if depth == 0 {
+                        eprintln!("[DEBUG-EXN-HANDLER] Found target End at pc={}", new_pc);
                         break;
                     }
                     depth -= 1;
@@ -1030,6 +1037,7 @@ impl StacklessEngine {
             new_pc += 1;
         }
         frame.pc = new_pc;
+        eprintln!("[DEBUG-EXN-HANDLER] Final frame.pc={}", frame.pc);
 
         true
     }
@@ -1232,6 +1240,14 @@ impl StacklessEngine {
         }
     }
 
+    /// Returns the instance ID that will be assigned to the next module
+    /// registered via `set_current_module`. This allows callers to create
+    /// a `ModuleInstance` with the correct engine-assigned ID *before*
+    /// registering it, so that FuncRef `instance_id` values match.
+    pub fn peek_next_instance_id(&self) -> usize {
+        self.next_instance_id.load(Ordering::Relaxed) as usize
+    }
+
     /// Set the current module for execution
     ///
     /// Returns the instance ID that can be used for execution
@@ -1383,6 +1399,7 @@ impl StacklessEngine {
                     resume_state = None;
                 }
                 Err(e) => {
+                    eprintln!("[DEBUG-TRAMPOLINE-ERR] error={}, has_active_exception={}, pending_frames={}", e, self.active_exception.is_some(), pending_frames.len());
                     // Handle exception unwinding through pending frames
                     #[cfg(feature = "std")]
                     if self.active_exception.is_some() {
@@ -1390,6 +1407,10 @@ impl StacklessEngine {
                         self.call_frames_count = self.call_frames_count.saturating_sub(1);
                         let mut found_handler = false;
                         while let Some(mut frame) = pending_frames.pop() {
+                            eprintln!("[DEBUG-TRAMPOLINE-ERR] Checking frame: instance_id={}, func_idx={}, pc={}, block_stack_len={}", frame.instance_id, frame.func_idx, frame.pc, frame.block_stack.len());
+                            for (i, (bt, bpc, bti, _)) in frame.block_stack.iter().enumerate() {
+                                eprintln!("[DEBUG-TRAMPOLINE-ERR]   block_stack[{}] = ({}, pc={}, bti={})", i, bt, bpc, bti);
+                            }
                             if self.find_and_apply_exception_handler(&mut frame) {
                                 // Handler found - resume this frame
                                 current_instance_id = frame.instance_id;
@@ -1769,8 +1790,15 @@ impl StacklessEngine {
                             kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
                             kiln_foundation::ValueType::V128 => Value::V128(V128 { bytes: [0u8; 16] }),
                             kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                            kiln_foundation::ValueType::NullFuncRef => Value::FuncRef(None),
+                            kiln_foundation::ValueType::TypedFuncRef(_, _) => Value::FuncRef(None),
                             kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
                             kiln_foundation::ValueType::ExnRef => Value::ExnRef(None),
+                            kiln_foundation::ValueType::AnyRef => Value::ExternRef(None),
+                            kiln_foundation::ValueType::EqRef => Value::I31Ref(None),
+                            kiln_foundation::ValueType::I31Ref => Value::I31Ref(None),
+                            kiln_foundation::ValueType::StructRef(_) => Value::StructRef(None),
+                            kiln_foundation::ValueType::ArrayRef(_) => Value::ArrayRef(None),
                             _ => Value::I32(0),
                         };
                         locals.push(default_value);
@@ -1792,8 +1820,15 @@ impl StacklessEngine {
                             kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
                             kiln_foundation::ValueType::V128 => Value::V128(V128 { bytes: [0u8; 16] }),
                             kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                            kiln_foundation::ValueType::NullFuncRef => Value::FuncRef(None),
+                            kiln_foundation::ValueType::TypedFuncRef(_, _) => Value::FuncRef(None),
                             kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
                             kiln_foundation::ValueType::ExnRef => Value::ExnRef(None),
+                            kiln_foundation::ValueType::AnyRef => Value::ExternRef(None),
+                            kiln_foundation::ValueType::EqRef => Value::I31Ref(None),
+                            kiln_foundation::ValueType::I31Ref => Value::I31Ref(None),
+                            kiln_foundation::ValueType::StructRef(_) => Value::StructRef(None),
+                            kiln_foundation::ValueType::ArrayRef(_) => Value::ArrayRef(None),
                             _ => Value::I32(0),
                         };
                         for _ in 0..local_decl.count {
@@ -5897,29 +5932,26 @@ impl StacklessEngine {
                                 "[MemoryCopy] Starting copy operation"
                             );
 
-                            // For now, only support same-memory copy (most common case)
-                            // Multi-memory support can be added later
-                            if dst_mem_idx != src_mem_idx {
-                                #[cfg(feature = "tracing")]
-                                trace!("MemoryCopy: cross-memory copy not yet implemented");
-                                return Err(kiln_error::Error::runtime_error("Cross-memory copy not yet implemented"));
-                            }
-
                             // Per WebAssembly spec: bounds check MUST happen before checking size==0
                             // If size == 0 AND (dest > memory.size OR src > memory.size): TRAP
                             // If size > 0 AND ((dest + size) > memory.size OR (src + size) > memory.size): TRAP
                             #[cfg(any(feature = "std", feature = "alloc"))]
                             {
-                                let memory_wrapper = instance.memory(dst_mem_idx)?;
-                                let memory = &memory_wrapper.0;
-                                let memory_size = memory.size_in_bytes() as u32;
+                                let dst_memory_wrapper = instance.memory(dst_mem_idx)?;
+                                let dst_memory = &dst_memory_wrapper.0;
+                                let dst_memory_size = dst_memory.size_in_bytes() as u32;
+
+                                let src_memory_wrapper = instance.memory(src_mem_idx)?;
+                                let src_memory = &src_memory_wrapper.0;
+                                let src_memory_size = src_memory.size_in_bytes() as u32;
+
                                 let dest_u32 = dest as u32;
                                 let src_u32 = src as u32;
                                 let size_u32 = size as u32;
 
                                 if size_u32 == 0 {
                                     // For size 0, check if offsets are within bounds (can be equal to size)
-                                    if dest_u32 > memory_size || src_u32 > memory_size {
+                                    if dest_u32 > dst_memory_size || src_u32 > src_memory_size {
                                         return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                     // No-op for zero size copy after bounds check passes
@@ -5933,22 +5965,23 @@ impl StacklessEngine {
                                 let src_end = src_u32.checked_add(size_u32)
                                     .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
-                                if dest_end > memory_size || src_end > memory_size {
+                                if dest_end > dst_memory_size || src_end > src_memory_size {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
 
                                 let size_usize = size_u32 as usize;
 
-                                // Read source data into temp buffer (handles overlapping regions)
+                                // Read source data into temp buffer, then write to destination
+                                // This correctly handles cross-memory copies and overlapping same-memory copies
                                 let mut buffer = vec![0u8; size_usize];
-                                if let Err(e) = memory.read(src_u32, &mut buffer) {
+                                if let Err(e) = src_memory.read(src_u32, &mut buffer) {
                                     #[cfg(feature = "tracing")]
                                     trace!("MemoryCopy: read failed: {:?}", e);
                                     return Err(e);
                                 }
 
                                 // Write to destination using write_shared (thread-safe)
-                                if let Err(e) = memory.write_shared(dest_u32, &buffer) {
+                                if let Err(e) = dst_memory.write_shared(dest_u32, &buffer) {
                                     #[cfg(feature = "tracing")]
                                     trace!("MemoryCopy: write failed: {:?}", e);
                                     return Err(e);
@@ -6442,6 +6475,8 @@ impl StacklessEngine {
                         let null_value = match value_type {
                             // Standard reference types
                             ValueType::FuncRef => Value::FuncRef(None),
+                            ValueType::NullFuncRef => Value::FuncRef(None),
+                            ValueType::TypedFuncRef(_, _) => Value::FuncRef(None),
                             ValueType::ExternRef => Value::ExternRef(None),
                             // GC abstract heap types (using their Value representations)
                             ValueType::AnyRef => Value::ExternRef(None),   // anyref uses externref repr
@@ -6469,6 +6504,14 @@ impl StacklessEngine {
                                 Value::FuncRef(Some(_)) => 0i32,
                                 Value::ExternRef(None) => 1i32,
                                 Value::ExternRef(Some(_)) => 0i32,
+                                Value::ExnRef(None) => 1i32,
+                                Value::ExnRef(Some(_)) => 0i32,
+                                Value::I31Ref(None) => 1i32,
+                                Value::I31Ref(Some(_)) => 0i32,
+                                Value::StructRef(None) => 1i32,
+                                Value::StructRef(Some(_)) => 0i32,
+                                Value::ArrayRef(None) => 1i32,
+                                Value::ArrayRef(Some(_)) => 0i32,
                                 _ => {
                                     #[cfg(feature = "tracing")]
                                     error!("RefIsNull: expected reference type, got {:?}", ref_val);
@@ -6486,16 +6529,16 @@ impl StacklessEngine {
                         // Pop reference, trap if null, push back if not null
                         if let Some(ref_val) = operand_stack.pop() {
                             match &ref_val {
-                                Value::FuncRef(None) | Value::ExternRef(None) => {
-                                    #[cfg(feature = "tracing")]
-                                    error!("RefAsNonNull: null reference");
+                                Value::FuncRef(None) | Value::ExternRef(None)
+                                | Value::ExnRef(None) | Value::I31Ref(None)
+                                | Value::StructRef(None) | Value::ArrayRef(None) => {
                                     return Err(kiln_error::Error::runtime_trap(
-                                        "null reference in ref.as_non_null",
+                                        "null reference",
                                     ));
                                 }
-                                Value::FuncRef(Some(_)) | Value::ExternRef(Some(_)) => {
-                                    #[cfg(feature = "tracing")]
-                                    trace!("RefAsNonNull: non-null reference");
+                                Value::FuncRef(Some(_)) | Value::ExternRef(Some(_))
+                                | Value::ExnRef(Some(_)) | Value::I31Ref(Some(_))
+                                | Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) => {
                                     operand_stack.push(ref_val);
                                 }
                                 _ => {
@@ -12183,6 +12226,51 @@ fn execute_simd_op(opcode: u32, stack: &mut Vec<Value>) -> Result<()> {
         // f32x4.demote_f64x2_zero / f64x2.promote_low_f32x4
         0x5E => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_demote_f64x2_zero(&a)); }
         0x5F => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_promote_low_f32x4(&a)); }
+
+        // ============================================================
+        // Relaxed SIMD operations (0x100+)
+        // ============================================================
+
+        // i8x16.relaxed_swizzle
+        0x100 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i8x16_relaxed_swizzle(&a, &b)); }
+        // i32x4.relaxed_trunc_f32x4_s
+        0x101 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f32x4_s(&a)); }
+        // i32x4.relaxed_trunc_f32x4_u
+        0x102 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f32x4_u(&a)); }
+        // i32x4.relaxed_trunc_f64x2_s_zero
+        0x103 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f64x2_s_zero(&a)); }
+        // i32x4.relaxed_trunc_f64x2_u_zero
+        0x104 => { let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_trunc_f64x2_u_zero(&a)); }
+        // f32x4.relaxed_madd
+        0x105 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_madd(&a, &b, &c)); }
+        // f32x4.relaxed_nmadd
+        0x106 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_nmadd(&a, &b, &c)); }
+        // f64x2.relaxed_madd
+        0x107 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_madd(&a, &b, &c)); }
+        // f64x2.relaxed_nmadd
+        0x108 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_nmadd(&a, &b, &c)); }
+        // i8x16.relaxed_laneselect
+        0x109 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        // i16x8.relaxed_laneselect
+        0x10A => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        // i32x4.relaxed_laneselect
+        0x10B => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        // i64x2.relaxed_laneselect
+        0x10C => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::relaxed_laneselect(&a, &b, &c)); }
+        // f32x4.relaxed_min
+        0x10D => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_min(&a, &b)); }
+        // f32x4.relaxed_max
+        0x10E => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f32x4_relaxed_max(&a, &b)); }
+        // f64x2.relaxed_min
+        0x10F => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_min(&a, &b)); }
+        // f64x2.relaxed_max
+        0x110 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::f64x2_relaxed_max(&a, &b)); }
+        // i16x8.relaxed_q15mulr_s
+        0x111 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_relaxed_q15mulr_s(&a, &b)); }
+        // i16x8.relaxed_dot_i8x16_i7x16_s
+        0x112 => { let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i16x8_relaxed_dot_i8x16_i7x16_s(&a, &b)); }
+        // i32x4.relaxed_dot_i8x16_i7x16_add_s
+        0x113 => { let c = pop_v128(stack)?; let b = pop_v128(stack)?; let a = pop_v128(stack)?; push_v128(stack, simd_ops::i32x4_relaxed_dot_i8x16_i7x16_add_s(&a, &b, &c)); }
 
         _ => {
             return Err(kiln_error::Error::runtime_execution_error("Unimplemented SIMD opcode"));
