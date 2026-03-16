@@ -1106,41 +1106,41 @@ impl<'a> StreamingDecoder<'a> {
                             None
                         };
 
-                        // Validate regular memory limits
-                        if min > MAX_MEMORY_PAGES {
-                            return Err(Error::validation_error(
-                                "memory size must be at most 65536 pages (4 GiB)",
-                            ));
-                        }
-                        if let Some(max_val) = max {
-                            if max_val > MAX_MEMORY_PAGES {
-                                return Err(Error::validation_error(
-                                    "memory size must be at most 65536 pages (4 GiB)",
-                                ));
-                            }
-                        }
-
                         (min, max)
                     };
 
-                    // Custom page size (bit 3): read page size as LEB128 u32
+                    // Custom page size (bit 3): read page size exponent as LEB128 u32
+                    // Per the custom-page-sizes proposal, the binary encoding stores
+                    // the log2 of the page size (the exponent), not the raw byte count.
+                    // So 0 => 2^0 = 1 byte, 16 => 2^16 = 65536 bytes.
                     let custom_page_size = if (flags & 0x08) != 0 {
-                        let (ps, bytes_read) = read_leb128_u32(data, offset)?;
+                        let (ps_exp, bytes_read) = read_leb128_u32(data, offset)?;
                         offset += bytes_read;
-                        if ps > 65536 {
+                        if ps_exp > 16 {
                             return Err(Error::validation_error(
                                 "custom page size must be at most 65536",
                             ));
                         }
-                        if ps != 0 && (ps & (ps - 1)) != 0 {
-                            return Err(Error::validation_error(
-                                "custom page size must be a power of 2",
-                            ));
-                        }
-                        Some(ps)
+                        Some(1u32 << ps_exp)
                     } else {
                         None
                     };
+
+                    // Validate page count against 4 GiB limit, accounting for custom page size
+                    let page_size_bytes = custom_page_size.unwrap_or(65536) as u64;
+                    let max_allowed_pages = (4u64 * 1024 * 1024 * 1024) / page_size_bytes;
+                    if (min as u64) > max_allowed_pages {
+                        return Err(Error::validation_error(
+                            "memory size must be at most 65536 pages (4 GiB)",
+                        ));
+                    }
+                    if let Some(max_val) = max {
+                        if (max_val as u64) > max_allowed_pages {
+                            return Err(Error::validation_error(
+                                "memory size must be at most 65536 pages (4 GiB)",
+                            ));
+                        }
+                    }
 
                     #[cfg(feature = "tracing")]
                     trace!(import_index = i, min_pages = min, max_pages = ?max, "import: memory");
@@ -1603,37 +1603,38 @@ impl<'a> StreamingDecoder<'a> {
                 return Err(Error::validation_error("shared memory must have maximum"));
             }
 
-            if min > MAX_MEMORY_PAGES {
+            // Custom page size (bit 3): read page size exponent as LEB128 u32
+            // Per the custom-page-sizes proposal, the binary encoding stores
+            // the log2 of the page size (the exponent), not the raw byte count.
+            // So 0 => 2^0 = 1 byte, 16 => 2^16 = 65536 bytes.
+            let custom_page_size = if (flags & 0x08) != 0 {
+                let (ps_exp, bytes_read) = read_leb128_u32(data, offset)?;
+                offset += bytes_read;
+                if ps_exp > 16 {
+                    return Err(Error::validation_error(
+                        "custom page size must be at most 65536",
+                    ));
+                }
+                Some(1u32 << ps_exp)
+            } else {
+                None
+            };
+
+            // Validate page count against 4 GiB limit, accounting for custom page size
+            let page_size_bytes = custom_page_size.unwrap_or(65536) as u64;
+            let max_allowed_pages = (4u64 * 1024 * 1024 * 1024) / page_size_bytes;
+            if (min as u64) > max_allowed_pages {
                 return Err(Error::validation_error(
                     "memory size must be at most 65536 pages (4 GiB)",
                 ));
             }
             if let Some(max_val) = max {
-                if max_val > MAX_MEMORY_PAGES {
+                if (max_val as u64) > max_allowed_pages {
                     return Err(Error::validation_error(
                         "memory size must be at most 65536 pages (4 GiB)",
                     ));
                 }
             }
-
-            // Custom page size (bit 3): read page size as LEB128 u32
-            let custom_page_size = if (flags & 0x08) != 0 {
-                let (ps, bytes_read) = read_leb128_u32(data, offset)?;
-                offset += bytes_read;
-                if ps > 65536 {
-                    return Err(Error::validation_error(
-                        "custom page size must be at most 65536",
-                    ));
-                }
-                if ps != 0 && (ps & (ps - 1)) != 0 {
-                    return Err(Error::validation_error(
-                        "custom page size must be a power of 2",
-                    ));
-                }
-                Some(ps)
-            } else {
-                None
-            };
 
             // Create memory type
             let memory_type = kiln_foundation::types::MemoryType {
@@ -2543,8 +2544,8 @@ impl<'a> StreamingDecoder<'a> {
                 return Err(Error::parse_error("Unexpected end of data section"));
             }
 
-            let tag = data[offset];
-            offset += 1;
+            let (tag, tag_bytes) = read_leb128_u32(data, offset)?;
+            offset += tag_bytes;
 
             let segment = match tag {
                 // Active data segment with implicit memory 0

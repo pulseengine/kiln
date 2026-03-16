@@ -192,6 +192,7 @@ fn to_core_memory_type(memory_type: &MemoryType) -> CoreMemoryType {
     CoreMemoryType {
         limits: memory_type.limits,
         shared: memory_type.shared,
+        page_size: memory_type.page_size,
     }
 }
 
@@ -524,6 +525,29 @@ impl kiln_foundation::traits::FromBytes for Memory {
 }
 
 impl Memory {
+    /// Returns the effective page size in bytes for this memory instance.
+    /// Uses the custom page size from the memory type if set, otherwise
+    /// falls back to the standard WebAssembly page size (65536 bytes).
+    #[must_use]
+    pub fn page_size_bytes(&self) -> usize {
+        self.ty.page_size.map_or(PAGE_SIZE, |ps| ps as usize)
+    }
+
+    /// Returns the maximum number of pages allowed for this memory instance,
+    /// considering the custom page size. With the standard 65536-byte page size
+    /// the maximum is 65536 pages (4 GiB). With smaller custom page sizes the
+    /// maximum number of pages is proportionally larger to keep the 4 GiB limit.
+    #[must_use]
+    fn max_pages_for_page_size(&self) -> u64 {
+        let ps = self.page_size_bytes() as u64;
+        if ps == 0 {
+            // page_size of 0 is invalid per the custom-page-sizes spec
+            return 0;
+        }
+        // 4 GiB / page_size
+        (4u64 * 1024 * 1024 * 1024) / ps
+    }
+
     /// Creates a new memory instance from a type
     ///
     /// # Arguments
@@ -540,36 +564,22 @@ impl Memory {
     pub fn new(ty: CoreMemoryType) -> Result<Box<Self>> {
         let initial_pages = ty.limits.min;
         let maximum_pages_opt = ty.limits.max; // This is Option<u32>
+        let effective_page_size: usize = ty.page_size.map_or(PAGE_SIZE, |ps| ps as usize);
 
         // DEBUG: Log the memory type being used
         #[cfg(feature = "tracing")]
         {
             use kiln_foundation::tracing::info;
-            info!("Creating memory with initial_pages={}, max_pages={:?} from CoreMemoryType",
-                  initial_pages, maximum_pages_opt);
+            info!("Creating memory with initial_pages={}, max_pages={:?}, page_size={} from CoreMemoryType",
+                  initial_pages, maximum_pages_opt, effective_page_size);
         }
 
-        // Wasm MVP allows up to 65536 pages (4GiB).
-        // Binary std/no_std choice
-        // PalMemoryProvider::new will pass these pages to the PageAllocator.
-
-        let verification_level = VerificationLevel::Standard; // Or from config
-
-        // Choose and instantiate the PageAllocator
-        // The cfg attributes here depend on features enabled for the kiln-platform
-        // crate. It's assumed the build system/top-level crate configures these
-        // features for kiln-platform.
-
-        // It's better to create a Box<dyn PageAllocator> or use an enum
-        // Binary std/no_std choice
-        // For compile-time selection based on features, direct instantiation is okay
-        // but leads to more complex cfg blocks.
-        // Let's try to instantiate the provider directly.
+        let verification_level = VerificationLevel::Standard;
 
         // CRITICAL: Create Mutex<SafeMemoryHandler> inline to minimize stack usage
         // The key is to never have the 64KB SafeMemoryHandler as a stack variable
 
-        let current_size_bytes = wasm_offset_to_usize(initial_pages)? * PAGE_SIZE;
+        let current_size_bytes = wasm_offset_to_usize(initial_pages)? * effective_page_size;
 
         // In std mode, use StdProvider which can be dynamically sized
         // In no_std mode, use NoStdProvider with fixed compile-time size
@@ -663,7 +673,7 @@ impl Memory {
     #[must_use]
     pub fn size_in_bytes(&self) -> usize {
         let pages = self.current_pages.load(Ordering::Relaxed);
-        wasm_offset_to_usize(pages).unwrap_or(0) * PAGE_SIZE
+        wasm_offset_to_usize(pages).unwrap_or(0) * self.page_size_bytes()
     }
 
     /// A reference to the memory data as a `Vec<u8>`
@@ -872,13 +882,13 @@ impl Memory {
             }
         }
 
-        // Check against the absolute maximum (4GB)
-        if new_page_count > MAX_PAGES {
+        // Check against the absolute maximum for this page size (4GB total)
+        if (new_page_count as u64) > self.max_pages_for_page_size() {
             return Err(Error::resource_limit_exceeded("Runtime operation error"));
         }
 
         // Calculate the new size in bytes and resize through Mutex
-        let new_size = wasm_offset_to_usize(new_page_count)? * PAGE_SIZE;
+        let new_size = wasm_offset_to_usize(new_page_count)? * self.page_size_bytes();
 
         // Resize the underlying data
         #[cfg(feature = "std")]
@@ -931,13 +941,13 @@ impl Memory {
             }
         }
 
-        // Check against the absolute maximum (4GB)
-        if new_page_count > MAX_PAGES {
+        // Check against the absolute maximum for this page size (4GB total)
+        if (new_page_count as u64) > self.max_pages_for_page_size() {
             return Err(Error::resource_limit_exceeded("Runtime operation error"));
         }
 
         // Calculate the new size in bytes and resize through Mutex
-        let new_size = wasm_offset_to_usize(new_page_count)? * PAGE_SIZE;
+        let new_size = wasm_offset_to_usize(new_page_count)? * self.page_size_bytes();
 
         // Resize the underlying data
         #[cfg(feature = "std")]

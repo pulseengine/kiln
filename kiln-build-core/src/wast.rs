@@ -27,7 +27,8 @@ use crate::{
     diagnostics::{Diagnostic, Position, Range, Severity},
     wast_execution::{
         WastEngine, convert_wast_args_to_values, convert_wast_results_to_values,
-        execute_wast_execute, execute_wast_invoke, is_expected_trap, values_equal,
+        execute_wast_execute, execute_wast_invoke, has_either_alternatives, is_expected_trap,
+        results_match_with_either, values_equal,
     },
 };
 
@@ -628,49 +629,41 @@ impl WastTestRunner {
         // Execute the function using the real engine
         match execute_wast_execute(&mut self.engine, exec) {
             Ok(actual_results) => {
-                // Convert expected results
-                match convert_wast_results_to_values(results) {
-                    Ok(expected_results) => {
-                        // Compare results
-                        if actual_results.len() == expected_results.len() {
-                            let results_match = actual_results
-                                .iter()
-                                .zip(expected_results.iter())
-                                .all(|(actual, expected)| {
-                                    let is_equal = values_equal(actual, expected);
-                                    is_equal
-                                });
-
-                            if results_match {
-                                self.stats.passed += 1;
-                                Ok(WastDirectiveInfo {
-                                    test_type: WastTestType::Correctness,
-                                    directive_name: "assert_return".to_string(),
-                                    requires_module_state: true,
-                                    modifies_engine_state: false,
-                                    result: TestResult::Passed,
-                                    error_message: None,
-                                })
-                            } else {
-                                self.stats.failed += 1;
-                                let func_name = match exec {
-                                    WastExecute::Invoke(invoke) => invoke.name.to_string(),
-                                    WastExecute::Get { global, .. } => format!("get {}", global),
-                                    _ => "unknown".to_string(),
-                                };
-                                Ok(WastDirectiveInfo {
-                                    test_type: WastTestType::Correctness,
-                                    directive_name: "assert_return".to_string(),
-                                    requires_module_state: true,
-                                    modifies_engine_state: false,
-                                    result: TestResult::Failed,
-                                    error_message: Some(format!(
-                                        "Function '{}': actual={:?}, expected={:?}",
-                                        func_name, actual_results, expected_results
-                                    )),
-                                })
-                            }
-                        } else {
+                // Check if any expected results use `either` alternatives
+                if has_either_alternatives(results) {
+                    // Use either-aware comparison
+                    match results_match_with_either(&actual_results, results) {
+                        Ok(true) => {
+                            self.stats.passed += 1;
+                            Ok(WastDirectiveInfo {
+                                test_type: WastTestType::Correctness,
+                                directive_name: "assert_return".to_string(),
+                                requires_module_state: true,
+                                modifies_engine_state: false,
+                                result: TestResult::Passed,
+                                error_message: None,
+                            })
+                        }
+                        Ok(false) => {
+                            self.stats.failed += 1;
+                            let func_name = match exec {
+                                WastExecute::Invoke(invoke) => invoke.name.to_string(),
+                                WastExecute::Get { global, .. } => format!("get {}", global),
+                                _ => "unknown".to_string(),
+                            };
+                            Ok(WastDirectiveInfo {
+                                test_type: WastTestType::Correctness,
+                                directive_name: "assert_return".to_string(),
+                                requires_module_state: true,
+                                modifies_engine_state: false,
+                                result: TestResult::Failed,
+                                error_message: Some(format!(
+                                    "Function '{}': actual={:?}, matched no alternative in either",
+                                    func_name, actual_results
+                                )),
+                            })
+                        }
+                        Err(e) => {
                             self.stats.failed += 1;
                             Ok(WastDirectiveInfo {
                                 test_type: WastTestType::Correctness,
@@ -679,27 +672,86 @@ impl WastTestRunner {
                                 modifies_engine_state: false,
                                 result: TestResult::Failed,
                                 error_message: Some(format!(
-                                    "Result count mismatch: actual={}, expected={}",
-                                    actual_results.len(),
-                                    expected_results.len()
+                                    "Failed to evaluate either alternatives: {}",
+                                    e
                                 )),
                             })
                         }
-                    },
-                    Err(e) => {
-                        self.stats.failed += 1;
-                        Ok(WastDirectiveInfo {
-                            test_type: WastTestType::Correctness,
-                            directive_name: "assert_return".to_string(),
-                            requires_module_state: true,
-                            modifies_engine_state: false,
-                            result: TestResult::Failed,
-                            error_message: Some(format!(
-                                "Failed to convert expected results: {}",
-                                e
-                            )),
-                        })
-                    },
+                    }
+                } else {
+                    // Standard comparison without `either`
+                    match convert_wast_results_to_values(results) {
+                        Ok(expected_results) => {
+                            // Compare results
+                            if actual_results.len() == expected_results.len() {
+                                let results_match = actual_results
+                                    .iter()
+                                    .zip(expected_results.iter())
+                                    .all(|(actual, expected)| {
+                                        let is_equal = values_equal(actual, expected);
+                                        is_equal
+                                    });
+
+                                if results_match {
+                                    self.stats.passed += 1;
+                                    Ok(WastDirectiveInfo {
+                                        test_type: WastTestType::Correctness,
+                                        directive_name: "assert_return".to_string(),
+                                        requires_module_state: true,
+                                        modifies_engine_state: false,
+                                        result: TestResult::Passed,
+                                        error_message: None,
+                                    })
+                                } else {
+                                    self.stats.failed += 1;
+                                    let func_name = match exec {
+                                        WastExecute::Invoke(invoke) => invoke.name.to_string(),
+                                        WastExecute::Get { global, .. } => format!("get {}", global),
+                                        _ => "unknown".to_string(),
+                                    };
+                                    Ok(WastDirectiveInfo {
+                                        test_type: WastTestType::Correctness,
+                                        directive_name: "assert_return".to_string(),
+                                        requires_module_state: true,
+                                        modifies_engine_state: false,
+                                        result: TestResult::Failed,
+                                        error_message: Some(format!(
+                                            "Function '{}': actual={:?}, expected={:?}",
+                                            func_name, actual_results, expected_results
+                                        )),
+                                    })
+                                }
+                            } else {
+                                self.stats.failed += 1;
+                                Ok(WastDirectiveInfo {
+                                    test_type: WastTestType::Correctness,
+                                    directive_name: "assert_return".to_string(),
+                                    requires_module_state: true,
+                                    modifies_engine_state: false,
+                                    result: TestResult::Failed,
+                                    error_message: Some(format!(
+                                        "Result count mismatch: actual={}, expected={}",
+                                        actual_results.len(),
+                                        expected_results.len()
+                                    )),
+                                })
+                            }
+                        },
+                        Err(e) => {
+                            self.stats.failed += 1;
+                            Ok(WastDirectiveInfo {
+                                test_type: WastTestType::Correctness,
+                                directive_name: "assert_return".to_string(),
+                                requires_module_state: true,
+                                modifies_engine_state: false,
+                                result: TestResult::Failed,
+                                error_message: Some(format!(
+                                    "Failed to convert expected results: {}",
+                                    e
+                                )),
+                            })
+                        },
+                    }
                 }
             },
             Err(e) => {
@@ -1795,6 +1847,20 @@ fn contains_validation_keyword(error_msg: &str, expected_msg: &str) -> bool {
 }
 
 fn contains_malformed_keyword(error_msg: &str, expected_msg: &str) -> bool {
+    // LEB128-related errors: "integer representation too long", "integer too large",
+    // and "varuint32 overflow" are all LEB128 validation errors. If the expected
+    // message is one of these and the actual error is also one of these, accept it.
+    let leb128_errors = [
+        "integer representation too long",
+        "integer too large",
+        "varuint32 overflow",
+    ];
+    let expected_is_leb128 = leb128_errors.iter().any(|e| expected_msg.contains(e));
+    let error_is_leb128 = leb128_errors.iter().any(|e| error_msg.contains(e));
+    if expected_is_leb128 && error_is_leb128 {
+        return true;
+    }
+
     let malformed_keywords = [
         "malformed",
         "unexpected end",

@@ -111,8 +111,8 @@ fn parse_data(
         ));
     }
 
-    let tag = bytes[offset];
-    let mut current_offset = offset + 1;
+    let (tag, tag_bytes) = binary::read_leb128_u32(bytes, offset)?;
+    let mut current_offset = offset + tag_bytes;
 
     match tag {
         // Active data segment with implicit memory 0

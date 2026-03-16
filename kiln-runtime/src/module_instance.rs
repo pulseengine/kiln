@@ -618,9 +618,16 @@ impl ModuleInstance {
                     kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
                     kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
                     kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
+                    kiln_foundation::ValueType::NullFuncRef => Value::FuncRef(None),
+                    kiln_foundation::ValueType::TypedFuncRef(_, _) => Value::FuncRef(None),
                     kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
                     kiln_foundation::ValueType::V128 => Value::V128(kiln_foundation::values::V128 { bytes: [0u8; 16] }),
                     kiln_foundation::ValueType::ExnRef => Value::ExnRef(None),
+                    kiln_foundation::ValueType::AnyRef => Value::ExternRef(None),
+                    kiln_foundation::ValueType::EqRef => Value::I31Ref(None),
+                    kiln_foundation::ValueType::I31Ref => Value::I31Ref(None),
+                    kiln_foundation::ValueType::StructRef(_) => Value::StructRef(None),
+                    kiln_foundation::ValueType::ArrayRef(_) => Value::ArrayRef(None),
                     _ => Value::I32(0),
                 };
                 let placeholder = Global::new(global_type.value_type, global_type.mutable, default_value)
