@@ -248,7 +248,9 @@ impl TableSet {
 
         // Validate that value is a reference type
         match value {
-            Value::FuncRef(_) | Value::ExternRef(_) => {},
+            Value::FuncRef(_) | Value::ExternRef(_)
+            | Value::I31Ref(_) | Value::StructRef(_)
+            | Value::ArrayRef(_) | Value::Ref(_) => {},
             _ => {
                 return Err(Error::type_error(
                     "table.set value must be a reference type",
@@ -340,7 +342,9 @@ impl TableGrow {
 
         // Validate that init_value is a reference type
         match init_value {
-            Value::FuncRef(_) | Value::ExternRef(_) => {},
+            Value::FuncRef(_) | Value::ExternRef(_)
+            | Value::I31Ref(_) | Value::StructRef(_)
+            | Value::ArrayRef(_) | Value::Ref(_) => {},
             _ => {
                 return Err(Error::type_error(
                     "table.grow init value must be a reference type",
@@ -414,7 +418,9 @@ impl TableFill {
 
         // Validate that value is a reference type
         match value {
-            Value::FuncRef(_) | Value::ExternRef(_) => {},
+            Value::FuncRef(_) | Value::ExternRef(_)
+            | Value::I31Ref(_) | Value::StructRef(_)
+            | Value::ArrayRef(_) | Value::Ref(_) => {},
             _ => {
                 return Err(Error::type_error(
                     "table.fill value must be a reference type",

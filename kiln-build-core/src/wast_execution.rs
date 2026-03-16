@@ -90,6 +90,11 @@ impl WastEngine {
         // This must happen before populate_memories_from_module() which adds defined memories
         Self::resolve_spectest_memory_imports(&module, &module_instance)?;
 
+        // Resolve memory imports from registered modules (e.g., "Mm" "mem")
+        // This must also happen before populate_memories_from_module() because
+        // imported memories come before defined memories in the index space
+        self.resolve_registered_memory_imports(&module, &module_instance)?;
+
         // Initialize module instance resources (memories, globals, tables, data segments, etc.)
         module_instance
             .populate_memories_from_module()
@@ -162,7 +167,17 @@ impl WastEngine {
         self.engine.register_instance_name(instance_idx, &module_name);
 
         // Set as current module
-        self.current_module = Some(module);
+        self.current_module = Some(Arc::clone(&module));
+
+        // Execute the start function if one is defined
+        // Per the WebAssembly spec, the start function runs after all initialization
+        // (memories, tables, globals, data segments, element segments are all set up)
+        if let Some(start_idx) = module.start {
+            self.engine.reset_call_depth();
+            self.engine
+                .execute(instance_idx, start_idx as usize, vec![])
+                .map_err(|e| anyhow::anyhow!("start function trapped: {}", e))?;
+        }
 
         Ok(())
     }
@@ -528,7 +543,74 @@ impl WastEngine {
         Ok(())
     }
 
+    /// Resolve memory imports from registered modules
+    /// This handles cross-module memory sharing where a module imports a memory
+    /// exported by another registered module (e.g., `(import "Mm" "mem" (memory 1))`)
+    /// Memory imports must be resolved BEFORE populate_memories_from_module() because
+    /// imported memories come before defined memories in the index space.
+    fn resolve_registered_memory_imports(
+        &self,
+        module: &Module,
+        module_instance: &Arc<kiln_runtime::module_instance::ModuleInstance>,
+    ) -> Result<()> {
+        use kiln_runtime::module::RuntimeImportDesc;
+
+        let mut memory_import_idx = 0usize;
+
+        for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
+            // Check if this is a memory import
+            if let Some(RuntimeImportDesc::Memory(_)) = module.import_types.get(i) {
+                // Skip spectest imports (handled separately)
+                if mod_name == "spectest" {
+                    memory_import_idx += 1;
+                    continue;
+                }
+
+                // Look up the registered module
+                if let Some(source_module_arc) = self.modules.get(mod_name) {
+                    // Find the exported memory in the source module
+                    let bounded_field =
+                        kiln_foundation::bounded::BoundedString::<256>::from_str_truncate(
+                            field_name,
+                        )
+                        .map_err(|e| anyhow::anyhow!("Field name too long: {:?}", e))?;
+
+                    if let Some(export) = source_module_arc.exports.get(&bounded_field) {
+                        if export.kind == kiln_runtime::module::ExportKind::Memory {
+                            let source_mem_idx = export.index as usize;
+
+                            // Get the source module instance to access its memory
+                            if let Some(source_instance_id) = self.instance_ids.get(mod_name) {
+                                if let Some(source_instance) = self.engine.get_instance(*source_instance_id) {
+                                    if let Ok(memory_wrapper) = source_instance.memory(source_mem_idx as u32) {
+                                        // Share the memory (clone the Arc, not the data)
+                                        module_instance
+                                            .set_memory(memory_import_idx, memory_wrapper)
+                                            .map_err(|e| {
+                                                anyhow::anyhow!(
+                                                    "Failed to set imported memory: {:?}",
+                                                    e
+                                                )
+                                            })?;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                memory_import_idx += 1;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Resolve global imports from registered modules (like "G")
+    ///
+    /// For mutable globals, we share the same underlying Arc so mutations
+    /// in one module are visible in others (per the WebAssembly spec).
+    /// For immutable globals, we copy the value since it cannot change.
     fn resolve_registered_module_imports(
         &self,
         module: &Module,
@@ -540,16 +622,9 @@ impl WastEngine {
 
         let mut global_import_idx = 0usize;
 
-        for (mod_name, field_name) in module.import_order.iter() {
-            // Count this if it's a global import
-            if global_import_idx >= module.global_import_types.len() {
-                break;
-            }
-
-            // Check if this is a global import by checking if it matches our expected position
-            let is_global = module.global_import_types.get(global_import_idx).is_some();
-
-            if is_global {
+        for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
+            // Check if this is a global import using import_types
+            if let Some(kiln_runtime::module::RuntimeImportDesc::Global(_)) = module.import_types.get(i) {
                 // Skip spectest imports (handled separately)
                 if mod_name == "spectest" {
                     global_import_idx += 1;
@@ -568,36 +643,55 @@ impl WastEngine {
                     if let Some(export) = source_module.exports.get(&bounded_field) {
                         if export.kind == kiln_runtime::module::ExportKind::Global {
                             let source_global_idx = export.index as usize;
+                            let global_type = &module.global_import_types[global_import_idx];
 
-                            // Get the value from the source module's global
-                            if let Ok(global_wrapper) = source_module.globals.get(source_global_idx)
-                            {
-                                if let Ok(guard) = global_wrapper.0.read() {
-                                    let value = guard.get();
-                                    let global_type =
-                                        &module.global_import_types[global_import_idx];
+                            if global_type.mutable {
+                                // Mutable globals: share the Arc from the source instance
+                                // so mutations are visible across modules
+                                if let Some(source_instance_id) = self.instance_ids.get(mod_name) {
+                                    if let Some(source_instance) = self.engine.get_instance(*source_instance_id) {
+                                        if let Ok(shared_wrapper) = source_instance.global(source_global_idx as u32) {
+                                            module_instance
+                                                .set_global(global_import_idx, shared_wrapper)
+                                                .map_err(|e| {
+                                                    anyhow::anyhow!(
+                                                        "Failed to set imported mutable global: {:?}",
+                                                        e
+                                                    )
+                                                })?;
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Immutable globals: copy the current value
+                                if let Some(source_instance_id) = self.instance_ids.get(mod_name) {
+                                    if let Some(source_instance) = self.engine.get_instance(*source_instance_id) {
+                                        if let Ok(source_wrapper) = source_instance.global(source_global_idx as u32) {
+                                            if let Ok(guard) = source_wrapper.0.read() {
+                                                let value = guard.get();
+                                                let global = Global::new(
+                                                    global_type.value_type,
+                                                    global_type.mutable,
+                                                    value.clone(),
+                                                )
+                                                .map_err(|e| {
+                                                    anyhow::anyhow!("Failed to create imported global: {:?}", e)
+                                                })?;
 
-                                    // Create a new global with the resolved value
-                                    let global = Global::new(
-                                        global_type.value_type,
-                                        global_type.mutable,
-                                        value.clone(),
-                                    )
-                                    .map_err(|e| {
-                                        anyhow::anyhow!("Failed to create imported global: {:?}", e)
-                                    })?;
-
-                                    module_instance
-                                        .set_global(
-                                            global_import_idx,
-                                            GlobalWrapper(StdArc::new(RwLock::new(global))),
-                                        )
-                                        .map_err(|e| {
-                                            anyhow::anyhow!(
-                                                "Failed to set imported global: {:?}",
-                                                e
-                                            )
-                                        })?;
+                                                module_instance
+                                                    .set_global(
+                                                        global_import_idx,
+                                                        GlobalWrapper(StdArc::new(RwLock::new(global))),
+                                                    )
+                                                    .map_err(|e| {
+                                                        anyhow::anyhow!(
+                                                            "Failed to set imported global: {:?}",
+                                                            e
+                                                        )
+                                                    })?;
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1410,12 +1504,16 @@ pub fn execute_wast_invoke(engine: &mut WastEngine, invoke: &WastInvoke) -> Resu
 }
 
 /// Helper function to execute a WAST execute directive
-pub fn execute_wast_execute(engine: &mut WastEngine, execute: &WastExecute) -> Result<Vec<Value>> {
+pub fn execute_wast_execute(engine: &mut WastEngine, execute: &mut WastExecute) -> Result<Vec<Value>> {
     match execute {
         WastExecute::Invoke(invoke) => execute_wast_invoke(engine, invoke),
-        WastExecute::Wat(_) => {
-            // WAT modules need to be compiled and executed
-            Err(anyhow::anyhow!("WAT execution not yet implemented"))
+        WastExecute::Wat(wat) => {
+            // WAT module: encode to binary, load, and execute start function
+            // This is used in assert_trap/assert_return with inline (module ...) definitions
+            // load_module handles start function execution per the WebAssembly spec
+            let binary = wat.encode().context("Failed to encode WAT module to binary")?;
+            engine.load_module(None, &binary)?;
+            Ok(vec![])
         },
         WastExecute::Get { module, global, .. } => {
             // Global variable access
@@ -1487,9 +1585,9 @@ pub fn run_simple_wast_test(wast_content: &str) -> Result<()> {
                     ));
                 },
             },
-            WastDirective::AssertTrap { exec, message, .. } => {
+            WastDirective::AssertTrap { mut exec, message, .. } => {
                 // Test that execution traps with expected error
-                match execute_wast_execute(&mut engine, &exec) {
+                match execute_wast_execute(&mut engine, &mut exec) {
                     Err(_) => {
                         // Expected trap occurred
                     },

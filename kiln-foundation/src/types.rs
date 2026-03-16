@@ -1692,6 +1692,16 @@ pub enum Instruction<P: MemoryProvider + Clone + core::fmt::Debug + PartialEq + 
     I64Extend16S,
     I64Extend32S,
 
+    // Wide-arithmetic operations (0xFC prefix, sub-opcodes 0x13-0x16)
+    /// i64.add128: [i64 i64 i64 i64] -> [i64 i64] — 128-bit addition
+    I64Add128,
+    /// i64.sub128: [i64 i64 i64 i64] -> [i64 i64] — 128-bit subtraction
+    I64Sub128,
+    /// i64.mul_wide_s: [i64 i64] -> [i64 i64] — signed 64x64->128 multiply
+    I64MulWideS,
+    /// i64.mul_wide_u: [i64 i64] -> [i64 i64] — unsigned 64x64->128 multiply
+    I64MulWideU,
+
     // Reference operations
     /// ref.null creates a null reference of the specified type.
     /// Uses ValueType to support all GC reference types (anyref, exnref, etc.)
@@ -2115,10 +2125,10 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq + D
                 checksum.update_slice(&[0xD1]); // ref.is_null opcode
             },
             Instruction::RefAsNonNull => {
-                checksum.update_slice(&[0xD3]); // ref.as_non_null opcode
+                checksum.update_slice(&[0xD4]); // ref.as_non_null opcode
             },
             Instruction::RefEq => {
-                checksum.update_slice(&[0xD2]); // ref.eq opcode
+                checksum.update_slice(&[0xD3]); // ref.eq opcode
             },
             Instruction::LocalGet(idx)
             | Instruction::LocalSet(idx)
@@ -2583,8 +2593,8 @@ impl<PInstr: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + E
                 writer.write_u32_le(*label_idx)?;
             },
             Instruction::RefIsNull => writer.write_u8(0xD1)?, // ref.is_null opcode
-            Instruction::RefAsNonNull => writer.write_u8(0xD3)?, // ref.as_non_null opcode
-            Instruction::RefEq => writer.write_u8(0xD2)?,     // ref.eq opcode
+            Instruction::RefAsNonNull => writer.write_u8(0xD4)?, // ref.as_non_null opcode
+            Instruction::RefEq => writer.write_u8(0xD3)?,     // ref.eq opcode
             Instruction::LocalGet(idx) => {
                 writer.write_u8(0x20)?;
                 writer.write_u32_le(*idx)?;

@@ -2877,10 +2877,26 @@ impl WastModuleValidator {
                         0x70 | -16 => stack.push(StackType::NullFuncRef),
                         // nofunc → NullFuncRef
                         0x73 | -13 => stack.push(StackType::NullFuncRef),
-                        // extern, noextern → ExternRef
-                        0x6F | -17 | 0x72 | -14 => stack.push(StackType::ExternRef),
-                        // exn → ExnRef
-                        0x69 | -23 => stack.push(StackType::ExnRef),
+                        // extern → NullExternRef
+                        0x6F | -17 => stack.push(StackType::NullExternRef),
+                        // noextern → NullExternRef
+                        0x72 | -14 => stack.push(StackType::NullExternRef),
+                        // exn → NullExnRef
+                        0x69 | -23 => stack.push(StackType::NullExnRef),
+                        // noexn → NullExnRef
+                        0x74 | -12 => stack.push(StackType::NullExnRef),
+                        // any → NoneRef (null any is bottom of any hierarchy)
+                        0x6E | -18 => stack.push(StackType::NoneRef),
+                        // eq → NoneRef (null eq is subtype of eqref)
+                        0x6D | -19 => stack.push(StackType::NoneRef),
+                        // i31 → NoneRef
+                        0x6C | -20 => stack.push(StackType::NoneRef),
+                        // struct → NoneRef
+                        0x6B | -21 => stack.push(StackType::NoneRef),
+                        // array → NoneRef
+                        0x6A | -22 => stack.push(StackType::NoneRef),
+                        // none → NoneRef (bottom of any hierarchy)
+                        0x71 | -15 => stack.push(StackType::NoneRef),
                         // Concrete type index → nullable typed reference
                         _ if heap_type_val >= 0 => {
                             stack.push(StackType::TypedFuncRef(heap_type_val as u32, true));
@@ -2926,6 +2942,86 @@ impl WastModuleValidator {
                     // function's type. This is a non-nullable typed function reference.
                     let func_type_idx = Self::get_function_type_idx(module, func_idx)?;
                     stack.push(StackType::TypedFuncRef(func_type_idx, false));
+                },
+
+                // ref.eq (0xD3): [eqref eqref] -> [i32]
+                0xD3 => {
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+                    // Pop two eqref values. We accept any subtype of eqref (i31, struct, array, eq, none)
+                    // as well as Unknown for polymorphic typing.
+                    for _ in 0..2 {
+                        if !unreachable {
+                            if stack.len() <= frame_height {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            let val = stack.pop().unwrap();
+                            if val != StackType::Unknown
+                                && !val.is_subtype_of(&StackType::EqRef)
+                            {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                        }
+                    }
+                    stack.push(StackType::I32);
+                },
+
+                // ref.as_non_null (0xD4): [ref] -> [ref]
+                0xD4 => {
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+                    if !unreachable {
+                        if stack.len() <= frame_height {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        let ref_type = stack.pop().unwrap();
+                        if !ref_type.is_reference() && ref_type != StackType::Unknown {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        // Push back the same type (now guaranteed non-null)
+                        stack.push(ref_type);
+                    } else {
+                        stack.push(StackType::Unknown);
+                    }
+                },
+
+                // br_on_null (0xD5): [t* ref] -> [t*]
+                0xD5 => {
+                    let (_label_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                    offset = new_offset;
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+                    // Pop a reference value; if null, branch to label
+                    if !unreachable {
+                        if stack.len() <= frame_height {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        let ref_type = stack.pop().unwrap();
+                        if !ref_type.is_reference() && ref_type != StackType::Unknown {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        // On fall-through, the ref is non-null, push it back
+                        stack.push(ref_type);
+                    }
+                },
+
+                // br_on_non_null (0xD6): [t* ref] -> [t*]
+                0xD6 => {
+                    let (_label_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                    offset = new_offset;
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+                    // Pop a reference value; if non-null, branch to label with the ref
+                    if !unreachable {
+                        if stack.len() <= frame_height {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        let ref_type = stack.pop().unwrap();
+                        if !ref_type.is_reference() && ref_type != StackType::Unknown {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        // On fall-through, the ref was null, so nothing pushed
+                    }
                 },
 
                 // Multi-byte prefix (0xFC) - saturating truncations, bulk memory, etc.
@@ -3269,6 +3365,27 @@ impl WastModuleValidator {
                                 return Err(anyhow!("type mismatch"));
                             }
                         },
+                        // Wide-arithmetic (0xFC 0x13-0x16)
+                        0x13 | 0x14 => {
+                            // i64.add128 / i64.sub128: [i64 i64 i64 i64] -> [i64 i64]
+                            let frame_height = Self::current_frame_height(&frames);
+                            let unreachable = Self::is_unreachable(&frames);
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) { return Err(anyhow!("type mismatch")); }
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) { return Err(anyhow!("type mismatch")); }
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) { return Err(anyhow!("type mismatch")); }
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) { return Err(anyhow!("type mismatch")); }
+                            stack.push(StackType::I64);
+                            stack.push(StackType::I64);
+                        },
+                        0x15 | 0x16 => {
+                            // i64.mul_wide_s / i64.mul_wide_u: [i64 i64] -> [i64 i64]
+                            let frame_height = Self::current_frame_height(&frames);
+                            let unreachable = Self::is_unreachable(&frames);
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) { return Err(anyhow!("type mismatch")); }
+                            if !Self::pop_type(&mut stack, StackType::I64, frame_height, unreachable) { return Err(anyhow!("type mismatch")); }
+                            stack.push(StackType::I64);
+                            stack.push(StackType::I64);
+                        },
                         // Unknown 0xFC sub-opcode - skip
                         _ => {},
                     }
@@ -3591,7 +3708,7 @@ impl WastModuleValidator {
                             }
                             stack.push(StackType::V128);
                         },
-                        // All other ops: classify as unary [v128]->[v128] or binary [v128,v128]->[v128]
+                        // All other ops: classify as unary, binary, or ternary
                         _ => {
                             let is_unary = matches!(simd_opcode,
                                 0x4D | 0x5E | 0x5F |
@@ -3599,14 +3716,32 @@ impl WastModuleValidator {
                                 0x80 | 0x81 | 0x87..=0x8A | 0x94 |
                                 0xA0 | 0xA1 | 0xA7..=0xAA |
                                 0xC0 | 0xC1 | 0xC7..=0xCA |
-                                0xE0..=0xE3 | 0xEC..=0xEF | 0xF8..=0xFF
+                                0xE0..=0xE3 | 0xEC..=0xEF | 0xF8..=0xFF |
+                                // Relaxed SIMD unary: relaxed trunc [v128] -> [v128]
+                                0x101..=0x104
                             );
-                            if is_unary {
+                            // Relaxed SIMD ternary [v128, v128, v128] -> [v128]:
+                            // relaxed_madd/nmadd (0x105-0x108), relaxed_laneselect (0x109-0x10C),
+                            // relaxed_dot_i8x16_i7x16_add_s (0x113)
+                            let is_ternary = matches!(simd_opcode,
+                                0x105..=0x10C | 0x113
+                            );
+                            if is_ternary {
+                                for _ in 0..3 {
+                                    if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
+                                        return Err(anyhow!("type mismatch"));
+                                    }
+                                }
+                                stack.push(StackType::V128);
+                            } else if is_unary {
                                 if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
                                     return Err(anyhow!("type mismatch"));
                                 }
                                 stack.push(StackType::V128);
                             } else {
+                                // Binary [v128, v128] -> [v128] (default)
+                                // Includes relaxed: swizzle (0x100), min/max (0x10D-0x110),
+                                // q15mulr_s (0x111), dot_i8x16_i7x16_s (0x112)
                                 if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
                                     return Err(anyhow!("type mismatch"));
                                 }
@@ -4017,10 +4152,19 @@ impl WastModuleValidator {
                         0x70 | -16 => stack.push(StackType::NullFuncRef),
                         // nofunc → NullFuncRef
                         0x73 | -13 => stack.push(StackType::NullFuncRef),
-                        // extern, noextern → ExternRef
-                        0x6F | -17 | 0x72 | -14 => stack.push(StackType::ExternRef),
-                        // exn → ExnRef
-                        0x69 | -23 => stack.push(StackType::ExnRef),
+                        // extern → NullExternRef
+                        0x6F | -17 => stack.push(StackType::NullExternRef),
+                        // noextern → NullExternRef
+                        0x72 | -14 => stack.push(StackType::NullExternRef),
+                        // exn → NullExnRef
+                        0x69 | -23 => stack.push(StackType::NullExnRef),
+                        // noexn → NullExnRef
+                        0x74 | -12 => stack.push(StackType::NullExnRef),
+                        // any, eq, i31, struct, array, none → NoneRef
+                        0x6E | -18 | 0x6D | -19 | 0x6C | -20
+                        | 0x6B | -21 | 0x6A | -22 | 0x71 | -15 => {
+                            stack.push(StackType::NoneRef);
+                        },
                         // Concrete type index → nullable typed reference
                         _ if heap_type >= 0 => {
                             stack.push(StackType::TypedFuncRef(heap_type as u32, true));

@@ -295,10 +295,20 @@ impl Table {
     /// Elements are initialized to a type-appropriate null value.
     pub fn new(ty: KilnTableType) -> Result<Self> {
         // Determine the type-appropriate null value for initialization
-        let init_val = match ty.element_type {
+        let init_val = match &ty.element_type {
             KilnRefType::Funcref => Some(KilnValue::FuncRef(None)),
             KilnRefType::Externref => Some(KilnValue::ExternRef(None)),
-            KilnRefType::Gc(_) => Some(KilnValue::ExternRef(None)),
+            KilnRefType::Gc(gc) => {
+                use kiln_foundation::types::HeapType;
+                match gc.heap_type {
+                    HeapType::Func | HeapType::NoFunc | HeapType::Concrete(_) => Some(KilnValue::FuncRef(None)),
+                    HeapType::Extern | HeapType::NoExtern => Some(KilnValue::ExternRef(None)),
+                    HeapType::I31 | HeapType::Eq | HeapType::Any | HeapType::None => Some(KilnValue::I31Ref(None)),
+                    HeapType::Struct => Some(KilnValue::StructRef(None)),
+                    HeapType::Array => Some(KilnValue::ArrayRef(None)),
+                    HeapType::Exn => Some(KilnValue::ExnRef(None)),
+                }
+            },
         };
 
         let initial_size = wasm_index_to_usize(ty.limits.min)?;
