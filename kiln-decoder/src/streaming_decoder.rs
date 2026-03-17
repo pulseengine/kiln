@@ -986,14 +986,35 @@ impl<'a> StreamingDecoder<'a> {
                         return Err(Error::parse_error("malformed limits flags"));
                     }
 
-                    let (min, bytes_read) = read_leb128_u32(data, offset)?;
-                    offset += bytes_read;
-                    let max = if flags & 0x01 != 0 {
-                        let (max, bytes_read) = read_leb128_u32(data, offset)?;
+                    let is_table64 = flags & 0x04 != 0;
+
+                    // Parse limits - table64 uses u64 encoding, regular tables use u32
+                    let (min, max) = if is_table64 {
+                        use kiln_format::binary::read_leb128_u64;
+                        let (min64, bytes_read) = read_leb128_u64(data, offset)?;
                         offset += bytes_read;
-                        Some(max)
+                        let max64 = if flags & 0x01 != 0 {
+                            let (max_val, bytes_read) = read_leb128_u64(data, offset)?;
+                            offset += bytes_read;
+                            Some(max_val)
+                        } else {
+                            None
+                        };
+                        // Saturate to u32 for runtime (tables can't practically exceed u32 entries)
+                        let min = if min64 > u32::MAX as u64 { u32::MAX } else { min64 as u32 };
+                        let max = max64.map(|m| if m > u32::MAX as u64 { u32::MAX } else { m as u32 });
+                        (min, max)
                     } else {
-                        None
+                        let (min, bytes_read) = read_leb128_u32(data, offset)?;
+                        offset += bytes_read;
+                        let max = if flags & 0x01 != 0 {
+                            let (max, bytes_read) = read_leb128_u32(data, offset)?;
+                            offset += bytes_read;
+                            Some(max)
+                        } else {
+                            None
+                        };
+                        (min, max)
                     };
                     #[cfg(feature = "tracing")]
                     trace!(import_index = i, min = min, max = ?max, "import: table");
@@ -1412,15 +1433,34 @@ impl<'a> StreamingDecoder<'a> {
                 return Err(Error::parse_error("malformed limits flags"));
             }
 
-            let (min, bytes_read) = read_leb128_u32(data, offset)?;
-            offset += bytes_read;
-
-            let max = if flags & 0x01 != 0 {
-                let (max_val, bytes_read) = read_leb128_u32(data, offset)?;
+            // Parse limits - table64 uses u64 encoding, regular tables use u32
+            let (min, max) = if flags & 0x04 != 0 {
+                // table64: limits are encoded as u64 LEB128
+                use kiln_format::binary::read_leb128_u64;
+                let (min64, bytes_read) = read_leb128_u64(data, offset)?;
                 offset += bytes_read;
-                Some(max_val)
+                let max64 = if flags & 0x01 != 0 {
+                    let (max_val, bytes_read) = read_leb128_u64(data, offset)?;
+                    offset += bytes_read;
+                    Some(max_val)
+                } else {
+                    None
+                };
+                // Saturate to u32 for runtime (tables can't practically exceed u32 entries)
+                let min = if min64 > u32::MAX as u64 { u32::MAX } else { min64 as u32 };
+                let max = max64.map(|m| if m > u32::MAX as u64 { u32::MAX } else { m as u32 });
+                (min, max)
             } else {
-                None
+                let (min, bytes_read) = read_leb128_u32(data, offset)?;
+                offset += bytes_read;
+                let max = if flags & 0x01 != 0 {
+                    let (max_val, bytes_read) = read_leb128_u32(data, offset)?;
+                    offset += bytes_read;
+                    Some(max_val)
+                } else {
+                    None
+                };
+                (min, max)
             };
 
             // Parse and validate init expression if present (ends with 0x0B)
