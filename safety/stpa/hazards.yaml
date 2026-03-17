@@ -14,8 +14,13 @@ hazards:
       memory, table, control flow) produces a result that diverges from
       the WebAssembly Core Specification. This includes edge cases in
       float-to-int conversion, saturating arithmetic, SIMD lane operations,
-      and atomic memory ordering.
-    losses: [L-1]
+      and atomic memory ordering. Relaxed SIMD instructions may produce
+      non-deterministic results that violate safety requirements assuming
+      deterministic execution (e.g., relaxed fma, relaxed swizzle, relaxed
+      min/max returning different NaN bit patterns across runs). Wide
+      arithmetic (128-bit integer) operations may overflow or truncate
+      incorrectly, affecting control flow decisions.
+    losses: [L-1, L-6]
 
   - id: H-2
     title: Memory access exceeds linear memory bounds
@@ -24,7 +29,17 @@ hazards:
       accesses bytes outside the valid range of the target linear memory.
       In multi-memory mode, instructions reference the wrong memory index.
       The bounds check mechanism (software CMP, MPU, masking) has gaps.
-    losses: [L-1, L-2]
+      In memory64 mode, 64-bit addresses may be silently truncated to 32-bit
+      during bounds checking, allowing access beyond the intended range.
+      A u64 offset may overflow when added to the base address, wrapping
+      around and bypassing bounds checks. A memory64 module may request
+      allocation beyond the physical memory available on no_std platforms
+      (where there is no virtual memory), causing OOM or corruption of
+      adjacent physical memory regions. Custom page sizes may cause page
+      size mismatch between host and guest, leading to incorrect bounds
+      calculation when page_size * page_count overflows or uses the wrong
+      page size constant.
+    losses: [L-1, L-2, L-3]
 
   - id: H-3
     title: Resource budget exceeded without detection
@@ -101,6 +116,42 @@ hazards:
       #[forbid(unsafe_code)] crate is missed by the audit.
     losses: [L-3, L-7]
 
+  - id: H-11
+    title: Shared memory and atomic operation violation
+    description: >
+      A threads/atomics instruction violates memory ordering, data
+      integrity, or liveness guarantees. Atomic load/store/RMW/cmpxchg
+      operations on shared memory produce results inconsistent with the
+      WebAssembly threads specification's sequentially-consistent ordering
+      model. Even in single-threaded execution (Kiln's current mode),
+      incorrect atomic semantics create latent bugs that manifest when
+      multi-thread support is added. An atomic.wait instruction blocks
+      the sole execution thread, causing a permanent deadlock (the spec
+      requires trapping in single-threaded contexts). Atomic RMW operations
+      (i32.atomic.rmw.add, etc.) apply the wrong operator or use incorrect
+      byte widths (e.g., atomic.rmw8 operating on 16 bits). Shared memory
+      alignment requirements for atomic operations are not enforced,
+      causing torn reads/writes on platforms without hardware atomics.
+    losses: [L-1, L-3, L-6]
+
+  - id: H-12
+    title: GC heap reference safety violation
+    description: >
+      A GC proposal instruction (struct.new, struct.get, array.new,
+      array.get, ref.cast, br_on_cast) produces an incorrect result,
+      accesses freed memory, or causes unbounded allocation. Struct and
+      array heap objects are backed by Arc<Mutex<>> and may produce
+      dangling references if the reference counting is incorrect or if
+      the runtime drops a heap object while references remain. Type
+      casting via ref.cast or br_on_cast uses incorrect subtype hierarchy
+      traversal, allowing a reference to be interpreted as a wrong type
+      (type confusion). In no_std environments without a garbage
+      collector, struct/array references accumulate without reclamation,
+      exhausting the bounded allocation pool. The GC type hierarchy
+      (structref <: eqref <: anyref) is not correctly validated during
+      cast operations, leading to unsound type coercions.
+    losses: [L-1, L-2, L-3, L-7]
+
 # Sub-hazards for complex areas
 sub-hazards:
   # Refinements of H-4 (Canonical ABI)
@@ -137,6 +188,105 @@ sub-hazards:
       The blast_zone fault isolation mechanism fails to contain a trap
       in one component, allowing it to corrupt the state of another
       component or the runtime itself.
+
+  # Refinements of H-2 (Memory access) — memory64 and custom page sizes
+  - id: H-2.1
+    parent: H-2
+    title: 64-bit address truncated to 32-bit in bounds check
+    description: >
+      A memory64 load/store passes a 64-bit effective address to a bounds
+      check that internally operates on 32-bit values (e.g., casting i64
+      to u32). Addresses above 4 GiB wrap to low addresses, bypassing the
+      bounds check and accessing arbitrary low memory.
+
+  - id: H-2.2
+    parent: H-2
+    title: u64 offset addition overflows in memory64 mode
+    description: >
+      The effective address computation (base + offset) for memory64
+      instructions uses u64 arithmetic. When base and offset are both
+      large, the addition overflows (wraps to a small value), producing
+      an effective address that appears within bounds but refers to the
+      wrong memory location.
+
+  - id: H-2.3
+    parent: H-2
+    title: Memory64 allocation exceeds physical memory on no_std platform
+    description: >
+      A memory64 module declares an initial or maximum memory size that
+      exceeds the physical RAM available on an embedded platform. Without
+      virtual memory, the allocation either succeeds (corrupting other
+      memory regions) or causes an unrecoverable system fault.
+
+  - id: H-2.4
+    parent: H-2
+    title: Custom page size mismatch causes incorrect bounds
+    description: >
+      A module declares a non-standard page size (e.g., 1 byte instead of
+      65536). The bounds check uses the standard page size constant,
+      computing memory.size * 65536 when the actual memory is
+      memory.size * 1. Loads/stores near the true boundary either fail
+      spuriously or succeed when they should trap.
+
+  # Refinements of H-1 (Instruction execution) — relaxed SIMD and wide arithmetic
+  - id: H-1.1
+    parent: H-1
+    title: Relaxed SIMD non-determinism violates safety invariants
+    description: >
+      Relaxed SIMD instructions (relaxed_fma, relaxed_min, relaxed_max,
+      relaxed_swizzle, relaxed_dot) produce implementation-defined results
+      that may vary between runs on the same platform. Safety-critical
+      code that assumes deterministic execution produces different outputs,
+      violating certification requirements for reproducible behavior.
+
+  - id: H-1.2
+    parent: H-1
+    title: Wide arithmetic 128-bit overflow affects control flow
+    description: >
+      128-bit integer multiply or add (i64.mul_wide_s, i64.mul_wide_u,
+      i64.add128, i64.sub128) produces incorrect high/low result pair.
+      When the result is used in a subsequent branch condition, the
+      wrong branch is taken, leading to incorrect program behavior.
+
+  # Refinements of H-11 (Threads/Atomics)
+  - id: H-11.1
+    parent: H-11
+    title: atomic.wait blocks single-threaded runtime permanently
+    description: >
+      memory.atomic.wait32 or memory.atomic.wait64 is executed in a
+      single-threaded runtime without returning a "not-equal" or
+      "timed-out" result. The sole thread blocks forever, causing
+      the system to hang. The spec requires returning 1 (not-equal)
+      immediately in contexts where no other thread can issue notify.
+
+  - id: H-11.2
+    parent: H-11
+    title: Atomic RMW uses wrong byte width
+    description: >
+      An atomic.rmw8 or atomic.rmw16 instruction operates on more bytes
+      than specified (e.g., a full 32-bit read-modify-write instead of 8-bit),
+      corrupting adjacent bytes in shared memory.
+
+  # Refinements of H-12 (GC)
+  - id: H-12.1
+    parent: H-12
+    title: ref.cast type confusion via incorrect subtype check
+    description: >
+      ref.cast checks the runtime type of a reference against a target
+      type but uses incorrect subtype hierarchy traversal. A reference
+      to struct type A is successfully cast to unrelated struct type B,
+      and subsequent struct.get reads fields at wrong offsets, producing
+      garbage data or accessing out-of-bounds memory.
+
+  - id: H-12.2
+    parent: H-12
+    title: GC heap objects accumulate without bound in no_std
+    description: >
+      In no_std mode, there is no garbage collector. Struct and array
+      heap objects are allocated from the bounded allocation pool but
+      never reclaimed (Arc reference counts never reach zero due to
+      cycles or long-lived references). The pool is exhausted, causing
+      subsequent allocations to fail and trapping the module.
 
   # Refinements of H-9 (CFI)
   - id: H-9.1

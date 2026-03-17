@@ -1,0 +1,149 @@
+# STPA-SEC: Security Hazards
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Security hazards are system states that, combined with adversarial action,
+# can lead to security losses. Each hazard maps to one or more security losses
+# (SL-*) and, where applicable, to safety hazards (H-*) from the STPA analysis.
+#
+# Unlike safety hazards (which concern unintentional failures), security hazards
+# assume an intelligent adversary who crafts inputs specifically to trigger the
+# hazardous state.
+
+security-hazards:
+  - id: SH-1
+    title: Bounds check bypass via memory64 address truncation
+    description: >
+      The engine's bounds check path truncates a 64-bit effective address
+      to 32 bits before comparison. An adversary crafts a memory64 module
+      with addresses in the range [0x1_0000_0000, 0x1_FFFF_FFFF] that,
+      after truncation, map to valid low addresses. This allows reading
+      or writing arbitrary locations within the first 4 GiB of the
+      linear memory, potentially including runtime metadata stored adjacent
+      to linear memory (e.g., memory size fields, bounds check constants).
+      If the linear memory buffer is allocated from a larger host buffer,
+      the truncated address may reach host data.
+    security-losses: [SL-1]
+    safety-hazards: [H-2]
+    attack-vector: >
+      Attacker provides a memory64 module with i64.load instructions using
+      addresses like 0x1_0000_0040 that truncate to 0x40, bypassing a
+      bounds check against the full 64-bit address space.
+    exploitability: high
+    rationale: >
+      Memory64 is a new feature; bounds check code paths may not have been
+      updated from 32-bit to 64-bit arithmetic throughout the codebase.
+
+  - id: SH-2
+    title: Type confusion via incorrect GC casting
+    description: >
+      The engine's ref.cast or br_on_cast implementation has an incorrect
+      subtype hierarchy check. An adversary constructs a module with a
+      carefully chosen type hierarchy where type A and type B share a
+      common ancestor but have different field layouts. By casting a
+      reference from type A to type B, the adversary can read fields at
+      offsets defined by type B but backed by type A's data, effectively
+      performing a type-confused memory read. If struct fields contain
+      indices into tables or memories, the confusion can escalate to
+      out-of-bounds access.
+    security-losses: [SL-1, SL-3]
+    safety-hazards: [H-12]
+    attack-vector: >
+      Attacker defines: (type $a (sub (struct (field i32) (field i64))))
+      and (type $b (sub (struct (field i64) (field i32)))). Both are subtypes
+      of structref. A ref.cast from $a to $b reinterprets the i32 field as
+      the low half of an i64, and the i64 field as an i32, producing
+      attacker-controlled values at unexpected widths.
+    exploitability: medium
+    rationale: >
+      GC type hierarchies are complex; subtype checking must be both
+      sound and complete. Incomplete checks enable type confusion.
+
+  - id: SH-3
+    title: Resource exhaustion via unbounded GC allocation in no_std
+    description: >
+      In no_std mode, GC heap objects are allocated from the bounded
+      allocation pool but never reclaimed (no garbage collector). An
+      adversary crafts a module that allocates struct/array objects in
+      a tight loop without ever dropping references. The bounded pool
+      is exhausted, causing all subsequent allocation attempts (including
+      those by the runtime for call frames, tables, and other internal
+      data) to fail. This is a denial-of-service attack that can prevent
+      safety-critical code from executing.
+    security-losses: [SL-2]
+    safety-hazards: [H-12, H-3]
+    attack-vector: >
+      Module contains: (func (loop (struct.new $large_struct) (br 0)))
+      where $large_struct has many fields. Each iteration allocates without
+      possibility of reclamation.
+    exploitability: high
+    rationale: >
+      GC allocation shares the same pool as runtime internals. Pool
+      exhaustion is trivially achievable by an adversary in no_std mode.
+
+  - id: SH-4
+    title: Timing side channels in atomic operations
+    description: >
+      Atomic memory operations (atomic.wait, atomic.notify, atomic RMW)
+      have timing characteristics that depend on the state of shared
+      memory. An adversary module can measure the time taken by atomic
+      operations to infer the state of memory locations shared with
+      another module (in a multi-module scenario), or to detect whether
+      the host runtime is performing operations on adjacent memory. On
+      platforms with hardware atomics, cache-line contention patterns
+      reveal information about co-located data access.
+    security-losses: [SL-3]
+    safety-hazards: [H-11]
+    attack-vector: >
+      Adversary repeatedly executes atomic.wait with timeout=0 and measures
+      the return time. Variations reveal whether another agent recently
+      modified the target address.
+    exploitability: low
+    rationale: >
+      Timing side channels are difficult to exploit but relevant for
+      high-assurance systems where information flow must be controlled.
+
+  - id: SH-5
+    title: Stack overflow via deeply nested blocks or calls
+    description: >
+      An adversary crafts a module with deeply nested block structures
+      (block within block within block, thousands deep) or deeply recursive
+      function calls designed to overflow the host call stack or the
+      runtime's internal value stack. If the stack overflow is not detected
+      before it corrupts adjacent memory (e.g., the shadow stack, the
+      linear memory bounds, or host stack frames), the adversary may
+      achieve control flow hijacking or data corruption.
+    security-losses: [SL-1, SL-4]
+    safety-hazards: [H-2, H-3]
+    attack-vector: >
+      Module with 10,000 nested blocks: (block (block (block ... (br 9999)
+      ...))). Each block pushes to the label stack. If the label stack is
+      unbounded or shares memory with other structures, overflow corrupts
+      adjacent data.
+    exploitability: medium
+    rationale: >
+      Stack overflow is a classic attack vector. The runtime must enforce
+      limits before corruption occurs, not after.
+
+  - id: SH-6
+    title: Integer overflow in wide arithmetic affecting control flow
+    description: >
+      An adversary exploits incorrect wide arithmetic (128-bit integer
+      operations) to produce wrong comparison results that affect branch
+      decisions. If the high 64 bits of a 128-bit multiplication are
+      computed incorrectly, a subsequent branch-if-nonzero on the high
+      word takes the wrong path. The adversary uses this to bypass
+      validation logic implemented in WebAssembly (e.g., bounds checks,
+      authentication checks, or capability validations within the wasm
+      module itself).
+    security-losses: [SL-1, SL-4]
+    safety-hazards: [H-1]
+    attack-vector: >
+      Module implements a capability check using 128-bit arithmetic:
+      if (i64.mul_wide_u(token, secret) == expected) { grant_access() }.
+      Incorrect high-word computation causes the check to pass with a
+      forged token.
+    exploitability: medium
+    rationale: >
+      Wide arithmetic is new and complex. Implementation errors in
+      carry propagation or sign extension are plausible.

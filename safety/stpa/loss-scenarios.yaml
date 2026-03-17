@@ -350,3 +350,150 @@ loss-scenarios:
     causal-factors:
       - Capacity check uses allocator capacity, not configured capacity
       - Allocator over-provisions without notifying the bounded collection
+
+  # =========================================================================
+  # Memory64 / no_std scenarios
+  # =========================================================================
+  - id: LS-M64-1
+    title: Memory64 module requests 256 TiB on embedded platform without virtual memory
+    uca: UCA-E-7
+    hazards: [H-2, H-3]
+    type: inadequate-control-algorithm
+    scenario: >
+      A memory64 module declares (memory i64 4194304) — requesting 256 TiB
+      of initial memory (4194304 pages * 64 KiB). On a std platform, the OS
+      returns ENOMEM and the runtime traps gracefully. On a no_std embedded
+      platform with 512 KiB of RAM and no virtual memory, the allocation
+      request is passed directly to the physical memory allocator. The
+      allocator either: (a) returns a pointer into unowned memory, corrupting
+      other subsystems, or (b) triggers a hard fault that resets the entire
+      system without diagnostic output.
+    causal-factors:
+      - Memory64 allows declaring memory sizes that exceed physical RAM by orders of magnitude
+      - No_std allocator does not have virtual memory to lazily commit pages
+      - Platform-specific physical memory limit not checked before allocation
+      - Decoder accepts memory64 limits without platform-aware validation
+
+  - id: LS-M64-2
+    title: 64-bit address truncated to 32-bit in bounds check path
+    uca: UCA-E-7
+    hazards: [H-2]
+    type: inadequate-control-algorithm
+    scenario: >
+      The engine's memory bounds check code was written for memory32 and uses
+      u32 arithmetic internally. When processing a memory64 instruction, the
+      i64 effective address 0x1_0000_0100 is cast to u32, yielding 0x0000_0100
+      (256). The bounds check passes because 256 < memory_size. The actual
+      access reads from offset 256 instead of 4 GiB + 256, returning data from
+      the wrong location. This is a silent data corruption with no trap.
+    causal-factors:
+      - Bounds check code uses u32 types inherited from memory32 implementation
+      - Rust "as u32" cast silently truncates without warning
+      - No compile-time or runtime assertion that address fits in u32
+
+  - id: LS-M64-3
+    title: Custom page size mismatch causes incorrect memory bounds
+    uca: UCA-E-3
+    hazards: [H-2]
+    type: inadequate-process-model
+    scenario: >
+      A module declares a memory with a custom page size of 1 byte (as
+      permitted by the custom-page-sizes proposal). The engine's bounds
+      check computes the memory size as page_count * 65536 (the standard
+      page size) instead of page_count * 1. A memory with 100 pages and
+      page_size=1 has 100 bytes of actual storage, but the bounds check
+      believes it has 6,553,600 bytes. Loads beyond byte 100 read
+      uninitialized or out-of-bounds memory.
+    causal-factors:
+      - Bounds check hardcodes PAGE_SIZE = 65536 instead of reading per-memory page size
+      - Custom page size stored in memory declaration but not propagated to bounds checker
+    process-model-flaw: >
+      Engine assumes all memories use the standard 64 KiB page size
+
+  # =========================================================================
+  # GC / no_std scenarios
+  # =========================================================================
+  - id: LS-GC-1
+    title: GC struct/array references accumulate and exhaust bounded allocation pool
+    uca: UCA-GC-1
+    hazards: [H-12, H-3]
+    type: inadequate-control-algorithm
+    scenario: >
+      A module in a no_std environment creates struct and array heap objects
+      in a loop (struct.new in a hot path). Each allocation consumes space
+      from the bounded allocation pool managed by safe_managed_alloc!. Since
+      there is no garbage collector in no_std mode, objects whose Arc
+      reference count never reaches zero (due to circular references or
+      long-lived parent references) are never reclaimed. After N iterations,
+      the pool is exhausted. The module traps on the next allocation, but
+      the accumulated unreachable objects cannot be recovered. If the pool
+      is shared with other runtime data structures, the exhaustion cascades
+      to unrelated operations (e.g., call stack growth, table expansion).
+    causal-factors:
+      - No garbage collector available in no_std environments
+      - Arc<Mutex<>> reference counting does not handle cycles
+      - GC heap allocations share the same bounded pool as runtime internals
+      - No separate budget or limit for GC heap object count
+
+  - id: LS-GC-2
+    title: ref.cast type confusion due to incorrect subtype hierarchy
+    uca: UCA-GC-2
+    hazards: [H-12, H-1]
+    type: inadequate-control-algorithm
+    scenario: >
+      The engine maintains a subtype hierarchy for GC types (structref <:
+      eqref <: anyref). A ref.cast instruction checks whether a reference's
+      runtime type is a subtype of the target type. The implementation uses
+      a linear scan of supertypes but terminates early (checks only the
+      immediate parent, not the full chain). A struct type that is a grandchild
+      of the target type fails the cast when it should succeed, while an
+      unrelated type with the same immediate parent as the target type passes
+      when it should fail. The latter case is a type confusion vulnerability:
+      struct.get reads fields at offsets defined by the wrong type.
+    causal-factors:
+      - Subtype check only examines immediate parent, not transitive closure
+      - GC type hierarchy can be arbitrarily deep via subtyping declarations
+      - No formal verification of subtype checking algorithm
+
+  # =========================================================================
+  # Threads/Atomics / no_std scenarios
+  # =========================================================================
+  - id: LS-AT-1
+    title: atomic.wait blocks single-threaded no_std runtime forever
+    uca: UCA-E-10
+    hazards: [H-11, H-3]
+    type: inadequate-control-algorithm
+    scenario: >
+      A module executes memory.atomic.wait32 on a no_std platform running
+      a single-threaded Kiln runtime. The spec requires that in contexts
+      where no other agent can execute memory.atomic.notify, the runtime
+      must return 1 ("not-equal") immediately or trap. The implementation
+      enters an actual blocking wait (e.g., a spin loop or platform sleep),
+      which never completes because no other thread exists to issue notify.
+      On an embedded system, this blocks the entire system: the watchdog
+      timer eventually fires and resets the device, losing all in-progress
+      computation.
+    causal-factors:
+      - atomic.wait implementation does not check thread count or runtime mode
+      - No_std platform has no OS-level thread wakeup mechanism
+      - Spec's requirement to return immediately in single-threaded mode not implemented
+      - Fuel metering does not cover wait operations (no fuel consumed while waiting)
+
+  - id: LS-AT-2
+    title: Atomic ordering violation produces inconsistent shared memory state
+    uca: UCA-E-9
+    hazards: [H-11, H-1]
+    type: inadequate-control-algorithm
+    scenario: >
+      An atomic.rmw instruction is supposed to perform a sequentially
+      consistent read-modify-write. The implementation uses a Mutex-based
+      emulation (correct in single-threaded mode) but the lock scope is
+      too narrow: it locks for the read, releases, computes, then locks
+      again for the write. In the current single-threaded runtime this is
+      harmless, but when multi-threading support is added, the read and
+      write are no longer atomic with respect to each other, allowing
+      another thread to interleave and produce a lost-update anomaly.
+    causal-factors:
+      - Lock scope does not cover the entire read-modify-write sequence
+      - Single-threaded testing does not reveal the atomicity gap
+      - No formal model of the memory ordering semantics

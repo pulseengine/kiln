@@ -1,0 +1,279 @@
+# STPA-SEC: Vulnerability Mapping
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# Each entry maps a security hazard (SH-*) to specific code locations in the
+# Kiln codebase and identifies existing or required mitigations. This provides
+# traceability from security hazards to implementation artifacts.
+#
+# Status values:
+#   - mitigated: Mitigation is implemented and tested
+#   - partial: Some mitigation exists but gaps remain
+#   - unmitigated: No mitigation in place; requires implementation
+#   - not-applicable: Hazard does not apply in current configuration
+
+vulnerabilities:
+  # ===========================================================================
+  # SH-1: Bounds check bypass via memory64 address truncation
+  # ===========================================================================
+  - id: V-1
+    security-hazard: SH-1
+    title: Memory64 address truncation in bounds check
+    code-locations:
+      - file: kiln-runtime/src/execution/memory.rs
+        description: >
+          Memory load/store bounds check functions. Must verify that all
+          address arithmetic uses u64 when the memory is memory64 (index
+          type i64). Check for any "as u32" or "as usize" casts on 32-bit
+          platforms that could silently truncate 64-bit addresses.
+      - file: kiln-runtime/src/instruction_parser.rs
+        description: >
+          Instruction decoding for memory instructions. The memarg offset
+          field is u64 for memory64. Verify that the decoded offset is
+          stored and propagated as u64, not truncated to u32.
+      - file: kiln-runtime/src/execution/engine.rs
+        description: >
+          Main instruction dispatch. Memory access instructions must pass
+          the full 64-bit effective address to the bounds check, not a
+          truncated version.
+    mitigations:
+      - id: MIT-1.1
+        description: >
+          All memory bounds check functions must use u64 arithmetic when
+          operating on memory64 memories. The effective address type must
+          be u64, not usize (which is u32 on 32-bit embedded platforms).
+        status: unmitigated
+        priority: critical
+      - id: MIT-1.2
+        description: >
+          Add compile-time assertions or clippy lints to detect u64-to-u32
+          truncation in memory access code paths. Consider a newtype wrapper
+          (EffectiveAddress(u64)) that prevents accidental truncation.
+        status: unmitigated
+        priority: high
+      - id: MIT-1.3
+        description: >
+          Platform-aware memory allocation limits: on no_std platforms,
+          reject memory64 declarations with initial/maximum sizes exceeding
+          the platform's physical memory. This must be checked at module
+          validation time, not at allocation time.
+        status: unmitigated
+        priority: critical
+
+  # ===========================================================================
+  # SH-2: Type confusion via incorrect GC casting
+  # ===========================================================================
+  - id: V-2
+    security-hazard: SH-2
+    title: GC type hierarchy traversal in ref.cast and br_on_cast
+    code-locations:
+      - file: kiln-runtime/src/execution/engine.rs
+        description: >
+          Execution of ref.cast and br_on_cast instructions. The runtime
+          type of the reference must be checked against the full subtype
+          hierarchy, not just the immediate parent type. The subtype check
+          function must handle arbitrary depth.
+      - file: kiln-runtime/src/types.rs
+        description: >
+          Type definitions and subtype relationships. The GC type hierarchy
+          (structref <: eqref <: anyref, arrayref <: eqref <: anyref) must
+          be correctly represented and queryable.
+    mitigations:
+      - id: MIT-2.1
+        description: >
+          Implement transitive subtype checking: is_subtype(a, b) must walk
+          the full supertype chain from a to root, checking for b at each
+          step. Use pre-computed supertype arrays (Cohen's display) for O(1)
+          subtype checks if the type hierarchy is known at validation time.
+        status: unmitigated
+        priority: critical
+      - id: MIT-2.2
+        description: >
+          Add fuzz tests that generate random type hierarchies and verify
+          that ref.cast produces correct results for all type pairs. The
+          oracle is: cast succeeds iff source type is a (transitive) subtype
+          of target type.
+        status: unmitigated
+        priority: high
+      - id: MIT-2.3
+        description: >
+          Validate struct field access (struct.get, struct.set) after a
+          successful cast: verify that the field index is within the bounds
+          of the *cast-to* type's field count, not the original type's.
+        status: unmitigated
+        priority: critical
+
+  # ===========================================================================
+  # SH-3: Resource exhaustion via unbounded GC allocation in no_std
+  # ===========================================================================
+  - id: V-3
+    security-hazard: SH-3
+    title: GC heap allocation pool exhaustion in no_std
+    code-locations:
+      - file: kiln-runtime/src/execution/engine.rs
+        description: >
+          Execution of struct.new, array.new, array.new_default, and
+          array.new_fixed instructions. Each creates a new heap object
+          that must be allocated from the bounded pool.
+      - file: kiln-foundation/src/memory/
+        description: >
+          The safe_managed_alloc! macro and capability-based allocation
+          system. GC heap objects must be tracked as a separate budget
+          category or have explicit limits.
+    mitigations:
+      - id: MIT-3.1
+        description: >
+          Introduce a configurable GC heap object limit (max_gc_objects)
+          separate from the linear memory limit. When the limit is reached,
+          struct.new and array.new must trap with a resource exhaustion
+          error, not silently fail or corrupt the allocation pool.
+        status: unmitigated
+        priority: critical
+      - id: MIT-3.2
+        description: >
+          In no_std mode, track GC heap object count and total GC heap
+          bytes as part of the per-crate budget in safe_managed_alloc!.
+          Report GC heap usage in the fuel/budget diagnostics.
+        status: unmitigated
+        priority: high
+      - id: MIT-3.3
+        description: >
+          Consider reference-counting cycle detection for no_std mode:
+          when GC heap utilization exceeds a threshold (e.g., 80% of
+          max_gc_objects), run a mark-sweep pass to identify unreachable
+          objects. This is optional but recommended for long-running
+          embedded systems.
+        status: unmitigated
+        priority: medium
+
+  # ===========================================================================
+  # SH-4: Timing side channels in atomic operations
+  # ===========================================================================
+  - id: V-4
+    security-hazard: SH-4
+    title: Timing variation in atomic memory operations
+    code-locations:
+      - file: kiln-runtime/src/execution/engine.rs
+        description: >
+          Execution of atomic.wait, atomic.notify, and atomic RMW
+          instructions. Timing must be constant-time or at least not
+          dependent on the value of shared memory at the target address.
+      - file: kiln-runtime/src/execution/memory.rs
+        description: >
+          Shared memory access functions. Lock acquisition time for
+          Mutex-based atomic emulation may vary based on contention.
+    mitigations:
+      - id: MIT-4.1
+        description: >
+          In single-threaded mode, atomic.wait must return immediately
+          (constant-time) without checking the memory value first. The
+          spec allows returning 1 ("not-equal") unconditionally in
+          single-threaded contexts, which eliminates the timing channel.
+        status: unmitigated
+        priority: medium
+      - id: MIT-4.2
+        description: >
+          Document the timing side-channel risk in the security model.
+          For high-assurance deployments, recommend disabling shared
+          memory and atomics features entirely via a configuration flag
+          (e.g., disable_threads feature flag).
+        status: unmitigated
+        priority: low
+      - id: MIT-4.3
+        description: >
+          Ensure atomic RMW operations use constant-time comparison for
+          cmpxchg to prevent timing leakage of the expected value. Use
+          platform-specific constant-time comparison intrinsics where
+          available.
+        status: unmitigated
+        priority: medium
+
+  # ===========================================================================
+  # SH-5: Stack overflow via deeply nested blocks/calls
+  # ===========================================================================
+  - id: V-5
+    security-hazard: SH-5
+    title: Stack overflow from deep nesting or recursion
+    code-locations:
+      - file: kiln-runtime/src/execution/engine.rs
+        description: >
+          Call stack depth check before call/call_indirect/call_ref.
+          Also: label stack depth check when entering block/loop/if/
+          try_table. Both stacks must be bounded.
+      - file: kiln-runtime/src/instruction_parser.rs
+        description: >
+          Validation of nested block depth during module validation.
+          The validator should reject modules with nesting depth exceeding
+          a configurable limit (e.g., 1000) at validation time, before
+          execution begins.
+    mitigations:
+      - id: MIT-5.1
+        description: >
+          Enforce configurable maximum call stack depth (default: 1000)
+          checked before every call instruction. The check must occur
+          before any stack frame is allocated, so overflow is detected
+          before corruption can occur.
+        status: partial
+        priority: critical
+        note: >
+          Call depth checking exists (UCA-E-5) but label stack depth
+          for nested blocks may not be separately bounded.
+      - id: MIT-5.2
+        description: >
+          Enforce configurable maximum block nesting depth at validation
+          time. Reject modules that declare functions with block nesting
+          exceeding the limit. This is a defense-in-depth measure that
+          prevents adversarial modules from reaching the runtime check.
+        status: unmitigated
+        priority: high
+      - id: MIT-5.3
+        description: >
+          Ensure the label stack (for block/loop/if targets) uses
+          BoundedVec with a capacity derived from the maximum nesting
+          depth, so overflow is detected by the bounded collection
+          rather than by host stack overflow or memory corruption.
+        status: unmitigated
+        priority: high
+
+  # ===========================================================================
+  # SH-6: Integer overflow in wide arithmetic affecting control flow
+  # ===========================================================================
+  - id: V-6
+    security-hazard: SH-6
+    title: Wide arithmetic (128-bit) computation errors
+    code-locations:
+      - file: kiln-runtime/src/execution/engine.rs
+        description: >
+          Execution of i64.mul_wide_s, i64.mul_wide_u, i64.add128,
+          i64.sub128 instructions. The 128-bit result must be split
+          correctly into high and low 64-bit words with correct carry
+          propagation and sign extension.
+      - file: kiln-runtime/src/instruction_parser.rs
+        description: >
+          Decoding of wide arithmetic opcodes (0xFC prefix). The
+          instruction must be correctly identified and dispatched to
+          the wide arithmetic handler.
+    mitigations:
+      - id: MIT-6.1
+        description: >
+          Implement wide arithmetic using Rust's native u128/i128 types
+          for the intermediate computation, then split into (high, low)
+          u64 pair. This leverages the compiler's correct 128-bit
+          arithmetic rather than implementing manual carry propagation.
+        status: unmitigated
+        priority: high
+      - id: MIT-6.2
+        description: >
+          Add exhaustive edge-case tests for wide arithmetic: boundary
+          values (0, 1, -1, i64::MAX, i64::MIN, u64::MAX), carry
+          propagation cases, sign extension for signed variants, and
+          overflow behavior for add128/sub128.
+        status: unmitigated
+        priority: high
+      - id: MIT-6.3
+        description: >
+          In ASIL-D mode, consider formal verification (Kani proofs)
+          for wide arithmetic operations. The specification is small
+          enough to verify exhaustively for representative input classes.
+        status: unmitigated
+        priority: medium

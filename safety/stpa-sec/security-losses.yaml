@@ -1,0 +1,75 @@
+# STPA-SEC: Security Losses
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# STPA-SEC extends STPA with security-specific analysis. Security losses
+# are distinct from safety losses: they represent outcomes where an
+# adversary exploits the system to achieve unauthorized objectives.
+#
+# These security losses complement the safety losses in safety/stpa/losses.yaml.
+# Where safety losses concern unintentional failures, security losses concern
+# adversarial exploitation.
+#
+# Threat model: The attacker controls the WebAssembly module bytes and all
+# inputs to the module (function arguments, WASI responses). The attacker
+# cannot modify the Kiln runtime binary or the host application. The goal
+# is to escape the WebAssembly sandbox, exhaust host resources, or leak
+# information from the host or other modules.
+
+security-losses:
+  - id: SL-1
+    title: Sandbox escape — wasm code accesses host memory
+    description: >
+      An adversarial WebAssembly module reads or writes memory outside its
+      own linear memory, accessing host process memory, runtime internal
+      data structures, or another module's linear memory. This violates
+      the fundamental sandboxing guarantee of WebAssembly. On embedded
+      systems without MMU/MPU protection, a sandbox escape can access
+      arbitrary physical memory including security-critical peripherals
+      (cryptographic key storage, secure boot configuration).
+    impact: arbitrary-code-execution, data-theft, privilege-escalation
+    safety-losses: [L-2, L-8]
+    stakeholders: [developers, end-users, certification-authorities]
+
+  - id: SL-2
+    title: Denial of service — resource exhaustion
+    description: >
+      An adversarial WebAssembly module exhausts host resources (memory,
+      CPU time, allocation pool, stack space) to the point where the host
+      system becomes unresponsive or other modules cannot execute. On
+      embedded safety-critical systems, this constitutes a safety hazard:
+      resource exhaustion can prevent safety-critical tasks from executing
+      within their deadlines (e.g., watchdog servicing, sensor polling,
+      actuator control).
+    impact: system-unavailability, safety-deadline-miss
+    safety-losses: [L-3, L-7]
+    stakeholders: [developers, end-users, certification-authorities]
+
+  - id: SL-3
+    title: Information disclosure — side channel leakage
+    description: >
+      An adversarial WebAssembly module infers information about the host,
+      other modules, or the runtime's internal state through timing,
+      memory access patterns, or observable behavior differences. Sources
+      include: timing variation in bounds checks (branch prediction),
+      atomic operation timing revealing contention, cache-line-granularity
+      memory access patterns, and observable differences in trap messages
+      that reveal internal addresses or sizes.
+    impact: data-theft, cryptographic-key-recovery
+    safety-losses: [L-6]
+    stakeholders: [developers, end-users]
+
+  - id: SL-4
+    title: Code execution outside wasm sandbox
+    description: >
+      An adversarial WebAssembly module achieves execution of arbitrary
+      native code on the host system, bypassing the interpreter loop
+      entirely. Attack vectors include: corrupting the instruction
+      dispatch table, exploiting unsafe Rust in the runtime, abusing
+      host function callbacks to reach unexpected code paths, or using
+      CFI violations to redirect control flow to attacker-controlled
+      gadgets. This is the most severe security loss as it grants the
+      attacker full host-level privileges.
+    impact: arbitrary-code-execution, full-system-compromise
+    safety-losses: [L-1, L-2, L-8]
+    stakeholders: [developers, end-users, certification-authorities]
