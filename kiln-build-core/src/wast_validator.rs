@@ -4137,6 +4137,159 @@ impl WastModuleValidator {
                     }
                 },
 
+                // Atomic instructions (0xFE prefix) - WebAssembly Threads Proposal
+                0xFE => {
+                    if offset >= code.len() {
+                        return Err(anyhow!("unexpected end of code after 0xFE prefix"));
+                    }
+                    let (sub_opcode, new_offset) = Self::parse_varuint32(code, offset)?;
+                    offset = new_offset;
+                    let fh = Self::current_frame_height(&frames);
+                    let ur = Self::is_unreachable(&frames);
+
+                    // All atomic instructions except atomic.fence require a memory
+                    if sub_opcode != 0x03 && !Self::has_memory(module) {
+                        return Err(anyhow!("unknown memory"));
+                    }
+
+                    match sub_opcode {
+                        // memory.atomic.notify: [i32, i32] -> [i32]
+                        0x00 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I32);
+                        },
+                        // memory.atomic.wait32: [i32, i32, i64] -> [i32]
+                        0x01 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I64, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I32);
+                        },
+                        // memory.atomic.wait64: [i32, i64, i64] -> [i32]
+                        0x02 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I64, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I64, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I32);
+                        },
+                        // atomic.fence: [] -> []
+                        0x03 => {
+                            if offset >= code.len() {
+                                return Err(anyhow!("unexpected end of code in atomic.fence"));
+                            }
+                            offset += 1; // skip reserved byte
+                        },
+                        // Atomic loads
+                        // i32.atomic.load, i32.atomic.load8_u, i32.atomic.load16_u: [i32] -> [i32]
+                        0x10 | 0x12 | 0x13 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I32);
+                        },
+                        // i64.atomic.load, i64.atomic.load8_u, i64.atomic.load16_u, i64.atomic.load32_u: [i32] -> [i64]
+                        0x11 | 0x14 | 0x15 | 0x16 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I64);
+                        },
+                        // Atomic stores
+                        // i32.atomic.store, i32.atomic.store8, i32.atomic.store16: [i32, i32] -> []
+                        0x17 | 0x19 | 0x1A => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                        },
+                        // i64.atomic.store, i64.atomic.store8, i64.atomic.store16, i64.atomic.store32: [i32, i64] -> []
+                        0x18 | 0x1B | 0x1C | 0x1D => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I64, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                        },
+                        // i32 RMW operations (add, sub, and, or, xor, xchg): [i32, i32] -> [i32]
+                        0x1E | 0x25 | 0x2C | 0x33 | 0x3A | 0x41 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I32);
+                        },
+                        // i64 RMW operations (add, sub, and, or, xor, xchg): [i32, i64] -> [i64]
+                        0x1F | 0x26 | 0x2D | 0x34 | 0x3B | 0x42 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I64, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I64);
+                        },
+                        // i32.atomic.rmw8/16 variants (add, sub, and, or, xor, xchg): [i32, i32] -> [i32]
+                        0x20 | 0x21 | 0x27 | 0x28 | 0x2E | 0x2F | 0x35 | 0x36 | 0x3C | 0x3D | 0x43 | 0x44 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I32);
+                        },
+                        // i64.atomic.rmw8/16/32 variants (add, sub, and, or, xor, xchg): [i32, i64] -> [i64]
+                        0x22 | 0x23 | 0x24 | 0x29 | 0x2A | 0x2B | 0x30 | 0x31 | 0x32 |
+                        0x37 | 0x38 | 0x39 | 0x3E | 0x3F | 0x40 | 0x45 | 0x46 | 0x47 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I64, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I64);
+                        },
+                        // i32.atomic.rmw.cmpxchg: [i32, i32, i32] -> [i32]
+                        0x48 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I32);
+                        },
+                        // i64.atomic.rmw.cmpxchg: [i32, i64, i64] -> [i64]
+                        0x49 => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I64, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I64, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I64);
+                        },
+                        // i32.atomic.rmw8/16.cmpxchg_u: [i32, i32, i32] -> [i32]
+                        0x4A | 0x4B => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I32);
+                        },
+                        // i64.atomic.rmw8/16/32.cmpxchg_u: [i32, i64, i64] -> [i64]
+                        0x4C | 0x4D | 0x4E => {
+                            let (_mem_idx, new_offset) = Self::parse_memarg(code, offset, module)?;
+                            offset = new_offset;
+                            Self::pop_type(&mut stack, StackType::I64, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I64, fh, ur);
+                            Self::pop_type(&mut stack, StackType::I32, fh, ur);
+                            stack.push(StackType::I64);
+                        },
+                        // Unknown atomic sub-opcode
+                        _ => {},
+                    }
+                },
+
                 // Skip other opcodes for now (will be handled by instruction executor)
                 _ => {
                     // For all other opcodes, try to skip variable-length immediates
