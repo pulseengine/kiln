@@ -60,26 +60,30 @@ security-hazards:
       sound and complete. Incomplete checks enable type confusion.
 
   - id: SH-3
-    title: Resource exhaustion via unbounded GC allocation in no_std
+    title: Resource exhaustion via unbounded GC allocation in kiln-builtins
     description: >
-      In no_std mode, GC heap objects are allocated from the bounded
-      allocation pool but never reclaimed (no garbage collector). An
-      adversary crafts a module that allocates struct/array objects in
-      a tight loop without ever dropping references. The bounded pool
-      is exhausted, causing all subsequent allocation attempts (including
-      those by the runtime for call frames, tables, and other internal
-      data) to fail. This is a denial-of-service attack that can prevent
-      safety-critical code from executing.
+      In the kiln-builtins no_std runtime support library, GC heap objects
+      are allocated from the bounded allocation pool but never reclaimed
+      (no garbage collector). An adversary crafts a module that, after
+      Synth compilation and execution on gale, allocates struct/array
+      objects in a tight loop without ever dropping references. The bounded
+      pool is exhausted, causing all subsequent allocation attempts
+      (including those by kiln-builtins for host intrinsic state, tables,
+      and other internal data) to fail. This is a denial-of-service attack
+      that can prevent safety-critical code from executing on embedded
+      targets.
     security-losses: [SL-2]
     safety-hazards: [H-12, H-3]
     attack-vector: >
       Module contains: (func (loop (struct.new $large_struct) (br 0)))
-      where $large_struct has many fields. Each iteration allocates without
-      possibility of reclamation.
+      where $large_struct has many fields. After Synth compilation, each
+      iteration allocates from kiln-builtins pool without possibility of
+      reclamation.
     exploitability: high
     rationale: >
-      GC allocation shares the same pool as runtime internals. Pool
-      exhaustion is trivially achievable by an adversary in no_std mode.
+      GC allocation in kiln-builtins shares the same pool as runtime
+      intrinsic state. Pool exhaustion is trivially achievable by an
+      adversary in the embedded execution path.
 
   - id: SH-4
     title: Timing side channels in atomic operations
@@ -147,3 +151,58 @@ security-hazards:
     rationale: >
       Wide arithmetic is new and complex. Implementation errors in
       carry propagation or sign extension are plausible.
+
+  - id: SH-7
+    title: ABI mismatch between Synth-compiled code and kiln-builtins
+    description: >
+      Synth compiles core WebAssembly modules to native ELF binaries that
+      call into kiln-builtins via a C ABI interface. If Synth and
+      kiln-builtins disagree on the calling convention (argument register
+      assignment, stack layout, return value encoding, struct passing),
+      an adversary can craft a module whose Synth-compiled output passes
+      arguments that kiln-builtins misinterprets. This can cause
+      kiln-builtins to perform memory operations at attacker-controlled
+      offsets, bypass capability checks by reading wrong argument slots,
+      or corrupt its internal state by writing return values to wrong
+      locations.
+    security-losses: [SL-1, SL-4]
+    safety-hazards: [H-2, H-1]
+    attack-vector: >
+      Adversary provides a component that, after Meld lowering and Synth
+      compilation, produces a native call sequence where the argument
+      layout exploits a disagreement between Synth's ABI assumptions and
+      kiln-builtins' ABI expectations. For example, Synth places a
+      memory base pointer in register r2 while kiln-builtins reads it
+      from r3, causing a bounds check to use an attacker-controlled value.
+    exploitability: medium
+    rationale: >
+      The Synth-to-kiln-builtins ABI is defined by convention across two
+      independent codebases. Version skew or platform-specific calling
+      convention differences (ARM vs RISC-V) create opportunities for
+      mismatch.
+
+  - id: SH-8
+    title: Capability escalation through Meld component fusion
+    description: >
+      Meld fuses multiple components into core modules at build time,
+      resolving inter-component imports to direct calls. If Meld's fusion
+      incorrectly wires an import from component A to an export from
+      component B that has broader capabilities than A is authorized to
+      use, the fused module grants A access to B's capabilities. An
+      adversary who controls component A's source can exploit this to
+      access filesystem, network, or other WASI capabilities that the
+      original component graph did not authorize for A.
+    security-losses: [SL-1, SL-3]
+    safety-hazards: [H-8]
+    attack-vector: >
+      Adversary publishes a component that declares a narrow import
+      (e.g., wasi:clocks/monotonic-clock). Meld's fusion, due to a name
+      resolution bug or overly permissive matching, wires this import to
+      a broader export (e.g., wasi:filesystem/types) from another
+      component in the graph. The adversary's code now has filesystem
+      access through the misrouted import.
+    exploitability: medium
+    rationale: >
+      Component fusion is a complex graph transformation. Name resolution
+      across WIT interfaces with versioning and aliasing creates
+      opportunities for incorrect wiring that escalates capabilities.

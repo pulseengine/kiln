@@ -22,11 +22,14 @@ cross-toolchain-hazards:
     title: Canonical ABI element size disagreement (Meld ↔ Kiln)
     tools: [meld, kiln]
     description: >
-      Meld's parser.rs::canonical_abi_element_size() and Kiln's
-      kiln-component canonical_abi compute different element sizes for
-      the same component type. When running a Meld-fused P2 component,
-      adapters (computed by Meld) allocate buffers with wrong sizes vs.
-      what Kiln's lift/lower expects.
+      Meld lowers components to core modules at build time, computing
+      canonical ABI element sizes for adapter code it embeds. Kiln's
+      interpreter executes the resulting core modules and dispatches
+      host intrinsics. If Meld's parser.rs::canonical_abi_element_size()
+      and Kiln's kiln-component canonical_abi compute different element
+      sizes for the same component type, the adapter code embedded by
+      Meld allocates buffers with wrong sizes vs. what Kiln's host
+      intrinsic dispatch expects to read.
     affected-types:
       - "list<tuple<...>> with non-trivial padding"
       - "record with mixed-size fields (u8, u32, u64)"
@@ -47,12 +50,15 @@ cross-toolchain-hazards:
   # XH-3: Synth ↔ Kiln element size disagreement
   # =========================================================================
   - id: XH-3
-    title: Canonical ABI element size disagreement (Synth ↔ Kiln)
-    tools: [synth, kiln]
+    title: Canonical ABI element size disagreement (Synth ↔ kiln-builtins)
+    tools: [synth, kiln-builtins]
     description: >
-      Synth's synth-abi crate computes element sizes for AOT compilation.
-      When Synth-compiled code runs on Kiln (via Gale), the import dispatch
-      argument layout must match what Kiln expects to read.
+      Synth compiles Meld-lowered core modules to native ELF for gale.
+      Synth's synth-abi crate computes element sizes for the native call
+      ABI. When Synth-compiled code runs on gale with kiln-builtins as
+      the host intrinsic library, the argument layout in native calls to
+      kiln-builtins must match what kiln-builtins expects to read. This
+      is a native ABI boundary, not a Wasm-level boundary.
     affected-types:
       - "Import arguments with composite types"
       - "Return values written via retptr"
@@ -111,6 +117,68 @@ cross-toolchain-hazards:
       secondary: "Shared Rocq spec for align_up and field layout"
     kiln-implementation: kiln-component/src/canonical_abi/
     requirement: SR-10
+
+  # =========================================================================
+  # XH-6: Meld fusion format versioning
+  # =========================================================================
+  - id: XH-6
+    title: Meld fusion output format versioning (Meld ↔ Kiln)
+    tools: [meld, kiln]
+    description: >
+      Meld produces fused core modules with a specific encoding of
+      adapter trampolines, import tables, and metadata sections. If
+      Meld's output format evolves (e.g., new trampoline encoding,
+      changed custom section layout) without a corresponding update
+      in Kiln's decoder and linker, Kiln may misparse the fused
+      module, skip adapter code, or resolve imports incorrectly.
+      The fused module format is not part of the WebAssembly spec
+      and is a private contract between Meld and Kiln.
+    affected-types:
+      - "Custom sections encoding adapter metadata"
+      - "Trampoline function signatures"
+      - "Import/export name mangling conventions"
+    impact: >
+      Kiln silently loads a fused module but misinterprets adapter
+      metadata. Host intrinsic calls receive wrong arguments or are
+      dispatched to wrong handlers. No trap occurs because the core
+      module is structurally valid.
+    mitigation:
+      primary: "Version tag in Meld's custom section, checked by Kiln at load time"
+      secondary: "Shared integration test suite using pinned Meld output artifacts"
+    kiln-implementation: kiln-decoder/src/custom_sections.rs
+    meld-implementation: meld-core/src/fusion/output.rs
+    requirement: SR-11
+
+  # =========================================================================
+  # XH-7: kiln-builtins ABI stability
+  # =========================================================================
+  - id: XH-7
+    title: kiln-builtins ABI stability (Synth ↔ kiln-builtins)
+    tools: [synth, kiln-builtins]
+    description: >
+      Synth generates native code that calls kiln-builtins host
+      intrinsics via a C ABI. The function signatures, argument
+      passing conventions, and struct layouts must remain stable
+      across kiln-builtins releases, or Synth-compiled binaries
+      built against one version will malfunction when linked with
+      a different version. Unlike the Wasm-level ABI (which is
+      spec-defined), this native ABI is a private contract between
+      Synth and kiln-builtins with no external specification.
+    affected-types:
+      - "Host intrinsic function signatures"
+      - "Memory descriptor structs passed by pointer"
+      - "Error code enumerations"
+    impact: >
+      Synth-compiled binary calls kiln-builtins function with wrong
+      argument layout. kiln-builtins reads corrupted values, leading
+      to memory safety violations or incorrect execution on embedded
+      targets.
+    mitigation:
+      primary: "Versioned ABI header shared between Synth and kiln-builtins via build dependency"
+      secondary: "ABI version magic number embedded in ELF, checked at load time by kiln-builtins"
+    kiln-implementation: kiln-builtins/src/abi.rs
+    synth-implementation: synth-codegen/src/abi/builtins.rs
+    requirement: SR-24
 
 # =========================================================================
 # Fixture Coverage Matrix
