@@ -965,8 +965,8 @@ impl WastTestRunner {
                     },
                     Err(validation_error) => {
                         // Module validation failed as expected
-                        // Use debug format to get full error chain, not just top-level message
-                        let error_msg = format!("{:?}", validation_error).to_lowercase();
+                        // Use {:#} to include full error chain from anyhow context
+                        let error_msg = format!("{:#}", validation_error).to_lowercase();
                         let expected_msg = expected_message.to_lowercase();
 
                         if error_msg.contains(&expected_msg)
@@ -1066,7 +1066,8 @@ impl WastTestRunner {
                     },
                     Err(decode_error) => {
                         // Binary decoding/validation failed as expected
-                        let error_msg = decode_error.to_string().to_lowercase();
+                        // Use {:#} to include full error chain (inner errors from anyhow context)
+                        let error_msg = format!("{:#}", decode_error).to_lowercase();
                         let expected_msg = expected_message.to_lowercase();
 
                         if error_msg.contains(&expected_msg)
@@ -1090,7 +1091,7 @@ impl WastTestRunner {
                                 modifies_engine_state: false,
                                 result: TestResult::Failed,
                                 error_message: Some(format!(
-                                    "Expected malformed error '{}' but got: {}",
+                                    "Expected malformed error '{}' but got: {:#}",
                                     expected_message, decode_error
                                 )),
                             })
@@ -1164,7 +1165,8 @@ impl WastTestRunner {
                     },
                     Err(linking_error) => {
                         // Check if error message matches expectations
-                        let error_msg = linking_error.to_string().to_lowercase();
+                        // Use {:#} to include full error chain
+                        let error_msg = format!("{:#}", linking_error).to_lowercase();
                         let expected_msg = expected_message.to_lowercase();
 
                         if error_msg.contains(&expected_msg)
@@ -1261,7 +1263,8 @@ impl WastTestRunner {
                     },
                     Err(execution_error) => {
                         // Function execution failed - check if it's due to resource exhaustion
-                        let error_msg = execution_error.to_string().to_lowercase();
+                        // Use {:#} to include full error chain
+                        let error_msg = format!("{:#}", execution_error).to_lowercase();
                         let expected_msg = expected_message.to_lowercase();
 
                         if contains_exhaustion_keyword(&error_msg, &expected_msg) {
@@ -1858,6 +1861,18 @@ fn contains_malformed_keyword(error_msg: &str, expected_msg: &str) -> bool {
     let expected_is_leb128 = leb128_errors.iter().any(|e| expected_msg.contains(e));
     let error_is_leb128 = leb128_errors.iter().any(|e| error_msg.contains(e));
     if expected_is_leb128 && error_is_leb128 {
+        return true;
+    }
+
+    // Opcode-related errors: "illegal opcode" matches "unknown instruction opcode"
+    let opcode_errors = [
+        "illegal opcode",
+        "unknown instruction opcode",
+        "unknown opcode",
+    ];
+    let expected_is_opcode = opcode_errors.iter().any(|e| expected_msg.contains(e));
+    let error_is_opcode = opcode_errors.iter().any(|e| error_msg.contains(e));
+    if expected_is_opcode && error_is_opcode {
         return true;
     }
 
