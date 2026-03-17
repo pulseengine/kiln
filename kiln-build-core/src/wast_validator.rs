@@ -12,7 +12,7 @@
 
 use anyhow::{Context, Result, anyhow};
 use std::collections::HashSet;
-use kiln_format::module::{CompositeTypeKind, ExportKind, Function, Global, ImportDesc, Module};
+use kiln_format::module::{CompositeTypeKind, ExportKind, Function, Global, ImportDesc, Module, RecGroup};
 use kiln_format::pure_format_types::{PureElementInit, PureElementMode, PureElementSegment};
 use kiln_format::types::RefType;
 use kiln_foundation::ValueType;
@@ -266,6 +266,12 @@ impl WastModuleValidator {
 
         // Validate type index references are within bounds
         Self::validate_type_references(module)?;
+
+        // Validate forward type references outside rec groups
+        Self::validate_rec_group_type_references(module)?;
+
+        // Validate subtype declarations in rec_groups
+        Self::validate_subtype_declarations(module)?;
 
         // Validate data segments - only ACTIVE segments require a memory to be defined
         // Passive segments can exist without memory (they're only used via memory.init/data.drop)
@@ -1051,9 +1057,9 @@ impl WastModuleValidator {
                                 let stack_idx = frame.stack_height + i;
                                 if stack_idx < stack.len() {
                                     let actual = stack[stack_idx];
-                                    if actual != expected
-                                        && actual != StackType::Unknown
+                                    if actual != StackType::Unknown
                                         && expected != StackType::Unknown
+                                        && !Self::is_subtype_of_in_module(&actual, &expected, module)
                                     {
                                         return Err(anyhow!("type mismatch"));
                                     }
@@ -1272,7 +1278,7 @@ impl WastModuleValidator {
                             }
 
                             for &expected in frame.output_types.iter().rev() {
-                                if !Self::pop_type(&mut stack, expected, unreachable_height, true) {
+                                if !Self::pop_type_with_module(&mut stack, expected, unreachable_height, true, Some(module)) {
                                     return Err(anyhow!("type mismatch"));
                                 }
                             }
@@ -1284,7 +1290,7 @@ impl WastModuleValidator {
                                 return Err(anyhow!("type mismatch"));
                             }
                             for &expected in frame.output_types.iter().rev() {
-                                if !Self::pop_type(&mut stack, expected, frame_height, false) {
+                                if !Self::pop_type_with_module(&mut stack, expected, frame_height, false, Some(module)) {
                                     return Err(anyhow!("type mismatch"));
                                 }
                             }
@@ -1322,7 +1328,7 @@ impl WastModuleValidator {
                         }
 
                         for &expected in frame.output_types.iter().rev() {
-                            if !Self::pop_type(&mut stack, expected, unreachable_height, true) {
+                            if !Self::pop_type_with_module(&mut stack, expected, unreachable_height, true, Some(module)) {
                                 return Err(anyhow!("type mismatch"));
                             }
                         }
@@ -1335,7 +1341,7 @@ impl WastModuleValidator {
                             return Err(anyhow!("type mismatch"));
                         }
                         for &expected in frame.output_types.iter().rev() {
-                            if !Self::pop_type(&mut stack, expected, frame_height, false) {
+                            if !Self::pop_type_with_module(&mut stack, expected, frame_height, false, Some(module)) {
                                 return Err(anyhow!("type mismatch"));
                             }
                         }
@@ -1350,11 +1356,12 @@ impl WastModuleValidator {
                     let (label_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                     offset = new_offset;
 
-                    Self::validate_branch(
+                    Self::validate_branch_with_module(
                         &stack,
                         label_idx,
                         &frames,
                         Self::is_unreachable(&frames),
+                        Some(module),
                     )?;
 
                     // Mark current frame as unreachable — stack becomes polymorphic
@@ -1382,11 +1389,12 @@ impl WastModuleValidator {
                         return Err(anyhow!("type mismatch"));
                     }
 
-                    Self::validate_branch(
+                    Self::validate_branch_with_module(
                         &stack,
                         label_idx,
                         &frames,
                         Self::is_unreachable(&frames),
+                        Some(module),
                     )?;
 
                     // After br_if, the stack types must be updated to the label's result types
@@ -1474,11 +1482,12 @@ impl WastModuleValidator {
                     }
 
                     // Validate the stack has the required values for the branch
-                    Self::validate_branch(
+                    Self::validate_branch_with_module(
                         &stack,
                         default_label,
                         &frames,
                         Self::is_unreachable(&frames),
+                        Some(module),
                     )?;
 
                     // Mark current frame as unreachable — stack becomes polymorphic
@@ -1495,11 +1504,12 @@ impl WastModuleValidator {
                     let frame_height = Self::current_frame_height(&frames);
                     if let Some(frame) = frames.first() {
                         for &expected in frame.output_types.iter().rev() {
-                            if !Self::pop_type(
+                            if !Self::pop_type_with_module(
                                 &mut stack,
                                 expected,
                                 frame_height,
                                 Self::is_unreachable(&frames),
+                                Some(module),
                             ) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -1529,11 +1539,12 @@ impl WastModuleValidator {
                         let frame_height = Self::current_frame_height(&frames);
                         for param in func_type.params.iter().rev() {
                             let expected = StackType::from_value_type(*param);
-                            if !Self::pop_type(
+                            if !Self::pop_type_with_module(
                                 &mut stack,
                                 expected,
                                 frame_height,
                                 Self::is_unreachable(&frames),
+                                Some(module),
                             ) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -1587,11 +1598,12 @@ impl WastModuleValidator {
                     // Pop arguments in reverse order
                     for param in func_type.params.iter().rev() {
                         let expected = StackType::from_value_type(*param);
-                        if !Self::pop_type(
+                        if !Self::pop_type_with_module(
                             &mut stack,
                             expected,
                             frame_height,
                             Self::is_unreachable(&frames),
+                            Some(module),
                         ) {
                             return Err(anyhow!("type mismatch"));
                         }
@@ -1629,11 +1641,12 @@ impl WastModuleValidator {
                     // Pop arguments in reverse order
                     for param in called_func_type.params.iter().rev() {
                         let expected = StackType::from_value_type(*param);
-                        if !Self::pop_type(
+                        if !Self::pop_type_with_module(
                             &mut stack,
                             expected,
                             frame_height,
                             Self::is_unreachable(&frames),
+                            Some(module),
                         ) {
                             return Err(anyhow!("type mismatch"));
                         }
@@ -1705,11 +1718,12 @@ impl WastModuleValidator {
                     // Pop arguments in reverse order
                     for param in called_type.params.iter().rev() {
                         let expected = StackType::from_value_type(*param);
-                        if !Self::pop_type(
+                        if !Self::pop_type_with_module(
                             &mut stack,
                             expected,
                             frame_height,
                             Self::is_unreachable(&frames),
+                            Some(module),
                         ) {
                             return Err(anyhow!("type mismatch"));
                         }
@@ -1742,11 +1756,12 @@ impl WastModuleValidator {
                     // Pop arguments in reverse order
                     for param in called_type.params.iter().rev() {
                         let expected = StackType::from_value_type(*param);
-                        if !Self::pop_type(
+                        if !Self::pop_type_with_module(
                             &mut stack,
                             expected,
                             frame_height,
                             Self::is_unreachable(&frames),
+                            Some(module),
                         ) {
                             return Err(anyhow!("type mismatch"));
                         }
@@ -1790,11 +1805,12 @@ impl WastModuleValidator {
                     // Pop arguments in reverse order
                     for param in called_type.params.iter().rev() {
                         let expected = StackType::from_value_type(*param);
-                        if !Self::pop_type(
+                        if !Self::pop_type_with_module(
                             &mut stack,
                             expected,
                             frame_height,
                             Self::is_unreachable(&frames),
+                            Some(module),
                         ) {
                             return Err(anyhow!("type mismatch"));
                         }
@@ -3093,7 +3109,16 @@ impl WastModuleValidator {
                     // Pops a reference, pushes i32
                     let frame_height = Self::current_frame_height(&frames);
                     let unreachable = Self::is_unreachable(&frames);
-                    if !unreachable {
+                    if unreachable {
+                        // In unreachable code, pop if there's a value available
+                        if stack.len() > frame_height {
+                            let ref_type = stack.pop().unwrap();
+                            if ref_type != StackType::Unknown && !ref_type.is_reference() {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                        }
+                        // Otherwise polymorphic underflow is fine
+                    } else {
                         if stack.len() <= frame_height {
                             return Err(anyhow!("type mismatch"));
                         }
@@ -4417,8 +4442,8 @@ impl WastModuleValidator {
                         return Err(anyhow!("type mismatch"));
                     }
                     let actual_type = stack[0];
-                    // Use subtype checking: actual must be a subtype of expected
-                    if !actual_type.is_subtype_of(&expected_type) && actual_type != StackType::Unknown {
+                    // Use module-aware subtype checking for concrete type indices
+                    if !Self::is_subtype_of_in_module(&actual_type, &expected_type, module) && actual_type != StackType::Unknown {
                         return Err(anyhow!("type mismatch"));
                     }
                     return Ok(());
@@ -5209,6 +5234,17 @@ impl WastModuleValidator {
         min_height: usize,
         unreachable: bool,
     ) -> bool {
+        Self::pop_type_with_module(stack, expected, min_height, unreachable, None)
+    }
+
+    /// Pop a value from the stack with optional module context for concrete type subtyping.
+    fn pop_type_with_module(
+        stack: &mut Vec<StackType>,
+        expected: StackType,
+        min_height: usize,
+        unreachable: bool,
+        module: Option<&Module>,
+    ) -> bool {
         // In unreachable code, the stack is polymorphic
         if unreachable {
             // Can pop below min_height (polymorphic underflow)
@@ -5223,6 +5259,9 @@ impl WastModuleValidator {
                     return true;
                 }
                 // Concrete values must match the expected type
+                if let Some(m) = module {
+                    return Self::is_subtype_of_in_module(&actual, &expected, m);
+                }
                 return actual.is_subtype_of(&expected);
             }
             return true;
@@ -5235,7 +5274,11 @@ impl WastModuleValidator {
 
         if let Some(actual) = stack.pop() {
             // Use subtype checking: actual must be a subtype of expected
-            actual.is_subtype_of(&expected)
+            if let Some(m) = module {
+                Self::is_subtype_of_in_module(&actual, &expected, m)
+            } else {
+                actual.is_subtype_of(&expected)
+            }
         } else {
             false
         }
@@ -5542,6 +5585,17 @@ impl WastModuleValidator {
         frames: &[ControlFrame],
         unreachable: bool,
     ) -> Result<()> {
+        Self::validate_branch_with_module(stack, label_idx, frames, unreachable, None)
+    }
+
+    /// Validate a branch target with optional module context for concrete type subtyping.
+    fn validate_branch_with_module(
+        stack: &[StackType],
+        label_idx: u32,
+        frames: &[ControlFrame],
+        unreachable: bool,
+        module: Option<&Module>,
+    ) -> Result<()> {
         if label_idx as usize >= frames.len() {
             return Err(anyhow!("br: label index {} out of range", label_idx));
         }
@@ -5582,14 +5636,691 @@ impl WastModuleValidator {
         for (i, expected) in expected_types.iter().rev().enumerate() {
             let stack_idx = stack.len() - 1 - i;
             let actual = &stack[stack_idx];
-            // Use subtype checking instead of equality
-            if !actual.is_subtype_of(expected) {
+            if let Some(m) = module {
+                if !Self::is_subtype_of_in_module(actual, expected, m) {
+                    return Err(anyhow!("type mismatch"));
+                }
+            } else if !actual.is_subtype_of(expected) {
                 return Err(anyhow!("type mismatch"));
             }
         }
 
         Ok(())
     }
+
+    /// Check if two type indices refer to equivalent types.
+    ///
+    /// Two types are equivalent if they are in rec groups with the same structure
+    /// at the same relative position within those groups. Structural equivalence
+    /// means: same number of types in the group, and for each corresponding pair,
+    /// the composite kind matches and all references to types within the group
+    /// use the same relative offsets.
+    fn are_types_equivalent(idx1: u32, idx2: u32, module: &Module) -> bool {
+        if idx1 == idx2 {
+            return true;
+        }
+
+        // Find the rec groups containing each type index
+        let group1 = Self::find_rec_group(idx1, module);
+        let group2 = Self::find_rec_group(idx2, module);
+
+        match (group1, group2) {
+            (Some((g1, offset1)), Some((g2, offset2))) => {
+                // Must be at the same relative position
+                if offset1 != offset2 {
+                    return false;
+                }
+                // Groups must have the same number of types
+                if g1.types.len() != g2.types.len() {
+                    return false;
+                }
+                // Check structural equivalence of all types in both groups
+                for (t1, t2) in g1.types.iter().zip(g2.types.iter()) {
+                    if !Self::are_subtypes_structurally_equal(t1, t2, g1, g2, module) {
+                        return false;
+                    }
+                }
+                true
+            },
+            _ => false,
+        }
+    }
+
+    /// Find the rec group containing a type index.
+    /// Returns (group, offset_within_group) or None if not in any rec group.
+    fn find_rec_group(type_idx: u32, module: &Module) -> Option<(&RecGroup, usize)> {
+        for group in &module.rec_groups {
+            let start = group.start_type_index;
+            let end = start + group.types.len() as u32;
+            if type_idx >= start && type_idx < end {
+                return Some((group, (type_idx - start) as usize));
+            }
+        }
+        None
+    }
+
+    /// Check if two SubType entries are structurally equal, normalizing type
+    /// references within their respective rec groups to group-relative indices.
+    fn are_subtypes_structurally_equal(
+        t1: &kiln_format::module::SubType,
+        t2: &kiln_format::module::SubType,
+        g1: &RecGroup,
+        g2: &RecGroup,
+        module: &Module,
+    ) -> bool {
+        // Both must have the same finality
+        if t1.is_final != t2.is_final {
+            return false;
+        }
+        // Both must have the same number of supertypes
+        if t1.supertype_indices.len() != t2.supertype_indices.len() {
+            return false;
+        }
+        // Supertype indices must be equivalent (after normalization)
+        for (&s1, &s2) in t1.supertype_indices.iter().zip(t2.supertype_indices.iter()) {
+            if !Self::are_type_refs_equivalent(s1, s2, g1, g2, module) {
+                return false;
+            }
+        }
+        // Composite types must be structurally equal
+        if !Self::are_composite_kinds_equivalent(&t1.composite_kind, &t2.composite_kind, g1, g2, module) {
+            return false;
+        }
+
+        // For function types, also compare the function signatures from module.types
+        match (&t1.composite_kind, &t2.composite_kind) {
+            (CompositeTypeKind::Func, CompositeTypeKind::Func) => {
+                let ft1 = module.types.get(t1.type_index as usize);
+                let ft2 = module.types.get(t2.type_index as usize);
+                match (ft1, ft2) {
+                    (Some(f1), Some(f2)) => {
+                        if f1.params.len() != f2.params.len() || f1.results.len() != f2.results.len() {
+                            return false;
+                        }
+                        for (p1, p2) in f1.params.iter().zip(f2.params.iter()) {
+                            if !Self::are_value_types_equivalent(*p1, *p2, g1, g2, module) {
+                                return false;
+                            }
+                        }
+                        for (r1, r2) in f1.results.iter().zip(f2.results.iter()) {
+                            if !Self::are_value_types_equivalent(*r1, *r2, g1, g2, module) {
+                                return false;
+                            }
+                        }
+                        true
+                    },
+                    _ => false,
+                }
+            },
+            _ => true,
+        }
+    }
+
+    /// Check if two type references are equivalent, normalizing group-internal
+    /// references to relative offsets.
+    fn are_type_refs_equivalent(
+        idx1: u32,
+        idx2: u32,
+        g1: &RecGroup,
+        g2: &RecGroup,
+        module: &Module,
+    ) -> bool {
+        let in_g1 = idx1 >= g1.start_type_index && idx1 < g1.start_type_index + g1.types.len() as u32;
+        let in_g2 = idx2 >= g2.start_type_index && idx2 < g2.start_type_index + g2.types.len() as u32;
+
+        if in_g1 && in_g2 {
+            // Both are internal references - compare relative offsets
+            (idx1 - g1.start_type_index) == (idx2 - g2.start_type_index)
+        } else if !in_g1 && !in_g2 {
+            // Both are external references - they must be equivalent
+            Self::are_types_equivalent(idx1, idx2, module)
+        } else {
+            // One is internal, one is external - not equivalent
+            false
+        }
+    }
+
+    /// Check if two composite type kinds are structurally equivalent.
+    fn are_composite_kinds_equivalent(
+        k1: &CompositeTypeKind,
+        k2: &CompositeTypeKind,
+        g1: &RecGroup,
+        g2: &RecGroup,
+        module: &Module,
+    ) -> bool {
+        use kiln_format::module::GcStorageType;
+        match (k1, k2) {
+            (CompositeTypeKind::Func, CompositeTypeKind::Func) => {
+                // For func types, we need to compare the actual function signatures.
+                // The SubType's type_index gives us the func type in module.types.
+                // However, we compare at the SubType level which includes composite_kind,
+                // but Func kind alone doesn't carry the signature. We need to look up
+                // the function types from module.types using the type indices.
+                // Since we're comparing at the rec group level, we use the SubType's
+                // type_index to find the corresponding func types.
+                true // Func composite kinds match; the actual signature is compared
+                     // through the module.types entries at the SubType level
+            },
+            (CompositeTypeKind::Struct, CompositeTypeKind::Struct) => true,
+            (CompositeTypeKind::Array, CompositeTypeKind::Array) => true,
+            (CompositeTypeKind::StructWithFields(f1), CompositeTypeKind::StructWithFields(f2)) => {
+                if f1.len() != f2.len() {
+                    return false;
+                }
+                for (field1, field2) in f1.iter().zip(f2.iter()) {
+                    if field1.mutable != field2.mutable {
+                        return false;
+                    }
+                    if !Self::are_storage_types_equivalent(
+                        &field1.storage_type, &field2.storage_type, g1, g2, module
+                    ) {
+                        return false;
+                    }
+                }
+                true
+            },
+            (CompositeTypeKind::ArrayWithElement(e1), CompositeTypeKind::ArrayWithElement(e2)) => {
+                if e1.mutable != e2.mutable {
+                    return false;
+                }
+                Self::are_storage_types_equivalent(
+                    &e1.storage_type, &e2.storage_type, g1, g2, module
+                )
+            },
+            // Mix of Struct/StructWithFields or Array/ArrayWithElement: treat as compatible
+            // if the detailed one has empty fields
+            (CompositeTypeKind::Struct, CompositeTypeKind::StructWithFields(f)) |
+            (CompositeTypeKind::StructWithFields(f), CompositeTypeKind::Struct) => {
+                f.is_empty()
+            },
+            _ => false,
+        }
+    }
+
+    /// Check if two GC storage types are equivalent.
+    fn are_storage_types_equivalent(
+        s1: &kiln_format::module::GcStorageType,
+        s2: &kiln_format::module::GcStorageType,
+        g1: &RecGroup,
+        g2: &RecGroup,
+        module: &Module,
+    ) -> bool {
+        use kiln_format::module::GcStorageType;
+        match (s1, s2) {
+            (GcStorageType::I8, GcStorageType::I8) |
+            (GcStorageType::I16, GcStorageType::I16) => true,
+            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => v1 == v2,
+            (GcStorageType::RefType(idx1), GcStorageType::RefType(idx2)) |
+            (GcStorageType::RefTypeNull(idx1), GcStorageType::RefTypeNull(idx2)) => {
+                Self::are_type_refs_equivalent(*idx1, *idx2, g1, g2, module)
+            },
+            _ => false,
+        }
+    }
+
+    /// Check if two ValueTypes are equivalent, considering type index equivalence.
+    fn are_value_types_equivalent(
+        v1: ValueType,
+        v2: ValueType,
+        g1: &RecGroup,
+        g2: &RecGroup,
+        module: &Module,
+    ) -> bool {
+        match (v1, v2) {
+            (ValueType::TypedFuncRef(idx1, n1), ValueType::TypedFuncRef(idx2, n2)) => {
+                n1 == n2 && Self::are_type_refs_equivalent(idx1, idx2, g1, g2, module)
+            },
+            (ValueType::StructRef(idx1), ValueType::StructRef(idx2)) => {
+                Self::are_type_refs_equivalent(idx1, idx2, g1, g2, module)
+            },
+            (ValueType::ArrayRef(idx1), ValueType::ArrayRef(idx2)) => {
+                Self::are_type_refs_equivalent(idx1, idx2, g1, g2, module)
+            },
+            _ => v1 == v2,
+        }
+    }
+
+    /// Check if concrete type idx1 is a subtype of concrete type idx2,
+    /// following the declared supertype chain in rec_groups.
+    fn is_concrete_subtype(sub_idx: u32, sup_idx: u32, module: &Module) -> bool {
+        if Self::are_types_equivalent(sub_idx, sup_idx, module) {
+            return true;
+        }
+
+        // Walk the supertype chain from sub_idx
+        let mut current = sub_idx;
+        let mut visited = HashSet::new();
+        visited.insert(current);
+
+        loop {
+            // Find the SubType for current
+            if let Some((group, offset)) = Self::find_rec_group(current, module) {
+                let sub_type = &group.types[offset];
+                if sub_type.supertype_indices.is_empty() {
+                    return false;
+                }
+                let parent = sub_type.supertype_indices[0];
+                if Self::are_types_equivalent(parent, sup_idx, module) {
+                    return true;
+                }
+                if !visited.insert(parent) {
+                    return false; // Cycle detected
+                }
+                current = parent;
+            } else {
+                return false;
+            }
+        }
+    }
+
+    /// Module-aware subtype check for StackType values.
+    ///
+    /// Extends the basic `is_subtype_of` with module context for concrete type
+    /// indices. Two `TypedFuncRef` values with different indices may still be
+    /// subtypes if one's type index is a declared subtype of the other's.
+    fn is_subtype_of_in_module(sub: &StackType, sup: &StackType, module: &Module) -> bool {
+        // Use the basic check first (handles abstract types)
+        if sub.is_subtype_of(sup) {
+            return true;
+        }
+
+        match (sub, sup) {
+            // TypedFuncRef with different indices - check concrete subtyping
+            (StackType::TypedFuncRef(sub_idx, sub_null), StackType::TypedFuncRef(sup_idx, sup_null)) => {
+                // Nullability: non-nullable <: nullable
+                if *sub_null && !*sup_null {
+                    return false;
+                }
+                Self::is_concrete_subtype(*sub_idx, *sup_idx, module)
+            },
+            // Concrete type -> abstract type: need to check what the concrete type actually is
+            (StackType::TypedFuncRef(idx, _), StackType::FuncRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
+            },
+            (StackType::TypedFuncRef(idx, _), StackType::StructRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+            },
+            (StackType::TypedFuncRef(idx, _), StackType::ArrayRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
+            },
+            (StackType::TypedFuncRef(idx, _), StackType::EqRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+                    || Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
+            },
+            (StackType::TypedFuncRef(idx, _), StackType::AnyRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+                    || Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
+            },
+            // NoneRef is bottom of any hierarchy - subtype of nullable concrete refs in any hierarchy
+            (StackType::NoneRef, StackType::TypedFuncRef(idx, true)) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+                    || Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
+            },
+            // NullFuncRef (nofunc) is bottom of func hierarchy
+            (StackType::NullFuncRef, StackType::TypedFuncRef(idx, true)) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
+            },
+            _ => false,
+        }
+    }
+
+    /// Check if a concrete type index refers to a specific kind of composite type.
+    fn concrete_type_is_kind(module: &Module, type_idx: u32, kind: CompositeKindClass) -> bool {
+        if let Some(composite_kind) = Self::get_composite_type_kind(module, type_idx) {
+            match (kind, composite_kind) {
+                (CompositeKindClass::Func, CompositeTypeKind::Func) => true,
+                (CompositeKindClass::Struct, CompositeTypeKind::Struct) |
+                (CompositeKindClass::Struct, CompositeTypeKind::StructWithFields(_)) => true,
+                (CompositeKindClass::Array, CompositeTypeKind::Array) |
+                (CompositeKindClass::Array, CompositeTypeKind::ArrayWithElement(_)) => true,
+                _ => false,
+            }
+        } else {
+            // Not in rec_groups - check if it's a func type in module.types
+            // Types not in rec_groups are plain function types
+            match kind {
+                CompositeKindClass::Func => true,
+                _ => false,
+            }
+        }
+    }
+
+    /// Module-aware pop_type that uses module context for concrete type subtyping.
+    fn pop_type_in_module(
+        stack: &mut Vec<StackType>,
+        expected: StackType,
+        min_height: usize,
+        unreachable: bool,
+        module: &Module,
+    ) -> bool {
+        if unreachable {
+            if stack.len() <= min_height {
+                return true;
+            }
+            if let Some(actual) = stack.pop() {
+                if actual == StackType::Unknown {
+                    return true;
+                }
+                return Self::is_subtype_of_in_module(&actual, &expected, module);
+            }
+            return true;
+        }
+
+        if stack.len() <= min_height {
+            return false;
+        }
+
+        if let Some(actual) = stack.pop() {
+            Self::is_subtype_of_in_module(&actual, &expected, module)
+        } else {
+            false
+        }
+    }
+
+    /// Validate all subtype declarations in the module's rec_groups.
+    ///
+    /// For each SubType that declares a supertype, validates:
+    /// 1. The supertype index is valid
+    /// 2. The supertype is not final
+    /// 3. The composite types are compatible (same kind)
+    /// 4. The subtype is structurally compatible with the supertype
+    fn validate_subtype_declarations(module: &Module) -> Result<()> {
+        for group in &module.rec_groups {
+            for sub_type in &group.types {
+                for &super_idx in &sub_type.supertype_indices {
+                    // Validate supertype index is within bounds
+                    if super_idx as usize >= module.types.len() {
+                        return Err(anyhow!("sub type"));
+                    }
+
+                    // Find the supertype's SubType declaration
+                    let super_subtype = Self::find_subtype_by_index(super_idx, module);
+
+                    if let Some(super_st) = super_subtype {
+                        // Check that the supertype is not final
+                        if super_st.is_final {
+                            return Err(anyhow!("sub type"));
+                        }
+
+                        // Check that the composite kinds are compatible
+                        if !Self::is_composite_kind_compatible(
+                            &sub_type.composite_kind,
+                            &super_st.composite_kind,
+                        ) {
+                            return Err(anyhow!("sub type"));
+                        }
+
+                        // Check structural compatibility for detailed types
+                        Self::validate_structural_subtype(
+                            sub_type, super_st, group, module
+                        )?;
+                    } else {
+                        // Supertype is not in rec_groups. For plain function types
+                        // in module.types, the sub must also be a function type.
+                        // Plain types without `sub` declaration are implicitly final.
+                        return Err(anyhow!("sub type"));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Find a SubType by its type index across all rec_groups.
+    fn find_subtype_by_index(type_idx: u32, module: &Module) -> Option<&kiln_format::module::SubType> {
+        for group in &module.rec_groups {
+            let start = group.start_type_index;
+            let end = start + group.types.len() as u32;
+            if type_idx >= start && type_idx < end {
+                let local_idx = (type_idx - start) as usize;
+                return Some(&group.types[local_idx]);
+            }
+        }
+        None
+    }
+
+    /// Check if a child composite kind is compatible with a parent composite kind.
+    /// Same kind requirement: func <: func, struct <: struct, array <: array.
+    fn is_composite_kind_compatible(
+        child: &CompositeTypeKind,
+        parent: &CompositeTypeKind,
+    ) -> bool {
+        match (child, parent) {
+            (CompositeTypeKind::Func, CompositeTypeKind::Func) => true,
+            (CompositeTypeKind::Struct, CompositeTypeKind::Struct) |
+            (CompositeTypeKind::Struct, CompositeTypeKind::StructWithFields(_)) |
+            (CompositeTypeKind::StructWithFields(_), CompositeTypeKind::Struct) |
+            (CompositeTypeKind::StructWithFields(_), CompositeTypeKind::StructWithFields(_)) => true,
+            (CompositeTypeKind::Array, CompositeTypeKind::Array) |
+            (CompositeTypeKind::Array, CompositeTypeKind::ArrayWithElement(_)) |
+            (CompositeTypeKind::ArrayWithElement(_), CompositeTypeKind::Array) |
+            (CompositeTypeKind::ArrayWithElement(_), CompositeTypeKind::ArrayWithElement(_)) => true,
+            _ => false,
+        }
+    }
+
+    /// Validate that a subtype is structurally compatible with its declared supertype.
+    ///
+    /// For structs: child must have at least as many fields, first N fields must match
+    /// For arrays: element types must match (covariant for immutable, invariant for mutable)
+    /// For funcs: params must be contravariant, results must be covariant
+    fn validate_structural_subtype(
+        child: &kiln_format::module::SubType,
+        parent: &kiln_format::module::SubType,
+        child_group: &RecGroup,
+        module: &Module,
+    ) -> Result<()> {
+        match (&child.composite_kind, &parent.composite_kind) {
+            (CompositeTypeKind::Func, CompositeTypeKind::Func) => {
+                // For function types, compare using module.types
+                let child_ft = module.types.get(child.type_index as usize);
+                let parent_ft = module.types.get(parent.type_index as usize);
+                if let (Some(cft), Some(pft)) = (child_ft, parent_ft) {
+                    // Same number of params and results required
+                    if cft.params.len() != pft.params.len() || cft.results.len() != pft.results.len() {
+                        return Err(anyhow!("sub type"));
+                    }
+                    // Params: contravariant (parent param must be subtype of child param)
+                    for (cp, pp) in cft.params.iter().zip(pft.params.iter()) {
+                        let cs = StackType::from_value_type(*cp);
+                        let ps = StackType::from_value_type(*pp);
+                        if !Self::is_subtype_of_in_module(&ps, &cs, module) {
+                            return Err(anyhow!("sub type"));
+                        }
+                    }
+                    // Results: covariant (child result must be subtype of parent result)
+                    for (cr, pr) in cft.results.iter().zip(pft.results.iter()) {
+                        let cs = StackType::from_value_type(*cr);
+                        let ps = StackType::from_value_type(*pr);
+                        if !Self::is_subtype_of_in_module(&cs, &ps, module) {
+                            return Err(anyhow!("sub type"));
+                        }
+                    }
+                }
+            },
+            (CompositeTypeKind::StructWithFields(child_fields), CompositeTypeKind::StructWithFields(parent_fields)) => {
+                // Child must have at least as many fields as parent
+                if child_fields.len() < parent_fields.len() {
+                    return Err(anyhow!("sub type"));
+                }
+                // First N fields must be compatible
+                for (cf, pf) in child_fields.iter().zip(parent_fields.iter()) {
+                    Self::validate_field_subtype(cf, pf, module)?;
+                }
+            },
+            (CompositeTypeKind::ArrayWithElement(child_elem), CompositeTypeKind::ArrayWithElement(parent_elem)) => {
+                Self::validate_field_subtype(child_elem, parent_elem, module)?;
+            },
+            // If one side is detailed and the other isn't, we can't fully validate
+            // but the kind compatibility was already checked
+            _ => {},
+        }
+        Ok(())
+    }
+
+    /// Validate field subtyping for struct/array fields.
+    ///
+    /// Immutable fields: covariant (child field type must be subtype of parent field type)
+    /// Mutable fields: invariant (types must be equivalent)
+    fn validate_field_subtype(
+        child: &kiln_format::module::GcFieldType,
+        parent: &kiln_format::module::GcFieldType,
+        module: &Module,
+    ) -> Result<()> {
+        use kiln_format::module::GcStorageType;
+
+        if child.mutable != parent.mutable {
+            return Err(anyhow!("sub type"));
+        }
+
+        if child.mutable {
+            // Mutable fields must be invariant (exact match)
+            if !Self::are_storage_types_equal_in_module(&child.storage_type, &parent.storage_type, module) {
+                return Err(anyhow!("sub type"));
+            }
+        } else {
+            // Immutable fields are covariant
+            if !Self::is_storage_type_subtype(&child.storage_type, &parent.storage_type, module) {
+                return Err(anyhow!("sub type"));
+            }
+        }
+        Ok(())
+    }
+
+    /// Check if two storage types are equal (for mutable field invariance).
+    fn are_storage_types_equal_in_module(
+        s1: &kiln_format::module::GcStorageType,
+        s2: &kiln_format::module::GcStorageType,
+        module: &Module,
+    ) -> bool {
+        use kiln_format::module::GcStorageType;
+        match (s1, s2) {
+            (GcStorageType::I8, GcStorageType::I8) |
+            (GcStorageType::I16, GcStorageType::I16) => true,
+            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => v1 == v2,
+            (GcStorageType::RefType(idx1), GcStorageType::RefType(idx2)) |
+            (GcStorageType::RefTypeNull(idx1), GcStorageType::RefTypeNull(idx2)) => {
+                Self::are_types_equivalent(*idx1, *idx2, module)
+            },
+            _ => false,
+        }
+    }
+
+    /// Check if a storage type is a subtype of another (for immutable field covariance).
+    fn is_storage_type_subtype(
+        sub: &kiln_format::module::GcStorageType,
+        sup: &kiln_format::module::GcStorageType,
+        module: &Module,
+    ) -> bool {
+        use kiln_format::module::GcStorageType;
+        match (sub, sup) {
+            (GcStorageType::I8, GcStorageType::I8) |
+            (GcStorageType::I16, GcStorageType::I16) => true,
+            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => v1 == v2,
+            (GcStorageType::RefType(sub_idx), GcStorageType::RefType(sup_idx)) => {
+                Self::is_concrete_subtype(*sub_idx, *sup_idx, module)
+            },
+            (GcStorageType::RefType(sub_idx), GcStorageType::RefTypeNull(sup_idx)) => {
+                Self::is_concrete_subtype(*sub_idx, *sup_idx, module)
+            },
+            (GcStorageType::RefTypeNull(sub_idx), GcStorageType::RefTypeNull(sup_idx)) => {
+                Self::is_concrete_subtype(*sub_idx, *sup_idx, module)
+            },
+            // Cross-format: concrete ref vs abstract ref encoded as Value byte
+            // Value bytes: 0x6E=anyref, 0x6D=eqref, 0x6B=structref, 0x6A=arrayref,
+            // 0x70=funcref, 0x6F=externref
+            (GcStorageType::RefType(idx), GcStorageType::Value(v)) |
+            (GcStorageType::RefTypeNull(idx), GcStorageType::Value(v)) => {
+                let sub_st = StackType::TypedFuncRef(*idx, matches!(sub, GcStorageType::RefTypeNull(_)));
+                let sup_st = Self::value_byte_to_stack_type(*v);
+                Self::is_subtype_of_in_module(&sub_st, &sup_st, module)
+            },
+            _ => false,
+        }
+    }
+
+    /// Convert a value type byte to StackType for subtype checking.
+    fn value_byte_to_stack_type(byte: u8) -> StackType {
+        match byte {
+            0x6E => StackType::AnyRef,     // anyref
+            0x6D => StackType::EqRef,      // eqref
+            0x6C => StackType::I31Ref,     // i31ref
+            0x6B => StackType::StructRef,  // structref
+            0x6A => StackType::ArrayRef,   // arrayref
+            0x70 => StackType::FuncRef,    // funcref
+            0x6F => StackType::ExternRef,  // externref
+            0x69 => StackType::ExnRef,     // exnref
+            0x71 => StackType::NoneRef,    // none
+            0x73 => StackType::NullFuncRef, // nofunc
+            0x72 => StackType::NullExternRef, // noextern
+            _ => StackType::Unknown,
+        }
+    }
+
+    /// Check if two ValueTypes are equal with module context for concrete indices.
+    fn are_value_types_equal_in_module(v1: ValueType, v2: ValueType, module: &Module) -> bool {
+        match (v1, v2) {
+            (ValueType::TypedFuncRef(idx1, n1), ValueType::TypedFuncRef(idx2, n2)) => {
+                n1 == n2 && Self::are_types_equivalent(idx1, idx2, module)
+            },
+            _ => v1 == v2,
+        }
+    }
+
+    /// Validate that type references within rec groups don't use forward references
+    /// outside the current group.
+    ///
+    /// In a non-rec-group context, type $t1 cannot reference $t2 if $t2 comes after $t1.
+    /// Within a rec group, forward references within the group are allowed.
+    fn validate_rec_group_type_references(module: &Module) -> Result<()> {
+        // Types that are NOT in rec groups but reference a later type are invalid
+        // For each type in the module, check if it references a type that comes after it
+        // but is not in the same rec group.
+
+        // Build a set of type indices that are in rec groups, along with their group bounds
+        let mut type_to_group_end: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        for group in &module.rec_groups {
+            let end = group.start_type_index + group.types.len() as u32;
+            for i in group.start_type_index..end {
+                type_to_group_end.insert(i, end);
+            }
+        }
+
+        // Check each type's references
+        for (idx, func_type) in module.types.iter().enumerate() {
+            let idx = idx as u32;
+            let group_end = type_to_group_end.get(&idx).copied().unwrap_or(idx + 1);
+
+            for vt in func_type.params.iter().chain(func_type.results.iter()) {
+                if let Some(ref_idx) = Self::extract_type_ref(vt) {
+                    // The referenced type must either be before this type or in the same group
+                    if ref_idx > idx && ref_idx >= group_end {
+                        return Err(anyhow!("unknown type"));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Extract a type index reference from a ValueType, if any.
+    fn extract_type_ref(vt: &ValueType) -> Option<u32> {
+        match vt {
+            ValueType::TypedFuncRef(idx, _) |
+            ValueType::StructRef(idx) |
+            ValueType::ArrayRef(idx) => Some(*idx),
+            _ => None,
+        }
+    }
+}
+
+/// Classification of composite type kinds for module-aware subtyping.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CompositeKindClass {
+    Func,
+    Struct,
+    Array,
 }
 
 /// Block type enumeration
