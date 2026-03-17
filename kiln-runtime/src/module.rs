@@ -4270,6 +4270,12 @@ impl TableWrapper {
     pub fn element_type(&self) -> kiln_foundation::types::RefType {
         self.0.ty.element_type
     }
+
+    /// Check if this table uses 64-bit indices (table64 proposal)
+    #[must_use]
+    pub fn is_table64(&self) -> bool {
+        self.0.ty.table64
+    }
 }
 
 /// Wrapper for Arc<Memory> to enable trait implementations  

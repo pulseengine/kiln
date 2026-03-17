@@ -459,19 +459,20 @@ impl WastEngine {
         use kiln_runtime::module::{RuntimeImportDesc, TableWrapper};
         use kiln_runtime::table::Table;
 
-        // The spectest table type: (table 10 20 funcref)
+        // The spectest table types:
+        //   "table"   = (table 10 20 funcref)
+        //   "table64" = (table i64 10 20 funcref)
         // Look for table imports from spectest
         for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
-            if mod_name == "spectest" && field_name == "table" {
+            if mod_name == "spectest" && (field_name == "table" || field_name == "table64") {
                 // Check if this is actually a table import
                 if let Some(RuntimeImportDesc::Table(_table_type)) = module.import_types.get(i) {
+                    let is_table64 = field_name == "table64";
                     // The spectest module provides a table with 10-20 funcref elements
-                    // The import type specifies minimum requirements, but the actual
-                    // spectest table always has at least 10 elements
                     let spectest_table_type = TableType {
                         element_type: RefType::Funcref,
                         limits: Limits { min: 10, max: Some(20) },
-                        table64: false,
+                        table64: is_table64,
                     };
                     let table = Table::new(spectest_table_type).map_err(|e| {
                         anyhow::anyhow!("Failed to create spectest table: {:?}", e)
@@ -871,17 +872,18 @@ impl WastEngine {
                 Ok(())
             }
             RuntimeImportDesc::Table(table_type) => {
-                if field_name != "table" {
+                if field_name != "table" && field_name != "table64" {
                     return Err(anyhow::anyhow!(
                         "unknown import: spectest::{} is not a known spectest table",
                         field_name
                     ));
                 }
-                // spectest table is (table 10 20 funcref)
+                let is_table64 = field_name == "table64";
+                // spectest table is (table 10 20 funcref) or (table i64 10 20 funcref)
                 let spectest_table = TableType {
                     element_type: RefType::Funcref,
                     limits: Limits { min: 10, max: Some(20) },
-                    table64: false,
+                    table64: is_table64,
                 };
                 validate_table_import_compatibility(table_type, &spectest_table)?;
                 Ok(())

@@ -1573,10 +1573,11 @@ impl WastModuleValidator {
                     let func_type = &module.types[type_idx as usize];
                     let frame_height = Self::current_frame_height(&frames);
 
-                    // Pop table index (must be i32)
+                    // Pop table index (i64 if table64, else i32)
+                    let table_addr_type = if Self::is_table64(module, table_idx) { StackType::I64 } else { StackType::I32 };
                     if !Self::pop_type(
                         &mut stack,
-                        StackType::I32,
+                        table_addr_type,
                         frame_height,
                         Self::is_unreachable(&frames),
                     ) {
@@ -1690,10 +1691,11 @@ impl WastModuleValidator {
 
                     let frame_height = Self::current_frame_height(&frames);
 
-                    // Pop table index (must be i32)
+                    // Pop table index (i64 if table64, else i32)
+                    let table_addr_type = if Self::is_table64(module, table_idx) { StackType::I64 } else { StackType::I32 };
                     if !Self::pop_type(
                         &mut stack,
-                        StackType::I32,
+                        table_addr_type,
                         frame_height,
                         Self::is_unreachable(&frames),
                     ) {

@@ -2315,11 +2315,18 @@ impl StacklessEngine {
                     }
                     Instruction::CallIndirect(type_idx, table_idx) => {
                         // CallIndirect: call a function through an indirect table reference
-                        // Pop the function index from the stack
-                        let table_func_idx = if let Some(Value::I32(idx)) = operand_stack.pop() {
-                            idx as u32
-                        } else {
-                            return Err(kiln_error::Error::runtime_trap("CallIndirect: expected i32 function index on stack"));
+                        // Pop the function index from the stack (i32 or i64 for table64)
+                        let popped = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("CallIndirect: expected function index on stack")
+                        })?;
+                        let table_func_idx: u32 = match popped {
+                            Value::I32(idx) => idx as u32,
+                            Value::I64(idx) => u32::try_from(idx).map_err(|_| {
+                                kiln_error::Error::runtime_trap("undefined element")
+                            })?,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap("CallIndirect: expected i32 or i64 function index on stack"));
+                            }
                         };
 
                         #[cfg(feature = "tracing")]
@@ -2924,11 +2931,18 @@ impl StacklessEngine {
                     }
                     Instruction::ReturnCallIndirect(type_idx, table_idx) => {
                         // ReturnCallIndirect: tail call through indirect table reference
-                        // Pop the function index from the stack
-                        let table_func_idx = if let Some(Value::I32(idx)) = operand_stack.pop() {
-                            idx as u32
-                        } else {
-                            return Err(kiln_error::Error::runtime_trap("return_call_indirect: expected i32 function index on stack"));
+                        // Pop the function index from the stack (i32 or i64 for table64)
+                        let popped = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("return_call_indirect: expected function index on stack")
+                        })?;
+                        let table_func_idx: u32 = match popped {
+                            Value::I32(idx) => idx as u32,
+                            Value::I64(idx) => u32::try_from(idx).map_err(|_| {
+                                kiln_error::Error::runtime_trap("undefined element")
+                            })?,
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap("return_call_indirect: expected i32 or i64 function index on stack"));
+                            }
                         };
 
                         #[cfg(feature = "tracing")]
@@ -6732,64 +6746,81 @@ impl StacklessEngine {
 
                     // ==================== TABLE OPERATIONS ====================
                     Instruction::TableGet(table_idx) => {
-                        // table.get: [i32] -> [ref]
+                        // table.get: [it] -> [ref] where it=i64 if table64, else i32
                         // Pop index from stack, get element from table at that index
-                        if let Some(Value::I32(elem_idx)) = operand_stack.pop() {
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                table_idx = table_idx,
-                                elem_idx = elem_idx,
-                                "[TableGet] Getting element from table"
-                            );
-
-                            if elem_idx < 0 {
+                        let popped = operand_stack.pop().ok_or_else(|| {
+                            kiln_error::Error::runtime_trap("table.get: expected index on stack")
+                        })?;
+                        let elem_idx: u32 = match popped {
+                            Value::I32(idx) => {
+                                if idx < 0 {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds table access",
+                                    ));
+                                }
+                                idx as u32
+                            }
+                            Value::I64(idx) => {
+                                if idx < 0 {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds table access",
+                                    ));
+                                }
+                                u32::try_from(idx).map_err(|_| {
+                                    kiln_error::Error::runtime_trap("out of bounds table access")
+                                })?
+                            }
+                            _ => {
                                 return Err(kiln_error::Error::runtime_trap(
-                                    "table.get: index cannot be negative",
+                                    "table.get: expected i32 or i64 index on stack",
                                 ));
                             }
+                        };
 
-                            // Get the table from the instance
-                            let table = instance.table(table_idx)?;
-                            let elem = table.get(elem_idx as u32)?;
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            table_idx = table_idx,
+                            elem_idx = elem_idx,
+                            "[TableGet] Getting element from table"
+                        );
 
-                            // Push the element (or null ref) onto the stack
-                            let value = match elem {
-                                Some(v) => v,
-                                None => {
-                                    // Return null reference based on table element type
-                                    use kiln_foundation::types::HeapType;
-                                    match table.element_type() {
-                                        kiln_foundation::types::RefType::Funcref => Value::FuncRef(None),
-                                        kiln_foundation::types::RefType::Externref => Value::ExternRef(None),
-                                        kiln_foundation::types::RefType::Gc(gc) => match gc.heap_type {
-                                            HeapType::Func | HeapType::NoFunc => Value::FuncRef(None),
-                                            HeapType::Extern | HeapType::NoExtern => Value::ExternRef(None),
-                                            HeapType::I31 | HeapType::Eq | HeapType::Any | HeapType::None => Value::I31Ref(None),
-                                            HeapType::Struct => Value::StructRef(None),
-                                            HeapType::Array => Value::ArrayRef(None),
-                                            HeapType::Exn => Value::ExnRef(None),
-                                            HeapType::Concrete(_) => Value::FuncRef(None),
-                                        },
-                                    }
+                        // Get the table from the instance
+                        let table = instance.table(table_idx)?;
+                        let elem = table.get(elem_idx)?;
+
+                        // Push the element (or null ref) onto the stack
+                        let value = match elem {
+                            Some(v) => v,
+                            None => {
+                                // Return null reference based on table element type
+                                use kiln_foundation::types::HeapType;
+                                match table.element_type() {
+                                    kiln_foundation::types::RefType::Funcref => Value::FuncRef(None),
+                                    kiln_foundation::types::RefType::Externref => Value::ExternRef(None),
+                                    kiln_foundation::types::RefType::Gc(gc) => match gc.heap_type {
+                                        HeapType::Func | HeapType::NoFunc => Value::FuncRef(None),
+                                        HeapType::Extern | HeapType::NoExtern => Value::ExternRef(None),
+                                        HeapType::I31 | HeapType::Eq | HeapType::Any | HeapType::None => Value::I31Ref(None),
+                                        HeapType::Struct => Value::StructRef(None),
+                                        HeapType::Array => Value::ArrayRef(None),
+                                        HeapType::Exn => Value::ExnRef(None),
+                                        HeapType::Concrete(_) => Value::FuncRef(None),
+                                    },
                                 }
-                            };
-                            operand_stack.push(value);
+                            }
+                        };
+                        operand_stack.push(value);
 
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                table_idx = table_idx,
-                                elem_idx = elem_idx,
-                                "[TableGet] SUCCESS"
-                            );
-                        } else {
-                            return Err(kiln_error::Error::runtime_trap(
-                                "table.get: expected i32 index on stack",
-                            ));
-                        }
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            table_idx = table_idx,
+                            elem_idx = elem_idx,
+                            "[TableGet] SUCCESS"
+                        );
                     }
 
                     Instruction::TableSet(table_idx) => {
-                        // table.set: [i32 ref] -> []
+                        // table.set: [it ref] -> [] where it=i64 if table64, else i32
                         // Pop value, then index from stack; set element in table
                         let value = operand_stack.pop().ok_or_else(|| {
                             kiln_error::Error::runtime_trap("table.set: expected value on stack")
@@ -6798,55 +6829,69 @@ impl StacklessEngine {
                             kiln_error::Error::runtime_trap("table.set: expected index on stack")
                         })?;
 
-                        if let Value::I32(elem_idx) = idx {
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                table_idx = table_idx,
-                                elem_idx = elem_idx,
-                                value = ?value,
-                                "[TableSet] Setting element in table"
-                            );
-
-                            if elem_idx < 0 {
-                                return Err(kiln_error::Error::runtime_trap(
-                                    "table.set: index cannot be negative",
-                                ));
-                            }
-
-                            // Validate value is a reference type
-                            let table_value = match &value {
-                                Value::FuncRef(_)
-                                | Value::ExternRef(_)
-                                | Value::I31Ref(_)
-                                | Value::StructRef(_)
-                                | Value::ArrayRef(_)
-                                | Value::Ref(_) => Some(value.clone()),
-                                _ => {
+                        let elem_idx: u32 = match idx {
+                            Value::I32(i) => {
+                                if i < 0 {
                                     return Err(kiln_error::Error::runtime_trap(
-                                        "table.set: value must be a reference type",
+                                        "out of bounds table access",
                                     ));
                                 }
-                            };
+                                i as u32
+                            }
+                            Value::I64(i) => {
+                                if i < 0 {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds table access",
+                                    ));
+                                }
+                                u32::try_from(i).map_err(|_| {
+                                    kiln_error::Error::runtime_trap("out of bounds table access")
+                                })?
+                            }
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "table.set: expected i32 or i64 index",
+                                ));
+                            }
+                        };
 
-                            // Get the table and set the element
-                            let table = instance.table(table_idx)?;
-                            table.set(elem_idx as u32, table_value)?;
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            table_idx = table_idx,
+                            elem_idx = elem_idx,
+                            value = ?value,
+                            "[TableSet] Setting element in table"
+                        );
 
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                table_idx = table_idx,
-                                elem_idx = elem_idx,
-                                "[TableSet] SUCCESS"
-                            );
-                        } else {
-                            return Err(kiln_error::Error::runtime_trap(
-                                "table.set: expected i32 index",
-                            ));
-                        }
+                        // Validate value is a reference type
+                        let table_value = match &value {
+                            Value::FuncRef(_)
+                            | Value::ExternRef(_)
+                            | Value::I31Ref(_)
+                            | Value::StructRef(_)
+                            | Value::ArrayRef(_)
+                            | Value::Ref(_) => Some(value.clone()),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "table.set: value must be a reference type",
+                                ));
+                            }
+                        };
+
+                        // Get the table and set the element
+                        let table = instance.table(table_idx)?;
+                        table.set(elem_idx, table_value)?;
+
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            table_idx = table_idx,
+                            elem_idx = elem_idx,
+                            "[TableSet] SUCCESS"
+                        );
                     }
 
                     Instruction::TableSize(table_idx) => {
-                        // table.size: [] -> [i32]
+                        // table.size: [] -> [it] where it=i64 if table64, else i32
                         // Push current table size onto stack
                         #[cfg(feature = "tracing")]
                         trace!(
@@ -6856,7 +6901,11 @@ impl StacklessEngine {
 
                         let table = instance.table(table_idx)?;
                         let size = table.size();
-                        operand_stack.push(Value::I32(size as i32));
+                        if table.is_table64() {
+                            operand_stack.push(Value::I64(size as i64));
+                        } else {
+                            operand_stack.push(Value::I32(size as i32));
+                        }
 
                         #[cfg(feature = "tracing")]
                         trace!(
@@ -6867,8 +6916,8 @@ impl StacklessEngine {
                     }
 
                     Instruction::TableGrow(table_idx) => {
-                        // table.grow: [ref i32] -> [i32]
-                        // Pop delta (i32), pop init value (ref), grow table, push old size or -1
+                        // table.grow: [ref it] -> [it] where it=i64 if table64, else i32
+                        // Pop delta, pop init value (ref), grow table, push old size or -1
                         let delta = operand_stack.pop().ok_or_else(|| {
                             kiln_error::Error::runtime_trap("table.grow: expected delta on stack")
                         })?;
@@ -6876,65 +6925,94 @@ impl StacklessEngine {
                             kiln_error::Error::runtime_trap("table.grow: expected init value on stack")
                         })?;
 
-                        if let Value::I32(delta_val) = delta {
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                table_idx = table_idx,
-                                delta = delta_val,
-                                init_value = ?init_value,
-                                "[TableGrow] Growing table"
-                            );
+                        // Determine if this is a table64 table
+                        let table = instance.table(table_idx)?;
+                        let is_table64 = table.is_table64();
 
-                            // Negative delta should return -1 (failure)
-                            if delta_val < 0 {
-                                operand_stack.push(Value::I32(-1));
-                            } else {
-                                // Validate init value is a reference type
-                                match &init_value {
-                                    Value::FuncRef(_)
-                                    | Value::ExternRef(_)
-                                    | Value::I31Ref(_)
-                                    | Value::StructRef(_)
-                                    | Value::ArrayRef(_)
-                                    | Value::Ref(_) => {}
-                                    _ => {
-                                        return Err(kiln_error::Error::runtime_trap(
-                                            "table.grow: init value must be a reference type",
-                                        ));
-                                    }
+                        let delta_u32: Option<u32> = match delta {
+                            Value::I32(d) => {
+                                if d < 0 { None } else { Some(d as u32) }
+                            }
+                            Value::I64(d) => {
+                                if d < 0 { None } else { u32::try_from(d).ok() }
+                            }
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "table.grow: expected i32 or i64 delta",
+                                ));
+                            }
+                        };
+
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            table_idx = table_idx,
+                            delta = ?delta_u32,
+                            init_value = ?init_value,
+                            "[TableGrow] Growing table"
+                        );
+
+                        // If delta couldn't be converted, growth fails
+                        if let Some(delta_val) = delta_u32 {
+                            // Validate init value is a reference type
+                            match &init_value {
+                                Value::FuncRef(_)
+                                | Value::ExternRef(_)
+                                | Value::I31Ref(_)
+                                | Value::StructRef(_)
+                                | Value::ArrayRef(_)
+                                | Value::Ref(_) => {}
+                                _ => {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "table.grow: init value must be a reference type",
+                                    ));
                                 }
+                            }
 
-                                let table = instance.table(table_idx)?;
-                                match table.grow(delta_val as u32, init_value) {
-                                    Ok(old_size) => {
+                            match table.grow(delta_val, init_value) {
+                                Ok(old_size) => {
+                                    if is_table64 {
+                                        operand_stack.push(Value::I64(old_size as i64));
+                                    } else {
                                         operand_stack.push(Value::I32(old_size as i32));
-                                        #[cfg(feature = "tracing")]
-                                        trace!(
-                                            table_idx = table_idx,
-                                            old_size = old_size,
-                                            "[TableGrow] SUCCESS"
-                                        );
                                     }
-                                    Err(_) => {
-                                        // Growth failed (e.g., exceeded max size)
+                                    #[cfg(feature = "tracing")]
+                                    trace!(
+                                        table_idx = table_idx,
+                                        old_size = old_size,
+                                        "[TableGrow] SUCCESS"
+                                    );
+                                }
+                                Err(_) => {
+                                    // Growth failed (e.g., exceeded max size)
+                                    if is_table64 {
+                                        operand_stack.push(Value::I64(-1));
+                                    } else {
                                         operand_stack.push(Value::I32(-1));
-                                        #[cfg(feature = "tracing")]
-                                        trace!(
-                                            table_idx = table_idx,
-                                            "[TableGrow] Failed, returning -1"
-                                        );
                                     }
+                                    #[cfg(feature = "tracing")]
+                                    trace!(
+                                        table_idx = table_idx,
+                                        "[TableGrow] Failed, returning -1"
+                                    );
                                 }
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap(
-                                "table.grow: expected i32 delta",
-                            ));
+                            // Negative or overflow delta - growth fails
+                            if is_table64 {
+                                operand_stack.push(Value::I64(-1));
+                            } else {
+                                operand_stack.push(Value::I32(-1));
+                            }
+                            #[cfg(feature = "tracing")]
+                            trace!(
+                                table_idx = table_idx,
+                                "[TableGrow] Failed, returning -1"
+                            );
                         }
                     }
 
                     Instruction::TableFill(table_idx) => {
-                        // table.fill: [i32 ref i32] -> []
+                        // table.fill: [it ref it] -> [] where it=i64 if table64, else i32
                         // Pop size, value, dest; fill table region with value
                         let size = operand_stack.pop().ok_or_else(|| {
                             kiln_error::Error::runtime_trap("table.fill: expected size on stack")
@@ -6946,146 +7024,202 @@ impl StacklessEngine {
                             kiln_error::Error::runtime_trap("table.fill: expected dest on stack")
                         })?;
 
-                        if let (Value::I32(dest_idx), Value::I32(fill_size)) = (&dest, &size) {
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                table_idx = table_idx,
-                                dest = dest_idx,
-                                size = fill_size,
-                                value = ?value,
-                                "[TableFill] Filling table region"
-                            );
-
-                            if *dest_idx < 0 || *fill_size < 0 {
-                                return Err(kiln_error::Error::runtime_trap(
-                                    "table.fill: negative dest or size",
-                                ));
-                            }
-
-                            // Validate value is a reference type
-                            let fill_value = match &value {
-                                Value::FuncRef(_)
-                                | Value::ExternRef(_)
-                                | Value::I31Ref(_)
-                                | Value::StructRef(_)
-                                | Value::ArrayRef(_)
-                                | Value::Ref(_) => Some(value.clone()),
-                                _ => {
+                        // Extract dest index (i32 or i64)
+                        let dest_idx: u32 = match dest {
+                            Value::I32(i) => {
+                                if i < 0 {
                                     return Err(kiln_error::Error::runtime_trap(
-                                        "table.fill: value must be a reference type",
+                                        "out of bounds table access",
                                     ));
                                 }
-                            };
+                                i as u32
+                            }
+                            Value::I64(i) => {
+                                if i < 0 {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds table access",
+                                    ));
+                                }
+                                u32::try_from(i).map_err(|_| {
+                                    kiln_error::Error::runtime_trap("out of bounds table access")
+                                })?
+                            }
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "table.fill: expected i32 or i64 for dest",
+                                ));
+                            }
+                        };
 
-                            let table = instance.table(table_idx)?;
-                            table.fill(*dest_idx as u32, *fill_size as u32, fill_value)?;
+                        // Extract fill size (i32 or i64)
+                        let fill_size: u32 = match size {
+                            Value::I32(i) => {
+                                if i < 0 {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds table access",
+                                    ));
+                                }
+                                i as u32
+                            }
+                            Value::I64(i) => {
+                                if i < 0 {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds table access",
+                                    ));
+                                }
+                                u32::try_from(i).map_err(|_| {
+                                    kiln_error::Error::runtime_trap("out of bounds table access")
+                                })?
+                            }
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "table.fill: expected i32 or i64 for size",
+                                ));
+                            }
+                        };
 
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                table_idx = table_idx,
-                                dest = dest_idx,
-                                size = fill_size,
-                                "[TableFill] SUCCESS"
-                            );
-                        } else {
-                            return Err(kiln_error::Error::runtime_trap(
-                                "table.fill: expected i32 values for dest and size",
-                            ));
-                        }
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            table_idx = table_idx,
+                            dest = dest_idx,
+                            size = fill_size,
+                            value = ?value,
+                            "[TableFill] Filling table region"
+                        );
+
+                        // Validate value is a reference type
+                        let fill_value = match &value {
+                            Value::FuncRef(_)
+                            | Value::ExternRef(_)
+                            | Value::I31Ref(_)
+                            | Value::StructRef(_)
+                            | Value::ArrayRef(_)
+                            | Value::Ref(_) => Some(value.clone()),
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "table.fill: value must be a reference type",
+                                ));
+                            }
+                        };
+
+                        let table = instance.table(table_idx)?;
+                        table.fill(dest_idx, fill_size, fill_value)?;
+
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            table_idx = table_idx,
+                            dest = dest_idx,
+                            size = fill_size,
+                            "[TableFill] SUCCESS"
+                        );
                     }
 
                     Instruction::TableCopy(dst_table_idx, src_table_idx) => {
-                        // table.copy: [i32 i32 i32] -> []
+                        // table.copy: [it_d, it_s, it_n] -> [] (table64-aware)
                         // Pop size, src_offset, dst_offset; copy elements between tables
-                        let size = operand_stack.pop().ok_or_else(|| {
+                        let size_val = operand_stack.pop().ok_or_else(|| {
                             kiln_error::Error::runtime_trap("table.copy: expected size on stack")
                         })?;
-                        let src_offset = operand_stack.pop().ok_or_else(|| {
+                        let src_val = operand_stack.pop().ok_or_else(|| {
                             kiln_error::Error::runtime_trap("table.copy: expected src offset on stack")
                         })?;
-                        let dst_offset = operand_stack.pop().ok_or_else(|| {
+                        let dst_val = operand_stack.pop().ok_or_else(|| {
                             kiln_error::Error::runtime_trap("table.copy: expected dst offset on stack")
                         })?;
 
-                        if let (Value::I32(dst_idx), Value::I32(src_idx), Value::I32(copy_size)) =
-                            (&dst_offset, &src_offset, &size)
-                        {
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                dst_table = dst_table_idx,
-                                src_table = src_table_idx,
-                                dst_offset = dst_idx,
-                                src_offset = src_idx,
-                                size = copy_size,
-                                "[TableCopy] Copying table elements"
-                            );
+                        // Helper closure to extract u32 from i32 or i64 Value
+                        let to_u32 = |v: &Value, name: &str| -> kiln_error::Result<u32> {
+                            match v {
+                                Value::I32(i) => {
+                                    if *i < 0 {
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds table access",
+                                        ));
+                                    }
+                                    Ok(*i as u32)
+                                }
+                                Value::I64(i) => {
+                                    if *i < 0 {
+                                        return Err(kiln_error::Error::runtime_trap(
+                                            "out of bounds table access",
+                                        ));
+                                    }
+                                    u32::try_from(*i).map_err(|_| {
+                                        kiln_error::Error::runtime_trap("out of bounds table access")
+                                    })
+                                }
+                                _ => Err(kiln_error::Error::runtime_trap(
+                                    "table.copy: expected i32 or i64 value",
+                                )),
+                            }
+                        };
 
-                            if *dst_idx < 0 || *src_idx < 0 || *copy_size < 0 {
+                        let dst_idx = to_u32(&dst_val, "dst")?;
+                        let src_idx = to_u32(&src_val, "src")?;
+                        let copy_size = to_u32(&size_val, "size")?;
+
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            dst_table = dst_table_idx,
+                            src_table = src_table_idx,
+                            dst_offset = dst_idx,
+                            src_offset = src_idx,
+                            size = copy_size,
+                            "[TableCopy] Copying table elements"
+                        );
+
+                        // Handle same-table and cross-table copy
+                        if dst_table_idx == src_table_idx {
+                            // Same table copy - use the table's copy method
+                            let table = instance.table(dst_table_idx)?;
+                            table.copy(dst_idx, src_idx, copy_size)?;
+                        } else {
+                            // Cross-table copy - read from src, write to dst
+                            let src_table = instance.table(src_table_idx)?;
+                            let dst_table = instance.table(dst_table_idx)?;
+
+                            // Bounds check BEFORE zero-length check (per WebAssembly spec)
+                            let src_end = src_idx.checked_add(copy_size)
+                                .ok_or_else(|| kiln_error::Error::runtime_trap(
+                                    "out of bounds table access"
+                                ))?;
+                            let dst_end = dst_idx.checked_add(copy_size)
+                                .ok_or_else(|| kiln_error::Error::runtime_trap(
+                                    "out of bounds table access"
+                                ))?;
+                            if src_end > src_table.size() || dst_end > dst_table.size() {
                                 return Err(kiln_error::Error::runtime_trap(
-                                    "out of bounds table access",
+                                    "out of bounds table access"
                                 ));
                             }
 
-                            // Handle same-table and cross-table copy
-                            if dst_table_idx == src_table_idx {
-                                // Same table copy - use the table's copy method
-                                let table = instance.table(dst_table_idx)?;
-                                table.copy(*dst_idx as u32, *src_idx as u32, *copy_size as u32)?;
-                            } else {
-                                // Cross-table copy - read from src, write to dst
-                                let src_table = instance.table(src_table_idx)?;
-                                let dst_table = instance.table(dst_table_idx)?;
-
-                                // Bounds check BEFORE zero-length check (per WebAssembly spec)
-                                let src_end = (*src_idx as u32).checked_add(*copy_size as u32)
-                                    .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                        "out of bounds table access"
-                                    ))?;
-                                let dst_end = (*dst_idx as u32).checked_add(*copy_size as u32)
-                                    .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                        "out of bounds table access"
-                                    ))?;
-                                if src_end > src_table.size() || dst_end > dst_table.size() {
-                                    return Err(kiln_error::Error::runtime_trap(
-                                        "out of bounds table access"
-                                    ));
+                            // Zero-length copy is a no-op (after bounds check)
+                            if copy_size > 0 {
+                                // Read all source elements first (to handle any overlap scenarios)
+                                let mut temp_elements = Vec::new();
+                                for i in 0..copy_size {
+                                    let elem = src_table.get(src_idx + i)?;
+                                    temp_elements.push(elem);
                                 }
 
-                                // Zero-length copy is a no-op (after bounds check)
-                                if *copy_size == 0 {
-                                    // Continue to next instruction
-                                } else {
-                                    // Read all source elements first (to handle any overlap scenarios)
-                                    let mut temp_elements = Vec::new();
-                                    for i in 0..*copy_size as u32 {
-                                        let elem = src_table.get(*src_idx as u32 + i)?;
-                                        temp_elements.push(elem);
-                                    }
-
-                                    // Write to destination table
-                                    for (i, elem) in temp_elements.into_iter().enumerate() {
-                                        dst_table.set(*dst_idx as u32 + i as u32, elem)?;
-                                    }
+                                // Write to destination table
+                                for (i, elem) in temp_elements.into_iter().enumerate() {
+                                    dst_table.set(dst_idx + i as u32, elem)?;
                                 }
                             }
-
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                dst_table = dst_table_idx,
-                                src_table = src_table_idx,
-                                "[TableCopy] SUCCESS"
-                            );
-                        } else {
-                            return Err(kiln_error::Error::runtime_trap(
-                                "table.copy: expected i32 values for offsets and size",
-                            ));
                         }
+
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            dst_table = dst_table_idx,
+                            src_table = src_table_idx,
+                            "[TableCopy] SUCCESS"
+                        );
                     }
 
                     Instruction::TableInit(elem_seg_idx, table_idx) => {
-                        // table.init: [i32 i32 i32] -> []
-                        // Pop size, src_offset (in elem segment), dst_offset (in table)
-                        // Initialize table elements from element segment
+                        // table.init: [it, i32, i32] -> [] (it=i64 if table64)
+                        // Pop size (i32), src_offset (i32, into elem segment), dst_offset (it, into table)
                         let size = operand_stack.pop().ok_or_else(|| {
                             kiln_error::Error::runtime_trap("table.init: expected size on stack")
                         })?;
@@ -7096,104 +7230,151 @@ impl StacklessEngine {
                             kiln_error::Error::runtime_trap("table.init: expected dst offset on stack")
                         })?;
 
-                        if let (Value::I32(dst_idx), Value::I32(src_idx), Value::I32(init_size)) =
-                            (&dst_offset, &src_offset, &size)
-                        {
+                        // Extract size (always i32)
+                        let init_size: u32 = match size {
+                            Value::I32(i) => {
+                                if i < 0 {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds table access",
+                                    ));
+                                }
+                                i as u32
+                            }
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "table.init: expected i32 for size",
+                                ));
+                            }
+                        };
+
+                        // Extract src_offset (always i32, indexes into element segment)
+                        let src_idx: u32 = match src_offset {
+                            Value::I32(i) => {
+                                if i < 0 {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds table access",
+                                    ));
+                                }
+                                i as u32
+                            }
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "table.init: expected i32 for src offset",
+                                ));
+                            }
+                        };
+
+                        // Extract dst_offset (i32 or i64 depending on table64)
+                        let dst_idx: u32 = match dst_offset {
+                            Value::I32(i) => {
+                                if i < 0 {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds table access",
+                                    ));
+                                }
+                                i as u32
+                            }
+                            Value::I64(i) => {
+                                if i < 0 {
+                                    return Err(kiln_error::Error::runtime_trap(
+                                        "out of bounds table access",
+                                    ));
+                                }
+                                u32::try_from(i).map_err(|_| {
+                                    kiln_error::Error::runtime_trap("out of bounds table access")
+                                })?
+                            }
+                            _ => {
+                                return Err(kiln_error::Error::runtime_trap(
+                                    "table.init: expected i32 or i64 for dst offset",
+                                ));
+                            }
+                        };
+
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            elem_seg_idx = elem_seg_idx,
+                            table_idx = table_idx,
+                            dst_offset = dst_idx,
+                            src_offset = src_idx,
+                            size = init_size,
+                            "[TableInit] Initializing table from element segment"
+                        );
+
+                        // Get the element segment from the module (needed for bounds check)
+                        #[cfg(feature = "std")]
+                        let elem_segment = module.elements.get(elem_seg_idx as usize)
+                            .ok_or_else(|| kiln_error::Error::runtime_trap(
+                                "table.init: invalid element segment index"
+                            ))?;
+                        #[cfg(not(feature = "std"))]
+                        let elem_segment = module.elements.get(elem_seg_idx as usize)
+                            .map_err(|_| kiln_error::Error::runtime_trap(
+                                "table.init: invalid element segment index"
+                            ))?;
+
+                        // Check if the element segment has been dropped
+                        // Dropped segments have effective length 0
+                        let effective_elem_len = if instance.is_element_segment_dropped(elem_seg_idx) {
+                            0
+                        } else {
+                            elem_segment.items.len()
+                        };
+
+                        // Check bounds in element segment (must happen BEFORE zero-size check per spec)
+                        let src_end = (src_idx as usize).checked_add(init_size as usize)
+                            .ok_or_else(|| kiln_error::Error::runtime_trap(
+                                "out of bounds table access"
+                            ))?;
+                        if src_end > effective_elem_len {
+                            return Err(kiln_error::Error::runtime_trap(
+                                "out of bounds table access",
+                            ));
+                        }
+
+                        // Get table and check bounds (must happen BEFORE zero-size check per spec)
+                        let table = instance.table(table_idx)?;
+                        let dst_end = dst_idx.checked_add(init_size)
+                            .ok_or_else(|| kiln_error::Error::runtime_trap(
+                                "out of bounds table access"
+                            ))?;
+                        if dst_end > table.size() {
+                            return Err(kiln_error::Error::runtime_trap(
+                                "out of bounds table access",
+                            ));
+                        }
+
+                        // Handle zero-size init (valid no-op) AFTER bounds checks
+                        if init_size == 0 {
+                            #[cfg(feature = "tracing")]
+                            trace!("[TableInit] Zero size, no-op");
+                            // Continue to next instruction
+                        } else {
+                            // Copy elements from segment to table
+                            for i in 0..init_size as usize {
+                                let item_idx = src_idx as usize + i;
+                                let func_idx = elem_segment.items.get(item_idx)
+                                    .map_err(|_| kiln_error::Error::runtime_trap(
+                                        "table.init: element segment access error"
+                                    ))?;
+
+                                // u32::MAX is sentinel for null reference
+                                let value = if func_idx == u32::MAX {
+                                    Some(Value::FuncRef(None))  // null funcref
+                                } else {
+                                    Some(Value::FuncRef(Some(
+                                        kiln_foundation::values::FuncRef::from_index(func_idx)
+                                    )))
+                                };
+                                table.set(dst_idx + i as u32, value)?;
+                            }
+
                             #[cfg(feature = "tracing")]
                             trace!(
                                 elem_seg_idx = elem_seg_idx,
                                 table_idx = table_idx,
-                                dst_offset = dst_idx,
-                                src_offset = src_idx,
-                                size = init_size,
-                                "[TableInit] Initializing table from element segment"
+                                "[TableInit] SUCCESS"
                             );
-
-                            if *dst_idx < 0 || *src_idx < 0 || *init_size < 0 {
-                                return Err(kiln_error::Error::runtime_trap(
-                                    "out of bounds table access",
-                                ));
-                            }
-
-                            // Get the element segment from the module (needed for bounds check)
-                            #[cfg(feature = "std")]
-                            let elem_segment = module.elements.get(elem_seg_idx as usize)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                    "table.init: invalid element segment index"
-                                ))?;
-                            #[cfg(not(feature = "std"))]
-                            let elem_segment = module.elements.get(elem_seg_idx as usize)
-                                .map_err(|_| kiln_error::Error::runtime_trap(
-                                    "table.init: invalid element segment index"
-                                ))?;
-
-                            // Check if the element segment has been dropped
-                            // Dropped segments have effective length 0
-                            let effective_elem_len = if instance.is_element_segment_dropped(elem_seg_idx) {
-                                0
-                            } else {
-                                elem_segment.items.len()
-                            };
-
-                            // Check bounds in element segment (must happen BEFORE zero-size check per spec)
-                            let src_end = (*src_idx as usize).checked_add(*init_size as usize)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                    "out of bounds table access"
-                                ))?;
-                            if src_end > effective_elem_len {
-                                return Err(kiln_error::Error::runtime_trap(
-                                    "out of bounds table access",
-                                ));
-                            }
-
-                            // Get table and check bounds (must happen BEFORE zero-size check per spec)
-                            let table = instance.table(table_idx)?;
-                            let dst_end = (*dst_idx as u32).checked_add(*init_size as u32)
-                                .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                    "out of bounds table access"
-                                ))?;
-                            if dst_end > table.size() {
-                                return Err(kiln_error::Error::runtime_trap(
-                                    "out of bounds table access",
-                                ));
-                            }
-
-                            // Handle zero-size init (valid no-op) AFTER bounds checks
-                            if *init_size == 0 {
-                                #[cfg(feature = "tracing")]
-                                trace!("[TableInit] Zero size, no-op");
-                                // Continue to next instruction
-                            } else {
-                                // Copy elements from segment to table
-                                for i in 0..*init_size as usize {
-                                    let item_idx = *src_idx as usize + i;
-                                    let func_idx = elem_segment.items.get(item_idx)
-                                        .map_err(|_| kiln_error::Error::runtime_trap(
-                                            "table.init: element segment access error"
-                                        ))?;
-
-                                    // u32::MAX is sentinel for null reference
-                                    let value = if func_idx == u32::MAX {
-                                        Some(Value::FuncRef(None))  // null funcref
-                                    } else {
-                                        Some(Value::FuncRef(Some(
-                                            kiln_foundation::values::FuncRef::from_index(func_idx)
-                                        )))
-                                    };
-                                    table.set(*dst_idx as u32 + i as u32, value)?;
-                                }
-
-                                #[cfg(feature = "tracing")]
-                                trace!(
-                                    elem_seg_idx = elem_seg_idx,
-                                    table_idx = table_idx,
-                                    "[TableInit] SUCCESS"
-                                );
-                            }
-                        } else {
-                            return Err(kiln_error::Error::runtime_trap(
-                                "table.init: expected i32 values for offsets and size",
-                            ));
                         }
                     }
 

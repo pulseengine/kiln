@@ -1136,6 +1136,14 @@ impl ModuleInstance {
                                     debug!("Element segment {} has I32Const offset: {}", idx, value);
                                     *value as u32
                                 }
+                                kiln_foundation::types::Instruction::I64Const(value) => {
+                                    // table64: element segment offset is i64
+                                    #[cfg(feature = "tracing")]
+                                    debug!("Element segment {} has I64Const offset: {}", idx, value);
+                                    u32::try_from(*value).map_err(|_| {
+                                        Error::runtime_error("Element segment offset too large for table")
+                                    })?
+                                }
                                 kiln_foundation::types::Instruction::GlobalGet(global_idx) => {
                                     // Look up the global value for the offset
                                     #[cfg(feature = "tracing")]
@@ -1148,6 +1156,14 @@ impl ModuleInstance {
                                                         #[cfg(feature = "tracing")]
                                                         debug!("Element segment {} global offset value: {}", idx, v);
                                                         *v as u32
+                                                    },
+                                                    kiln_foundation::values::Value::I64(v) => {
+                                                        // table64: global offset is i64
+                                                        #[cfg(feature = "tracing")]
+                                                        debug!("Element segment {} global i64 offset value: {}", idx, v);
+                                                        u32::try_from(*v).map_err(|_| {
+                                                            Error::runtime_error("Element segment offset too large for table")
+                                                        })?
                                                     },
                                                     _ => *mode_offset
                                                 }
