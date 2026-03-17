@@ -360,6 +360,7 @@ impl WastEngine {
                     let core_mem_type = CoreMemoryType {
                         limits: Limits { min: 1, max: Some(2) },
                         shared: is_shared,
+                        memory64: false,
                         page_size: None,
                     };
 
@@ -1458,6 +1459,15 @@ fn validate_memory_import_compatibility(import: &MemoryType, actual: &MemoryType
     if import.shared != actual.shared {
         return Err(anyhow::anyhow!(
             "incompatible import type: memory shared flag mismatch"
+        ));
+    }
+
+    // Page size must match per the custom-page-sizes proposal
+    let import_page_size = import.page_size.unwrap_or(65536);
+    let actual_page_size = actual.page_size.unwrap_or(65536);
+    if import_page_size != actual_page_size {
+        return Err(anyhow::anyhow!(
+            "incompatible import type: memory types incompatible"
         ));
     }
 

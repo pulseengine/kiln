@@ -303,7 +303,7 @@ impl SharedMemoryInstance {
 
                 // Execute atomic load
                 let memarg = MemArg {
-                    offset: address,
+                    offset: address as u64,
                     align_exponent: 2,
                     memory_index: 0,
                 }; // Assume 4-byte alignment
@@ -326,7 +326,7 @@ impl SharedMemoryInstance {
 
                 // Execute atomic store
                 let memarg = MemArg {
-                    offset: address,
+                    offset: address as u64,
                     align_exponent: 2,
                     memory_index: 0,
                 }; // Assume 4-byte alignment
@@ -351,7 +351,7 @@ impl SharedMemoryInstance {
 
                 // Execute atomic wait
                 let memarg = MemArg {
-                    offset: address,
+                    offset: address as u64,
                     align_exponent: 2,
                     memory_index: 0,
                 };
@@ -378,7 +378,7 @@ impl SharedMemoryInstance {
 
                 // Execute atomic notify
                 let memarg = MemArg {
-                    offset: address,
+                    offset: address as u64,
                     align_exponent: 2,
                     memory_index: 0,
                 };
@@ -620,6 +620,7 @@ pub fn create_shared_memory(
             max: memory_type.max_pages(),
         },
         shared: memory_type.is_shared(),
+        memory64: false,
         page_size: None,
     };
 

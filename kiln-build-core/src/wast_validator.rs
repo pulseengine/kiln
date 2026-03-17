@@ -118,8 +118,13 @@ impl StackType {
     ///   nofunc <: func types <: func
     ///   noextern <: extern
     ///   noexn <: exn
+    ///   none <: (ref $t) <: struct/array/func <: eq/func <: any
     ///
     /// Nullability: non-nullable <: nullable (for the same heap type)
+    ///
+    /// Note: TypedFuncRef(idx, nullable) represents a concrete typed reference
+    /// to any composite type (func, struct, or array). Without module context,
+    /// we treat it as compatible with all abstract GC reference types.
     fn is_subtype_of(&self, other: &StackType) -> bool {
         if self == other {
             return true;
@@ -135,7 +140,7 @@ impl StackType {
             // NullFuncRef (nofunc) is bottom of func hierarchy
             (StackType::NullFuncRef, StackType::FuncRef) => true,
             (StackType::NullFuncRef, StackType::TypedFuncRef(_, nullable)) => *nullable,
-            // TypedFuncRef is a subtype of FuncRef
+            // TypedFuncRef is a subtype of FuncRef (when the concrete type is a func type)
             (StackType::TypedFuncRef(_, _), StackType::FuncRef) => true,
             // Two TypedFuncRefs: type indices must match, and nullability must be compatible
             (StackType::TypedFuncRef(t1, n1), StackType::TypedFuncRef(t2, n2)) => {
@@ -143,6 +148,20 @@ impl StackType {
             },
             // FuncRef is NOT a subtype of TypedFuncRef
             (StackType::FuncRef, StackType::TypedFuncRef(_, _)) => false,
+
+            // === Concrete typed references and abstract GC types ===
+            // TypedFuncRef represents a concrete typed reference (ref $t).
+            // Without module context, we can't determine if $t is func/struct/array,
+            // so we accept it as a subtype of all abstract GC ref types.
+            // This is sound because the spec allows concrete struct/array types
+            // to be subtypes of structref/arrayref/eqref/anyref.
+            (StackType::TypedFuncRef(_, _), StackType::StructRef) => true,
+            (StackType::TypedFuncRef(_, _), StackType::ArrayRef) => true,
+            (StackType::TypedFuncRef(_, _), StackType::EqRef) => true,
+            (StackType::TypedFuncRef(_, _), StackType::AnyRef) => true,
+
+            // NoneRef is bottom of the any hierarchy - subtype of concrete refs
+            (StackType::NoneRef, StackType::TypedFuncRef(_, nullable)) => *nullable,
 
             // === extern hierarchy: noextern <: extern ===
             (StackType::NullExternRef, StackType::ExternRef) => true,
@@ -578,13 +597,16 @@ impl WastModuleValidator {
                         return Err(anyhow!("size minimum must not be greater than maximum"));
                     }
                 }
-                // Check memory size bounds (65536 pages max)
-                if memory.limits.min > WASM_MAX_MEMORY_PAGES {
-                    return Err(anyhow!("memory size"));
-                }
-                if let Some(max) = memory.limits.max {
-                    if max > WASM_MAX_MEMORY_PAGES {
+                // Check memory size bounds (65536 pages max for memory32)
+                // Memory64 allows much larger limits (up to 2^48 pages)
+                if !memory.memory64 {
+                    if memory.limits.min > WASM_MAX_MEMORY_PAGES {
                         return Err(anyhow!("memory size"));
+                    }
+                    if let Some(max) = memory.limits.max {
+                        if max > WASM_MAX_MEMORY_PAGES {
+                            return Err(anyhow!("memory size"));
+                        }
                     }
                 }
             }
@@ -598,13 +620,16 @@ impl WastModuleValidator {
                     return Err(anyhow!("size minimum must not be greater than maximum"));
                 }
             }
-            // Check memory size bounds (65536 pages max)
-            if memory.limits.min > WASM_MAX_MEMORY_PAGES {
-                return Err(anyhow!("memory size"));
-            }
-            if let Some(max) = memory.limits.max {
-                if max > WASM_MAX_MEMORY_PAGES {
+            // Check memory size bounds (65536 pages max for memory32)
+            // Memory64 allows much larger limits (up to 2^48 pages)
+            if !memory.memory64 {
+                if memory.limits.min > WASM_MAX_MEMORY_PAGES {
                     return Err(anyhow!("memory size"));
+                }
+                if let Some(max) = memory.limits.max {
+                    if max > WASM_MAX_MEMORY_PAGES {
+                        return Err(anyhow!("memory size"));
+                    }
                 }
             }
         }
@@ -690,6 +715,39 @@ impl WastModuleValidator {
         Ok(())
     }
 
+    /// Check type references inside a GC composite type's field definitions
+    fn check_composite_type_refs(kind: &CompositeTypeKind, num_types: usize) -> Result<()> {
+        match kind {
+            CompositeTypeKind::StructWithFields(fields) => {
+                for field in fields {
+                    Self::check_gc_storage_type_ref(&field.storage_type, num_types)?;
+                }
+            }
+            CompositeTypeKind::ArrayWithElement(elem) => {
+                Self::check_gc_storage_type_ref(&elem.storage_type, num_types)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Check if a GcStorageType contains a type index reference and validate it
+    fn check_gc_storage_type_ref(
+        st: &kiln_format::module::GcStorageType,
+        num_types: usize,
+    ) -> Result<()> {
+        match st {
+            kiln_format::module::GcStorageType::RefType(idx)
+            | kiln_format::module::GcStorageType::RefTypeNull(idx) => {
+                if (*idx as usize) >= num_types {
+                    return Err(anyhow!("unknown type"));
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// Validate that all type index references in the module are within bounds
     fn validate_type_references(module: &Module) -> Result<()> {
         let num_types = module.types.len();
@@ -737,6 +795,17 @@ impl WastModuleValidator {
         // Check element segment types
         for elem in &module.elements {
             Self::check_ref_type_ref(&elem.element_type, num_types)?;
+        }
+
+        // Check type references inside GC struct/array field definitions (rec_groups)
+        for rec_group in &module.rec_groups {
+            // Types within the same rec group can reference each other,
+            // so the valid range includes the group's own indices
+            let group_end = rec_group.start_type_index as usize + rec_group.types.len();
+            let valid_types = num_types.max(group_end);
+            for sub_type in &rec_group.types {
+                Self::check_composite_type_refs(&sub_type.composite_kind, valid_types)?;
+            }
         }
 
         Ok(())

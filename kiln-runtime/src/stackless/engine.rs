@@ -57,6 +57,9 @@ type String = BoundedString<256>; // 256 byte strings
 #[cfg(not(any(feature = "std", feature = "alloc")))]
 pub struct Arc<T>(T);
 
+// GC heap reference wrapper types for WebAssembly GC proposal
+use kiln_foundation::values::{GcStructRef, GcArrayRef};
+
 #[cfg(not(any(feature = "std", feature = "alloc")))]
 impl<T> Arc<T> {
     pub fn new(value: T) -> Self {
@@ -447,13 +450,13 @@ impl<'a> RuntimeState for ExecutionState<'a> {
 /// Per WebAssembly spec, if base + offset overflows or exceeds u32::MAX, it traps.
 /// Returns Ok(effective_address) or Err if overflow occurs.
 #[inline]
-fn calculate_effective_address(base: i32, offset: u32, size: u32) -> kiln_error::Result<u64> {
+fn calculate_effective_address(base: i32, offset: u64, size: u32) -> kiln_error::Result<u64> {
     // Convert base to u32 first (WebAssembly treats addresses as unsigned)
     let base_u32 = base as u32;
 
     // Check for overflow in base + offset
     let effective_addr = (base_u32 as u64)
-        .checked_add(offset as u64)
+        .checked_add(offset)
         .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
     // Check for overflow when adding access size
@@ -475,10 +478,10 @@ fn calculate_effective_address(base: i32, offset: u32, size: u32) -> kiln_error:
 /// Per WebAssembly spec, if base + offset overflows or exceeds addressable memory, it traps.
 /// Returns Ok(effective_address as u32) since actual memory is still bounded by u32 address space.
 #[inline]
-fn calculate_effective_address_64(base: i64, offset: u32, size: u32) -> kiln_error::Result<u32> {
+fn calculate_effective_address_64(base: i64, offset: u64, size: u32) -> kiln_error::Result<u32> {
     let base_u64 = base as u64;
     let effective_addr = base_u64
-        .checked_add(offset as u64)
+        .checked_add(offset)
         .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
     let end_addr = effective_addr
         .checked_add(size as u64)
@@ -494,7 +497,7 @@ fn calculate_effective_address_64(base: i64, offset: u32, size: u32) -> kiln_err
 /// Calculates the effective address using the appropriate helper based on address type.
 /// Returns the effective address as u32 (memory is still u32-bounded even with memory64 indexing).
 #[inline]
-fn pop_memory_address(operand_stack: &mut Vec<Value>, mem_arg_offset: u32, size: u32) -> kiln_error::Result<u32> {
+fn pop_memory_address(operand_stack: &mut Vec<Value>, mem_arg_offset: u64, size: u32) -> kiln_error::Result<u32> {
     match operand_stack.pop() {
         Some(Value::I32(addr)) => Ok(calculate_effective_address(addr, mem_arg_offset, size)? as u32),
         Some(Value::I64(addr)) => calculate_effective_address_64(addr, mem_arg_offset, size),
@@ -506,11 +509,17 @@ fn pop_memory_address(operand_stack: &mut Vec<Value>, mem_arg_offset: u32, size:
 /// Accepts both I32 (memory32) and I64 (memory64) addresses.
 /// Returns the effective address as u32 using wrapping_add for offset (matching atomic semantics).
 #[inline]
-fn pop_atomic_address(operand_stack: &mut Vec<Value>, memarg_offset: u32) -> kiln_error::Result<u32> {
+fn pop_atomic_address(operand_stack: &mut Vec<Value>, memarg_offset: u64) -> kiln_error::Result<u32> {
     match operand_stack.pop() {
-        Some(Value::I32(addr)) => Ok((addr as u32).wrapping_add(memarg_offset)),
+        Some(Value::I32(addr)) => {
+            let effective = (addr as u32 as u64).wrapping_add(memarg_offset);
+            if effective > u64::from(u32::MAX) {
+                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+            }
+            Ok(effective as u32)
+        }
         Some(Value::I64(addr)) => {
-            let effective = (addr as u64).wrapping_add(memarg_offset as u64);
+            let effective = (addr as u64).wrapping_add(memarg_offset);
             if effective > u64::from(u32::MAX) {
                 return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
             }
@@ -4771,8 +4780,8 @@ impl StacklessEngine {
                     // I64 Partial Store Instructions (store lower bits of i64)
                     // ========================================
                     Instruction::I64Store8(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 1)? as u32;
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 1)?;
                             #[cfg(feature = "tracing")]
                             trace!(
                                 instance_id = instance_id,
@@ -4805,8 +4814,8 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I64Store16(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 2)? as u32;
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 2)?;
                             #[cfg(feature = "tracing")]
                             trace!(
                                 instance_id = instance_id,
@@ -4839,8 +4848,8 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::I64Store32(mem_arg) => {
-                        if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
+                        if let Some(Value::I64(value)) = operand_stack.pop() {
+                            let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                             #[cfg(feature = "tracing")]
                             trace!(
                                 instance_id = instance_id,
@@ -4881,46 +4890,31 @@ impl StacklessEngine {
                         operand_stack.push(Value::F64(FloatBits64(bits)));
                     }
                     Instruction::F32Load(mem_arg) => {
+                        let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                         #[cfg(feature = "tracing")]
-                        trace!("F32Load: stack before pop has {} elements", operand_stack.len());
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
-                            #[cfg(feature = "tracing")]
-                            trace!("F32Load: addr={}, offset={}, mem_idx={}", addr, offset, mem_arg.memory_index);
-                            match instance.memory(mem_arg.memory_index as u32) {
-                                Ok(memory_wrapper) => {
-                                    let memory = &memory_wrapper.0;
-                                    let mut buffer = [0u8; 4];
-                                    match memory.read(offset, &mut buffer) {
-                                        Ok(()) => {
-                                            let bits = u32::from_le_bytes(buffer);
-                                            #[cfg(feature = "tracing")]
-                                            trace!("F32Load: read bytes {:?}, bits={:#x}, pushing F32", buffer, bits);
-                                            operand_stack.push(Value::F32(FloatBits32(bits)));
-                                            #[cfg(feature = "tracing")]
-                                            trace!("F32Load: stack after push has {} elements", operand_stack.len());
-                                        }
-                                        Err(e) => {
-                                            #[cfg(feature = "tracing")]
-                                            error!("F32Load: memory read error: {:?}", e);
-                                            return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                        }
+                        trace!("F32Load: offset={}, mem_idx={}", offset, mem_arg.memory_index);
+                        match instance.memory(mem_arg.memory_index as u32) {
+                            Ok(memory_wrapper) => {
+                                let memory = &memory_wrapper.0;
+                                let mut buffer = [0u8; 4];
+                                match memory.read(offset, &mut buffer) {
+                                    Ok(()) => {
+                                        let bits = u32::from_le_bytes(buffer);
+                                        operand_stack.push(Value::F32(FloatBits32(bits)));
+                                    }
+                                    Err(_e) => {
+                                        return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
                                 }
-                                Err(e) => {
-                                    #[cfg(feature = "tracing")]
-                                    error!("F32Load: memory access error: {:?}", e);
-                                    return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
-                                }
                             }
-                        } else {
-                            #[cfg(feature = "tracing")]
-                            error!("F32Load: stack was empty or top was not I32!");
+                            Err(_e) => {
+                                return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
+                            }
                         }
                     }
                     Instruction::F32Store(mem_arg) => {
-                        if let (Some(Value::F32(bits)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 4)? as u32;
+                        if let Some(Value::F32(bits)) = operand_stack.pop() {
+                            let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 4)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -4936,8 +4930,8 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::F64Load(mem_arg) => {
-                        if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
+                        {
+                            let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -4959,8 +4953,8 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::F64Store(mem_arg) => {
-                        if let (Some(Value::F64(bits)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let offset = calculate_effective_address(addr, mem_arg.offset, 8)? as u32;
+                        if let Some(Value::F64(bits)) = operand_stack.pop() {
+                            let offset = pop_memory_address(&mut operand_stack, mem_arg.offset, 8)?;
                             match instance.memory(mem_arg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -5850,13 +5844,19 @@ impl StacklessEngine {
                             Ok(memory_wrapper) => {
                                 let memory = &memory_wrapper.0;
                                 let size_in_pages = memory.size();
+                                let is_memory64 = memory.ty.memory64;
                                 #[cfg(feature = "tracing")]
                                 trace!(
                                     memory_idx = memory_idx,
                                     size_in_pages = size_in_pages,
+                                    is_memory64 = is_memory64,
                                     "[MemorySize] Retrieved memory size"
                                 );
-                                operand_stack.push(Value::I32(size_in_pages as i32));
+                                if is_memory64 {
+                                    operand_stack.push(Value::I64(size_in_pages as i64));
+                                } else {
+                                    operand_stack.push(Value::I32(size_in_pages as i32));
+                                }
                             }
                             Err(e) => {
                                 #[cfg(feature = "tracing")]
@@ -5866,51 +5866,76 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::MemoryGrow(memory_idx) => {
-                        // Pop the number of pages to grow
-                        if let Some(Value::I32(delta)) = operand_stack.pop() {
-                            if delta < 0 {
-                                // Negative delta is invalid, return -1 (failure)
+                        // Pop the number of pages to grow (accepts both I32 and I64)
+                        let delta = match operand_stack.pop() {
+                            Some(Value::I64(d)) => d as i64,
+                            Some(Value::I32(d)) => d as i64,
+                            _ => {
                                 #[cfg(feature = "tracing")]
-                                trace!("MemoryGrow: negative delta {}, pushing -1", delta);
-                                operand_stack.push(Value::I32(-1));
+                                trace!("MemoryGrow: insufficient values on stack");
+                                continue;
+                            }
+                        };
+                        // Determine memory64 from the memory type, not the stack value
+                        let is_memory64 = instance.memory(memory_idx as u32)
+                            .map(|mw| mw.0.ty.memory64)
+                            .unwrap_or(false);
+                        if delta < 0 {
+                            #[cfg(feature = "tracing")]
+                            trace!("MemoryGrow: negative delta {}, pushing -1", delta);
+                            if is_memory64 {
+                                operand_stack.push(Value::I64(-1));
                             } else {
-                                // Use instance memory for grow (has initialized data segments)
-                                match instance.memory(memory_idx as u32) {
-                                    Ok(memory_wrapper) => {
-                                        let memory = &memory_wrapper.0;
-                                        let current_size = memory.size();
-                                        #[cfg(feature = "tracing")]
-                                        trace!(
-                                            memory_idx = memory_idx,
-                                            delta = delta,
-                                            current_size = current_size,
-                                            "[MemoryGrow] Attempting to grow memory"
-                                        );
-                                        match memory.grow_shared(delta as u32) {
-                                            Ok(prev_pages) => {
-                                                #[cfg(feature = "tracing")]
-                                                trace!(
-                                                    memory_idx = memory_idx,
-                                                    prev_pages = prev_pages,
-                                                    new_pages = prev_pages + delta as u32,
-                                                    "[MemoryGrow] Success"
-                                                );
+                                operand_stack.push(Value::I32(-1));
+                            }
+                        } else {
+                            match instance.memory(memory_idx as u32) {
+                                Ok(memory_wrapper) => {
+                                    let memory = &memory_wrapper.0;
+                                    let current_size = memory.size();
+                                    #[cfg(feature = "tracing")]
+                                    trace!(
+                                        memory_idx = memory_idx,
+                                        delta = delta,
+                                        current_size = current_size,
+                                        "[MemoryGrow] Attempting to grow memory"
+                                    );
+                                    match memory.grow_shared(delta as u32) {
+                                        Ok(prev_pages) => {
+                                            #[cfg(feature = "tracing")]
+                                            trace!(
+                                                memory_idx = memory_idx,
+                                                prev_pages = prev_pages,
+                                                new_pages = prev_pages + delta as u32,
+                                                "[MemoryGrow] Success"
+                                            );
+                                            if is_memory64 {
+                                                operand_stack.push(Value::I64(prev_pages as i64));
+                                            } else {
                                                 operand_stack.push(Value::I32(prev_pages as i32));
                                             }
-                                            Err(e) => {
-                                                #[cfg(feature = "tracing")]
-                                                warn!(
-                                                    memory_idx = memory_idx,
-                                                    error = ?e,
-                                                    "[MemoryGrow] Failed"
-                                                );
+                                        }
+                                        Err(e) => {
+                                            #[cfg(feature = "tracing")]
+                                            warn!(
+                                                memory_idx = memory_idx,
+                                                error = ?e,
+                                                "[MemoryGrow] Failed"
+                                            );
+                                            if is_memory64 {
+                                                operand_stack.push(Value::I64(-1));
+                                            } else {
                                                 operand_stack.push(Value::I32(-1));
                                             }
                                         }
                                     }
-                                    Err(e) => {
-                                        #[cfg(feature = "tracing")]
-                                        trace!("MemoryGrow: memory[{}] not found: {:?}", memory_idx, e);
+                                }
+                                Err(e) => {
+                                    #[cfg(feature = "tracing")]
+                                    trace!("MemoryGrow: memory[{}] not found: {:?}", memory_idx, e);
+                                    if is_memory64 {
+                                        operand_stack.push(Value::I64(-1));
+                                    } else {
                                         operand_stack.push(Value::I32(-1));
                                     }
                                 }
@@ -5919,8 +5944,25 @@ impl StacklessEngine {
                     }
                     Instruction::MemoryCopy(dst_mem_idx, src_mem_idx) => {
                         // Pop size, src, dest from stack (in that order per wasm spec)
-                        if let (Some(Value::I32(size)), Some(Value::I32(src)), Some(Value::I32(dest))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
+                        // For memory64, these may be I64 values
+                        let size_val = operand_stack.pop();
+                        let src_val = operand_stack.pop();
+                        let dest_val = operand_stack.pop();
+                        let size = match size_val {
+                            Some(Value::I32(v)) => v as u32 as u64,
+                            Some(Value::I64(v)) => v as u64,
+                            _ => { #[cfg(feature = "tracing")] trace!("MemoryCopy: insufficient values on stack"); pc += 1; continue; }
+                        };
+                        let src = match src_val {
+                            Some(Value::I32(v)) => v as u32 as u64,
+                            Some(Value::I64(v)) => v as u64,
+                            _ => { #[cfg(feature = "tracing")] trace!("MemoryCopy: insufficient values on stack"); pc += 1; continue; }
+                        };
+                        let dest = match dest_val {
+                            Some(Value::I32(v)) => v as u32 as u64,
+                            Some(Value::I64(v)) => v as u64,
+                            _ => { #[cfg(feature = "tracing")] trace!("MemoryCopy: insufficient values on stack"); pc += 1; continue; }
+                        };
                         {
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -5933,46 +5975,37 @@ impl StacklessEngine {
                             );
 
                             // Per WebAssembly spec: bounds check MUST happen before checking size==0
-                            // If size == 0 AND (dest > memory.size OR src > memory.size): TRAP
-                            // If size > 0 AND ((dest + size) > memory.size OR (src + size) > memory.size): TRAP
                             #[cfg(any(feature = "std", feature = "alloc"))]
                             {
                                 let dst_memory_wrapper = instance.memory(dst_mem_idx)?;
                                 let dst_memory = &dst_memory_wrapper.0;
-                                let dst_memory_size = dst_memory.size_in_bytes() as u32;
+                                let dst_memory_size = dst_memory.size_in_bytes() as u64;
 
                                 let src_memory_wrapper = instance.memory(src_mem_idx)?;
                                 let src_memory = &src_memory_wrapper.0;
-                                let src_memory_size = src_memory.size_in_bytes() as u32;
+                                let src_memory_size = src_memory.size_in_bytes() as u64;
 
-                                let dest_u32 = dest as u32;
-                                let src_u32 = src as u32;
-                                let size_u32 = size as u32;
-
-                                if size_u32 == 0 {
-                                    // For size 0, check if offsets are within bounds (can be equal to size)
-                                    if dest_u32 > dst_memory_size || src_u32 > src_memory_size {
+                                if size == 0 {
+                                    if dest > dst_memory_size || src > src_memory_size {
                                         return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                     }
-                                    // No-op for zero size copy after bounds check passes
                                     pc += 1;
                                     continue;
                                 }
 
-                                // For size > 0, check if (offset + size) overflows or exceeds memory size
-                                let dest_end = dest_u32.checked_add(size_u32)
+                                let dest_end = dest.checked_add(size)
                                     .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-                                let src_end = src_u32.checked_add(size_u32)
+                                let src_end = src.checked_add(size)
                                     .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
                                 if dest_end > dst_memory_size || src_end > src_memory_size {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
 
-                                let size_usize = size_u32 as usize;
+                                let size_usize = size as usize;
+                                let dest_u32 = dest as u32;
+                                let src_u32 = src as u32;
 
-                                // Read source data into temp buffer, then write to destination
-                                // This correctly handles cross-memory copies and overlapping same-memory copies
                                 let mut buffer = vec![0u8; size_usize];
                                 if let Err(e) = src_memory.read(src_u32, &mut buffer) {
                                     #[cfg(feature = "tracing")]
@@ -5980,7 +6013,6 @@ impl StacklessEngine {
                                     return Err(e);
                                 }
 
-                                // Write to destination using write_shared (thread-safe)
                                 if let Err(e) = dst_memory.write_shared(dest_u32, &buffer) {
                                     #[cfg(feature = "tracing")]
                                     trace!("MemoryCopy: write failed: {:?}", e);
@@ -5995,7 +6027,6 @@ impl StacklessEngine {
                                         dest = format_args!("{:#x}", dest),
                                         "[MemoryCopy] SUCCESS"
                                     );
-                                    // Show copied data as string if ASCII
                                     if size <= 50 && buffer.iter().all(|&b| b >= 0x20 && b <= 0x7e || b == 0) {
                                         if let Ok(s) = core::str::from_utf8(&buffer) {
                                             trace!(data = %s, "[MemoryCopy] Copied ASCII data");
@@ -6005,15 +6036,28 @@ impl StacklessEngine {
                             }
                             #[cfg(not(any(feature = "std", feature = "alloc")))]
                             return Err(kiln_error::Error::runtime_error("MemoryCopy requires std or alloc feature"));
-                        } else {
-                            #[cfg(feature = "tracing")]
-                            trace!("MemoryCopy: insufficient values on stack");
                         }
                     }
                     Instruction::MemoryFill(mem_idx) => {
                         // Pop size, value, dest from stack (in that order per wasm spec)
-                        if let (Some(Value::I32(size)), Some(Value::I32(value)), Some(Value::I32(dest))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
+                        // For memory64, size and dest may be I64
+                        let size_val = operand_stack.pop();
+                        let value_val = operand_stack.pop();
+                        let dest_val = operand_stack.pop();
+                        let size = match size_val {
+                            Some(Value::I32(v)) => v as u32 as u64,
+                            Some(Value::I64(v)) => v as u64,
+                            _ => { #[cfg(feature = "tracing")] trace!("MemoryFill: insufficient values on stack"); pc += 1; continue; }
+                        };
+                        let value = match value_val {
+                            Some(Value::I32(v)) => v,
+                            _ => { #[cfg(feature = "tracing")] trace!("MemoryFill: insufficient values on stack"); pc += 1; continue; }
+                        };
+                        let dest = match dest_val {
+                            Some(Value::I32(v)) => v as u32 as u64,
+                            Some(Value::I64(v)) => v as u64,
+                            _ => { #[cfg(feature = "tracing")] trace!("MemoryFill: insufficient values on stack"); pc += 1; continue; }
+                        };
                         {
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -6024,41 +6068,31 @@ impl StacklessEngine {
                                 "[MemoryFill] Starting fill operation"
                             );
 
-                            // Per WebAssembly spec: bounds check MUST happen before checking size==0
-                            // If size == 0 AND dest > memory.size: TRAP
-                            // If size > 0 AND (dest + size) > memory.size: TRAP
                             let memory_wrapper = instance.memory(mem_idx)?;
                             let memory = &memory_wrapper.0;
-                            let memory_size = memory.size_in_bytes() as u32;
-                            let dest_u32 = dest as u32;
-                            let size_u32 = size as u32;
+                            let memory_size = memory.size_in_bytes() as u64;
 
-                            if size_u32 == 0 {
-                                // For size 0, check if offset is within bounds (can be equal to size)
-                                if dest_u32 > memory_size {
+                            if size == 0 {
+                                if dest > memory_size {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
-                                // No-op for zero size fill after bounds check passes
                                 pc += 1;
                                 continue;
                             }
 
-                            // For size > 0, check if (offset + size) overflows or exceeds memory size
-                            let dest_end = dest_u32.checked_add(size_u32)
+                            let dest_end = dest.checked_add(size)
                                 .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
                             if dest_end > memory_size {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
 
-                            let size_usize = size_u32 as usize;
+                            let size_usize = size as usize;
                             let fill_byte = (value & 0xFF) as u8;
 
-                            // Create buffer filled with the value
                             let buffer = vec![fill_byte; size_usize];
 
-                            // Write to destination using write_shared (thread-safe)
-                            if let Err(e) = memory.write_shared(dest_u32, &buffer) {
+                            if let Err(e) = memory.write_shared(dest as u32, &buffer) {
                                 #[cfg(feature = "tracing")]
                                 trace!("MemoryFill: write failed: {:?}", e);
                                 return Err(e);
@@ -6071,15 +6105,28 @@ impl StacklessEngine {
                                 fill_byte = format_args!("{:#x}", fill_byte),
                                 "[MemoryFill] SUCCESS"
                             );
-                        } else {
-                            #[cfg(feature = "tracing")]
-                            trace!("MemoryFill: insufficient values on stack");
                         }
                     }
                     Instruction::MemoryInit(data_idx, mem_idx) => {
                         // Pop n (length), s (source offset in data), d (dest offset in memory)
-                        if let (Some(Value::I32(n)), Some(Value::I32(s)), Some(Value::I32(d))) =
-                            (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
+                        // For memory64, d and n may be I64; s is always I32 (data segment offset)
+                        let n_val = operand_stack.pop();
+                        let s_val = operand_stack.pop();
+                        let d_val = operand_stack.pop();
+                        let n = match n_val {
+                            Some(Value::I32(v)) => v as u32 as u64,
+                            Some(Value::I64(v)) => v as u64,
+                            _ => { #[cfg(feature = "tracing")] trace!("MemoryInit: insufficient values on stack"); pc += 1; continue; }
+                        };
+                        let s = match s_val {
+                            Some(Value::I32(v)) => v as u32 as u64,
+                            _ => { #[cfg(feature = "tracing")] trace!("MemoryInit: insufficient values on stack"); pc += 1; continue; }
+                        };
+                        let d = match d_val {
+                            Some(Value::I32(v)) => v as u32 as u64,
+                            Some(Value::I64(v)) => v as u64,
+                            _ => { #[cfg(feature = "tracing")] trace!("MemoryInit: insufficient values on stack"); pc += 1; continue; }
+                        };
                         {
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -6091,44 +6138,32 @@ impl StacklessEngine {
                                 "[MemoryInit] Starting memory init operation"
                             );
 
-                            // Check if this data segment has been dropped
-                            // Per WebAssembly spec, a dropped segment behaves as if it has zero length
                             let is_dropped = self.dropped_data_segments
                                 .get(&instance_id)
                                 .and_then(|v| v.get(data_idx as usize))
                                 .copied()
                                 .unwrap_or(false);
 
-                            // Get data segment from module (for length calculation)
                             let data_segment = module.data.get(data_idx as usize)
                                 .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
-                            // If dropped, treat as zero-length segment
-                            let data_len = if is_dropped { 0u32 } else { data_segment.init.len() as u32 };
-                            let s_u32 = s as u32;
-                            let d_u32 = d as u32;
-                            let n_u32 = n as u32;
+                            let data_len = if is_dropped { 0u64 } else { data_segment.init.len() as u64 };
 
-                            // Per WebAssembly spec: bounds check MUST happen before checking n==0
-                            // Get memory for bounds checking
                             let memory_wrapper = instance.memory(mem_idx)?;
                             let memory = &memory_wrapper.0;
-                            let memory_size = memory.size_in_bytes() as u32;
+                            let memory_size = memory.size_in_bytes() as u64;
 
-                            if n_u32 == 0 {
-                                // For n == 0, check if offsets are within bounds (can be equal to size)
-                                if s_u32 > data_len || d_u32 > memory_size {
+                            if n == 0 {
+                                if s > data_len || d > memory_size {
                                     return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                                 }
-                                // No-op for zero size init after bounds check passes
                                 pc += 1;
                                 continue;
                             }
 
-                            // For n > 0, check if (offset + n) overflows or exceeds bounds
-                            let src_end = s_u32.checked_add(n_u32)
+                            let src_end = s.checked_add(n)
                                 .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
-                            let dest_end = d_u32.checked_add(n_u32)
+                            let dest_end = d.checked_add(n)
                                 .ok_or_else(|| kiln_error::Error::runtime_trap("out of bounds memory access"))?;
 
                             if src_end > data_len {
@@ -6138,11 +6173,10 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
 
-                            // Copy data from segment to memory
                             #[cfg(any(feature = "std", feature = "alloc"))]
                             {
-                                let src_slice = &data_segment.init[s_u32 as usize..src_end as usize];
-                                if let Err(e) = memory.write_shared(d_u32, src_slice) {
+                                let src_slice = &data_segment.init[s as usize..src_end as usize];
+                                if let Err(e) = memory.write_shared(d as u32, src_slice) {
                                     #[cfg(feature = "tracing")]
                                     trace!("MemoryInit: write failed: {:?}", e);
                                     return Err(e);
@@ -6156,9 +6190,6 @@ impl StacklessEngine {
                                 len = n,
                                 "[MemoryInit] SUCCESS"
                             );
-                        } else {
-                            #[cfg(feature = "tracing")]
-                            trace!("MemoryInit: insufficient values on stack");
                         }
                     }
                     Instruction::DataDrop(data_idx) => {
@@ -7213,7 +7244,7 @@ impl StacklessEngine {
                         // memory.atomic.notify: [i32, i32] -> [i32]
                         // Wake up to count threads waiting on the given address
                         if let (Some(Value::I32(count)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check alignment - notify requires 4-byte alignment
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
@@ -7236,7 +7267,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(timeout)), Some(Value::I32(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check alignment - wait32 requires 4-byte alignment
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
@@ -7279,7 +7310,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(timeout)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check alignment - wait64 requires 8-byte alignment
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
@@ -7327,7 +7358,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicLoad { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check 4-byte alignment for i32
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
@@ -7361,7 +7392,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicLoad { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check 8-byte alignment for i64
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
@@ -7395,7 +7426,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicLoad8U { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // 8-bit loads have natural alignment (1 byte)
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
@@ -7426,7 +7457,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicLoad16U { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             // Check 2-byte alignment for i16
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
@@ -7460,7 +7491,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicLoad8U { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -7490,7 +7521,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicLoad16U { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7523,7 +7554,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicLoad32U { memarg } => {
                         if let Some(Value::I32(addr)) = operand_stack.pop() {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7560,7 +7591,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicStore { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7591,7 +7622,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicStore { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7622,7 +7653,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicStore8 { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -7650,7 +7681,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicStore16 { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7681,7 +7712,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicStore8 { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -7709,7 +7740,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicStore16 { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7740,7 +7771,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicStore32 { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7775,7 +7806,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmwAdd { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7819,7 +7850,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmwAdd { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7861,7 +7892,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw8AddU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -7893,7 +7924,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw16AddU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7928,7 +7959,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw8AddU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -7960,7 +7991,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw16AddU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -7995,7 +8026,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw32AddU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8034,7 +8065,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmwSub { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8069,7 +8100,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmwSub { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8104,7 +8135,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw8SubU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8136,7 +8167,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw16SubU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8171,7 +8202,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw8SubU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8203,7 +8234,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw16SubU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8238,7 +8269,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw32SubU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8277,7 +8308,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmwAnd { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8312,7 +8343,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmwAnd { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8347,7 +8378,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw8AndU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8379,7 +8410,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw16AndU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8414,7 +8445,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw8AndU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8446,7 +8477,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw16AndU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8481,7 +8512,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw32AndU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8520,7 +8551,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmwOr { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8555,7 +8586,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmwOr { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8590,7 +8621,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw8OrU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8622,7 +8653,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw16OrU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8657,7 +8688,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw8OrU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8689,7 +8720,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw16OrU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8724,7 +8755,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw32OrU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8763,7 +8794,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmwXor { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8798,7 +8829,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmwXor { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8833,7 +8864,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw8XorU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8865,7 +8896,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw16XorU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8900,7 +8931,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw8XorU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -8932,7 +8963,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw16XorU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -8967,7 +8998,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw32XorU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -9006,7 +9037,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmwXchg { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -9040,7 +9071,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmwXchg { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -9074,7 +9105,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw8XchgU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9105,7 +9136,7 @@ impl StacklessEngine {
 
                     Instruction::I32AtomicRmw16XchgU { memarg } => {
                         if let (Some(Value::I32(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -9139,7 +9170,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw8XchgU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9170,7 +9201,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw16XchgU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -9204,7 +9235,7 @@ impl StacklessEngine {
 
                     Instruction::I64AtomicRmw32XchgU { memarg } => {
                         if let (Some(Value::I64(value)), Some(Value::I32(addr))) = (operand_stack.pop(), operand_stack.pop()) {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -9245,7 +9276,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(replacement)), Some(Value::I32(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -9292,7 +9323,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(replacement)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 8 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -9329,7 +9360,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(replacement)), Some(Value::I32(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9363,7 +9394,7 @@ impl StacklessEngine {
                         if let (Some(Value::I32(replacement)), Some(Value::I32(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -9400,7 +9431,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(replacement)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             match instance.memory(memarg.memory_index as u32) {
                                 Ok(memory_wrapper) => {
                                     let memory = &memory_wrapper.0;
@@ -9434,7 +9465,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(replacement)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 2 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -9471,7 +9502,7 @@ impl StacklessEngine {
                         if let (Some(Value::I64(replacement)), Some(Value::I64(expected)), Some(Value::I32(addr))) =
                             (operand_stack.pop(), operand_stack.pop(), operand_stack.pop())
                         {
-                            let effective_addr = (addr as u32).wrapping_add(memarg.offset);
+                            let effective_addr = (addr as u32 as u64).wrapping_add(memarg.offset) as u32;
                             if effective_addr % 4 != 0 {
                                 return Err(kiln_error::Error::runtime_trap("unaligned atomic access"));
                             }
@@ -10079,7 +10110,7 @@ impl StacklessEngine {
                                 kiln_error::Error::runtime_error("Failed to add field to struct"))?;
                         }
 
-                        operand_stack.push(Value::StructRef(Some(struct_ref)));
+                        operand_stack.push(Value::StructRef(Some(GcStructRef::new(struct_ref))));
                     }
 
                     Instruction::StructNewDefault(type_idx) => {
@@ -10118,7 +10149,7 @@ impl StacklessEngine {
                             }
                         }
 
-                        operand_stack.push(Value::StructRef(Some(struct_ref)));
+                        operand_stack.push(Value::StructRef(Some(GcStructRef::new(struct_ref))));
                     }
 
                     Instruction::StructGet(type_idx, field_idx) => {
@@ -10132,7 +10163,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("struct.get: field index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("struct.get: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
                         }
                     }
 
@@ -10147,7 +10178,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("struct.get_s: field index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("struct.get_s: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
                         }
                     }
 
@@ -10162,7 +10193,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("struct.get_u: field index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("struct.get_u: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
                         }
                     }
 
@@ -10176,7 +10207,7 @@ impl StacklessEngine {
                             s.set_field(field_idx as usize, value).map_err(|_|
                                 kiln_error::Error::runtime_trap("struct.set: field index out of bounds"))?;
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("struct.set: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null structure reference"));
                         }
                     }
 
@@ -10198,7 +10229,7 @@ impl StacklessEngine {
                             array_ref.push(init_value.clone()).map_err(|_|
                                 kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
-                        operand_stack.push(Value::ArrayRef(Some(array_ref)));
+                        operand_stack.push(Value::ArrayRef(Some(GcArrayRef::new(array_ref))));
                     }
 
                     Instruction::ArrayNewDefault(type_idx) => {
@@ -10209,15 +10240,47 @@ impl StacklessEngine {
                             Some(Value::I32(n)) => n as u32,
                             _ => return Err(kiln_error::Error::runtime_trap("array.new_default: expected i32 length")),
                         };
+                        // Determine the default value from the array's element type
+                        let default_val = {
+                            #[cfg(feature = "std")]
+                            {
+                                match module.gc_types.get(type_idx as usize) {
+                                    Some(crate::module::GcTypeInfo::Array(field)) => {
+                                        match &field.storage {
+                                            crate::module::GcFieldStorage::I8 |
+                                            crate::module::GcFieldStorage::I16 |
+                                            crate::module::GcFieldStorage::Value(0x7F) => Value::I32(0),
+                                            crate::module::GcFieldStorage::Value(0x7E) => Value::I64(0),
+                                            crate::module::GcFieldStorage::Value(0x7D) => Value::F32(FloatBits32::from_f32(0.0)),
+                                            crate::module::GcFieldStorage::Value(0x7C) => Value::F64(FloatBits64::from_f64(0.0)),
+                                            crate::module::GcFieldStorage::Value(0x7B) => Value::V128(V128 { bytes: [0u8; 16] }),
+                                            crate::module::GcFieldStorage::Value(0x6C) => Value::I31Ref(None),
+                                            crate::module::GcFieldStorage::Value(0x6B) => Value::StructRef(None),
+                                            crate::module::GcFieldStorage::Value(0x6A) => Value::ArrayRef(None),
+                                            crate::module::GcFieldStorage::Value(0x70) => Value::FuncRef(None),
+                                            crate::module::GcFieldStorage::Value(0x6F) => Value::ExternRef(None),
+                                            crate::module::GcFieldStorage::Value(0x6E) => Value::StructRef(None), // anyref defaults to null
+                                            crate::module::GcFieldStorage::Value(0x6D) => Value::StructRef(None), // eqref defaults to null
+                                            crate::module::GcFieldStorage::Value(0x63) |
+                                            crate::module::GcFieldStorage::Value(0x64) => Value::FuncRef(None), // ref null/non-null defaults
+                                            _ => Value::I32(0),
+                                        }
+                                    }
+                                    _ => Value::I32(0),
+                                }
+                            }
+                            #[cfg(not(feature = "std"))]
+                            { Value::I32(0) }
+                        };
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
                             kiln_foundation::traits::DefaultMemoryProvider::default()
                         ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for _ in 0..length {
-                            array_ref.push(Value::I32(0)).map_err(|_|
+                            array_ref.push(default_val.clone()).map_err(|_|
                                 kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
-                        operand_stack.push(Value::ArrayRef(Some(array_ref)));
+                        operand_stack.push(Value::ArrayRef(Some(GcArrayRef::new(array_ref))));
                     }
 
                     Instruction::ArrayNewFixed(type_idx, count) => {
@@ -10239,7 +10302,7 @@ impl StacklessEngine {
                             array_ref.push(v).map_err(|_|
                                 kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
-                        operand_stack.push(Value::ArrayRef(Some(array_ref)));
+                        operand_stack.push(Value::ArrayRef(Some(GcArrayRef::new(array_ref))));
                     }
 
                     Instruction::ArrayGet(type_idx) => {
@@ -10257,7 +10320,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("array.get: index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.get: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10276,7 +10339,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("array.get_s: index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.get_s: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10295,7 +10358,7 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("array.get_u: index out of bounds"));
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.get_u: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10313,7 +10376,7 @@ impl StacklessEngine {
                             a.set(index, value).map_err(|_|
                                 kiln_error::Error::runtime_trap("array.set: index out of bounds"))?;
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.set: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10324,7 +10387,7 @@ impl StacklessEngine {
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             operand_stack.push(Value::I32(a.len() as i32));
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.len: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10435,7 +10498,7 @@ impl StacklessEngine {
                             array_ref.push(val).map_err(|_|
                                 kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
-                        operand_stack.push(Value::ArrayRef(Some(array_ref)));
+                        operand_stack.push(Value::ArrayRef(Some(GcArrayRef::new(array_ref))));
                     }
 
                     Instruction::ArrayNewElem(type_idx, elem_idx) => {
@@ -10466,7 +10529,7 @@ impl StacklessEngine {
                             array_ref.push(item_val).map_err(|_|
                                 kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
-                        operand_stack.push(Value::ArrayRef(Some(array_ref)));
+                        operand_stack.push(Value::ArrayRef(Some(GcArrayRef::new(array_ref))));
                     }
 
                     Instruction::ArrayFill(type_idx) => {
@@ -10493,7 +10556,7 @@ impl StacklessEngine {
                                     kiln_error::Error::runtime_trap("array.fill: set failed"))?;
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.fill: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10511,7 +10574,7 @@ impl StacklessEngine {
                         };
                         let src_array = match operand_stack.pop() {
                             Some(Value::ArrayRef(Some(a))) => a,
-                            _ => return Err(kiln_error::Error::runtime_trap("array.copy: null source reference")),
+                            _ => return Err(kiln_error::Error::runtime_trap("null array reference")),
                         };
                         let dst_offset = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as u32,
@@ -10533,7 +10596,7 @@ impl StacklessEngine {
                                     kiln_error::Error::runtime_trap("array.copy: dst set failed"))?;
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.copy: null destination reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10592,7 +10655,7 @@ impl StacklessEngine {
                                     kiln_error::Error::runtime_trap("array.init_data: set failed"))?;
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.init_data: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10629,7 +10692,7 @@ impl StacklessEngine {
                                     kiln_error::Error::runtime_trap("array.init_elem: set failed"))?;
                             }
                         } else {
-                            return Err(kiln_error::Error::runtime_trap("array.init_elem: null reference"));
+                            return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
                     }
 
@@ -10681,15 +10744,17 @@ impl StacklessEngine {
                         operand_stack.push(val);
                     }
 
-                    Instruction::BrOnCast { flags: _, label: label_idx, from_type: _, to_type } => {
+                    Instruction::BrOnCast { flags, label: label_idx, from_type: _, to_type } => {
                         // br_on_cast: [ref] -> [ref]
                         // Branch if cast succeeds, consuming the reference on the branch path
+                        // flags bit 1: to_type is nullable (null matches)
                         #[cfg(feature = "tracing")]
-                        trace!("BrOnCast: label={}, to_type={:?}", label_idx, to_type);
+                        trace!("BrOnCast: label={}, flags={}, to_type={:?}", label_idx, flags, to_type);
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("br_on_cast: expected reference"))?;
-                        // Test if cast would succeed (nullable based on flags)
-                        if ref_test_value(&val, &to_type, true) {
+                        // Test if cast would succeed
+                        let to_nullable = (flags & 2) != 0;
+                        if ref_test_value(&val, &to_type, to_nullable) {
                             // Cast succeeds - push value and branch
                             operand_stack.push(val);
                             // Branch logic (similar to Br)
@@ -10741,14 +10806,16 @@ impl StacklessEngine {
                         }
                     }
 
-                    Instruction::BrOnCastFail { flags: _, label: label_idx, from_type: _, to_type } => {
+                    Instruction::BrOnCastFail { flags, label: label_idx, from_type: _, to_type } => {
                         // br_on_cast_fail: [ref] -> [ref]
                         // Branch if cast FAILS
+                        // flags bit 1: to_type is nullable
                         #[cfg(feature = "tracing")]
-                        trace!("BrOnCastFail: label={}, to_type={:?}", label_idx, to_type);
+                        trace!("BrOnCastFail: label={}, flags={}, to_type={:?}", label_idx, flags, to_type);
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("br_on_cast_fail: expected reference"))?;
-                        if !ref_test_value(&val, &to_type, true) {
+                        let to_nullable = (flags & 2) != 0;
+                        if !ref_test_value(&val, &to_type, to_nullable) {
                             // Cast fails - push value and branch
                             operand_stack.push(val);
                             if (label_idx as usize) < block_stack.len() {
@@ -11849,8 +11916,7 @@ fn ref_test_value(val: &Value, heap_type: &kiln_foundation::types::HeapType, all
         HeapType::Func => matches!(val, Value::FuncRef(Some(_))),
         HeapType::Extern => matches!(val, Value::ExternRef(Some(_))),
         HeapType::Any => matches!(val,
-            Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_)) |
-            Value::ExternRef(Some(_))
+            Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_))
         ),
         HeapType::Eq => matches!(val,
             Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_))
@@ -11862,8 +11928,8 @@ fn ref_test_value(val: &Value, heap_type: &kiln_foundation::types::HeapType, all
         HeapType::None | HeapType::NoFunc | HeapType::NoExtern => false,
         // Concrete type index - check if the value's type index matches
         HeapType::Concrete(type_idx) => match val {
-            Value::StructRef(Some(sref)) => sref.type_index == *type_idx,
-            Value::ArrayRef(Some(aref)) => aref.type_index == *type_idx,
+            Value::StructRef(Some(sref)) => sref.type_index() == *type_idx,
+            Value::ArrayRef(Some(aref)) => aref.type_index() == *type_idx,
             Value::FuncRef(Some(_fref)) => true, // FuncRef doesn't carry type index
             _ => false,
         },

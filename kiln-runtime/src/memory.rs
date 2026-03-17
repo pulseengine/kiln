@@ -192,6 +192,7 @@ fn to_core_memory_type(memory_type: &MemoryType) -> CoreMemoryType {
     CoreMemoryType {
         limits: memory_type.limits,
         shared: memory_type.shared,
+        memory64: memory_type.memory64,
         page_size: memory_type.page_size,
     }
 }
@@ -579,7 +580,16 @@ impl Memory {
         // CRITICAL: Create Mutex<SafeMemoryHandler> inline to minimize stack usage
         // The key is to never have the 64KB SafeMemoryHandler as a stack variable
 
-        let current_size_bytes = wasm_offset_to_usize(initial_pages)? * effective_page_size;
+        let current_size_bytes_raw = (initial_pages as u64) * (effective_page_size as u64);
+        // Cap actual allocation to 4GB to prevent OOM on memory64 with huge initial sizes
+        // memory.grow will handle the rest lazily
+        const MAX_INITIAL_ALLOC: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB
+        if current_size_bytes_raw > MAX_INITIAL_ALLOC {
+            return Err(Error::memory_error(
+                "memory size exceeds implementation limit"
+            ));
+        }
+        let current_size_bytes = current_size_bytes_raw as usize;
 
         // In std mode, use StdProvider which can be dynamically sized
         // In no_std mode, use NoStdProvider with fixed compile-time size

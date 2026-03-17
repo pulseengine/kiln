@@ -1694,17 +1694,20 @@ fn parse_block_type(bytecode: &[u8], offset: usize) -> Result<BlockType> {
 ///
 /// The multi-memory proposal encodes the memory index in bit 6 of the alignment byte.
 /// When bit 6 is set, a LEB128 memory index follows the alignment byte, then the offset.
-/// Binary encoding: align:u32 memidx:u32? offset:u32
+/// Binary encoding: align:u32 memidx:u32? offset:u64
+///
+/// The offset is read as u64 LEB128 to support the memory64 proposal. For memory32 modules,
+/// offsets will fit in u32 but are still valid u64 LEB128 values.
 fn parse_memarg(bytecode: &[u8], offset: usize) -> Result<(MemArg, usize)> {
     let (align_raw, bytes1) = read_leb128_u32(bytecode, offset)?;
     let has_memory_index = (align_raw & 0x40) != 0;
     let align_exponent = align_raw & 0x3F;
     if has_memory_index {
         let (memory_index, bytes2) = read_leb128_u32(bytecode, offset + bytes1)?;
-        let (mem_offset, bytes3) = read_leb128_u32(bytecode, offset + bytes1 + bytes2)?;
+        let (mem_offset, bytes3) = read_leb128_u64(bytecode, offset + bytes1 + bytes2)?;
         Ok((MemArg { align_exponent, offset: mem_offset, memory_index }, bytes1 + bytes2 + bytes3))
     } else {
-        let (mem_offset, bytes2) = read_leb128_u32(bytecode, offset + bytes1)?;
+        let (mem_offset, bytes2) = read_leb128_u64(bytecode, offset + bytes1)?;
         Ok((MemArg { align_exponent, offset: mem_offset, memory_index: 0 }, bytes1 + bytes2))
     }
 }
@@ -1734,6 +1737,37 @@ pub(crate) fn read_leb128_u32(data: &[u8], offset: usize) -> Result<(u32, usize)
         shift += 7;
         if shift >= 32 {
             return Err(Error::parse_error("LEB128 value too large for u32"));
+        }
+    }
+
+    Ok((result, consumed))
+}
+
+/// Read a LEB128 encoded u64 (used for memory64 offsets in memarg)
+pub(crate) fn read_leb128_u64(data: &[u8], offset: usize) -> Result<(u64, usize)> {
+    let mut result = 0u64;
+    let mut shift = 0;
+    let mut consumed = 0;
+
+    loop {
+        if offset + consumed >= data.len() {
+            return Err(Error::parse_error(
+                "Unexpected end of data while reading LEB128",
+            ));
+        }
+
+        let byte = data[offset + consumed];
+        consumed += 1;
+
+        result |= ((byte & 0x7F) as u64) << shift;
+
+        if byte & 0x80 == 0 {
+            break;
+        }
+
+        shift += 7;
+        if shift >= 64 {
+            return Err(Error::parse_error("LEB128 value too large for u64"));
         }
     }
 

@@ -34,6 +34,8 @@ mod types {
         pub limits: crate::types::Limits,
         /// Whether the memory is shared
         pub shared: bool,
+        /// Memory64 extension - uses i64 addresses instead of i32
+        pub memory64: bool,
         /// Custom page size (custom-page-sizes proposal).
         /// When `Some`, the page size in bytes; must be a power of two and <= 65536.
         /// When `None`, the standard 65536-byte page size is used.
