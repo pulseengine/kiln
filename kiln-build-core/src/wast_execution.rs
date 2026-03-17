@@ -350,15 +350,16 @@ impl WastEngine {
 
         // Look for memory imports from spectest
         for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
-            if mod_name == "spectest" && field_name == "memory" {
+            if mod_name == "spectest" && (field_name == "memory" || field_name == "shared_memory") {
                 // Check if this is actually a memory import
                 if let Some(RuntimeImportDesc::Memory(_mem_type)) = module.import_types.get(i) {
+                    let is_shared = field_name == "shared_memory";
                     // The spectest module provides a memory with 1-2 pages
                     // The import type specifies minimum requirements, but the actual
                     // spectest memory always has at least 1 page
                     let core_mem_type = CoreMemoryType {
                         limits: Limits { min: 1, max: Some(2) },
-                        shared: false,
+                        shared: is_shared,
                         page_size: None,
                     };
 
@@ -885,20 +886,34 @@ impl WastEngine {
                 Ok(())
             }
             RuntimeImportDesc::Memory(mem_type) => {
-                if field_name != "memory" {
-                    return Err(anyhow::anyhow!(
-                        "unknown import: spectest::{} is not a known spectest memory",
-                        field_name
-                    ));
+                match field_name {
+                    "memory" => {
+                        // spectest memory is (memory 1 2)
+                        let spectest_mem = MemoryType {
+                            limits: Limits { min: 1, max: Some(2) },
+                            shared: false,
+                            memory64: false,
+                            page_size: None,
+                        };
+                        validate_memory_import_compatibility(mem_type, &spectest_mem)?;
+                    }
+                    "shared_memory" => {
+                        // spectest shared_memory is (memory 1 2 shared)
+                        let spectest_mem = MemoryType {
+                            limits: Limits { min: 1, max: Some(2) },
+                            shared: true,
+                            memory64: false,
+                            page_size: None,
+                        };
+                        validate_memory_import_compatibility(mem_type, &spectest_mem)?;
+                    }
+                    _ => {
+                        return Err(anyhow::anyhow!(
+                            "unknown import: spectest::{} is not a known spectest memory",
+                            field_name
+                        ));
+                    }
                 }
-                // spectest memory is (memory 1 2)
-                let spectest_mem = MemoryType {
-                    limits: Limits { min: 1, max: Some(2) },
-                    shared: false,
-                    memory64: false,
-                    page_size: None,
-                };
-                validate_memory_import_compatibility(mem_type, &spectest_mem)?;
                 Ok(())
             }
             RuntimeImportDesc::Tag(_tag_type) => {
