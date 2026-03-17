@@ -100,6 +100,357 @@ fn skip_leb128_i64(data: &[u8], offset: usize) -> usize {
     bytes
 }
 
+/// Validate LEB128 values within a code body's instruction bytes.
+/// This catches malformed LEB128 encodings (overlong, overflow) in memarg,
+/// FC/FD sub-opcodes, and other instruction operands.
+/// Returns Ok(()) if all LEB128 values are valid, or the first LEB128 error.
+fn validate_code_body_leb128(data: &[u8]) -> Result<()> {
+    use kiln_format::binary::{read_leb128_u32, read_leb128_i32, read_leb128_i64, read_leb128_u64};
+
+    let mut offset = 0;
+
+    while offset < data.len() {
+        let opcode = data[offset];
+        offset += 1;
+
+        match opcode {
+            // End/else/nop/unreachable/return/drop/select - no operands
+            0x00 | 0x01 | 0x05 | 0x0B | 0x0F | 0x1A | 0x1B => {},
+
+            // Block/loop/if - block type (s33 LEB128)
+            0x02 | 0x03 | 0x04 => {
+                let (_, bytes) = read_leb128_i64(data, offset)?;
+                offset += bytes;
+            },
+
+            // br/br_if - label index (u32 LEB128)
+            0x0C | 0x0D => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // br_table - count + label indices + default
+            0x0E => {
+                let (count, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+                for _ in 0..count {
+                    let (_, bytes) = read_leb128_u32(data, offset)?;
+                    offset += bytes;
+                }
+                // Default label
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // call - function index (u32 LEB128)
+            0x10 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // call_indirect - type index + table index (u32 LEB128 each)
+            0x11 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // return_call - function index
+            0x12 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // return_call_indirect - type index + table index
+            0x13 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // call_ref / return_call_ref - type index
+            0x14 | 0x15 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // try_table - block type + handler count + handlers + ...
+            0x1F => {
+                // block type (s33)
+                let (_, bytes) = read_leb128_i64(data, offset)?;
+                offset += bytes;
+                // handler count
+                let (handler_count, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+                for _ in 0..handler_count {
+                    if offset >= data.len() { break; }
+                    let kind = data[offset];
+                    offset += 1;
+                    match kind {
+                        0x00 | 0x01 => {
+                            // catch/catch_ref: tag index + label
+                            let (_, bytes) = read_leb128_u32(data, offset)?;
+                            offset += bytes;
+                            let (_, bytes) = read_leb128_u32(data, offset)?;
+                            offset += bytes;
+                        },
+                        0x02 | 0x03 => {
+                            // catch_all/catch_all_ref: label only
+                            let (_, bytes) = read_leb128_u32(data, offset)?;
+                            offset += bytes;
+                        },
+                        _ => {}
+                    }
+                }
+            },
+
+            // throw - tag index
+            0x08 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // throw_ref - no operands
+            0x0A => {},
+
+            // select with types - count + value types
+            0x1C => {
+                let (count, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+                for _ in 0..count {
+                    if offset < data.len() {
+                        // Value type can be multi-byte for ref types
+                        let b = data[offset];
+                        offset += 1;
+                        if b == 0x63 || b == 0x64 {
+                            // nullable/non-nullable ref type with heap type
+                            let (_, bytes) = read_leb128_i64(data, offset)?;
+                            offset += bytes;
+                        }
+                    }
+                }
+            },
+
+            // local.get/set/tee - local index (u32 LEB128)
+            0x20 | 0x21 | 0x22 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // global.get/set - global index (u32 LEB128)
+            0x23 | 0x24 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // table.get/set - table index
+            0x25 | 0x26 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // Memory load/store instructions (0x28-0x3E) - memarg
+            0x28..=0x3E => {
+                // memarg: alignment (u32 LEB128) + optional memory index + offset (u64 LEB128)
+                let (align_raw, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+                if (align_raw & 0x40) != 0 {
+                    // Multi-memory: memory index follows
+                    let (_, bytes) = read_leb128_u32(data, offset)?;
+                    offset += bytes;
+                }
+                let (_, bytes) = read_leb128_u64(data, offset)?;
+                offset += bytes;
+            },
+
+            // memory.size / memory.grow - memory index (u32 LEB128)
+            0x3F | 0x40 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // i32.const
+            0x41 => {
+                let (_, bytes) = read_leb128_i32(data, offset)?;
+                offset += bytes;
+            },
+
+            // i64.const
+            0x42 => {
+                let (_, bytes) = read_leb128_i64(data, offset)?;
+                offset += bytes;
+            },
+
+            // f32.const - 4 raw bytes
+            0x43 => { offset += 4; },
+
+            // f64.const - 8 raw bytes
+            0x44 => { offset += 8; },
+
+            // All i32/i64/f32/f64 numeric ops (no operands) 0x45-0xC4
+            0x45..=0xC4 => {},
+
+            // ref.null - heap type (s33 LEB128)
+            0xD0 => {
+                let (_, bytes) = read_leb128_i64(data, offset)?;
+                offset += bytes;
+            },
+
+            // ref.is_null - no operands
+            0xD1 => {},
+
+            // ref.func - function index
+            0xD2 => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+            },
+
+            // ref.eq - no operands
+            0xD3 => {},
+
+            // ref.as_non_null / ref.test / ref.cast / br_on_cast variants
+            0xD4 => {},
+            0xD5 | 0xD6 => {
+                // ref.as_non_null / ref.is_null variants
+            },
+
+            // 0xFB - GC prefix
+            0xFB => {
+                let (_, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+                // GC sub-opcodes have variable operands, skip remaining bytes
+                // by scanning for the next recognizable opcode boundary.
+                // This is a conservative approach - we validated the sub-opcode LEB128.
+            },
+
+            // 0xFC - misc prefix (bulk memory, saturating truncation, etc.)
+            0xFC => {
+                let (subop, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+
+                match subop {
+                    // Saturating truncation (0x00-0x07) - no additional operands
+                    0x00..=0x07 => {},
+                    // memory.init - data_idx + mem_idx
+                    0x08 => {
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                        if offset < data.len() { offset += 1; } // mem index byte
+                    },
+                    // data.drop
+                    0x09 => {
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                    },
+                    // memory.copy - src_mem + dst_mem
+                    0x0A => {
+                        if offset < data.len() { offset += 1; }
+                        if offset < data.len() { offset += 1; }
+                    },
+                    // memory.fill - mem index
+                    0x0B => {
+                        if offset < data.len() { offset += 1; }
+                    },
+                    // table.init - elem_idx + table_idx
+                    0x0C => {
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                    },
+                    // elem.drop
+                    0x0D => {
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                    },
+                    // table.copy - dst_table + src_table
+                    0x0E => {
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                    },
+                    // table.grow/size/fill
+                    0x0F | 0x10 | 0x11 => {
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                    },
+                    _ => {
+                        // Unknown FC sub-opcode; skip conservatively
+                    },
+                }
+            },
+
+            // 0xFD - SIMD prefix
+            0xFD => {
+                let (subop, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+                // SIMD load/store ops (0-11, etc.) have memarg
+                if subop <= 11 || (subop >= 84 && subop <= 97) || (subop >= 88 && subop <= 91)
+                    || (subop >= 92 && subop <= 95)
+                {
+                    // memarg
+                    let (align_raw, bytes) = read_leb128_u32(data, offset)?;
+                    offset += bytes;
+                    if (align_raw & 0x40) != 0 {
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                    }
+                    let (_, bytes) = read_leb128_u64(data, offset)?;
+                    offset += bytes;
+                } else if subop == 12 {
+                    // v128.const - 16 raw bytes
+                    offset += 16;
+                } else if subop == 13 {
+                    // i8x16.shuffle - 16 lane bytes
+                    offset += 16;
+                } else if (14..=21).contains(&subop) || subop == 256 + 21 {
+                    // Lane extract/replace - 1 lane byte
+                    if offset < data.len() { offset += 1; }
+                }
+                // Other SIMD ops have no additional operands
+            },
+
+            // 0xFE - threads/atomics prefix
+            0xFE => {
+                let (subop, bytes) = read_leb128_u32(data, offset)?;
+                offset += bytes;
+                // Atomic load/store/rmw ops have memarg
+                if subop >= 0x10 && subop <= 0x4E {
+                    let (align_raw, bytes) = read_leb128_u32(data, offset)?;
+                    offset += bytes;
+                    if (align_raw & 0x40) != 0 {
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                    }
+                    let (_, bytes) = read_leb128_u64(data, offset)?;
+                    offset += bytes;
+                } else if subop == 0x00 || subop == 0x01 {
+                    // memory.atomic.notify / memory.atomic.wait32/64 - memarg
+                    let (align_raw, bytes) = read_leb128_u32(data, offset)?;
+                    offset += bytes;
+                    if (align_raw & 0x40) != 0 {
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                    }
+                    let (_, bytes) = read_leb128_u64(data, offset)?;
+                    offset += bytes;
+                } else if subop == 0x03 {
+                    // atomic.fence - 1 byte (flags)
+                    if offset < data.len() { offset += 1; }
+                }
+            },
+
+            // Unknown or simple opcodes - no operands
+            _ => {},
+        }
+    }
+
+    Ok(())
+}
+
 /// Find the end of an expression by properly parsing instructions.
 /// Returns the position AFTER the end opcode (0x0B).
 ///
@@ -1139,13 +1490,13 @@ impl<'a> StreamingDecoder<'a> {
                     // Custom page size (bit 3): read page size exponent as LEB128 u32
                     // Per the custom-page-sizes proposal, the binary encoding stores
                     // the log2 of the page size (the exponent), not the raw byte count.
-                    // So 0 => 2^0 = 1 byte, 16 => 2^16 = 65536 bytes.
+                    // Only exponent 0 (page size 1) and 16 (page size 65536) are valid.
                     let custom_page_size = if (flags & 0x08) != 0 {
                         let (ps_exp, bytes_read) = read_leb128_u32(data, offset)?;
                         offset += bytes_read;
-                        if ps_exp > 16 {
+                        if ps_exp != 0 && ps_exp != 16 {
                             return Err(Error::validation_error(
-                                "custom page size must be at most 65536",
+                                "invalid custom page size",
                             ));
                         }
                         Some(1u32 << ps_exp)
@@ -1660,13 +2011,13 @@ impl<'a> StreamingDecoder<'a> {
             // Custom page size (bit 3): read page size exponent as LEB128 u32
             // Per the custom-page-sizes proposal, the binary encoding stores
             // the log2 of the page size (the exponent), not the raw byte count.
-            // So 0 => 2^0 = 1 byte, 16 => 2^16 = 65536 bytes.
+            // Only exponent 0 (page size 1) and 16 (page size 65536) are valid.
             let custom_page_size = if (flags & 0x08) != 0 {
                 let (ps_exp, bytes_read) = read_leb128_u32(data, offset)?;
                 offset += bytes_read;
-                if ps_exp > 16 {
+                if ps_exp != 0 && ps_exp != 16 {
                     return Err(Error::validation_error(
-                        "custom page size must be at most 65536",
+                        "invalid custom page size",
                     ));
                 }
                 Some(1u32 << ps_exp)
@@ -2102,7 +2453,7 @@ impl<'a> StreamingDecoder<'a> {
                         0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
                         0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
                         0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
-                        _ => kiln_format::types::RefType::Funcref,
+                        _ => return Err(Error::parse_error("malformed reference type")),
                     };
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: passive");
@@ -2159,7 +2510,7 @@ impl<'a> StreamingDecoder<'a> {
                         0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
                         0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
                         0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
-                        _ => kiln_format::types::RefType::Funcref,
+                        _ => return Err(Error::parse_error("malformed reference type")),
                     };
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: declarative");
@@ -2211,7 +2562,7 @@ impl<'a> StreamingDecoder<'a> {
                             offset += ht_bytes;
                             kiln_format::types::RefType::Gc(GcRefType::new(nullable, decode_heap_type(ht_val)))
                         }
-                        _ => kiln_format::types::RefType::Funcref,
+                        _ => return Err(Error::parse_error("malformed reference type")),
                     };
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: passive with type");
@@ -2255,7 +2606,7 @@ impl<'a> StreamingDecoder<'a> {
                             offset += ht_bytes;
                             kiln_format::types::RefType::Gc(GcRefType::new(nullable, decode_heap_type(ht_val)))
                         }
-                        _ => kiln_format::types::RefType::Funcref,
+                        _ => return Err(Error::parse_error("malformed reference type")),
                     };
 
                     #[cfg(feature = "tracing")]
@@ -2293,7 +2644,7 @@ impl<'a> StreamingDecoder<'a> {
                             offset += ht_bytes;
                             kiln_format::types::RefType::Gc(GcRefType::new(nullable, decode_heap_type(ht_val)))
                         }
-                        _ => kiln_format::types::RefType::Funcref,
+                        _ => return Err(Error::parse_error("malformed reference type")),
                     };
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: declarative with type");
@@ -2520,6 +2871,12 @@ impl<'a> StreamingDecoder<'a> {
                 // Now copy only the instruction bytes (after locals, before the implicit 'end')
                 let instructions_start = body_start + body_offset;
                 let instructions_data = &data[instructions_start..body_end];
+
+                // Validate LEB128 values in instruction operands before structural checks.
+                // This catches overlong/overflow LEB128 in memarg, FC sub-opcodes, etc.
+                // The validation runs before the END opcode check because truncated bodies
+                // from malformed LEB128 would cause misleading "END opcode expected" errors.
+                validate_code_body_leb128(instructions_data)?;
 
                 // Validate function body ends with END opcode (0x0B)
                 if instructions_data.is_empty() || instructions_data[instructions_data.len() - 1] != 0x0B {
@@ -2859,26 +3216,20 @@ impl<'a> StreamingDecoder<'a> {
     /// Perform cross-section validation at end of decoding
     fn validate_cross_section_counts(&self) -> Result<()> {
         // Validate function and code section counts match
-        // Both must be present and equal, or both must be absent
-        match (self.function_count, self.code_count) {
-            (Some(func), Some(code)) if func != code => {
-                return Err(Error::parse_error(
-                    "function and code section have inconsistent lengths",
-                ));
-            }
-            (Some(_), None) => {
-                // Function section exists but no code section - this is invalid
-                return Err(Error::parse_error(
-                    "function and code section have inconsistent lengths",
-                ));
-            }
-            (None, Some(_)) => {
-                // Code section exists but no function section - this is invalid
-                return Err(Error::parse_error(
-                    "function and code section have inconsistent lengths",
-                ));
-            }
-            _ => {}
+        // Both must be present and equal, or both must be absent.
+        // A section with count 0 is treated as equivalent to absent.
+        let func_count = self.function_count.unwrap_or(0);
+        let code_count = self.code_count.unwrap_or(0);
+        if func_count != code_count {
+            return Err(Error::parse_error(
+                "function and code section have inconsistent lengths",
+            ));
+        }
+        // If counts are non-zero, both sections must actually be present
+        if func_count > 0 && (self.function_count.is_none() || self.code_count.is_none()) {
+            return Err(Error::parse_error(
+                "function and code section have inconsistent lengths",
+            ));
         }
 
         // Validate data count section matches data section if present

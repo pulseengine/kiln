@@ -1728,6 +1728,19 @@ pub(crate) fn read_leb128_u32(data: &[u8], offset: usize) -> Result<(u32, usize)
         let byte = data[offset + consumed];
         consumed += 1;
 
+        // For the 5th byte (shift == 28), validate overflow:
+        // Only the low 4 bits are valid (bits 28-31 of u32).
+        // The continuation bit must not be set (> 5 bytes).
+        if shift == 28 {
+            if (byte & 0x80) != 0 {
+                return Err(Error::parse_error("integer representation too long"));
+            }
+            // Bits 4-6 must be zero for unsigned LEB128 u32
+            if (byte & 0xF0) != 0 {
+                return Err(Error::parse_error("integer too large"));
+            }
+        }
+
         result |= ((byte & 0x7F) as u32) << shift;
 
         if byte & 0x80 == 0 {
@@ -1735,8 +1748,8 @@ pub(crate) fn read_leb128_u32(data: &[u8], offset: usize) -> Result<(u32, usize)
         }
 
         shift += 7;
-        if shift >= 32 {
-            return Err(Error::parse_error("LEB128 value too large for u32"));
+        if shift >= 35 {
+            return Err(Error::parse_error("integer representation too long"));
         }
     }
 
@@ -1759,6 +1772,19 @@ pub(crate) fn read_leb128_u64(data: &[u8], offset: usize) -> Result<(u64, usize)
         let byte = data[offset + consumed];
         consumed += 1;
 
+        // For the 10th byte (shift == 63), validate overflow:
+        // Only 1 bit is valid (bit 63 of u64).
+        // The continuation bit must not be set (> 10 bytes).
+        if shift == 63 {
+            if (byte & 0x80) != 0 {
+                return Err(Error::parse_error("integer representation too long"));
+            }
+            // Only bit 0 is valid, bits 1-6 (0x7E) must be zero
+            if (byte & 0x7E) != 0 {
+                return Err(Error::parse_error("integer too large"));
+            }
+        }
+
         result |= ((byte & 0x7F) as u64) << shift;
 
         if byte & 0x80 == 0 {
@@ -1766,8 +1792,8 @@ pub(crate) fn read_leb128_u64(data: &[u8], offset: usize) -> Result<(u64, usize)
         }
 
         shift += 7;
-        if shift >= 64 {
-            return Err(Error::parse_error("LEB128 value too large for u64"));
+        if shift >= 70 {
+            return Err(Error::parse_error("integer representation too long"));
         }
     }
 
@@ -1791,11 +1817,33 @@ pub(crate) fn read_leb128_i32(data: &[u8], offset: usize) -> Result<(i32, usize)
         byte = data[offset + consumed];
         consumed += 1;
 
+        // For the 5th byte (shift == 28), validate overflow
+        if shift == 28 {
+            if (byte & 0x80) != 0 {
+                return Err(Error::parse_error("integer representation too long"));
+            }
+            // For signed i32, the sign bit is bit 3 (0x08) of the 5th byte
+            // Bits 4-6 (0x70) must match the sign bit
+            let sign_bit = (byte & 0x08) != 0;
+            let upper_bits = byte & 0x70;
+            if sign_bit {
+                if upper_bits != 0x70 {
+                    return Err(Error::parse_error("integer too large"));
+                }
+            } else if upper_bits != 0x00 {
+                return Err(Error::parse_error("integer too large"));
+            }
+        }
+
         result |= ((byte & 0x7F) as i32) << shift;
         shift += 7;
 
         if byte & 0x80 == 0 {
             break;
+        }
+
+        if shift >= 35 {
+            return Err(Error::parse_error("integer representation too long"));
         }
     }
 
@@ -1824,11 +1872,33 @@ pub(crate) fn read_leb128_i64(data: &[u8], offset: usize) -> Result<(i64, usize)
         byte = data[offset + consumed];
         consumed += 1;
 
+        // For the 10th byte (shift == 63), validate overflow
+        if shift == 63 {
+            if (byte & 0x80) != 0 {
+                return Err(Error::parse_error("integer representation too long"));
+            }
+            // For signed i64, the sign bit is bit 0 (0x01) of the 10th byte
+            // Bits 1-6 (0x7E) must match the sign bit
+            let sign_bit = (byte & 0x01) != 0;
+            let upper_bits = byte & 0x7E;
+            if sign_bit {
+                if upper_bits != 0x7E {
+                    return Err(Error::parse_error("integer too large"));
+                }
+            } else if upper_bits != 0x00 {
+                return Err(Error::parse_error("integer too large"));
+            }
+        }
+
         result |= ((byte & 0x7F) as i64) << shift;
         shift += 7;
 
         if byte & 0x80 == 0 {
             break;
+        }
+
+        if shift >= 70 {
+            return Err(Error::parse_error("integer representation too long"));
         }
     }
 
