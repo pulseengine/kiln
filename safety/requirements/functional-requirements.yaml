@@ -331,6 +331,183 @@ artifacts:
       note: "Related to BA RFC #46 host-wit-bindgen equivalent"
 
   # =========================================================================
+  # WebAssembly Proposal Conformance — New Instruction Categories
+  # =========================================================================
+  - id: FR-MEM64
+    type: requirement
+    title: Memory64 proposal compliance
+    description: >
+      The interpreter shall implement the Memory64 proposal, including:
+      i64 addressing for all load/store and bulk memory operations
+      (memory.copy, memory.fill, memory.init, data.drop), u64 offsets
+      in memarg encoding, and memory.size/memory.grow returning i64
+      for memory64-typed memories. The decoder shall parse the memory64
+      flag in memory type definitions and validate that memory indices
+      referencing memory64 memories use i64 operands throughout.
+    status: planned
+    tags: [wasm-core, spec-conformance, memory64]
+    traced_to: [H-2]
+    links:
+      - type: derives-from
+        target: REQ_LFUNC_018
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs, kiln-decoder/src/streaming_decoder.rs
+      spec-reference: "WebAssembly Memory64 Proposal"
+      verification-method: test
+      verification-description: >
+        All memory64 WAST test files pass (13 files, 5902 assertions);
+        memory64 load/store with i64 addresses verified; memory.size and
+        memory.grow return i64 for memory64 memories; u64 memarg offsets
+        decoded correctly
+
+  - id: FR-ATOMICS
+    type: requirement
+    title: Threads proposal compliance
+    description: >
+      The interpreter shall implement the Threads proposal, including:
+      shared memory support (shared flag in memory type), all atomic
+      load/store operations (i32.atomic.load, i32.atomic.load8_u,
+      i32.atomic.load16_u, i64.atomic.load, i64.atomic.load8_u,
+      i64.atomic.load16_u, i64.atomic.load32_u, and corresponding
+      stores), all atomic read-modify-write operations (add, sub, and,
+      or, xor, xchg for i32 and i64 at all widths), atomic compare-
+      exchange operations (i32.atomic.rmw.cmpxchg and variants),
+      memory.atomic.wait32, memory.atomic.wait64, memory.atomic.notify,
+      and atomic.fence. In single-threaded (no_std) mode, atomic
+      operations shall execute as regular load/store/RMW operations
+      with correct sequential semantics but without real concurrency.
+    status: planned
+    tags: [wasm-core, spec-conformance, threads, atomics]
+    traced_to: [H-1]
+    links:
+      - type: derives-from
+        target: REQ_LFUNC_018
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs
+      spec-reference: "WebAssembly Threads Proposal"
+      verification-method: test
+      verification-description: >
+        atomic.wast passes (249 assertions); shared memory creation and
+        validation verified; all atomic RMW operations produce correct
+        results in single-threaded mode; memory.atomic.wait returns
+        immediately in single-threaded mode
+
+  - id: FR-GC
+    type: requirement
+    title: GC proposal compliance
+    description: >
+      The interpreter shall implement the GC proposal, including:
+      struct and array heap reference types (struct.new, struct.get,
+      struct.set, array.new, array.get, array.set, array.len, and
+      fixed/default/data/elem variants), the type hierarchy
+      (any > eq > i31/struct/array), ref.test and ref.cast type
+      testing and casting operations, br_on_cast and br_on_cast_fail
+      conditional branching, i31.new and i31.get_s/i31.get_u for
+      unboxed 31-bit integers, and extern.internalize/extern.externalize
+      for host reference conversion.
+    status: planned
+    tags: [wasm-core, spec-conformance, gc]
+    traced_to: [H-1, H-3]
+    links:
+      - type: derives-from
+        target: REQ_LFUNC_018
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs
+      spec-reference: "WebAssembly GC Proposal"
+      verification-method: test
+      verification-description: >
+        GC WAST test files pass; struct create/access/mutate verified;
+        array create/access/length verified; type hierarchy subtyping
+        checks correct for ref.test/ref.cast; br_on_cast branches
+        correctly based on runtime type
+
+  - id: FR-SIMD-EXT
+    type: requirement
+    title: Relaxed SIMD compliance
+    description: >
+      The interpreter shall implement the Relaxed SIMD proposal,
+      including: relaxed fused multiply-add operations (f32x4.relaxed_madd,
+      f32x4.relaxed_nmadd, f64x2.relaxed_madd, f64x2.relaxed_nmadd),
+      relaxed lane selection (i8x16.relaxed_laneselect, i16x8.relaxed_-
+      laneselect, i32x4.relaxed_laneselect, i64x2.relaxed_laneselect),
+      relaxed min/max (f32x4.relaxed_min, f32x4.relaxed_max, f64x2.-
+      relaxed_min, f64x2.relaxed_max), relaxed integer truncation
+      (i32x4.relaxed_trunc_f32x4_s/u, i32x4.relaxed_trunc_f64x2_s/u_-
+      zero), relaxed swizzle (i8x16.relaxed_swizzle), relaxed
+      i16x8.relaxed_q15mulr_s, and relaxed dot product
+      (i16x8.relaxed_dot_i8x16_i7x16_s, i32x4.relaxed_dot_i8x16_-
+      i7x16_add_s). The interpreter shall choose deterministic behavior
+      for all edge cases (NaN handling, out-of-range truncation) and
+      document which deterministic choice is made for each operation.
+    status: planned
+    tags: [wasm-core, spec-conformance, simd, relaxed-simd]
+    traced_to: [H-1]
+    links:
+      - type: derives-from
+        target: REQ_LFUNC_018
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs
+      spec-reference: "WebAssembly Relaxed SIMD Proposal"
+      verification-method: test
+      verification-description: >
+        Relaxed SIMD WAST test files pass; deterministic behavior
+        documented for each edge case; fused multiply-add precision
+        verified; lane selection semantics verified
+
+  - id: FR-WIDE-ARITH
+    type: requirement
+    title: Wide arithmetic compliance
+    description: >
+      The interpreter shall implement the Wide Arithmetic proposal,
+      including: i64.add128 (128-bit addition via two i64 operands
+      and two i64 results), i64.sub128 (128-bit subtraction),
+      i64.mul_wide_s (signed 64x64->128 multiplication), and
+      i64.mul_wide_u (unsigned 64x64->128 multiplication). All
+      operations shall handle overflow and sign extension correctly
+      per the proposal specification.
+    status: planned
+    tags: [wasm-core, spec-conformance, wide-arithmetic]
+    traced_to: [H-1]
+    links:
+      - type: derives-from
+        target: REQ_LFUNC_018
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs
+      spec-reference: "WebAssembly Wide Arithmetic Proposal"
+      verification-method: test
+      verification-description: >
+        wide-arithmetic.wast passes (109 assertions); 128-bit addition
+        and subtraction carry/borrow verified; signed and unsigned
+        widening multiplication verified at boundary values
+
+  - id: FR-CUSTOM-PAGES
+    type: requirement
+    title: Custom page sizes compliance
+    description: >
+      The interpreter shall implement the Custom Page Sizes proposal,
+      including: page sizes of 1 byte and 65536 bytes (the standard
+      Wasm page size), the page size encoded in memory type definitions,
+      limits validation respecting the declared page size, memory.size
+      returning the size in units of the declared page size, and
+      memory.grow growing by the declared page size units. The decoder
+      shall parse the custom-page-size annotation in memory types and
+      validate that only allowed page sizes (1 and 65536) are used.
+    status: planned
+    tags: [wasm-core, spec-conformance, custom-page-sizes]
+    traced_to: [H-2]
+    links:
+      - type: derives-from
+        target: REQ_LFUNC_018
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs, kiln-decoder/src/streaming_decoder.rs
+      spec-reference: "WebAssembly Custom Page Sizes Proposal"
+      verification-method: test
+      verification-description: >
+        custom-page-sizes.wast passes; page size 1 and 65536 both
+        validated; memory.size and memory.grow use correct page size
+        units; invalid page sizes rejected by decoder
+
+  # =========================================================================
   # REMOVED from sphinx-needs (with rationale):
   #
   # REQ_FUNC_004 (State Migration) — planned, never started, low priority.

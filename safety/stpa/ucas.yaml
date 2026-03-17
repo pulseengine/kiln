@@ -62,6 +62,61 @@ engine-ucas:
       context: "Deeply recursive function call chain"
       hazards: [H-2, H-3]
 
+  # --- Memory64 address calculation ---
+    - id: UCA-E-7
+      description: >
+        Engine computes memory64 effective address by truncating the i64
+        address or u64 offset to 32 bits before performing the bounds check,
+        allowing access to memory locations that should be out of bounds.
+      context: "Memory64 module with addresses above 4 GiB"
+      hazards: [H-2]
+
+    - id: UCA-E-8
+      description: >
+        Engine does not detect u64 overflow in memory64 effective address
+        computation (base + offset wraps around), producing a small effective
+        address that passes the bounds check but refers to the wrong location.
+      context: "Memory64 load with large base and large offset"
+      hazards: [H-2]
+
+  # --- Atomic RMW ---
+    - id: UCA-E-9
+      description: >
+        Engine executes atomic RMW instruction (i32.atomic.rmw.add,
+        i64.atomic.rmw.xor, etc.) with incorrect byte width, reading or
+        writing more bytes than specified by the instruction suffix (rmw8,
+        rmw16), corrupting adjacent bytes in shared memory.
+      context: "Atomic rmw8 on shared memory near a field boundary"
+      hazards: [H-11]
+
+    - id: UCA-E-10
+      description: >
+        Engine executes memory.atomic.wait32/wait64 without checking whether
+        the runtime is single-threaded, causing the sole execution thread to
+        block permanently instead of returning 1 (not-equal) immediately.
+      context: "Single-threaded no_std runtime executing atomic.wait"
+      hazards: [H-11]
+
+  # --- Relaxed SIMD non-determinism ---
+    - id: UCA-E-11
+      description: >
+        Engine executes relaxed SIMD instruction (relaxed_fma, relaxed_min,
+        relaxed_max, relaxed_swizzle) and produces non-deterministic results
+        without any mechanism to detect or constrain the non-determinism, in
+        a safety-critical context that requires deterministic execution.
+      context: "ASIL-rated module using relaxed SIMD for numeric computation"
+      hazards: [H-1]
+
+  # --- Wide arithmetic ---
+    - id: UCA-E-12
+      description: >
+        Engine executes wide arithmetic instruction (i64.mul_wide_s,
+        i64.mul_wide_u, i64.add128, i64.sub128) and produces incorrect
+        high or low 64-bit result, leading to wrong branch decisions
+        or arithmetic results downstream.
+      context: "128-bit multiplication used in cryptographic or financial computation"
+      hazards: [H-1]
+
 decoder-ucas:
   control-action: "Parse and validate WebAssembly binary"
   controller: CTRL-DECODER
@@ -275,3 +330,53 @@ allocation-ucas:
         dropping the inserted element or corrupting adjacent memory.
       context: "BoundedVec at capacity with push operation"
       hazards: [H-3, H-10]
+
+gc-ucas:
+  control-action: "Manage GC heap allocation, deallocation, and type casting"
+  controller: CTRL-ENGINE
+
+  providing:
+    - id: UCA-GC-1
+      description: >
+        Engine allocates a new GC heap object (struct.new, array.new) without
+        checking the bounded allocation pool capacity, causing pool exhaustion
+        in no_std mode where no garbage collector reclaims unreachable objects.
+      context: "Long-running no_std module creating many short-lived structs"
+      hazards: [H-12, H-3]
+
+    - id: UCA-GC-2
+      description: >
+        Engine executes ref.cast with incorrect subtype hierarchy traversal,
+        allowing a reference of type A to be successfully cast to unrelated
+        type B. Subsequent field access (struct.get, array.get) reads data
+        at wrong offsets, producing garbage values or accessing out-of-bounds
+        memory within the heap object.
+      context: "Module using ref.cast between struct types with different field layouts"
+      hazards: [H-12, H-1]
+
+    - id: UCA-GC-3
+      description: >
+        Engine executes br_on_cast with inverted cast result, branching to the
+        target when the cast should fail (or falling through when it should
+        succeed), causing the module to operate on a reference of the wrong type.
+      context: "Pattern-matching code using br_on_cast for type dispatch"
+      hazards: [H-12, H-1]
+
+  not-providing:
+    - id: UCA-GC-4
+      description: >
+        Engine does not validate that a GC heap reference is still live before
+        executing struct.get or array.get. If the backing Arc<Mutex<>> has been
+        dropped (reference count reached zero), the access reads freed memory
+        or panics on a poisoned mutex.
+      context: "Reference held across a function boundary after the allocating scope returns"
+      hazards: [H-12, H-2]
+
+    - id: UCA-GC-5
+      description: >
+        Engine does not enforce allocation limits for GC heap objects
+        separately from linear memory limits, allowing a module to exhaust
+        host memory via struct/array allocations while linear memory remains
+        within its configured budget.
+      context: "Module that allocates millions of small structs without growing linear memory"
+      hazards: [H-12, H-3, H-10]

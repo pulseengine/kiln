@@ -775,6 +775,142 @@ artifacts:
       verification-method: review, test
 
   # =========================================================================
+  # No_std Feature Parity and Safety — Proposal-Specific
+  #
+  # These requirements document safety constraints for new instruction
+  # categories when operating in no_std (embedded/bare-metal) environments,
+  # where virtual memory, threads, and garbage collection are unavailable.
+  # =========================================================================
+  - id: SR-NOSTD-MEM
+    type: requirement
+    title: No_std memory64 safety
+    description: >
+      In no_std environments, Memory64 allocation shall be capped at the
+      implementation-defined physical memory limit (no virtual memory is
+      available). memory.grow for memory64 memories shall fail gracefully
+      by returning -1 (as i64) when the requested growth would exceed the
+      physical limit or the configured per-instance memory budget. All
+      memory bounds checks for memory64 memories shall use u64 arithmetic
+      throughout the check path; no intermediate truncation to u32 or
+      usize (on 32-bit targets) is permitted. On 32-bit no_std targets,
+      the effective addressable memory64 range shall be limited to the
+      target's address space and clearly documented.
+    status: planned
+    tags: [no-std, memory-safety, memory64, asil-d, stpa-derived]
+    traced_to: [H-2, H-3, H-7]
+    links:
+      - type: derives-from
+        target: SR-3
+      - type: derives-from
+        target: FR-MEM64
+    fields:
+      implementation: kiln-runtime/src/memory.rs
+      iso-26262: "ISO 26262-6:7.4.14"
+      verification-method: test, analysis
+      verification-description: >
+        memory.grow returns -1 (i64) when exceeding no_std memory budget;
+        bounds checks use u64 arithmetic verified by code review; no
+        truncation to u32 in memory64 access path on 32-bit targets;
+        Kani proof for u64 bounds check non-truncation
+
+  - id: SR-NOSTD-GC
+    type: requirement
+    title: No_std GC reference safety
+    description: >
+      In no_std environments, GC proposal struct and array allocations
+      shall draw from a bounded, pre-allocated pool configured at
+      initialization time. When the pool is exhausted, allocation shall
+      return a trap (not panic or OOM abort). No garbage collector shall
+      run; references shall be either reference-counted with bounded
+      reference counts or statically bounded by the pool capacity. The
+      pool capacity shall be configurable via the resource budget system
+      (safe_managed_alloc! integration). Circular references shall be
+      documented as a known limitation in no_std mode.
+    status: planned
+    tags: [no-std, memory-safety, gc, asil-c, stpa-derived]
+    traced_to: [H-1, H-3, H-7]
+    links:
+      - type: derives-from
+        target: SR-8
+      - type: derives-from
+        target: FR-GC
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs, kiln-foundation/src/capabilities/memory_factory.rs
+      iso-26262: "ISO 26262-6:7.4.3"
+      verification-method: test, analysis
+      verification-description: >
+        Allocation beyond pool capacity returns trap (not panic); pool
+        size respects safe_managed_alloc! budget; reference count overflow
+        returns trap; stress test exhausting pool produces deterministic
+        trap error
+
+  - id: SR-NOSTD-ATOMICS
+    type: requirement
+    title: No_std atomics safety
+    description: >
+      In no_std environments without thread support, atomic operations
+      shall execute as single-threaded regular load/store/RMW operations
+      with sequential consistency. memory.atomic.wait32 and
+      memory.atomic.wait64 shall return 2 ("timed out") immediately
+      without blocking, as no other thread can perform a wake. There
+      shall be no shared memory across threads (shared flag in memory
+      type is accepted for module compatibility but no cross-thread
+      sharing occurs). atomic.fence shall be a no-op in single-threaded
+      mode. The no_std atomic implementation shall produce identical
+      results to the std implementation for all single-threaded execution
+      sequences.
+    status: planned
+    tags: [no-std, threads, atomics, asil-b, stpa-derived]
+    traced_to: [H-1, H-3, H-7]
+    links:
+      - type: derives-from
+        target: SR-1
+      - type: derives-from
+        target: FR-ATOMICS
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs
+      verification-method: test, analysis
+      verification-description: >
+        memory.atomic.wait returns 2 immediately in no_std mode; atomic
+        RMW operations produce correct sequential results; no blocking
+        or deadlock possible; single-threaded atomic results match std
+        mode results for identical instruction sequences
+
+  - id: SR-NOSTD-BUDGET
+    type: requirement
+    title: No_std resource budgets for new proposals
+    description: >
+      In no_std environments, the following resource budgets shall be
+      enforced and configurable at initialization time: maximum number
+      of GC heap allocations (structs + arrays) per invocation, maximum
+      total memory pages allocatable across all memories (including
+      memory64 memories, counted in their respective page size units),
+      and stack depth limit for call frames (including frames generated
+      by GC operations such as struct.new_default which may internally
+      invoke initialization). Budget exhaustion shall return a trap
+      with a descriptive error (not panic). Budget counters shall be
+      integrated with the existing fuel metering system so that a
+      single resource limit configuration covers both execution time
+      and space budgets.
+    status: planned
+    tags: [no-std, resource-containment, asil-d, stpa-derived]
+    traced_to: [H-3, H-7]
+    links:
+      - type: derives-from
+        target: SR-8
+      - type: derives-from
+        target: SR-22
+    fields:
+      implementation: kiln-runtime/src/stackless/engine.rs, kiln-foundation/src/capabilities/memory_factory.rs
+      iso-26262: "ISO 26262-6:7.4.3, ISO 26262-6:7.4.4"
+      verification-method: test
+      verification-description: >
+        GC allocation count exceeding budget returns trap; memory page
+        allocation exceeding budget returns -1 from memory.grow; stack
+        depth limit prevents unbounded recursion from GC init operations;
+        budget configuration API validated at initialization time
+
+  # =========================================================================
   # REMOVED from sphinx-needs (with rationale):
   #
   # REQ_SAFETY_002 (Safety Manual Compliance) — process requirement, not
