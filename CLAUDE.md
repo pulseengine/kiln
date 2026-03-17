@@ -482,6 +482,18 @@ The Kiln project has completed its migration to a unified build system:
 - **Integration**: Former kiln-verification-tool functionality integrated into kiln-build-core
 - **API consistency**: All commands follow consistent patterns and error handling
 
+### Post-RFC #46 Architecture (Current)
+The PulseEngine toolchain follows BA RFC #46 for component model support:
+
+- **Meld** lowers components to core modules at build time
+- **Kiln interpreter** (std-only) executes core modules + host intrinsics
+- **kiln-builtins** (no_std) provides host intrinsics for synth-compiled code
+- **Synth** compiles to native ELF for gale/embedded targets
+- Component Model is NOT implemented as a runtime feature — Meld handles it
+
+The interpreter is std-only. The no_std path is via kiln-builtins for synth-compiled code.
+See `docs/architecture/rfc46-toolchain-architecture.md` for details.
+
 ### Removed Legacy Components
 - Shell scripts: `verify_build.sh`, `fuzz_all.sh`, `verify_no_std.sh`, `test_features.sh`, `documentation_audit.sh`
 - Kani verification scripts: `test_kani_phase4.sh`, `validate_kani_phase4.sh`

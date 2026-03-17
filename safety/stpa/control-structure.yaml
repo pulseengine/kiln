@@ -255,6 +255,55 @@ controllers:
       - from: PROC-BUDGET
         info: Allocation success/failure, remaining budget
 
+  - id: CTRL-MELD
+    name: Meld Component Lowering (Build Time)
+    type: automated
+    description: >
+      Build-time tool that lowers Component Model constructs to core
+      WebAssembly modules. Resolves inter-component imports, performs
+      canonical ABI lift/lower transformations statically, and fuses
+      multi-component graphs into core modules. Meld runs before Kiln
+      and produces the artifacts that Kiln or Synth consume. Not part
+      of the Kiln runtime, but its output format is a trust boundary
+      for Kiln's decoder and linker.
+    source-crate: meld-core (external)
+    control-actions:
+      - ca: CA-MELD-1
+        target: PROC-MODULE
+        action: Lower component to core module(s) with embedded adapters
+      - ca: CA-MELD-2
+        target: PROC-INSTANCE
+        action: Resolve inter-component imports to direct core-level wiring
+      - ca: CA-MELD-3
+        target: PROC-CANONICAL
+        action: Emit static canonical ABI adapter trampolines
+    feedback:
+      - from: PROC-MODULE
+        info: Fused core module bytes, capability manifest, adapter metadata
+
+  - id: CTRL-SYNTH
+    name: Synth AOT Compiler (Build Time)
+    type: automated
+    description: >
+      Build-time AOT compiler that translates core WebAssembly modules
+      (typically Meld output) to native ELF binaries for gale and other
+      embedded targets. Generates native code that calls into
+      kiln-builtins for host intrinsics. Synth runs before deployment
+      and produces the native artifacts that gale loads.
+    source-crate: synth-codegen (external)
+    control-actions:
+      - ca: CA-SYNTH-1
+        target: PROC-BUILTINS
+        action: Generate native calls to kiln-builtins host intrinsics
+      - ca: CA-SYNTH-2
+        target: PROC-GALE
+        action: Emit native ELF binary for target architecture
+    feedback:
+      - from: PROC-BUILTINS
+        info: ABI version compatibility, intrinsic availability
+      - from: PROC-GALE
+        info: Target architecture constraints, memory layout
+
 controlled-processes:
   - id: PROC-INSTRUCTION
     name: Instruction Stream
@@ -315,3 +364,19 @@ controlled-processes:
   - id: PROC-BUDGET
     name: Allocation Budget
     description: Per-crate memory budget tracked by the allocation manager
+
+  - id: PROC-BUILTINS
+    name: kiln-builtins Host Intrinsics
+    description: >
+      The no_std runtime support library providing host intrinsics for
+      Synth-compiled native code. Includes memory bounds checking,
+      table access, WASI host functions for embedded targets, and trap
+      handling. Linked into gale firmware images.
+
+  - id: PROC-GALE
+    name: Gale Native Execution Environment
+    description: >
+      The gale RTOS execution environment that loads and runs
+      Synth-compiled native ELF binaries. Provides task scheduling,
+      hardware abstraction (MPU, interrupts), and links against
+      kiln-builtins for host intrinsic dispatch.

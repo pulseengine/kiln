@@ -277,3 +277,96 @@ vulnerabilities:
           enough to verify exhaustively for representative input classes.
         status: unmitigated
         priority: medium
+
+  # ===========================================================================
+  # SH-7: ABI mismatch between Synth-compiled code and kiln-builtins
+  # ===========================================================================
+  - id: V-7
+    security-hazard: SH-7
+    title: Synth-to-kiln-builtins ABI mismatch
+    code-locations:
+      - file: kiln-builtins/src/abi.rs
+        description: >
+          The C ABI surface that kiln-builtins exposes to Synth-compiled
+          native code. Argument register assignments, struct passing
+          conventions, and return value encoding must exactly match what
+          Synth generates.
+      - file: kiln-builtins/src/intrinsics/
+        description: >
+          Host intrinsic implementations called by Synth-compiled code.
+          Each intrinsic reads arguments from the ABI-defined locations.
+          Mismatch causes wrong values to be read or written.
+    mitigations:
+      - id: MIT-7.1
+        description: >
+          Define the Synth-to-kiln-builtins ABI as a versioned, machine-
+          readable specification (e.g., a shared header or bindgen input).
+          Both Synth and kiln-builtins must be generated from or validated
+          against this single specification. Version the ABI with a magic
+          number checked at load time.
+        status: unmitigated
+        priority: critical
+      - id: MIT-7.2
+        description: >
+          Add end-to-end ABI conformance tests: compile known modules with
+          Synth, execute on gale with kiln-builtins, and verify that
+          argument values, return values, and memory operations match
+          expected results. Cover all intrinsic functions and all supported
+          target architectures (ARM, RISC-V, x86-64).
+        status: unmitigated
+        priority: high
+      - id: MIT-7.3
+        description: >
+          Include an ABI version check in the kiln-builtins initialization
+          path. Synth-compiled ELF binaries embed the ABI version they
+          were compiled against. kiln-builtins refuses to execute binaries
+          with a mismatched ABI version, failing loudly rather than
+          silently misinterpreting arguments.
+        status: unmitigated
+        priority: critical
+
+  # ===========================================================================
+  # SH-8: Capability escalation through Meld component fusion
+  # ===========================================================================
+  - id: V-8
+    security-hazard: SH-8
+    title: Capability escalation through Meld fusion wiring
+    code-locations:
+      - file: kiln-component/src/linker.rs
+        description: >
+          The Kiln-side linker that resolves remaining host/WASI imports
+          after Meld fusion. Must verify that the fused module's import
+          set does not exceed the union of capabilities authorized for
+          the original components.
+      - file: kiln-wasi/src/dispatcher.rs
+        description: >
+          WASI capability dispatcher. Must enforce per-component capability
+          sets even after fusion has flattened the component graph into
+          core modules.
+    mitigations:
+      - id: MIT-8.1
+        description: >
+          Meld must emit a capability manifest alongside the fused core
+          module, listing which original component each import originated
+          from and what capabilities were authorized. Kiln's linker
+          validates this manifest against the host's capability policy
+          before instantiation.
+        status: unmitigated
+        priority: critical
+      - id: MIT-8.2
+        description: >
+          Add integration tests that verify capability boundaries survive
+          fusion: create a two-component graph where component A has
+          clock-only capabilities and component B has filesystem
+          capabilities. After fusion, verify that code paths originating
+          from A cannot reach filesystem imports.
+        status: unmitigated
+        priority: high
+      - id: MIT-8.3
+        description: >
+          Implement a post-fusion capability audit in Kiln that traces
+          each import in the fused module back to its originating
+          component and verifies the capability authorization chain.
+          Log warnings for any import that cannot be traced.
+        status: unmitigated
+        priority: medium
