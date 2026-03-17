@@ -1282,8 +1282,8 @@ impl FromBytes for FuncType {
 pub struct MemArg {
     /// The alignment exponent (2^align_exponent bytes)
     pub align_exponent: u32,
-    /// The offset to add to the address
-    pub offset:         u32,
+    /// The offset to add to the address (u64 for memory64 support)
+    pub offset:         u64,
     /// The memory index (0 for single memory)
     pub memory_index:   u32,
 }
@@ -1305,7 +1305,7 @@ impl ToBytes for MemArg {
         _provider: &PStream,
     ) -> kiln_error::Result<()> {
         writer.write_u32_le(self.align_exponent)?;
-        writer.write_u32_le(self.offset)?;
+        writer.write_u64_le(self.offset)?;
         writer.write_u32_le(self.memory_index)
     }
 
@@ -1322,7 +1322,7 @@ impl FromBytes for MemArg {
         _provider: &PStream,
     ) -> kiln_error::Result<Self> {
         let align_exponent = reader.read_u32_le()?;
-        let offset = reader.read_u32_le()?;
+        let offset = reader.read_u64_le()?;
         let memory_index = reader.read_u32_le()?;
         Ok(Self {
             align_exponent,

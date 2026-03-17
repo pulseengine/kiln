@@ -17,6 +17,17 @@ use core::fmt;
 #[cfg(feature = "std")]
 use std::fmt;
 
+// GC heap reference types require shared mutable access (Arc<Mutex<>>)
+// to implement WebAssembly GC reference semantics where multiple locals/stack
+// entries can refer to the same struct/array heap object.
+// Uses Arc<Mutex> for thread safety (Send + Sync).
+#[cfg(feature = "std")]
+use std::sync::{Arc, Mutex};
+#[cfg(not(feature = "std"))]
+use alloc::sync::Arc;
+#[cfg(not(feature = "std"))]
+use kiln_sync::Mutex;
+
 // Core imports
 use kiln_error::{
     codes,
@@ -184,6 +195,164 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> De
     }
 }
 
+/// GC heap-allocated struct reference with shared ownership.
+///
+/// Wraps `Arc<Mutex<StructRef>>` to provide WebAssembly GC reference semantics:
+/// multiple locals and stack entries can refer to the same struct, and mutations
+/// through one reference are visible through all others.
+/// Uses Arc<Mutex> for thread safety (Send + Sync).
+#[derive(Clone)]
+pub struct GcStructRef(pub Arc<Mutex<StructRef<DefaultMemoryProvider>>>);
+
+impl GcStructRef {
+    /// Create a new GC struct reference wrapping the given StructRef
+    pub fn new(inner: StructRef<DefaultMemoryProvider>) -> Self {
+        Self(Arc::new(Mutex::new(inner)))
+    }
+
+    /// Acquire the lock (abstracts over std vs no_std Mutex API differences)
+    #[cfg(feature = "std")]
+    fn lock_inner(&self) -> std::sync::MutexGuard<'_, StructRef<DefaultMemoryProvider>> {
+        self.0.lock().expect("GcStructRef lock poisoned")
+    }
+
+    /// Acquire the lock (no_std version - kiln_sync::Mutex::lock returns guard directly)
+    #[cfg(not(feature = "std"))]
+    fn lock_inner(&self) -> kiln_sync::KilnMutexGuard<'_, StructRef<DefaultMemoryProvider>> {
+        self.0.lock()
+    }
+
+    /// Get the type index of the struct
+    pub fn type_index(&self) -> u32 {
+        self.lock_inner().type_index
+    }
+
+    /// Get a field value
+    pub fn get_field(&self, index: usize) -> kiln_error::Result<Value> {
+        self.lock_inner().get_field(index)
+    }
+
+    /// Set a field value
+    pub fn set_field(&self, index: usize, value: Value) -> kiln_error::Result<()> {
+        self.lock_inner().set_field(index, value)
+    }
+
+    /// Add a field value
+    pub fn add_field(&self, value: Value) -> kiln_error::Result<()> {
+        self.lock_inner().add_field(value)
+    }
+}
+
+impl fmt::Debug for GcStructRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "GcStructRef(type={})", self.type_index())
+    }
+}
+
+impl PartialEq for GcStructRef {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for GcStructRef {}
+
+impl core::hash::Hash for GcStructRef {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        (Arc::as_ptr(&self.0) as usize).hash(state);
+    }
+}
+
+/// GC heap-allocated array reference with shared ownership.
+///
+/// Wraps `Arc<Mutex<ArrayRef>>` to provide WebAssembly GC reference semantics:
+/// multiple locals and stack entries can refer to the same array, and mutations
+/// through one reference are visible through all others.
+/// Uses Arc<Mutex> for thread safety (Send + Sync).
+#[derive(Clone)]
+pub struct GcArrayRef(pub Arc<Mutex<ArrayRef<DefaultMemoryProvider>>>);
+
+impl GcArrayRef {
+    /// Create a new GC array reference wrapping the given ArrayRef
+    pub fn new(inner: ArrayRef<DefaultMemoryProvider>) -> Self {
+        Self(Arc::new(Mutex::new(inner)))
+    }
+
+    /// Acquire the lock (abstracts over std vs no_std Mutex API differences)
+    #[cfg(feature = "std")]
+    fn lock_inner(&self) -> std::sync::MutexGuard<'_, ArrayRef<DefaultMemoryProvider>> {
+        self.0.lock().expect("GcArrayRef lock poisoned")
+    }
+
+    /// Acquire the lock (no_std version)
+    #[cfg(not(feature = "std"))]
+    fn lock_inner(&self) -> kiln_sync::KilnMutexGuard<'_, ArrayRef<DefaultMemoryProvider>> {
+        self.0.lock()
+    }
+
+    /// Get the type index of the array
+    pub fn type_index(&self) -> u32 {
+        self.lock_inner().type_index
+    }
+
+    /// Get array length
+    pub fn len(&self) -> usize {
+        self.lock_inner().len()
+    }
+
+    /// Check if array is empty
+    pub fn is_empty(&self) -> bool {
+        self.lock_inner().is_empty()
+    }
+
+    /// Get element at index
+    pub fn get(&self, index: usize) -> kiln_error::Result<Value> {
+        self.lock_inner().get(index)
+    }
+
+    /// Set element at index
+    pub fn set(&self, index: usize, value: Value) -> kiln_error::Result<()> {
+        self.lock_inner().set(index, value)
+    }
+
+    /// Push element to array
+    pub fn push(&self, value: Value) -> kiln_error::Result<()> {
+        self.lock_inner().push(value)
+    }
+}
+
+impl fmt::Debug for GcArrayRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "GcArrayRef(type={}, len={})", self.type_index(), self.len())
+    }
+}
+
+impl PartialEq for GcArrayRef {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for GcArrayRef {}
+
+impl core::hash::Hash for GcArrayRef {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        (Arc::as_ptr(&self.0) as usize).hash(state);
+    }
+}
+
+impl Checksummable for GcStructRef {
+    fn update_checksum(&self, checksum: &mut Checksum) {
+        checksum.update(self.type_index() as u8);
+    }
+}
+
+impl Checksummable for GcArrayRef {
+    fn update_checksum(&self, checksum: &mut Checksum) {
+        checksum.update(self.type_index() as u8);
+    }
+}
+
 /// Represents a WebAssembly runtime value
 #[derive(Debug, Clone, core::hash::Hash)]
 #[allow(clippy::derived_hash_with_manual_eq)]
@@ -207,9 +376,11 @@ pub enum Value {
     /// 16-bit vector (represented internally as V128)
     I16x8(V128),
     /// Struct reference (WebAssembly 3.0 GC)
-    StructRef(Option<StructRef<DefaultMemoryProvider>>),
+    /// Uses GcStructRef for shared heap storage (Rc<RefCell<>> semantics)
+    StructRef(Option<GcStructRef>),
     /// Array reference (WebAssembly 3.0 GC)
-    ArrayRef(Option<ArrayRef<DefaultMemoryProvider>>),
+    /// Uses GcArrayRef for shared heap storage (Rc<RefCell<>> semantics)
+    ArrayRef(Option<GcArrayRef>),
     /// Exception reference (Exception Handling proposal)
     ExnRef(Option<u32>),
     /// i31 reference (WebAssembly 3.0 GC) - unboxed 31-bit integer
@@ -388,7 +559,7 @@ impl Value {
 
     /// Returns the value type of this `Value`.
     #[must_use]
-    pub const fn value_type(&self) -> ValueType {
+    pub fn value_type(&self) -> ValueType {
         match self {
             Self::I32(_) => ValueType::I32,
             Self::I64(_) => ValueType::I64,
@@ -400,9 +571,9 @@ impl Value {
             Self::ExternRef(_) => ValueType::ExternRef,
             Self::ExnRef(_) => ValueType::ExnRef,
             Self::Ref(_) => ValueType::I32,
-            Self::StructRef(Some(s)) => ValueType::StructRef(s.type_index),
+            Self::StructRef(Some(s)) => ValueType::StructRef(s.type_index()),
             Self::StructRef(None) => ValueType::StructRef(0), // Default type index for null
-            Self::ArrayRef(Some(a)) => ValueType::ArrayRef(a.type_index),
+            Self::ArrayRef(Some(a)) => ValueType::ArrayRef(a.type_index()),
             Self::ArrayRef(None) => ValueType::ArrayRef(0), // Default type index for null
             Self::I31Ref(_) => ValueType::I31Ref,
             // Component Model types - these are not standard WebAssembly types
@@ -418,7 +589,7 @@ impl Value {
 
     /// Checks if the value matches the provided type.
     #[must_use]
-    pub const fn matches_type(&self, ty: &ValueType) -> bool {
+    pub fn matches_type(&self, ty: &ValueType) -> bool {
         match (self, ty) {
             (Self::I32(_), ValueType::I32) => true,
             (Self::I64(_), ValueType::I64) => true,
@@ -430,10 +601,9 @@ impl Value {
             (Self::ExternRef(_), ValueType::ExternRef) => true,
             (Self::ExnRef(_), ValueType::ExnRef) => true,
             (Self::Ref(_), ValueType::I32) => true,
-            (Self::StructRef(Some(s)), ValueType::StructRef(idx)) => s.type_index == *idx,
-            (Self::StructRef(None), ValueType::StructRef(_)) => true, // Null matches any struct
-            // type
-            (Self::ArrayRef(Some(a)), ValueType::ArrayRef(idx)) => a.type_index == *idx,
+            (Self::StructRef(Some(s)), ValueType::StructRef(idx)) => s.type_index() == *idx,
+            (Self::StructRef(None), ValueType::StructRef(_)) => true, // Null matches any struct type
+            (Self::ArrayRef(Some(a)), ValueType::ArrayRef(idx)) => a.type_index() == *idx,
             (Self::ArrayRef(None), ValueType::ArrayRef(_)) => true, // Null matches any array type
             // GC reference types
             (Self::I31Ref(_), ValueType::I31Ref) => true,
@@ -769,9 +939,9 @@ impl Value {
             Value::ExnRef(Some(idx)) => writer.write_all(&idx.to_le_bytes()),
             Value::I31Ref(Some(v)) => writer.write_all(&v.to_le_bytes()),
             Value::I31Ref(None) => writer.write_all(&0i32.to_le_bytes()),
-            Value::StructRef(Some(s)) => writer.write_all(&s.type_index.to_le_bytes()),
+            Value::StructRef(Some(s)) => writer.write_all(&s.type_index().to_le_bytes()),
             Value::StructRef(None) => writer.write_all(&0u32.to_le_bytes()),
-            Value::ArrayRef(Some(a)) => writer.write_all(&a.type_index.to_le_bytes()),
+            Value::ArrayRef(Some(a)) => writer.write_all(&a.type_index().to_le_bytes()),
             Value::ArrayRef(None) => writer.write_all(&0u32.to_le_bytes()),
             // Component Model types - simplified serialization as i32
             Value::Bool(b) => writer.write_all(&(*b as i32).to_le_bytes()),
@@ -938,9 +1108,9 @@ impl fmt::Display for Value {
             Value::I31Ref(None) => write!(f, "i31ref:null"),
             Value::Ref(v) => write!(f, "ref:{v}"),
             Value::I16x8(v) => write!(f, "i16x8:{v:?}"),
-            Value::StructRef(Some(v)) => write!(f, "structref:type{}", v.type_index),
+            Value::StructRef(Some(v)) => write!(f, "structref:type{}", v.type_index()),
             Value::StructRef(None) => write!(f, "structref:null"),
-            Value::ArrayRef(Some(v)) => write!(f, "arrayref:type{}[{}]", v.type_index, v.len()),
+            Value::ArrayRef(Some(v)) => write!(f, "arrayref:type{}[{}]", v.type_index(), v.len()),
             Value::ArrayRef(None) => write!(f, "arrayref:null"),
             // Component Model types
             Value::Bool(b) => write!(f, "bool:{b}"),
@@ -1351,7 +1521,7 @@ impl ToBytes for Value {
                 // Write Some/None flag + always write 4 bytes for fixed size
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => v.to_bytes_with_provider(writer, provider)?,
+                    Some(v) => v.lock_inner().to_bytes_with_provider(writer, provider)?,
                     None => writer.write_u32_le(0)?, // Padding for fixed size
                 }
             },
@@ -1359,7 +1529,7 @@ impl ToBytes for Value {
                 // Write Some/None flag + always write 4 bytes for fixed size
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => v.to_bytes_with_provider(writer, provider)?,
+                    Some(v) => v.lock_inner().to_bytes_with_provider(writer, provider)?,
                     None => writer.write_u32_le(0)?, // Padding for fixed size
                 }
             },
@@ -1473,7 +1643,7 @@ impl FromBytes for Value {
                 let is_some = reader.read_u8()? == 1;
                 if is_some {
                     let v = StructRef::from_bytes_with_provider(reader, provider)?;
-                    Ok(Value::StructRef(Some(v)))
+                    Ok(Value::StructRef(Some(GcStructRef::new(v))))
                 } else {
                     let _ = reader.read_u32_le()?; // Skip padding
                     Ok(Value::StructRef(None))
@@ -1484,7 +1654,7 @@ impl FromBytes for Value {
                 let is_some = reader.read_u8()? == 1;
                 if is_some {
                     let v = ArrayRef::from_bytes_with_provider(reader, provider)?;
-                    Ok(Value::ArrayRef(Some(v)))
+                    Ok(Value::ArrayRef(Some(GcArrayRef::new(v))))
                 } else {
                     let _ = reader.read_u32_le()?; // Skip padding
                     Ok(Value::ArrayRef(None))

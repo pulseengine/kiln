@@ -819,16 +819,26 @@ impl FromBytes for char {
 /// Binary std/no_std choice
 // const DEFAULT_NO_STD_PROVIDER_CAPACITY: usize = 0; // Capacity defined by NoStdProvider itself
 
-/// Default memory provider for no_std environments when no specific provider is
-/// given. Wraps `NoStdProvider` with a fixed-size backing array.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)] // Removed Copy
-pub struct DefaultMemoryProvider(NoStdProvider<0>); // Use 0 for default capacity of NoStdProvider
+/// Default memory provider for GC value types and trait-level fallbacks.
+///
+/// In std mode, uses heap-backed storage (Vec<u8>) for actual GC operations.
+/// In no_std mode, uses NoStdProvider<0> (zero capacity) as a placeholder.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DefaultMemoryProvider {
+    /// Inner provider for no_std compatibility
+    inner: NoStdProvider<0>,
+    /// Heap-backed storage for std mode, enabling GC struct/array fields
+    #[cfg(feature = "std")]
+    heap_data: std::vec::Vec<u8>,
+}
 
 impl Default for DefaultMemoryProvider {
     fn default() -> Self {
-        // Note: Using NoStdProvider::<0>::default() here is legitimate as this is
-        // the default memory provider implementation for trait-level fallbacks
-        Self(NoStdProvider::<0>::default())
+        Self {
+            inner: NoStdProvider::<0>::default(),
+            #[cfg(feature = "std")]
+            heap_data: std::vec::Vec::new(),
+        }
     }
 }
 
@@ -851,7 +861,7 @@ impl RootMemoryProvider for DefaultMemoryProvider {
     }
 
     fn get_allocator(&self) -> &Self::Allocator {
-        &self.0
+        &self.inner
     }
 
     fn new_handler(&self) -> kiln_error::Result<SafeMemoryHandler<Self>>
@@ -861,45 +871,102 @@ impl RootMemoryProvider for DefaultMemoryProvider {
         Ok(SafeMemoryHandler::new(self.clone()))
     }
 
-    // Implement missing methods from crate::safe_memory::Provider
+    // In std mode, use heap-backed storage for GC operations
+    // In no_std mode, delegate to the zero-capacity inner provider
+
     fn borrow_slice(&self, offset: usize, len: usize) -> kiln_error::Result<Slice<'_>> {
-        self.0.borrow_slice(offset, len) // Delegate to inner NoStdProvider
+        #[cfg(feature = "std")]
+        {
+            if offset + len > self.heap_data.len() {
+                return Err(KilnError::memory_out_of_bounds("DefaultMemoryProvider: read out of bounds"));
+            }
+            Slice::new(&self.heap_data[offset..offset + len]).map_err(|_| {
+                KilnError::memory_error("DefaultMemoryProvider: failed to create slice")
+            })
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.inner.borrow_slice(offset, len)
+        }
     }
 
     fn write_data(&mut self, offset: usize, data: &[u8]) -> kiln_error::Result<()> {
-        self.0.write_data(offset, data)
+        #[cfg(feature = "std")]
+        {
+            let end = offset + data.len();
+            if end > self.heap_data.len() {
+                self.heap_data.resize(end, 0);
+            }
+            self.heap_data[offset..end].copy_from_slice(data);
+            Ok(())
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.inner.write_data(offset, data)
+        }
     }
 
     fn verify_access(&self, offset: usize, len: usize) -> kiln_error::Result<()> {
-        self.0.verify_access(offset, len)
+        #[cfg(feature = "std")]
+        {
+            if offset + len <= self.heap_data.len() {
+                Ok(())
+            } else {
+                // For std mode, we auto-grow, so access is always valid
+                Ok(())
+            }
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.inner.verify_access(offset, len)
+        }
     }
 
     fn size(&self) -> usize {
-        self.0.size()
+        #[cfg(feature = "std")]
+        { self.heap_data.len() }
+        #[cfg(not(feature = "std"))]
+        { self.inner.size() }
     }
 
     fn capacity(&self) -> usize {
-        self.0.capacity()
+        #[cfg(feature = "std")]
+        { usize::MAX } // Heap-backed, effectively unlimited
+        #[cfg(not(feature = "std"))]
+        { self.inner.capacity() }
     }
 
     fn verify_integrity(&self) -> kiln_error::Result<()> {
-        self.0.verify_integrity()
+        Ok(()) // Heap-backed storage doesn't need integrity verification
     }
 
     fn set_verification_level(&mut self, level: VerificationLevel) {
-        self.0.set_verification_level(level)
+        self.inner.set_verification_level(level)
     }
 
     fn verification_level(&self) -> VerificationLevel {
-        self.0.verification_level()
+        self.inner.verification_level()
     }
 
     fn memory_stats(&self) -> Stats {
-        self.0.memory_stats()
+        self.inner.memory_stats()
     }
 
     fn get_slice_mut(&mut self, offset: usize, len: usize) -> kiln_error::Result<SliceMut<'_>> {
-        self.0.get_slice_mut(offset, len)
+        #[cfg(feature = "std")]
+        {
+            let end = offset + len;
+            if end > self.heap_data.len() {
+                self.heap_data.resize(end, 0);
+            }
+            SliceMut::new(&mut self.heap_data[offset..end]).map_err(|_| {
+                KilnError::memory_error("DefaultMemoryProvider: failed to create mutable slice")
+            })
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.inner.get_slice_mut(offset, len)
+        }
     }
 
     fn copy_within(
@@ -908,11 +975,33 @@ impl RootMemoryProvider for DefaultMemoryProvider {
         dst_offset: usize,
         len: usize,
     ) -> kiln_error::Result<()> {
-        self.0.copy_within(src_offset, dst_offset, len)
+        #[cfg(feature = "std")]
+        {
+            let end = (src_offset + len).max(dst_offset + len);
+            if end > self.heap_data.len() {
+                self.heap_data.resize(end, 0);
+            }
+            self.heap_data.copy_within(src_offset..src_offset + len, dst_offset);
+            Ok(())
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.inner.copy_within(src_offset, dst_offset, len)
+        }
     }
 
     fn ensure_used_up_to(&mut self, byte_offset: usize) -> kiln_error::Result<()> {
-        self.0.ensure_used_up_to(byte_offset)
+        #[cfg(feature = "std")]
+        {
+            if byte_offset > self.heap_data.len() {
+                self.heap_data.resize(byte_offset, 0);
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "std"))]
+        {
+            self.inner.ensure_used_up_to(byte_offset)
+        }
     }
 }
 

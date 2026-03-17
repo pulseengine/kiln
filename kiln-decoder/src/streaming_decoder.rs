@@ -652,7 +652,7 @@ impl<'a> StreamingDecoder<'a> {
                 let mut gc_fields = Vec::with_capacity(field_count as usize);
                 for _ in 0..field_count {
                     // Parse storage type (value type or packed type)
-                    let (storage_byte, new_offset) = self.parse_storage_type(data, offset)?;
+                    let (storage_type, new_offset) = self.parse_storage_type(data, offset)?;
                     offset = new_offset;
 
                     // Parse mutability flag
@@ -662,11 +662,6 @@ impl<'a> StreamingDecoder<'a> {
                     let mutable = data[offset] != 0;
                     offset += 1;
 
-                    let storage_type = match storage_byte {
-                        0x78 => GcStorageType::I8,
-                        0x77 => GcStorageType::I16,
-                        other => GcStorageType::Value(other),
-                    };
                     gc_fields.push(GcFieldType { storage_type, mutable });
                 }
 
@@ -692,7 +687,7 @@ impl<'a> StreamingDecoder<'a> {
             },
             COMPOSITE_TYPE_ARRAY => {
                 // Parse array type: storage_type mutability
-                let (storage_byte, new_offset) = self.parse_storage_type(data, offset)?;
+                let (storage_type, new_offset) = self.parse_storage_type(data, offset)?;
                 offset = new_offset;
 
                 // Parse mutability flag
@@ -702,11 +697,6 @@ impl<'a> StreamingDecoder<'a> {
                 let mutable = data[offset] != 0;
                 offset += 1;
 
-                let storage_type = match storage_byte {
-                    0x78 => GcStorageType::I8,
-                    0x77 => GcStorageType::I16,
-                    other => GcStorageType::Value(other),
-                };
                 let gc_element = GcFieldType { storage_type, mutable };
 
                 #[cfg(feature = "tracing")]
@@ -741,9 +731,7 @@ impl<'a> StreamingDecoder<'a> {
     }
 
     /// Parse a storage type (value type or packed type)
-    fn parse_storage_type(&self, data: &[u8], mut offset: usize) -> Result<(u8, usize)> {
-        use kiln_format::binary::read_leb128_u32;
-
+    fn parse_storage_type(&self, data: &[u8], offset: usize) -> Result<(GcStorageType, usize)> {
         if offset >= data.len() {
             return Err(Error::parse_error("Unexpected end of storage type"));
         }
@@ -751,13 +739,26 @@ impl<'a> StreamingDecoder<'a> {
         let byte = data[offset];
 
         // Check for packed types first (i8 = 0x78, i16 = 0x77)
-        if byte == 0x78 || byte == 0x77 {
-            return Ok((byte, offset + 1));
+        if byte == 0x78 {
+            return Ok((GcStorageType::I8, offset + 1));
+        }
+        if byte == 0x77 {
+            return Ok((GcStorageType::I16, offset + 1));
         }
 
-        // Otherwise parse as value type
-        let (_, new_offset) = self.parse_value_type(data, offset)?;
-        Ok((byte, new_offset))
+        // Otherwise parse as value type - capture the full parsed type
+        let (vt, new_offset) = self.parse_value_type(data, offset)?;
+        use kiln_foundation::types::ValueType;
+        match vt {
+            ValueType::TypedFuncRef(idx, nullable) => {
+                if nullable {
+                    Ok((GcStorageType::RefTypeNull(idx), new_offset))
+                } else {
+                    Ok((GcStorageType::RefType(idx), new_offset))
+                }
+            }
+            _ => Ok((GcStorageType::Value(byte), new_offset)),
+        }
     }
 
     /// Parse a value type (may include GC reference types)
@@ -1081,20 +1082,25 @@ impl<'a> StreamingDecoder<'a> {
                         };
 
                         // Validate memory64 limits
-                        if min64 > MAX_MEMORY_PAGES as u64 {
+                        // Memory64 allows up to 2^48 pages (each 65536 bytes = full 64-bit address space)
+                        const MAX_MEMORY64_PAGES: u64 = 1u64 << 48;
+                        if min64 > MAX_MEMORY64_PAGES {
                             return Err(Error::validation_error(
-                                "memory size must be at most 65536 pages (4 GiB)",
+                                "memory size must be at most 2^48 pages (16 EiB)",
                             ));
                         }
                         if let Some(max64) = max64 {
-                            if max64 > MAX_MEMORY_PAGES as u64 {
+                            if max64 > MAX_MEMORY64_PAGES {
                                 return Err(Error::validation_error(
-                                    "memory size must be at most 65536 pages (4 GiB)",
+                                    "memory size must be at most 2^48 pages (16 EiB)",
                                 ));
                             }
                         }
 
-                        (min64 as u32, max64.map(|v| v as u32))
+                        // Clamp to u32 for runtime storage (actual allocation is bounded by physical memory)
+                        let min_clamped = if min64 > u32::MAX as u64 { u32::MAX } else { min64 as u32 };
+                        let max_clamped = max64.map(|v| if v > u32::MAX as u64 { u32::MAX } else { v as u32 });
+                        (min_clamped, max_clamped)
                     } else {
                         let (min, bytes_read) = read_leb128_u32(data, offset)?;
                         offset += bytes_read;
@@ -1126,19 +1132,23 @@ impl<'a> StreamingDecoder<'a> {
                         None
                     };
 
-                    // Validate page count against 4 GiB limit, accounting for custom page size
-                    let page_size_bytes = custom_page_size.unwrap_or(65536) as u64;
-                    let max_allowed_pages = (4u64 * 1024 * 1024 * 1024) / page_size_bytes;
-                    if (min as u64) > max_allowed_pages {
-                        return Err(Error::validation_error(
-                            "memory size must be at most 65536 pages (4 GiB)",
-                        ));
-                    }
-                    if let Some(max_val) = max {
-                        if (max_val as u64) > max_allowed_pages {
+                    // Validate page count against limits, accounting for custom page size
+                    // For memory64, the limit was already validated above (2^48 pages)
+                    // For memory32, validate against the 4 GiB limit
+                    if !is_memory64 {
+                        let page_size_bytes = custom_page_size.unwrap_or(65536) as u64;
+                        let max_allowed_pages = (4u64 * 1024 * 1024 * 1024) / page_size_bytes;
+                        if (min as u64) > max_allowed_pages {
                             return Err(Error::validation_error(
                                 "memory size must be at most 65536 pages (4 GiB)",
                             ));
+                        }
+                        if let Some(max_val) = max {
+                            if (max_val as u64) > max_allowed_pages {
+                                return Err(Error::validation_error(
+                                    "memory size must be at most 65536 pages (4 GiB)",
+                                ));
+                            }
                         }
                     }
 
@@ -1566,22 +1576,26 @@ impl<'a> StreamingDecoder<'a> {
                     None
                 };
 
-                // Validate memory64 limits (still have a limit, though higher)
-                // For non-memory64 tests, values > 65536 pages should fail
-                if min64 > MAX_MEMORY_PAGES as u64 {
+                // Validate memory64 limits
+                // Memory64 allows up to 2^48 pages (each 65536 bytes = full 64-bit address space)
+                const MAX_MEMORY64_PAGES: u64 = 1u64 << 48;
+                if min64 > MAX_MEMORY64_PAGES {
                     return Err(Error::validation_error(
-                        "memory size must be at most 65536 pages (4 GiB)",
+                        "memory size must be at most 2^48 pages (16 EiB)",
                     ));
                 }
                 if let Some(max64) = max64 {
-                    if max64 > MAX_MEMORY_PAGES as u64 {
+                    if max64 > MAX_MEMORY64_PAGES {
                         return Err(Error::validation_error(
-                            "memory size must be at most 65536 pages (4 GiB)",
+                            "memory size must be at most 2^48 pages (16 EiB)",
                         ));
                     }
                 }
 
-                (min64 as u32, max64.map(|v| v as u32))
+                // Clamp to u32 for runtime storage (actual allocation is bounded by physical memory)
+                let min_clamped = if min64 > u32::MAX as u64 { u32::MAX } else { min64 as u32 };
+                let max_clamped = max64.map(|v| if v > u32::MAX as u64 { u32::MAX } else { v as u32 });
+                (min_clamped, max_clamped)
             } else {
                 let (min, bytes_read) = read_leb128_u32(data, offset)?;
                 offset += bytes_read;
@@ -1620,19 +1634,23 @@ impl<'a> StreamingDecoder<'a> {
                 None
             };
 
-            // Validate page count against 4 GiB limit, accounting for custom page size
-            let page_size_bytes = custom_page_size.unwrap_or(65536) as u64;
-            let max_allowed_pages = (4u64 * 1024 * 1024 * 1024) / page_size_bytes;
-            if (min as u64) > max_allowed_pages {
-                return Err(Error::validation_error(
-                    "memory size must be at most 65536 pages (4 GiB)",
-                ));
-            }
-            if let Some(max_val) = max {
-                if (max_val as u64) > max_allowed_pages {
+            // Validate page count against limits, accounting for custom page size
+            // For memory64, the limit was already validated above (2^48 pages)
+            // For memory32, validate against the 4 GiB limit
+            if !is_memory64 {
+                let page_size_bytes = custom_page_size.unwrap_or(65536) as u64;
+                let max_allowed_pages = (4u64 * 1024 * 1024 * 1024) / page_size_bytes;
+                if (min as u64) > max_allowed_pages {
                     return Err(Error::validation_error(
                         "memory size must be at most 65536 pages (4 GiB)",
                     ));
+                }
+                if let Some(max_val) = max {
+                    if (max_val as u64) > max_allowed_pages {
+                        return Err(Error::validation_error(
+                            "memory size must be at most 65536 pages (4 GiB)",
+                        ));
+                    }
                 }
             }
 

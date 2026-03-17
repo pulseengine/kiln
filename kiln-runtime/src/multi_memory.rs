@@ -204,6 +204,7 @@ impl MultiMemoryInstance {
         let core_mem_type = CoreMemoryType {
             limits: memory_type.limits,
             shared: memory_type.shared,
+            memory64: memory_type.memory64,
             page_size: memory_type.page_size,
         };
         let memory = Memory::new(core_mem_type)

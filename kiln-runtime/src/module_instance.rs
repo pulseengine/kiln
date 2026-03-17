@@ -965,6 +965,11 @@ impl ModuleInstance {
                                 debug!("Data segment {} has I32Const offset: {}", idx, value);
                                 *value as u32
                             }
+                            kiln_foundation::types::Instruction::I64Const(value) => {
+                                #[cfg(feature = "tracing")]
+                                debug!("Data segment {} has I64Const offset: {}", idx, value);
+                                *value as u32
+                            }
                             kiln_foundation::types::Instruction::GlobalGet(global_idx) => {
                                 // Look up the global value for the offset
                                 #[cfg(feature = "tracing")]
@@ -986,9 +991,14 @@ impl ModuleInstance {
                                                     debug!("Data segment {} global offset value: {}", idx, v);
                                                     *v as u32
                                                 },
+                                                kiln_foundation::values::Value::I64(v) => {
+                                                    #[cfg(feature = "tracing")]
+                                                    debug!("Data segment {} global offset value (i64): {}", idx, v);
+                                                    *v as u32
+                                                },
                                                 _ => {
                                                     #[cfg(feature = "tracing")]
-                                                    debug!("Data segment {} global has non-i32 type, using 0", idx);
+                                                    debug!("Data segment {} global has non-i32/i64 type, using 0", idx);
                                                     0
                                                 }
                                             }

@@ -153,6 +153,7 @@ fn to_core_memory_type(memory_type: KilnMemoryType) -> CoreMemoryType {
     CoreMemoryType {
         limits: memory_type.limits,
         shared: memory_type.shared,
+        memory64: memory_type.memory64,
         page_size: memory_type.page_size,
     }
 }
@@ -1419,6 +1420,19 @@ impl Module {
         })
     }
 
+    /// Convert a GcStorageType from the format crate to the runtime GcFieldStorage.
+    #[cfg(feature = "std")]
+    fn convert_gc_storage_type(st: &kiln_format::module::GcStorageType) -> GcFieldStorage {
+        match st {
+            kiln_format::module::GcStorageType::I8 => GcFieldStorage::I8,
+            kiln_format::module::GcStorageType::I16 => GcFieldStorage::I16,
+            kiln_format::module::GcStorageType::Value(b) => GcFieldStorage::Value(*b),
+            // Reference types use 0x64/0x63 (ref/ref null) encoding byte for field storage
+            kiln_format::module::GcStorageType::RefType(_) => GcFieldStorage::Value(0x64),
+            kiln_format::module::GcStorageType::RefTypeNull(_) => GcFieldStorage::Value(0x63),
+        }
+    }
+
     /// Creates a runtime Module from a `kiln_format::module::Module`.
     /// This is the primary constructor after decoding.
     #[cfg(feature = "std")]
@@ -1477,21 +1491,13 @@ impl Module {
                         CompositeTypeKind::Array => GcTypeInfo::Func, // Legacy variant, treat as func
                         CompositeTypeKind::StructWithFields(fields) => {
                             let gc_fields: Vec<GcField> = fields.iter().map(|f| {
-                                let storage = match &f.storage_type {
-                                    kiln_format::module::GcStorageType::I8 => GcFieldStorage::I8,
-                                    kiln_format::module::GcStorageType::I16 => GcFieldStorage::I16,
-                                    kiln_format::module::GcStorageType::Value(b) => GcFieldStorage::Value(*b),
-                                };
+                                let storage = Self::convert_gc_storage_type(&f.storage_type);
                                 GcField { storage, mutable: f.mutable }
                             }).collect();
                             GcTypeInfo::Struct(gc_fields)
                         }
                         CompositeTypeKind::ArrayWithElement(elem) => {
-                            let storage = match &elem.storage_type {
-                                kiln_format::module::GcStorageType::I8 => GcFieldStorage::I8,
-                                kiln_format::module::GcStorageType::I16 => GcFieldStorage::I16,
-                                kiln_format::module::GcStorageType::Value(b) => GcFieldStorage::Value(*b),
-                            };
+                            let storage = Self::convert_gc_storage_type(&elem.storage_type);
                             GcTypeInfo::Array(GcField { storage, mutable: elem.mutable })
                         }
                     };
@@ -4859,7 +4865,7 @@ impl ToBytes for GlobalWrapper {
             },
             KilnValue::StructRef(ref_opt) => {
                 let value = match ref_opt {
-                    Some(struct_ref) => struct_ref.type_index,
+                    Some(struct_ref) => struct_ref.type_index(),
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;
@@ -4867,7 +4873,7 @@ impl ToBytes for GlobalWrapper {
             },
             KilnValue::ArrayRef(ref_opt) => {
                 let value = match ref_opt {
-                    Some(array_ref) => array_ref.type_index,
+                    Some(array_ref) => array_ref.type_index(),
                     None => 0xFFFFFFFF,
                 };
                 writer.write_all(&value.to_le_bytes())?;

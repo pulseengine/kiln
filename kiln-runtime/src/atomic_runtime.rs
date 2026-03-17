@@ -307,7 +307,7 @@ pub fn atomic_i32_load(
     addr: u32,
 ) -> Result<i32> {
     let memarg = kiln_foundation::MemArg {
-        offset: addr,
+        offset: addr as u64,
         align_exponent: 2,
         memory_index: 0,
     }; // 2^2 = 4-byte alignment
@@ -331,7 +331,7 @@ pub fn atomic_i32_store(
     value: i32,
 ) -> Result<()> {
     let memarg = kiln_foundation::MemArg {
-        offset: addr,
+        offset: addr as u64,
         align_exponent: 2,
         memory_index: 0,
     }; // 2^2 = 4-byte alignment
@@ -353,7 +353,7 @@ pub fn atomic_i32_compare_and_swap(
     replacement: i32,
 ) -> Result<i32> {
     let memarg = kiln_foundation::MemArg {
-        offset: addr,
+        offset: addr as u64,
         align_exponent: 2,
         memory_index: 0,
     }; // 2^2 = 4-byte alignment
@@ -385,7 +385,7 @@ pub fn atomic_i32_fetch_add(
     value: i32,
 ) -> Result<i32> {
     let memarg = kiln_foundation::MemArg {
-        offset: addr,
+        offset: addr as u64,
         align_exponent: 2,
         memory_index: 0,
     }; // 2^2 = 4-byte alignment

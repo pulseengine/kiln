@@ -28,6 +28,8 @@ use kiln_foundation::{
     types::ValueType,
     values::{
         ArrayRef,
+        GcArrayRef,
+        GcStructRef,
         StructRef,
         Value,
     },
@@ -73,7 +75,7 @@ impl StructNew {
             struct_ref.add_field(value.clone())?;
         }
 
-        Ok(Value::StructRef(Some(struct_ref)))
+        Ok(Value::StructRef(Some(GcStructRef::new(struct_ref))))
     }
 }
 
@@ -105,7 +107,7 @@ impl StructGet {
         match struct_value {
             Value::StructRef(Some(struct_ref)) => {
                 // Verify type index matches
-                if struct_ref.type_index != self.type_index {
+                if struct_ref.type_index() != self.type_index {
                     return Err(Error::type_error("Struct type index mismatch"));
                 }
 
@@ -146,13 +148,13 @@ impl StructSet {
     /// Returns an error if value is not a struct or field update fails
     pub fn execute(&self, struct_value: Value, new_value: Value) -> Result<Value> {
         match struct_value {
-            Value::StructRef(Some(mut struct_ref)) => {
+            Value::StructRef(Some(struct_ref)) => {
                 // Verify type index matches
-                if struct_ref.type_index != self.type_index {
+                if struct_ref.type_index() != self.type_index {
                     return Err(Error::type_error("Struct type index mismatch"));
                 }
 
-                // Set the field value
+                // Set the field value (GcStructRef uses interior mutability)
                 struct_ref.set_field(self.field_index as usize, new_value)?;
 
                 Ok(Value::StructRef(Some(struct_ref)))
@@ -193,7 +195,7 @@ impl ArrayNew {
             DefaultMemoryProvider::default(),
         )?;
 
-        Ok(Value::ArrayRef(Some(array_ref)))
+        Ok(Value::ArrayRef(Some(GcArrayRef::new(array_ref))))
     }
 }
 
@@ -220,7 +222,7 @@ impl ArrayGet {
         match array_value {
             Value::ArrayRef(Some(array_ref)) => {
                 // Verify type index matches
-                if array_ref.type_index != self.type_index {
+                if array_ref.type_index() != self.type_index {
                     return Err(Error::type_error("Array type index mismatch"));
                 }
 
@@ -256,9 +258,9 @@ impl ArraySet {
     /// Returns an error if value is not an array or index is out of bounds
     pub fn execute(&self, array_value: Value, index: u32, new_value: Value) -> Result<Value> {
         match array_value {
-            Value::ArrayRef(Some(mut array_ref)) => {
+            Value::ArrayRef(Some(array_ref)) => {
                 // Verify type index matches
-                if array_ref.type_index != self.type_index {
+                if array_ref.type_index() != self.type_index {
                     return Err(Error::type_error("Array type index mismatch"));
                 }
 
@@ -298,7 +300,7 @@ impl ArrayLen {
         match array_value {
             Value::ArrayRef(Some(array_ref)) => {
                 // Verify type index matches
-                if array_ref.type_index != self.type_index {
+                if array_ref.type_index() != self.type_index {
                     return Err(Error::type_error("Array type index mismatch"));
                 }
 
@@ -668,7 +670,7 @@ mod tests {
 
         match result {
             Value::StructRef(Some(struct_ref)) => {
-                assert_eq!(struct_ref.type_index, 1);
+                assert_eq!(struct_ref.type_index(), 1);
                 assert_eq!(struct_ref.get_field(0).unwrap(), Value::I32(42));
                 assert_eq!(struct_ref.get_field(1).unwrap(), Value::I64(123));
             },
@@ -683,7 +685,7 @@ mod tests {
         // Create a struct to test with
         let mut struct_ref = StructRef::new(1, DefaultMemoryProvider::default()).unwrap();
         struct_ref.add_field(Value::I32(42)).unwrap();
-        let struct_value = Value::StructRef(Some(struct_ref));
+        let struct_value = Value::StructRef(Some(GcStructRef::new(struct_ref)));
 
         let result = op.execute(struct_value).unwrap();
         assert_eq!(result, Value::I32(42));
@@ -703,7 +705,7 @@ mod tests {
         // Create a struct to test with
         let mut struct_ref = StructRef::new(1, DefaultMemoryProvider::default()).unwrap();
         struct_ref.add_field(Value::I32(42)).unwrap();
-        let struct_value = Value::StructRef(Some(struct_ref));
+        let struct_value = Value::StructRef(Some(GcStructRef::new(struct_ref)));
 
         let result = op.execute(struct_value, Value::I32(100)).unwrap();
 
@@ -722,7 +724,7 @@ mod tests {
 
         match result {
             Value::ArrayRef(Some(array_ref)) => {
-                assert_eq!(array_ref.type_index, 2);
+                assert_eq!(array_ref.type_index(), 2);
                 assert_eq!(array_ref.len(), 3);
                 assert_eq!(array_ref.get(0).unwrap(), Value::I32(42));
                 assert_eq!(array_ref.get(1).unwrap(), Value::I32(42));
@@ -739,7 +741,7 @@ mod tests {
         // Create an array to test with
         let array_ref =
             ArrayRef::with_size(2, 2, Value::I32(42), DefaultMemoryProvider::default()).unwrap();
-        let array_value = Value::ArrayRef(Some(array_ref));
+        let array_value = Value::ArrayRef(Some(GcArrayRef::new(array_ref)));
 
         let result = op.execute(array_value, 1).unwrap();
         assert_eq!(result, Value::I32(42));
@@ -752,7 +754,7 @@ mod tests {
         // Create an array to test with
         let array_ref =
             ArrayRef::with_size(2, 2, Value::I32(42), DefaultMemoryProvider::default()).unwrap();
-        let array_value = Value::ArrayRef(Some(array_ref));
+        let array_value = Value::ArrayRef(Some(GcArrayRef::new(array_ref)));
 
         let result = op.execute(array_value, 1, Value::I32(100)).unwrap();
 
@@ -771,7 +773,7 @@ mod tests {
         // Create an array to test with
         let array_ref =
             ArrayRef::with_size(2, 5, Value::I32(42), DefaultMemoryProvider::default()).unwrap();
-        let array_value = Value::ArrayRef(Some(array_ref));
+        let array_value = Value::ArrayRef(Some(GcArrayRef::new(array_ref)));
 
         let result = op.execute(array_value).unwrap();
         assert_eq!(result, Value::I32(5));

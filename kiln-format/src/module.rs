@@ -1589,6 +1589,12 @@ pub enum GcStorageType {
     I8,
     /// Packed i16 (0x77)
     I16,
+    /// Reference to a concrete type index (non-nullable)
+    /// Produced by `(ref $t)` = 0x64 followed by type index
+    RefType(u32),
+    /// Nullable reference to a concrete type index
+    /// Produced by `(ref null $t)` = 0x63 followed by type index
+    RefTypeNull(u32),
 }
 
 /// A single field in a GC struct type
