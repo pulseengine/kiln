@@ -497,3 +497,46 @@ loss-scenarios:
       - Lock scope does not cover the entire read-modify-write sequence
       - Single-threaded testing does not reveal the atomicity gap
       - No formal model of the memory ordering semantics
+
+  # =========================================================================
+  # RFC #46 Architecture scenarios
+  # =========================================================================
+  - id: LS-RF46-1
+    title: Meld produces lowered module with ABI incompatible with Kiln host intrinsics
+    uca: UCA-BI-1
+    hazards: [H-13]
+    type: inadequate-process-model
+    scenario: >
+      Meld lowers a component to a core module and emits host intrinsic
+      calls (e.g., memory.copy, string transcoding stubs) using a calling
+      convention or signature that differs from what Kiln's host import
+      handler or kiln-builtins expects. At runtime, the fused module calls
+      the intrinsic with the wrong number of arguments or wrong types. The
+      host handler either traps with an opaque "signature mismatch" error
+      or, worse, silently interprets the arguments incorrectly, producing
+      corrupted data.
+    causal-factors:
+      - Meld and Kiln define host intrinsic signatures independently
+      - No shared IDL or machine-readable contract for host intrinsic ABI
+      - Version skew between Meld and Kiln releases
+    process-model-flaw: >
+      Meld assumes Kiln's host intrinsic ABI matches its own emitted calls;
+      no compile-time or load-time ABI verification exists
+
+  - id: LS-RF46-2
+    title: Synth-compiled code calls kiln-builtin with wrong calling convention
+    uca: UCA-BI-1
+    hazards: [H-13]
+    type: inadequate-control-algorithm
+    scenario: >
+      Synth compiles a Meld-fused core module to native ELF for an embedded
+      target. The compiled code calls a kiln-builtin function using the
+      platform's C calling convention, but the builtin was compiled with a
+      different convention (e.g., different register allocation for i64
+      return values on 32-bit ARM). The return value is read from the wrong
+      register or stack location, producing garbage data that propagates
+      silently through the application.
+    causal-factors:
+      - Synth and kiln-builtins compiled with different ABI settings
+      - No ABI compatibility check at link time for embedded targets
+      - 32-bit platforms split 64-bit values across register pairs differently

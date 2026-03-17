@@ -157,6 +157,7 @@ component-model-ucas:
         miscounts code units or produces invalid sequences.
       context: "String containing multi-byte UTF-8 characters"
       hazards: [H-4]
+      scope: delegated-to-meld
 
     - id: UCA-CM-2
       description: >
@@ -164,6 +165,7 @@ component-model-ucas:
         incorrect alignment calculation.
       context: "Record with mixed-size fields (u8, u32, u64)"
       hazards: [H-4]
+      scope: delegated-to-meld
 
     - id: UCA-CM-3
       description: >
@@ -171,6 +173,7 @@ component-model-ucas:
         past the end of the list buffer or leaving uninitialized gaps.
       context: "list<tuple<u8, u32, u8>> where element_size != sum of field sizes"
       hazards: [H-4]
+      scope: delegated-to-meld
 
     - id: UCA-CM-4
       description: >
@@ -178,6 +181,7 @@ component-model-ucas:
         previously-dropped but not-yet-reclaimed handle.
       context: "Rapid create/drop cycle filling resource table"
       hazards: [H-6]
+      scope: reduced
 
     - id: UCA-CM-5
       description: >
@@ -185,6 +189,7 @@ component-model-ucas:
         resource table's free list or dropping the wrong resource.
       context: "Component error path that drops handle in both normal and cleanup code"
       hazards: [H-6]
+      scope: reduced
 
     - id: UCA-CM-7
       description: >
@@ -192,6 +197,7 @@ component-model-ucas:
         instance index lookup in the linker's resolution table.
       context: "Multiple component instances with same export name"
       hazards: [H-5]
+      scope: delegated-to-meld
 
     - id: UCA-CM-8
       description: >
@@ -200,6 +206,7 @@ component-model-ucas:
         modules to corrupt data at the kiln lift/lower boundary.
       context: "Running a meld-fused component through kiln with P2 wrapper"
       hazards: [H-4]
+      scope: reduced
       rationale: >
         This is a cross-tool consistency hazard. Meld computes CopyLayout
         at fusion time; Kiln computes canonical ABI layout at runtime. If
@@ -213,6 +220,7 @@ component-model-ucas:
         freed state.
       context: "Task cancellation racing with stream data arrival"
       hazards: [H-7]
+      scope: deferred
 
 linker-ucas:
   control-action: "Resolve imports to exports across component instances"
@@ -380,3 +388,18 @@ gc-ucas:
         within its configured budget.
       context: "Module that allocates millions of small structs without growing linear memory"
       hazards: [H-12, H-3, H-10]
+
+builtins-ucas:
+  control-action: "Provide host intrinsic implementations for synth-compiled code"
+  controller: CTRL-BUILTINS
+
+  providing:
+    - id: UCA-BI-1
+      description: >
+        Builtin provides wrong return type to synth-compiled code. A
+        kiln-builtin host intrinsic returns a value whose type (e.g., i64
+        instead of i32, or wrong struct layout) does not match what the
+        synth-compiled caller expects, causing the caller to misinterpret
+        the return value and produce incorrect results or memory corruption.
+      context: "Synth-compiled module calling kiln-builtin after Meld fusion"
+      hazards: [H-13]

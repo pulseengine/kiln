@@ -86,6 +86,8 @@ hazards:
       The fuel-aware waker interferes with deterministic scheduling.
       Task cancellation leaves dangling references.
     losses: [L-4, L-6]
+    scope: deferred
+    note: "Async not in P2 scope"
 
   - id: H-8
     title: WASI host function violates capability boundary
@@ -152,6 +154,16 @@ hazards:
       cast operations, leading to unsound type coercions.
     losses: [L-1, L-2, L-3, L-7]
 
+  - id: H-13
+    title: Meld-fused module ABI mismatch
+    description: >
+      Meld produces a core module whose host intrinsic signatures don't
+      match Kiln/kiln-builtins expectations. The fused module calls a
+      host intrinsic with the wrong number of parameters, wrong types,
+      or wrong calling convention, causing a trap, silent data corruption,
+      or undefined behavior at the host boundary.
+    losses: [L-1, L-2]
+
 # Sub-hazards for complex areas
 sub-hazards:
   # Refinements of H-4 (Canonical ABI)
@@ -162,6 +174,8 @@ sub-hazards:
       UTF-8 to UTF-16 or Latin-1 conversion produces invalid sequences,
       miscounts code units, or doesn't handle surrogate pairs. Matches
       Meld H-4.4 but at runtime rather than fusion time.
+    scope: delegated-to-meld
+    note: "Canonical ABI operations performed at build time by Meld per BA RFC #46"
 
   - id: H-4.2
     parent: H-4
@@ -171,6 +185,8 @@ sub-hazards:
       parser.rs canonical_abi_element_size for the same type. When running
       meld-fused modules, the adapter allocates N bytes but kiln's lift
       reads M bytes (M ≠ N), causing data corruption.
+    scope: delegated-to-meld
+    note: "Canonical ABI operations performed at build time by Meld per BA RFC #46"
 
   - id: H-4.3
     parent: H-4
@@ -179,6 +195,8 @@ sub-hazards:
       Record fields are laid out with incorrect alignment, causing
       loads/stores to read from wrong offsets within the record's
       linear memory representation.
+    scope: delegated-to-meld
+    note: "Canonical ABI operations performed at build time by Meld per BA RFC #46"
 
   # Refinements of H-5 (cross-component)
   - id: H-5.1

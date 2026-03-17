@@ -101,7 +101,8 @@ artifacts:
       Any opcode or opcode prefix+suffix combination not defined in the
       WebAssembly spec shall cause an immediate trap. The default match arm
       in opcode dispatch shall return Err, not Ok.
-    status: draft
+    status: delegated
+    delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [execution, correctness, stpa-derived]
     links:
       - type: derives-from
@@ -122,7 +123,8 @@ artifacts:
       Maximum call depth shall be checked before call, call_indirect,
       call_ref, and return_call instructions. The check shall measure
       actual call depth (not frame count) to correctly handle tail calls.
-    status: partial
+    status: delegated
+    delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [execution, stack-safety, asil-d, stpa-derived]
     links:
       - type: derives-from
@@ -145,7 +147,8 @@ artifacts:
       In multi-memory modules, every memory instruction's memory index
       operand shall be validated against the module's declared memory count.
       Invalid indices shall trap. The engine shall not default to memory 0.
-    status: draft
+    status: delegated
+    delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [execution, memory-safety, stpa-derived]
     links:
       - type: derives-from
@@ -167,7 +170,8 @@ artifacts:
       The decoder shall reject modules with duplicate sections, out-of-order
       sections, invalid LEB128 encodings, and all other malformation checks
       defined in the WebAssembly spec.
-    status: partial
+    status: delegated
+    delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [decoder, validation, asil-d, stpa-derived]
     links:
       - type: derives-from
@@ -191,7 +195,8 @@ artifacts:
       Decoder shall check configured resource limits before allocating
       structures for types, functions, memories, tables, globals, and
       elements. The limit check shall occur before the allocation, not after.
-    status: partial
+    status: delegated
+    delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [decoder, resource-containment, asil-d, stpa-derived]
     links:
       - type: derives-from
@@ -219,7 +224,8 @@ artifacts:
       sequences), UTF-16 (including surrogate pairs), and Latin-1. Multi-byte
       characters shall not be split across buffer boundaries. Code unit counts
       shall match the encoding.
-    status: draft
+    status: delegated
+    delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [component-model, canonical-abi, strings, stpa-derived]
     links:
       - type: derives-from
@@ -241,7 +247,8 @@ artifacts:
       Record field offsets shall be computed using align_up(current_offset,
       field_alignment) as defined in the canonical ABI spec. The align_up
       function shall be: align_up(x, a) = (x + a - 1) & !(a - 1).
-    status: draft
+    status: delegated
+    delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [component-model, canonical-abi, alignment, stpa-derived]
     links:
       - type: derives-from
@@ -262,7 +269,8 @@ artifacts:
       List element size shall be computed as align_up(sum_of_field_sizes,
       max_alignment). This shall match Meld's canonical_abi_element_size()
       for all type families. Disagreement is a blocking defect.
-    status: draft
+    status: delegated
+    delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [component-model, canonical-abi, cross-toolchain, stpa-derived]
     links:
       - type: derives-from
@@ -795,6 +803,11 @@ artifacts:
       usize (on 32-bit targets) is permitted. On 32-bit no_std targets,
       the effective addressable memory64 range shall be limited to the
       target's address space and clearly documented.
+    rationale: >
+      Per BA RFC #46, the no_std path is via kiln-builtins for synth-compiled
+      code, not the interpreter. Memory64 safety constraints apply to the
+      kiln-builtins host intrinsics that manage linear memory on behalf of
+      synth-compiled modules.
     status: planned
     tags: [no-std, memory-safety, memory64, asil-d, stpa-derived]
     traced_to: [H-2, H-3, H-7]
@@ -826,6 +839,11 @@ artifacts:
       pool capacity shall be configurable via the resource budget system
       (safe_managed_alloc! integration). Circular references shall be
       documented as a known limitation in no_std mode.
+    rationale: >
+      Per BA RFC #46, the no_std path is via kiln-builtins for synth-compiled
+      code, not the interpreter. GC reference safety constraints apply to
+      kiln-builtins allocations backing GC heap objects in synth-compiled
+      modules.
     status: planned
     tags: [no-std, memory-safety, gc, asil-c, stpa-derived]
     traced_to: [H-1, H-3, H-7]
@@ -909,6 +927,63 @@ artifacts:
         allocation exceeding budget returns -1 from memory.grow; stack
         depth limit prevents unbounded recursion from GC init operations;
         budget configuration API validated at initialization time
+
+  # =========================================================================
+  # RFC #46 Architecture — ABI and Compatibility
+  # =========================================================================
+  - id: SR-BUILTIN-ABI
+    type: requirement
+    title: Kiln builtins must maintain stable ABI for synth-compiled code
+    description: >
+      All kiln-builtins host intrinsic functions shall have stable, versioned
+      ABI signatures. Changes to parameter types, return types, or calling
+      convention shall require a version bump and coordinated update with
+      Meld and Synth. The ABI shall be documented in a machine-readable
+      format (e.g., WIT or C header) that Meld and Synth consume at build
+      time. ABI-breaking changes without version coordination shall be
+      detected by integration tests.
+    status: draft
+    tags: [builtins, abi-stability, cross-toolchain, rfc46, stpa-derived]
+    links:
+      - type: derives-from
+        target: H-13
+      - type: derives-from
+        target: LS-RF46-1
+      - type: derives-from
+        target: LS-RF46-2
+    fields:
+      implementation: kiln-builtins/
+      verification-method: test, analysis
+      verification-description: >
+        Integration tests compile a Meld-fused module and execute it against
+        kiln-builtins; ABI signature registry compared between Meld output
+        and kiln-builtins declarations; CI fails on signature mismatch
+
+  - id: SR-MELD-COMPAT
+    type: requirement
+    title: Kiln must validate Meld-fused module format before execution
+    description: >
+      Before executing a Meld-fused core module, Kiln shall validate that
+      the module's host intrinsic imports match the expected signatures
+      provided by kiln-builtins or the interpreter's host import handler.
+      Signature mismatches shall produce a clear error at load time, not
+      a silent failure or trap at call time. The validation shall cover
+      function parameter count, parameter types, and return types for
+      all host intrinsic imports.
+    status: draft
+    tags: [validation, meld-compat, cross-toolchain, rfc46, stpa-derived]
+    links:
+      - type: derives-from
+        target: H-13
+      - type: derives-from
+        target: LS-RF46-1
+    fields:
+      implementation: kiln-runtime/src/module_loading.rs
+      verification-method: test
+      verification-description: >
+        Module with mismatched host intrinsic signature is rejected at load
+        time with descriptive error; valid Meld-fused modules load and
+        execute successfully
 
   # =========================================================================
   # REMOVED from sphinx-needs (with rationale):
