@@ -164,6 +164,84 @@ hazards:
       or undefined behavior at the host boundary.
     losses: [L-1, L-2]
 
+  - id: H-14
+    title: Kiln async executor starvation
+    description: >
+      One wasm logical thread monopolizes the kiln async executor,
+      preventing other threads from making progress. In the full RFC #46
+      implementation, cooperative multitasking relies on threads
+      voluntarily yielding via thread_switch_to or waitable_set_wait.
+      A thread that executes a tight compute loop without yielding
+      starves all other threads in the same component instance. On gale,
+      this can cause the RTOS watchdog to fire if high-priority tasks
+      are blocked behind the monopolizing thread. On std targets, this
+      manifests as unbounded latency for other async tasks sharing the
+      executor. Fuel metering provides a backstop but the fuel quantum
+      may be too large to maintain scheduling fairness.
+    losses: [L-1, L-3]
+
+  - id: H-15
+    title: Gale task / kiln thread mismatch
+    description: >
+      Kiln creates more logical threads (via thread_new) than gale can
+      schedule, exhausting the RTOS task slot table. Gale has a fixed,
+      compile-time-configured maximum number of tasks. When all slots
+      are occupied, gale_task_create fails. If kiln does not check the
+      return value or does not enforce a per-component thread budget,
+      subsequent thread_new calls either trap unexpectedly or return an
+      invalid thread_id that causes thread_switch_to to corrupt the
+      scheduler state. On std targets, the analogous failure is OS thread
+      or async task exhaustion under high concurrency.
+    losses: [L-3, L-7]
+
+  - id: H-16
+    title: Stream backpressure failure
+    description: >
+      A stream writer produces data faster than the reader consumes it,
+      filling the bounded channel. The writer receives BLOCKED on every
+      stream_write call. If the writer does not yield or wait on the
+      stream's writable event, it enters a busy-retry loop that consumes
+      fuel and CPU without making progress. If both writer and reader
+      are on the same logical thread, the situation is a deadlock: the
+      writer cannot yield to the reader because cooperative scheduling
+      requires explicit thread_switch_to. Even across threads, sustained
+      overproduction causes the writer thread to waste its entire fuel
+      budget on blocked writes, starving its other work.
+    losses: [L-3]
+
+  - id: H-17
+    title: Cross-component resource leak via stale handle
+    description: >
+      Component A creates a resource (via thing_new), passes the handle
+      to component B through a cross-component call, then drops the
+      resource (via thing_drop). Component B still holds the now-stale
+      handle. When B calls thing_rep with the stale handle, two outcomes
+      are possible: (1) the slot has been reused for a new resource
+      belonging to A or a third component C, and B reads C's data
+      (information leak and type confusion); (2) the generation counter
+      detects the staleness and traps (correct behavior). If the
+      generation counter has wrapped (after 2^N create/drop cycles on
+      that slot), outcome (1) occurs silently. This hazard is amplified
+      in the full RFC #46 model where resources cross component
+      boundaries via async task returns and stream payloads.
+    losses: [L-1, L-2]
+
+  - id: H-18
+    title: Executor-scheduler priority inversion
+    description: >
+      On gale, a low-priority RTOS task holds a resource or waitable
+      that a high-priority task is waiting on (via waitable_set_wait).
+      Gale's preemptive scheduler runs a medium-priority task that
+      preempts the low-priority task, preventing it from completing
+      its work and signaling the waitable. The high-priority task
+      remains blocked indefinitely. This is classic priority inversion,
+      but manifested through the kiln async executor's waitable set
+      mechanism rather than through traditional mutex contention. On
+      std targets, the analogous scenario occurs when the tokio runtime
+      schedules tasks without priority awareness and a low-priority
+      task holds a stream writer that a high-priority task reads from.
+    losses: [L-1]
+
 # Sub-hazards for complex areas
 sub-hazards:
   # Refinements of H-4 (Canonical ABI)

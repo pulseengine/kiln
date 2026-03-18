@@ -389,6 +389,72 @@ gc-ucas:
       context: "Module that allocates millions of small structs without growing linear memory"
       hazards: [H-12, H-3, H-10]
 
+executor-ucas:
+  control-action: "Schedule wasm logical threads and dispatch waitable set events"
+  controller: CTRL-EXECUTOR
+
+  providing:
+    - id: UCA-EX-1
+      description: >
+        Executor schedules a logical thread that has been cancelled (task
+        status is START_CANCELLED or RETURN_CANCELLED). The cancelled
+        thread resumes execution with stale or partially cleaned-up state,
+        producing incorrect results or accessing freed resources. The
+        executor's thread state table shows the thread as cancelled but
+        the scheduling decision was made from a stale snapshot of the
+        state taken before the cancellation was recorded.
+      context: "Cancellation arrives between executor's state check and dispatch"
+      hazards: [H-7, H-14]
+
+    - id: UCA-EX-5
+      description: >
+        Executor allows thread_switch_to to target a logical thread
+        belonging to a different component instance, crossing the sandbox
+        boundary. The target thread runs in the caller's execution context
+        but accesses the target component's linear memory, tables, and
+        resources. This constitutes a sandbox escape: the calling component
+        gains read/write access to another component's memory.
+      context: "Fused module with multiple component instances sharing the same kiln executor"
+      hazards: [H-14, H-17]
+
+  not-providing:
+    - id: UCA-EX-2
+      description: >
+        Executor fails to wake waiters when stream data arrives. A
+        stream_write completes and deposits data into the bounded
+        channel, but the executor does not signal the event group or
+        wake the waitable set that the reader's stream is joined to.
+        The reader remains blocked on waitable_set_wait indefinitely
+        even though data is available, causing the reader thread to
+        stall and potentially triggering a watchdog timeout on gale.
+      context: "Stream write from one thread, reader waiting in a different thread's waitable set"
+      hazards: [H-14, H-16]
+
+    - id: UCA-EX-3
+      description: >
+        Executor yields to gale (via gale_task_yield_to or
+        gale_event_group_wait) without fully saving the current wasm
+        execution state. The program counter, value stack, call stack,
+        or fuel counter is partially saved. When the thread is resumed,
+        execution continues from an inconsistent state: wrong instruction,
+        wrong stack depth, or wrong fuel balance. This produces silent
+        data corruption or stack underflow/overflow.
+      context: "thread_switch_to or waitable_set_wait called mid-instruction-sequence"
+      hazards: [H-14]
+
+  too-early-too-late:
+    - id: UCA-EX-4
+      description: >
+        Executor returns the wrong event type from waitable_set_wait.
+        A stream data-available event is reported as EVENT_SUBTASK, or
+        a subtask completion is reported as EVENT_STREAM_READ. The
+        waiter's dispatch logic takes the wrong action: it attempts to
+        read subtask state when it should read stream data, or vice
+        versa. This produces incorrect values, use-after-free on the
+        wrong resource type, or an unexpected trap.
+      context: "Multiple waitables of different types joined to the same waitable set fire simultaneously"
+      hazards: [H-7, H-14]
+
 builtins-ucas:
   control-action: "Provide host intrinsic implementations for synth-compiled code"
   controller: CTRL-BUILTINS

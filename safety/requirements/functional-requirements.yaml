@@ -512,33 +512,61 @@ artifacts:
   # =========================================================================
   - id: FR-RFC46-THREAD
     type: requirement
-    title: RFC #46 thread intrinsic requirements
+    title: RFC #46 thread intrinsic requirements (full multi-threaded)
     description: >
       The runtime shall implement the RFC #46 thread management intrinsics
-      (thread_new, thread_switch_to, thread_index) with the following
-      constraints: In single-threaded mode (the current Kiln execution
-      model), thread_new shall always return thread_id 0 regardless of
-      the context, table, and func arguments. thread_switch_to shall be
-      a no-op when called with thread_id 0. thread_index shall always
-      return 0. The runtime shall validate that thread_switch_to rejects
-      any thread_id other than 0 in single-threaded mode with an explicit
-      trap. context0_get and context0_set shall operate on a per-task
-      thread-local variable that persists across calls within the same
-      task execution.
+      (thread_new, thread_switch_to, thread_index, context0_get, context0_set)
+      with full multi-threaded support backed by gale RTOS tasks (on gale
+      targets) or std async tasks (on std targets).
+
+      thread_new(context, table, func) shall create a new logical thread
+      backed by a gale RTOS task (via gale_task_create) or a std async task.
+      The context value shall be stored in the new thread's task-local storage
+      (accessible via context0_get). The table and func arguments shall be
+      validated against the module's table and function sections before task
+      creation. thread_new shall return a unique thread_id scoped to the
+      calling component instance. Thread creation shall be bounded by a
+      per-component thread budget; when the budget is exhausted, thread_new
+      shall trap with a resource exhaustion error. On gale, the RTOS task
+      stack shall be allocated from the component's pre-assigned memory pool.
+
+      thread_switch_to(thread_id) shall save the current thread's full wasm
+      execution state (program counter, value stack, call stack, fuel counter)
+      and yield to gale (via gale_task_yield_to) or to the std async runtime
+      to schedule the target thread. thread_switch_to shall validate that the
+      target thread_id belongs to the same component instance as the caller;
+      cross-component switching shall trap immediately (sandbox enforcement).
+      Switching to a completed or cancelled thread shall trap.
+
+      thread_index() shall return the current logical thread's ID, read from
+      gale task-local storage or std thread_local.
+
+      context0_get/context0_set shall operate on per-thread, per-component
+      state stored in gale TLS or std thread_local. One component's context
+      shall not be visible to another component.
+
+      Completed threads shall be reaped: the backing gale task shall be
+      deallocated (gale_task_delete) and the thread table slot shall be
+      recycled.
     status: planned
-    tags: [rfc46, thread-intrinsics, component-model]
-    traced_to: [H-13, H-13.1, H-13.4]
+    tags: [rfc46, thread-intrinsics, component-model, gale-integration]
+    traced_to: [H-13, H-13.1, H-13.4, H-14, H-15]
     links:
       - type: derives-from
         target: REQ_FUNC_014
     fields:
-      implementation: kiln-builtins/src/intrinsics/
+      implementation: kiln-runtime/src/async_runtime.rs, kiln-builtins/src/intrinsics/
       spec-reference: "BA RFC #46 — Thread Management intrinsics"
       verification-method: test
       verification-description: >
-        thread_new returns 0 in single-threaded mode; thread_switch_to(0)
-        is a no-op; thread_switch_to(non-zero) traps; thread_index returns
-        0; context0_get/set round-trip values correctly
+        thread_new creates gale task and returns valid thread_id; thread_new
+        traps when thread budget exhausted; thread_switch_to saves and
+        restores wasm state correctly; thread_switch_to to cross-component
+        thread traps; thread_switch_to to completed thread traps;
+        thread_index returns correct ID per thread; context0_get/set
+        round-trip values correctly per thread; completed threads are
+        reaped and task slots recycled; gale_task_create failure handled
+        gracefully
 
   - id: FR-RFC46-STREAM
     type: requirement
@@ -611,40 +639,72 @@ artifacts:
 
   - id: FR-RFC46-WAITABLE
     type: requirement
-    title: RFC #46 waitable set intrinsic requirements
+    title: RFC #46 waitable set intrinsic requirements (full gale-backed)
     description: >
       The runtime shall implement the RFC #46 waitable set intrinsics
       (waitable_set_new, waitable_join, waitable_set_wait,
-      waitable_set_poll) with deadlock prevention on single-threaded
-      runtimes. waitable_set_new shall allocate a new empty waitable set
-      and return its identifier. waitable_join shall associate a waitable
-      (subtask, stream, or future) with a set and return a join handle.
-      waitable_set_poll shall check for ready events without blocking and
-      return EVENT_NONE(0) if no events are ready. In single-threaded
-      mode, waitable_set_wait shall either behave identically to
-      waitable_set_poll (non-blocking) or trap with an explicit error,
-      because blocking the sole thread would deadlock the system.
+      waitable_set_poll) with full gale event group integration (on gale
+      targets) or std async polling (on std targets).
+
+      waitable_set_new() shall allocate a new empty waitable set backed
+      by a gale event group (gale_event_group_create) or a std futures
+      aggregator. The set shall have a configurable maximum capacity for
+      joined waitables. Waitable set allocation shall be bounded by the
+      component's waitable set budget.
+
+      waitable_join(waitable, set) shall register a waitable (stream
+      reader, future reader, or subtask handle) with the set and return
+      a unique join_id. The join_id is used to correlate events from
+      waitable_set_wait/poll. A waitable can only be joined to one set
+      at a time; joining to a second set shall trap. The waitable handle
+      shall be validated for ownership (must belong to the same component
+      instance).
+
+      waitable_set_wait(set) shall yield the current thread to gale
+      (via gale_event_group_wait) or to the std async runtime, suspending
+      execution until any waitable in the set is ready. When woken, the
+      executor inspects readiness and returns (event_type, join_id).
       waitable_set_wait on an empty set (no joined waitables) shall trap
-      immediately in all modes. Event codes shall use the defined
-      constants: EVENT_NONE(0), EVENT_SUBTASK(1), EVENT_STREAM_READ(2),
-      EVENT_STREAM_WRITE(3), EVENT_FUTURE_READ(4), EVENT_FUTURE_WRITE(5),
-      EVENT_CANCELLED(6).
+      immediately in all modes. On gale, the event group wait has a
+      configurable timeout integrated with the RTOS watchdog.
+
+      waitable_set_poll(set) shall perform a non-blocking check of all
+      waitables and return (EVENT_NONE, 0) if none are ready. Polling
+      an empty set shall return (EVENT_NONE, 0) (not trap). Poll must
+      complete in bounded time O(n) where n is the number of joined
+      waitables.
+
+      Event codes shall use the defined constants: EVENT_NONE(0),
+      EVENT_SUBTASK(1), EVENT_STREAM_READ(2), EVENT_STREAM_WRITE(3),
+      EVENT_FUTURE_READ(4), EVENT_FUTURE_WRITE(5), EVENT_CANCELLED(6).
+
+      Feedback loops: gale signals the executor (via event group bits)
+      when a waitable becomes ready. The executor signals gale (via
+      gale_task_yield_to or gale_event_group_set) when a waitable's
+      state changes (e.g., stream data written). Stream-to-executor
+      notification occurs when the ring buffer state changes (data
+      available or space available).
     status: planned
-    tags: [rfc46, waitable-intrinsics, component-model]
-    traced_to: [H-13, H-13.4, H-13.5]
+    tags: [rfc46, waitable-intrinsics, component-model, gale-integration]
+    traced_to: [H-13, H-13.4, H-13.5, H-14, H-18]
     links:
       - type: derives-from
         target: REQ_FUNC_014
     fields:
-      implementation: kiln-builtins/src/intrinsics/
+      implementation: kiln-runtime/src/async_runtime.rs, kiln-builtins/src/intrinsics/
       spec-reference: "BA RFC #46 — Waitable Set Operations intrinsics"
       verification-method: test
       verification-description: >
-        waitable_set_new returns valid set id; waitable_join adds
-        waitable to set; waitable_set_poll returns EVENT_NONE when no
-        events ready; waitable_set_wait on empty set traps; single-
-        threaded waitable_set_wait does not block; event codes match
-        defined constants
+        waitable_set_new returns valid set id backed by gale event group;
+        waitable_join adds waitable to set and returns unique join_id;
+        waitable_join to second set traps; waitable_set_poll returns
+        EVENT_NONE when no events ready; waitable_set_poll on empty set
+        returns EVENT_NONE; waitable_set_wait on empty set traps;
+        waitable_set_wait suspends thread and resumes on event;
+        waitable_set_wait returns correct (event_type, join_id) pair;
+        event codes match defined constants; gale event group correctly
+        aggregates readiness from streams, futures, and subtasks;
+        watchdog timeout prevents permanent blocking on gale
 
   # =========================================================================
   # REMOVED from sphinx-needs (with rationale):

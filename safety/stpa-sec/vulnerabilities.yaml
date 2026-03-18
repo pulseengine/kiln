@@ -474,3 +474,115 @@ vulnerabilities:
           either succeeds (for valid ranges) or traps (for invalid ranges).
         status: unmitigated
         priority: high
+
+  # ===========================================================================
+  # SH-11: Thread sandbox escape via cross-component thread_switch_to
+  # ===========================================================================
+  - id: V-11
+    security-hazard: SH-11
+    title: Cross-component thread_switch_to sandbox escape
+    code-locations:
+      - file: kiln-runtime/src/async_runtime.rs
+        description: >
+          The kiln async executor's thread_switch_to implementation.
+          Before performing the context switch, must validate that the
+          target thread_id belongs to the same component instance as
+          the calling thread. The thread table must record the owning
+          component instance ID for each logical thread.
+      - file: kiln-runtime/src/stackless/engine.rs
+        description: >
+          The host intrinsic dispatch path for thread_switch_to. Must
+          pass the current component instance ID to the executor so
+          that ownership validation can occur before the switch.
+      - file: kiln-builtins/src/intrinsics/
+        description: >
+          The kiln-builtins entry point for thread_switch_to on gale
+          targets. Must perform the same ownership validation as the
+          interpreter path, using the task-local component instance ID
+          stored in gale TLS.
+    mitigations:
+      - id: MIT-11.1
+        description: >
+          Implement per-component thread ownership: each entry in the
+          thread table records the component instance ID that created
+          the thread (via thread_new). thread_switch_to must validate
+          that the target thread's owner matches the calling thread's
+          owner. Mismatch causes an immediate trap with a diagnostic
+          message identifying the sandbox violation.
+        status: unmitigated
+        priority: critical
+      - id: MIT-11.2
+        description: >
+          Encode component instance ID into the thread_id handle value
+          (similar to generation-counted resource handles). The thread
+          ID format becomes (instance_id << INDEX_BITS) | thread_index.
+          The executor validates the instance_id component of the handle
+          before performing any lookup, providing defense-in-depth
+          against guessed or forged thread IDs.
+        status: unmitigated
+        priority: high
+      - id: MIT-11.3
+        description: >
+          On gale, configure MPU regions per component instance and
+          verify that thread_switch_to does not change MPU settings
+          to the target thread's configuration if the target belongs
+          to a different component. This provides hardware-enforced
+          isolation as a backstop for the software ownership check.
+        status: unmitigated
+        priority: high
+
+  # ===========================================================================
+  # SH-12: Stream data exfiltration via cross-component handle confusion
+  # ===========================================================================
+  - id: V-12
+    security-hazard: SH-12
+    title: Cross-component stream handle confusion
+    code-locations:
+      - file: kiln-runtime/src/async_runtime.rs
+        description: >
+          The kiln async executor's stream_read and stream_write
+          implementations. Before accessing the stream's ring buffer
+          or channel, must validate that the stream handle belongs to
+          the calling component instance. The stream table must record
+          the owning component instance ID for each stream endpoint.
+      - file: kiln-builtins/src/intrinsics/
+        description: >
+          The kiln-builtins entry points for stream_read and
+          stream_write on gale targets. Must perform the same
+          ownership validation as the interpreter path.
+      - file: kiln-component/src/components/resource_management.rs
+        description: >
+          Stream endpoints (writer, reader) are resources tracked in
+          the resource table. The resource table's ownership and
+          generation validation must cover stream handles in addition
+          to user-defined resource handles.
+    mitigations:
+      - id: MIT-12.1
+        description: >
+          Treat stream writer and reader handles as resources in the
+          per-component resource table with full ownership, generation,
+          and type tagging. stream_read and stream_write validate the
+          handle through the resource table's existing validation path
+          (generation check, ownership check, type check) before
+          accessing the underlying channel. This reuses the hardened
+          resource validation from MIT-9.1, MIT-9.2, and MIT-9.3.
+        status: unmitigated
+        priority: critical
+      - id: MIT-12.2
+        description: >
+          On gale, configure MPU regions for stream ring buffers so
+          that each component can only access ring buffers belonging
+          to its own streams. This provides hardware-enforced isolation
+          as a backstop for the software ownership check in MIT-12.1.
+        status: unmitigated
+        priority: high
+      - id: MIT-12.3
+        description: >
+          Add integration tests that verify stream isolation: create
+          two component instances, each with their own stream. Verify
+          that component A cannot read from or write to component B's
+          stream, even when A has the correct handle value. The test
+          must confirm that the ownership check traps with a
+          descriptive error message.
+        status: unmitigated
+        priority: high

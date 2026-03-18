@@ -235,6 +235,53 @@ controllers:
         target: PROC-INSTANCE
         action: Report fault to host with diagnostic info
 
+  - id: CTRL-EXECUTOR
+    name: Kiln Async Executor
+    type: automated
+    description: >
+      Bridges RFC #46 cooperative multitasking to gale preemptive
+      scheduling (or to std async runtimes on non-gale targets).
+      Manages logical thread lifecycle, waitable set event dispatch,
+      stream data transfer notifications, and task completion signaling.
+      The executor is the central coordinator between wasm-level
+      cooperative scheduling (thread_switch_to, waitable_set_wait) and
+      the underlying OS/RTOS scheduler. On gale, each wasm logical
+      thread maps to a gale RTOS task; the executor translates wasm
+      yield/wait operations into gale task suspension and event group
+      operations. On std, the executor wraps tokio or async-std.
+    source-crate: kiln-runtime
+    control-actions:
+      - ca: CA-EXEC-1
+        target: PROC-THREAD
+        action: Create logical thread (thread_new) backed by gale task or std async task
+      - ca: CA-EXEC-2
+        target: PROC-THREAD
+        action: Save wasm state and switch to target thread (thread_switch_to)
+      - ca: CA-EXEC-3
+        target: PROC-WAITABLE
+        action: Poll waitable set for ready events (waitable_set_poll / waitable_set_wait)
+      - ca: CA-EXEC-4
+        target: PROC-STREAM
+        action: Transfer stream data and signal readiness to waitable sets
+      - ca: CA-EXEC-5
+        target: PROC-ASYNC
+        action: Signal task completion (task_return) or cancellation (task_cancel) to parent waiters
+    feedback:
+      - from: PROC-GALE
+        info: Task ready notification — gale signals executor when a suspended task's event fires
+      - from: PROC-THREAD
+        info: Thread completion status — thread entry function returned or trapped
+      - from: PROC-STREAM
+        info: Data available / space available — ring buffer state change notification
+      - from: PROC-WAITABLE
+        info: Event group readiness bits — which waitables in a set are ready
+    process-model:
+      - Each logical thread maps to exactly one gale task (or one std async task)
+      - Thread IDs are scoped to a component instance — no cross-component thread switching
+      - Waitable sets aggregate events from streams, futures, and subtasks
+      - Stream channels are bounded — backpressure is enforced at the executor level
+      - Task state machine transitions are atomic — no partial state visible to other threads
+
   - id: CTRL-ALLOC
     name: Safety-Level Allocation Manager
     type: automated
@@ -372,6 +419,26 @@ controlled-processes:
       Synth-compiled native code. Includes memory bounds checking,
       table access, WASI host functions for embedded targets, and trap
       handling. Linked into gale firmware images.
+
+  - id: PROC-THREAD
+    name: Logical Thread Table
+    description: >
+      Table mapping wasm logical thread IDs to backing execution
+      contexts (gale RTOS tasks or std async tasks). Each entry
+      contains the thread's saved wasm execution state (program
+      counter, value stack, call stack, fuel counter), its lifecycle
+      state (running, suspended, completed, cancelled), its owning
+      component instance ID, and the backing gale task handle or
+      std task join handle.
+
+  - id: PROC-WAITABLE
+    name: Waitable Set Registry
+    description: >
+      Collection of waitable sets, each containing a set of joined
+      waitables (stream endpoints, future endpoints, subtask handles).
+      Each set is backed by a gale event group (on gale) or a futures
+      aggregator (on std). Tracks which waitables are ready and
+      dispatches events to callers of waitable_set_wait/poll.
 
   - id: PROC-GALE
     name: Gale Native Execution Environment
