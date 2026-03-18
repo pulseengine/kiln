@@ -67,37 +67,22 @@ use std::sync::{
 pub struct ModuleInstance {
     /// The module this instance was instantiated from
     module:      Arc<Module>,
-    /// The instance's memory - Vec in std mode to avoid serialization overhead
-    #[cfg(feature = "std")]
+    /// The instance's memories
     memories:    Arc<Mutex<Vec<MemoryWrapper>>>,
-    #[cfg(not(feature = "std"))]
-    memories:    Arc<Mutex<BoundedMemoryVec<MemoryWrapper>>>,
-    /// The instance's tables - Vec in std mode to avoid serialization overhead
-    #[cfg(feature = "std")]
+    /// The instance's tables
     tables:      Arc<Mutex<Vec<TableWrapper>>>,
-    #[cfg(not(feature = "std"))]
-    tables:      Arc<Mutex<BoundedTableVec<TableWrapper>>>,
-    /// The instance's globals - Vec in std mode to avoid serialization overhead
-    #[cfg(feature = "std")]
+    /// The instance's globals
     globals:     Arc<Mutex<Vec<GlobalWrapper>>>,
-    #[cfg(not(feature = "std"))]
-    globals:     Arc<Mutex<BoundedGlobalVec<GlobalWrapper>>>,
     /// Instance ID for debugging
     instance_id: usize,
     /// Imported instance indices to resolve imports
     imports:     BoundedImportMap<BoundedImportMap<(usize, usize)>>,
     /// Tracks which element segments have been dropped via elem.drop
     /// After dropping, table.init will treat the segment as having 0 length
-    #[cfg(feature = "std")]
     dropped_elements: Arc<Mutex<Vec<bool>>>,
-    #[cfg(not(feature = "std"))]
-    dropped_elements: Arc<Mutex<kiln_foundation::bounded::BoundedVec<bool, 256, kiln_foundation::safe_memory::NoStdProvider<1024>>>>,
     /// Tracks which data segments have been dropped via data.drop
     /// After dropping, memory.init will treat the segment as having 0 length
-    #[cfg(feature = "std")]
     dropped_data: Arc<Mutex<Vec<bool>>>,
-    #[cfg(not(feature = "std"))]
-    dropped_data: Arc<Mutex<kiln_foundation::bounded::BoundedVec<bool, 256, kiln_foundation::safe_memory::NoStdProvider<1024>>>>,
     /// Debug information (optional)
     #[cfg(feature = "debug")]
     debug_info:  Option<DwarfDebugInfo<'static>>,
@@ -117,9 +102,7 @@ impl Debug for ModuleInstance {
 
 impl ModuleInstance {
     /// Create a new module instance from a module (accepts Arc to avoid deep clones)
-    #[cfg(feature = "std")]
     pub fn new(module: Arc<Module>, instance_id: usize) -> Result<Self> {
-        // In std mode, use Vec for simplicity and to avoid serialization overhead
         Ok(Self {
             module,
             memories: Arc::new(Mutex::new(Vec::new())),
@@ -129,44 +112,6 @@ impl ModuleInstance {
             imports: Default::default(),
             dropped_elements: Arc::new(Mutex::new(Vec::new())),
             dropped_data: Arc::new(Mutex::new(Vec::new())),
-            #[cfg(feature = "debug")]
-            debug_info: None,
-        })
-    }
-
-    /// Create a new module instance from a module (accepts Arc to avoid deep clones)
-    #[cfg(not(feature = "std"))]
-    pub fn new(module: Arc<Module>, instance_id: usize) -> Result<Self> {
-        // Create a single shared provider to avoid stack overflow from multiple
-        // provider allocations
-        let shared_provider = create_runtime_provider()?;
-
-        // Allocate memory for memories collection
-        let memories_vec = kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
-
-        // Allocate memory for tables collection
-        let tables_vec = kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
-
-        // Allocate memory for globals collection
-        let globals_vec = kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
-
-        // Allocate memory for dropped segment tracking
-        let dropped_elements_vec = kiln_foundation::bounded::BoundedVec::new(
-            kiln_foundation::safe_memory::NoStdProvider::<1024>::default()
-        )?;
-        let dropped_data_vec = kiln_foundation::bounded::BoundedVec::new(
-            kiln_foundation::safe_memory::NoStdProvider::<1024>::default()
-        )?;
-
-        Ok(Self {
-            module,
-            memories: Arc::new(Mutex::new(memories_vec)),
-            tables: Arc::new(Mutex::new(tables_vec)),
-            globals: Arc::new(Mutex::new(globals_vec)),
-            instance_id,
-            imports: Default::default(),
-            dropped_elements: Arc::new(Mutex::new(dropped_elements_vec)),
-            dropped_data: Arc::new(Mutex::new(dropped_data_vec)),
             #[cfg(feature = "debug")]
             debug_info: None,
         })
@@ -186,31 +131,18 @@ impl ModuleInstance {
 
     /// Get a memory from this instance
     pub fn memory(&self, idx: u32) -> Result<MemoryWrapper> {
-        #[cfg(feature = "std")]
-        {
-            let memories = self
-                .memories
-                .lock()
-                .map_err(|_| Error::runtime_error("Failed to lock memories"))?;
-            let memory = memories
-                .get(idx as usize)
-                .ok_or_else(|| Error::runtime_execution_error("Memory index out of bounds"))?;
-            Ok(memory.clone())
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            let memories = self.memories.lock();
-            let memory = memories
-                .get(idx as usize)
-                .map_err(|_| Error::runtime_execution_error("Memory index out of bounds"))?;
-            Ok(memory.clone())
-        }
+        let memories = self
+            .memories
+            .lock()
+            .map_err(|_| Error::runtime_error("Failed to lock memories"))?;
+        let memory = memories
+            .get(idx as usize)
+            .ok_or_else(|| Error::runtime_execution_error("Memory index out of bounds"))?;
+        Ok(memory.clone())
     }
 
     /// Set a memory at a specific index (for imported memories)
     /// This is used during instantiation to replace placeholder memories with imported ones
-    #[cfg(feature = "std")]
     pub fn set_memory(&self, idx: usize, memory: MemoryWrapper) -> Result<()> {
         let mut memories = self
             .memories
@@ -228,7 +160,6 @@ impl ModuleInstance {
     }
 
     /// Get a memory by export name from this instance
-    #[cfg(feature = "std")]
     pub fn memory_by_name(&self, name: &str) -> Result<MemoryWrapper> {
         use crate::module::ExportKind;
 
@@ -244,29 +175,16 @@ impl ModuleInstance {
 
     /// Get a table from this instance
     pub fn table(&self, idx: u32) -> Result<TableWrapper> {
-        #[cfg(feature = "std")]
-        {
-            let tables =
-                self.tables.lock().map_err(|_| Error::runtime_error("Failed to lock tables"))?;
-            let table = tables
-                .get(idx as usize)
-                .ok_or_else(|| Error::resource_table_not_found("Runtime operation error"))?;
-            Ok(table.clone())
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            let tables = self.tables.lock();
-            let table = tables
-                .get(idx as usize)
-                .map_err(|_| Error::resource_table_not_found("Runtime operation error"))?;
-            Ok(table.clone())
-        }
+        let tables =
+            self.tables.lock().map_err(|_| Error::runtime_error("Failed to lock tables"))?;
+        let table = tables
+            .get(idx as usize)
+            .ok_or_else(|| Error::resource_table_not_found("Runtime operation error"))?;
+        Ok(table.clone())
     }
 
     /// Set a table at a specific index (for imported tables)
     /// This is used during instantiation to replace placeholder tables with imported ones
-    #[cfg(feature = "std")]
     pub fn set_table(&self, idx: usize, table: TableWrapper) -> Result<()> {
         let mut tables = self
             .tables
@@ -284,7 +202,6 @@ impl ModuleInstance {
     }
 
     /// Get a table by export name from this instance
-    #[cfg(feature = "std")]
     pub fn table_by_name(&self, name: &str) -> Result<TableWrapper> {
         use crate::module::ExportKind;
 
@@ -300,31 +217,18 @@ impl ModuleInstance {
 
     /// Get a global from this instance
     pub fn global(&self, idx: u32) -> Result<GlobalWrapper> {
-        #[cfg(feature = "std")]
-        {
-            let globals = self
-                .globals
-                .lock()
-                .map_err(|_| Error::runtime_error("Failed to lock globals"))?;
-            let global = globals
-                .get(idx as usize)
-                .ok_or_else(|| Error::resource_global_not_found("Runtime operation error"))?;
-            Ok(global.clone())
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            let globals = self.globals.lock();
-            let global = globals
-                .get(idx as usize)
-                .map_err(|_| Error::resource_global_not_found("Runtime operation error"))?;
-            Ok(global.clone())
-        }
+        let globals = self
+            .globals
+            .lock()
+            .map_err(|_| Error::runtime_error("Failed to lock globals"))?;
+        let global = globals
+            .get(idx as usize)
+            .ok_or_else(|| Error::resource_global_not_found("Runtime operation error"))?;
+        Ok(global.clone())
     }
 
     /// Set a global at a specific index (for imported globals)
     /// This is used during instantiation to replace placeholder globals with imported ones
-    #[cfg(feature = "std")]
     pub fn set_global(&self, idx: usize, global: GlobalWrapper) -> Result<()> {
         let mut globals = self
             .globals
@@ -344,7 +248,6 @@ impl ModuleInstance {
     /// Re-evaluate globals that depend on imported globals after import values are set.
     /// This fixes the deferred initialization problem where globals using global.get
     /// of imported globals were evaluated before import values were known.
-    #[cfg(feature = "std")]
     pub fn reevaluate_deferred_globals(&self) -> Result<()> {
         use crate::module::GlobalWrapper;
         use crate::global::Global;
@@ -384,7 +287,6 @@ impl ModuleInstance {
     }
 
     /// Get a global by export name from this instance
-    #[cfg(feature = "std")]
     pub fn global_by_name(&self, name: &str) -> Result<GlobalWrapper> {
         use crate::module::ExportKind;
 
@@ -399,36 +301,18 @@ impl ModuleInstance {
     }
 
     /// Get the function type for a function
-    #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn function_type(&self, idx: u32) -> Result<crate::prelude::CoreFuncType> {
-        #[cfg(feature = "std")]
         let function = self
             .module
             .functions
             .get(idx as usize)
             .ok_or_else(|| Error::runtime_function_not_found("Function index not found"))?;
-        #[cfg(not(feature = "std"))]
-        let function = self
-            .module
-            .functions
-            .get(idx as usize)
-            .map_err(|_| Error::runtime_function_not_found("Function index not found"))?;
 
-        // In std mode, types is Vec so get() returns Option<&T>
-        #[cfg(feature = "std")]
         let ty = self
             .module
             .types
             .get(function.type_idx as usize)
             .ok_or_else(|| Error::validation_type_mismatch("Type index not found"))?;
-
-        // In no_std mode, types is BoundedVec so get() returns Result<T>
-        #[cfg(not(feature = "std"))]
-        let ty = &self
-            .module
-            .types
-            .get(function.type_idx as usize)
-            .map_err(|_| Error::validation_type_mismatch("Type index not found"))?;
 
         // Convert from provider-aware FuncType to clean CoreFuncType
         // Create BoundedVecs manually since FromIterator isn't implemented
@@ -468,96 +352,32 @@ impl ModuleInstance {
         crate::prelude::CoreFuncType::new(param_types, result_types)
     }
 
-    /// Get the function type for a function (no_std version)
-    #[cfg(not(any(feature = "std", feature = "alloc")))]
-    pub fn function_type(&self, idx: u32) -> Result<KilnFuncType> {
-        let function = self
-            .module
-            .functions
-            .get(idx as usize)
-            .ok_or_else(|| Error::runtime_function_not_found("Function index not found"))?;
-
-        // In std mode, types is Vec so get() returns Option<&T>
-        #[cfg(feature = "std")]
-        let ty = self
-            .module
-            .types
-            .get(function.type_idx as usize)
-            .ok_or_else(|| Error::validation_type_mismatch("Type index not found"))?;
-
-        // In no_std mode, types is BoundedVec so get() returns Result<T>
-        #[cfg(not(feature = "std"))]
-        let ty = &self
-            .module
-            .types
-            .get(function.type_idx as usize)
-            .map_err(|_| Error::validation_type_mismatch("Type index not found"))?;
-
-        Ok(ty.clone())
-    }
-
     /// Add a memory to this instance
     pub fn add_memory(&self, memory: Memory) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            let mut memories = self
-                .memories
-                .lock()
-                .map_err(|_| Error::runtime_error("Failed to lock memories"))?;
-            memories.push(MemoryWrapper::new(Box::new(memory)));
-            Ok(())
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            let mut memories = self.memories.lock();
-            memories
-                .push(MemoryWrapper::new(Box::new(memory)))
-                .map_err(|_| Error::capacity_limit_exceeded("Memory capacity exceeded"))?;
-            Ok(())
-        }
+        let mut memories = self
+            .memories
+            .lock()
+            .map_err(|_| Error::runtime_error("Failed to lock memories"))?;
+        memories.push(MemoryWrapper::new(Box::new(memory)));
+        Ok(())
     }
 
     /// Add a table to this instance
     pub fn add_table(&self, table: Table) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            let mut tables =
-                self.tables.lock().map_err(|_| Error::runtime_error("Failed to lock tables"))?;
-            tables.push(TableWrapper::new(table));
-            Ok(())
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            let mut tables = self.tables.lock();
-            tables
-                .push(TableWrapper::new(table))
-                .map_err(|_| Error::capacity_limit_exceeded("Table capacity exceeded"))?;
-            Ok(())
-        }
+        let mut tables =
+            self.tables.lock().map_err(|_| Error::runtime_error("Failed to lock tables"))?;
+        tables.push(TableWrapper::new(table));
+        Ok(())
     }
 
     /// Add a global to this instance
     pub fn add_global(&self, global: Global) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            let mut globals = self
-                .globals
-                .lock()
-                .map_err(|_| Error::runtime_error("Failed to lock globals"))?;
-            globals.push(GlobalWrapper::new(global));
-            Ok(())
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            let mut globals = self.globals.lock();
-            globals
-                .push(GlobalWrapper::new(global))
-                .map_err(|_| Error::capacity_limit_exceeded("Global capacity exceeded"))?;
-            Ok(())
-        }
+        let mut globals = self
+            .globals
+            .lock()
+            .map_err(|_| Error::runtime_error("Failed to lock globals"))?;
+        globals.push(GlobalWrapper::new(global));
+        Ok(())
     }
 
     /// Populate globals from the module into this instance
@@ -577,7 +397,6 @@ impl ModuleInstance {
         // Use the pre-computed count of global imports from the module
         let num_global_imports = self.module.num_global_imports;
 
-        #[cfg(feature = "std")]
         {
             let mut globals = self
                 .globals
@@ -645,54 +464,6 @@ impl ModuleInstance {
             );
         }
 
-        #[cfg(not(feature = "std"))]
-        {
-            let mut globals = self.globals.lock();
-
-            // First, create placeholder globals for imports by iterating import_order
-            for idx in 0..self.module.import_order.len() {
-                if let Ok((module_name, item_name)) = self.module.import_order.get(idx) {
-                    // Look up the module's import map
-                    if let Ok(Some(import_map)) = self.module.imports.get(&module_name) {
-                        // Look up the specific import
-                        if let Ok(Some(import)) = import_map.get(&item_name) {
-                            if let ImportDesc::Global(global_type) = &import.desc {
-                                use kiln_foundation::values::{Value, FloatBits32, FloatBits64};
-
-                                let default_value = match global_type.value_type {
-                                    kiln_foundation::ValueType::I32 => Value::I32(0),
-                                    kiln_foundation::ValueType::I64 => Value::I64(0),
-                                    kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                                    kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
-                                    kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
-                                    kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
-                                    _ => Value::I32(0),
-                                };
-                                let placeholder = Global::new(global_type.value_type, global_type.mutable, default_value)
-                                    .map_err(|_| Error::runtime_error("Failed to create placeholder global"))?;
-                                globals
-                                    .push(GlobalWrapper::new(placeholder))
-                                    .map_err(|_| Error::capacity_limit_exceeded("Global capacity exceeded"))?;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Now copy defined globals
-            for idx in 0..self.module.globals.len() {
-                if let Ok(global_wrapper) = self.module.globals.get(idx) {
-                    #[cfg(feature = "tracing")]
-                    debug!("Copying global {} to instance", idx);
-                    globals
-                        .push(global_wrapper.clone())
-                        .map_err(|_| Error::capacity_limit_exceeded("Global capacity exceeded"))?;
-                }
-            }
-            #[cfg(feature = "tracing")]
-            info!("Populated globals for instance {}", self.instance_id);
-        }
-
         Ok(())
     }
 
@@ -705,14 +476,12 @@ impl ModuleInstance {
         #[cfg(feature = "tracing")]
         info!("Populating memories from module for instance {}", self.instance_id);
 
-        #[cfg(feature = "std")]
         {
             let mut memories = self
                 .memories
                 .lock()
                 .map_err(|_| Error::runtime_error("Failed to lock memories"))?;
 
-            // In std mode, module.memories is Vec so we can iterate directly
             for (idx, memory_wrapper) in self.module.memories.iter().enumerate() {
                 #[cfg(feature = "tracing")]
                 debug!("Copying memory {} to instance", idx);
@@ -720,22 +489,6 @@ impl ModuleInstance {
             }
             #[cfg(feature = "tracing")]
             info!("Populated {} memories for instance {}", self.module.memories.len(), self.instance_id);
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            let mut memories = self.memories.lock();
-            for idx in 0..self.module.memories.len() {
-                if let Ok(memory_wrapper) = self.module.memories.get(idx) {
-                    #[cfg(feature = "tracing")]
-                    debug!("Copying memory {} to instance", idx);
-                    memories
-                        .push(memory_wrapper.clone())
-                        .map_err(|_| Error::capacity_limit_exceeded("Memory capacity exceeded"))?;
-                }
-            }
-            #[cfg(feature = "tracing")]
-            info!("Populated memories for instance {}", self.instance_id);
         }
 
         Ok(())
@@ -750,14 +503,12 @@ impl ModuleInstance {
         #[cfg(feature = "tracing")]
         info!("Populating tables from module for instance {}", self.instance_id);
 
-        #[cfg(feature = "std")]
         {
             let mut tables = self
                 .tables
                 .lock()
                 .map_err(|_| Error::runtime_error("Failed to lock tables"))?;
 
-            // In std mode, module.tables is Vec so we can iterate directly
             for (idx, table_wrapper) in self.module.tables.iter().enumerate() {
                 #[cfg(feature = "tracing")]
                 debug!("Copying table {} to instance (size={})", idx, table_wrapper.size());
@@ -774,126 +525,58 @@ impl ModuleInstance {
             );
         }
 
-        #[cfg(not(feature = "std"))]
-        {
-            let mut tables = self.tables.lock();
-            for idx in 0..self.module.tables.len() {
-                if let Ok(table_wrapper) = self.module.tables.get(idx) {
-                    #[cfg(feature = "tracing")]
-                    debug!("Copying table {} to instance", idx);
-                    tables
-                        .push(table_wrapper.clone())
-                        .map_err(|_| Error::capacity_limit_exceeded("Table capacity exceeded"))?;
-                }
-            }
-            #[cfg(feature = "tracing")]
-            info!("Populated tables for instance {}", self.instance_id);
-        }
-
         Ok(())
     }
 
     /// Initialize dropped segment tracking arrays based on module's segment counts
     /// Call this during instance initialization before any elem.drop/data.drop operations
     pub fn initialize_dropped_segments(&self) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            let mut dropped_elems = self.dropped_elements.lock()
-                .map_err(|_| Error::runtime_error("Failed to lock dropped_elements"))?;
-            let mut dropped_data = self.dropped_data.lock()
-                .map_err(|_| Error::runtime_error("Failed to lock dropped_data"))?;
+        let mut dropped_elems = self.dropped_elements.lock()
+            .map_err(|_| Error::runtime_error("Failed to lock dropped_elements"))?;
+        let mut dropped_data = self.dropped_data.lock()
+            .map_err(|_| Error::runtime_error("Failed to lock dropped_data"))?;
 
-            // Resize to match module's element and data segment counts
-            dropped_elems.resize(self.module.elements.len(), false);
-            dropped_data.resize(self.module.data.len(), false);
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let mut dropped_elems = self.dropped_elements.lock();
-            let mut dropped_data = self.dropped_data.lock();
-
-            // Push false for each segment (they start not-dropped)
-            for _ in 0..self.module.elements.len() {
-                dropped_elems.push(false)?;
-            }
-            for _ in 0..self.module.data.len() {
-                dropped_data.push(false)?;
-            }
-        }
+        // Resize to match module's element and data segment counts
+        dropped_elems.resize(self.module.elements.len(), false);
+        dropped_data.resize(self.module.data.len(), false);
         Ok(())
     }
 
     /// Mark an element segment as dropped (called by elem.drop instruction)
     pub fn drop_element_segment(&self, segment_idx: u32) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            let mut dropped = self.dropped_elements.lock()
-                .map_err(|_| Error::runtime_error("Failed to lock dropped_elements"))?;
-            if (segment_idx as usize) < dropped.len() {
-                dropped[segment_idx as usize] = true;
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let mut dropped = self.dropped_elements.lock();
-            if let Ok(slot) = dropped.get_mut(segment_idx as usize) {
-                *slot = true;
-            }
+        let mut dropped = self.dropped_elements.lock()
+            .map_err(|_| Error::runtime_error("Failed to lock dropped_elements"))?;
+        if (segment_idx as usize) < dropped.len() {
+            dropped[segment_idx as usize] = true;
         }
         Ok(())
     }
 
     /// Mark a data segment as dropped (called by data.drop instruction)
     pub fn drop_data_segment(&self, segment_idx: u32) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            let mut dropped = self.dropped_data.lock()
-                .map_err(|_| Error::runtime_error("Failed to lock dropped_data"))?;
-            if (segment_idx as usize) < dropped.len() {
-                dropped[segment_idx as usize] = true;
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let mut dropped = self.dropped_data.lock();
-            if let Ok(slot) = dropped.get_mut(segment_idx as usize) {
-                *slot = true;
-            }
+        let mut dropped = self.dropped_data.lock()
+            .map_err(|_| Error::runtime_error("Failed to lock dropped_data"))?;
+        if (segment_idx as usize) < dropped.len() {
+            dropped[segment_idx as usize] = true;
         }
         Ok(())
     }
 
     /// Check if an element segment has been dropped
     pub fn is_element_segment_dropped(&self, segment_idx: u32) -> bool {
-        #[cfg(feature = "std")]
-        {
-            if let Ok(dropped) = self.dropped_elements.lock() {
-                dropped.get(segment_idx as usize).copied().unwrap_or(false)
-            } else {
-                false
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let dropped = self.dropped_elements.lock();
-            dropped.get(segment_idx as usize).ok().copied().unwrap_or(false)
+        if let Ok(dropped) = self.dropped_elements.lock() {
+            dropped.get(segment_idx as usize).copied().unwrap_or(false)
+        } else {
+            false
         }
     }
 
     /// Check if a data segment has been dropped
     pub fn is_data_segment_dropped(&self, segment_idx: u32) -> bool {
-        #[cfg(feature = "std")]
-        {
-            if let Ok(dropped) = self.dropped_data.lock() {
-                dropped.get(segment_idx as usize).copied().unwrap_or(false)
-            } else {
-                false
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let dropped = self.dropped_data.lock();
-            dropped.get(segment_idx as usize).ok().copied().unwrap_or(false)
+        if let Ok(dropped) = self.dropped_data.lock() {
+            dropped.get(segment_idx as usize).copied().unwrap_or(false)
+        } else {
+            false
         }
     }
 
@@ -953,11 +636,8 @@ impl ModuleInstance {
                                 #[cfg(feature = "tracing")]
                                 debug!("Data segment {} has GlobalGet({}) offset", idx, global_idx);
 
-                                #[cfg(feature = "std")]
                                 let globals = self.globals.lock()
                                     .map_err(|_| Error::runtime_error("Failed to lock globals"))?;
-                                #[cfg(not(feature = "std"))]
-                                let globals = self.globals.lock();
 
                                 // Get the global value
                                 if let Some(global_wrapper) = globals.iter().nth(*global_idx as usize) {
@@ -1014,11 +694,8 @@ impl ModuleInstance {
                 debug!("Data segment {} targets memory {} at offset {:#x}", idx, memory_idx, offset);
 
                 // Get the memory instance
-                #[cfg(feature = "std")]
                 let memories = self.memories.lock()
                     .map_err(|_| Error::runtime_error("Failed to lock memories"))?;
-                #[cfg(not(feature = "std"))]
-                let memories = self.memories.lock();
 
                 if memory_idx as usize >= memories.len() {
                     return Err(Error::runtime_error("Data segment references invalid memory index"));
@@ -1031,11 +708,7 @@ impl ModuleInstance {
                 let memory = &memory_wrapper.0;
 
                 // Write the data to memory
-                #[cfg(feature = "std")]
                 let init_data = &data_segment.init[..];
-                #[cfg(not(feature = "std"))]
-                let init_data = data_segment.init.as_slice()
-                    .map_err(|_e| Error::runtime_error("Failed to get data segment bytes"))?;
                 #[cfg(feature = "tracing")]
                 debug!("Writing {} bytes of data to memory at offset {:#x}", init_data.len(), offset);
 
@@ -1086,14 +759,10 @@ impl ModuleInstance {
         );
 
         // Get access to tables
-        #[cfg(feature = "std")]
         let tables = self.tables.lock()
             .map_err(|_| Error::runtime_error("Failed to lock tables"))?;
-        #[cfg(not(feature = "std"))]
-        let tables = self.tables.lock();
 
         // Iterate through all element segments in the module
-        #[cfg(feature = "std")]
         {
             // Get access to globals for evaluating offset expressions
             let globals = self.globals.lock()
@@ -1221,7 +890,6 @@ impl ModuleInstance {
                     }
 
                     // Evaluate and set deferred item expressions (e.g., global.get, ref.i31, struct.new)
-                    #[cfg(feature = "std")]
                     for (item_idx, expr) in elem_segment.item_exprs.iter() {
                         let table_offset = actual_offset + *item_idx;
                         // Evaluate the constant expression by interpreting its instructions
@@ -1292,43 +960,6 @@ impl ModuleInstance {
             }
         }
 
-        #[cfg(not(feature = "std"))]
-        {
-            for idx in 0..self.module.elements.len() {
-                if let Ok(elem_segment) = self.module.elements.get(idx) {
-                    #[cfg(feature = "tracing")]
-                    debug!("Processing element segment {}", idx);
-                    if let KilnElementMode::Active { table_index, offset } = &elem_segment.mode {
-                        #[cfg(feature = "tracing")]
-                        debug!("Processing active element segment {}", idx);
-
-                        let table_idx = *table_index as usize;
-                        if table_idx >= tables.len() {
-                            return Err(Error::runtime_error("Element segment references invalid table index"));
-                        }
-
-                        if let Ok(table_wrapper) = tables.get(table_idx) {
-                            let table = table_wrapper.inner();
-
-                            for item_idx in 0..elem_segment.items.len() {
-                                if let Ok(func_idx) = elem_segment.items.get(item_idx) {
-                                    let table_offset = *offset + item_idx as u32;
-                                    let value = Some(KilnValue::FuncRef(Some(KilnFuncRef::from_index_with_instance(func_idx, self.instance_id as u32))));
-                                    table.set_shared(table_offset, value)?;
-                                }
-                            }
-                        }
-
-                        #[cfg(feature = "tracing")]
-                        info!("Initialized element segment {}", idx);
-                    } else {
-                        #[cfg(feature = "tracing")]
-                        debug!("Skipping non-active element segment {}", idx);
-                    }
-                }
-            }
-        }
-
         #[cfg(feature = "tracing")]
         info!("Element segment initialization complete for instance {}", self.instance_id);
         Ok(())
@@ -1372,44 +1003,24 @@ impl ModuleInstance {
 
     /// Get a function by index - alias for compatibility with tail_call.rs
     pub fn get_function(&self, idx: usize) -> Result<crate::module::Function> {
-        #[cfg(feature = "std")]
-        return self.module
+        self.module
             .functions
             .get(idx)
             .cloned()
-            .ok_or_else(|| Error::runtime_function_not_found("Function index not found"));
-        #[cfg(not(feature = "std"))]
-        return self.module
-            .functions
-            .get(idx)
-            .map(|f| f.clone())
-            .map_err(|_| Error::runtime_function_not_found("Function index not found"));
+            .ok_or_else(|| Error::runtime_function_not_found("Function index not found"))
     }
 
     /// Get function type by index - alias for compatibility with tail_call.rs
     pub fn get_function_type(&self, idx: usize) -> Result<KilnFuncType> {
-        #[cfg(feature = "std")]
         let function = self
             .module
             .functions
             .get(idx)
             .ok_or_else(|| Error::runtime_function_not_found("Function index not found"))?;
-        #[cfg(not(feature = "std"))]
-        let function = self
-            .module
-            .functions
-            .get(idx)
-            .map_err(|_| Error::runtime_function_not_found("Function index not found"))?;
 
-        // In std mode, types is Vec so get() returns Option<&T>
-        #[cfg(feature = "std")]
-        return self.module.types.get(function.type_idx as usize)
-            .cloned()
-            .ok_or_else(|| Error::runtime_error("Function type index out of bounds"));
-
-        // In no_std mode, types is BoundedVec so get() returns Result<T>
-        #[cfg(not(feature = "std"))]
         self.module.types.get(function.type_idx as usize)
+            .cloned()
+            .ok_or_else(|| Error::runtime_error("Function type index out of bounds"))
     }
 
     /// Get a table by index - alias for compatibility with tail_call.rs
@@ -1419,15 +1030,9 @@ impl ModuleInstance {
 
     /// Get a type by index - alias for compatibility with tail_call.rs
     pub fn get_type(&self, idx: usize) -> Result<KilnFuncType> {
-        // In std mode, types is Vec so get() returns Option<&T>
-        #[cfg(feature = "std")]
-        return self.module.types.get(idx)
-            .cloned()
-            .ok_or_else(|| Error::runtime_error("Type index out of bounds"));
-
-        // In no_std mode, types is BoundedVec so get() returns Result<T>
-        #[cfg(not(feature = "std"))]
         self.module.types.get(idx)
+            .cloned()
+            .ok_or_else(|| Error::runtime_error("Type index out of bounds"))
     }
 }
 
@@ -1609,20 +1214,9 @@ impl Checksummable for ModuleInstance {
         }
 
         // Include counts of resources for uniqueness
-        #[cfg(feature = "std")]
         let memories_count = self.memories.lock().map_or(0, |m| m.len()) as u32;
-        #[cfg(not(feature = "std"))]
-        let memories_count = self.memories.lock().len() as u32;
-
-        #[cfg(feature = "std")]
         let tables_count = self.tables.lock().map_or(0, |t| t.len()) as u32;
-        #[cfg(not(feature = "std"))]
-        let tables_count = self.tables.lock().len() as u32;
-
-        #[cfg(feature = "std")]
         let globals_count = self.globals.lock().map_or(0, |g| g.len()) as u32;
-        #[cfg(not(feature = "std"))]
-        let globals_count = self.globals.lock().len() as u32;
 
         checksum.update_slice(&memories_count.to_le_bytes());
         checksum.update_slice(&tables_count.to_le_bytes());
@@ -1646,20 +1240,9 @@ impl ToBytes for ModuleInstance {
         writer.write_all(&self.instance_id.to_le_bytes())?;
 
         // Write resource counts
-        #[cfg(feature = "std")]
         let memories_count = self.memories.lock().map_or(0, |m| m.len()) as u32;
-        #[cfg(not(feature = "std"))]
-        let memories_count = self.memories.lock().len() as u32;
-
-        #[cfg(feature = "std")]
         let tables_count = self.tables.lock().map_or(0, |t| t.len()) as u32;
-        #[cfg(not(feature = "std"))]
-        let tables_count = self.tables.lock().len() as u32;
-
-        #[cfg(feature = "std")]
         let globals_count = self.globals.lock().map_or(0, |g| g.len()) as u32;
-        #[cfg(not(feature = "std"))]
-        let globals_count = self.globals.lock().len() as u32;
 
         writer.write_all(&memories_count.to_le_bytes())?;
         writer.write_all(&tables_count.to_le_bytes())?;
@@ -1705,23 +1288,8 @@ impl FromBytes for ModuleInstance {
 
         // Skip reading the name for now (simplified implementation)
         if name_len > 0 {
-            #[cfg(any(feature = "std", feature = "alloc"))]
-            {
-                #[cfg(feature = "std")]
-                let mut name_bytes = std::vec![0u8; name_len];
-                #[cfg(all(feature = "alloc", not(feature = "std")))]
-                let mut name_bytes = alloc::vec![0u8; name_len];
-                reader.read_exact(&mut name_bytes)?;
-            }
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            {
-                // In no_std without alloc, we can't allocate the buffer
-                // Just skip the bytes by reading them one by one
-                for _ in 0..name_len {
-                    let mut byte = [0u8; 1];
-                    reader.read_exact(&mut byte)?;
-                }
-            }
+            let mut name_bytes = std::vec![0u8; name_len];
+            reader.read_exact(&mut name_bytes)?;
         }
 
         // Create a default module instance with empty collections using create_runtime_provider
