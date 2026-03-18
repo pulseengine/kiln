@@ -508,6 +508,145 @@ artifacts:
         units; invalid page sizes rejected by decoder
 
   # =========================================================================
+  # RFC #46 Host Intrinsic Requirements
+  # =========================================================================
+  - id: FR-RFC46-THREAD
+    type: requirement
+    title: RFC #46 thread intrinsic requirements
+    description: >
+      The runtime shall implement the RFC #46 thread management intrinsics
+      (thread_new, thread_switch_to, thread_index) with the following
+      constraints: In single-threaded mode (the current Kiln execution
+      model), thread_new shall always return thread_id 0 regardless of
+      the context, table, and func arguments. thread_switch_to shall be
+      a no-op when called with thread_id 0. thread_index shall always
+      return 0. The runtime shall validate that thread_switch_to rejects
+      any thread_id other than 0 in single-threaded mode with an explicit
+      trap. context0_get and context0_set shall operate on a per-task
+      thread-local variable that persists across calls within the same
+      task execution.
+    status: planned
+    tags: [rfc46, thread-intrinsics, component-model]
+    traced_to: [H-13, H-13.1, H-13.4]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_014
+    fields:
+      implementation: kiln-builtins/src/intrinsics/
+      spec-reference: "BA RFC #46 — Thread Management intrinsics"
+      verification-method: test
+      verification-description: >
+        thread_new returns 0 in single-threaded mode; thread_switch_to(0)
+        is a no-op; thread_switch_to(non-zero) traps; thread_index returns
+        0; context0_get/set round-trip values correctly
+
+  - id: FR-RFC46-STREAM
+    type: requirement
+    title: RFC #46 stream/future intrinsic requirements
+    description: >
+      The runtime shall implement the RFC #46 stream and future intrinsics
+      (stream_<type>_new, stream_<type>_read, stream_<type>_write, and
+      corresponding future variants) with bounds-checked buffer access.
+      For every stream_read(stream, memory, buffer, length) and
+      stream_write(stream, memory, buffer, length) call, the runtime
+      shall validate that the range [buffer, buffer + length) falls
+      entirely within the bounds of the specified linear memory using
+      checked arithmetic (detecting u32/u64 overflow). If the range is
+      invalid, the intrinsic shall trap before any data is transferred.
+      stream_new shall return a (writer, reader) pair as a packed i64
+      value per the RFC encoding. Read/write results shall use the
+      COPY_RESULT constants: BLOCKED(0xFFFFFFFF), COMPLETED(0),
+      DROPPED(1), CANCELLED(2).
+    status: planned
+    tags: [rfc46, stream-intrinsics, component-model]
+    traced_to: [H-13, H-13.2, H-2]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_014
+    fields:
+      implementation: kiln-builtins/src/intrinsics/
+      spec-reference: "BA RFC #46 — Stream/Future Construction intrinsics"
+      verification-method: test
+      verification-description: >
+        stream_new returns valid writer/reader pair; stream_read with
+        valid buffer succeeds; stream_read with out-of-bounds buffer
+        traps; stream_write with valid buffer succeeds; buffer + length
+        overflow detected and trapped; COPY_RESULT constants correctly
+        returned
+
+  - id: FR-RFC46-RESOURCE
+    type: requirement
+    title: RFC #46 resource intrinsic requirements
+    description: >
+      The runtime shall implement the RFC #46 resource management
+      intrinsics (__wasm_import_<iface>_thing_new, thing_rep, thing_drop)
+      with handle validation and double-free prevention. thing_new shall
+      allocate a handle from the resource table with a generation counter
+      and return a unique handle value. thing_rep shall validate that the
+      handle is live (not dropped) and that the generation matches before
+      returning the representation value. thing_drop shall validate the
+      handle, deallocate the resource, increment the slot's generation
+      counter, and mark the slot as free. Calling thing_drop on an
+      already-dropped handle shall trap immediately (double-free
+      prevention). Calling thing_rep on a dropped handle shall trap.
+      Handle values shall encode both slot index and generation to detect
+      stale references.
+    status: planned
+    tags: [rfc46, resource-intrinsics, component-model]
+    traced_to: [H-13, H-13.3, H-6]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_014
+      - type: derives-from
+        target: REQ_CMP_020
+    fields:
+      implementation: kiln-builtins/src/intrinsics/, kiln-component/src/components/resource_management.rs
+      spec-reference: "BA RFC #46 — Resource Management intrinsics"
+      verification-method: test
+      verification-description: >
+        thing_new returns unique handle; thing_rep returns correct
+        representation; thing_drop frees resource; double thing_drop
+        traps; thing_rep on dropped handle traps; generation counter
+        prevents use-after-free
+
+  - id: FR-RFC46-WAITABLE
+    type: requirement
+    title: RFC #46 waitable set intrinsic requirements
+    description: >
+      The runtime shall implement the RFC #46 waitable set intrinsics
+      (waitable_set_new, waitable_join, waitable_set_wait,
+      waitable_set_poll) with deadlock prevention on single-threaded
+      runtimes. waitable_set_new shall allocate a new empty waitable set
+      and return its identifier. waitable_join shall associate a waitable
+      (subtask, stream, or future) with a set and return a join handle.
+      waitable_set_poll shall check for ready events without blocking and
+      return EVENT_NONE(0) if no events are ready. In single-threaded
+      mode, waitable_set_wait shall either behave identically to
+      waitable_set_poll (non-blocking) or trap with an explicit error,
+      because blocking the sole thread would deadlock the system.
+      waitable_set_wait on an empty set (no joined waitables) shall trap
+      immediately in all modes. Event codes shall use the defined
+      constants: EVENT_NONE(0), EVENT_SUBTASK(1), EVENT_STREAM_READ(2),
+      EVENT_STREAM_WRITE(3), EVENT_FUTURE_READ(4), EVENT_FUTURE_WRITE(5),
+      EVENT_CANCELLED(6).
+    status: planned
+    tags: [rfc46, waitable-intrinsics, component-model]
+    traced_to: [H-13, H-13.4, H-13.5]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_014
+    fields:
+      implementation: kiln-builtins/src/intrinsics/
+      spec-reference: "BA RFC #46 — Waitable Set Operations intrinsics"
+      verification-method: test
+      verification-description: >
+        waitable_set_new returns valid set id; waitable_join adds
+        waitable to set; waitable_set_poll returns EVENT_NONE when no
+        events ready; waitable_set_wait on empty set traps; single-
+        threaded waitable_set_wait does not block; event codes match
+        defined constants
+
+  # =========================================================================
   # REMOVED from sphinx-needs (with rationale):
   #
   # REQ_FUNC_004 (State Migration) — planned, never started, low priority.

@@ -370,3 +370,107 @@ vulnerabilities:
           Log warnings for any import that cannot be traced.
         status: unmitigated
         priority: medium
+
+  # ===========================================================================
+  # SH-9: Resource handle forgery via crafted handle values
+  # ===========================================================================
+  - id: V-9
+    security-hazard: SH-9
+    title: Resource handle forgery in RFC #46 intrinsics
+    code-locations:
+      - file: kiln-component/src/components/resource_management.rs
+        description: >
+          Resource table implementation for thing_new, thing_rep, and
+          thing_drop. Must validate that the calling component owns the
+          handle and that the handle's generation counter matches the
+          current slot generation (to detect use-after-free). Must also
+          verify resource type consistency (a handle created for type A
+          cannot be used with thing_rep for type B).
+      - file: kiln-builtins/src/intrinsics/
+        description: >
+          Host intrinsic entry points for __wasm_import_<iface>_thing_new,
+          thing_rep, and thing_drop. These must pass the calling
+          component's identity to the resource table for ownership checks.
+    mitigations:
+      - id: MIT-9.1
+        description: >
+          Implement generation-counted handles: each resource table slot
+          contains a generation counter that increments on each drop. A
+          handle encodes both the slot index and the generation. thing_rep
+          and thing_drop validate that the handle's generation matches the
+          slot's current generation, rejecting stale (use-after-free)
+          handles with an explicit trap.
+        status: unmitigated
+        priority: critical
+      - id: MIT-9.2
+        description: >
+          Implement per-component handle ownership: the resource table
+          tags each slot with the creating component's instance ID.
+          thing_rep and thing_drop verify that the calling component
+          matches the owning component. Cross-component resource access
+          is only permitted through explicit resource transfer operations
+          defined by the Component Model.
+        status: unmitigated
+        priority: critical
+      - id: MIT-9.3
+        description: >
+          Implement resource type tagging: each handle slot records the
+          resource type (interface + type name) it was created for.
+          thing_rep and thing_drop verify that the requested interface
+          matches the slot's type tag, preventing type-confused resource
+          access.
+        status: unmitigated
+        priority: high
+
+  # ===========================================================================
+  # SH-10: Stream buffer overflow via attacker-controlled length
+  # ===========================================================================
+  - id: V-10
+    security-hazard: SH-10
+    title: Stream buffer overflow in RFC #46 stream intrinsics
+    code-locations:
+      - file: kiln-builtins/src/intrinsics/
+        description: >
+          Host intrinsic implementations for stream_<type>_read and
+          stream_<type>_write. These accept (stream, memory, buffer,
+          length) parameters and must validate that the range
+          [buffer, buffer + length) falls entirely within the guest's
+          linear memory before performing any read or write.
+      - file: kiln-runtime/src/execution/memory.rs
+        description: >
+          Memory bounds checking functions. Stream intrinsics must use
+          the same bounds check path as regular load/store instructions,
+          ensuring consistent validation. The check must handle u32
+          overflow in buffer + length computation.
+    mitigations:
+      - id: MIT-10.1
+        description: >
+          Validate buffer bounds before any stream I/O: compute
+          buffer + length using checked arithmetic (u32::checked_add or
+          u64::checked_add for memory64). If the addition overflows or
+          the result exceeds memory.size, trap immediately before any
+          data is transferred. The check must occur in the host intrinsic
+          before calling into any platform I/O.
+        status: unmitigated
+        priority: critical
+      - id: MIT-10.2
+        description: >
+          Reuse the existing memory bounds check infrastructure from
+          load/store instruction execution for stream intrinsics, rather
+          than implementing a separate check. This ensures consistency
+          and reduces the risk of divergent validation logic. Create a
+          shared validate_memory_range(memory_index, offset, length)
+          function used by both instruction execution and stream
+          intrinsics.
+        status: unmitigated
+        priority: high
+      - id: MIT-10.3
+        description: >
+          Add fuzz tests that exercise stream_read and stream_write with
+          adversarial (buffer, length) pairs: buffer near memory end,
+          length = u32::MAX, buffer + length overflowing u32, zero-length
+          reads/writes, and buffer = 0 with length exceeding memory size.
+          The oracle is: no out-of-bounds access occurs and the intrinsic
+          either succeeds (for valid ranges) or traps (for invalid ranges).
+        status: unmitigated
+        priority: high

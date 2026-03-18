@@ -306,6 +306,66 @@ sub-hazards:
       cycles or long-lived references). The pool is exhausted, causing
       subsequent allocations to fail and trapping the module.
 
+  # Refinements of H-13 (Meld-fused ABI mismatch) — RFC #46 host intrinsics
+  - id: H-13.1
+    parent: H-13
+    title: Thread intrinsic ABI mismatch
+    description: >
+      thread_new returns a handle value whose format (size, encoding,
+      or sentinel values) does not match what the fused module expects.
+      The caller misinterprets the thread_id, leading to thread_switch_to
+      targeting the wrong thread or a non-existent thread. In single-
+      threaded mode, thread_new must always return 0 and thread_switch_to
+      must be a no-op; any deviation causes the fused module to enter
+      an impossible scheduling state.
+
+  - id: H-13.2
+    parent: H-13
+    title: Stream/future buffer overrun
+    description: >
+      stream_read or stream_write receives a (memory, buffer, length)
+      triple where buffer + length exceeds the linear memory bounds.
+      The host intrinsic writes beyond the guest's allocated memory,
+      corrupting adjacent data or host runtime state. This also applies
+      to future_read/future_write with the same buffer parameter pattern.
+
+  - id: H-13.3
+    parent: H-13
+    title: Resource handle confusion
+    description: >
+      __wasm_import_<iface>_thing_rep returns a representation value
+      that does not correspond to the handle passed in. The fused module
+      uses the wrong representation to access the underlying resource,
+      causing data corruption or cross-component information leakage.
+      Alternatively, thing_new returns a handle that aliases a live
+      handle from a different resource type.
+
+  - id: H-13.4
+    parent: H-13
+    title: Waitable set deadlock
+    description: >
+      waitable_set_wait is called in a single-threaded runtime where no
+      other execution context can produce events. The sole thread blocks
+      permanently, causing the system to hang. This is especially dangerous
+      when the waitable set is empty (no waitables joined) or when all
+      joined waitables are in a terminal state. The single-threaded runtime
+      must use waitable_set_poll (non-blocking) instead, or return an error
+      from waitable_set_wait.
+
+  - id: H-13.5
+    parent: H-13
+    title: Task status misinterpretation
+    description: >
+      A __wasm_export_<iface>_<func>__task_return or task_cancel callback
+      receives or produces an event code or task status constant that does
+      not match the defined constants (EVENT_NONE=0, EVENT_SUBTASK=1,
+      EVENT_STREAM_READ=2, EVENT_STREAM_WRITE=3, EVENT_FUTURE_READ=4,
+      EVENT_FUTURE_WRITE=5, EVENT_CANCELLED=6; TASK_STATUS_STARTING=0,
+      STARTED=1, RETURNED=2, START_CANCELLED=3, RETURN_CANCELLED=4).
+      Misinterpretation causes the caller to take the wrong action: e.g.,
+      treating RETURNED(2) as EVENT_STREAM_READ(2) because both use the
+      value 2 in different enum spaces.
+
   # Refinements of H-9 (CFI)
   - id: H-9.1
     parent: H-9
