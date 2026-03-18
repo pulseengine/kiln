@@ -127,7 +127,6 @@ impl RuntimeModuleBuilder for ModuleBuilder {
         // Create module directly to avoid Module::new()
         let provider = crate::bounded_runtime_infra::create_runtime_provider()
             .expect("Failed to create runtime provider");
-        #[cfg(feature = "std")]
         let module = Module {
             types: Vec::new(),
             imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create imports"),
@@ -136,6 +135,7 @@ impl RuntimeModuleBuilder for ModuleBuilder {
             tables: Vec::new(),
             memories: Vec::new(),
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create globals"),
+            tags: Vec::new(),
             elements: Vec::new(),
             data: Vec::new(),
             start: None,
@@ -149,26 +149,7 @@ impl RuntimeModuleBuilder for ModuleBuilder {
             deferred_global_inits: Vec::new(),
             import_types: Vec::new(),
             num_import_functions: 0,
-        };
-        #[cfg(not(feature = "std"))]
-        let module = Module {
-            types: Vec::new(),
-            imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create imports"),
-            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create import_order"),
-            functions: Vec::new(),
-            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create tables"),
-            memories: Vec::new(),
-            globals: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create globals"),
-            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create elements"),
-            data: kiln_foundation::bounded::BoundedVec::new(provider.clone()).expect("Failed to create data"),
-            start: None,
-            custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).expect("Failed to create custom_sections"),
-            exports: kiln_foundation::direct_map::DirectMap::new(),
-            name: None,
-            binary: None,
-            validated: false,
-            num_global_imports: 0,
-            num_import_functions: 0,
+            gc_types: Vec::new(),
         };
         Self {
             module,
@@ -394,32 +375,20 @@ fn read_leb128_u32(bytecode: &[u8], offset: usize) -> Result<(u32, usize)> {
 
 impl ModuleBuilder {
     /// Creates a new module builder with an existing binary.
-    #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn with_binary(_binary: Vec<u8>) -> Result<Self> {
         // Create module directly to avoid Module::new()
         let provider = crate::bounded_runtime_infra::create_runtime_provider()?;
         let module = Module {
             types: Vec::new(),
             imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            #[cfg(feature = "std")]
             import_order: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             functions: Vec::new(),
-            #[cfg(feature = "std")]
             tables: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
+            tags: Vec::new(),
             elements: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             data: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            data: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
             exports: kiln_foundation::direct_map::DirectMap::new(),
@@ -427,13 +396,11 @@ impl ModuleBuilder {
             binary: None,
             validated: false,
             num_global_imports: 0,
-            #[cfg(feature = "std")]
             global_import_types: Vec::new(),
-            #[cfg(feature = "std")]
             deferred_global_inits: Vec::new(),
-            #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
+            gc_types: Vec::new(),
         };
         Ok(Self {
             module,

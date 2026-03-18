@@ -3962,41 +3962,16 @@ impl ComponentInstance {
                         imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).map_err(|e| {
                             Error::runtime_execution_error("Failed to create imports")
                         })?,
-                        #[cfg(feature = "std")]
                         import_order: Vec::new(),
-                        #[cfg(not(feature = "std"))]
-                        import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
-                            Error::runtime_execution_error("Failed to create import_order")
-                        })?,
                         functions: Vec::new(),
-                        #[cfg(feature = "std")]
                         tables: Vec::new(),
-                        #[cfg(not(feature = "std"))]
-                        tables: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
-                            Error::runtime_execution_error("Failed to create tables")
-                        })?,
                         memories: Vec::new(),
                         globals: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
                             Error::runtime_execution_error("Failed to create globals")
                         })?,
-                        #[cfg(feature = "std")]
                         tags: Vec::new(),
-                        #[cfg(not(feature = "std"))]
-                        tags: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
-                            Error::runtime_execution_error("Failed to create tags")
-                        })?,
-                        #[cfg(feature = "std")]
                         elements: Vec::new(),
-                        #[cfg(not(feature = "std"))]
-                        elements: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
-                            Error::runtime_execution_error("Failed to create elements")
-                        })?,
-                        #[cfg(feature = "std")]
                         data: Vec::new(),
-                        #[cfg(not(feature = "std"))]
-                        data: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
-                            Error::runtime_execution_error("Failed to create data")
-                        })?,
                         start: None,
                         custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).map_err(|e| {
                             Error::runtime_execution_error("Failed to create custom_sections")
@@ -4006,14 +3981,10 @@ impl ComponentInstance {
                         binary: None,
                         validated: false,
                         num_global_imports: 0,
-                        #[cfg(feature = "std")]
                         global_import_types: Vec::new(),
-                        #[cfg(feature = "std")]
                         deferred_global_inits: Vec::new(),
-                        #[cfg(feature = "std")]
                         import_types: Vec::new(),
                         num_import_functions: 0,
-                        #[cfg(feature = "std")]
                         gc_types: Vec::new(),
                     };
                     m.load_from_binary(&binary_clone)

@@ -3,13 +3,7 @@
 // This module provides the core runtime implementation of WebAssembly modules
 // used by the runtime execution engine.
 
-// Use alloc when available through lib.rs
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{
-    format,
-    vec::Vec,
-};
-#[cfg(feature = "std")]
+// Use alloc (re-exported through lib.rs)
 use alloc::{
     format,
     vec::Vec,
@@ -123,11 +117,8 @@ type BoundedImportName = kiln_foundation::bounded::BoundedString<128>;
 type BoundedModuleName = kiln_foundation::bounded::BoundedString<128>;
 type BoundedLocalsVec = kiln_foundation::bounded::BoundedVec<KilnLocalEntry, 256, RuntimeProvider>;
 type BoundedElementItems = kiln_foundation::bounded::BoundedVec<u32, 4096, RuntimeProvider>;
-// Data init storage: Vec in std mode for large segments, BoundedVec in no_std
-#[cfg(feature = "std")]
+// Data init storage: Vec for large segments
 type BoundedDataInit = Vec<u8>;
-#[cfg(not(feature = "std"))]
-type BoundedDataInit = kiln_foundation::bounded::BoundedVec<u8, 16384, RuntimeProvider>;
 // Module types: 512 for ML modules with many tensor operation signatures
 type BoundedModuleTypes =
     kiln_foundation::bounded::BoundedVec<KilnFuncType, 512, RuntimeProvider>;
@@ -142,11 +133,8 @@ type BoundedElementVec = kiln_foundation::bounded::BoundedVec<Element, 512, Runt
 // Data segments limit: 512 for modules with embedded data
 type BoundedDataVec = kiln_foundation::bounded::BoundedVec<Data, 512, RuntimeProvider>;
 
-// Binary storage: Vec in std mode for large modules, BoundedVec in no_std
-#[cfg(feature = "std")]
+// Binary storage: Vec for large modules
 type BoundedBinary = Vec<u8>;
-#[cfg(not(feature = "std"))]
-type BoundedBinary = kiln_foundation::bounded::BoundedVec<u8, 65536, RuntimeProvider>;
 
 /// Convert MemoryType to CoreMemoryType
 fn to_core_memory_type(memory_type: KilnMemoryType) -> CoreMemoryType {
@@ -162,15 +150,7 @@ fn to_core_memory_type(memory_type: KilnMemoryType) -> CoreMemoryType {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct KilnExpr {
     /// Parsed instructions (simplified representation)
-    /// In std mode, use Vec to avoid serialization issues with Instruction enum
-    #[cfg(feature = "std")]
     pub instructions: Vec<kiln_foundation::types::Instruction<RuntimeProvider>>,
-    #[cfg(not(feature = "std"))]
-    pub instructions: kiln_foundation::bounded::BoundedVec<
-        kiln_foundation::types::Instruction<RuntimeProvider>,
-        1024,
-        RuntimeProvider,
-    >,
 }
 
 impl KilnExpr {
@@ -469,7 +449,6 @@ pub struct Element {
     /// Element items (function indices or expressions)
     pub items:        BoundedElementItems,
     /// Deferred item expressions that need global evaluation (e.g., global.get $gf)
-    #[cfg(feature = "std")]
     pub item_exprs:   Vec<(u32, KilnExpr)>, // (item_index, expression)
 }
 
@@ -569,7 +548,6 @@ impl kiln_foundation::traits::FromBytes for Element {
             offset_expr: None,
             element_type: KilnRefType::Funcref,
             items,
-            #[cfg(feature = "std")]
             item_exprs: Vec::new(),
         })
     }
@@ -644,13 +622,7 @@ impl kiln_foundation::traits::FromBytes for Data {
         reader.read_exact(&mut idx_bytes)?;
         let _len = u32::from_le_bytes(idx_bytes);
 
-        #[cfg(feature = "std")]
         let init = Vec::new();
-
-        #[cfg(not(feature = "std"))]
-        let init = BoundedDataInit::new(create_runtime_provider().map_err(|_| {
-            kiln_error::Error::memory_error("Failed to allocate provider for data init")
-        })?)?;
 
         Ok(Self {
             mode,
@@ -663,15 +635,8 @@ impl kiln_foundation::traits::FromBytes for Data {
 
 impl Data {
     /// Returns a reference to the data in this segment
-    #[cfg(feature = "std")]
     pub fn data(&self) -> Result<&[u8]> {
         Ok(&self.init)
-    }
-
-    /// Returns a reference to the data in this segment
-    #[cfg(not(feature = "std"))]
-    pub fn data(&self) -> Result<&[u8]> {
-        self.init.as_slice()
     }
 }
 
@@ -732,57 +697,25 @@ impl GcField {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
     /// Module types (function signatures)
-    /// In std mode, use Vec since KilnFuncType has variable size
-    /// BoundedVec requires fixed-size items but FuncType size varies with params/results
-    #[cfg(feature = "std")]
     pub types:           Vec<KilnFuncType>,
-    #[cfg(not(feature = "std"))]
-    pub types:           BoundedModuleTypes,
     /// Imported functions, tables, memories, and globals
     pub imports:         ModuleImports,
     /// Ordered list of imports for index-based lookup (module_name, field_name)
-    #[cfg(feature = "std")]
     pub import_order:    Vec<(String, String)>,
-    #[cfg(not(feature = "std"))]
-    pub import_order:    kiln_foundation::bounded::BoundedVec<(BoundedImportName, BoundedImportName), 256, RuntimeProvider>,
     /// Function definitions
-    /// In std mode, use Vec since Function has variable size (contains BoundedVecs for locals/instructions)
-    #[cfg(feature = "std")]
     pub functions:       Vec<Function>,
-    #[cfg(not(feature = "std"))]
-    pub functions:       BoundedFunctionVec,
     /// Table instances
-    /// In std mode, use Vec to avoid deserialization issues with Arc<Table>
-    #[cfg(feature = "std")]
     pub tables:          Vec<TableWrapper>,
-    #[cfg(not(feature = "std"))]
-    pub tables:          BoundedTableVec,
     /// Memory instances
-    /// In std mode, use Vec to avoid deserialization on every access
-    #[cfg(feature = "std")]
     pub memories:        Vec<MemoryWrapper>,
-    #[cfg(not(feature = "std"))]
-    pub memories:        BoundedMemoryVec,
     /// Global variable instances
     pub globals:         BoundedGlobalVec,
     /// Exception tag definitions (exception handling proposal)
-    #[cfg(feature = "std")]
     pub tags:            Vec<kiln_foundation::types::TagType>,
-    #[cfg(not(feature = "std"))]
-    pub tags:            kiln_foundation::bounded::BoundedVec<kiln_foundation::types::TagType, 64, RuntimeProvider>,
     /// Element segments for tables
-    /// In std mode, use Vec since Element has variable-size items (BoundedVec)
-    /// and BoundedVec requires fixed-size serialization
-    #[cfg(feature = "std")]
     pub elements:        Vec<Element>,
-    #[cfg(not(feature = "std"))]
-    pub elements:        BoundedElementVec,
     /// Data segments for memories
-    /// In std mode, use Vec since Data has variable size (data_bytes can be large)
-    #[cfg(feature = "std")]
     pub data:            Vec<Data>,
-    #[cfg(not(feature = "std"))]
-    pub data:            BoundedDataVec,
     /// Start function index
     pub start:           Option<u32>,
     /// Custom sections
@@ -798,40 +731,29 @@ pub struct Module {
     /// Number of global imports (for proper global indexing)
     pub num_global_imports: usize,
     /// Types of imported globals (for creating placeholders during instantiation)
-    /// This bypasses the broken nested BoundedMap serialization issue
-    #[cfg(feature = "std")]
     pub global_import_types: Vec<kiln_foundation::types::GlobalType>,
     /// Raw init expression bytes for defined globals (for deferred evaluation)
     /// Stored as (global_type, init_bytes) for each defined global
-    #[cfg(feature = "std")]
     pub deferred_global_inits: Vec<(kiln_foundation::types::GlobalType, Vec<u8>)>,
     /// Types of imports in order (parallels import_order)
     /// This provides fast lookup for import kind detection during linking
-    #[cfg(feature = "std")]
     pub import_types: Vec<RuntimeImportDesc>,
     /// Number of imported functions (set during decoding/loading)
     /// Used by the engine to distinguish import calls from local calls
     pub num_import_functions: usize,
     /// GC type information indexed by type index
     /// Stores struct field info and array element info needed for GC instructions
-    #[cfg(feature = "std")]
     pub gc_types: Vec<GcTypeInfo>,
 }
 
 impl Module {
-    /// Push memory (uniform API for std and no_std)
+    /// Push memory
     pub fn push_memory(&mut self, memory: MemoryWrapper) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            self.memories.push(memory);
-            Ok(())
-        }
-        #[cfg(not(feature = "std"))]
-        self.memories.push(memory)
+        self.memories.push(memory);
+        Ok(())
     }
 
     /// Count the number of tag imports in the module
-    #[cfg(feature = "std")]
     pub fn count_tag_imports(&self) -> usize {
         self.import_types.iter()
             .filter(|desc| matches!(desc, RuntimeImportDesc::Tag(_)))
@@ -842,7 +764,6 @@ impl Module {
     /// Tag indices include both imported and defined tags:
     /// - Indices 0..N-1 are imported tags
     /// - Indices N+ are defined tags
-    #[cfg(feature = "std")]
     pub fn get_tag_type(&self, tag_idx: u32) -> Option<&kiln_foundation::types::TagType> {
         let num_tag_imports = self.count_tag_imports();
         if (tag_idx as usize) < num_tag_imports {
@@ -867,7 +788,6 @@ impl Module {
     /// Evaluate a constant expression and return its value.
     /// Supports both simple const expressions and extended const expressions (WebAssembly 2.0).
     /// Extended const expressions allow i32/i64 add, sub, mul operations.
-    #[cfg(feature = "std")]
     fn evaluate_const_expr(
         init_bytes: &[u8],
         num_global_imports: usize,
@@ -1175,7 +1095,6 @@ impl Module {
     ///
     /// # Returns
     /// A vector of (defined_global_idx, new_value) pairs for globals that were re-evaluated
-    #[cfg(feature = "std")]
     pub fn reevaluate_deferred_globals(
         &self,
         instance_globals: &[GlobalWrapper],
@@ -1223,7 +1142,6 @@ impl Module {
     }
 
     /// Evaluate a constant expression using instance globals (for deferred evaluation)
-    #[cfg(feature = "std")]
     fn evaluate_const_expr_with_instance_globals(
         init_bytes: &[u8],
         num_global_imports: usize,
@@ -1378,29 +1296,14 @@ impl Module {
         Ok(Self {
             types: Vec::new(),
             imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            #[cfg(feature = "std")]
             import_order: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             functions: Vec::new(),
-            #[cfg(feature = "std")]
             tables: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             tags: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            tags: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             elements: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             data: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            data: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
             exports: kiln_foundation::direct_map::DirectMap::new(),
@@ -1408,20 +1311,15 @@ impl Module {
             binary: None,
             validated: false,
             num_global_imports: 0,
-            #[cfg(feature = "std")]
             global_import_types: Vec::new(),
-            #[cfg(feature = "std")]
             deferred_global_inits: Vec::new(),
-            #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
-            #[cfg(feature = "std")]
             gc_types: Vec::new(),
         })
     }
 
     /// Convert a GcStorageType from the format crate to the runtime GcFieldStorage.
-    #[cfg(feature = "std")]
     fn convert_gc_storage_type(st: &kiln_format::module::GcStorageType) -> GcFieldStorage {
         match st {
             kiln_format::module::GcStorageType::I8 => GcFieldStorage::I8,
@@ -1435,7 +1333,6 @@ impl Module {
 
     /// Creates a runtime Module from a `kiln_format::module::Module`.
     /// This is the primary constructor after decoding.
-    #[cfg(feature = "std")]
     pub fn from_kiln_module(kiln_module: &kiln_format::module::Module) -> Result<Box<Self>> {
         // Ensure memory system is initialized before creating providers
         kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
@@ -1524,12 +1421,7 @@ impl Module {
 
             let kiln_func_type = KilnFuncType::new(param_types, result_types)?;
 
-            // In std mode, Vec::push doesn't return Result
-            #[cfg(feature = "std")]
             runtime_module.types.push(kiln_func_type);
-
-            #[cfg(not(feature = "std"))]
-            runtime_module.types.push(kiln_func_type)?;
 
             #[cfg(feature = "tracing")]
             trace!(type_idx = i, total_types = runtime_module.types.len(), "Pushed type");
@@ -1607,31 +1499,22 @@ impl Module {
             runtime_module.imports.insert(bounded_module_256.clone(), inner_map)?;
 
             // Track import order for index-based lookup
-            #[cfg(feature = "std")]
-            {
-                runtime_module.import_order.push((import.module.to_string(), import.name.to_string()));
-                // Also store the import type for fast lookup during linking
-                let import_desc = match &import.desc {
-                    FormatImportDesc::Function(type_idx) => RuntimeImportDesc::Function(*type_idx),
-                    FormatImportDesc::Table(tt) => RuntimeImportDesc::Table(tt.clone()),
-                    FormatImportDesc::Memory(mt) => RuntimeImportDesc::Memory(*mt),
-                    FormatImportDesc::Global(gt) => RuntimeImportDesc::Global(kiln_foundation::types::GlobalType {
-                        value_type: gt.value_type,
-                        mutable: gt.mutable,
-                    }),
-                    FormatImportDesc::Tag(type_idx) => RuntimeImportDesc::Tag(kiln_foundation::types::TagType {
-                        attribute: 0,
-                        type_idx: *type_idx,
-                    }),
-                };
-                runtime_module.import_types.push(import_desc);
-            }
-            #[cfg(not(feature = "std"))]
-            {
-                let order_module = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.module)?;
-                let order_name = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
-                runtime_module.import_order.push((order_module, order_name))?;
-            }
+            runtime_module.import_order.push((import.module.to_string(), import.name.to_string()));
+            // Also store the import type for fast lookup during linking
+            let import_desc = match &import.desc {
+                FormatImportDesc::Function(type_idx) => RuntimeImportDesc::Function(*type_idx),
+                FormatImportDesc::Table(tt) => RuntimeImportDesc::Table(tt.clone()),
+                FormatImportDesc::Memory(mt) => RuntimeImportDesc::Memory(*mt),
+                FormatImportDesc::Global(gt) => RuntimeImportDesc::Global(kiln_foundation::types::GlobalType {
+                    value_type: gt.value_type,
+                    mutable: gt.mutable,
+                }),
+                FormatImportDesc::Tag(type_idx) => RuntimeImportDesc::Tag(kiln_foundation::types::TagType {
+                    attribute: 0,
+                    type_idx: *type_idx,
+                }),
+            };
+            runtime_module.import_types.push(import_desc);
 
             #[cfg(feature = "tracing")]
             trace!(module = %import.module, name = %import.name, "Added import");
@@ -1663,10 +1546,7 @@ impl Module {
                 // Imported function: create with empty locals and empty body
                 let empty_locals = crate::type_conversion::convert_locals_to_bounded_with_provider(&[], shared_provider.clone())?;
                 // Create empty instruction vector directly (don't parse empty bytecode)
-                #[cfg(feature = "std")]
                 let empty_instructions = Vec::new();
-                #[cfg(not(feature = "std"))]
-                let empty_instructions = kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())?;
                 (empty_locals, KilnExpr { instructions: empty_instructions })
             } else {
                 // Local function: convert locals and parse code
@@ -1813,10 +1693,7 @@ impl Module {
             let wrapper = TableWrapper::new(table);
             #[cfg(feature = "tracing")]
             trace!(table_idx = idx, "Pushing to runtime_module.tables");
-            #[cfg(feature = "std")]
             runtime_module.tables.push(wrapper);
-            #[cfg(not(feature = "std"))]
-            runtime_module.tables.push(wrapper)?;
 
             #[cfg(feature = "tracing")]
             trace!(table_idx = idx, total_tables = runtime_module.tables.len(), "Successfully added to runtime_module.tables");
@@ -1950,10 +1827,7 @@ impl Module {
                             shared_provider.clone()
                         )?
                     } else {
-                        #[cfg(feature = "std")]
-                        { Vec::new().into() }
-                        #[cfg(not(feature = "std"))]
-                        { kiln_foundation::bounded::BoundedVec::new(shared_provider.clone())? }
+                        Vec::new().into()
                     };
 
                     (
@@ -1977,25 +1851,7 @@ impl Module {
             #[cfg(feature = "tracing")]
             debug!(data_idx = data_idx, init_bytes_len = init_bytes.len(), "Data segment init bytes");
 
-            // Create init data - Vec in std mode, BoundedVec in no_std
-            #[cfg(feature = "std")]
             let init: Vec<u8> = init_bytes.to_vec();
-
-            #[cfg(not(feature = "std"))]
-            let init = {
-                let data_provider = crate::bounded_runtime_infra::create_runtime_provider()?;
-                let mut bounded_init = kiln_foundation::bounded::BoundedVec::<u8, 16384, RuntimeProvider>::new(data_provider)?;
-                for (byte_idx, byte) in init_bytes.iter().take(16384).enumerate() {
-                    bounded_init.push(*byte).map_err(|e| {
-                        Error::capacity_limit_exceeded("Data segment init too large")
-                    })?;
-                }
-                #[cfg(feature = "tracing")]
-                if init_bytes.len() > 16384 {
-                    warn!(data_idx = data_idx, original_len = init_bytes.len(), truncated_len = 16384, "Data segment truncated");
-                }
-                bounded_init
-            };
 
             let runtime_data = Data {
                 mode,
@@ -2004,18 +1860,9 @@ impl Module {
                 init,
             };
 
-            #[cfg(feature = "std")]
-            {
-                #[cfg(feature = "tracing")]
-                trace!(data_idx = data_idx, current_len = runtime_module.data.len(), "Pushing data segment to runtime_module.data");
-                runtime_module.data.push(runtime_data);
-            }
-            #[cfg(not(feature = "std"))]
-            {
-                runtime_module.data.push(runtime_data).map_err(|e| {
-                    Error::capacity_limit_exceeded("Too many data segments")
-                })?;
-            }
+            #[cfg(feature = "tracing")]
+            trace!(data_idx = data_idx, current_len = runtime_module.data.len(), "Pushing data segment to runtime_module.data");
+            runtime_module.data.push(runtime_data);
             #[cfg(feature = "tracing")]
             debug!(data_idx = data_idx, "Successfully converted data segment");
         }
@@ -2068,7 +1915,6 @@ impl Module {
             // Extract function indices from element init data
             let provider = crate::bounded_runtime_infra::create_runtime_provider()?;
             let mut items = BoundedElementItems::new(provider)?;
-            #[cfg(feature = "std")]
             let mut deferred_item_exprs: Vec<(u32, KilnExpr)> = Vec::new();
 
             match &elem_seg.init_data {
@@ -2116,38 +1962,28 @@ impl Module {
                             0x23 => {
                                 // global.get instruction - defer evaluation
                                 // Store the expression for later evaluation during element init
-                                #[cfg(feature = "std")]
-                                {
-                                    let (global_idx, _) = crate::instruction_parser::read_leb128_u32(expr, 1)?;
-                                    #[cfg(feature = "tracing")]
-                                    trace!(elem_offset = offset_value + i as u32, global_idx = global_idx, "Element item = global.get (deferred)");
-                                    let expr_insts = crate::instruction_parser::parse_instructions_with_provider(
-                                        expr.as_slice(),
-                                        shared_provider.clone()
-                                    )?;
-                                    deferred_item_exprs.push((i as u32, KilnExpr { instructions: expr_insts }));
-                                    // Push placeholder for deferred item
-                                    items.push(u32::MAX - 1)?;  // Sentinel for deferred evaluation
-                                }
+                                let (global_idx, _) = crate::instruction_parser::read_leb128_u32(expr, 1)?;
+                                #[cfg(feature = "tracing")]
+                                trace!(elem_offset = offset_value + i as u32, global_idx = global_idx, "Element item = global.get (deferred)");
+                                let expr_insts = crate::instruction_parser::parse_instructions_with_provider(
+                                    expr.as_slice(),
+                                    shared_provider.clone()
+                                )?;
+                                deferred_item_exprs.push((i as u32, KilnExpr { instructions: expr_insts }));
+                                // Push placeholder for deferred item
+                                items.push(u32::MAX - 1)?;  // Sentinel for deferred evaluation
                             }
                             _ => {
                                 // Non-trivial expression (e.g., i32.const + ref.i31, struct.new, etc.)
                                 // Defer to item_exprs for full evaluation during initialization
-                                #[cfg(feature = "std")]
-                                {
-                                    #[cfg(feature = "tracing")]
-                                    trace!(elem_offset = offset_value + i as u32, opcode = format_args!("0x{:02X}", expr[0]), "Element item = expression (deferred)");
-                                    let expr_insts = crate::instruction_parser::parse_instructions_with_provider(
-                                        expr.as_slice(),
-                                        shared_provider.clone()
-                                    )?;
-                                    deferred_item_exprs.push((i as u32, KilnExpr { instructions: expr_insts }));
-                                    items.push(u32::MAX - 1)?;  // Sentinel for deferred evaluation
-                                }
-                                #[cfg(not(feature = "std"))]
-                                {
-                                    items.push(u32::MAX)?;
-                                }
+                                #[cfg(feature = "tracing")]
+                                trace!(elem_offset = offset_value + i as u32, opcode = format_args!("0x{:02X}", expr[0]), "Element item = expression (deferred)");
+                                let expr_insts = crate::instruction_parser::parse_instructions_with_provider(
+                                    expr.as_slice(),
+                                    shared_provider.clone()
+                                )?;
+                                deferred_item_exprs.push((i as u32, KilnExpr { instructions: expr_insts }));
+                                items.push(u32::MAX - 1)?;  // Sentinel for deferred evaluation
                             }
                         }
                     }
@@ -2174,18 +2010,12 @@ impl Module {
                 offset_expr,
                 element_type: elem_seg.element_type,
                 items,
-                #[cfg(feature = "std")]
                 item_exprs: deferred_item_exprs,
             };
 
-            #[cfg(feature = "std")]
-            {
-                runtime_module.elements.push(runtime_elem);
-                #[cfg(feature = "tracing")]
-                trace!(elem_idx = elem_idx, total_elements = runtime_module.elements.len(), "Element segment converted");
-            }
-            #[cfg(not(feature = "std"))]
-            runtime_module.elements.push(runtime_elem)?;
+            runtime_module.elements.push(runtime_elem);
+            #[cfg(feature = "tracing")]
+            trace!(elem_idx = elem_idx, total_elements = runtime_module.elements.len(), "Element segment converted");
         }
         #[cfg(feature = "tracing")]
         debug!(total_elements = runtime_module.elements.len(), "Element segment conversion complete");
@@ -2207,494 +2037,6 @@ impl Module {
         Ok(Box::new(runtime_module))
     }
 
-    /// Creates a runtime Module from a `kiln_format::module::Module` in no_std
-    /// environments. This handles the generic provider type from the
-    /// decoder.
-    #[cfg(not(feature = "std"))]
-    pub fn from_kiln_module_nostd(kiln_module: &kiln_format::module::Module) -> Result<Self> {
-        // Ensure memory system is initialized before creating providers
-        kiln_foundation::memory_init::MemoryInitializer::ensure_initialized()?;
-
-        // Use empty() instead of new() to avoid memory allocation during initialization
-        let mut runtime_module = Self::empty();
-
-        // Map start function if present
-        runtime_module.start = kiln_module.start;
-
-        // Convert types
-        #[cfg(feature = "tracing")]
-        debug!(type_count = kiln_module.types.len(), "Module::from_format: Converting types");
-
-        for (i, func_type) in kiln_module.types.iter().enumerate() {
-            let _provider = create_runtime_provider()?;
-
-            #[cfg(feature = "tracing")]
-            trace!(type_idx = i, params_len = func_type.params.len(), results_len = func_type.results.len(), "Module::from_format: Converting type");
-
-            let kiln_func_type = KilnFuncType::new(
-                func_type.params.iter().copied(),
-                func_type.results.iter().copied()
-            )?;
-
-            runtime_module.types.push(kiln_func_type)?;
-
-            #[cfg(feature = "tracing")]
-            trace!(type_idx = i, total_types = runtime_module.types.len(), "Module::from_format: Pushed type");
-        }
-
-        #[cfg(feature = "tracing")]
-        debug!(total_types = runtime_module.types.len(), "Module::from_format: Done converting types");
-
-        // Convert imports
-        #[cfg(feature = "tracing")]
-        debug!(import_count = kiln_module.imports.len(), "Processing imports from kiln_module");
-
-        let mut global_import_count = 0usize;
-        for import in &kiln_module.imports {
-            let desc = match &import.desc {
-                FormatImportDesc::Function(type_idx) => RuntimeImportDesc::Function(*type_idx),
-                FormatImportDesc::Table(tt) => RuntimeImportDesc::Table(tt.clone()),
-                FormatImportDesc::Memory(mt) => RuntimeImportDesc::Memory(*mt),
-                FormatImportDesc::Global(gt) => {
-                    global_import_count += 1;
-                    RuntimeImportDesc::Global(kiln_foundation::types::GlobalType {
-                        value_type: gt.value_type,
-                        mutable:    gt.mutable,
-                    })
-                },
-                FormatImportDesc::Tag(tag_idx) => {
-                    // Handle Tag import - convert to appropriate runtime representation
-                    return Err(Error::parse_error("Tag imports not yet supported"));
-                },
-            };
-
-            // Convert string to BoundedString - need different sizes for different use
-            // cases
-            // 128-char strings for Import struct fields
-            let bounded_module_128 = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                &import.module
-            )?;
-            let bounded_name_128 =
-                kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
-
-            // 256-char strings for map keys
-            let bounded_module_256 = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                &import.module
-            )?;
-            let bounded_name_256 =
-                kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
-
-            let import_entry = Import {
-                module: bounded_module_128,
-                name: bounded_name_128,
-                ty: kiln_foundation::component::ExternType::default(),
-                desc,
-            };
-
-            // Get or create inner map for this module
-            let mut inner_map = match runtime_module.imports.get(&bounded_module_256)? {
-                Some(existing) => existing,
-                None => ImportMap::new(create_runtime_provider()?)?,
-            };
-
-            // Insert the import into the inner map
-            inner_map.insert(bounded_name_256, import_entry)?;
-
-            // Update the outer map
-            runtime_module.imports.insert(bounded_module_256.clone(), inner_map)?;
-
-            // Track import order for index-based lookup
-            #[cfg(feature = "std")]
-            runtime_module.import_order.push((import.module.to_string(), import.name.to_string()));
-            #[cfg(not(feature = "std"))]
-            {
-                let order_module = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.module)?;
-                let order_name = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
-                runtime_module.import_order.push((order_module, order_name))?;
-            }
-
-            #[cfg(feature = "tracing")]
-            trace!(module = %import.module, name = %import.name, "Added import");
-        }
-
-        // Set the count of global imports for proper index space mapping
-        runtime_module.num_global_imports = global_import_count;
-
-        // Count function imports for the engine's import/local call distinction
-        runtime_module.num_import_functions = kiln_module.imports.iter()
-            .filter(|imp| matches!(imp.desc, FormatImportDesc::Function(_)))
-            .count();
-
-        // Convert functions
-        for function in &kiln_module.functions {
-            runtime_module.push_function(Function {
-                type_idx: function.type_idx,
-                locals:   crate::type_conversion::convert_locals_to_bounded(&function.locals)?,
-                // Body conversion would happen here
-                body:     KilnExpr::default(),
-            })?;
-        }
-
-        // Convert tables
-        #[cfg(feature = "tracing")]
-        debug!(table_count = kiln_module.tables.len(), "Converting tables from kiln_module");
-        for (idx, table) in kiln_module.tables.iter().enumerate() {
-            #[cfg(feature = "tracing")]
-            trace!(table_idx = idx, table_type = ?table, "Creating table");
-            let wrapper = TableWrapper::new(Table::new(table.clone())?);
-            #[cfg(feature = "std")]
-            runtime_module.tables.push(wrapper);
-            #[cfg(not(feature = "std"))]
-            runtime_module.tables.push(wrapper)?;
-        }
-        #[cfg(feature = "tracing")]
-        debug!(total_tables = runtime_module.tables.len(), "Tables converted");
-
-        // Convert memories
-        for memory in &kiln_module.memories {
-            runtime_module
-                .memories
-                .push(MemoryWrapper::new(Memory::new(to_core_memory_type(
-                    *memory,
-                ))?))?;
-        }
-
-        // Convert globals
-        for global in &kiln_module.globals {
-            // For now, use a default initial value based on type
-            let initial_value = match global.global_type.value_type {
-                kiln_foundation::types::ValueType::I32 => kiln_foundation::values::Value::I32(0),
-                kiln_foundation::types::ValueType::I64 => kiln_foundation::values::Value::I64(0),
-                kiln_foundation::types::ValueType::F32 => kiln_foundation::values::Value::F32(
-                    kiln_foundation::values::FloatBits32::from_bits(0),
-                ),
-                kiln_foundation::types::ValueType::F64 => kiln_foundation::values::Value::F64(
-                    kiln_foundation::values::FloatBits64::from_bits(0),
-                ),
-                _ => {
-                    return Err(Error::not_supported_unsupported_operation(
-                        "Unsupported global type",
-                    ))
-                },
-            };
-
-            let new_global = Global::new(
-                global.global_type.value_type,
-                global.global_type.mutable,
-                initial_value,
-            )?;
-            runtime_module.globals.push(GlobalWrapper(Arc::new(RwLock::new(new_global))))?;
-        }
-
-        // Convert tags (exception handling proposal)
-        #[cfg(feature = "tracing")]
-        debug!(tag_count = kiln_module.tags.len(), "Converting tags from kiln_module (nostd)");
-        for tag_type in &kiln_module.tags {
-            #[cfg(feature = "std")]
-            runtime_module.tags.push(tag_type.clone());
-            #[cfg(not(feature = "std"))]
-            runtime_module.tags.push(tag_type.clone())?;
-        }
-
-        // Convert exports
-        for export in &kiln_module.exports {
-            let kind = match export.kind {
-                FormatExportKind::Function => ExportKind::Function,
-                FormatExportKind::Table => ExportKind::Table,
-                FormatExportKind::Memory => ExportKind::Memory,
-                FormatExportKind::Global => ExportKind::Global,
-                FormatExportKind::Tag => ExportKind::Tag,
-            };
-
-            // Create the export name with runtime provider
-            let export_name =
-                kiln_foundation::bounded::BoundedString::from_str_truncate(&export.name)?;
-
-            let export_obj = Export {
-                name: export_name.clone(),
-                kind,
-                index: export.index,
-            };
-
-            // Insert into the exports map using the export name as key
-            let map_key =
-                kiln_foundation::bounded::BoundedString::from_str_truncate(&export.name)?;
-            runtime_module.exports.insert(map_key, export_obj)?;
-        }
-
-        Ok(Box::new(runtime_module))
-    }
-
-    /// Creates a runtime Module from a `kiln_foundation::types::Module`.
-    /// This is the primary constructor after decoding for no_std.
-    #[cfg(not(feature = "std"))]
-    pub fn from_kiln_foundation_module(
-        kiln_module: &kiln_foundation::types::Module<RuntimeProvider>,
-    ) -> Result<Self> {
-        let mut runtime_module = Self::new()?;
-
-        // TODO: kiln_module doesn't have a name field currently
-        // if let Some(name) = &kiln_module.name {
-        //     runtime_module.name = Some(name.clone());
-        // }
-        // Map start function if present
-        runtime_module.start = kiln_module.start_func;
-
-        for type_def in &kiln_module.types {
-            runtime_module.types.push(type_def.clone())?;
-        }
-
-        for import_def in &kiln_module.imports {
-            let extern_ty = match &import_def.desc {
-                KilnImportDesc::Function(type_idx) => {
-                    let ft = runtime_module
-                        .types
-                        .get(*type_idx as usize)
-                        .map_err(|_| {
-                            Error::validation_type_mismatch(
-                                "Imported function type index out of bounds",
-                            )
-                        })?
-                        .clone();
-                    ExternType::Func(ft)
-                },
-                KilnImportDesc::Table(tt) => ExternType::Table(tt.clone()),
-                KilnImportDesc::Memory(mt) => ExternType::Memory(*mt),
-                KilnImportDesc::Global(gt) => {
-                    ExternType::Global(kiln_foundation::types::GlobalType {
-                        value_type: gt.value_type,
-                        mutable:    gt.mutable,
-                    })
-                },
-                KilnImportDesc::Extern(_) => {
-                    return Err(Error::not_supported_unsupported_operation(
-                        "Extern imports not supported",
-                    ))
-                },
-                KilnImportDesc::Resource(_) => {
-                    return Err(Error::not_supported_unsupported_operation(
-                        "Resource imports not supported",
-                    ))
-                },
-                _ => {
-                    return Err(Error::not_supported_unsupported_operation(
-                        "Unsupported import type",
-                    ))
-                },
-            };
-            // Create bounded strings for the import - avoid as_str() which is broken in
-            // no_std For now, use empty strings as placeholders since as_str()
-            // is broken
-            let module_key_256: kiln_foundation::bounded::BoundedString<256> =
-                kiln_foundation::bounded::BoundedString::from_str_truncate(
-                    "" // TODO: copy from import_def.module_name when as_str() is fixed
-                )?;
-            let module_key_128: kiln_foundation::bounded::BoundedString<128> =
-                kiln_foundation::bounded::BoundedString::from_str_truncate(
-                    "" // TODO: copy from import_def.module_name when as_str() is fixed
-                )?;
-            let name_key_256: kiln_foundation::bounded::BoundedString<256> =
-                kiln_foundation::bounded::BoundedString::from_str_truncate(
-                    "" // TODO: copy from import_def.item_name when as_str() is fixed
-                )?;
-            let name_key_128: kiln_foundation::bounded::BoundedString<128> =
-                kiln_foundation::bounded::BoundedString::from_str_truncate(
-                    "" // TODO: copy from import_def.item_name when as_str() is fixed
-                )?;
-
-            // Create import directly to avoid as_str() conversion issues
-            let import = crate::module::Import {
-                module: module_key_128,
-                name:   name_key_128,
-                ty:     extern_ty.clone(),
-                desc:   match &extern_ty {
-                    ExternType::Func(_) => RuntimeImportDesc::Function(0),
-                    ExternType::Table(table_type) => RuntimeImportDesc::Table(table_type.clone()),
-                    ExternType::Memory(memory_type) => {
-                        RuntimeImportDesc::Memory(memory_type.clone())
-                    },
-                    ExternType::Global(global_type) => {
-                        RuntimeImportDesc::Global(global_type.clone())
-                    },
-                    ExternType::Tag(_) => RuntimeImportDesc::Function(0),
-                    ExternType::Component(_) => RuntimeImportDesc::Function(0),
-                    ExternType::Instance(_) => RuntimeImportDesc::Function(0),
-                    ExternType::CoreModule(_) => RuntimeImportDesc::Function(0),
-                    ExternType::TypeDef(_) => RuntimeImportDesc::Function(0),
-                    ExternType::Resource(_) => RuntimeImportDesc::Function(0),
-                },
-            };
-            let provider = create_runtime_provider()?;
-            let mut inner_map = BoundedMap::new(provider)?;
-            inner_map.insert(name_key_256, import)?;
-            runtime_module.imports.insert(module_key_256, inner_map)?;
-        }
-
-        // Binary std/no_std choice
-        // The actual bodies are filled by kiln_module.code_entries
-        // Clear existing functions and prepare for new ones
-        for code_entry in &kiln_module.func_bodies {
-            // Find the corresponding type_idx from kiln_module.functions.
-            // This assumes kiln_module.functions has the type indices for functions defined
-            // in this module, and kiln_module.code_entries aligns with this.
-            // A direct link or combined struct in kiln_foundation::Module would be better.
-            // For now, we assume that the i-th code_entry corresponds to the i-th func type
-            // index in kiln_module.functions (after accounting for imported
-            // functions). This needs clarification in kiln_foundation::Module structure.
-            // Let's assume kiln_module.functions contains type indices for *defined*
-            // functions and code_entries matches this.
-            let func_idx_in_defined_funcs = runtime_module.functions.len(); // 0-indexed among defined functions
-            if func_idx_in_defined_funcs >= kiln_module.functions.len() {
-                return Err(Error::validation_error(
-                    "Mismatch between code entries and function type declarations",
-                ));
-            }
-            let type_idx = kiln_module.functions.get(func_idx_in_defined_funcs).map_err(|_| {
-                Error::validation_function_not_found("Function index out of bounds")
-            })?;
-
-            // Convert locals from foundation format to runtime format
-            let provider = create_runtime_provider()?;
-            let mut runtime_locals =
-                kiln_foundation::bounded::BoundedVec::<KilnLocalEntry, 256, RuntimeProvider>::new(
-                    provider,
-                )?;
-            for local in &code_entry.locals {
-                if runtime_locals.push(local).is_err() {
-                    return Err(Error::runtime_execution_error(
-                        "Runtime execution error: locals capacity exceeded",
-                    ));
-                }
-            }
-
-            // Convert body to KilnExpr
-            // For now, just use the default empty expression
-            // TODO: Properly convert the instruction sequence
-            let runtime_body = KilnExpr::default();
-
-            runtime_module.push_function(Function {
-                type_idx,
-                locals: runtime_locals,
-                body: runtime_body,
-            })?;
-        }
-
-        for table_def in &kiln_module.tables {
-            // For now, runtime tables are created empty and populated by element segments
-            // or host. This assumes runtime::table::Table::new can take
-            // KilnTableType.
-            let wrapper = TableWrapper::new(Table::new(table_def.clone())?);
-            #[cfg(feature = "std")]
-            runtime_module.tables.push(wrapper);
-            #[cfg(not(feature = "std"))]
-            runtime_module.tables.push(wrapper)?;
-        }
-
-        for memory_def in &kiln_module.memories {
-            runtime_module
-                .memories
-                .push(MemoryWrapper::new(Memory::new(to_core_memory_type(
-                    memory_def,
-                ))?))?;
-        }
-
-        for global_def in &kiln_module.globals {
-            // GlobalType only has value_type and mutable, no initial_value
-            // For now, create a default initial value based on the type
-            let default_value = match global_def.value_type {
-                ValueType::I32 => Value::I32(0),
-                ValueType::I64 => Value::I64(0),
-                ValueType::F32 => Value::F32(kiln_foundation::FloatBits32::from_float(0.0)),
-                ValueType::F64 => Value::F64(kiln_foundation::FloatBits64::from_float(0.0)),
-                ValueType::FuncRef => Value::FuncRef(None),
-                ValueType::ExternRef => Value::ExternRef(None),
-                ValueType::V128 => {
-                    return Err(Error::not_supported_unsupported_operation(
-                        "V128 globals not supported",
-                    ))
-                },
-                ValueType::I16x8 => {
-                    return Err(Error::not_supported_unsupported_operation(
-                        "I16x8 globals not supported",
-                    ))
-                },
-                ValueType::StructRef(_) => {
-                    return Err(Error::not_supported_unsupported_operation(
-                        "StructRef globals not supported",
-                    ))
-                },
-                _ => {
-                    return Err(Error::not_supported_unsupported_operation(
-                        "Unsupported global value type",
-                    ))
-                },
-            };
-
-            runtime_module.globals.push(GlobalWrapper::new(Global::new(
-                global_def.value_type,
-                global_def.mutable,
-                default_value,
-            )?))?;
-        }
-
-        // Convert tags (exception handling proposal)
-        // Note: kiln_foundation Module doesn't have tags yet, so this is a placeholder
-        // Tags would be added when kiln_foundation::types::Module gets a tags field
-
-        for export_def in &kiln_module.exports {
-            let (kind, index) = match &export_def.ty {
-                kiln_foundation::component::ExternType::Func(_) => {
-                    // For functions, we need to find the index in the function list
-                    // This is a simplified approach - in practice we'd need proper index tracking
-                    (ExportKind::Function, 0) // TODO: proper function index
-                                              // tracking
-                },
-                kiln_foundation::component::ExternType::Table(_) => {
-                    (ExportKind::Table, 0) // TODO: proper table index tracking
-                },
-                kiln_foundation::component::ExternType::Memory(_) => {
-                    (ExportKind::Memory, 0) // TODO: proper memory index
-                                            // tracking
-                },
-                kiln_foundation::component::ExternType::Global(_) => {
-                    (ExportKind::Global, 0) // TODO: proper global index
-                                            // tracking
-                },
-                kiln_foundation::component::ExternType::Tag(_) => {
-                    return Err(Error::not_supported_unsupported_operation(
-                        "Tag exports not supported",
-                    ))
-                },
-                _ => {
-                    return Err(Error::not_supported_unsupported_operation(
-                        "Unsupported export type",
-                    ))
-                },
-            };
-            let name_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                export_def.name.as_str()?,
-            )?;
-            let export = crate::module::Export::new(name_key.as_str()?, kind, index)?;
-            runtime_module.exports.insert(name_key, export)?;
-        }
-
-        // TODO: Element segments are not yet available in kiln_foundation Module
-        // This will need to be implemented once element segments are added to the
-        // Module struct
-
-        // TODO: Data segments are not yet available in kiln_foundation Module
-        // This will need to be implemented once data segments are added to the Module
-        // struct
-
-        for custom_def in &kiln_module.custom_sections {
-            let name_key = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                custom_def.name.as_str()?,
-            )?;
-            runtime_module.custom_sections.insert(name_key, custom_def.data.clone())?;
-        }
-
-        Ok(runtime_module)
-    }
 
     /// Gets an export by name
     pub fn get_export(&self, name: &str) -> Option<Export> {
@@ -2710,21 +2052,13 @@ impl Module {
         if idx as usize >= self.functions.len() {
             return None;
         }
-        #[cfg(feature = "std")]
-        return self.functions.get(idx as usize).cloned();
-        #[cfg(not(feature = "std"))]
-        return self.functions.get(idx as usize).ok();
+        self.functions.get(idx as usize).cloned()
     }
 
-    /// Helper method to push function - abstracts Vec vs BoundedVec difference
+    /// Helper method to push function
     pub fn push_function(&mut self, func: Function) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            self.functions.push(func);
-            Ok(())
-        }
-        #[cfg(not(feature = "std"))]
-        self.functions.push(func).map_err(|e| e.into())
+        self.functions.push(func);
+        Ok(())
     }
 
     /// Gets a function type by index
@@ -2732,14 +2066,7 @@ impl Module {
         if idx as usize >= self.types.len() {
             return None;
         }
-
-        // In std mode, types is Vec so get() returns Option<&T>
-        #[cfg(feature = "std")]
-        return self.types.get(idx as usize).cloned();
-
-        // In no_std mode, types is BoundedVec so get() returns Result<T>
-        #[cfg(not(feature = "std"))]
-        self.types.get(idx as usize).ok()
+        self.types.get(idx as usize).cloned()
     }
 
     /// Gets a global by index
@@ -2750,7 +2077,6 @@ impl Module {
     }
 
     /// Gets a memory by index
-    #[cfg(feature = "std")]
     pub fn get_memory(&self, idx: usize) -> Result<&MemoryWrapper> {
         self.memories.get(idx).ok_or_else(|| {
             Error::new(
@@ -2761,103 +2087,43 @@ impl Module {
         })
     }
 
-    #[cfg(not(feature = "std"))]
-    pub fn get_memory(&self, idx: usize) -> Result<MemoryWrapper> {
-        self.memories.get(idx).map_err(|_| {
-            Error::new(
-                ErrorCategory::Runtime,
-                kiln_error::codes::MEMORY_NOT_FOUND,
-                "Memory index out of bounds",
-            )
-        })
-    }
-
     /// Gets a table by index
     pub fn get_table(&self, idx: usize) -> Result<TableWrapper> {
-        #[cfg(feature = "std")]
-        {
-            self.tables
-                .get(idx)
-                .cloned()
-                .ok_or_else(|| Error::runtime_execution_error("Table index out of bounds"))
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            self.tables
-                .get(idx)
-                .map_err(|_| Error::runtime_execution_error("Table index out of bounds"))
-        }
+        self.tables
+            .get(idx)
+            .cloned()
+            .ok_or_else(|| Error::runtime_execution_error("Table index out of bounds"))
     }
 
     /// Adds a function export
     pub fn add_function_export(&mut self, name: &str, index: u32) -> Result<()> {
         let export = Export::new(name, ExportKind::Function, index)?;
-        #[cfg(feature = "std")]
-        {
-            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                name)?;
-            self.exports.insert(bounded_name, export)?;
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                &name)?;
-            self.exports.insert(bounded_name, export)?;
-        }
+        let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(name)?;
+        self.exports.insert(bounded_name, export)?;
         Ok(())
     }
 
     /// Adds a table export
     pub fn add_table_export(&mut self, name: &str, index: u32) -> Result<()> {
         let export = Export::new(name, ExportKind::Table, index)?;
-        #[cfg(feature = "std")]
-        {
-            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                name)?;
-            self.exports.insert(bounded_name, export)?;
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                &name)?;
-            self.exports.insert(bounded_name, export)?;
-        }
+        let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(name)?;
+        self.exports.insert(bounded_name, export)?;
         Ok(())
     }
 
     /// Adds a memory export
     pub fn add_memory_export(&mut self, name: &str, index: u32) -> Result<()> {
         let export = Export::new(name, ExportKind::Memory, index)?;
-        #[cfg(feature = "std")]
-        {
-            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                name)?;
-            self.exports.insert(bounded_name, export)?;
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                &name)?;
-            self.exports.insert(bounded_name, export)?;
-        }
+        let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(name)?;
+        self.exports.insert(bounded_name, export)?;
         Ok(())
     }
 
     /// Adds a global export
     pub fn add_global_export(&mut self, name: &str, index: u32) -> Result<()> {
         let export = Export::new(name, ExportKind::Global, index)?;
-        #[cfg(feature = "std")]
-        {
-            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                name)?;
-            self.exports.insert(bounded_name, export)?;
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                &name)?;
-            self.exports.insert(bounded_name, export)?;
-        }
+        let bounded_name = kiln_foundation::bounded::BoundedString::from_str_truncate(name)?;
+        self.exports.insert(bounded_name, export)?;
         Ok(())
     }
 
@@ -2901,19 +2167,8 @@ impl Module {
 
     /// Add a function type to the module
     pub fn add_type(&mut self, ty: KilnFuncType) -> Result<()> {
-        // In std mode, Vec::push doesn't return Result
-        #[cfg(feature = "std")]
-        {
-            self.types.push(ty);
-            Ok(())
-        }
-
-        // In no_std mode, BoundedVec::push returns Result
-        #[cfg(not(feature = "std"))]
-        {
-            self.types.push(ty)?;
-            Ok(())
-        }
+        self.types.push(ty);
+        Ok(())
     }
 
     /// Add a function import to the module
@@ -2923,23 +2178,11 @@ impl Module {
         item_name: &str,
         type_idx: u32,
     ) -> Result<()> {
-        // In std mode, types is Vec so get() returns Option<&T>
-        #[cfg(feature = "std")]
         let func_type = self
             .types
             .get(type_idx as usize)
             .cloned()
             .ok_or_else(|| Error::validation_type_mismatch("Type index out of bounds for import func"))?;
-
-        // In no_std mode, types is BoundedVec so get() returns Result<T>
-        #[cfg(not(feature = "std"))]
-        let func_type = self
-            .types
-            .get(type_idx as usize)
-            .map_err(|_| {
-                Error::validation_type_mismatch("Type index out of bounds for import func")
-            })?
-            .clone();
 
         let import_struct = crate::module::Import::new(
             module_name,
@@ -2947,39 +2190,18 @@ impl Module {
             ExternType::Func(func_type),
             RuntimeImportDesc::Function(0), // Function index would need to be determined properly
         )?;
-        #[cfg(feature = "std")]
-        {
-            // Convert to bounded strings
-            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                module_name)?;
-            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                item_name)?;
+        let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
+            module_name)?;
+        let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
+            item_name)?;
 
-            // For BoundedMap, we need to handle the nested map differently
-            // First check if module exists
-            let mut inner_map = match self.imports.get(&bounded_module)? {
-                Some(existing) => existing,
-                None => ImportMap::new(create_runtime_provider()?)?,
-            };
+        let mut inner_map = match self.imports.get(&bounded_module)? {
+            Some(existing) => existing,
+            None => ImportMap::new(create_runtime_provider()?)?,
+        };
 
-            // Insert the import into the inner map
-            let _ = inner_map.insert(bounded_item, import_struct)?;
-
-            // Update the outer map
-            let _ = self.imports.insert(bounded_module, inner_map)?;
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                module_name)?;
-            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                item_name)?;
-            // BoundedMap doesn't support get_mut, so we'll use a simpler approach
-            let provider = create_runtime_provider()?;
-            let mut inner_map = BoundedMap::new(provider)?;
-            let _ = inner_map.insert(bounded_item, import_struct)?;
-            let _ = self.imports.insert(bounded_module, inner_map)?;
-        }
+        let _ = inner_map.insert(bounded_item, import_struct)?;
+        let _ = self.imports.insert(bounded_module, inner_map)?;
         Ok(())
     }
 
@@ -2996,39 +2218,16 @@ impl Module {
             ExternType::Table(table_type.clone()),
             RuntimeImportDesc::Table(table_type),
         )?;
-        #[cfg(feature = "std")]
-        {
-            // Convert to bounded strings
-            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                module_name)?;
-            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                item_name)?;
-
-            // For BoundedMap, we need to handle the nested map differently
-            // First check if module exists
-            let mut inner_map = match self.imports.get(&bounded_module)? {
-                Some(existing) => existing,
-                None => ImportMap::new(create_runtime_provider()?)?,
-            };
-
-            // Insert the import into the inner map
-            let _ = inner_map.insert(bounded_item, import_struct)?;
-
-            // Update the outer map
-            let _ = self.imports.insert(bounded_module, inner_map)?;
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                module_name)?;
-            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                item_name)?;
-            // BoundedMap doesn't support get_mut, so we'll use a simpler approach
-            let provider = create_runtime_provider()?;
-            let mut inner_map = BoundedMap::new(provider)?;
-            let _ = inner_map.insert(bounded_item, import_struct)?;
-            let _ = self.imports.insert(bounded_module, inner_map)?;
-        }
+        let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
+            module_name)?;
+        let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
+            item_name)?;
+        let mut inner_map = match self.imports.get(&bounded_module)? {
+            Some(existing) => existing,
+            None => ImportMap::new(create_runtime_provider()?)?,
+        };
+        let _ = inner_map.insert(bounded_item, import_struct)?;
+        let _ = self.imports.insert(bounded_module, inner_map)?;
         Ok(())
     }
 
@@ -3045,39 +2244,16 @@ impl Module {
             ExternType::Memory(memory_type),
             RuntimeImportDesc::Memory(memory_type),
         )?;
-        #[cfg(feature = "std")]
-        {
-            // Convert to bounded strings
-            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                module_name)?;
-            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                item_name)?;
-
-            // For BoundedMap, we need to handle the nested map differently
-            // First check if module exists
-            let mut inner_map = match self.imports.get(&bounded_module)? {
-                Some(existing) => existing,
-                None => ImportMap::new(create_runtime_provider()?)?,
-            };
-
-            // Insert the import into the inner map
-            let _ = inner_map.insert(bounded_item, import_struct)?;
-
-            // Update the outer map
-            let _ = self.imports.insert(bounded_module, inner_map)?;
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                module_name)?;
-            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                item_name)?;
-            // BoundedMap doesn't support get_mut, so we'll use a simpler approach
-            let provider = create_runtime_provider()?;
-            let mut inner_map = BoundedMap::new(provider)?;
-            let _ = inner_map.insert(bounded_item, import_struct)?;
-            let _ = self.imports.insert(bounded_module, inner_map)?;
-        }
+        let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
+            module_name)?;
+        let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
+            item_name)?;
+        let mut inner_map = match self.imports.get(&bounded_module)? {
+            Some(existing) => existing,
+            None => ImportMap::new(create_runtime_provider()?)?,
+        };
+        let _ = inner_map.insert(bounded_item, import_struct)?;
+        let _ = self.imports.insert(bounded_module, inner_map)?;
         Ok(())
     }
 
@@ -3133,10 +2309,7 @@ impl Module {
     /// Add a table to the module
     pub fn add_table(&mut self, table_type: KilnTableType) -> Result<()> {
         let wrapper = TableWrapper::new(Table::new(table_type)?);
-        #[cfg(feature = "std")]
         self.tables.push(wrapper);
-        #[cfg(not(feature = "std"))]
-        self.tables.push(wrapper)?;
         Ok(())
     }
 
@@ -3246,19 +2419,14 @@ impl Module {
             offset_expr: None, // Would need to convert from element.mode offset_expr
             element_type: element.element_type,
             items,
-            #[cfg(feature = "std")]
             item_exprs: Vec::new(),
         };
 
-        #[cfg(feature = "std")]
         self.elements.push(runtime_element);
-        #[cfg(not(feature = "std"))]
-        self.elements.push(runtime_element)?;
         Ok(())
     }
 
     /// Set a function body
-    #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn set_function_body(
         &mut self,
         func_idx: u32,
@@ -3291,19 +2459,10 @@ impl Module {
         if func_idx as usize == self.functions.len() {
             self.push_function(func_entry)?;
         } else {
-            #[cfg(feature = "std")]
-            {
-                if (func_idx as usize) < self.functions.len() {
-                    self.functions[func_idx as usize] = func_entry;
-                } else {
-                    return Err(Error::runtime_component_limit_exceeded("Function index out of bounds"));
-                }
-            }
-            #[cfg(not(feature = "std"))]
-            {
-                let _ = self.functions.set(func_idx as usize, func_entry).map_err(|_| {
-                    Error::runtime_component_limit_exceeded("Failed to set function entry")
-                })?;
+            if (func_idx as usize) < self.functions.len() {
+                self.functions[func_idx as usize] = func_entry;
+            } else {
+                return Err(Error::runtime_component_limit_exceeded("Function index out of bounds"));
             }
         }
         Ok(())
@@ -3312,19 +2471,7 @@ impl Module {
     /// Add a data segment to the module
     pub fn add_data(&mut self, data: kiln_format::pure_format_types::PureDataSegment) -> Result<()> {
         // Convert format data to runtime data
-        #[cfg(feature = "std")]
         let init_vec: Vec<u8> = data.data_bytes.clone();
-
-        #[cfg(not(feature = "std"))]
-        let init_vec = {
-            let provider = create_runtime_provider()?;
-            let mut bounded_vec = kiln_foundation::bounded::BoundedVec::<u8, 16384, RuntimeProvider>::new(provider)?;
-            // Copy data from the format's data_bytes
-            for byte in data.data_bytes.iter().take(16384) {
-                bounded_vec.push(*byte)?;
-            }
-            bounded_vec
-        };
 
         let runtime_data = crate::module::Data {
             mode:        KilnDataMode::Active {
@@ -3336,15 +2483,11 @@ impl Module {
             init:        init_vec,
         };
 
-        #[cfg(feature = "std")]
         self.data.push(runtime_data);
-        #[cfg(not(feature = "std"))]
-        self.data.push(runtime_data)?;
         Ok(())
     }
 
     /// Add a custom section to the module
-    #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn add_custom_section(&mut self, name: &str, data: Vec<u8>) -> Result<()> {
         let name_key =
             kiln_foundation::bounded::BoundedString::from_str_truncate(name)?;
@@ -3359,24 +2502,9 @@ impl Module {
     }
 
     /// Set the binary representation of the module
-    #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn set_binary(&mut self, binary: Vec<u8>) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            self.binary = Some(binary);
-            Ok(())
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let provider = create_runtime_provider()?;
-            let mut bounded_binary =
-                kiln_foundation::bounded::BoundedVec::<u8, 65536, RuntimeProvider>::new(provider)?;
-            for byte in binary {
-                bounded_binary.push(byte)?;
-            }
-            self.binary = Some(bounded_binary);
-            Ok(())
-        }
+        self.binary = Some(binary);
+        Ok(())
     }
 
     /// Validate the module
@@ -3407,39 +2535,16 @@ impl Module {
             ExternType::Global(component_global_type),
             RuntimeImportDesc::Global(component_global_type),
         )?;
-        #[cfg(feature = "std")]
-        {
-            // Convert to bounded strings
-            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                module_name)?;
-            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                item_name)?;
-
-            // For BoundedMap, we need to handle the nested map differently
-            // First check if module exists
-            let mut inner_map = match self.imports.get(&bounded_module)? {
-                Some(existing) => existing,
-                None => ImportMap::new(create_runtime_provider()?)?,
-            };
-
-            // Insert the import into the inner map
-            let _ = inner_map.insert(bounded_item, import_struct)?;
-
-            // Update the outer map
-            let _ = self.imports.insert(bounded_module, inner_map)?;
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                module_name)?;
-            let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
-                item_name)?;
-            // BoundedMap doesn't support get_mut, so we'll use a simpler approach
-            let provider = create_runtime_provider()?;
-            let mut inner_map = BoundedMap::new(provider)?;
-            let _ = inner_map.insert(bounded_item, import_struct)?;
-            let _ = self.imports.insert(bounded_module, inner_map)?;
-        }
+        let bounded_module = kiln_foundation::bounded::BoundedString::from_str_truncate(
+            module_name)?;
+        let bounded_item = kiln_foundation::bounded::BoundedString::from_str_truncate(
+            item_name)?;
+        let mut inner_map = match self.imports.get(&bounded_module)? {
+            Some(existing) => existing,
+            None => ImportMap::new(create_runtime_provider()?)?,
+        };
+        let _ = inner_map.insert(bounded_item, import_struct)?;
+        let _ = self.imports.insert(bounded_module, inner_map)?;
         Ok(())
     }
 
@@ -3483,7 +2588,6 @@ impl Module {
             kiln_format::pure_format_types::PureElementMode::Declared => KilnElementMode::Declarative,
         };
 
-        #[cfg(feature = "std")]
         self.elements.push(crate::module::Element {
             mode:         runtime_mode,
             table_idx:    None, // Simplified for now
@@ -3492,14 +2596,6 @@ impl Module {
             items:        items_resolved,
             item_exprs:   Vec::new(),
         });
-        #[cfg(not(feature = "std"))]
-        self.elements.push(crate::module::Element {
-            mode:         runtime_mode,
-            table_idx:    None, // Simplified for now
-            offset_expr:  None, // Element segment doesn't have direct offset_expr field
-            element_type: element_segment.element_type,
-            items:        items_resolved,
-        })?;
         Ok(())
     }
 
@@ -3520,35 +2616,14 @@ impl Module {
             kiln_format::pure_format_types::PureDataMode::Passive => (KilnDataMode::Passive, None),
         };
 
-        // Convert data_segment.data_bytes - Vec in std mode, BoundedVec in no_std
-        #[cfg(feature = "std")]
         let runtime_init: Vec<u8> = data_segment.data_bytes.clone();
 
-        #[cfg(not(feature = "std"))]
-        let runtime_init = {
-            let provider = create_runtime_provider()?;
-            let mut bounded_init =
-                kiln_foundation::bounded::BoundedVec::<u8, 16384, RuntimeProvider>::new(provider)?;
-            for byte in data_segment.data_bytes.iter().take(16384) {
-                bounded_init.push(*byte)?;
-            }
-            bounded_init
-        };
-
-        #[cfg(feature = "std")]
         self.data.push(crate::module::Data {
             mode: runtime_mode,
             memory_idx,
             offset_expr: None, // Simplified for now
             init: runtime_init,
         });
-        #[cfg(not(feature = "std"))]
-        self.data.push(crate::module::Data {
-            mode: runtime_mode,
-            memory_idx,
-            offset_expr: None, // Simplified for now
-            init: runtime_init,
-        })?;
         Ok(())
     }
 
@@ -3572,24 +2647,9 @@ impl Module {
     }
 
     /// Set the binary representation of the module (alternative method)
-    #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn set_binary_runtime(&mut self, binary: Vec<u8>) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            self.binary = Some(binary);
-            Ok(())
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let provider = create_runtime_provider()?;
-            let mut bounded_binary =
-                kiln_foundation::bounded::BoundedVec::<u8, 65536, RuntimeProvider>::new(provider)?;
-            for byte in binary {
-                bounded_binary.push(byte)?;
-            }
-            self.binary = Some(bounded_binary);
-            Ok(())
-        }
+        self.binary = Some(binary);
+        Ok(())
     }
 
     /// Load a module from WebAssembly binary
@@ -3628,18 +2688,7 @@ impl Module {
         trace!("from_module_info completed successfully");
 
         // Store the binary for later use
-        #[cfg(feature = "std")]
         let bounded_binary = binary.to_vec();
-
-        #[cfg(not(feature = "std"))]
-        let bounded_binary = {
-            let provider = create_runtime_provider()?;
-            let mut vec = kiln_foundation::bounded::BoundedVec::<u8, 65536, RuntimeProvider>::new(provider)?;
-            for byte in binary {
-                vec.push(*byte)?;
-            }
-            vec
-        };
 
         Ok(Self {
             binary: Some(bounded_binary),
@@ -3655,29 +2704,14 @@ impl Module {
         let mut runtime_module = Self {
             types: Vec::new(),
             imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            #[cfg(feature = "std")]
             import_order: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             functions: Vec::new(),
-            #[cfg(feature = "std")]
             tables: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             tags: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            tags: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             elements: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             data: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            data: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
             exports: kiln_foundation::direct_map::DirectMap::new(),
@@ -3685,14 +2719,10 @@ impl Module {
             binary: None,
             validated: false,
             num_global_imports: 0,
-            #[cfg(feature = "std")]
             global_import_types: Vec::new(),
-            #[cfg(feature = "std")]
             deferred_global_inits: Vec::new(),
-            #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
-            #[cfg(feature = "std")]
             gc_types: Vec::new(),
         };
 
@@ -3815,14 +2845,7 @@ impl Module {
             runtime_module.imports.insert(module_key, inner_map)?;
 
             // Track import order for index-based lookup
-            #[cfg(feature = "std")]
             runtime_module.import_order.push((import.module.clone(), import.name.clone()));
-            #[cfg(not(feature = "std"))]
-            {
-                let order_module = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.module)?;
-                let order_name = kiln_foundation::bounded::BoundedString::from_str_truncate(&import.name)?;
-                runtime_module.import_order.push((order_module, order_name))?;
-            }
 
             #[cfg(feature = "tracing")]
             trace!("Import processed successfully");
@@ -3873,10 +2896,7 @@ impl Module {
             let decoded_module = Box::new(decoder::decode_module(binary)?);
 
             // decoded_module is kiln_format::Module, so we need the format-compatible method
-            #[cfg(feature = "std")]
             let full_runtime_module = *Module::from_kiln_module(&*decoded_module)?;
-            #[cfg(not(feature = "std"))]
-            let full_runtime_module = Module::from_kiln_module_nostd(&*decoded_module)?;
 
             return Ok(full_runtime_module);
         }
@@ -3932,7 +2952,6 @@ impl Module {
 
     /// Get the import identity for a tag (module_name, field_name)
     /// Returns Some((module, name)) if the tag is imported, None if it's locally defined
-    #[cfg(feature = "std")]
     pub fn get_tag_import_identity(&self, tag_idx: u32) -> Option<(String, String)> {
         let num_tag_imports = self.count_tag_imports();
         if (tag_idx as usize) < num_tag_imports {
@@ -3960,7 +2979,6 @@ impl Module {
 
     /// Get the export name for a locally defined tag
     /// Returns Some(export_name) if the tag is exported, None otherwise
-    #[cfg(feature = "std")]
     pub fn get_tag_export_name(&self, tag_idx: u32) -> Option<String> {
         // Look through exports to find if this tag is exported
         for export in self.exports.values() {
@@ -4131,29 +3149,14 @@ impl kiln_foundation::traits::FromBytes for Module {
         let module = Module {
             types: Vec::new(),
             imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            #[cfg(feature = "std")]
             import_order: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             functions: Vec::new(),
-            #[cfg(feature = "std")]
             tables: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             tags: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            tags: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             elements: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             data: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            data: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
             exports: kiln_foundation::direct_map::DirectMap::new(),
@@ -4161,14 +3164,10 @@ impl kiln_foundation::traits::FromBytes for Module {
             binary: None,
             validated,
             num_global_imports: 0,
-            #[cfg(feature = "std")]
             global_import_types: Vec::new(),
-            #[cfg(feature = "std")]
             deferred_global_inits: Vec::new(),
-            #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
-            #[cfg(feature = "std")]
             gc_types: Vec::new(),
         };
 
@@ -4399,54 +3398,26 @@ impl MemoryWrapper {
 
     /// Write i32 to memory
     pub fn write_i32(&self, offset: u32, value: i32) -> Result<()> {
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            use crate::memory_helpers::ArcMemoryExt;
-            self.0.write_i32(offset, value)
-        }
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            self.write(offset, &value.to_le_bytes())
-        }
+        use crate::memory_helpers::ArcMemoryExt;
+        self.0.write_i32(offset, value)
     }
 
     /// Write i64 to memory
     pub fn write_i64(&self, offset: u32, value: i64) -> Result<()> {
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            use crate::memory_helpers::ArcMemoryExt;
-            self.0.write_i64(offset, value)
-        }
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            self.write(offset, &value.to_le_bytes())
-        }
+        use crate::memory_helpers::ArcMemoryExt;
+        self.0.write_i64(offset, value)
     }
 
     /// Write f32 to memory
     pub fn write_f32(&self, offset: u32, value: f32) -> Result<()> {
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            use crate::memory_helpers::ArcMemoryExt;
-            self.0.write_f32(offset, value)
-        }
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            self.write(offset, &value.to_bits().to_le_bytes())
-        }
+        use crate::memory_helpers::ArcMemoryExt;
+        self.0.write_f32(offset, value)
     }
 
     /// Write f64 to memory
     pub fn write_f64(&self, offset: u32, value: f64) -> Result<()> {
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            use crate::memory_helpers::ArcMemoryExt;
-            self.0.write_f64(offset, value)
-        }
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            self.write(offset, &value.to_bits().to_le_bytes())
-        }
+        use crate::memory_helpers::ArcMemoryExt;
+        self.0.write_f64(offset, value)
     }
 
     /// Fill memory (requires mutable access)
@@ -4507,45 +3478,29 @@ impl GlobalWrapper {
 
     /// Get the global value
     pub fn get(&self) -> Result<KilnValue> {
-        #[cfg(feature = "std")]
-        {
-            let guard = self.0.read().map_err(|_| {
-                crate::Error::runtime_execution_error("Failed to acquire read lock on global")
-            })?;
-            Ok(guard.get().clone())
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let guard = self.0.read();
-            Ok(guard.get().clone())
-        }
+        let guard = self.0.read().map_err(|_| {
+            crate::Error::runtime_execution_error("Failed to acquire read lock on global")
+        })?;
+        Ok(guard.get().clone())
     }
 
     /// Set the global value
     pub fn set(&self, value: KilnValue) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            let mut guard = self.0.write().map_err(|_| {
-                crate::Error::runtime_execution_error("Failed to acquire write lock on global")
-            })?;
+        let mut guard = self.0.write().map_err(|_| {
+            crate::Error::runtime_execution_error("Failed to acquire write lock on global")
+        })?;
 
-            #[cfg(feature = "tracing")]
-            {
-                use kiln_foundation::tracing::debug;
-                let global_type = guard.global_type_descriptor();
-                debug!(
-                    "GlobalWrapper::set - global is mutable: {}, value_type: {:?}, new_value: {:?}",
-                    global_type.mutable, global_type.value_type, value
-                );
-            }
-
-            guard.set(&value)
-        }
-        #[cfg(not(feature = "std"))]
+        #[cfg(feature = "tracing")]
         {
-            let mut guard = self.0.write();
-            guard.set(&value)
+            use kiln_foundation::tracing::debug;
+            let global_type = guard.global_type_descriptor();
+            debug!(
+                "GlobalWrapper::set - global is mutable: {}, value_type: {:?}, new_value: {:?}",
+                global_type.mutable, global_type.value_type, value
+            );
         }
+
+        guard.set(&value)
     }
 
     /// Unwrap to get the Arc<RwLock<Global>>
@@ -4556,62 +3511,30 @@ impl GlobalWrapper {
 
     /// Get global value (returns a clone of the value)
     pub fn get_value(&self) -> KilnValue {
-        #[cfg(feature = "std")]
-        {
-            let guard = self.0.read().unwrap_or_else(|e| e.into_inner());
-            guard.get().clone()
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let guard = self.0.read();
-            guard.get().clone()
-        }
+        let guard = self.0.read().unwrap_or_else(|e| e.into_inner());
+        guard.get().clone()
     }
 
     /// Set global value (requires mutable access)
     pub fn set_value(&self, new_value: &KilnValue) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            let mut guard = self.0.write().map_err(|_| {
-                crate::Error::runtime_execution_error("Failed to acquire write lock on global")
-            })?;
-            guard.set(new_value)
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let mut guard = self.0.write();
-            guard.set(new_value)
-        }
+        let mut guard = self.0.write().map_err(|_| {
+            crate::Error::runtime_execution_error("Failed to acquire write lock on global")
+        })?;
+        guard.set(new_value)
     }
 
     /// Get global value type
     #[must_use]
     pub fn value_type(&self) -> KilnValueType {
-        #[cfg(feature = "std")]
-        {
-            let guard = self.0.read().unwrap_or_else(|e| e.into_inner());
-            guard.global_type_descriptor().value_type
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let guard = self.0.read();
-            guard.global_type_descriptor().value_type
-        }
+        let guard = self.0.read().unwrap_or_else(|e| e.into_inner());
+        guard.global_type_descriptor().value_type
     }
 
     /// Check if global is mutable
     #[must_use]
     pub fn is_mutable(&self) -> bool {
-        #[cfg(feature = "std")]
-        {
-            let guard = self.0.read().unwrap_or_else(|e| e.into_inner());
-            guard.global_type_descriptor().mutable
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let guard = self.0.read();
-            guard.global_type_descriptor().mutable
-        }
+        let guard = self.0.read().unwrap_or_else(|e| e.into_inner());
+        guard.global_type_descriptor().mutable
     }
 }
 
@@ -4776,10 +3699,7 @@ fn value_type_to_u8(vt: KilnValueType) -> u8 {
 impl Checksummable for GlobalWrapper {
     fn update_checksum(&self, checksum: &mut Checksum) {
         // Use global value type for checksum
-        #[cfg(feature = "std")]
         let guard = self.0.read().unwrap_or_else(|e| e.into_inner());
-        #[cfg(not(feature = "std"))]
-        let guard = self.0.read();
 
         checksum.update_slice(
             &value_type_to_u8(guard.global_type_descriptor().value_type).to_le_bytes(),
@@ -4798,12 +3718,9 @@ impl ToBytes for GlobalWrapper {
         writer: &mut WriteStream,
         _provider: &P,
     ) -> Result<()> {
-        #[cfg(feature = "std")]
         let guard = self.0.read().map_err(|_| {
             kiln_error::Error::runtime_execution_error("Failed to acquire read lock on global")
         })?;
-        #[cfg(not(feature = "std"))]
-        let guard = self.0.read();
 
         // Write value type (1 byte)
         writer.write_u8(value_type_to_u8(guard.global_type_descriptor().value_type))?;

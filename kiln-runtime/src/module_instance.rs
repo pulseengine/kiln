@@ -1754,29 +1754,14 @@ impl FromBytes for ModuleInstance {
         let default_module = Module {
             types: Vec::new(),
             imports: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            #[cfg(feature = "std")]
             import_order: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            import_order: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             functions: Vec::new(),
-            #[cfg(feature = "std")]
             tables: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            tables: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             memories: Vec::new(),
             globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             tags: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            tags: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             elements: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            elements: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
-            #[cfg(feature = "std")]
             data: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            data: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
             exports: kiln_foundation::direct_map::DirectMap::new(),
@@ -1784,14 +1769,10 @@ impl FromBytes for ModuleInstance {
             binary: None,
             validated: false,
             num_global_imports: 0,
-            #[cfg(feature = "std")]
             global_import_types: Vec::new(),
-            #[cfg(feature = "std")]
             deferred_global_inits: Vec::new(),
-            #[cfg(feature = "std")]
             import_types: Vec::new(),
             num_import_functions: 0,
-            #[cfg(feature = "std")]
             gc_types: Vec::new(),
         };
 
