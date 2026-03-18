@@ -19,20 +19,6 @@
 //! - Comprehensive validation and bounds checking
 //! - Memory isolation and access control
 
-// Binary std/no_std choice
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::format;
-#[cfg(not(feature = "std"))]
-use alloc::{
-    boxed::Box,
-    collections::BTreeMap as HashMap,
-    sync::Arc,
-    vec::Vec,
-};
-#[cfg(feature = "std")]
 use std::{
     boxed::Box,
     collections::HashMap,
@@ -325,9 +311,6 @@ pub struct MultiMemoryContext {
     /// Memory instances indexed by memory index.
     #[cfg(feature = "std")]
     memories: HashMap<u32, Arc<MultiMemoryInstance>>,
-    /// Memory instances indexed by memory index in no_std mode.
-    #[cfg(not(feature = "std"))]
-    memories: [(u32, Option<Arc<MultiMemoryInstance>>); MAX_MEMORIES],
 
     /// Thread-safe counter for memory allocation.
     memory_counter: SafeAtomicCounter,
@@ -343,10 +326,7 @@ impl MultiMemoryContext {
     /// Create new multi-memory context
     pub fn new() -> Self {
         Self {
-            #[cfg(feature = "std")]
             memories: HashMap::new(),
-            #[cfg(not(feature = "std"))]
-            memories: core::array::from_fn(|i| (i as u32, None)),
             memory_counter: SafeAtomicCounter::new(
                 usize::MAX,
                 SafetyContext::new(AsilLevel::QM),
@@ -360,28 +340,10 @@ impl MultiMemoryContext {
     pub fn register_memory(&mut self, memory: Arc<MultiMemoryInstance>) -> Result<u32> {
         let memory_index = memory.memory_index;
 
-        #[cfg(feature = "std")]
-        {
-            if self.memories.len() >= MAX_MEMORIES {
-                return Err(Error::memory_error("Maximum number of memories reached"));
-            }
-            self.memories.insert(memory_index, memory);
+        if self.memories.len() >= MAX_MEMORIES {
+            return Err(Error::memory_error("Maximum number of memories reached"));
         }
-
-        #[cfg(not(feature = "std"))]
-        {
-            if let Some(slot) = self
-                .memories
-                .iter_mut()
-                .find(|(idx, mem)| *idx == memory_index && mem.is_none())
-            {
-                slot.1 = Some(memory);
-            } else {
-                return Err(Error::memory_error(
-                    "Memory index already exists or maximum memories reached",
-                ));
-            }
-        }
+        self.memories.insert(memory_index, memory);
 
         let mut global_stats = self.global_stats.lock();
         global_stats.registered_memories += 1;
@@ -391,23 +353,10 @@ impl MultiMemoryContext {
 
     /// Get memory instance by index
     pub fn get_memory(&self, memory_index: u32) -> Result<Arc<MultiMemoryInstance>> {
-        #[cfg(feature = "std")]
-        {
-            self.memories
-                .get(&memory_index)
-                .cloned()
-                .ok_or_else(|| Error::runtime_execution_error("Memory index not found"))
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            self.memories
-                .iter()
-                .find(|(idx, _)| *idx == memory_index)
-                .and_then(|(_, mem)| mem.as_ref())
-                .cloned()
-                .ok_or_else(|| Error::runtime_execution_error("Memory index not found"))
-        }
+        self.memories
+            .get(&memory_index)
+            .cloned()
+            .ok_or_else(|| Error::runtime_execution_error("Memory index not found"))
     }
 
     /// Execute multi-memory operation
@@ -509,38 +458,8 @@ impl MultiMemoryContext {
     }
 
     /// Get list of all memory indices.
-    #[cfg(feature = "std")]
     pub fn get_memory_indices(&self) -> Vec<u32> {
         self.memories.keys().copied().collect()
-    }
-
-    /// Get list of all memory indices in no_std mode.
-    #[cfg(not(feature = "std"))]
-    pub fn get_memory_indices(
-        &self,
-    ) -> Result<
-        kiln_foundation::bounded::BoundedVec<
-            u32,
-            MAX_MEMORIES,
-            kiln_foundation::safe_memory::NoStdProvider<1024>,
-        >,
-    > {
-        use kiln_foundation::{
-            budget_aware_provider::CrateId,
-            safe_managed_alloc,
-        };
-        let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
-        let mut indices = kiln_foundation::bounded::BoundedVec::new(provider).map_err(|_| {
-            Error::runtime_execution_error("Failed to create memory indices vector")
-        })?;
-        for (idx, mem) in &self.memories {
-            if mem.is_some() {
-                indices.push(*idx).map_err(|_| {
-                    Error::runtime_execution_error("Failed to add memory index to vector")
-                })?;
-            }
-        }
-        Ok(indices)
     }
 
     /// Get global multi-memory statistics
@@ -684,17 +603,8 @@ impl MultiMemoryStats {
 pub struct DummyDataSegments;
 
 impl DataSegmentOperations for DummyDataSegments {
-    #[cfg(feature = "std")]
     fn get_data_segment(&self, _index: u32) -> Result<Option<Vec<u8>>> {
         Ok(Some(Vec::new()))
-    }
-
-    #[cfg(not(feature = "std"))]
-    fn get_data_segment(
-        &self,
-        _index: u32,
-    ) -> Result<Option<kiln_foundation::BoundedVec<u8, 65_536, kiln_foundation::NoStdProvider<65_536>>>> {
-        Ok(None)
     }
 
     fn drop_data_segment(&mut self, _index: u32) -> Result<()> {

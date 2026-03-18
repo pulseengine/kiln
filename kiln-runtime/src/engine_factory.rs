@@ -227,21 +227,8 @@ impl RuntimeEngine for crate::stackless::StacklessEngine {
     ) -> Result<Vec<kiln_foundation::Value>> {
         // For now, return empty result - proper implementation would execute function
         let _ = (module, function, args);
-        // Return empty result using bounded collection
-        #[cfg(feature = "std")]
-        {
-            Ok(vec![])
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            use kiln_foundation::bounded::BoundedVec;
-            let provider = kiln_foundation::safe_managed_alloc!(
-                512,
-                kiln_foundation::budget_aware_provider::CrateId::Runtime
-            )?;
-            let bounded_vec = BoundedVec::<kiln_foundation::values::Value, 16, _>::new(provider)?;
-            Ok(bounded_vec.into_vec())
-        }
+        // Return empty result
+        Ok(vec![])
     }
 
     fn get_statistics(&self) -> EngineStatistics {

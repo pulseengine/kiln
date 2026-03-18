@@ -19,20 +19,6 @@
 //! - Comprehensive validation and access control
 //! - Thread-safe operations with proper memory ordering
 
-// Binary std/no_std choice
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::{
-    boxed::Box,
-    collections::BTreeMap as HashMap,
-    sync::Arc,
-    vec::Vec,
-};
-#[cfg(not(feature = "std"))]
-use core::time::Duration;
-#[cfg(feature = "std")]
 use std::{
     boxed::Box,
     collections::HashMap,
@@ -447,11 +433,7 @@ impl SharedMemoryInstance {
 /// Shared memory context managing multiple shared memory instances
 pub struct SharedMemoryContext {
     /// Shared memory instances indexed by memory index.
-    #[cfg(feature = "std")]
     memories: HashMap<u32, Arc<SharedMemoryInstance>>,
-    /// Shared memory instances indexed by memory index in no_std mode.
-    #[cfg(not(feature = "std"))]
-    memories: [(u32, Option<Arc<SharedMemoryInstance>>); MAX_SHARED_MEMORIES],
 
     /// Thread-safe counter for memory allocation.
     memory_counter: SafeAtomicCounter,
@@ -466,10 +448,7 @@ impl SharedMemoryContext {
         let safety_context = SafetyContext::new(AsilLevel::QM);
 
         Self {
-            #[cfg(feature = "std")]
             memories: HashMap::new(),
-            #[cfg(not(feature = "std"))]
-            memories: core::array::from_fn(|i| (i as u32, None)),
             memory_counter: SafeAtomicCounter::new(MAX_SHARED_MEMORIES, safety_context),
             global_stats: Arc::new(KilnMutex::new(SharedMemoryStats {
                 registered_segments: 0,
@@ -485,26 +464,12 @@ impl SharedMemoryContext {
         let memory_index = self.memory_counter.increment()
             .map_err(|_| Error::memory_error("Failed to allocate memory index"))? as u32;
 
-        #[cfg(feature = "std")]
-        {
-            if self.memories.len() >= MAX_SHARED_MEMORIES {
-                return Err(Error::memory_error(
-                    "Maximum number of shared memories reached",
-                ));
-            }
-            self.memories.insert(memory_index, memory);
+        if self.memories.len() >= MAX_SHARED_MEMORIES {
+            return Err(Error::memory_error(
+                "Maximum number of shared memories reached",
+            ));
         }
-
-        #[cfg(not(feature = "std"))]
-        {
-            if let Some(slot) = self.memories.iter_mut().find(|(_, mem)| mem.is_none()) {
-                slot.1 = Some(memory);
-            } else {
-                return Err(Error::memory_error(
-                    "Maximum number of shared memories reached",
-                ));
-            }
-        }
+        self.memories.insert(memory_index, memory);
 
         // Update global statistics
         let mut global_stats = self.global_stats.lock();
@@ -515,23 +480,10 @@ impl SharedMemoryContext {
 
     /// Gets shared memory instance by index.
     pub fn get_shared_memory(&self, memory_index: u32) -> Result<Arc<SharedMemoryInstance>> {
-        #[cfg(feature = "std")]
-        {
-            self.memories
-                .get(&memory_index)
-                .cloned()
-                .ok_or_else(|| Error::runtime_execution_error("Shared memory index not found"))
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            self.memories
-                .iter()
-                .find(|(idx, _)| *idx == memory_index)
-                .and_then(|(_, mem)| mem.as_ref())
-                .cloned()
-                .ok_or_else(|| Error::runtime_execution_error("Shared memory index not found"))
-        }
+        self.memories
+            .get(&memory_index)
+            .cloned()
+            .ok_or_else(|| Error::runtime_execution_error("Shared memory index not found"))
     }
 
     /// Executes a shared memory operation.

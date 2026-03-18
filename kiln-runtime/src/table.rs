@@ -26,10 +26,6 @@ use kiln_foundation::{
 // Platform-aware memory provider for table operations
 type TableProvider = kiln_foundation::safe_memory::NoStdProvider<8192>; // 8KB for table operations
 
-#[cfg(all(not(feature = "std"), feature = "alloc"))]
-use alloc::format;
-// Import format macro based on feature flags
-#[cfg(feature = "std")]
 use std::format;
 
 // Import the TableOperations trait from kiln-instructions
@@ -50,10 +46,7 @@ use crate::prelude::{
 };
 
 // Sync primitives for interior mutability
-#[cfg(feature = "std")]
 use std::sync::Mutex;
-#[cfg(not(feature = "std"))]
-use kiln_sync::KilnMutex as Mutex;
 
 /// Invalid index error code
 const INVALID_INDEX: u16 = 4004;
@@ -102,9 +95,6 @@ pub struct Table {
     pub ty:                 KilnTableType,
     /// The table elements - wrapped in Mutex for interior mutability
     /// This allows setting elements through Arc<Table> references
-    #[cfg(feature = "std")]
-    elements: Mutex<TableElements>,
-    #[cfg(not(feature = "std"))]
     elements: Mutex<TableElements>,
     /// A debug name for the table (optional)
     pub debug_name:         Option<RuntimeString>,
@@ -114,10 +104,7 @@ pub struct Table {
 
 impl Debug for Table {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        #[cfg(feature = "std")]
         let elements_len = self.elements.lock().map(|e| e.len()).unwrap_or(0);
-        #[cfg(not(feature = "std"))]
-        let elements_len = self.elements.lock().len();
 
         f.debug_struct("Table")
             .field("ty", &self.ty)
@@ -135,11 +122,8 @@ impl Clone for Table {
                 .expect("Failed to allocate table elements during clone");
 
         // Lock the source elements for reading
-        #[cfg(feature = "std")]
         let source_elements = self.elements.lock()
             .expect("Table mutex poisoned during clone");
-        #[cfg(not(feature = "std"))]
-        let source_elements = self.elements.lock();
 
         for i in 0..source_elements.len() {
             // Use BoundedVec get method for safe access
@@ -153,9 +137,6 @@ impl Clone for Table {
 
         Self {
             ty:                 self.ty.clone(),
-            #[cfg(feature = "std")]
-            elements:           Mutex::new(new_elements),
-            #[cfg(not(feature = "std"))]
             elements:           Mutex::new(new_elements),
             debug_name:         self.debug_name.clone(),
             verification_level: self.verification_level,
@@ -173,17 +154,11 @@ impl PartialEq for Table {
         }
 
         // Lock both tables for comparison
-        #[cfg(feature = "std")]
         let self_elements = self.elements.lock()
             .expect("Table mutex poisoned during comparison");
-        #[cfg(not(feature = "std"))]
-        let self_elements = self.elements.lock();
 
-        #[cfg(feature = "std")]
         let other_elements = other.elements.lock()
             .expect("Table mutex poisoned during comparison");
-        #[cfg(not(feature = "std"))]
-        let other_elements = other.elements.lock();
 
         // Compare elements manually since BoundedStack doesn't have to_vec()
         if self_elements.len() != other_elements.len() {
@@ -376,10 +351,7 @@ impl Table {
     /// The current size of the table
     #[must_use]
     pub fn size(&self) -> u32 {
-        #[cfg(feature = "std")]
         let len = self.elements.lock().map(|e| e.len()).unwrap_or(0);
-        #[cfg(not(feature = "std"))]
-        let len = self.elements.lock().len();
         usize_to_wasm_u32(len).unwrap_or(0)
     }
 
@@ -399,11 +371,8 @@ impl Table {
     pub fn get(&self, idx: u32) -> Result<Option<KilnValue>> {
         let idx_usize = wasm_index_to_usize(idx)?;
 
-        #[cfg(feature = "std")]
         let elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let elements = self.elements.lock();
 
         if idx_usize >= elements.len() {
             return Err(Error::invalid_function_index("Table access out of bounds"));
@@ -444,11 +413,8 @@ impl Table {
     pub fn set(&mut self, idx: u32, value: Option<KilnValue>) -> Result<()> {
         let idx_usize = wasm_index_to_usize(idx)?;
 
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         if idx_usize >= elements.len() {
             return Err(Error::invalid_function_index("Table access out of bounds"));
@@ -495,11 +461,8 @@ impl Table {
     pub fn set_shared(&self, idx: u32, value: Option<KilnValue>) -> Result<()> {
         let idx_usize = wasm_index_to_usize(idx)?;
 
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         if idx_usize >= elements.len() {
             return Err(Error::invalid_function_index("Table access out of bounds"));
@@ -575,11 +538,8 @@ impl Table {
         }
 
         // Lock elements and push new values
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         for _ in 0..delta {
             elements.push(Some(init_value_from_arg.clone()))?;
@@ -597,11 +557,8 @@ impl Table {
         value: Option<KilnValue>,
         len: usize,
     ) -> Result<()> {
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         // Verify bounds - use checked arithmetic to prevent overflow
         let end = offset.checked_add(len)
@@ -640,11 +597,8 @@ impl Table {
     /// This method provides interior mutability for use when the table is
     /// wrapped in an Arc.
     pub fn copy_elements_shared(&self, dst: usize, src: usize, len: usize) -> Result<()> {
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         // Verify bounds - use checked arithmetic to prevent overflow
         let src_end = src.checked_add(len)
@@ -694,11 +648,8 @@ impl Table {
     /// This method provides interior mutability for use when the table is
     /// wrapped in an Arc.
     pub fn init_shared(&self, offset: u32, init_data: &[Option<KilnValue>]) -> Result<()> {
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         if offset as usize + init_data.len() > elements.len() {
             return Err(Error::runtime_out_of_bounds(
@@ -765,11 +716,8 @@ impl Table {
         }
 
         // Lock elements and push new values
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         for _ in 0..delta {
             elements.push(Some(init_value_from_arg.clone()))?;
@@ -823,11 +771,8 @@ impl Table {
     ///
     /// Returns an error if the operation fails
     pub fn init(&mut self, offset: u32, init_data: &[Option<KilnValue>]) -> Result<()> {
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         if offset as usize + init_data.len() > elements.len() {
             return Err(Error::runtime_out_of_bounds(
@@ -848,11 +793,8 @@ impl Table {
 
     /// Copy elements from one region of a table to another
     pub fn copy_elements(&mut self, dst: usize, src: usize, len: usize) -> Result<()> {
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         // Verify bounds - use checked arithmetic to prevent overflow
         let src_end = src.checked_add(len)
@@ -907,11 +849,8 @@ impl Table {
         value: Option<KilnValue>,
         len: usize,
     ) -> Result<()> {
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         // Verify bounds - use checked arithmetic to prevent overflow
         let end = offset.checked_add(len)
@@ -969,11 +908,8 @@ impl Table {
 
     /// Sets an element at the given index.
     pub fn init_element(&mut self, idx: usize, value: Option<KilnValue>) -> Result<()> {
-        #[cfg(feature = "std")]
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
-        #[cfg(not(feature = "std"))]
-        let mut elements = self.elements.lock();
 
         // Check bounds
         if idx >= elements.len() {
@@ -1001,7 +937,6 @@ impl Table {
 }
 
 /// Extension trait for `Arc<Table>` to simplify access to table operations
-#[cfg(feature = "std")]
 pub trait ArcTableExt {
     /// Get the size of the table
     fn size(&self) -> u32;
@@ -1028,7 +963,6 @@ pub trait ArcTableExt {
     fn fill(&self, offset: u32, len: u32, value: Option<KilnValue>) -> Result<()>;
 }
 
-#[cfg(feature = "std")]
 impl ArcTableExt for Arc<Table> {
     fn size(&self) -> u32 {
         self.as_ref().size()

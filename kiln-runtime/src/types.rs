@@ -1,9 +1,4 @@
-//! Type aliases for `no_std` compatibility in kiln-runtime
-
-use kiln_foundation::{
-    BoundedMap,
-    BoundedVec,
-};
+//! Type aliases for kiln-runtime
 
 use crate::prelude::*;
 
@@ -59,199 +54,90 @@ pub const MAX_CFI_CHECKS: usize = 1024;
 pub const MAX_INSTRUMENTATION_POINTS: usize = 2048;
 
 // Runtime state vectors
-/// Value stack type for std environments
-#[cfg(feature = "std")]
+/// Value stack type
 pub type ValueStackVec = Vec<kiln_foundation::Value>;
-/// Value stack type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type ValueStackVec = BoundedVec<kiln_foundation::Value, MAX_VALUE_STACK, RuntimeProvider>;
 
-/// Call stack type for std environments
-#[cfg(feature = "std")]
+/// Call stack type
 pub type CallStackVec = Vec<crate::core_types::CallFrame>;
-/// Call stack type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type CallStackVec = BoundedVec<crate::core_types::CallFrame, MAX_CALL_STACK, RuntimeProvider>;
 
-/// Local variables vector type for std environments
-#[cfg(feature = "std")]
+/// Local variables vector type
 pub type LocalsVec = Vec<kiln_foundation::Value>;
-/// Local variables vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type LocalsVec = BoundedVec<kiln_foundation::Value, MAX_LOCALS, RuntimeProvider>;
 
-/// Global variables vector type for std environments
-#[cfg(feature = "std")]
+/// Global variables vector type
 pub type GlobalsVec = Vec<crate::global::Global>;
-/// Global variables vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type GlobalsVec = BoundedVec<crate::global::Global, MAX_GLOBALS, RuntimeProvider>;
 
-/// Functions vector type for std environments
-#[cfg(feature = "std")]
+/// Functions vector type
 pub type FunctionsVec = Vec<crate::func::Function>;
-/// Functions vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type FunctionsVec = BoundedVec<crate::func::Function, MAX_FUNCTIONS, RuntimeProvider>;
 
-/// Imports vector type for std environments
-#[cfg(feature = "std")]
+/// Imports vector type
 pub type ImportsVec<T> = Vec<T>;
-/// Imports vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type ImportsVec<T> = BoundedVec<T, MAX_IMPORTS, RuntimeProvider>;
 
-/// Exports vector type for std environments
-#[cfg(feature = "std")]
+/// Exports vector type
 pub type ExportsVec<T> = Vec<T>;
-/// Exports vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type ExportsVec<T> = BoundedVec<T, MAX_EXPORTS, RuntimeProvider>;
 
-/// Tables vector type for std environments
-#[cfg(feature = "std")]
+/// Tables vector type
 pub type TablesVec = Vec<crate::table::Table>;
-/// Tables vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type TablesVec = BoundedVec<crate::table::Table, MAX_TABLES, RuntimeProvider>;
 
-/// Memories vector type for std environments
-#[cfg(feature = "std")]
+/// Memories vector type
 pub type MemoriesVec = Vec<crate::memory::Memory>;
-/// Memories vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type MemoriesVec = BoundedVec<crate::memory::Memory, MAX_MEMORIES, RuntimeProvider>;
 
-/// Element segments vector type for std environments
-#[cfg(feature = "std")]
+/// Element segments vector type
 pub type ElementsVec = Vec<kiln_foundation::types::ElementSegment>;
-/// Element segments vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type ElementsVec =
-    BoundedVec<kiln_foundation::types::ElementSegment, MAX_ELEMENTS, RuntimeProvider>;
 
-/// Data segments vector type for std environments
-#[cfg(feature = "std")]
+/// Data segments vector type
 pub type DataVec = Vec<kiln_foundation::types::DataSegment>;
-/// Data segments vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type DataVec = BoundedVec<kiln_foundation::types::DataSegment, MAX_DATA, RuntimeProvider>;
 
 // Instruction vectors
-/// Instructions vector type for std environments
-#[cfg(feature = "std")]
+/// Instructions vector type
 // Instructions module is temporarily disabled in kiln-decoder
 // pub type InstructionVec = Vec<kiln_decoder::instructions::Instruction>;
 pub type InstructionVec = Vec<crate::prelude::Instruction>;
-/// Instructions vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type InstructionVec = BoundedVec<crate::prelude::Instruction, 65536, RuntimeProvider>;
 
-/// Branch targets vector type for std environments
-#[cfg(feature = "std")]
+/// Branch targets vector type
 pub type BranchTargetsVec = Vec<u32>;
-/// Branch targets vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type BranchTargetsVec = BoundedVec<u32, MAX_BRANCH_TABLE_TARGETS, RuntimeProvider>;
 
 // Module instance vectors
-/// Module instances vector type for std environments
-#[cfg(feature = "std")]
+/// Module instances vector type
 pub type ModuleInstanceVec = Vec<crate::module_instance::ModuleInstance>;
-/// Module instances vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type ModuleInstanceVec =
-    BoundedVec<crate::module_instance::ModuleInstance, MAX_MODULE_INSTANCES, RuntimeProvider>;
 
-/// Function bodies vector type for std environments
-#[cfg(feature = "std")]
+/// Function bodies vector type
 pub type FunctionBodiesVec = Vec<Vec<u8>>;
-/// Function bodies vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type FunctionBodiesVec =
-    BoundedVec<BoundedVec<u8, 65536, RuntimeProvider>, MAX_FUNCTION_BODIES, RuntimeProvider>;
 
 // Memory and table data
-/// Memory data vector type for std environments
-#[cfg(feature = "std")]
+/// Memory data vector type
 pub type MemoryDataVec = Vec<u8>;
-/// Memory data vector type for `no_std` environments (64MB max)
-#[cfg(not(feature = "std"))]
-pub type MemoryDataVec = BoundedVec<u8, { 64 * 1024 * 1024 }, RuntimeProvider>;
 
-/// Table data vector type for std environments
-#[cfg(feature = "std")]
+/// Table data vector type
 pub type TableDataVec = Vec<Option<crate::prelude::RefValue>>;
-/// Table data vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type TableDataVec =
-    BoundedVec<Option<crate::prelude::RefValue>, MAX_TABLE_ENTRIES, RuntimeProvider>;
 
 // String type for runtime
-/// Runtime string type for std environments
-#[cfg(feature = "std")]
+/// Runtime string type
 pub type RuntimeString = String;
-/// Runtime string type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type RuntimeString = kiln_foundation::BoundedString<MAX_STRING_LENGTH>;
 
 // Maps for runtime state
-/// Function map type for std environments
-#[cfg(feature = "std")]
+/// Function map type
 pub type FunctionMap = HashMap<u32, crate::func::Function>;
-/// Function map type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type FunctionMap = BoundedMap<u32, crate::func::Function, MAX_FUNCTIONS, RuntimeProvider>;
 
-/// Global map type for std environments
-#[cfg(feature = "std")]
+/// Global map type
 pub type GlobalMap = HashMap<u32, crate::global::Global>;
-/// Global map type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type GlobalMap = BoundedMap<u32, crate::global::Global, MAX_GLOBALS, RuntimeProvider>;
 
-/// Memory map type for std environments
-#[cfg(feature = "std")]
+/// Memory map type
 pub type MemoryMap = HashMap<u32, crate::memory::Memory>;
-/// Memory map type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type MemoryMap = BoundedMap<u32, crate::memory::Memory, MAX_MEMORIES, RuntimeProvider>;
 
-/// Table map type for std environments
-#[cfg(feature = "std")]
+/// Table map type
 pub type TableMap = HashMap<u32, crate::table::Table>;
-/// Table map type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type TableMap = BoundedMap<u32, crate::table::Table, MAX_TABLES, RuntimeProvider>;
 
 // CFI and instrumentation types
-/// CFI checks vector type for std environments
-#[cfg(feature = "std")]
+/// CFI checks vector type
 pub type CfiCheckVec = Vec<crate::cfi_engine::CfiCheck>;
-/// CFI checks vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type CfiCheckVec = BoundedVec<crate::cfi_engine::CfiCheck, MAX_CFI_CHECKS, RuntimeProvider>;
 
-/// Instrumentation points vector type for std environments
-#[cfg(feature = "std")]
+/// Instrumentation points vector type
 pub type InstrumentationVec = Vec<crate::execution::InstrumentationPoint>;
-/// Instrumentation points vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type InstrumentationVec =
-    BoundedVec<crate::execution::InstrumentationPoint, MAX_INSTRUMENTATION_POINTS, RuntimeProvider>;
 
 // Generic byte vector for raw data
-/// Byte vector type for std environments
-#[cfg(feature = "std")]
+/// Byte vector type
 pub type ByteVec = Vec<u8>;
-/// Byte vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type ByteVec = BoundedVec<u8, 65536, RuntimeProvider>;
 
 // Error collection for batch operations
-/// Error vector type for std environments
-#[cfg(feature = "std")]
+/// Error vector type
 pub type ErrorVec = Vec<kiln_error::Error>;
-/// Error vector type for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub type ErrorVec = BoundedVec<kiln_error::Error, 256, RuntimeProvider>;

@@ -10,13 +10,6 @@
 //! - Bounded memory usage with compile-time guarantees
 //! - Comprehensive validation and error handling
 
-// Binary std/no_std choice
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::format;
-
 use kiln_error::{
     codes,
     Error,

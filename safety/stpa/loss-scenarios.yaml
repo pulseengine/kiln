@@ -540,3 +540,84 @@ loss-scenarios:
       - Synth and kiln-builtins compiled with different ABI settings
       - No ABI compatibility check at link time for embedded targets
       - 32-bit platforms split 64-bit values across register pairs differently
+
+  # =========================================================================
+  # Kiln Async Executor scenarios (RFC #46 full implementation)
+  # =========================================================================
+  - id: LS-EX-1
+    title: Executor polls empty waitable set, gale busy-waits consuming 100% CPU
+    uca: UCA-EX-4
+    hazards: [H-14, H-3]
+    type: inadequate-control-algorithm
+    scenario: >
+      A wasm thread calls waitable_set_poll on a waitable set that has no
+      joined waitables (created via waitable_set_new but waitable_join was
+      never called). The executor's poll implementation iterates over the
+      empty set and returns EVENT_NONE immediately. The wasm code, expecting
+      an event, calls waitable_set_poll again in a tight loop. Each poll
+      returns instantly with EVENT_NONE, consuming fuel and CPU time but
+      making no progress. On gale, the RTOS task running this thread consumes
+      100% of its time slice on fruitless polls, starving lower-priority tasks.
+      If the wasm code catches EVENT_NONE and retries without yielding,
+      the fuel budget is the only backstop — but the fuel quantum may allow
+      millions of empty polls before exhaustion. On embedded targets, this
+      wastes power and may cause thermal issues. The root cause is that
+      waitable_set_poll on an empty set should trap or return a distinct
+      error code, not silently return EVENT_NONE which is ambiguous with
+      "all waitables checked, none ready."
+    causal-factors:
+      - waitable_set_poll does not distinguish "empty set" from "no events ready"
+      - No minimum yield between consecutive poll calls
+      - Fuel cost of poll is too low (1 fuel unit per poll vs. 1 per instruction)
+      - wasm busy-loop pattern not detectable by the executor
+
+  - id: LS-EX-2
+    title: Stream channel full, writer blocks, reader on same thread — deadlock
+    uca: UCA-EX-2
+    hazards: [H-14, H-16]
+    type: inadequate-control-algorithm
+    scenario: >
+      A single wasm logical thread creates a stream (via stream_new), writes
+      data into it, and later reads from it — all within the same thread.
+      The bounded channel has capacity N. After N writes, the channel is full
+      and stream_write returns BLOCKED. The thread then attempts to read, but
+      the read logic is structured after the write loop (not interleaved).
+      The thread is stuck: it cannot write (channel full) and it has not yet
+      reached the read code. On a single-threaded runtime, this is a permanent
+      deadlock. On a multi-threaded runtime, the thread could yield to allow
+      a different thread to drain the channel, but if the producer and consumer
+      are the same thread, no amount of yielding helps. The RFC #46 spec does
+      not prohibit single-thread producer-consumer patterns, so the runtime
+      must either detect this pattern and trap, or document that same-thread
+      producer-consumer requires interleaved read/write (ping-pong pattern).
+    causal-factors:
+      - Same-thread producer-consumer with bounded channel
+      - RFC #46 stream API does not prevent single-thread self-deadlock
+      - No deadlock detection in the executor
+      - Cooperative scheduling requires explicit yield, which the deadlocked thread cannot reach
+
+  - id: LS-EX-3
+    title: thread_new called in loop without cleanup, gale task table exhausted
+    uca: UCA-EX-1
+    hazards: [H-15, H-3]
+    type: inadequate-control-algorithm
+    scenario: >
+      A wasm component calls thread_new in a loop to spawn worker threads.
+      Each iteration creates a new logical thread backed by a gale RTOS task.
+      The spawned threads run to completion but their gale task slots are not
+      reclaimed because: (a) kiln's thread table does not have a reaping
+      mechanism for completed threads, or (b) the gale task slots require
+      explicit deallocation (gale_task_delete) which kiln does not call after
+      thread completion. After K iterations (where K is gale's max task count,
+      typically 32-256 on embedded targets), gale_task_create returns an error.
+      If kiln does not check this error and instead returns an invalid
+      thread_id (e.g., -1 interpreted as u32::MAX), the subsequent
+      thread_switch_to(-1) indexes out of bounds in kiln's thread table,
+      causing a memory access violation on the host. The fix requires kiln to
+      (1) enforce a per-component thread budget, (2) reap completed thread
+      slots, and (3) call gale_task_delete when a thread completes.
+    causal-factors:
+      - No thread budget enforcement in kiln
+      - Completed gale tasks not deallocated
+      - thread_new return value not checked against gale error
+      - Thread table grows unboundedly without reaping

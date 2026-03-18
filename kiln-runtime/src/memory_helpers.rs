@@ -542,36 +542,24 @@ impl ArcMemoryExt for Arc<Memory> {
     }
 
     fn write_via_callback(&self, offset: u32, buffer: &[u8]) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            // Use internal Mutex or RwLock to provide thread-safe mutation
-            // Clone and modify through interior mutability
-            let mut current_buffer = self.buffer()?;
-            let start = offset as usize;
-            let end = start + buffer.len();
+        // Use internal Mutex or RwLock to provide thread-safe mutation
+        // Clone and modify through interior mutability
+        let mut current_buffer = self.buffer()?;
+        let start = offset as usize;
+        let end = start + buffer.len();
 
-            if end > current_buffer.len() {
-                return Err(Error::memory_error("Memory access out of bounds"));
+        if end > current_buffer.len() {
+            return Err(Error::memory_error("Memory access out of bounds"));
+        }
+
+        // Update the memory through the mutex/lock mechanism in the Memory
+        // implementation
+        self.update_buffer(|mem_buffer| {
+            for (i, &byte) in buffer.iter().enumerate() {
+                mem_buffer[start + i] = byte;
             }
-
-            // Update the memory through the mutex/lock mechanism in the Memory
-            // implementation
-            self.update_buffer(|mem_buffer| {
-                for (i, &byte) in buffer.iter().enumerate() {
-                    mem_buffer[start + i] = byte;
-                }
-                Ok(())
-            })
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // For no_std, Arc<Memory> cannot provide mutable access without interior
-            // mutability
-            Err(Error::runtime_execution_error(
-                "Arc<Memory> mutable access not available in no_std",
-            ))
-        }
+            Ok(())
+        })
     }
 
     fn grow_via_callback(&self, _pages: u32) -> Result<u32> {

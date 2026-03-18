@@ -13,7 +13,6 @@ use kiln_error::{
     ErrorCategory,
     Result,
 };
-#[cfg(feature = "std")]
 use kiln_platform::threading::{
     Thread,
     ThreadHandle,
@@ -38,61 +37,6 @@ use crate::{
     },
 };
 
-// For no_std builds, provide dummy types
-/// Thread representation for `no_std` environments
-#[cfg(not(feature = "std"))]
-#[derive(Debug)]
-pub struct Thread {
-    /// Thread identifier
-    pub id: ThreadId,
-}
-
-/// Thread handle for `no_std` environments
-#[cfg(not(feature = "std"))]
-#[derive(Debug)]
-pub struct ThreadHandle {
-    /// Thread identifier
-    pub id: ThreadId,
-}
-
-/// Thread spawn options for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub struct ThreadSpawnOptions {
-    /// Optional stack size for the thread
-    pub stack_size: Option<usize>,
-    /// Optional thread priority
-    pub priority:   Option<i32>,
-    /// Optional thread name
-    pub name:       Option<&'static str>,
-}
-
-#[cfg(not(feature = "std"))]
-impl ThreadHandle {
-    /// Terminate the thread (not supported in `no_std` mode)
-    pub fn terminate(&self) -> Result<()> {
-        Err(Error::not_supported_unsupported_operation(
-            "Thread termination not supported in no_std mode",
-        ))
-    }
-
-    /// Join thread with timeout (not supported in `no_std` mode)
-    pub fn join_timeout(&self, _timeout: core::time::Duration) -> Result<()> {
-        Err(Error::not_supported_unsupported_operation(
-            "Thread join with timeout not supported in no_std mode",
-        ))
-    }
-
-    /// Join thread (not supported in `no_std` mode)
-    pub fn join(&self) -> Result<()> {
-        Err(Error::not_supported_unsupported_operation(
-            "Thread join not supported in no_std mode",
-        ))
-    }
-}
-
-#[cfg(not(feature = "std"))]
-use alloc::sync::Arc;
-#[cfg(feature = "std")]
 use std::{
     sync::Arc,
     thread,
@@ -341,11 +285,7 @@ pub struct ThreadManager {
     /// Thread configuration
     pub config:     ThreadConfig,
     /// Active thread contexts
-    /// In std mode, use Vec to avoid stack overflow with large arrays
-    #[cfg(feature = "std")]
     threads: Vec<Option<ThreadExecutionContext>>,
-    #[cfg(not(feature = "std"))]
-    threads: [Option<ThreadExecutionContext>; MAX_MANAGED_THREADS],
     /// Next thread ID to assign
     next_thread_id: ThreadId,
     /// Thread manager statistics
@@ -357,10 +297,7 @@ impl ThreadManager {
     pub fn new(config: ThreadConfig) -> Result<Self> {
         Ok(Self {
             config,
-            #[cfg(feature = "std")]
             threads: (0..MAX_MANAGED_THREADS).map(|_| None).collect(),
-            #[cfg(not(feature = "std"))]
-            threads: [const { None }; MAX_MANAGED_THREADS],
             next_thread_id: 1, // Thread ID 0 is reserved for main thread
             stats: ThreadManagerStats::new(),
         })
@@ -438,17 +375,13 @@ impl ThreadManager {
             name:       Some("wasm-thread".to_string()),
         };
 
-        // Spawn platform thread (feature-gated)
-        #[cfg(feature = "std")]
+        // Spawn platform thread
         let handle = kiln_platform::threading::spawn_thread(spawn_options, move || {
             // Thread execution logic would go here
             // This is a placeholder for the actual WebAssembly execution
             Ok(())
         })
         .map_err(|_| Error::runtime_execution_error("Failed to spawn platform thread"))?;
-
-        #[cfg(not(feature = "std"))]
-        let handle = ThreadHandle { id: thread_id };
 
         context.handle = Some(handle);
         context.update_state(ThreadState::Running);
@@ -517,7 +450,6 @@ impl ThreadManager {
     }
 
     /// Get all active threads
-    #[cfg(feature = "std")]
     pub fn get_active_threads(&self) -> Vec<ThreadId> {
         self.threads
             .iter()
@@ -545,34 +477,12 @@ impl ThreadManager {
     pub fn cleanup_completed_threads(&mut self) -> usize {
         let initial_count = self.thread_count();
 
-        #[cfg(feature = "std")]
-        {
-            // For arrays, we need to manually implement retain-like behavior
-            for i in 0..self.threads.len() {
-                if let Some(context) = &self.threads[i] {
-                    if !context.info.is_active() {
-                        self.threads[i] = None;
-                    }
+        for i in 0..self.threads.len() {
+            if let Some(context) = &self.threads[i] {
+                if !context.info.is_active() {
+                    self.threads[i] = None;
                 }
             }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            // Binary std/no_std choice
-            let mut write_idx = 0;
-            for read_idx in 0..self.threads.len() {
-                if let Some(context) = &self.threads[read_idx] {
-                    if context.info.is_active() {
-                        if write_idx != read_idx {
-                            // Move active thread to write position
-                            // This is a simplified approach - in practice might
-                            // need more sophisticated cleanup
-                        }
-                        write_idx += 1;
-                    }
-                }
-            }
-            // Truncate to remove completed threads (simplified)
         }
 
         initial_count - self.thread_count()
@@ -615,10 +525,7 @@ impl Default for ThreadManager {
         Self::new(ThreadConfig::default()).unwrap_or_else(|_| {
             // Create a minimal thread manager with very limited resources
             Self {
-                #[cfg(feature = "std")]
                 threads:        (0..MAX_MANAGED_THREADS).map(|_| None).collect(),
-                #[cfg(not(feature = "std"))]
-                threads:        [const { None }; MAX_MANAGED_THREADS],
                 next_thread_id: 1,
                 config:         ThreadConfig {
                     max_threads:        1,
@@ -710,7 +617,6 @@ mod tests {
         assert_eq!(manager.active_thread_count(), 0);
     }
 
-    #[cfg(feature = "std")]
     #[test]
     fn test_thread_spawning() {
         let mut manager = ThreadManager::default();

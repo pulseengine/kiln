@@ -7,11 +7,9 @@ use kiln_error::{
     Error,
     ErrorCategory,
 };
-#[cfg(any(feature = "std", feature = "alloc"))]
 use kiln_foundation::capabilities::factory::CapabilityGuardedProvider;
 // Box is re-exported by kiln_foundation
 use kiln_foundation::Box;
-#[cfg(feature = "std")]
 use kiln_foundation::heap_provider::HeapProvider;
 use kiln_foundation::{
     bounded::{
@@ -36,21 +34,14 @@ use kiln_foundation::{
 /// In std mode, we use HeapProvider which allocates on the heap, so this can be larger.
 /// ML inference modules with many imports/types need substantial memory for BoundedMaps.
 /// In no_std mode, we use NoStdProvider which embeds [u8; N] in the struct, so must be small.
-#[cfg(feature = "std")]
-pub const RUNTIME_MEMORY_SIZE: usize = 8_388_608; // 8MB for std (heap-allocated, large ML modules)
-#[cfg(not(feature = "std"))]
-pub const RUNTIME_MEMORY_SIZE: usize = 8192; // 8KB for no_std (stack-allocated)
+pub const RUNTIME_MEMORY_SIZE: usize = 8_388_608; // 8MB (heap-allocated, large ML modules)
 
 // Stack allocation threshold - use platform allocator for sizes above this
 const STACK_ALLOCATION_THRESHOLD: usize = 4096; // 4KB
 
 /// Base memory provider for runtime
-/// In std mode, use HeapProvider for heap allocation (supports larger modules)
-/// In no_std mode, use NoStdProvider with small stack allocation
-#[cfg(feature = "std")]
+/// Uses HeapProvider for heap allocation (supports larger modules)
 pub type BaseRuntimeProvider = HeapProvider;
-#[cfg(not(feature = "std"))]
-pub type BaseRuntimeProvider = NoStdProvider<8192>;
 
 /// Budget-aware memory provider for runtime
 /// Uses CapabilityAwareProvider wrapper in all environments
@@ -71,38 +62,18 @@ pub fn create_runtime_provider_with_context(
         verification::VerificationLevel,
     };
 
-    #[cfg(feature = "std")]
-    {
-        // In std mode, use HeapProvider with larger heap allocation
-        let base_provider = HeapProvider::new(RUNTIME_MEMORY_SIZE)?;
+    let base_provider = HeapProvider::new(RUNTIME_MEMORY_SIZE)?;
 
-        // Create a simple capability for the runtime
-        let capability = DynamicMemoryCapability::new(
-            RUNTIME_MEMORY_SIZE,
-            CrateId::Runtime,
-            VerificationLevel::Standard,
-        );
+    // Create a simple capability for the runtime
+    let capability = DynamicMemoryCapability::new(
+        RUNTIME_MEMORY_SIZE,
+        CrateId::Runtime,
+        VerificationLevel::Standard,
+    );
 
-        let provider =
-            CapabilityAwareProvider::new(base_provider, Box::new(capability), CrateId::Runtime);
-        Ok(provider)
-    }
-    #[cfg(not(feature = "std"))]
-    {
-        // In no_std environments, use NoStdProvider with small stack allocation
-        let base_provider = NoStdProvider::<8192>::default();
-
-        // Create a simple capability for the runtime
-        let capability = DynamicMemoryCapability::new(
-            RUNTIME_MEMORY_SIZE,
-            CrateId::Runtime,
-            VerificationLevel::Standard,
-        );
-
-        let provider =
-            CapabilityAwareProvider::new(base_provider, Box::new(capability), CrateId::Runtime);
-        Ok(provider)
-    }
+    let provider =
+        CapabilityAwareProvider::new(base_provider, Box::new(capability), CrateId::Runtime);
+    Ok(provider)
 }
 
 /// Helper function to create a runtime provider
@@ -118,33 +89,15 @@ pub fn create_runtime_provider() -> kiln_error::Result<RuntimeProvider> {
         verification::VerificationLevel,
     };
 
-    #[cfg(feature = "std")]
-    {
-        // In std mode, use HeapProvider with large heap allocation
-        let base_provider = HeapProvider::new(RUNTIME_MEMORY_SIZE)?;
-        let capability = DynamicMemoryCapability::new(
-            RUNTIME_MEMORY_SIZE,
-            CrateId::Runtime,
-            VerificationLevel::Standard,
-        );
-        let provider =
-            CapabilityAwareProvider::new(base_provider, Box::new(capability), CrateId::Runtime);
-        Ok(provider)
-    }
-
-    #[cfg(not(feature = "std"))]
-    {
-        // In no_std, use NoStdProvider with small stack allocation
-        let base_provider = NoStdProvider::<8192>::default();
-        let capability = DynamicMemoryCapability::new(
-            RUNTIME_MEMORY_SIZE,
-            CrateId::Runtime,
-            VerificationLevel::Standard,
-        );
-        let provider =
-            CapabilityAwareProvider::new(base_provider, Box::new(capability), CrateId::Runtime);
-        Ok(provider)
-    }
+    let base_provider = HeapProvider::new(RUNTIME_MEMORY_SIZE)?;
+    let capability = DynamicMemoryCapability::new(
+        RUNTIME_MEMORY_SIZE,
+        CrateId::Runtime,
+        VerificationLevel::Standard,
+    );
+    let provider =
+        CapabilityAwareProvider::new(base_provider, Box::new(capability), CrateId::Runtime);
+    Ok(provider)
 }
 
 /// Maximum number of runtime instances

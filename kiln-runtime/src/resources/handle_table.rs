@@ -154,10 +154,7 @@ where
         + kiln_foundation::traits::FromBytes,
 {
     /// Table entries indexed by handle
-    #[cfg(feature = "std")]
     entries:     Vec<Option<ResourceEntry<T>>>,
-    #[cfg(not(feature = "std"))]
-    entries:     BoundedVec<Option<ResourceEntry<T>>, MAX_RESOURCES_PER_TYPE, P>,
     /// Next available handle
     next_handle: u32,
     /// Memory provider (kept for API compatibility)
@@ -177,10 +174,7 @@ where
     pub fn new(provider: P) -> Result<Self> {
         // Start with empty table - entries are allocated lazily as needed
         Ok(Self {
-            #[cfg(feature = "std")]
             entries: Vec::new(),
-            #[cfg(not(feature = "std"))]
-            entries: BoundedVec::new(provider)?,
             next_handle: 1, // 0 is reserved for null handle
             _provider: core::marker::PhantomData,
         })
@@ -195,182 +189,68 @@ where
             ref_count: 0,
         };
 
-        #[cfg(feature = "std")]
-        {
-            // Extend Vec if needed
-            while self.entries.len() <= handle.0 as usize {
-                self.entries.push(None);
-            }
-            self.entries[handle.0 as usize] = Some(entry);
+        // Extend Vec if needed
+        while self.entries.len() <= handle.0 as usize {
+            self.entries.push(None);
         }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Extend BoundedVec if needed
-            if handle.0 as usize >= self.entries.len() {
-                while self.entries.len() <= handle.0 as usize {
-                    self.entries.push(None).map_err(|_| {
-                        Error::capacity_limit_exceeded("Resource table capacity exceeded")
-                    })?;
-                }
-            }
-            let _old_entry = self
-                .entries
-                .set(handle.0 as usize, Some(entry))
-                .map_err(|_| Error::resource_error("Failed to set resource entry"))?;
-        }
+        self.entries[handle.0 as usize] = Some(entry);
 
         Ok(handle)
     }
 
     /// Create a borrowed handle from an owned handle
     pub fn new_borrow(&mut self, owned: ResourceHandle) -> Result<ResourceHandle> {
-        #[cfg(feature = "std")]
-        {
-            let entry = self
-                .entries
-                .get_mut(owned.0 as usize)
-                .and_then(|opt| opt.as_mut())
-                .ok_or_else(|| Error::resource_invalid_handle("Invalid owned handle"))?;
+        let entry = self
+            .entries
+            .get_mut(owned.0 as usize)
+            .and_then(|opt| opt.as_mut())
+            .ok_or_else(|| Error::resource_invalid_handle("Invalid owned handle"))?;
 
-            if entry.ownership != ResourceOwnership::Owned {
-                return Err(Error::resource_invalid_handle(
-                    "Can only borrow from owned resources",
-                ));
-            }
-
-            entry.ref_count += 1;
-            Ok(owned)
+        if entry.ownership != ResourceOwnership::Owned {
+            return Err(Error::resource_invalid_handle(
+                "Can only borrow from owned resources",
+            ));
         }
 
-        #[cfg(not(feature = "std"))]
-        {
-            let current_entry = self
-                .entries
-                .get(owned.0 as usize)
-                .map_err(|_| Error::resource_invalid_handle("Invalid owned handle index"))?;
-
-            if current_entry.is_none() {
-                return Err(Error::resource_invalid_handle(
-                    "Invalid owned handle - no entry",
-                ));
-            }
-
-            let mut entry = current_entry.unwrap();
-            if entry.ownership != ResourceOwnership::Owned {
-                return Err(Error::resource_invalid_handle(
-                    "Can only borrow from owned resources",
-                ));
-            }
-
-            entry.ref_count += 1;
-            let _old = self
-                .entries
-                .set(owned.0 as usize, Some(entry))
-                .map_err(|_| Error::resource_error("Failed to update resource entry"))?;
-            Ok(owned)
-        }
+        entry.ref_count += 1;
+        Ok(owned)
     }
 
     /// Get a resource by handle
     pub fn get(&self, handle: ResourceHandle) -> Option<&T> {
-        #[cfg(feature = "std")]
-        {
-            self.entries
-                .get(handle.0 as usize)?
-                .as_ref()
-                .map(|entry| &entry.resource)
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            // BoundedVec's get returns Result<T, _>, not Option<&T>
-            // We can't return a reference in no_std mode
-            let _ = handle;
-            None
-        }
+        self.entries
+            .get(handle.0 as usize)?
+            .as_ref()
+            .map(|entry| &entry.resource)
     }
 
     /// Get a mutable resource by handle (only for owned)
     pub fn get_mut(&mut self, handle: ResourceHandle) -> Option<&mut T> {
-        #[cfg(feature = "std")]
-        {
-            self.entries
-                .get_mut(handle.0 as usize)?
-                .as_mut()
-                .map(|entry| &mut entry.resource)
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            // BoundedVec doesn't support get_mut
-            let _ = handle;
-            None
-        }
+        self.entries
+            .get_mut(handle.0 as usize)?
+            .as_mut()
+            .map(|entry| &mut entry.resource)
     }
 
     /// Drop a resource handle
     pub fn drop_handle(&mut self, handle: ResourceHandle) -> Result<Option<T>> {
-        #[cfg(feature = "std")]
-        {
-            let entry = self
-                .entries
-                .get_mut(handle.0 as usize)
-                .and_then(|opt| opt.as_mut())
+        let entry = self
+            .entries
+            .get_mut(handle.0 as usize)
+            .and_then(|opt| opt.as_mut())
+            .ok_or_else(|| Error::resource_invalid_handle("Invalid resource handle"))?;
+
+        // If ref_count > 0, this is dropping a borrow (decrement ref_count)
+        // If ref_count == 0, this is dropping the owned resource (remove entry)
+        if entry.ref_count > 0 {
+            entry.ref_count -= 1;
+            Ok(None)
+        } else {
+            // Take ownership and remove from table
+            let entry = self.entries[handle.0 as usize]
+                .take()
                 .ok_or_else(|| Error::resource_invalid_handle("Invalid resource handle"))?;
-
-            // If ref_count > 0, this is dropping a borrow (decrement ref_count)
-            // If ref_count == 0, this is dropping the owned resource (remove entry)
-            if entry.ref_count > 0 {
-                entry.ref_count -= 1;
-                Ok(None)
-            } else {
-                // Take ownership and remove from table
-                let entry = self.entries[handle.0 as usize]
-                    .take()
-                    .ok_or_else(|| Error::resource_invalid_handle("Invalid resource handle"))?;
-                Ok(Some(entry.resource))
-            }
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            let entry = self
-                .entries
-                .get(handle.0 as usize)
-                .map_err(|_| Error::resource_invalid_handle("Invalid handle index"))?
-                .ok_or_else(|| Error::resource_invalid_handle("Invalid resource handle"))?;
-
-            // Remove the entry by setting it to None
-            let _old = self
-                .entries
-                .set(handle.0 as usize, None)
-                .map_err(|_| Error::resource_error("Failed to remove resource entry"))?;
-
-            match entry.ownership {
-                ResourceOwnership::Owned => {
-                    if entry.ref_count > 0 {
-                        // Put it back, still has borrows
-                        let _old = self
-                            .entries
-                            .set(handle.0 as usize, Some(entry))
-                            .map_err(|_| Error::resource_error("Failed to restore resource entry"))?;
-                        return Err(Error::resource_error(
-                            "Cannot drop owned resource with active borrows",
-                        ));
-                    }
-                    Ok(Some(entry.resource))
-                },
-                ResourceOwnership::Borrowed => {
-                    // Decrement ref count on the owned resource
-                    if let Ok(Some(mut owned_entry)) = self.entries.get(handle.0 as usize) {
-                        owned_entry.ref_count = owned_entry.ref_count.saturating_sub(1);
-                        let _old = self
-                            .entries
-                            .set(handle.0 as usize, Some(owned_entry))
-                            .map_err(|_| Error::resource_error("Failed to update ref count"))?;
-                    }
-                    Ok(None)
-                },
-            }
+            Ok(Some(entry.resource))
         }
     }
 
@@ -384,10 +264,7 @@ where
                 continue;
             } // Skip 0 (null handle)
 
-            #[cfg(feature = "std")]
             let is_available = self.entries.get(index).map_or(true, |opt| opt.is_none());
-            #[cfg(not(feature = "std"))]
-            let is_available = self.entries.get(index).ok().flatten().is_none();
 
             if is_available {
                 self.next_handle = (index + 1) as u32;
@@ -401,19 +278,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    #[cfg(feature = "std")]
     use std::string::String as StdString;
 
     use kiln_foundation::traits::DefaultMemoryProvider;
 
     use super::*;
-    #[cfg(not(feature = "std"))]
-    extern crate alloc;
-    #[cfg(not(feature = "std"))]
-    use alloc::string::String as StdString;
 
     #[test]
-    #[cfg(feature = "std")]
     fn test_resource_table_basic() {
         // Use a provider with sufficient capacity for the test
         // BoundedVec needs space for metadata, serialization buffers, and items

@@ -2,15 +2,12 @@
 //!
 //! This module provides the implementation for WebAssembly function types.
 
-#[cfg(not(feature = "std"))]
-use kiln_foundation::types::FuncType as RuntimeFuncType;
 use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
 };
 
 use crate::prelude::Debug;
-#[cfg(feature = "std")]
 use crate::prelude::RuntimeFuncType;
 
 /// Placeholder Function type for runtime functions
@@ -30,7 +27,6 @@ pub struct Function {
 
 impl Function {
     /// Create a new function
-    #[cfg(feature = "std")]
     pub fn new(func_type: RuntimeFuncType) -> Result<Self, kiln_error::Error> {
         let provider = safe_managed_alloc!(8192, CrateId::Runtime)?;
         Ok(Self {
@@ -40,33 +36,7 @@ impl Function {
         })
     }
 
-    #[cfg(not(feature = "std"))]
-    pub fn new(
-        func_type: RuntimeFuncType,
-    ) -> Result<Self, kiln_error::Error> {
-        let provider = safe_managed_alloc!(8192, CrateId::Runtime)?;
-        Ok(Self {
-            func_type,
-            body: kiln_foundation::bounded::BoundedVec::new(provider)?,
-            function_index: None,
-        })
-    }
-
     /// Create a new function with an index
-    #[cfg(feature = "std")]
-    pub fn new_with_index(
-        func_type: RuntimeFuncType,
-        index: u32,
-    ) -> Result<Self, kiln_error::Error> {
-        let provider = safe_managed_alloc!(8192, CrateId::Runtime)?;
-        Ok(Self {
-            func_type,
-            body: kiln_foundation::bounded::BoundedVec::new(provider)?,
-            function_index: Some(index),
-        })
-    }
-
-    #[cfg(not(feature = "std"))]
     pub fn new_with_index(
         func_type: RuntimeFuncType,
         index: u32,

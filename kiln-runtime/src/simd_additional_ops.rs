@@ -3,9 +3,6 @@
 //! This module contains the remaining SIMD operation implementations that
 //! complete the WebAssembly SIMD specification coverage.
 
-#[cfg(not(feature = "std"))]
-use alloc::format;
-
 use kiln_error::{
     codes,
     Error,

@@ -331,12 +331,8 @@ impl ComponentRuntime for ComponentRuntimeImpl {
         #[cfg(all(not(feature = "std"), not(feature = "std")))]
         let mut host_function_names = kiln_foundation::bounded::BoundedVec::new();
 
-        #[cfg(feature = "std")]
         let mut host_functions = {
-            #[cfg(feature = "std")]
             let mut map = HashMap::new();
-            #[cfg(not(feature = "std"))]
-            let mut map = BTreeMap::new();
             
             for name in self.host_functions.keys() {
                 host_function_names.push(name.clone();
@@ -396,10 +392,7 @@ impl ComponentRuntime for ComponentRuntimeImpl {
             };
 
             // Insert the function into the host functions map
-            #[cfg(feature = "std")]
             let name_string = name.to_string();
-            #[cfg(not(feature = "std"))]
-            let name_string = alloc::string::String::from(name);
 
             self.host_functions.insert(name_string, Box::new(func_impl));
         }
@@ -455,11 +448,7 @@ impl ComponentRuntimeImpl {
     }
 }
 
-#[cfg(feature = "std")]
 type HostFunctionTypeMap = HashMap<String, Option<FuncType>>;
-
-#[cfg(not(feature = "std"))]
-type HostFunctionTypeMap = BTreeMap<String, Option<FuncType>>;
 
 /// Basic implementation of ComponentInstance for testing
 struct ComponentInstanceImpl {
@@ -492,22 +481,8 @@ impl ComponentInstance for ComponentInstanceImpl {
         }
 
         // Check if this is a function that's known to the runtime
-        #[cfg(feature = "std")]
         let name_check = self.host_function_names.contains(&name.to_string());
-        #[cfg(not(feature = "std"))]
-        let name_check = self.host_function_names.contains(&alloc::string::String::from(name;
-        #[cfg(all(not(feature = "std"), not(feature = "std")))]
-        let name_check = {
-            let mut found = false;
-            for stored_name in self.host_function_names.iter() {
-                if stored_name.as_str().map_or(false, |s| s == name) {
-                    found = true;
-                    break;
-                }
-            }
-            found
-        };
-        
+
         if name_check {
             // Create an empty SafeStack for the result
             let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
@@ -768,10 +743,7 @@ mod tests {
                 let provider = kiln_provider!(131072, CrateId::Runtime).unwrap_or_default);
                 Vec::new(provider)?
             },
-            #[cfg(feature = "std")]
             host_functions: HashMap::new(),
-            #[cfg(not(feature = "std"))]
-            host_functions: BTreeMap::new(),
         };
 
         // Write to memory

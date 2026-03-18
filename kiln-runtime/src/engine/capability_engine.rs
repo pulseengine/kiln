@@ -362,19 +362,12 @@ impl CapabilityAwareEngine {
         match preset {
             EnginePreset::QM => {
                 // QM mode: Full host function support with standard limits
-                #[cfg(feature = "std")]
                 {
                     let builder = HostBuilder::new()
                         .with_component_name("kiln_qm_component")
                         .with_host_id("kiln_qm_host");
                     let registry = builder.build()?;
                     Ok((Some(registry), None))
-                }
-                #[cfg(not(feature = "std"))]
-                {
-                    let limits = HostIntegrationLimits::qnx();
-                    let manager = BoundedHostIntegrationManager::new(limits)?;
-                    Ok((None, Some(manager)))
                 }
             },
             EnginePreset::AsilA => {
@@ -408,7 +401,6 @@ impl CapabilityAwareEngine {
     where
         F: Fn(&[Value]) -> Result<Vec<Value>> + Send + Sync + Clone + 'static,
     {
-        #[cfg(feature = "std")]
         {
             if let Some(ref mut registry) = self.host_registry {
                 use kiln_host::CloneableFn;
@@ -428,19 +420,6 @@ impl CapabilityAwareEngine {
 
                 #[cfg(feature = "tracing")]
                 trace!(module = module_name, function = func_name, "Registered host function");
-                Ok(())
-            } else {
-                Err(Error::not_supported_unsupported_operation(
-                    "Host functions not supported in this configuration",
-                ))
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            if let Some(ref mut manager) = self.host_manager {
-                use kiln_host::BoundedHostFunction;
-                // TODO: Create BoundedHostFunction and add to manager
-                // For now, return success as placeholder
                 Ok(())
             } else {
                 Err(Error::not_supported_unsupported_operation(
@@ -900,20 +879,6 @@ impl CapabilityEngine for CapabilityAwareEngine {
         Ok(())
     }
 
-    #[cfg(not(feature = "std"))]
-    fn link_import(
-        &mut self,
-        _module: ModuleHandle,
-        _import_module: &str,
-        _import_name: &str,
-        _provider_instance: InstanceHandle,
-        _export_name: &str,
-    ) -> Result<()> {
-        // No-std mode: import linking not yet supported
-        Err(Error::runtime_error("Import linking not supported in no_std mode"))
-    }
-
-    #[cfg(feature = "std")]
     fn remap_import_links(
         &mut self,
         module: ModuleHandle,
@@ -935,16 +900,6 @@ impl CapabilityEngine for CapabilityAwareEngine {
         // Delegate to StacklessEngine's remap method
         self.inner.remap_import_links(module_id, instance_id);
 
-        Ok(())
-    }
-
-    #[cfg(not(feature = "std"))]
-    fn remap_import_links(
-        &mut self,
-        _module: ModuleHandle,
-        _instance: InstanceHandle,
-    ) -> Result<()> {
-        // No-std mode: not supported
         Ok(())
     }
 
@@ -1049,15 +1004,11 @@ impl CapabilityEngine for CapabilityAwareEngine {
         // IMPORTANT: We must NOT call set_current_module here - that creates a new ID!
         // The instance was already registered during instantiate() and import links
         // were registered with that ID. Using a different ID breaks link lookup.
-        #[cfg(feature = "std")]
         let stackless_instance_id = self
             .handle_to_idx
             .get(&instance_handle)
             .copied()
             .ok_or_else(|| Error::resource_not_found("Instance not registered - call instantiate first"))?;
-
-        #[cfg(not(feature = "std"))]
-        let stackless_instance_id = self.inner.set_current_module(Arc::clone(instance))?;
 
         // Reset call depth before each top-level invocation
         self.inner.reset_call_depth();
@@ -1075,14 +1026,12 @@ impl CapabilityEngine for CapabilityAwareEngine {
 
 impl CapabilityAwareEngine {
     /// Get an instance by handle (for debugging)
-    #[cfg(feature = "std")]
     pub fn get_instance(&self, handle: InstanceHandle) -> Result<&Arc<ModuleInstance>> {
         self.instances.get(&handle)
             .ok_or_else(|| Error::resource_not_found("Instance not found"))
     }
 
     /// Find the index of an imported item (table, memory, or global) in the module
-    #[cfg(feature = "std")]
     fn find_import_index(
         &self,
         module: &Arc<Module>,

@@ -91,15 +91,9 @@ use core::alloc::Layout;
 use core::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use core::time::Duration;
 
-#[cfg(not(feature = "std"))]
-use core::borrow::BorrowMut;
-#[cfg(feature = "std")]
 use std::borrow::BorrowMut;
 
-#[cfg(feature = "std")]
 use std::vec;
-#[cfg(not(feature = "std"))]
-use alloc::vec;
 
 // External crates
 use kiln_foundation::safe_memory::{
@@ -107,15 +101,10 @@ use kiln_foundation::safe_memory::{
 };
 use kiln_foundation::MemoryStats;
 
-#[cfg(not(feature = "std"))]
-use kiln_sync::KilnRwLock as RwLock;
-
 // Internal modules
 // Temporarily disabled - memory_adapter module is disabled
 // use crate::memory_adapter::StdMemoryProvider;
 use crate::prelude::{Arc, BoundedCapacity, CoreMemoryType, Debug, Eq, Error, ErrorCategory, Ord, PartialEq, Result, TryFrom, VerificationLevel, str};
-#[cfg(not(feature = "std"))]
-use crate::prelude::vec_with_capacity;
 
 // Import the MemoryOperations trait from kiln-instructions
 use kiln_instructions::memory_ops::MemoryOperations;
@@ -176,45 +165,19 @@ fn usize_to_wasm_u32(size: usize) -> Result<u32> {
 #[derive(Debug)]
 struct MemoryMetrics {
     /// Peak memory usage in bytes
-    #[cfg(feature = "std")]
     peak_usage: AtomicUsize,
     /// Memory access counter for profiling
-    #[cfg(feature = "std")]
     access_count: AtomicU64,
     /// Maximum size of any access
-    #[cfg(feature = "std")]
     max_access_size: AtomicUsize,
     /// Number of unique regions accessed
-    #[cfg(feature = "std")]
     unique_regions: AtomicUsize,
     /// Last access offset for validation
-    #[cfg(feature = "std")]
     last_access_offset: AtomicUsize,
     /// Last access length for validation
-    #[cfg(feature = "std")]
     last_access_length: AtomicUsize,
-
-    /// Peak memory usage (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    peak_usage: usize,
-    /// Memory access counter (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    access_count: u64,
-    /// Maximum size of any access (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    max_access_size: usize,
-    /// Number of unique regions accessed (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    unique_regions: usize,
-    /// Last access offset for validation (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    last_access_offset: usize,
-    /// Last access length for validation (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    last_access_length: usize,
 }
 
-#[cfg(feature = "std")]
 impl Clone for MemoryMetrics {
     fn clone(&self) -> Self {
         Self {
@@ -227,22 +190,7 @@ impl Clone for MemoryMetrics {
         }
 }
 
-#[cfg(not(feature = "std"))]
-impl Clone for MemoryMetrics {
-    fn clone(&self) -> Self {
-        // For no_std, fields are directly cloneable (usize, u64)
-        Self {
-            peak_usage: self.peak_usage,
-            access_count: self.access_count,
-            max_access_size: self.max_access_size,
-            unique_regions: self.unique_regions,
-            last_access_offset: self.last_access_offset,
-            last_access_length: self.last_access_length,
-        }
-}
-
 impl MemoryMetrics {
-    #[cfg(feature = "std")]
     fn new(size: usize) -> Self {
         Self {
             peak_usage: AtomicUsize::new(size),
@@ -252,17 +200,7 @@ impl MemoryMetrics {
             last_access_offset: AtomicUsize::new(0),
             last_access_length: AtomicUsize::new(0),
         }
-
-    #[cfg(not(feature = "std"))]
-    fn new(size: usize) -> Self {
-        Self {
-            peak_usage: size,
-            access_count: 0,
-            max_access_size: 0,
-            unique_regions: 0,
-            last_access_offset: 0,
-            last_access_length: 0,
-        }
+    }
 }
 
 /// Represents a WebAssembly memory instance
@@ -271,21 +209,13 @@ pub struct Memory {
     /// The memory type
     pub ty: CoreMemoryType,
     /// The memory data
-    #[cfg(feature = "std")]
-    pub data: SafeMemoryHandler<LargeMemoryProvider>,
-    /// The memory data for `no_std` environments
-    #[cfg(not(feature = "std"))]
     pub data: SafeMemoryHandler<LargeMemoryProvider>,
     /// Current number of pages
     pub current_pages: core::sync::atomic::AtomicU32,
     /// Optional name for debugging
     pub debug_name: Option<kiln_foundation::bounded::BoundedString<128, SmallMemoryProvider>>,
     /// Memory metrics for tracking access
-    #[cfg(feature = "std")]
     pub metrics: MemoryMetrics,
-    /// Memory metrics for tracking access (`RwLock` for `no_std`)
-    #[cfg(not(feature = "std"))]
-    pub metrics: RwLock<MemoryMetrics>,
     /// Memory verification level
     pub verification_level: VerificationLevel,
 }
@@ -297,22 +227,12 @@ impl Clone for Memory {
             self.data.to_vec().expect("Failed to clone memory data");
         // Convert BoundedVec to appropriate provider
         let new_data = {
-            #[cfg(feature = "std")]
-            {
-                // Use LargeMemoryProvider for consistency with struct definition
-                let new_provider = LargeMemoryProvider::default());
-                SafeMemoryHandler::new(new_provider)
-            }
-            #[cfg(not(feature = "std"))]
-            {
-                // Use LargeMemoryProvider for consistency with struct definition
-                let new_provider = LargeMemoryProvider::default());
-                SafeMemoryHandler::new(new_provider)
-            }
+            // Use LargeMemoryProvider for consistency with struct definition
+            let new_provider = LargeMemoryProvider::default());
+            SafeMemoryHandler::new(new_provider)
         };
 
-        // Clone metrics, handling potential RwLock poisoning for no_std
-        #[cfg(feature = "std")]
+        // Clone metrics
         let cloned_metrics = MemoryMetrics {
             peak_usage: AtomicUsize::new(self.metrics.peak_usage.load(Ordering::Relaxed)),
             access_count: AtomicU64::new(self.metrics.access_count.load(Ordering::Relaxed)),
@@ -324,12 +244,6 @@ impl Clone for Memory {
             last_access_length: AtomicUsize::new(
                 self.metrics.last_access_length.load(Ordering::Relaxed),
             ),
-        };
-
-        #[cfg(not(feature = "std"))]
-        let cloned_metrics = {
-            let guard = self.metrics.read);
-            RwLock::new((*guard).clone()) // Assuming MemoryMetrics is Clone
         };
 
         Self {
@@ -448,14 +362,7 @@ impl Memory {
         // but leads to more complex cfg blocks.
         // Let's try to instantiate the provider directly.
 
-        // Create memory provider based on available features
-        #[cfg(feature = "std")]
-        let data_handler = {
-            let provider = LargeMemoryProvider::default());
-            SafeMemoryHandler::new(provider)
-        };
-
-        #[cfg(not(feature = "std"))]
+        // Create memory provider
         let data_handler = {
             let provider = LargeMemoryProvider::default());
             SafeMemoryHandler::new(provider)
@@ -477,10 +384,7 @@ impl Memory {
             data: data_handler,
             current_pages: core::sync::atomic::AtomicU32::new(initial_pages),
             debug_name: None,
-            #[cfg(feature = "std")]
             metrics: MemoryMetrics::new(current_size_bytes),
-            #[cfg(not(feature = "std"))]
-            metrics: RwLock::new(MemoryMetrics::new(current_size_bytes)),
             verification_level,
         })
     }
@@ -584,133 +488,59 @@ impl Memory {
 
     /// Returns the peak memory usage in bytes
     pub fn peak_memory(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.peak_usage.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read);
-            metrics.peak_usage
-        }
+        self.metrics.peak_usage.load(Ordering::Relaxed)
+    }
 
     /// Returns the total number of memory accesses
     pub fn access_count(&self) -> u64 {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.access_count.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read);
-            metrics.access_count
-        }
+        self.metrics.access_count.load(Ordering::Relaxed)
+    }
 
     /// Increment the access count for memory operations
     fn increment_access_count(&self, offset: usize, len: usize) {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.access_count.fetch_add(1, Ordering::Relaxed;
-            self.metrics.max_access_size.fetch_max(len, Ordering::Relaxed;
-            self.metrics.last_access_offset.store(offset, Ordering::Relaxed;
-            self.metrics.last_access_length.store(len, Ordering::Relaxed;
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use write() method with KilnRwLock
-            let mut metrics = self.metrics.write);
-            metrics.access_count += 1;
-            metrics.max_access_size = metrics.max_access_size.max(len;
-            metrics.last_access_offset = offset;
-            metrics.last_access_length = len;
-        }
+        self.metrics.access_count.fetch_add(1, Ordering::Relaxed);
+        self.metrics.max_access_size.fetch_max(len, Ordering::Relaxed);
+        self.metrics.last_access_offset.store(offset, Ordering::Relaxed);
+        self.metrics.last_access_length.store(len, Ordering::Relaxed);
+    }
 
     /// Update the peak memory usage statistic
     fn update_peak_memory(&self) {
-        let current_size = self.size_in_bytes);
+        let current_size = self.size_in_bytes();
 
-        #[cfg(feature = "std")]
-        {
-            let mut current_peak = self.metrics.peak_usage.load(Ordering::Relaxed;
-            while current_size > current_peak {
-                match self.metrics.peak_usage.compare_exchange(
-                    current_peak,
-                    current_size,
-                    Ordering::Relaxed,
-                    Ordering::Relaxed,
-                ) {
-                    Ok(_) => break,
-                    Err(actual) => current_peak = actual,
-                }
+        let mut current_peak = self.metrics.peak_usage.load(Ordering::Relaxed);
+        while current_size > current_peak {
+            match self.metrics.peak_usage.compare_exchange(
+                current_peak,
+                current_size,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(actual) => current_peak = actual,
+            }
         }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use write() method with KilnRwLock
-            let mut metrics = self.metrics.write);
-            metrics.peak_usage = metrics.peak_usage.max(current_size;
-        }
+    }
 
     /// Returns the maximum size of any memory access
     pub fn max_access_size(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.max_access_size.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read);
-            metrics.max_access_size
-        }
+        self.metrics.max_access_size.load(Ordering::Relaxed)
+    }
 
     /// Returns the number of unique memory regions accessed
     pub fn unique_regions(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.unique_regions.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read);
-            metrics.unique_regions
-        }
+        self.metrics.unique_regions.load(Ordering::Relaxed)
+    }
 
     /// Returns the offset of the most recent memory access
     pub fn last_access_offset(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.last_access_offset.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read);
-            metrics.last_access_offset
-        }
+        self.metrics.last_access_offset.load(Ordering::Relaxed)
+    }
 
     /// Returns the length of the most recent memory access
     pub fn last_access_length(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.last_access_length.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read);
-            metrics.last_access_length
-        }
+        self.metrics.last_access_length.load(Ordering::Relaxed)
+    }
 
     /// Grows memory by the given number of pages
     ///

@@ -206,3 +206,135 @@ security-hazards:
       Component fusion is a complex graph transformation. Name resolution
       across WIT interfaces with versioning and aliasing creates
       opportunities for incorrect wiring that escalates capabilities.
+
+  - id: SH-9
+    title: Resource handle forgery via crafted handle values
+    description: >
+      The RFC #46 host intrinsics __wasm_import_<iface>_thing_new,
+      thing_rep, and thing_drop operate on integer handle values that
+      index into a per-component resource table. An adversary crafts a
+      fused module that passes forged handle values to thing_rep or
+      thing_drop, attempting to access resource slots belonging to other
+      component instances or to the host runtime itself. If the resource
+      table does not validate handle ownership (which component created
+      the handle) and handle generation (to detect use-after-free), the
+      adversary can read another component's resource representation via
+      thing_rep, corrupt another component's resource via thing_drop, or
+      cause a type confusion by using a handle created for resource type A
+      with thing_rep for resource type B.
+    security-losses: [SL-1, SL-3]
+    safety-hazards: [H-6, H-13]
+    attack-vector: >
+      Adversary's component calls thing_rep(handle=42) where handle 42
+      belongs to a co-resident component's file descriptor resource. The
+      returned representation is the raw fd number, which the adversary
+      uses to construct a WASI call targeting that fd. Alternatively, the
+      adversary calls thing_drop(handle=42) to close the victim's fd,
+      causing the victim to fail on subsequent I/O.
+    exploitability: high
+    rationale: >
+      Handle values are plain integers with no cryptographic binding to
+      the creating component. Without ownership and generation checks,
+      handles are trivially forgeable by any code in the fused module.
+
+  - id: SH-10
+    title: Stream buffer overflow via attacker-controlled length
+    description: >
+      The RFC #46 stream_read(stream, memory, buffer, length) intrinsic
+      writes up to `length` bytes into guest linear memory starting at
+      `buffer`. An adversary crafts a fused module that passes a large
+      `length` value or a `buffer` near the end of linear memory such
+      that buffer + length overflows the linear memory bounds. If the
+      host intrinsic does not validate buffer + length against the
+      memory's current size before writing, the write overwrites memory
+      beyond the guest's allocation. On embedded platforms without virtual
+      memory (no_std), this can corrupt host runtime data structures,
+      the capability-based memory budget tracker, or adjacent component
+      memories. The same attack applies to stream_write reading from
+      out-of-bounds guest memory, potentially leaking host data.
+    security-losses: [SL-1, SL-4]
+    safety-hazards: [H-2, H-13]
+    attack-vector: >
+      Module calls stream_read(stream_id, 0, buffer=0xFFFF_FF00, length=0x200).
+      The effective range [0xFFFF_FF00, 0x1_0000_0100) extends 256 bytes past
+      the end of a 4 GiB linear memory. On a no_std platform where linear
+      memory is a contiguous allocation, the overflow writes into whatever
+      follows: potentially the resource table, capability budget, or another
+      component's memory.
+    exploitability: high
+    rationale: >
+      Buffer overflow via unchecked length is a classic vulnerability.
+      Stream intrinsics are new API surface from RFC #46 that may not
+      yet have hardened bounds checking.
+
+  - id: SH-11
+    title: Thread sandbox escape via cross-component thread_switch_to
+    description: >
+      The RFC #46 thread_switch_to(thread_id) intrinsic directs the
+      executor to suspend the current wasm logical thread and resume
+      the target thread. An adversary crafts a fused module that calls
+      thread_switch_to with a thread_id belonging to a different
+      component instance. If the executor does not validate that the
+      target thread belongs to the same component instance as the
+      caller, the switch succeeds. The adversary's thread context is
+      now executing within the target component's execution environment
+      — with access to the target's linear memory, tables, globals, and
+      resources. This is a full sandbox escape: the adversary can read
+      and write the victim component's memory, call its internal
+      functions via table references, and access its resources via
+      thing_rep. On gale, where component instances may correspond to
+      different RTOS task groups with different MPU configurations,
+      the cross-component switch may also bypass hardware memory
+      protection if the gale task inherits the target's MPU settings.
+    security-losses: [SL-1, SL-3]
+    safety-hazards: [H-14, H-17]
+    attack-vector: >
+      Adversary's component A observes (or guesses) that component B's
+      thread_id is 3 (thread IDs may be sequential integers). Component
+      A calls thread_switch_to(3). If the executor does not check
+      ownership, the switch places A's execution in B's context. A
+      then reads B's linear memory (containing secrets, keys, or
+      application data) via ordinary load instructions.
+    exploitability: high
+    rationale: >
+      Thread IDs are plain integers with no cryptographic binding to
+      the creating component. Without ownership validation in the
+      executor, cross-component switching is trivially achievable.
+      This is analogous to SH-9 (resource handle forgery) but at the
+      thread level, with more severe consequences because thread
+      switching grants full memory access rather than just resource
+      representation access.
+
+  - id: SH-12
+    title: Stream data exfiltration via cross-component handle confusion
+    description: >
+      An adversary crafts a fused module that uses a stream reader
+      handle belonging to a different component instance. The stream
+      was created by component B for inter-thread communication within
+      B. Component A obtains (guesses or computes) the stream handle
+      value and calls stream_read with it. If the stream infrastructure
+      does not validate that the calling component owns the stream
+      handle, A reads data that B intended to be private — potentially
+      including cryptographic keys, authentication tokens, sensor data,
+      or control commands. The same attack works in reverse: A writes
+      into B's stream, injecting malicious data that B trusts because
+      it came from "its own" stream. On gale, where streams are backed
+      by shared memory ring buffers, the adversary may also be able to
+      directly access the ring buffer memory if MPU regions are not
+      configured per-stream.
+    security-losses: [SL-1, SL-3]
+    safety-hazards: [H-16, H-17]
+    attack-vector: >
+      Component A knows that component B created a stream with writer
+      handle 5 and reader handle 6 (handles are sequential integers).
+      A calls stream_read(6, 0, buffer=0x100, length=64) to read 64
+      elements from B's stream into A's linear memory. If the stream
+      read intrinsic does not check ownership, A receives B's data.
+      Alternatively, A calls stream_write(5, 0, buffer=0x200, length=1)
+      to inject a single crafted element into B's stream.
+    exploitability: high
+    rationale: >
+      Stream handles are integers indexing into a shared stream table.
+      Without per-component ownership checks, any component can read
+      from or write to any stream in the system. This is the stream
+      analog of SH-9 (resource handle forgery).

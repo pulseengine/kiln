@@ -12,19 +12,10 @@ use kiln_foundation::tracing::{
     debug_span, info_span, trace_span, Span
 };
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{
-    collections::BTreeMap as HashMap,
-    string::String,
-    sync::Arc,
-    vec::Vec,
-};
 use core::sync::atomic::{
     AtomicU64,
     Ordering,
 };
-// Use std types when available, fall back to alloc, then kiln_foundation
-#[cfg(feature = "std")]
 use std::{
     collections::HashMap,
     string::String,
@@ -1525,7 +1516,6 @@ impl StacklessEngine {
 
         // Check if this function is aliased and get the correct module
         // Clone the Arc<Module> so we own it and don't hold a borrow
-        #[cfg(feature = "std")]
         let module: Arc<crate::module::Module> = {
             if let Some(&original_instance_id) = self.aliased_functions.get(&(instance_id, func_idx)) {
                 #[cfg(feature = "tracing")]
@@ -1546,14 +1536,9 @@ impl StacklessEngine {
             }
         };
 
-        #[cfg(not(feature = "std"))]
-        let module: Arc<crate::module::Module> = instance.module().clone();
-
-        #[cfg(feature = "std")]
         {
             let elem_count = module.elements.len();
             let first_elem_items = if elem_count > 0 {
-                // In std mode, elements is Vec, so get() returns Option<&T>
                 if let Some(elem) = module.elements.get(0) {
                     elem.items.len()
                 } else {
@@ -1575,7 +1560,6 @@ impl StacklessEngine {
         // Check if this function index is an import and dispatch to linked instance
         let num_imports = self.count_total_imports(&module);
         if func_idx < num_imports {
-            #[cfg(feature = "std")]
             {
                 // This is an imported function - need to call via import link
                 if let Ok((module_name, field_name)) = self.find_import_by_index(&module, func_idx) {
@@ -1644,12 +1628,6 @@ impl StacklessEngine {
                     return Ok(ExecutionOutcome::Complete(Vec::new()));
                 }
             }
-            #[cfg(not(feature = "std"))]
-            {
-                // In no_std mode, return error for unresolved imports
-                self.call_frames_count -= 1;
-                return Err(kiln_error::Error::runtime_error("Import resolution not supported in no_std"));
-            }
         }
 
         // Validate function index
@@ -1667,32 +1645,15 @@ impl StacklessEngine {
             .get(func_idx)
             .ok_or_else(|| kiln_error::Error::runtime_function_not_found("Failed to get function"))?;
 
-        #[cfg(feature = "std")]
         #[cfg(feature = "tracing")]
-
         debug!("StacklessEngine: func.type_idx={}, module.types.len()={}", func.type_idx, module.types.len());
 
-        // In std mode, types is Vec so use simple indexing
-        #[cfg(feature = "std")]
         let func_type = module
             .types
             .get(func.type_idx as usize)
             .ok_or_else(|| kiln_error::Error::runtime_error("Function type index out of bounds"))?;
 
-        // In no_std mode, types is BoundedVec so use .get() method
-        #[cfg(not(feature = "std"))]
-        let func_type = module
-            .types
-            .get(func.type_idx as usize)
-            .map_err(|e| {
-                #[cfg(feature = "tracing")]
-
-                debug!("StacklessEngine: Failed to get type at index {}: {:?}", func.type_idx, e);
-                kiln_error::Error::runtime_error("Failed to get function type")
-            })?;
-
         // Execute the function's bytecode instructions
-        #[cfg(feature = "std")]
         {
             use kiln_foundation::types::Instruction;
 
@@ -1852,12 +1813,8 @@ impl StacklessEngine {
             } // end of fresh-call initialization
 
             while pc < instructions.len() {
-                #[cfg(feature = "std")]
                 let instruction = instructions.get(pc)
                     .ok_or_else(|| kiln_error::Error::runtime_error("Instruction index out of bounds"))?;
-                #[cfg(not(feature = "std"))]
-                let instruction = instructions.get(pc)
-                    .map_err(|_| kiln_error::Error::runtime_error("Instruction index out of bounds"))?;
 
                 instruction_count += 1;
                 #[cfg(feature = "tracing")]
@@ -2375,12 +2332,7 @@ impl StacklessEngine {
                                 #[cfg(feature = "tracing")]
                                 trace!(elements_len = module.elements.len(), "[CALL_INDIRECT] Searching element segments");
                                 for elem_idx in 0..module.elements.len() {
-                                    // In std mode, elements is Vec, so get() returns Option<&T>
-                                    // In no_std mode, elements is BoundedVec, so get() returns Result<T>
-                                    #[cfg(feature = "std")]
                                     let elem_opt = module.elements.get(elem_idx);
-                                    #[cfg(not(feature = "std"))]
-                                    let elem_opt = module.elements.get(elem_idx).ok().as_ref();
 
                                     if let Some(elem) = elem_opt {
                                         // The offset is where this element starts in the table
@@ -2390,16 +2342,11 @@ impl StacklessEngine {
                                             _ => {
                                                 // Try offset_expr
                                                 if let Some(ref offset_expr) = elem.offset_expr {
-                                                    #[cfg(feature = "std")]
-                                                    {
-                                                        if let Some(Instruction::I32Const(off)) = offset_expr.instructions.first() {
-                                                            *off as u32
-                                                        } else {
-                                                            0
-                                                        }
+                                                    if let Some(Instruction::I32Const(off)) = offset_expr.instructions.first() {
+                                                        *off as u32
+                                                    } else {
+                                                        0
                                                     }
-                                                    #[cfg(not(feature = "std"))]
-                                                    0
                                                 } else {
                                                     0
                                                 }
@@ -2716,26 +2663,6 @@ impl StacklessEngine {
                                     }
                                 }
 
-                                #[cfg(not(feature = "std"))]
-                                {
-                                    // NON-RECURSIVE: redirect via trampoline
-                                    let saved_state = SuspendedFrame {
-                                        instance_id,
-                                        func_idx: caller_func_idx,
-                                        pc: pc + 1,
-                                        locals,
-                                        operand_stack,
-                                        block_stack,
-                                        block_depth,
-                                        instruction_count,
-                                    };
-                                    return Ok(ExecutionOutcome::Call {
-                                        instance_id,
-                                        func_idx,
-                                        args: call_args,
-                                        return_state: Some(saved_state),
-                                    });
-                                }
                             } else {
                                 // Couldn't resolve import - redirect via trampoline
                                 #[cfg(feature = "tracing")]
@@ -6653,16 +6580,7 @@ impl StacklessEngine {
                                         let mut depth = 1;
                                         let mut search_pc = pc + 1;
                                         while depth > 0 && search_pc < instructions.len() {
-                                            #[cfg(feature = "std")]
                                             if let Some(search_instr) = instructions.get(search_pc) {
-                                                match search_instr {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
-                                            }
-                                            #[cfg(not(feature = "std"))]
-                                            if let Ok(search_instr) = instructions.get(search_pc) {
                                                 match search_instr {
                                                     Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
                                                     Instruction::End => depth -= 1,
@@ -6709,16 +6627,7 @@ impl StacklessEngine {
                                         let mut depth = 1;
                                         let mut search_pc = pc + 1;
                                         while depth > 0 && search_pc < instructions.len() {
-                                            #[cfg(feature = "std")]
                                             if let Some(search_instr) = instructions.get(search_pc) {
-                                                match search_instr {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
-                                            }
-                                            #[cfg(not(feature = "std"))]
-                                            if let Ok(search_instr) = instructions.get(search_pc) {
                                                 match search_instr {
                                                     Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
                                                     Instruction::End => depth -= 1,
@@ -7302,14 +7211,8 @@ impl StacklessEngine {
                         );
 
                         // Get the element segment from the module (needed for bounds check)
-                        #[cfg(feature = "std")]
                         let elem_segment = module.elements.get(elem_seg_idx as usize)
                             .ok_or_else(|| kiln_error::Error::runtime_trap(
-                                "table.init: invalid element segment index"
-                            ))?;
-                        #[cfg(not(feature = "std"))]
-                        let elem_segment = module.elements.get(elem_seg_idx as usize)
-                            .map_err(|_| kiln_error::Error::runtime_trap(
                                 "table.init: invalid element segment index"
                             ))?;
 
@@ -7391,14 +7294,7 @@ impl StacklessEngine {
                         );
 
                         // Validate element segment index exists
-                        #[cfg(feature = "std")]
                         if elem_seg_idx as usize >= module.elements.len() {
-                            return Err(kiln_error::Error::runtime_trap(
-                                "elem.drop: invalid element segment index",
-                            ));
-                        }
-                        #[cfg(not(feature = "std"))]
-                        if module.elements.get(elem_seg_idx as usize).is_err() {
                             return Err(kiln_error::Error::runtime_trap(
                                 "elem.drop: invalid element segment index",
                             ));
@@ -10259,16 +10155,9 @@ impl StacklessEngine {
                         trace!("StructNew: type_idx={}", type_idx);
 
                         // Determine field count from GC type info
-                        let field_count = {
-                            #[cfg(feature = "std")]
-                            {
-                                match module.gc_types.get(type_idx as usize) {
-                                    Some(crate::module::GcTypeInfo::Struct(fields)) => fields.len(),
-                                    _ => 0, // Unknown type, try with 0 fields
-                                }
-                            }
-                            #[cfg(not(feature = "std"))]
-                            { 0usize }
+                        let field_count = match module.gc_types.get(type_idx as usize) {
+                            Some(crate::module::GcTypeInfo::Struct(fields)) => fields.len(),
+                            _ => 0, // Unknown type, try with 0 fields
                         };
 
                         let mut struct_ref = kiln_foundation::values::StructRef::new(
@@ -10306,7 +10195,6 @@ impl StacklessEngine {
                         ).map_err(|_| kiln_error::Error::runtime_error("Failed to create struct"))?;
 
                         // Determine field types from GC type info and add default values
-                        #[cfg(feature = "std")]
                         {
                             if let Some(crate::module::GcTypeInfo::Struct(fields)) = module.gc_types.get(type_idx as usize) {
                                 for field in fields {
@@ -10422,36 +10310,29 @@ impl StacklessEngine {
                             _ => return Err(kiln_error::Error::runtime_trap("array.new_default: expected i32 length")),
                         };
                         // Determine the default value from the array's element type
-                        let default_val = {
-                            #[cfg(feature = "std")]
-                            {
-                                match module.gc_types.get(type_idx as usize) {
-                                    Some(crate::module::GcTypeInfo::Array(field)) => {
-                                        match &field.storage {
-                                            crate::module::GcFieldStorage::I8 |
-                                            crate::module::GcFieldStorage::I16 |
-                                            crate::module::GcFieldStorage::Value(0x7F) => Value::I32(0),
-                                            crate::module::GcFieldStorage::Value(0x7E) => Value::I64(0),
-                                            crate::module::GcFieldStorage::Value(0x7D) => Value::F32(FloatBits32::from_f32(0.0)),
-                                            crate::module::GcFieldStorage::Value(0x7C) => Value::F64(FloatBits64::from_f64(0.0)),
-                                            crate::module::GcFieldStorage::Value(0x7B) => Value::V128(V128 { bytes: [0u8; 16] }),
-                                            crate::module::GcFieldStorage::Value(0x6C) => Value::I31Ref(None),
-                                            crate::module::GcFieldStorage::Value(0x6B) => Value::StructRef(None),
-                                            crate::module::GcFieldStorage::Value(0x6A) => Value::ArrayRef(None),
-                                            crate::module::GcFieldStorage::Value(0x70) => Value::FuncRef(None),
-                                            crate::module::GcFieldStorage::Value(0x6F) => Value::ExternRef(None),
-                                            crate::module::GcFieldStorage::Value(0x6E) => Value::StructRef(None), // anyref defaults to null
-                                            crate::module::GcFieldStorage::Value(0x6D) => Value::StructRef(None), // eqref defaults to null
-                                            crate::module::GcFieldStorage::Value(0x63) |
-                                            crate::module::GcFieldStorage::Value(0x64) => Value::FuncRef(None), // ref null/non-null defaults
-                                            _ => Value::I32(0),
-                                        }
-                                    }
+                        let default_val = match module.gc_types.get(type_idx as usize) {
+                            Some(crate::module::GcTypeInfo::Array(field)) => {
+                                match &field.storage {
+                                    crate::module::GcFieldStorage::I8 |
+                                    crate::module::GcFieldStorage::I16 |
+                                    crate::module::GcFieldStorage::Value(0x7F) => Value::I32(0),
+                                    crate::module::GcFieldStorage::Value(0x7E) => Value::I64(0),
+                                    crate::module::GcFieldStorage::Value(0x7D) => Value::F32(FloatBits32::from_f32(0.0)),
+                                    crate::module::GcFieldStorage::Value(0x7C) => Value::F64(FloatBits64::from_f64(0.0)),
+                                    crate::module::GcFieldStorage::Value(0x7B) => Value::V128(V128 { bytes: [0u8; 16] }),
+                                    crate::module::GcFieldStorage::Value(0x6C) => Value::I31Ref(None),
+                                    crate::module::GcFieldStorage::Value(0x6B) => Value::StructRef(None),
+                                    crate::module::GcFieldStorage::Value(0x6A) => Value::ArrayRef(None),
+                                    crate::module::GcFieldStorage::Value(0x70) => Value::FuncRef(None),
+                                    crate::module::GcFieldStorage::Value(0x6F) => Value::ExternRef(None),
+                                    crate::module::GcFieldStorage::Value(0x6E) => Value::StructRef(None), // anyref defaults to null
+                                    crate::module::GcFieldStorage::Value(0x6D) => Value::StructRef(None), // eqref defaults to null
+                                    crate::module::GcFieldStorage::Value(0x63) |
+                                    crate::module::GcFieldStorage::Value(0x64) => Value::FuncRef(None), // ref null/non-null defaults
                                     _ => Value::I32(0),
                                 }
                             }
-                            #[cfg(not(feature = "std"))]
-                            { Value::I32(0) }
+                            _ => Value::I32(0),
                         };
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
                             type_idx,
@@ -10640,16 +10521,9 @@ impl StacklessEngine {
                             _ => return Err(kiln_error::Error::runtime_trap("array.new_data: expected i32 offset")),
                         };
                         // Get element size from GC type info
-                        let elem_size = {
-                            #[cfg(feature = "std")]
-                            {
-                                match module.gc_types.get(type_idx as usize) {
-                                    Some(crate::module::GcTypeInfo::Array(field)) => field.size_in_bytes(),
-                                    _ => 4, // default to 4 bytes if type info unavailable
-                                }
-                            }
-                            #[cfg(not(feature = "std"))]
-                            { 4usize }
+                        let elem_size = match module.gc_types.get(type_idx as usize) {
+                            Some(crate::module::GcTypeInfo::Array(field)) => field.size_in_bytes(),
+                            _ => 4, // default to 4 bytes if type info unavailable
                         };
                         // Get data segment
                         let data_segment = module.data.get(data_idx as usize)
@@ -10798,16 +10672,9 @@ impl StacklessEngine {
                             _ => return Err(kiln_error::Error::runtime_trap("array.init_data: expected i32 dst_offset")),
                         };
                         if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
-                            let elem_size = {
-                                #[cfg(feature = "std")]
-                                {
-                                    match module.gc_types.get(type_idx as usize) {
-                                        Some(crate::module::GcTypeInfo::Array(field)) => field.size_in_bytes(),
-                                        _ => 4,
-                                    }
-                                }
-                                #[cfg(not(feature = "std"))]
-                                { 4usize }
+                            let elem_size = match module.gc_types.get(type_idx as usize) {
+                                Some(crate::module::GcTypeInfo::Array(field)) => field.size_in_bytes(),
+                                _ => 4,
                             };
                             let data_segment = module.data.get(data_idx as usize)
                                 .ok_or_else(|| kiln_error::Error::runtime_trap("array.init_data: invalid data index"))?;
@@ -10948,16 +10815,7 @@ impl StacklessEngine {
                                         let mut depth = 1;
                                         let mut search_pc = pc + 1;
                                         while depth > 0 && search_pc < instructions.len() {
-                                            #[cfg(feature = "std")]
                                             if let Some(si) = instructions.get(search_pc) {
-                                                match si {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
-                                            }
-                                            #[cfg(not(feature = "std"))]
-                                            if let Ok(si) = instructions.get(search_pc) {
                                                 match si {
                                                     Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
                                                     Instruction::End => depth -= 1,
@@ -11008,16 +10866,7 @@ impl StacklessEngine {
                                         let mut depth = 1;
                                         let mut search_pc = pc + 1;
                                         while depth > 0 && search_pc < instructions.len() {
-                                            #[cfg(feature = "std")]
                                             if let Some(si) = instructions.get(search_pc) {
-                                                match si {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
-                                            }
-                                            #[cfg(not(feature = "std"))]
-                                            if let Ok(si) = instructions.get(search_pc) {
                                                 match si {
                                                     Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
                                                     Instruction::End => depth -= 1,
@@ -11146,122 +10995,8 @@ impl StacklessEngine {
             Ok(ExecutionOutcome::Complete(results))
         }
 
-        #[cfg(not(feature = "std"))]
-        {
-            // Fallback for no_std - return default values
-            let mut results = {
-                use kiln_foundation::{
-                    budget_aware_provider::CrateId,
-                    safe_managed_alloc,
-                };
-                use crate::bounded_runtime_infra::RUNTIME_MEMORY_SIZE;
-                let provider = safe_managed_alloc!(RUNTIME_MEMORY_SIZE, CrateId::Runtime)?;
-                BoundedVec::new(provider)?
-            };
-            for result_type in &func_type.results {
-                let default_value = match result_type {
-                    kiln_foundation::ValueType::I32 => Value::I32(0),
-                    kiln_foundation::ValueType::I64 => Value::I64(0),
-                    kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                    kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
-                    _ => Value::I32(0),
-                };
-                results.push(default_value)?;
-            }
-            // Return completed execution - call depth is handled by the trampoline wrapper
-            Ok(ExecutionOutcome::Complete(results))
-        }
     }
 
-    #[cfg(not(any(feature = "std", feature = "alloc")))]
-    pub fn execute(
-        &self,
-        instance_id: usize,
-        func_idx: usize,
-        args: Vec<Value>,
-    ) -> Result<Vec<Value>> {
-        #[cfg(feature = "std")]
-        #[cfg(feature = "tracing")]
-
-        trace!("DEBUG StacklessEngine::execute: instance_id={}, func_idx={}", instance_id, func_idx);
-
-        let instance = self
-            .instances
-            .get(&instance_id)?
-            .ok_or_else(|| kiln_error::Error::runtime_execution_error("Instance not found"))?;
-
-        // For now, implement a basic execution that validates the function exists
-        // and returns appropriate results
-        let module = instance.module();
-
-        #[cfg(feature = "std")]
-        #[cfg(feature = "tracing")]
-
-        debug!("Got module, functions.len()={}", module.functions.len());
-
-        // Validate function index
-        if func_idx >= module.functions.len() {
-            return Err(kiln_error::Error::runtime_function_not_found(
-                "Function index out of bounds",
-            ));
-        }
-
-        let func = module
-            .functions
-            .get(func_idx)
-            .map_err(|_| kiln_error::Error::runtime_error("Failed to get function"))?;
-
-        #[cfg(feature = "std")]
-        #[cfg(feature = "tracing")]
-
-        debug!("Retrieved func, body.instructions.len()={}", func.body.instructions.len());
-
-        #[cfg(feature = "std")]
-        #[cfg(feature = "tracing")]
-
-        trace!("DEBUG execute: func.type_idx={}, module.types.len()={}", func.type_idx, module.types.len());
-
-        // In std mode, types is Vec so get() returns Option<&T>
-        #[cfg(feature = "std")]
-        let func_type = module
-            .types
-            .get(func.type_idx as usize)
-            .ok_or_else(|| kiln_error::Error::runtime_error("Failed to get function type"))?;
-
-        // In no_std mode, types is BoundedVec so get() returns Result<T>
-        #[cfg(not(feature = "std"))]
-        let func_type = &module
-            .types
-            .get(func.type_idx as usize)
-            .map_err(|_| kiln_error::Error::runtime_error("Failed to get function type"))?;
-
-        // Return appropriate default values based on function signature
-        let mut results = {
-            use kiln_foundation::{
-                budget_aware_provider::CrateId,
-                safe_managed_alloc,
-            };
-
-            let provider = safe_managed_alloc!(4096, CrateId::Runtime)?;
-            BoundedVec::new(provider)
-                .map_err(|_| kiln_error::Error::runtime_error("Failed to create results vector"))?
-        };
-        for result_type in &func_type.results {
-            let default_value = match result_type {
-                kiln_foundation::ValueType::I32 => Value::I32(0),
-                kiln_foundation::ValueType::I64 => Value::I64(0),
-                kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0.0f32.to_bits())),
-                kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0.0f64.to_bits())),
-                // Add other types as needed
-                _ => Value::I32(0), // Default fallback
-            };
-            results
-                .push(default_value)
-                .map_err(|_| kiln_error::Error::runtime_error("Failed to push result value"))?;
-        }
-
-        Ok(results)
-    }
 
     /// Get the remaining fuel for execution
     pub fn remaining_fuel(&self) -> Option<u64> {
@@ -11299,19 +11034,10 @@ impl StacklessEngine {
             .functions
             .get(func_idx)
             .ok_or_else(|| kiln_error::Error::runtime_function_not_found("Failed to get function"))?;
-        // In std mode, types is Vec so get() returns Option<&T>
-        #[cfg(feature = "std")]
         let func_type = module
             .types
             .get(func.type_idx as usize)
             .ok_or_else(|| kiln_error::Error::runtime_error("Failed to get function type"))?;
-
-        // In no_std mode, types is BoundedVec so get() returns Result<T>
-        #[cfg(not(feature = "std"))]
-        let func_type = &module
-            .types
-            .get(func.type_idx as usize)
-            .map_err(|_| kiln_error::Error::runtime_error("Failed to get function type"))?;
 
         // Simulate step execution - in real implementation would execute instructions
         // For now, return completed with default values
@@ -11433,7 +11159,6 @@ impl StacklessEngine {
                func_idx, module.import_order.len(), module.import_types.len());
 
         // Iterate through ALL imports, counting only function imports until we find the one we want
-        #[cfg(feature = "std")]
         {
             let mut func_import_count = 0usize;
             for (i, (module_name, field_name)) in module.import_order.iter().enumerate() {
@@ -11446,30 +11171,6 @@ impl StacklessEngine {
                         return Ok((module_name.clone(), field_name.clone()));
                     }
                     func_import_count += 1;
-                }
-            }
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            let mut func_import_count = 0usize;
-            for i in 0..module.import_order.len() {
-                if let Ok(Some((module_name, field_name))) = module.import_order.get(i) {
-                    // Check if this import is a function import
-                    if let Some(RuntimeImportDesc::Function(_)) = module.import_types.get(i) {
-                        if func_import_count == func_idx {
-                            #[cfg(feature = "tracing")]
-                            trace!("Found function import {} at overall index {}: {}::{}",
-                                   func_idx, i,
-                                   module_name.as_str().unwrap_or("<error>"),
-                                   field_name.as_str().unwrap_or("<error>"));
-                            return Ok((
-                                module_name.as_str().map(|s| s.to_string()).unwrap_or_default(),
-                                field_name.as_str().map(|s| s.to_string()).unwrap_or_default()
-                            ));
-                        }
-                        func_import_count += 1;
-                    }
                 }
             }
         }
@@ -11539,24 +11240,10 @@ impl StacklessEngine {
 
     /// Find export function index by name
     fn find_export_index(&self, module: &crate::module::Module, name: &str) -> Result<usize> {
-        #[cfg(feature = "std")]
-        {
-            for (export_name, export) in module.exports.iter() {
-                // BoundedString::as_str() returns Result<&str, BoundedError>
-                if let Ok(export_str) = export_name.as_str() {
-                    if export_str == name {
-                        if let crate::module::ExportKind::Function = export.kind {
-                            return Ok(export.index as usize);
-                        }
-                    }
-                }
-            }
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            for (export_name, export) in module.exports.iter() {
-                if export_name.as_str() == name {
+        for (export_name, export) in module.exports.iter() {
+            // BoundedString::as_str() returns Result<&str, BoundedError>
+            if let Ok(export_str) = export_name.as_str() {
+                if export_str == name {
                     if let crate::module::ExportKind::Function = export.kind {
                         return Ok(export.index as usize);
                     }

@@ -31,11 +31,7 @@ use crate::bounded_runtime_infra::{
 };
 type InstructionProvider = RuntimeProvider;
 
-// Match KilnExpr type: Vec in std mode, BoundedVec in no_std mode
-#[cfg(feature = "std")]
 type InstructionVec = Vec<Instruction<InstructionProvider>>;
-#[cfg(not(feature = "std"))]
-type InstructionVec = BoundedVec<Instruction<InstructionProvider>, 1024, InstructionProvider>;
 
 type TargetVec = BoundedVec<u32, 20000, InstructionProvider>;
 
@@ -51,19 +47,12 @@ pub fn parse_instructions_with_provider(
 
     let provider_clone = provider.clone();
 
-    #[cfg(feature = "std")]
     let mut instructions = Vec::new();
-    #[cfg(not(feature = "std"))]
-    let mut instructions = BoundedVec::new(provider)
-        .map_err(|_| Error::memory_error("Failed to allocate instruction vector"))?;
 
     let mut offset = 0;
 
-    #[cfg(feature = "std")]
     let mut instruction_count = 0u32;
-    #[cfg(feature = "std")]
     static mut FUNC_COUNTER: u32 = 0;
-    #[cfg(feature = "std")]
     let func_id = unsafe {
         FUNC_COUNTER += 1;
         FUNC_COUNTER
@@ -97,12 +86,7 @@ pub fn parse_instructions_with_provider(
             return Err(Error::parse_error("Instruction consumed 0 bytes"));
         }
 
-        #[cfg(feature = "std")]
         instructions.push(instruction.clone());
-        #[cfg(not(feature = "std"))]
-        instructions
-            .push(instruction.clone())
-            .map_err(|_| Error::capacity_limit_exceeded("Too many instructions in function"))?;
 
         offset += consumed;
 
