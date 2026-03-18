@@ -1,189 +1,32 @@
 //! Prelude module for kiln-runtime
 //!
-//! This module provides a unified set of imports for both std and `no_std`
-//! environments. It re-exports commonly used types and traits to ensure
-//! consistency across all crates in the Kiln project and simplify imports in
-//! individual modules.
+//! This module provides a unified set of imports for the runtime.
+//! The interpreter is std-only per the RFC #46 architecture decision.
 
-// Core imports for both std and no_std environments
-
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
-// Binary std/no_std choice
-// Note: NoStdProvider import removed - use safe_managed_alloc! instead
-
-// Platform-aware collection type aliases that adapt to target platform
-// capabilities Note: These type aliases are now generic over the provider type
-// P Users must specify their own provider when using these types
-/// `BoundedHashMap` type for `no_std` environments with bounded capacity
-#[cfg(all(not(feature = "std"), feature = "alloc"))]
-pub type BoundedHashMap<K, V, P> = kiln_foundation::bounded_collections::BoundedMap<K, V, 128, P>;
-
-/// `BoundedHashSet` type for `no_std` environments with bounded capacity  
-#[cfg(all(not(feature = "std"), feature = "alloc"))]
-pub type BoundedHashSet<T, P> = kiln_foundation::bounded_collections::BoundedSet<T, 128, P>;
-
-// Platform-aware string and vector types
-#[cfg(not(feature = "std"))]
-pub use kiln_foundation::bounded::BoundedString;
-
-// Helper macro to create Vec
-/// Create a new Vec for `no_std` environments
-#[cfg(not(feature = "std"))]
-#[macro_export]
-macro_rules! vec_new {
-    () => {
-        Vec::new()
-    };
-}
-
-// Helper function to create Vec with capacity
-/// Create a Vec with specified capacity for `no_std` environments
-#[cfg(not(feature = "std"))]
-#[must_use]
-pub fn vec_with_capacity<T>(capacity: usize) -> alloc::vec::Vec<T> {
-    alloc::vec::Vec::with_capacity(capacity)
-}
-
-// Add vec! macro for no_std environments without alloc
-/// Vec creation macro for pure `no_std` environments without alloc
-#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-#[macro_export]
-macro_rules! vec {
-    () => {
-        Vec::new()
-    };
-    ($elem:expr; $n:expr) => {
-        {
-            let mut v = Vec::new();
-            for _ in 0..$n {
-                v.push($elem);
-            }
-            v
-        }
-    };
-    ($($x:expr),*) => {
-        {
-            let mut v = Vec::new();
-            $(v.push($x);)*
-            v
-        }
-    };
-}
-
-// Simple format! implementation for no_std mode using a fixed buffer
-/// Simplified format macro for `no_std` environments
-#[cfg(not(feature = "std"))]
-#[macro_export]
-macro_rules! format {
-    ($fmt:expr) => {{
-        $fmt
-    }};
-    ($fmt:expr, $($arg:tt)*) => {{
-        $fmt // Simplified - just return the format string for no_std
-    }};
-}
-
-// Re-export the macros for no_std
-// Note: format macro is provided by alloc when available
-
-// Helper functions for Option<Value> conversion
-/// Convert Option<Value> to Option<i32> for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub fn option_value_as_i32(value: &Option<kiln_foundation::Value>) -> Option<i32> {
-    match value {
-        Some(kiln_foundation::Value::I32(val)) => Some(*val),
-        _ => None,
-    }
-}
-
-/// Convert Option<Value> to Option<i64> for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub fn option_value_as_i64(value: &Option<kiln_foundation::Value>) -> Option<i64> {
-    match value {
-        Some(kiln_foundation::Value::I64(val)) => Some(*val),
-        _ => None,
-    }
-}
-
-/// Convert Option<Value> to Option<f32> for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub fn option_value_as_f32(value: &Option<kiln_foundation::Value>) -> Option<f32> {
-    match value {
-        Some(kiln_foundation::Value::F32(val)) => Some(val.value()),
-        _ => None,
-    }
-}
-
-/// Convert Option<Value> to Option<f64> for `no_std` environments
-#[cfg(not(feature = "std"))]
-pub fn option_value_as_f64(value: &Option<kiln_foundation::Value>) -> Option<f64> {
-    match value {
-        Some(kiln_foundation::Value::F64(val)) => Some(val.value()),
-        _ => None,
-    }
-}
-
-// ToString is provided by alloc when available
-
-// Arc and Mutex for no_std with alloc
-#[cfg(all(not(feature = "std"), feature = "alloc"))]
-pub use alloc::sync::Arc;
-
-// For pure no_std without alloc, use reference wrapper
-/// Arc-like reference wrapper for pure `no_std` environments without alloc
-#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-#[derive(Debug, Clone)]
-pub struct Arc<T> {
-    /// Inner value being wrapped
-    inner: T,
-}
-
-#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-impl<T> Arc<T> {
-    /// Create a new Arc wrapper for pure `no_std` environments
-    pub fn new(value: T) -> Self {
-        Self { inner: value }
-    }
-
-    /// Compare Arc pointers (always returns false in `no_std` mode)
-    pub fn ptr_eq(_this: &Self, _other: &Self) -> bool {
-        // In no_std mode, we can't do pointer comparison, so just return false
-        false
-    }
-}
-
-#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-impl<T: PartialEq> PartialEq for Arc<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.inner == other.inner
-    }
-}
-
-#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-impl<T: Eq> Eq for Arc<T> {}
-
-#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-impl<T> core::ops::Deref for Arc<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-// Re-export from alloc when available but not std
-#[cfg(all(not(feature = "std"), feature = "alloc"))]
-pub use alloc::{
+// Re-export from std
+pub use std::{
     boxed::Box,
+    collections::{
+        HashMap,
+        HashSet,
+    },
     format,
     string::{
         String,
         ToString,
     },
+    sync::{
+        Arc,
+        Mutex,
+        MutexGuard,
+        RwLock,
+        RwLockReadGuard,
+        RwLockWriteGuard,
+    },
     vec,
     vec::Vec,
 };
+
 pub use core::{
     any::Any,
     cmp::{
@@ -214,60 +57,7 @@ pub use core::{
         Ordering as AtomicOrdering,
     },
 };
-// Re-export from std when the std feature is enabled
-#[cfg(feature = "std")]
-pub use std::{
-    boxed::Box,
-    collections::{
-        HashMap,
-        HashSet,
-    },
-    format,
-    string::{
-        String,
-        ToString,
-    },
-    sync::{
-        Arc,
-        Mutex,
-        MutexGuard,
-        RwLock,
-        RwLockReadGuard,
-        RwLockWriteGuard,
-    },
-    vec,
-    vec::Vec,
-};
 
-// Provide String and ToString for pure no_std environments
-#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-pub use kiln_foundation::bounded::BoundedString as String;
-
-#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-pub trait ToString {
-    fn to_string(&self) -> RuntimeString;
-}
-
-#[cfg(all(not(feature = "std"), not(feature = "alloc")))]
-impl ToString for &str {
-    fn to_string(&self) -> RuntimeString {
-        RuntimeString::try_from_str(self).unwrap_or_else(|_| {
-            // If conversion fails, create empty string
-            RuntimeString::try_from_str("").unwrap()
-        })
-    }
-}
-
-// Remove duplicate definitions - Vec and String are already defined above
-
-// Re-export from kiln-decoder (aliased to avoid name clashes)
-// Component module is temporarily disabled in kiln-decoder
-// #[cfg(feature = "std")]
-// pub use kiln_decoder::component::Component as DecoderComponentDefinition;
-// Re-export from kiln-instructions for instruction types
-// Decoder imports are optional and may not be available
-// pub use kiln_decoder::instructions::Instruction;
-// pub use kiln_decoder::prelude::Module as DecoderModule;
 // Re-export from kiln-error for error handling
 pub use kiln_error::prelude::{
     kinds::{
@@ -284,10 +74,9 @@ pub use kiln_error::prelude::{
     ErrorCategory,
     Result,
 };
-// Re-export from kiln-format for format specifications (aliased to avoid name clashes)
-#[cfg(feature = "std")]
+
+// Re-export from kiln-format
 pub use kiln_format::component::Component as FormatComponent;
-#[cfg(feature = "std")]
 pub use kiln_format::{
     module::{
         Element as FormatElement,
@@ -303,46 +92,39 @@ pub use kiln_format::{
     pure_format_types::PureDataSegment as FormatData,
     section::CustomSection as FormatCustomSection,
 };
+
 // Clean core WebAssembly types (for runtime use)
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub use kiln_foundation::clean_core_types::{
     CoreGlobalType,
     CoreMemoryType,
     CoreTableType,
 };
-// For ExternType, use the clean_types version which doesn't have provider parameters
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub use kiln_foundation::clean_types::ExternType as CleanExternType;
-// Re-export from kiln-foundation for core types
-#[cfg(feature = "std")]
 pub use kiln_foundation::component::ComponentType;
-// Import required traits (these should already be implemented by kiln_foundation::Value)
+
+// Import required traits
 pub use kiln_foundation::traits::{
     Checksummable,
     FromBytes,
     ToBytes,
 };
-// Re-export core types from kiln_foundation instead of kiln_format
-pub use kiln_foundation::types::{
-    CustomSection, /* Assuming this is the intended replacement for FormatCustomSection
-                    * Add other direct re-exports from kiln_foundation::types if they were
-                    * previously from kiln_format::module e.g., DataSegment,
-                    * ElementSegment, Export, GlobalType, Import, MemoryType, TableType,
-                    * FuncType For now, only replacing what was directly
-                    * aliased or used in a way that implies a direct replacement need. */
-};
+
+// Re-export core types from kiln_foundation
+pub use kiln_foundation::types::CustomSection;
 pub use kiln_foundation::{
     prelude::{
         BoundedStack,
         BoundedVec,
+        ComponentValue,
         ResourceType,
         SafeMemoryHandler,
         SafeSlice,
+        ValType as ComponentValType,
         ValueType,
         VerificationLevel,
     },
     safe_memory::SafeStack,
-    traits::BoundedCapacity, // Add trait for len(), is_empty(), etc.
+    traits::BoundedCapacity,
     types::{
         DataSegment,
         ElementSegment,
@@ -351,8 +133,8 @@ pub use kiln_foundation::{
     },
     MemoryStats,
 };
-// Use foundation Value directly for runtime (not clean_types)
-// This ensures compatibility with BoundedVec and bounded collections
+
+// Use foundation Value directly for runtime
 pub use kiln_foundation::{
     types::FuncType as CleanFuncType,
     types::ValueType as CleanValType,
@@ -362,90 +144,33 @@ pub use kiln_foundation::{
     Value as CleanValue,
 };
 
-/// Core function type from kiln_foundation.
-#[cfg(any(feature = "std", feature = "alloc"))]
+/// Core function type
 pub type CoreFuncType = kiln_foundation::types::FuncType;
-
-// Fallback for no_std environments - provide core types
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-pub use kiln_foundation::types::{
-    GlobalType as CoreGlobalType,
-    MemoryType as CoreMemoryType,
-    TableType as CoreTableType,
-};
-
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-pub type CoreFuncType = kiln_foundation::types::FuncType;
-
-// Public type aliases using clean CORE types (not component types)
 /// Type alias for WebAssembly function types
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub type FuncType = kiln_foundation::types::FuncType;
 /// Type alias for WebAssembly memory types
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub type MemoryType = CoreMemoryType;
 /// Type alias for WebAssembly table types
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub type TableType = CoreTableType;
 /// Type alias for WebAssembly global types
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub type GlobalType = CoreGlobalType;
-// Note: ValType doesn't need aliasing - ValueType from core is already used
 /// Type alias for WebAssembly values
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub type Value = CleanValue;
 /// Type alias for WebAssembly external types
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub type ExternType = CleanExternType;
-
-// Factory for internal allocation when needed
-#[cfg(any(feature = "std", feature = "alloc"))]
-pub use kiln_foundation::type_factory::RuntimeFactory64K as DefaultFactory;
-// Fallback for no-alloc environments - use legacy provider-based types temporarily
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-pub use kiln_foundation::types::{
-    FuncType,
-    GlobalType,
-    MemoryType,
-    TableType,
-    ValueType as ValType,
-};
-
-// Default provider factory for capability-based allocation
 /// Default memory provider factory with 64KB allocation capacity
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub type DefaultProviderFactory = kiln_foundation::type_factory::RuntimeFactory64K;
-
-/// Default memory provider factory for pure no_std (smaller capacity)
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-pub type DefaultProviderFactory = kiln_foundation::type_factory::RuntimeFactory8K;
-
-/// Runtime function type alias for consistency
-#[cfg(any(feature = "std", feature = "alloc"))]
+/// Factory for internal allocation
+pub type DefaultFactory = kiln_foundation::type_factory::RuntimeFactory64K;
+/// Runtime function type alias
 pub type RuntimeFuncType = FuncType;
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-pub type RuntimeFuncType = kiln_foundation::types::FuncType;
-
-/// Runtime string type alias for consistency
-#[cfg(feature = "std")]
+/// Runtime string type alias
 pub type RuntimeString = String;
-#[cfg(not(feature = "std"))]
-pub type RuntimeString = kiln_foundation::bounded::BoundedString<256>;
 
-// Safety-critical wrapper types for runtime (deterministic, verifiable)
-// SIMD execution integration
-
-// Binary std/no_std choice
-#[cfg(feature = "std")]
-pub use kiln_foundation::prelude::{
-    ComponentValue,
-    ValType as ComponentValType,
-};
-// Re-export from kiln-host (for runtime host interaction items)
-#[cfg(feature = "std")]
+// Re-export from kiln-host
 pub use kiln_host::prelude::CallbackRegistry as HostFunctionRegistry;
-#[cfg(feature = "std")]
 pub use kiln_host::prelude::HostFunctionHandler as HostFunction;
+
 pub use kiln_instructions::{
     arithmetic_ops::ArithmeticOp,
     control_ops::{
@@ -461,43 +186,35 @@ pub use crate::module::{
     TableWrapper as RuntimeTable,
 };
 
-// Temporary instruction type until unified enum is available
 /// Unified instruction type for WebAssembly operations
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[derive(Default)]
 pub enum Instruction {
     /// No operation instruction
     #[default]
-    Nop, // Unit variant for default
+    Nop,
     /// Arithmetic operation instruction
     Arithmetic(ArithmeticOp),
     /// Control flow operation instruction
     Control(ControlOp),
-    /// Function call instruction (simplified for compatibility)
+    /// Function call instruction
     Call(u32),
-    // Add other variants as needed
 }
 
-
-// Implement required traits for Instruction
 impl kiln_foundation::traits::Checksummable for Instruction {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         match self {
             Instruction::Nop => {
-                checksum.update_slice(&[0u8]); // Variant discriminant for Nop
+                checksum.update_slice(&[0u8]);
             },
-            Instruction::Arithmetic(op) => {
-                checksum.update_slice(&[1u8]); // Variant discriminant
-                                               // ArithmeticOp would need to
-                                               // implement Checksummable
+            Instruction::Arithmetic(_op) => {
+                checksum.update_slice(&[1u8]);
             },
-            Instruction::Control(op) => {
-                checksum.update_slice(&[2u8]); // Variant discriminant
-                                               // ControlOp would need to
-                                               // implement Checksummable
+            Instruction::Control(_op) => {
+                checksum.update_slice(&[2u8]);
             },
             Instruction::Call(func_idx) => {
-                checksum.update_slice(&[3u8]); // Variant discriminant
+                checksum.update_slice(&[3u8]);
                 checksum.update_slice(&func_idx.to_le_bytes());
             },
         }
@@ -507,10 +224,10 @@ impl kiln_foundation::traits::Checksummable for Instruction {
 impl kiln_foundation::traits::ToBytes for Instruction {
     fn serialized_size(&self) -> usize {
         1 + match self {
-            Instruction::Nop => 0,           // No additional data
-            Instruction::Arithmetic(_) => 4, // Placeholder size
-            Instruction::Control(_) => 4,    // Placeholder size
-            Instruction::Call(_) => 4,       // Function index size
+            Instruction::Nop => 0,
+            Instruction::Arithmetic(_) => 4,
+            Instruction::Control(_) => 4,
+            Instruction::Call(_) => 4,
         }
     }
 
@@ -555,41 +272,21 @@ impl kiln_foundation::traits::FromBytes for Instruction {
         }
     }
 }
-// Re-export from kiln-intercept (for runtime interception items)
+
+// Re-export from kiln-intercept
 pub use kiln_intercept::prelude::{
     LinkInterceptor as InterceptorRegistry,
     LinkInterceptorStrategy as InterceptStrategy,
 };
-// Binary std/no_std choice
-#[cfg(not(feature = "std"))]
-pub use kiln_sync::{
-    KilnMutex as Mutex,
-    KilnMutexGuard as MutexGuard,
-    KilnRwLock as RwLock,
-    KilnRwLockReadGuard as RwLockReadGuard,
-    KilnRwLockWriteGuard as RwLockWriteGuard,
-};
 
-// Execution related types defined in kiln-runtime
+// Execution related types
 pub use crate::execution::{
     ExecutionContext,
     ExecutionStats,
-}; /* Removed ExecutionResult as
-    * it's not defined in
-    * execution.rs */
-// --- Local definitions from kiln-runtime ---
-// These are types defined within kiln-runtime itself, re-exported for convenience if used
-// widely.
+};
 
-// Core runtime structures
-// pub use crate::func::Function; // Removed: func.rs only re-exports FuncType from
-// kiln_foundation, which is already in prelude. RuntimeFunction (from module.rs) is the primary
-// Function struct for the runtime.
 pub use crate::global::Global;
-// Adapters and helpers if they are part of the public API exported by this prelude
-// Temporarily disabled - memory_adapter module is disabled
-// pub use crate::memory_adapter::MemoryAdapter;
-// Module items specific to kiln-runtime module structure
+
 pub use crate::module::{
     Data,
     Element,
@@ -599,23 +296,10 @@ pub use crate::module::{
     Import,
     OtherExport,
 };
-// Stackless execution engine components - temporarily disabled
-// pub use crate::stackless::{
-//     StacklessCallbackRegistry, StacklessEngine, StacklessExecutionState, StacklessFrame,
-//     StacklessStack,
-// };
+
 pub use crate::{
     memory::Memory,
     module::Module as RuntimeModule,
     module_instance::ModuleInstance as RuntimeModuleInstance,
     table::Table,
 };
-
-// The following re-exports from kiln_format are removed as kiln-runtime should
-// not depend on kiln-format. pub use kiln_format::module::{ // REMOVED
-// DataMode as FormatDataMode, Element as FormatElement, Export as FormatExport,
-// // ... and others }; // REMOVED
-// pub use kiln_format::section::CustomSection as FormatCustomSection; // REMOVED
-// pub use kiln_format::component::Component as FormatComponent; // REMOVED
-// (Component model types should come from kiln_component or kiln_foundation if
-// foundational)
