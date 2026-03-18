@@ -23,7 +23,6 @@
 //! - Thread-safe access with internal synchronization
 //! - Performance metrics tracking (access counts, peak usage)
 //! - Debug name support for easier debugging
-//! - Support for both `std` and `no_std` environments
 //! - Memory safety checks and bounds validation
 //! - Integrated checksum verification for data integrity
 //!
@@ -64,8 +63,7 @@
 //! Memory operations use appropriate synchronization primitives based on the
 //! environment:
 //!
-//! - In `std` environments, atomic variables are used for metrics
-//! - In `no_std` environments, `RwLock` is used for metrics
+//! - Atomic variables are used for metrics
 //!
 //! # Usage
 //!
@@ -100,14 +98,10 @@
 //! assert_eq!(old_size, 1); // Previous size was 1 page
 //! ```
 
-// Import BorrowMut for SafeMemoryHandler
-#[cfg(any(feature = "std", feature = "alloc"))]
 extern crate alloc;
 
 // Core/std library imports
-#[cfg(all(not(feature = "std"), feature = "alloc"))]
 use alloc::vec;
-#[cfg(not(feature = "std"))]
 use core::borrow::BorrowMut;
 use core::{
     alloc::Layout,
@@ -120,10 +114,6 @@ use core::{
     },
     time::Duration,
 };
-#[cfg(feature = "std")]
-use core::borrow::BorrowMut;
-#[cfg(feature = "std")]
-use alloc::vec;
 
 // External crates
 use kiln_foundation::safe_memory::{
@@ -137,17 +127,11 @@ use kiln_foundation::{
     types::MemoryType,
     MemoryStats,
 };
-#[cfg(feature = "std")]
 use kiln_foundation::MemoryAccessor;
 // Import atomic operations trait
 use kiln_instructions::atomic_ops::AtomicOperations;
 // Import the MemoryOperations trait from kiln-instructions
 use kiln_instructions::memory_ops::MemoryOperations;
-#[cfg(not(feature = "std"))]
-use kiln_sync::KilnRwLock as RwLock;
-
-#[cfg(not(feature = "std"))]
-use crate::prelude::vec_with_capacity;
 // Internal modules
 // Temporarily disabled - memory_adapter module is disabled
 // use crate::memory_adapter::StdMemoryProvider;
@@ -167,16 +151,8 @@ use crate::prelude::{
     VerificationLevel,
 };
 
-// Platform-aware memory providers for memory operations
-// For std mode: Use StdProvider which uses Vec<u8> for dynamically-sized memory
-// For no_std mode: Use NoStdProvider with fixed size (limited to compile-time constant)
-#[cfg(feature = "std")]
+// Use StdProvider which uses Vec<u8> for dynamically-sized memory
 type LargeMemoryProvider = kiln_foundation::safe_memory::StdProvider;
-#[cfg(not(feature = "std"))]
-type LargeMemoryProvider = kiln_foundation::safe_memory::NoStdProvider<524288>; // 512KB (8 pages) for no_std
-
-type SmallMemoryProvider = kiln_foundation::safe_memory::NoStdProvider<4096>; // 4KB for small objects
-type MediumMemoryProvider = kiln_foundation::safe_memory::NoStdProvider<65536>; // 64KB for medium objects
 
 /// WebAssembly page size (64KB)
 pub const PAGE_SIZE: usize = 65536;
@@ -241,77 +217,37 @@ fn usize_to_wasm_u32(size: usize) -> Result<u32> {
 #[derive(Debug)]
 pub struct MemoryMetrics {
     /// Peak memory usage in bytes
-    #[cfg(feature = "std")]
     peak_usage:         AtomicUsize,
     /// Memory access counter for profiling
-    #[cfg(feature = "std")]
     access_count:       AtomicU64,
     /// Maximum size of any access
-    #[cfg(feature = "std")]
     max_access_size:    AtomicUsize,
     /// Number of unique regions accessed
-    #[cfg(feature = "std")]
     unique_regions:     AtomicUsize,
     /// Last access offset for validation
-    #[cfg(feature = "std")]
     last_access_offset: AtomicUsize,
     /// Last access length for validation
-    #[cfg(feature = "std")]
     last_access_length: AtomicUsize,
-
-    /// Peak memory usage (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    peak_usage:         usize,
-    /// Memory access counter (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    access_count:       u64,
-    /// Maximum size of any access (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    max_access_size:    usize,
-    /// Number of unique regions accessed (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    unique_regions:     usize,
-    /// Last access offset for validation (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    last_access_offset: usize,
-    /// Last access length for validation (`no_std` version)
-    #[cfg(not(feature = "std"))]
-    last_access_length: usize,
 }
 
 impl Clone for MemoryMetrics {
     fn clone(&self) -> Self {
-        #[cfg(feature = "std")]
-        {
-            Self {
-                peak_usage:         AtomicUsize::new(self.peak_usage.load(Ordering::Relaxed)),
-                access_count:       AtomicU64::new(self.access_count.load(Ordering::Relaxed)),
-                max_access_size:    AtomicUsize::new(self.max_access_size.load(Ordering::Relaxed)),
-                unique_regions:     AtomicUsize::new(self.unique_regions.load(Ordering::Relaxed)),
-                last_access_offset: AtomicUsize::new(
-                    self.last_access_offset.load(Ordering::Relaxed),
-                ),
-                last_access_length: AtomicUsize::new(
-                    self.last_access_length.load(Ordering::Relaxed),
-                ),
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            Self {
-                peak_usage:         self.peak_usage,
-                access_count:       self.access_count,
-                max_access_size:    self.max_access_size,
-                unique_regions:     self.unique_regions,
-                last_access_offset: self.last_access_offset,
-                last_access_length: self.last_access_length,
-            }
+        Self {
+            peak_usage:         AtomicUsize::new(self.peak_usage.load(Ordering::Relaxed)),
+            access_count:       AtomicU64::new(self.access_count.load(Ordering::Relaxed)),
+            max_access_size:    AtomicUsize::new(self.max_access_size.load(Ordering::Relaxed)),
+            unique_regions:     AtomicUsize::new(self.unique_regions.load(Ordering::Relaxed)),
+            last_access_offset: AtomicUsize::new(
+                self.last_access_offset.load(Ordering::Relaxed),
+            ),
+            last_access_length: AtomicUsize::new(
+                self.last_access_length.load(Ordering::Relaxed),
+            ),
         }
     }
 }
 
 impl MemoryMetrics {
-    #[cfg(feature = "std")]
     fn new(size: usize) -> Self {
         Self {
             peak_usage:         AtomicUsize::new(size),
@@ -322,18 +258,6 @@ impl MemoryMetrics {
             last_access_length: AtomicUsize::new(0),
         }
     }
-
-    #[cfg(not(feature = "std"))]
-    fn new(size: usize) -> Self {
-        Self {
-            peak_usage:         size,
-            access_count:       0,
-            max_access_size:    0,
-            unique_regions:     0,
-            last_access_offset: 0,
-            last_access_length: 0,
-        }
-    }
 }
 
 /// Represents a WebAssembly memory instance
@@ -342,20 +266,13 @@ pub struct Memory {
     /// The memory type
     pub ty:                 CoreMemoryType,
     /// The memory data (Box + Mutex for ASIL-B: heap allocation + thread-safe writes)
-    #[cfg(feature = "std")]
     pub data:               Box<std::sync::Mutex<SafeMemoryHandler<LargeMemoryProvider>>>,
-    #[cfg(not(feature = "std"))]
-    pub data:               Box<RwLock<SafeMemoryHandler<LargeMemoryProvider>>>,
     /// Current number of pages
     pub current_pages:      core::sync::atomic::AtomicU32,
     /// Optional name for debugging
     pub debug_name: Option<kiln_foundation::bounded::BoundedString<128>>,
     /// Memory metrics for tracking access
-    #[cfg(feature = "std")]
     pub metrics:            MemoryMetrics,
-    /// Memory metrics for tracking access (`RwLock` for `no_std`)
-    #[cfg(not(feature = "std"))]
-    pub metrics:            RwLock<MemoryMetrics>,
     /// Memory verification level
     pub verification_level: VerificationLevel,
 }
@@ -363,37 +280,17 @@ pub struct Memory {
 impl Clone for Memory {
     fn clone(&self) -> Self {
         // Create new SafeMemoryHandler by copying bytes from the data
-        #[cfg(feature = "std")]
         let current_bytes = self.data.lock().unwrap().to_vec().unwrap_or_default();
-        #[cfg(not(feature = "std"))]
-        let current_bytes = self.data.read().to_vec().unwrap_or_default();
 
         // Create new SafeMemoryHandler wrapped in Mutex
-        // In std mode, use StdProvider with proper size allocation
-        #[cfg(feature = "std")]
         let new_data = {
             use kiln_foundation::safe_memory::StdProvider;
-            // Create provider with data directly (StdProvider::new takes Vec<u8>)
             let new_provider = StdProvider::new(current_bytes.clone());
             let new_handler = SafeMemoryHandler::new(new_provider);
             Box::new(std::sync::Mutex::new(new_handler))
         };
 
-        #[cfg(not(feature = "std"))]
-        let new_data = {
-            let new_provider = LargeMemoryProvider::default();
-            let mut new_handler = SafeMemoryHandler::new(new_provider);
-
-            // Copy the data into the new handler
-            if !current_bytes.is_empty() {
-                new_handler.write_data(0, &current_bytes)
-                    .expect("Failed to write cloned data during memory clone");
-            }
-            Box::new(RwLock::new(new_handler))
-        };
-
-        // Clone metrics, handling potential RwLock poisoning for no_std
-        #[cfg(feature = "std")]
+        // Clone metrics
         let cloned_metrics = MemoryMetrics {
             peak_usage:         AtomicUsize::new(self.metrics.peak_usage.load(Ordering::Relaxed)),
             access_count:       AtomicU64::new(self.metrics.access_count.load(Ordering::Relaxed)),
@@ -411,12 +308,6 @@ impl Clone for Memory {
             ),
         };
 
-        #[cfg(not(feature = "std"))]
-        let cloned_metrics = {
-            let guard = self.metrics.read();
-            RwLock::new((*guard).clone())
-        };
-
         Self {
             ty:                 self.ty,
             data:               new_data,
@@ -431,21 +322,8 @@ impl Clone for Memory {
 impl PartialEq for Memory {
     fn eq(&self, other: &Self) -> bool {
         // Compare memory data by extracting bytes from Mutex
-        let self_data = {
-            #[cfg(feature = "std")]
-            let data = self.data.lock().unwrap().to_vec().unwrap_or_default();
-            #[cfg(not(feature = "std"))]
-            let data = self.data.read().to_vec().unwrap_or_default();
-            data
-        };
-
-        let other_data = {
-            #[cfg(feature = "std")]
-            let data = other.data.lock().unwrap().to_vec().unwrap_or_default();
-            #[cfg(not(feature = "std"))]
-            let data = other.data.read().to_vec().unwrap_or_default();
-            data
-        };
+        let self_data = self.data.lock().unwrap().to_vec().unwrap_or_default();
+        let other_data = other.data.lock().unwrap().to_vec().unwrap_or_default();
 
         self.ty == other.ty
             && self_data == other_data
@@ -591,9 +469,6 @@ impl Memory {
         }
         let current_size_bytes = current_size_bytes_raw as usize;
 
-        // In std mode, use StdProvider which can be dynamically sized
-        // In no_std mode, use NoStdProvider with fixed compile-time size
-        #[cfg(feature = "std")]
         let provider = {
             use kiln_foundation::safe_memory::StdProvider;
             // Create a StdProvider with Vec pre-allocated and pre-filled to the required size
@@ -603,23 +478,15 @@ impl Memory {
             provider.add_data(&vec![0u8; current_size_bytes]);
             provider
         };
-        #[cfg(not(feature = "std"))]
-        let provider = LargeMemoryProvider::default();
 
         let handler = SafeMemoryHandler::new(provider);
 
         Ok(Box::new(Self {
             ty,
-            #[cfg(feature = "std")]
             data: Box::new(std::sync::Mutex::new(handler)),
-            #[cfg(not(feature = "std"))]
-            data: Box::new(RwLock::new(handler)),
             current_pages: core::sync::atomic::AtomicU32::new(initial_pages),
             debug_name: None,
-            #[cfg(feature = "std")]
             metrics: MemoryMetrics::new(current_size_bytes),
-            #[cfg(not(feature = "std"))]
-            metrics: RwLock::new(MemoryMetrics::new(current_size_bytes)),
             verification_level,
         }))
     }
@@ -696,7 +563,6 @@ impl Memory {
     ///
     /// For memory-safe access, prefer using `get_safe_slice()` or
     /// `as_safe_slice()` methods instead.
-    #[cfg(feature = "std")]
     pub fn buffer(&self) -> Result<alloc::vec::Vec<u8>> {
         // Use the SafeMemoryHandler to get data through a safe slice to ensure
         // memory integrity is verified during the operation
@@ -723,141 +589,58 @@ impl Memory {
 
     /// Returns the peak memory usage in bytes
     pub fn peak_memory(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.peak_usage.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read();
-            metrics.peak_usage
-        }
+        self.metrics.peak_usage.load(Ordering::Relaxed)
     }
 
     /// Returns the total number of memory accesses
     pub fn access_count(&self) -> u64 {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.access_count.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read();
-            metrics.access_count
-        }
+        self.metrics.access_count.load(Ordering::Relaxed)
     }
 
     /// Increment the access count for memory operations
     fn increment_access_count(&self, offset: usize, len: usize) {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.access_count.fetch_add(1, Ordering::Relaxed);
-            self.metrics.max_access_size.fetch_max(len, Ordering::Relaxed);
-            self.metrics.last_access_offset.store(offset, Ordering::Relaxed);
-            self.metrics.last_access_length.store(len, Ordering::Relaxed);
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use write() method with KilnRwLock
-            let mut metrics = self.metrics.write();
-            metrics.access_count += 1;
-            metrics.max_access_size = metrics.max_access_size.max(len);
-            metrics.last_access_offset = offset;
-            metrics.last_access_length = len;
-        }
+        self.metrics.access_count.fetch_add(1, Ordering::Relaxed);
+        self.metrics.max_access_size.fetch_max(len, Ordering::Relaxed);
+        self.metrics.last_access_offset.store(offset, Ordering::Relaxed);
+        self.metrics.last_access_length.store(len, Ordering::Relaxed);
     }
 
     /// Update the peak memory usage statistic
     fn update_peak_memory(&self) {
         let current_size = self.size_in_bytes();
 
-        #[cfg(feature = "std")]
-        {
-            let mut current_peak = self.metrics.peak_usage.load(Ordering::Relaxed);
-            while current_size > current_peak {
-                match self.metrics.peak_usage.compare_exchange(
-                    current_peak,
-                    current_size,
-                    Ordering::Relaxed,
-                    Ordering::Relaxed,
-                ) {
-                    Ok(_) => break,
-                    Err(actual) => current_peak = actual,
-                }
+        let mut current_peak = self.metrics.peak_usage.load(Ordering::Relaxed);
+        while current_size > current_peak {
+            match self.metrics.peak_usage.compare_exchange(
+                current_peak,
+                current_size,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(actual) => current_peak = actual,
             }
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use write() method with KilnRwLock
-            let mut metrics = self.metrics.write();
-            metrics.peak_usage = metrics.peak_usage.max(current_size);
         }
     }
 
     /// Returns the maximum size of any memory access
     pub fn max_access_size(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.max_access_size.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read();
-            metrics.max_access_size
-        }
+        self.metrics.max_access_size.load(Ordering::Relaxed)
     }
 
     /// Returns the number of unique memory regions accessed
     pub fn unique_regions(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.unique_regions.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read();
-            metrics.unique_regions
-        }
+        self.metrics.unique_regions.load(Ordering::Relaxed)
     }
 
     /// Returns the offset of the most recent memory access
     pub fn last_access_offset(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.last_access_offset.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read();
-            metrics.last_access_offset
-        }
+        self.metrics.last_access_offset.load(Ordering::Relaxed)
     }
 
     /// Returns the length of the most recent memory access
     pub fn last_access_length(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.last_access_length.load(Ordering::Relaxed)
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use read() method with KilnRwLock
-            let metrics = self.metrics.read();
-            metrics.last_access_length
-        }
+        self.metrics.last_access_length.load(Ordering::Relaxed)
     }
 
     /// Grows memory by the given number of pages
@@ -901,10 +684,7 @@ impl Memory {
         let new_size = wasm_offset_to_usize(new_page_count)? * self.page_size_bytes();
 
         // Resize the underlying data
-        #[cfg(feature = "std")]
         self.data.lock().unwrap().resize(new_size)?;
-        #[cfg(not(feature = "std"))]
-        self.data.write().resize(new_size)?;
 
         // Update the page count
         let old_pages = self.current_pages.swap(new_page_count, Ordering::Relaxed);
@@ -960,10 +740,7 @@ impl Memory {
         let new_size = wasm_offset_to_usize(new_page_count)? * self.page_size_bytes();
 
         // Resize the underlying data
-        #[cfg(feature = "std")]
         self.data.lock().unwrap().resize(new_size)?;
-        #[cfg(not(feature = "std"))]
-        self.data.write().resize(new_size)?;
 
         // Update the page count
         let old_pages = self.current_pages.swap(new_page_count, Ordering::Relaxed);
@@ -1002,7 +779,6 @@ impl Memory {
         self.increment_access_count(offset_usize, size);
 
         // Read from memory with Mutex locking
-        #[cfg(feature = "std")]
         {
             let data_guard = self.data.lock().unwrap();
             let safe_slice = data_guard.get_slice(offset_usize, size)?;
@@ -1019,12 +795,6 @@ impl Memory {
                     "Memory read raw"
                 );
             }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            let data_guard = self.data.read();
-            let safe_slice = data_guard.get_slice(offset_usize, size)?;
-            buffer.copy_from_slice(safe_slice.data()?);
         }
 
         Ok(())
@@ -1066,10 +836,7 @@ impl Memory {
         self.increment_access_count(offset_usize, size);
 
         // Use the SafeMemoryHandler's write_data method for efficient direct writing
-        #[cfg(feature = "std")]
         self.data.lock().unwrap().write_data(offset_usize, buffer)?;
-        #[cfg(not(feature = "std"))]
-        self.data.write().write_data(offset_usize, buffer)?;
 
         // Update the peak memory usage
         self.update_peak_memory();
@@ -1131,10 +898,7 @@ impl Memory {
         self.increment_access_count(offset_usize, size);
 
         // ASIL-B: Thread-safe write with Mutex
-        #[cfg(feature = "std")]
         self.data.lock().unwrap().write_data(offset_usize, buffer)?;
-        #[cfg(not(feature = "std"))]
-        self.data.write().write_data(offset_usize, buffer)?;
 
         // Update metrics
         self.update_peak_memory();
@@ -1164,10 +928,7 @@ impl Memory {
         self.increment_access_count(offset_usize, 1);
 
         // Use SafeMemoryHandler to get a safe slice
-        #[cfg(feature = "std")]
         let data_guard = self.data.lock().unwrap();
-        #[cfg(not(feature = "std"))]
-        let data_guard = self.data.read();
 
         let slice = data_guard.get_slice(offset_usize, 1)?;
         let data = slice.data()?;
@@ -1217,10 +978,7 @@ impl Memory {
         }
 
         // Get current data size
-        #[cfg(feature = "std")]
         let data_size = self.data.lock().unwrap().len();
-        #[cfg(not(feature = "std"))]
-        let data_size = self.data.read().len();
 
         // Get the last byte that would be accessed
         let end_offset = match offset.checked_add(len) {
@@ -1244,10 +1002,7 @@ impl Memory {
         let addr = wasm_offset_to_usize(addr)?;
         let access_size = wasm_offset_to_usize(access_size)?;
 
-        #[cfg(feature = "std")]
         let data_size = self.data.lock().unwrap().size();
-        #[cfg(not(feature = "std"))]
-        let data_size = self.data.read().size();
 
         if addr + access_size > data_size {
             return Err(Error::validation_error("Memory access out of bounds"));
@@ -1322,7 +1077,6 @@ impl Memory {
     /// Register a pre-grow hook to be executed before memory grows
     ///
     /// This is used by SafeMemory to validate the memory state before growing
-    #[cfg(feature = "std")]
     pub fn with_pre_grow_hook<F>(&self, hook: F) -> Result<()>
     where
         F: FnOnce(u32, &[u8]) -> Result<()> + Send + 'static,
@@ -1343,7 +1097,6 @@ impl Memory {
     ///
     /// This is used by SafeMemory to update checksums and validate the new
     /// memory state
-    #[cfg(feature = "std")]
     pub fn with_post_grow_hook<F>(&self, hook: F) -> Result<()>
     where
         F: FnOnce(u32, &[u8]) -> Result<()> + Send + 'static,
@@ -1367,10 +1120,7 @@ impl Memory {
         let expected_size = wasm_offset_to_usize(pages).unwrap_or(0) * PAGE_SIZE;
 
         // Verify memory size is consistent
-        #[cfg(feature = "std")]
         let data_size = self.data.lock().unwrap().size();
-        #[cfg(not(feature = "std"))]
-        let data_size = self.data.read().size();
 
         if data_size != expected_size {
             return Err(Error::validation_error("Memory size mismatch"));
@@ -1405,10 +1155,7 @@ impl Memory {
         size: usize,
     ) -> Result<()> {
         // Bounds check for source
-        #[cfg(feature = "std")]
         let src_data_size = src_mem.data.lock().unwrap().size();
-        #[cfg(not(feature = "std"))]
-        let src_data_size = src_mem.data.read().size();
 
         let src_end = match src_addr.checked_add(size) {
             Some(end) if end <= src_data_size => end,
@@ -1416,10 +1163,7 @@ impl Memory {
         };
 
         // Bounds check for destination
-        #[cfg(feature = "std")]
         let dst_data_size = self.data.lock().unwrap().size();
-        #[cfg(not(feature = "std"))]
-        let dst_data_size = self.data.read().size();
 
         let dst_end = match dst_addr.checked_add(size) {
             Some(end) if end <= dst_data_size => end,
@@ -1435,26 +1179,17 @@ impl Memory {
         src_mem.increment_access_count(src_addr, size);
 
         // Use SafeSlice for source memory access
-        #[cfg(feature = "std")]
         let src_data_guard = src_mem.data.lock().unwrap();
-        #[cfg(not(feature = "std"))]
-        let src_data_guard = src_mem.data.read();
 
         let src_slice = src_data_guard.get_slice(src_addr, size)?;
         let src_data = src_slice.data()?;
 
         // Handle overlapping regions safely by using a temporary buffer
-        #[cfg(feature = "std")]
         let mut temp_buf = Vec::with_capacity(size);
-        #[cfg(not(feature = "std"))]
-        let mut temp_buf = vec_with_capacity::<u8>(size);
         temp_buf.extend_from_slice(src_data);
 
         // Get destination memory data using provider-aware method
-        #[cfg(feature = "std")]
         let mut dst_data_guard = self.data.lock().unwrap();
-        #[cfg(not(feature = "std"))]
-        let mut dst_data_guard = self.data.write();
 
         let data_size = dst_data_guard.size();
         let dst_slice = dst_data_guard.get_slice(0, data_size)?;
@@ -1526,30 +1261,13 @@ impl Memory {
             let chunk_size = remaining.min(MAX_CHUNK_SIZE);
 
             // For each chunk, create a properly sized fill buffer
-            #[cfg(feature = "std")]
             let fill_buffer = vec![val; chunk_size];
-            #[cfg(all(not(feature = "std"), not(feature = "std")))]
-            let fill_buffer = {
-                let mut buffer: kiln_foundation::bounded::BoundedVec<u8, 4096, SmallMemoryProvider> =
-                    kiln_foundation::bounded::BoundedVec::new(SmallMemoryProvider::default())
-                        .unwrap();
-                for _ in 0..chunk_size {
-                    buffer.push(val).unwrap();
-                }
-                buffer
-            };
 
             // Write directly to the data handler with safety verification
-            #[cfg(feature = "std")]
             self.data.lock().unwrap().verify_access(current_dst, chunk_size)?;
-            #[cfg(not(feature = "std"))]
-            self.data.read().verify_access(current_dst, chunk_size)?;
 
             // Write the buffer data using memory write method
-            #[cfg(feature = "std")]
             self.write(current_dst as u32, &fill_buffer)?;
-            #[cfg(not(feature = "std"))]
-            self.write(current_dst as u32, fill_buffer.as_slice()?)?;
 
             current_dst += chunk_size;
             remaining -= chunk_size;
@@ -1586,10 +1304,7 @@ impl Memory {
         };
 
         // Destination bounds check
-        #[cfg(feature = "std")]
         let data_size = self.data.lock().unwrap().size();
-        #[cfg(not(feature = "std"))]
-        let data_size = self.data.read().size();
 
         let dst_end = match dst.checked_add(size) {
             Some(end) if end <= data_size => end,
@@ -1644,16 +1359,8 @@ impl Memory {
             let src_data = src_slice.data()?;
 
             // Verify destination access is valid using the SafeMemoryHandler
-            #[cfg(feature = "std")]
             {
                 let mut data_guard = self.data.lock().unwrap();
-                data_guard.verify_access(dst_offset, chunk_size)?;
-                // Write the source data directly to the destination
-                data_guard.write_data(dst_offset, src_data)?;
-            }
-            #[cfg(not(feature = "std"))]
-            {
-                let mut data_guard = self.data.write();
                 data_guard.verify_access(dst_offset, chunk_size)?;
                 // Write the source data directly to the destination
                 data_guard.write_data(dst_offset, src_data)?;
@@ -2096,10 +1803,7 @@ impl Memory {
         self.verification_level = level;
 
         // Propagate to the memory handler
-        #[cfg(feature = "std")]
         self.data.lock().unwrap().set_verification_level(level);
-        #[cfg(not(feature = "std"))]
-        self.data.write().set_verification_level(level);
     }
 
     /// Gets the current verification level
@@ -2114,10 +1818,7 @@ impl Memory {
 
     /// Get the memory statistics
     fn memory_stats(&self) -> MemoryStats {
-        #[cfg(feature = "std")]
         let total_size = self.data.lock().unwrap().size();
-        #[cfg(not(feature = "std"))]
-        let total_size = self.data.read().size();
 
         MemoryStats {
             total_size,
@@ -2131,21 +1832,9 @@ impl Memory {
 
     /// Update all access metrics in one operation
     fn update_access_metrics(&self, offset: usize, len: usize) {
-        #[cfg(feature = "std")]
-        {
-            self.metrics.max_access_size.fetch_max(len, Ordering::Relaxed);
-            self.metrics.last_access_offset.store(offset, Ordering::Relaxed);
-            self.metrics.last_access_length.store(len, Ordering::Relaxed);
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // Use write() method with KilnRwLock
-            let mut metrics = self.metrics.write();
-            metrics.max_access_size = metrics.max_access_size.max(len);
-            metrics.last_access_offset = offset;
-            metrics.last_access_length = len;
-        }
+        self.metrics.max_access_size.fetch_max(len, Ordering::Relaxed);
+        self.metrics.last_access_offset.store(offset, Ordering::Relaxed);
+        self.metrics.last_access_length.store(len, Ordering::Relaxed);
     }
 
     /// Get safety statistics for this memory instance
@@ -2155,7 +1844,6 @@ impl Memory {
     /// # Returns
     ///
     /// A string containing the statistics
-    #[cfg(feature = "std")]
     pub fn safety_stats(&self) -> alloc::string::String {
         let memory_stats = self.memory_stats();
         let access_count = self.access_count();
@@ -2165,18 +1853,6 @@ impl Memory {
 
         // Create a string with formatted stats
         "Memory Safety Stats: [Runtime memory]".to_string()
-    }
-
-    /// Get safety statistics for this memory instance (no_std version)
-    #[cfg(not(feature = "std"))]
-    pub fn safety_stats(&self) -> Result<crate::prelude::RuntimeString> {
-        use crate::prelude::RuntimeString;
-        let provider = kiln_foundation::safe_managed_alloc!(
-            1024,
-            kiln_foundation::budget_aware_provider::CrateId::Runtime
-        )?;
-        Ok(RuntimeString::from_str_truncate("Memory Safety Stats: [Runtime memory]")
-            .unwrap_or_else(|_| RuntimeString::from_str_truncate("").unwrap()))
     }
 
     /// Returns a `SafeSlice` representing the entire memory
@@ -2228,10 +1904,7 @@ impl Memory {
         let new_byte_size = wasm_offset_to_usize(new_size_pages)? * PAGE_SIZE;
         // Placeholder: Assumes SafeMemoryHandler has a method like `resize`
         // that takes &self and handles locking internally.
-        #[cfg(feature = "std")]
         self.data.lock().unwrap().resize(new_byte_size)?;
-        #[cfg(not(feature = "std"))]
-        self.data.write().resize(new_byte_size)?;
 
         self.current_pages.store(new_size_pages, Ordering::Relaxed);
         self.update_peak_memory();
@@ -2247,7 +1920,6 @@ impl Memory {
 /// ASIL-B safety guarantees from the Mutex protection).
 ///
 /// Uses interior mutability via `write_shared()` for thread-safe writes.
-#[cfg(feature = "std")]
 impl MemoryAccessor for Memory {
     fn read_bytes(&self, offset: u32, buffer: &mut [u8]) -> Result<()> {
         self.read(offset, buffer)
@@ -2285,7 +1957,6 @@ fn u64_to_usize(value: u64) -> Result<usize> {
 }
 
 impl MemoryOperations for Memory {
-    #[cfg(feature = "std")]
     fn read_bytes(&self, offset: u64, len: u64) -> Result<Vec<u8>> {
         // Handle zero-length reads
         if len == 0 {
@@ -2306,65 +1977,12 @@ impl MemoryOperations for Memory {
         }
 
         // Read the data using the existing read method
-        #[cfg(feature = "std")]
         let mut buffer = vec![0u8; len_usize];
-        #[cfg(all(not(feature = "std"), not(feature = "std")))]
-        let mut buffer = {
-            let mut buf = kiln_foundation::bounded::BoundedVec::new();
-            for _ in 0..len_usize {
-                buf.push(0u8).unwrap();
-            }
-            buf
-        };
         // Convert back to u32 for the internal read method (which still uses u32)
         let offset_u32 = u32::try_from(offset)
             .map_err(|_| Error::memory_out_of_bounds("Offset exceeds u32 for internal read"))?;
         self.read(offset_u32, &mut buffer)?;
         Ok(buffer)
-    }
-
-    #[cfg(not(any(feature = "std",)))]
-    fn read_bytes(
-        &self,
-        offset: u64,
-        len: u64,
-    ) -> Result<kiln_foundation::BoundedVec<u8, 65536, MediumMemoryProvider>> {
-        // Handle zero-length reads
-        if len == 0 {
-            let provider = MediumMemoryProvider::default();
-            return kiln_foundation::BoundedVec::new(provider);
-        }
-
-        // Convert to usize and check for overflow
-        let offset_usize = u64_to_usize(offset)?;
-        let len_usize = u64_to_usize(len)?;
-
-        // Verify bounds
-        let end = offset_usize
-            .checked_add(len_usize)
-            .ok_or_else(|| Error::memory_out_of_bounds("Memory read would overflow"))?;
-
-        if end > self.size_in_bytes() {
-            return Err(Error::memory_out_of_bounds("Memory read out of bounds"));
-        }
-
-        // Create a bounded vector and fill it
-        let mut result = kiln_foundation::BoundedVec::<u8, 65536, MediumMemoryProvider>::new(
-            MediumMemoryProvider::default(),
-        )?;
-
-        // Read data byte by byte to populate the bounded vector
-        // Convert offset to u32 for internal get_byte method
-        let offset_u32 = u32::try_from(offset)
-            .map_err(|_| Error::memory_out_of_bounds("Offset exceeds u32 for internal read"))?;
-        for i in 0..len_usize {
-            let byte = self.get_byte(offset_u32 + i as u32)?;
-            result
-                .push(byte)
-                .map_err(|_| Error::runtime_execution_error("Memory access failed"))?;
-        }
-
-        Ok(result)
     }
 
     fn write_bytes(&mut self, offset: u64, bytes: &[u8]) -> Result<()> {
@@ -2434,25 +2052,10 @@ impl MemoryOperations for Memory {
         let dest_u32 = u32::try_from(dest)
             .map_err(|_| Error::memory_out_of_bounds("Dest offset exceeds u32"))?;
 
-        #[cfg(feature = "std")]
         {
             let mut buffer = vec![0u8; size_usize];
             self.read(src_u32, &mut buffer)?;
             self.write(dest_u32, &buffer)?;
-        }
-
-        #[cfg(not(feature = "std"))]
-        {
-            // For no_std, copy byte by byte
-            // This is less efficient but works in constrained environments
-            if size_usize > 4096 {
-                return Err(Error::runtime_execution_error("Memory operation error"));
-            }
-
-            for i in 0..size_usize {
-                let byte = self.get_byte(src_u32 + i as u32)?;
-                self.set_byte(dest_u32 + i as u32, byte)?;
-            }
         }
 
         Ok(())

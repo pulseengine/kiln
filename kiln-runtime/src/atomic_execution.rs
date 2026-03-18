@@ -15,14 +15,6 @@
 #![allow(clippy::undocumented_unsafe_blocks)]
 #![allow(clippy::unsafe_derive_deserialize)]
 
-// alloc is imported in lib.rs with proper feature gates
-
-#[cfg(not(feature = "std"))]
-use alloc::{
-    collections::BTreeMap,
-    sync::Arc,
-    vec::Vec,
-};
 // Import platform abstractions from kiln-foundation PAI layer
 use core::sync::atomic::{
     AtomicU32,
@@ -158,10 +150,7 @@ pub struct AtomicMemoryContext {
     /// Thread manager for coordination
     pub thread_manager: ThreadManager,
     /// Wait/notify coordination data structures
-    #[cfg(feature = "std")]
     wait_queues:        crate::bounded_runtime_infra::BoundedAtomicOpMap<ThreadIdVec>,
-    #[cfg(not(feature = "std"))]
-    wait_queues:        [(u32, [Option<ThreadId>; 8]); 16], // Fixed arrays for no_std
     /// Atomic operation statistics
     pub stats:          AtomicExecutionStats,
 }
@@ -1023,7 +1012,6 @@ impl AtomicMemoryContext {
         self.stats.wait_operations += 1;
 
         // Add thread to wait queue for this address
-        #[cfg(feature = "std")]
         {
             // BoundedMap API is different from HashMap - handle explicitly
             let provider = kiln_foundation::safe_managed_alloc!(
@@ -1049,44 +1037,10 @@ impl AtomicMemoryContext {
                 },
             }
         }
-        #[cfg(not(feature = "std"))]
-        {
-            // Binary std/no_std choice
-            let mut found = false;
-            for (wait_addr, queue) in &mut self.wait_queues {
-                if *wait_addr == addr as u32 {
-                    // Find empty slot in queue
-                    for slot in queue.iter_mut() {
-                        if slot.is_none() {
-                            *slot = Some(thread_id);
-                            found = true;
-                            break;
-                        }
-                    }
-                    break;
-                }
-            }
-            if !found {
-                // Find empty queue slot
-                for (wait_addr, queue) in &mut self.wait_queues {
-                    if *wait_addr == 0 {
-                        // 0 means unused
-                        *wait_addr = addr as u32;
-                        queue[0] = Some(thread_id);
-                        break;
-                    }
-                }
-            }
-        }
 
         // Return 0 for successful wait (simplified - real implementation would suspend
         // thread)
-        #[cfg(feature = "std")]
-        return result_vec![0];
-        #[cfg(not(feature = "std"))]
-        {
-            result_vec![0]
-        }
+        result_vec![0]
     }
 
     fn atomic_wait_u64(
@@ -1104,40 +1058,16 @@ impl AtomicMemoryContext {
 
         let mut notified = 0u32;
 
-        #[cfg(feature = "std")]
-        {
-            if let Ok(Some(queue)) = self.wait_queues.get_mut(&(addr as u64)) {
-                let to_notify = core::cmp::min(count as usize, queue.len());
-                for _ in 0..to_notify {
-                    if let Ok(Some(_thread_id)) = queue.pop() {
-                        // In real implementation, would wake up the thread
-                        notified += 1;
-                    }
-                }
-                if queue.is_empty() {
-                    self.wait_queues.remove(&(addr as u64))?;
+        if let Ok(Some(queue)) = self.wait_queues.get_mut(&(addr as u64)) {
+            let to_notify = core::cmp::min(count as usize, queue.len());
+            for _ in 0..to_notify {
+                if let Ok(Some(_thread_id)) = queue.pop() {
+                    // In real implementation, would wake up the thread
+                    notified += 1;
                 }
             }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            // Binary std/no_std choice
-            for (wait_addr, queue) in &mut self.wait_queues {
-                if *wait_addr == addr as u32 {
-                    let mut removed = 0;
-                    // For arrays, we remove by setting elements to None from the end
-                    for slot in queue.iter_mut().rev() {
-                        if removed >= count as usize {
-                            break;
-                        }
-                        if slot.is_some() {
-                            *slot = None;
-                            removed += 1;
-                            notified += 1;
-                        }
-                    }
-                    break;
-                }
+            if queue.is_empty() {
+                self.wait_queues.remove(&(addr as u64))?;
             }
         }
 

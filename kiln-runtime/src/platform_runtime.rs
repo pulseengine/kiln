@@ -136,7 +136,6 @@ pub struct RuntimeMetrics {
 
 impl PlatformAwareRuntime {
     /// Create new platform-aware runtime using platform discovery
-    #[cfg(feature = "std")]
     pub fn new() -> Result<Self> {
         let mut discoverer = PlatformLimitDiscoverer::new();
         let limits = discoverer
@@ -145,22 +144,7 @@ impl PlatformAwareRuntime {
         Self::new_with_limits(limits)
     }
 
-    /// Create new platform-aware runtime for no_std environments
-    #[cfg(not(feature = "std"))]
-    pub fn new() -> Result<Self> {
-        let cfi_protection = Self::create_basic_cfi_protection();
-        let execution_engine = CfiExecutionEngine::new(cfi_protection);
-        let safety_context = SafetyContext::new(AsilLevel::D); // Default to highest safety level for no_std
-
-        Ok(Self {
-            execution_engine: execution_engine?,
-            safety_context,
-            metrics: RuntimeMetrics::default(),
-        })
-    }
-
     /// Create new platform-aware runtime with specific limits
-    #[cfg(feature = "std")]
     pub fn new_with_limits(limits: ComprehensivePlatformLimits) -> Result<Self> {
         #[cfg(all(any(feature = "std", feature = "alloc"), feature = "platform"))]
         let memory_allocator = Self::create_memory_allocator(&limits)?;
@@ -215,13 +199,9 @@ impl PlatformAwareRuntime {
         self.validate_execution_limits(function, args)?;
 
         // Create execution context with platform limits
-        #[cfg(feature = "std")]
         let mut execution_context = ExecutionContext::new_with_limits(
             self.platform_limits.max_stack_bytes / 8, // Approximate stack depth
         );
-
-        #[cfg(not(feature = "std"))]
-        let mut execution_context = ExecutionContext::new_with_limits(256); // Default stack depth for no_std
 
         // Execute with CFI protection
         let instruction = self.create_call_instruction(function);
@@ -233,7 +213,6 @@ impl PlatformAwareRuntime {
         let end_time = self.get_timestamp();
         self.metrics.instructions_executed += 1;
         self.metrics.execution_time_ns += end_time.saturating_sub(start_time);
-        #[cfg(feature = "std")]
         self.update_memory_metrics();
 
         // Extract return values from CFI result
@@ -242,44 +221,21 @@ impl PlatformAwareRuntime {
 
     /// Instantiate component with resource budget validation
     pub fn instantiate_component(&mut self, component_bytes: &[u8]) -> Result<ComponentId> {
-        #[cfg(feature = "std")]
-        {
-            // Validate component against platform limits
-            let requirements = self.analyze_component_requirements(component_bytes)?;
+        // Validate component against platform limits
+        let requirements = self.analyze_component_requirements(component_bytes)?;
 
-            if requirements.memory_usage > self.available_memory() {
-                return Err(Error::runtime_execution_error(
-                    "Insufficient memory for component",
-                ));
-            }
-
-            if self.metrics.components_instantiated >= self.platform_limits.max_components as u32 {
-                return Err(Error::new(
-                    ErrorCategory::Resource,
-                    kiln_error::codes::RESOURCE_LIMIT_EXCEEDED,
-                    "Maximum component limit exceeded",
-                ));
-            }
+        if requirements.memory_usage > self.available_memory() {
+            return Err(Error::runtime_execution_error(
+                "Insufficient memory for component",
+            ));
         }
 
-        #[cfg(not(feature = "std"))]
-        {
-            // For no_std, use basic validation
-            if component_bytes.len() > 1024 * 1024 {
-                // 1MB limit
-                return Err(Error::runtime_execution_error(
-                    "Component size exceeds limit",
-                ));
-            }
-
-            if self.metrics.components_instantiated >= 16 {
-                // Fixed limit for no_std
-                return Err(Error::new(
-                    ErrorCategory::Resource,
-                    kiln_error::codes::RESOURCE_LIMIT_EXCEEDED,
-                    "Component instantiation limit exceeded",
-                ));
-            }
+        if self.metrics.components_instantiated >= self.platform_limits.max_components as u32 {
+            return Err(Error::new(
+                ErrorCategory::Resource,
+                kiln_error::codes::RESOURCE_LIMIT_EXCEEDED,
+                "Maximum component limit exceeded",
+            ));
         }
 
         // Create component instance with bounded resources
@@ -295,7 +251,6 @@ impl PlatformAwareRuntime {
     }
 
     /// Get platform limits
-    #[cfg(feature = "std")]
     pub fn platform_limits(&self) -> &ComprehensivePlatformLimits {
         &self.platform_limits
     }
@@ -307,31 +262,14 @@ impl PlatformAwareRuntime {
 
     /// Get available memory in bytes
     pub fn available_memory(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            // Simplified implementation - could query platform allocator for available
-            // memory
-            self.platform_limits
-                .max_total_memory
-                .saturating_sub(self.metrics.memory_allocated)
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            // For no_std, use a fixed memory budget
-            (1024_usize * 1024).saturating_sub(self.metrics.memory_allocated) // 1MB budget
-        }
+        self.platform_limits
+            .max_total_memory
+            .saturating_sub(self.metrics.memory_allocated)
     }
 
     /// Get total memory capacity
     pub fn total_memory(&self) -> usize {
-        #[cfg(feature = "std")]
-        {
-            self.platform_limits.max_total_memory
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            1024_usize * 1024 // 1MB for no_std
-        }
+        self.platform_limits.max_total_memory
     }
 
     /// Create platform-specific memory allocator using kiln-platform
@@ -432,15 +370,7 @@ impl PlatformAwareRuntime {
         CfiControlFlowProtection::new_with_level(protection_level)
     }
 
-    /// Create basic CFI protection for no_std environments
-    #[cfg(not(feature = "std"))]
-    fn create_basic_cfi_protection() -> CfiControlFlowProtection {
-        // Use maximum protection level for no_std environments (ASIL-D)
-        CfiControlFlowProtection::new_with_level(2)
-    }
-
     /// Validate execution against platform limits
-    #[cfg(feature = "std")]
     fn validate_execution_limits(&self, function: &RuntimeFunction, args: &[Value]) -> Result<()> {
         // Check stack depth estimate
         let estimated_stack = (args.len() + 32) * 8; // Rough estimate
@@ -541,25 +471,11 @@ impl PlatformAwareRuntime {
 
     /// Get current timestamp for performance tracking
     fn get_timestamp(&self) -> u64 {
-        // Platform-specific timestamp implementation
-        #[cfg(feature = "std")]
-        {
-            use std::time::{
-                SystemTime,
-                UNIX_EPOCH,
-            };
-            SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() as u64
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            // Simple counter for no_std environments
-            use core::sync::atomic::{
-                AtomicU64,
-                Ordering,
-            };
-            static COUNTER: AtomicU64 = AtomicU64::new(0);
-            COUNTER.fetch_add(1, Ordering::Relaxed)
-        }
+        use std::time::{
+            SystemTime,
+            UNIX_EPOCH,
+        };
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() as u64
     }
 }
 

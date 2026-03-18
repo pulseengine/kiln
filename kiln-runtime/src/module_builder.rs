@@ -53,12 +53,8 @@ use crate::{
     prelude::*,
 };
 
-// String type for runtime - use std::string::String or BoundedString
-#[cfg(feature = "std")]
+// String type for runtime
 type String = alloc::string::String;
-#[cfg(not(feature = "std"))]
-type String =
-    kiln_foundation::bounded::BoundedString<256>;
 
 /// Trait for building WebAssembly runtime modules from decoder output.
 pub trait RuntimeModuleBuilder {
@@ -231,13 +227,7 @@ impl RuntimeModuleBuilder for ModuleBuilder {
 
         // For now, create empty function with proper types
         // TODO: Implement proper bytecode parsing with compatible types
-        #[cfg(feature = "std")]
         let instructions = Vec::new();
-        #[cfg(not(feature = "std"))]
-        let instructions = {
-            let provider1 = create_runtime_provider()?;
-            kiln_foundation::bounded::BoundedVec::new(provider1)?
-        };
 
         let provider2 = create_runtime_provider()?;
         let locals = kiln_foundation::bounded::BoundedVec::new(provider2)?;
@@ -429,16 +419,9 @@ pub fn load_module_from_binary(binary: &[u8]) -> Result<Module> {
         Module::from_kiln_module(&*decoder_module).map(|boxed| *boxed)  // Dereference Box
         // Scope drops here, memory available for reuse
     }
-    #[cfg(all(not(feature = "decoder"), feature = "std"))]
+    #[cfg(not(feature = "decoder"))]
     {
         // Decoder not available - create an empty module
         Err(Error::runtime_execution_error("Decoder not available"))
-    }
-    #[cfg(not(feature = "std"))]
-    {
-        // Basic fallback for no_std - create an empty module
-        Err(Error::parse_invalid_binary(
-            "Module loading from binary not supported in no_std mode",
-        ))
     }
 }

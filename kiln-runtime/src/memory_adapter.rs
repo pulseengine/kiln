@@ -270,14 +270,10 @@ impl SafeMemoryAdapter {
         // Create a new adapter with the memory
         let arc_memory: Arc<Memory> = Arc::from(memory);  // Convert Box<Memory> to Arc<Memory>
 
-        #[cfg(feature = "std")]
         let provider = {
             let data = arc_memory.buffer()?;
             StdMemoryProvider::new(data.as_slice())
         };
-
-        #[cfg(not(feature = "std"))]
-        let provider = StdMemoryProvider::default();
 
         // Return a Memory adapter
         let adapter = SafeMemoryAdapter {

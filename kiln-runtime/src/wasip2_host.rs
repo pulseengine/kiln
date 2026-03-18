@@ -17,18 +17,10 @@
 //!    - Complex types are first-class values, not memory pointers
 //!    - Used when canonical ABI lift/lower is integrated
 
-#[cfg(feature = "std")]
 use std::string::String;
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-#[cfg(not(feature = "std"))]
-use alloc::string::String;
 
 use kiln_foundation::values::Value;
-#[cfg(feature = "std")]
 use std::vec::Vec;
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
 use kiln_error::Result;
 
 /// Component Model value types (re-exported for convenience)
@@ -101,20 +93,10 @@ pub struct LoweringContext<'a> {
 
 impl<'a> LoweringContext<'a> {
     /// Create a new lowering context with memory and optional realloc
-    #[cfg(feature = "std")]
     pub fn new(memory: &'a mut [u8], realloc: Option<ReallocCallback<'a>>) -> Self {
         Self {
             memory,
             realloc,
-            alloc_offset: 0,
-        }
-    }
-
-    /// Create a new lowering context (no_std version)
-    #[cfg(not(feature = "std"))]
-    pub fn new(memory: &'a mut [u8]) -> Self {
-        Self {
-            memory,
             alloc_offset: 0,
         }
     }
@@ -124,7 +106,6 @@ impl<'a> LoweringContext<'a> {
     /// Uses cabi_realloc callback if available, otherwise falls back to
     /// simple bump allocation starting at alloc_offset.
     pub fn allocate(&mut self, size: u32, align: u32) -> Result<u32> {
-        #[cfg(feature = "std")]
         if let Some(ref mut realloc) = self.realloc {
             // Call cabi_realloc(0, 0, align, size) for new allocation
             return realloc(0, 0, align as i32, size as i32).map(|p| p as u32);
@@ -1321,20 +1302,9 @@ impl Wasip2Host {
     /// This is called when the component wants to exit.
     /// The status parameter indicates success (ok variant) or failure.
     pub fn cli_exit(&mut self, status_ok: bool) -> Result<Vec<Value>> {
-        #[cfg(feature = "std")]
-        {
-            // In std mode, actually exit the process
-            let code = if status_ok { 0 } else { 1 };
-            std::process::exit(code);
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            if status_ok {
-                Ok(vec![])
-            } else {
-                Err(kiln_error::Error::runtime_error("Component exited with failure status"))
-            }
-        }
+        // Actually exit the process
+        let code = if status_ok { 0 } else { 1 };
+        std::process::exit(code);
     }
 
     /// Extract the base interface name without version suffix
@@ -1585,18 +1555,7 @@ impl Wasip2Host {
                     _ => true,
                 };
 
-                #[cfg(feature = "std")]
-                {
-                    std::process::exit(if success { 0 } else { 1 });
-                }
-                #[cfg(not(feature = "std"))]
-                {
-                    if success {
-                        Ok(vec![])
-                    } else {
-                        Err(kiln_error::Error::runtime_error("Component exited with failure"))
-                    }
-                }
+                std::process::exit(if success { 0 } else { 1 });
             },
 
             // wasi:cli/environment.get-environment() -> list<tuple<string, string>>

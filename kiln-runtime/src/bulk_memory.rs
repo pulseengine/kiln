@@ -19,13 +19,6 @@
 //! - Comprehensive validation and error handling
 //! - Proper bounds checking and overflow detection
 
-// Binary std/no_std choice
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::format;
-
 use kiln_error::{
     codes,
     Error,
@@ -466,21 +459,7 @@ pub fn memory_grow(memory: &mut dyn MemoryOperations, delta_pages: u32) -> Resul
 struct EmptyMemory;
 
 impl MemoryOperations for EmptyMemory {
-    #[cfg(feature = "std")]
     fn read_bytes(&self, _offset: u64, _len: u64) -> Result<Vec<u8>> {
-        Err(Error::runtime_unsupported_operation(
-            "EmptyMemory read not supported",
-        ))
-    }
-
-    #[cfg(not(feature = "std"))]
-    fn read_bytes(
-        &self,
-        _offset: u64,
-        _len: u64,
-    ) -> Result<
-        kiln_foundation::BoundedVec<u8, 65_536, kiln_foundation::safe_memory::NoStdProvider<65_536>>,
-    > {
         Err(Error::runtime_unsupported_operation(
             "EmptyMemory read not supported",
         ))

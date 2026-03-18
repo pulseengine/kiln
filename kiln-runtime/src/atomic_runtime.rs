@@ -21,13 +21,6 @@
 //! - Proper capability-based memory access verification
 //! - Thread-safe coordination with wait/notify semantics
 
-// Binary std/no_std choice
-#[cfg(not(feature = "std"))]
-extern crate alloc;
-
-#[cfg(not(feature = "std"))]
-use alloc::format;
-
 use kiln_error::{
     codes,
     Error,

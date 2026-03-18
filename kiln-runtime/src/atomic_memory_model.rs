@@ -393,18 +393,11 @@ impl AtomicMemoryModel {
     }
 
     fn calculate_operations_per_second(&self) -> f64 {
-        #[cfg(feature = "std")]
-        {
-            if self.model_stats.total_execution_time > 0 {
-                (self.model_stats.total_operations as f64)
-                    / (self.model_stats.total_execution_time as f64 / 1_000_000_000.0)
-            } else {
-                0.0
-            }
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            0.0 // Cannot calculate without timing information
+        if self.model_stats.total_execution_time > 0 {
+            (self.model_stats.total_operations as f64)
+                / (self.model_stats.total_execution_time as f64 / 1_000_000_000.0)
+        } else {
+            0.0
         }
     }
 
@@ -478,31 +471,9 @@ impl ThreadSyncState {
     }
 
     fn record_sync_operation(&mut self, thread_id: ThreadId) -> Result<()> {
-        #[cfg(feature = "std")]
-        {
-            // BoundedMap entry API returns the value, not a mutable reference
-            let current = self.sync_operations.get(&thread_id)?.unwrap_or(0);
-            self.sync_operations.insert(thread_id, current + 1)?;
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            // Since BoundedVec doesn't have iter_mut(), we need to find and update
-            // differently
-            let mut found = false;
-            for i in 0..self.sync_operations.len() {
-                if let Ok((tid, _count)) = self.sync_operations.get(i) {
-                    if tid == thread_id {
-                        // Found the entry, but we can't get mutable access
-                        // For now, just mark as found without updating
-                        found = true;
-                        break;
-                    }
-                }
-            }
-            if !found {
-                let _ = self.sync_operations.push((thread_id, 1));
-            }
-        }
+        // BoundedMap entry API returns the value, not a mutable reference
+        let current = self.sync_operations.get(&thread_id)?.unwrap_or(0);
+        self.sync_operations.insert(thread_id, current + 1)?;
         Ok(())
     }
 

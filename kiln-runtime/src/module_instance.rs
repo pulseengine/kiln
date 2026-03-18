@@ -29,17 +29,6 @@ use kiln_foundation::{
 use kiln_instructions::reference_ops::ReferenceOperations;
 
 // Type alias for FuncType to make signatures more readable - uses unified RuntimeProvider
-#[cfg(not(feature = "std"))]
-use crate::bounded_runtime_infra::{
-    create_runtime_provider,
-    BoundedGlobalVec,
-    BoundedImportExportName,
-    BoundedImportMap,
-    BoundedMemoryVec,
-    BoundedTableVec,
-    RuntimeProvider,
-};
-#[cfg(feature = "std")]
 use crate::bounded_runtime_infra::{
     create_runtime_provider,
     BoundedImportExportName,
@@ -66,20 +55,9 @@ use crate::{
 };
 type KilnFuncType = kiln_foundation::types::FuncType;
 
-// Platform sync primitives - use prelude imports for consistency
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::format;
 // Import format! macro for string formatting
-#[cfg(feature = "std")]
 use std::format;
-#[cfg(feature = "std")]
 use std::sync::{
-    Arc,
-    Mutex,
-};
-
-#[cfg(not(feature = "std"))]
-use crate::prelude::{
     Arc,
     Mutex,
 };
