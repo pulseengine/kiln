@@ -4,85 +4,9 @@
 
 // alloc is imported in lib.rs with proper feature gates
 
-#[cfg(feature = "std")]
 use std::{collections::HashMap, sync::Arc};
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{collections::BTreeMap, sync::Arc};
 
 // Components traits imported below with full set
-
-#[cfg(all(not(feature = "std"), not(feature = "std")))]
-pub mod no_alloc {
-    use kiln_error::{Error, ErrorCategory, Result};
-    use kiln_foundation::{
-        bounded::{BoundedVec, MAX_COMPONENT_TYPES},
-        safe_memory::{NoStdProvider, SafeSlice},
-        verification::VerificationLevel,
-    };
-
-    /// A minimal component implementation for pure no_std environments
-    ///
-    /// This provides basic validation and introspection capabilities,
-    /// but does not support execution of components.
-    #[derive(Debug)]
-    pub struct MinimalComponent {
-        verification_level: VerificationLevel,
-    }
-
-    impl MinimalComponent {
-        /// Creates a new minimal component
-        ///
-        /// # Arguments
-        ///
-        /// * `level` - The verification level to use
-        ///
-        /// # Returns
-        ///
-        /// * `Self` - A new minimal component
-        pub fn new(level: VerificationLevel) -> Self {
-            Self { verification_level: level }
-        }
-
-        /// Gets the verification level for this component
-        ///
-        /// # Returns
-        ///
-        /// * `VerificationLevel` - The verification level
-        #[must_use]
-        pub const fn verification_level(&self) -> VerificationLevel {
-            self.verification_level
-        }
-
-        /// Validates a component binary
-        ///
-        /// # Arguments
-        ///
-        /// * `binary` - The component binary data
-        ///
-        /// # Returns
-        ///
-        /// * `Result<()>` - Ok if the component is valid, Error otherwise
-        pub fn validate(binary: &[u8]) -> Result<()> {
-            #[cfg(feature = "decoder")]
-            {
-                // Use kiln-decoder's header validation
-                kiln_decoder::component::decode_no_alloc::verify_component_header(binary)
-            }
-            #[cfg(not(feature = "decoder"))]
-            {
-                // Basic validation - just check magic number
-                if binary.len() < 8 {
-                    return Err(Error::parse_invalid_binary("Binary too small to be a valid component"));
-                }
-                // Check for WASM magic number (0x00 0x61 0x73 0x6D)
-                if &binary[0..4] != b"\0asm" {
-                    return Err(Error::parse_invalid_binary("Invalid WASM magic number"));
-                }
-                Ok(())
-            }
-        }
-    }
-}
 
 use kiln_foundation::{
     safe_memory::{SafeMemoryHandler, SafeSlice, SafeStack},
@@ -91,10 +15,8 @@ use kiln_foundation::{
     budget_aware_provider::CrateId,
 };
 
-#[cfg(feature = "std")]
 use std::vec;
 
-#[cfg(feature = "std")]
 use crate::{
     component_traits::{
         ComponentInstance, ComponentRuntime, 
@@ -104,14 +26,7 @@ use crate::{
     prelude::*,
 };
 
-#[cfg(all(not(feature = "std"), not(feature = "std")))]
-use crate::{
-    component_traits::{ComponentType, ExternType, FuncType},
-    prelude::*,
-};
-
 /// Host function implementation
-#[cfg(feature = "std")]
 struct HostFunctionImpl<
     F: Fn(
             &[kiln_foundation::Value],
@@ -128,7 +43,6 @@ struct HostFunctionImpl<
 
 // TODO: ComponentHostFunction trait not yet defined - commented out temporarily
 /*
-#[cfg(feature = "std")]
 impl<
         F: Fn(
                 &[kiln_foundation::Value],
@@ -165,7 +79,6 @@ struct LegacyHostFunctionImpl<
     verification_level: VerificationLevel,
 }
 
-#[cfg(feature = "std")]
 impl<
         F: Fn(&[kiln_foundation::Value]) -> Result<kiln_foundation::bounded::BoundedVec<kiln_foundation::Value, 16, kiln_foundation::safe_memory::NoStdProvider<131072>>> + 'static + Send + Sync,
     > ComponentHostFunction for LegacyHostFunctionImpl<F>
@@ -212,7 +125,6 @@ impl DefaultHostFunctionFactory {
     }
 }
 
-#[cfg(feature = "std")]
 impl HostFunctionFactory for DefaultHostFunctionFactory {
     /// Create a function with the given name and type
     fn create_function(&self, _name: &str, ty: &FuncType) -> Result<Box<dyn HostFunction>> {
@@ -228,25 +140,14 @@ impl HostFunctionFactory for DefaultHostFunctionFactory {
             }),
         };
 
-        #[cfg(feature = "std")]
-        {
-            Ok(Box::new(func_impl))
-        }
-        #[cfg(all(not(feature = "std"), not(feature = "std")))]
-        {
-            // Binary std/no_std choice
-            Err(Error::runtime_execution_error("Host function creation not supported"))
-        }
+        Ok(Box::new(func_impl))
     }
 }
 
-#[cfg(feature = "std")]
 type HostFunctionMap = HashMap<String, Box<dyn ComponentHostFunction>>;
-#[cfg(feature = "std")]
 type HostFactoryVec = Vec<Box<dyn HostFunctionFactory>>;
 
 /// An implementation of the ComponentRuntime interface
-#[cfg(feature = "std")]
 pub struct ComponentRuntimeImpl {
     /// Host function factories for creating host functions
     host_factories: HostFactoryVec,
@@ -256,25 +157,17 @@ pub struct ComponentRuntimeImpl {
     host_functions: HostFunctionMap,
 }
 
-#[cfg(feature = "std")]
 impl ComponentRuntime for ComponentRuntimeImpl {
     /// Create a new ComponentRuntimeImpl
     fn new() -> Self {
         Self {
-            #[cfg(feature = "std")]
             host_factories: Vec::with_capacity(8),
-            #[cfg(all(not(feature = "std"), not(feature = "std")))]
-            host_factories: HostFactoryVec::new(kiln_provider!(131072, CrateId::Runtime).unwrap_or_default()).expect("Failed to create host factories"),
             verification_level: VerificationLevel::default(),
-            #[cfg(feature = "std")]
             host_functions: HostFunctionMap::new(),
-            #[cfg(all(not(feature = "std"), not(feature = "std")))]
-            host_functions: HostFunctionMap::new(kiln_provider!(131072, CrateId::Runtime).unwrap_or_default()).expect("Failed to create host functions"),
         }
     }
 
     /// Register a host function factory
-    #[cfg(feature = "std")]
     fn register_host_factory(&mut self, factory: Box<dyn HostFunctionFactory>) {
         // Safety-enhanced push operation with verification
         if self.verification_level.should_verify(128) {
@@ -282,20 +175,8 @@ impl ComponentRuntime for ComponentRuntimeImpl {
             self.verify_integrity().expect("ComponentRuntime integrity check failed");
         }
 
-        #[cfg(feature = "std")]
-        {
-            // Push to Vec (can't use SafeStack since HostFunctionFactory doesn't implement Clone)
-            self.host_factories.push(factory);
-        }
-
-        #[cfg(all(not(feature = "std"), not(feature = "std")))]
-        {
-            // Binary std/no_std choice
-            let _factory_id = self.host_factories.len() as u32;
-            let _ = self.host_factories.push(_factory_id);
-            // We don't actually store the factory in no_std mode for simplicity
-            core::mem::drop(factory);
-        }
+        // Push to Vec (can't use SafeStack since HostFunctionFactory doesn't implement Clone)
+        self.host_factories.push(factory);
 
         if self.verification_level.should_verify(128) {
             // Perform post-push integrity verification
@@ -303,9 +184,7 @@ impl ComponentRuntime for ComponentRuntimeImpl {
         }
     }
 
-
     /// Instantiate a component
-    #[cfg(feature = "std")]
     fn instantiate(&self, component_type: &ComponentType) -> Result<Box<dyn ComponentInstance>> {
         // Verify integrity before instantiation if high verification level
         if self.verification_level.should_verify(200) {
@@ -314,22 +193,10 @@ impl ComponentRuntime for ComponentRuntimeImpl {
 
         // Initialize memory with enough space (1 page = 64KB)
         let memory_size = 65536;
-        #[cfg(feature = "std")]
         let memory_data = vec![0; memory_size];
-        #[cfg(all(not(feature = "std"), not(feature = "std")))]
-        let memory_data = {
-            let mut data = kiln_foundation::bounded::BoundedVec::new();
-            for _ in 0..memory_size.min(65536) {
-                data.push(0u8).unwrap();
-            }
-            data
-        };
 
         // Collect host function names and types for tracking
-        #[cfg(feature = "std")]
         let mut host_function_names = Vec::new();
-        #[cfg(all(not(feature = "std"), not(feature = "std")))]
-        let mut host_function_names = kiln_foundation::bounded::BoundedVec::new();
 
         let mut host_functions = {
             let mut map = HashMap::new();
@@ -345,34 +212,15 @@ impl ComponentRuntime for ComponentRuntimeImpl {
             map
         };
 
-        #[cfg(all(not(feature = "std"), not(feature = "std")))]
-        let host_functions = {
-            // Binary std/no_std choice
-            for (name, _id) in self.host_functions.iter() {
-                host_function_names.push(name.clone());
-            }
-            // Return empty map-like structure for no_std
-            ()
-        };
-
         // Create a basic component instance implementation
-        #[cfg(feature = "std")]
-        {
-            Ok(Box::new(ComponentInstanceImpl {
-                component_type: component_type.clone(),
-                verification_level: self.verification_level,
-                memory_store: kiln_foundation::safe_memory::SafeMemoryHandler::<kiln_foundation::safe_memory::NoStdProvider<131072>>::new(kiln_provider!(131072, CrateId::Runtime).unwrap_or_default()),
-                host_function_names,
-                host_functions,
-            }))
-        }
-        #[cfg(all(not(feature = "std"), not(feature = "std")))]
-        {
-            // Binary std/no_std choice
-            Err(Error::runtime_execution_error("Component instantiation not supported in no std mode"))
-        }
+        Ok(Box::new(ComponentInstanceImpl {
+            component_type: component_type.clone(),
+            verification_level: self.verification_level,
+            memory_store: kiln_foundation::safe_memory::SafeMemoryHandler::<kiln_foundation::safe_memory::NoStdProvider<131072>>::new(kiln_provider!(131072, CrateId::Runtime).unwrap_or_default()),
+            host_function_names,
+            host_functions,
+        }))
     }
-
 
     /// Register a host function
     fn register_host_function<F>(&mut self, name: &str, ty: FuncType, function: F) -> Result<()>
@@ -382,25 +230,17 @@ impl ComponentRuntime for ComponentRuntimeImpl {
             + Send
             + Sync,
     {
-        #[cfg(feature = "std")]
-        {
-            // Create a legacy host function implementation
-            let func_impl = LegacyHostFunctionImpl {
-                func_type: ty,
-                implementation: Arc::new(function),
-                verification_level: self.verification_level,
-            };
+        // Create a legacy host function implementation
+        let func_impl = LegacyHostFunctionImpl {
+            func_type: ty,
+            implementation: Arc::new(function),
+            verification_level: self.verification_level,
+        };
 
-            // Insert the function into the host functions map
-            let name_string = name.to_string();
+        // Insert the function into the host functions map
+        let name_string = name.to_string();
 
-            self.host_functions.insert(name_string, Box::new(func_impl));
-        }
-        #[cfg(all(not(feature = "std"), not(feature = "std")))]
-        {
-            // Binary std/no_std choice
-            let _ = (name, ty, function);
-        }
+        self.host_functions.insert(name_string, Box::new(func_impl));
 
         Ok(())
     }
@@ -417,7 +257,6 @@ impl ComponentRuntime for ComponentRuntimeImpl {
     }
 }
 
-#[cfg(feature = "std")]
 impl ComponentRuntimeImpl {
     /// Create a new ComponentRuntimeImpl with a specific verification level
     ///
@@ -464,7 +303,6 @@ struct ComponentInstanceImpl {
     host_functions: HostFunctionTypeMap,
 }
 
-#[cfg(feature = "std")]
 impl ComponentInstance for ComponentInstanceImpl {
     /// Execute a function by name
     fn execute_function(
@@ -629,7 +467,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "std")]
     impl HostFunctionFactory for TestHostFunctionFactory {
         fn create_function(
             &self,
@@ -665,7 +502,6 @@ mod tests {
     // A legacy host function for testing - returns Vec
     struct LegacyTestHostFunctionFactory;
 
-    #[cfg(feature = "std")]
     impl HostFunctionFactory for LegacyTestHostFunctionFactory {
         fn create_function(
             &self,

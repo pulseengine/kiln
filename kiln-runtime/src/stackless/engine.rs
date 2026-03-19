@@ -23,116 +23,12 @@ use std::{
     vec::Vec,
 };
 
-// Debug support - only available with std and kiln-debug crate
-#[cfg(all(feature = "std", feature = "debugger"))]
+// Debug support - only available with kiln-debug crate
+#[cfg(feature = "debugger")]
 use kiln_debug::runtime_traits::{RuntimeDebugger, RuntimeState, DebugAction};
-
-// For pure no_std without alloc, use bounded collections
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-use kiln_foundation::{
-    bounded::BoundedString,
-    bounded::BoundedVec,
-    bounded_collections::BoundedMap,
-    safe_memory::NoStdProvider,
-};
-
-// Type aliases for pure no_std mode
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-type HashMap<K, V> = BoundedMap<K, V, 16, NoStdProvider<4096>>; // 16 concurrent instances max
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-type Vec<T> = BoundedVec<T, 256, NoStdProvider<4096>>; // 256 operands max
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-type String = BoundedString<256>; // 256 byte strings
-
-// Simple Arc substitute for no_std - just owns the value directly
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-pub struct Arc<T>(T);
 
 // GC heap reference wrapper types for WebAssembly GC proposal
 use kiln_foundation::values::{GcStructRef, GcArrayRef};
-
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T> Arc<T> {
-    pub fn new(value: T) -> Self {
-        Arc(value)
-    }
-}
-
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T> core::ops::Deref for Arc<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T: Clone> Clone for Arc<T> {
-    fn clone(&self) -> Self {
-        Arc(self.0.clone())
-    }
-}
-
-// Implement required traits for Arc to work with bounded collections
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T> kiln_foundation::traits::Checksummable for Arc<T>
-where
-    T: kiln_foundation::traits::Checksummable,
-{
-    fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
-        self.0.update_checksum(checksum);
-    }
-}
-
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T> kiln_foundation::traits::ToBytes for Arc<T>
-where
-    T: kiln_foundation::traits::ToBytes,
-{
-    fn serialized_size(&self) -> usize {
-        self.0.serialized_size()
-    }
-
-    fn to_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
-        &self,
-        writer: &mut kiln_foundation::traits::WriteStream<'a>,
-        provider: &PStream,
-    ) -> kiln_error::Result<()> {
-        self.0.to_bytes_with_provider(writer, provider)
-    }
-}
-
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T> kiln_foundation::traits::FromBytes for Arc<T>
-where
-    T: kiln_foundation::traits::FromBytes,
-{
-    fn from_bytes_with_provider<'a, PStream: kiln_foundation::MemoryProvider>(
-        reader: &mut kiln_foundation::traits::ReadStream<'a>,
-        provider: &PStream,
-    ) -> kiln_error::Result<Self> {
-        let value = T::from_bytes_with_provider(reader, provider)?;
-        Ok(Arc::new(value))
-    }
-}
-
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T: Default> Default for Arc<T> {
-    fn default() -> Self {
-        Arc::new(T::default())
-    }
-}
-
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T: PartialEq> PartialEq for Arc<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-impl<T: Eq> Eq for Arc<T> {}
 
 use kiln_error::Result;
 use kiln_foundation::{
@@ -204,7 +100,6 @@ const MAX_CALL_DEPTH: usize = 10000;
 /// When a Call instruction is encountered, the caller's state is saved here
 /// and returned to the trampoline. When the callee completes, the trampoline
 /// pushes results onto operand_stack and resumes execution from pc.
-#[cfg(any(feature = "std", feature = "alloc"))]
 #[derive(Debug)]
 struct SuspendedFrame {
     /// Instance ID of the executing instance
@@ -235,7 +130,6 @@ pub struct ExecutionStats {
 /// Outcome of executing a function body.
 /// Used for trampolining: instead of recursing on the Rust stack,
 /// execute_function_body returns control flow decisions to the trampoline in execute().
-#[cfg(any(feature = "std", feature = "alloc"))]
 enum ExecutionOutcome {
     /// Function completed normally with results
     Complete(Vec<Value>),
@@ -285,7 +179,6 @@ pub struct WasiStubMemory {
 /// This is the "virtual WebAssembly code" approach - the lowered function exists
 /// in the function index space but executes via our canonical executor.
 #[derive(Debug, Clone)]
-#[cfg(feature = "std")]
 pub struct LoweredFunction {
     /// Target interface (e.g., "wasi:io/streams@0.2.4")
     pub interface: String,
@@ -298,7 +191,6 @@ pub struct LoweredFunction {
 }
 
 /// Simple stackless WebAssembly execution engine
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub struct StacklessEngine {
     /// Currently loaded instances indexed by numeric ID
     instances:             HashMap<usize, Arc<ModuleInstance>>,
@@ -317,7 +209,6 @@ pub struct StacklessEngine {
     /// Current instruction pointer
     instruction_pointer:   AtomicU64,
     /// Host function registry for calling imported functions
-    #[cfg(feature = "std")]
     host_registry:         Option<Arc<kiln_host::CallbackRegistry>>,
     /// Pre-allocated WASI stub memory for each instance
     wasi_stubs:            HashMap<usize, WasiStubMemory>,
@@ -325,67 +216,38 @@ pub struct StacklessEngine {
     /// Maps instance_id -> Vec<bool> where true means segment was dropped
     dropped_data_segments: HashMap<usize, Vec<bool>>,
     /// Cross-instance import links: (instance_id, import_module, import_name) -> (target_instance_id, export_name)
-    #[cfg(feature = "std")]
     import_links:          HashMap<(usize, String, String), (usize, String)>,
     /// Aliased function origins: (instance_id, func_idx) -> original_instance_id
     /// Tracks which instance an aliased function actually comes from
-    #[cfg(feature = "std")]
     aliased_functions:     HashMap<(usize, usize), usize>,
     /// Generic host import handler for all host function calls
-    #[cfg(feature = "std")]
     host_handler:          Option<Box<dyn kiln_foundation::HostImportHandler>>,
     /// Optional runtime debugger for profiling and debugging
-    #[cfg(all(feature = "std", feature = "debugger"))]
+    #[cfg(feature = "debugger")]
     debugger:              Option<Box<dyn RuntimeDebugger>>,
     /// Active exception state for exception propagation across calls
     /// Contains (instance_id, tag_idx, tag_identity, payload) when an exception is in flight
     /// tag_identity is Some((module, name)) for imported tags, None for local tags
-    #[cfg(feature = "std")]
     active_exception:      Option<(usize, u32, Option<(String, String)>, Vec<Value>)>,
     /// Storage for caught exceptions (for throw_ref to re-throw)
     /// Maps exnref index to (tag_idx, payload)
-    #[cfg(feature = "std")]
     /// Exception storage: (tag_idx, tag_identity, payload)
     /// tag_identity is Some((module, name)) for imported tags, None for local tags
     exception_storage:     Vec<(u32, Option<(String, String)>, Vec<Value>)>,
     /// Lowered function registry: (instance_id, func_idx) -> LoweredFunction
     /// Used for canon.lower synthesized functions that dispatch to canonical executor
-    #[cfg(feature = "std")]
     lowered_functions:     HashMap<(usize, usize), LoweredFunction>,
     /// Instance name registry: instance_id -> registered module name
     /// Used for resolving tag identities in cross-module exception handling
-    #[cfg(feature = "std")]
     instance_registry:     HashMap<usize, String>,
     /// Explicit call stack for trampolining (avoids Rust stack recursion)
     /// Not used directly as a field - the trampoline in execute() uses a local Vec instead.
     /// Kept for potential future use (e.g., stack inspection).
-    #[cfg(feature = "std")]
     call_stack:            Vec<SuspendedFrame>,
 }
 
-/// Simple stackless WebAssembly execution engine (no_std version)
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-pub struct StacklessEngine {
-    /// Currently loaded instances indexed by numeric ID
-    instances:             HashMap<usize, Arc<ModuleInstance>>,
-    /// Next instance ID
-    next_instance_id:      AtomicU64,
-    /// Current active instance for execution
-    current_instance_id:   Option<usize>,
-    /// Operand stack for execution (needed by tail_call module)
-    pub operand_stack:     Vec<Value>,
-    /// Call frames count (needed by tail_call module)
-    pub call_frames_count: usize,
-    /// Execution statistics (needed by tail_call module)
-    pub stats:             ExecutionStats,
-    /// Remaining fuel for execution
-    fuel:                  AtomicU64,
-    /// Current instruction pointer
-    instruction_pointer:   AtomicU64,
-}
-
 /// Simple RuntimeState implementation for debugger callbacks
-#[cfg(all(feature = "std", feature = "debugger"))]
+#[cfg(feature = "debugger")]
 pub struct ExecutionState<'a> {
     pc: u32,
     func_idx: u32,
@@ -393,7 +255,7 @@ pub struct ExecutionState<'a> {
     locals: &'a [Value],
 }
 
-#[cfg(all(feature = "std", feature = "debugger"))]
+#[cfg(feature = "debugger")]
 impl<'a> RuntimeState for ExecutionState<'a> {
     fn pc(&self) -> u32 {
         self.pc
@@ -522,7 +384,6 @@ fn pop_atomic_address(operand_stack: &mut Vec<Value>, memarg_offset: u64) -> kil
 
 impl StacklessEngine {
     /// Create a new stackless engine
-    #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn new() -> Self {
         Self {
             instances:           HashMap::new(),
@@ -533,27 +394,18 @@ impl StacklessEngine {
             stats:               ExecutionStats::default(),
             fuel:                AtomicU64::new(u64::MAX),
             instruction_pointer: AtomicU64::new(0),
-            #[cfg(feature = "std")]
             host_registry:       None,
             wasi_stubs:          HashMap::new(),
             dropped_data_segments: HashMap::new(),
-            #[cfg(feature = "std")]
             import_links:        HashMap::new(),
-            #[cfg(feature = "std")]
             aliased_functions:   HashMap::new(),
-            #[cfg(feature = "std")]
             host_handler:        None,
-            #[cfg(all(feature = "std", feature = "debugger"))]
+            #[cfg(feature = "debugger")]
             debugger:            None,
-            #[cfg(feature = "std")]
             active_exception:    None,
-            #[cfg(feature = "std")]
             exception_storage:   Vec::new(),
-            #[cfg(feature = "std")]
             lowered_functions:   HashMap::new(),
-            #[cfg(feature = "std")]
             instance_registry:   HashMap::new(),
-            #[cfg(feature = "std")]
             call_stack:          Vec::with_capacity(256),
         }
     }
@@ -564,25 +416,24 @@ impl StacklessEngine {
     /// function entry/exit, and traps. This is useful for profiling and debugging.
     ///
     /// Note: This has performance overhead - only use when needed.
-    #[cfg(all(feature = "std", feature = "debugger"))]
+    #[cfg(feature = "debugger")]
     pub fn set_debugger(&mut self, debugger: Box<dyn RuntimeDebugger>) {
         self.debugger = Some(debugger);
     }
 
     /// Remove the attached debugger
-    #[cfg(all(feature = "std", feature = "debugger"))]
+    #[cfg(feature = "debugger")]
     pub fn clear_debugger(&mut self) {
         self.debugger = None;
     }
 
     /// Check if a debugger is attached
-    #[cfg(all(feature = "std", feature = "debugger"))]
+    #[cfg(feature = "debugger")]
     pub fn has_debugger(&self) -> bool {
         self.debugger.is_some()
     }
 
     /// Set the host import handler for resolving host function calls
-    #[cfg(feature = "std")]
     pub fn set_host_handler(&mut self, handler: Box<dyn kiln_foundation::HostImportHandler>) {
         self.host_handler = Some(handler);
     }
@@ -592,7 +443,6 @@ impl StacklessEngine {
     /// When a module calls a function at this (instance_id, func_idx), the engine
     /// will dispatch to the canonical executor instead of executing bytecode.
     /// This is the Component Model's "synthesized core function" mechanism.
-    #[cfg(feature = "std")]
     pub fn register_lowered_function(
         &mut self,
         instance_id: usize,
@@ -624,13 +474,11 @@ impl StacklessEngine {
     /// This associates a human-readable module name with an instance ID.
     /// Used for resolving tag identities in catch handlers when exceptions
     /// propagate across module boundaries.
-    #[cfg(feature = "std")]
     pub fn register_instance_name(&mut self, instance_id: usize, name: &str) {
         self.instance_registry.insert(instance_id, name.to_string());
     }
 
     /// Get the registered name for an instance
-    #[cfg(feature = "std")]
     pub fn get_instance_registered_name(&self, instance_id: usize) -> Option<&String> {
         self.instance_registry.get(&instance_id)
     }
@@ -641,7 +489,6 @@ impl StacklessEngine {
     /// - For imported tags: returns the import source (module_name, field_name)
     /// - For exported local tags (with registered instance): returns (registered_name, export_name)
     /// - For non-exported local tags: returns None (only matches within same module)
-    #[cfg(feature = "std")]
     fn get_effective_tag_identity(
         &self,
         instance_id: usize,
@@ -665,7 +512,6 @@ impl StacklessEngine {
     }
 
     /// Check if a function is a lowered function (from canon.lower)
-    #[cfg(feature = "std")]
     fn is_lowered_function(&self, instance_id: usize, func_idx: usize) -> bool {
         self.lowered_functions.contains_key(&(instance_id, func_idx))
     }
@@ -675,7 +521,7 @@ impl StacklessEngine {
     /// Called when an import link target has a `__canon_lower_` prefix export name.
     /// This handles the canonical ABI lifting and WASI dispatch without needing
     /// the lowered_functions map (which may have incorrect indices for mixed exports).
-    #[cfg(all(feature = "std", feature = "wasi"))]
+    #[cfg(feature = "wasi")]
     fn dispatch_canon_lowered(
         &mut self,
         instance_id: usize,
@@ -717,7 +563,7 @@ impl StacklessEngine {
     ///
     /// Looks up the lowered function metadata and delegates to `dispatch_canon_lowered`
     /// which routes through the HostImportHandler trait.
-    #[cfg(all(feature = "std", feature = "wasi"))]
+    #[cfg(feature = "wasi")]
     fn execute_lowered_function(
         &mut self,
         instance_id: usize,
@@ -732,7 +578,6 @@ impl StacklessEngine {
     }
 
     /// Register a cross-instance import link
-    #[cfg(feature = "std")]
     pub fn register_import_link(
         &mut self,
         instance_id: usize,
@@ -746,7 +591,6 @@ impl StacklessEngine {
     }
 
     /// Call an exported function in another instance by name
-    #[cfg(feature = "std")]
     fn call_exported_function(
         &mut self,
         target_instance_id: usize,
@@ -821,7 +665,6 @@ impl StacklessEngine {
 
     /// Resolve an exported function to (instance_id, func_idx) without executing it.
     /// Used by the trampoline to redirect import calls without recursion.
-    #[cfg(feature = "std")]
     fn resolve_export_func_idx(
         &self,
         target_instance_id: usize,
@@ -857,7 +700,6 @@ impl StacklessEngine {
     /// the frame will execute the handler code.
     ///
     /// Returns true if a handler was found and applied, false otherwise.
-    #[cfg(feature = "std")]
     fn find_and_apply_exception_handler(&mut self, frame: &mut SuspendedFrame) -> bool {
         use kiln_foundation::types::Instruction;
 
@@ -1043,13 +885,11 @@ impl StacklessEngine {
     }
 
     /// Set the host function registry for imported function calls
-    #[cfg(feature = "std")]
     pub fn set_host_registry(&mut self, registry: Arc<kiln_host::CallbackRegistry>) {
         self.host_registry = Some(registry);
     }
 
     /// Add an import link for cross-instance calls
-    #[cfg(feature = "std")]
     pub fn add_import_link(
         &mut self,
         instance_id: usize,
@@ -1067,7 +907,6 @@ impl StacklessEngine {
     /// Remap import links from old_id to new_id
     /// This is needed when link_import is called with module_id before instantiation,
     /// but runtime lookup uses instance_id (which is assigned during instantiation)
-    #[cfg(feature = "std")]
     pub fn remap_import_links(&mut self, old_id: usize, new_id: usize) {
         if old_id == new_id {
             return;
@@ -1103,7 +942,6 @@ impl StacklessEngine {
 
     /// Register an aliased function origin
     /// This tracks which instance a function actually belongs to when it's aliased
-    #[cfg(feature = "std")]
     pub fn register_aliased_function(
         &mut self,
         instance_id: usize,
@@ -1197,49 +1035,6 @@ impl StacklessEngine {
         Ok((result, bytes_read))
     }
 
-    /// Create a new stackless engine (no_std version)
-    #[cfg(not(any(feature = "std", feature = "alloc")))]
-    pub fn new() -> kiln_error::Result<Self> {
-        use kiln_foundation::{
-            budget_aware_provider::CrateId,
-            safe_managed_alloc,
-        };
-
-        let provider = safe_managed_alloc!(4096, CrateId::Runtime)?;
-        let instances = BoundedMap::new(provider.clone())
-            .map_err(|_| kiln_error::Error::runtime_error("Failed to create instances map"))?;
-        let operand_stack = BoundedVec::new(provider)
-            .map_err(|_| kiln_error::Error::runtime_error("Failed to create operand stack"))?;
-
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            Ok(Self {
-                instances:           HashMap::new(),
-                next_instance_id:    AtomicU64::new(1),
-                current_instance_id: None,
-                operand_stack:       Vec::new(),
-                call_frames_count:   0,
-                stats:               ExecutionStats::default(),
-                fuel:                AtomicU64::new(u64::MAX),
-                instruction_pointer: AtomicU64::new(0),
-            })
-        }
-
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            Ok(Self {
-                instances,
-                next_instance_id: AtomicU64::new(1),
-                current_instance_id: None,
-                operand_stack,
-                call_frames_count: 0,
-                stats: ExecutionStats::default(),
-                fuel: AtomicU64::new(u64::MAX),
-                instruction_pointer: AtomicU64::new(0),
-            })
-        }
-    }
-
     /// Returns the instance ID that will be assigned to the next module
     /// registered via `set_current_module`. This allows callers to create
     /// a `ModuleInstance` with the correct engine-assigned ID *before*
@@ -1305,7 +1100,6 @@ impl StacklessEngine {
     /// Get an instance by ID
     ///
     /// Returns a reference to the ModuleInstance if found.
-    #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn get_instance(&self, instance_id: usize) -> Option<Arc<ModuleInstance>> {
         self.instances.get(&instance_id).cloned()
     }
@@ -1319,7 +1113,6 @@ impl StacklessEngine {
     ///
     /// # Returns
     /// The function results
-    #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn execute(
         &mut self,
         instance_id: usize,
@@ -1401,7 +1194,6 @@ impl StacklessEngine {
                 Err(e) => {
                     eprintln!("[DEBUG-TRAMPOLINE-ERR] error={}, has_active_exception={}, pending_frames={}", e, self.active_exception.is_some(), pending_frames.len());
                     // Handle exception unwinding through pending frames
-                    #[cfg(feature = "std")]
                     if self.active_exception.is_some() {
                         // Current function (which errored) is done
                         self.call_frames_count = self.call_frames_count.saturating_sub(1);
@@ -1445,7 +1237,6 @@ impl StacklessEngine {
     ///
     /// # Panics
     /// Panics if the function attempts a Call or TailCall (violating leaf contract).
-    #[cfg(any(feature = "std", feature = "alloc"))]
     fn execute_leaf_function(
         &mut self,
         instance_id: usize,
@@ -1482,7 +1273,6 @@ impl StacklessEngine {
     }
 
     /// Internal function body execution - can return TailCall for trampolining
-    #[cfg(any(feature = "std", feature = "alloc"))]
     fn execute_function_body(
         &mut self,
         instance_id: usize,
@@ -1496,7 +1286,6 @@ impl StacklessEngine {
         // Clone the instance to avoid holding a borrow on self.instances
         // This allows us to call &mut self methods (like execute, call_wasi_function)
         // during execution without borrow checker conflicts.
-        #[cfg(any(feature = "std", feature = "alloc"))]
         let instance = {
             let found = self.instances.get(&instance_id);
             if found.is_none() {
@@ -1506,13 +1295,6 @@ impl StacklessEngine {
             }
             found.unwrap().clone()
         };
-
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        let instance = self
-            .instances
-            .get(&instance_id)?
-            .ok_or_else(|| kiln_error::Error::runtime_execution_error("Instance not found"))?
-            .clone();
 
         // Check if this function is aliased and get the correct module
         // Clone the Arc<Module> so we own it and don't hold a borrow
@@ -1569,7 +1351,7 @@ impl StacklessEngine {
                     if let Some((target_instance_id, export_name)) = linked
                     {
                         // Check if this is a canon-lowered function
-                        #[cfg(all(feature = "std", feature = "wasi"))]
+                        #[cfg(feature = "wasi")]
                         if export_name.starts_with("__canon_lower_") {
                             let canon_suffix = &export_name["__canon_lower_".len()..];
                             if let Some(sep_pos) = canon_suffix.rfind("::") {
@@ -1686,7 +1468,7 @@ impl StacklessEngine {
             // Take debugger out of self to use during execution (avoids borrow issues)
             // This is done for both fresh calls and resumes - the debugger is restored
             // before returning Call outcomes and re-taken on resume.
-            #[cfg(all(feature = "std", feature = "debugger"))]
+            #[cfg(feature = "debugger")]
             let mut debugger_opt = self.debugger.take();
 
             // Save the current function index for SuspendedFrame construction.
@@ -1821,7 +1603,7 @@ impl StacklessEngine {
                 trace!("pc={}, instruction={:?}", pc, instruction);
 
                 // Debugger callback - notify debugger of instruction execution
-                #[cfg(all(feature = "std", feature = "debugger"))]
+                #[cfg(feature = "debugger")]
                 if let Some(ref mut debugger) = debugger_opt {
                     let state = ExecutionState {
                         pc: pc as u32,
@@ -1841,7 +1623,7 @@ impl StacklessEngine {
                         // The trap should propagate as an error, not be silently ignored.
                         // This can occur in panic paths when the panic hook is NULL,
                         // or after proc_exit is called.
-                        #[cfg(all(feature = "std", feature = "tracing"))]
+                        #[cfg(feature = "tracing")]
                         {
                             // Print some context about what led to unreachable
                             let prev_str = if pc > 0 { format!("{:?}", instructions.get(pc - 1)) } else { "N/A".to_string() };
@@ -1987,7 +1769,7 @@ impl StacklessEngine {
                             // dispatch to the canonical executor instead of using import_links.
                             // This prevents infinite recursion when adapter modules import canon-lowered
                             // functions that are backed by InlineExports with no real module.
-                            #[cfg(all(feature = "std", feature = "wasi"))]
+                            #[cfg(feature = "wasi")]
                             {
                             let is_lowered = self.is_lowered_function(instance_id, func_idx as usize);
                             if is_lowered {
@@ -2013,7 +1795,7 @@ impl StacklessEngine {
                                 pc += 1;
                                 continue;
                             }
-                            } // end #[cfg(all(feature = "std", feature = "wasi"))]
+                            } // end #[cfg(feature = "wasi")]
 
                             // Find the import by index
                             let import_result = self.find_import_by_index(&module, func_idx as usize);
@@ -2031,7 +1813,6 @@ impl StacklessEngine {
                                 // Check if this import is linked to another instance
                                 // NOTE: Component adapter modules handle P2→P1 translation.
                                 // ALL imports (including WASI) should use cross-instance linking when linked.
-                                #[cfg(feature = "std")]
                                 {
                                     // Clone the values to avoid holding a borrow during call_exported_function
                                     let import_key = (instance_id, module_name.clone(), field_name.clone());
@@ -2050,7 +1831,7 @@ impl StacklessEngine {
                                         // starts with __canon_lower_). These are WASI functions
                                         // that should be dispatched via the canonical ABI executor,
                                         // not as cross-instance calls.
-                                        #[cfg(all(feature = "std", feature = "wasi"))]
+                                        #[cfg(feature = "wasi")]
                                         if export_name.starts_with("__canon_lower_") {
                                             // Parse interface::function from __canon_lower_{interface}::{function}
                                             let canon_suffix = &export_name["__canon_lower_".len()..];
@@ -2196,7 +1977,7 @@ impl StacklessEngine {
                                 stack_len = operand_stack.len(),
                                 "[CALL] Parameter and stack info"
                             );
-                            #[cfg(all(feature = "std", feature = "tracing"))]
+                            #[cfg(feature = "tracing")]
                             if func_idx == 94 || func_idx == 223 || func_idx == 232 || func_idx == 233 {
                                 trace!(
                                     func_idx = func_idx,
@@ -2205,7 +1986,7 @@ impl StacklessEngine {
                                 );
                             }
                             // Trace func 235 (free) to see what pointer is being freed
-                            #[cfg(all(feature = "std", feature = "tracing"))]
+                            #[cfg(feature = "tracing")]
                             if func_idx == 235 || func_idx == 236 {
                                 trace!(
                                     func_idx = func_idx,
@@ -2214,7 +1995,7 @@ impl StacklessEngine {
                                 );
                             }
                             // Trace func 244 (format string loop) to see arguments
-                            #[cfg(all(feature = "std", feature = "tracing"))]
+                            #[cfg(feature = "tracing")]
                             if func_idx == 244 {
                                 trace!(
                                     args = ?operand_stack.iter().rev().take(8).collect::<Vec<_>>(),
@@ -2249,7 +2030,7 @@ impl StacklessEngine {
                             // push results onto our operand_stack and resume us at pc+1.
                             // Exception handling is managed by the trampoline via
                             // find_and_apply_exception_handler on pending frames.
-                            #[cfg(all(feature = "std", feature = "debugger"))]
+                            #[cfg(feature = "debugger")]
                             {
                                 self.debugger = debugger_opt;
                             }
@@ -2432,7 +2213,7 @@ impl StacklessEngine {
                                 }
 
                                 // Check if this is a lowered function in the target instance
-                                #[cfg(all(feature = "std", feature = "wasi"))]
+                                #[cfg(feature = "wasi")]
                                 if self.is_lowered_function(target_id, func_idx) {
                                     let param_count = actual_type.params.len();
                                     let mut call_args = Vec::new();
@@ -2490,7 +2271,7 @@ impl StacklessEngine {
                         // CHECK FOR LOWERED FUNCTION: If this function was created by canon.lower,
                         // dispatch to the canonical executor instead of executing bytecode.
                         // This prevents infinite recursion when shim modules have self-referential tables.
-                        #[cfg(all(feature = "std", feature = "wasi"))]
+                        #[cfg(feature = "wasi")]
                         if self.is_lowered_function(instance_id, func_idx) {
                             #[cfg(feature = "tracing")]
                             trace!(
@@ -2531,7 +2312,7 @@ impl StacklessEngine {
 
                         // Track call_indirect to func 138 (iterator next)
                         static CALL_138_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-                        #[cfg(all(feature = "std", feature = "tracing"))]
+                        #[cfg(feature = "tracing")]
                         if func_idx == 138 {
                             let call_num = CALL_138_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             trace!(
@@ -2605,7 +2386,6 @@ impl StacklessEngine {
                                 );
 
                                 // Check if this import is linked to another instance
-                                #[cfg(feature = "std")]
                                 {
                                     let import_key = (instance_id, module_name.clone(), field_name.clone());
                                     let linked = self.import_links.get(&import_key)
@@ -2807,7 +2587,7 @@ impl StacklessEngine {
                         call_args.reverse();
 
                         // Restore debugger before returning for tail call
-                        #[cfg(all(feature = "std", feature = "debugger"))]
+                        #[cfg(feature = "debugger")]
                         {
                             self.debugger = debugger_opt;
                         }
@@ -2844,7 +2624,7 @@ impl StacklessEngine {
                         call_args.reverse();
 
                         // Restore debugger before returning for tail call
-                        #[cfg(all(feature = "std", feature = "debugger"))]
+                        #[cfg(feature = "debugger")]
                         {
                             self.debugger = debugger_opt;
                         }
@@ -2933,7 +2713,7 @@ impl StacklessEngine {
                         call_args.reverse();
 
                         // Restore debugger before returning for tail call
-                        #[cfg(all(feature = "std", feature = "debugger"))]
+                        #[cfg(feature = "debugger")]
                         {
                             self.debugger = debugger_opt;
                         }
@@ -4496,7 +4276,7 @@ impl StacklessEngine {
                                         let value = i64::from_le_bytes(buffer);
                                         #[cfg(feature = "tracing")]
                                         trace!("I64Load: read value {} from address {}", value, eff_addr);
-                                        #[cfg(all(feature = "std", feature = "tracing"))]
+                                        #[cfg(feature = "tracing")]
                                         {
                                             trace!(
                                                 value = value,
@@ -5916,7 +5696,6 @@ impl StacklessEngine {
                             );
 
                             // Per WebAssembly spec: bounds check MUST happen before checking size==0
-                            #[cfg(any(feature = "std", feature = "alloc"))]
                             {
                                 let dst_memory_wrapper = instance.memory(dst_mem_idx)?;
                                 let dst_memory = &dst_memory_wrapper.0;
@@ -5975,8 +5754,6 @@ impl StacklessEngine {
                                     }
                                 }
                             }
-                            #[cfg(not(any(feature = "std", feature = "alloc")))]
-                            return Err(kiln_error::Error::runtime_error("MemoryCopy requires std or alloc feature"));
                         }
                     }
                     Instruction::MemoryFill(mem_idx) => {
@@ -6114,7 +5891,6 @@ impl StacklessEngine {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
 
-                            #[cfg(any(feature = "std", feature = "alloc"))]
                             {
                                 let src_slice = &data_segment.init[s as usize..src_end as usize];
                                 if let Err(e) = memory.write_shared(d as u32, src_slice) {
@@ -9827,7 +9603,6 @@ impl StacklessEngine {
                             }
                         } else {
                             // No handler found in current function - store exception state for propagation
-                            #[cfg(feature = "std")]
                             {
                                 // Get effective tag identity for cross-module exception matching
                                 // This handles both imported tags and exported local tags
@@ -10010,7 +9785,6 @@ impl StacklessEngine {
                                 }
                             } else {
                                 // No handler - propagate to caller
-                                #[cfg(feature = "std")]
                                 {
                                     // Use the stored tag identity for cross-module exception matching
                                     // (thrown_tag_identity was retrieved from exception_storage)
@@ -10986,7 +10760,7 @@ impl StacklessEngine {
             trace!("Returning {} results", results.len());
 
             // Restore debugger back to self
-            #[cfg(all(feature = "std", feature = "debugger"))]
+            #[cfg(feature = "debugger")]
             {
                 self.debugger = debugger_opt;
             }
@@ -11255,7 +11029,6 @@ impl StacklessEngine {
     }
 
     /// Find an import's parameter count by module and field name
-    #[cfg(feature = "std")]
     fn get_import_param_count_by_name(
         module: &crate::module::Module,
         module_name: &str,
@@ -11288,7 +11061,6 @@ impl StacklessEngine {
     }
 
     /// Collect import arguments from stack by module/field name
-    #[cfg(feature = "std")]
     fn collect_import_args_by_name(
         module: &crate::module::Module,
         module_name: &str,
@@ -11309,7 +11081,6 @@ impl StacklessEngine {
     }
 
     /// Call cabi_realloc to allocate memory in WASM instance
-    #[cfg(any(feature = "std", feature = "alloc"))]
     fn call_cabi_realloc(&mut self, instance_id: usize, func_idx: usize,
                          old_ptr: u32, old_size: u32, align: u32, new_size: u32) -> Result<u32> {
         #[cfg(feature = "tracing")]
@@ -11474,7 +11245,6 @@ impl StacklessEngine {
                 );
 
                 // Set on host_handler (the dispatch target for get-arguments calls)
-                #[cfg(feature = "std")]
                 if let Some(ref mut handler) = self.host_handler {
                     handler.set_args_allocation(list_ptr, string_ptrs);
                 }
@@ -11599,7 +11369,6 @@ impl StacklessEngine {
         module: &crate::module::Module,
         instance_id: usize,
     ) -> Result<Option<Value>> {
-        #[cfg(feature = "std")]
         use std::io::Write;
 
         #[cfg(feature = "tracing")]
@@ -11611,7 +11380,6 @@ impl StacklessEngine {
         // properly handle the stack arguments.
         //
         // The host_registry is kept for non-WASI host functions that don't need stack args.
-        #[cfg(feature = "std")]
         if let Some(ref registry) = self.host_registry {
             // Only use host_registry for non-WASI functions
             // WASI functions need proper stack argument marshalling done below
@@ -11646,7 +11414,6 @@ impl StacklessEngine {
 
         // Use host_handler for WASI dispatch (when configured)
         // This is the proper architecture - host_handler routes to WasiDispatcher
-        #[cfg(feature = "std")]
         {
             // ON-DEMAND ALLOCATION for get-arguments
             // This MUST happen AFTER _start has initialized the component's allocator.
@@ -12580,14 +12347,8 @@ fn execute_simd_mem_lane_op(
 }
 
 impl Default for StacklessEngine {
-    #[cfg(any(feature = "std", feature = "alloc"))]
     fn default() -> Self {
         Self::new()
-    }
-
-    #[cfg(not(any(feature = "std", feature = "alloc")))]
-    fn default() -> Self {
-        Self::new().expect("Failed to create default StacklessEngine in no_std mode")
     }
 }
 

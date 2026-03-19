@@ -5,8 +5,7 @@
 
 pub mod serialization;
 
-// Re-export functions conditionally
-#[cfg(any(feature = "std", feature = "alloc"))]
+// Re-export functions
 pub use serialization::{
     create_state_section,
     extract_state_section,

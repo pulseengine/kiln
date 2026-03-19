@@ -4,11 +4,6 @@
 //! kiln-format and converting it to runtime representations. It establishes
 //! the runtime side of the boundary between format and runtime layers.
 
-// alloc is imported in lib.rs with proper feature gates
-
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
-#[cfg(feature = "std")]
 use alloc::vec::Vec;
 
 use kiln_foundation::{
@@ -23,9 +18,6 @@ use kiln_foundation::{
 };
 
 use crate::prelude::*;
-// For no_std without alloc, use type aliases with concrete providers
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-type Vec<T> = kiln_foundation::BoundedVec<T, 16, kiln_foundation::NoStdProvider<1024>>;
 
 /// Trait for types that can be initialized from format representations
 pub trait FromFormatBridge<FormatData> {
@@ -167,7 +159,6 @@ pub enum RuntimeRefType {
     ExternRef,
 }
 
-
 impl Checksummable for RuntimeRefType {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         let discriminant = match self {
@@ -256,16 +247,7 @@ impl Default for RuntimeDataSegment {
             index:                0,
             memory_index:         None,
             evaluated_offset:     None,
-            data:                 {
-                #[cfg(any(feature = "std", feature = "alloc"))]
-                {
-                    Vec::new()
-                }
-                #[cfg(not(any(feature = "std", feature = "alloc")))]
-                {
-                    kiln_foundation::BoundedVec::new(kiln_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
-                }
-            },
+            data:                 Vec::new(),
             initialization_state: InitializationState::Pending,
             runtime_handle:       0,
         }
@@ -304,10 +286,7 @@ impl ToBytes for RuntimeDataSegment {
         self.evaluated_offset.to_bytes_with_provider(writer, provider)?;
         (self.data.len() as u32).to_bytes_with_provider(writer, provider)?;
         for byte in &self.data {
-            #[cfg(any(feature = "std", feature = "alloc"))]
             writer.write_u8(*byte)?;
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            writer.write_u8(byte)?;
         }
         self.initialization_state.to_bytes_with_provider(writer, provider)?;
         self.runtime_handle.to_bytes_with_provider(writer, provider)?;
@@ -326,26 +305,11 @@ impl FromBytes for RuntimeDataSegment {
         let data_len = u32::from_bytes_with_provider(reader, provider)? as usize;
 
         let data = {
-            #[cfg(any(feature = "std", feature = "alloc"))]
-            {
-                let mut vec = Vec::with_capacity(data_len);
-                for _ in 0..data_len {
-                    vec.push(reader.read_u8()?);
-                }
-                vec
+            let mut vec = Vec::with_capacity(data_len);
+            for _ in 0..data_len {
+                vec.push(reader.read_u8()?);
             }
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            {
-                let data_provider = kiln_foundation::NoStdProvider::<1024>::default();
-                let mut vec = kiln_foundation::BoundedVec::new(data_provider)
-                    .map_err(|_| Error::parse_error("Failed to create data vector"))?;
-                for _ in 0..data_len {
-                    vec.push(reader.read_u8()?).map_err(|_| {
-                        Error::parse_error("Data segment too large for bounded vector")
-                    })?;
-                }
-                vec
-            }
+            vec
         };
 
         let initialization_state = InitializationState::from_bytes_with_provider(reader, provider)?;
@@ -385,16 +349,7 @@ impl Default for RuntimeElementSegment {
             index:                0,
             table_index:          None,
             evaluated_offset:     None,
-            elements:             {
-                #[cfg(any(feature = "std", feature = "alloc"))]
-                {
-                    Vec::new()
-                }
-                #[cfg(not(any(feature = "std", feature = "alloc")))]
-                {
-                    kiln_foundation::BoundedVec::new(kiln_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
-                }
-            },
+            elements:             Vec::new(),
             initialization_state: InitializationState::Pending,
             runtime_handle:       0,
         }
@@ -445,26 +400,11 @@ impl FromBytes for RuntimeElementSegment {
         let elements_len = u32::from_bytes_with_provider(reader, provider)? as usize;
 
         let elements = {
-            #[cfg(any(feature = "std", feature = "alloc"))]
-            {
-                let mut vec = Vec::with_capacity(elements_len);
-                for _ in 0..elements_len {
-                    vec.push(RuntimeElement::from_bytes_with_provider(reader, provider)?);
-                }
-                vec
+            let mut vec = Vec::with_capacity(elements_len);
+            for _ in 0..elements_len {
+                vec.push(RuntimeElement::from_bytes_with_provider(reader, provider)?);
             }
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            {
-                let elements_provider = kiln_foundation::NoStdProvider::<1024>::default();
-                let mut vec = kiln_foundation::BoundedVec::new(elements_provider)
-                    .map_err(|_| Error::parse_error("Failed to create elements vector"))?;
-                for _ in 0..elements_len {
-                    vec.push(RuntimeElement::from_bytes_with_provider(reader, provider)?).map_err(
-                        |_| Error::parse_error("Element segment too large for bounded vector"),
-                    )?;
-                }
-                vec
-            }
+            vec
         };
 
         let initialization_state = InitializationState::from_bytes_with_provider(reader, provider)?;
@@ -670,29 +610,13 @@ pub struct RuntimeModuleInitializer {
 impl RuntimeModuleInitializer {
     /// Create new initializer with runtime context
     pub fn new(context: RuntimeContext) -> Self {
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            Self {
-                context,
-                data_segments: Vec::new(),
-                element_segments: Vec::new(),
-                start_function: None,
-                current_step: 0,
-                total_steps: 0,
-            }
-        }
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            let provider = kiln_foundation::NoStdProvider::<1024>::default();
-            Self {
-                context,
-                data_segments: kiln_foundation::BoundedVec::new(provider.clone())
-                    .unwrap_or_default(),
-                element_segments: kiln_foundation::BoundedVec::new(provider).unwrap_or_default(),
-                start_function: None,
-                current_step: 0,
-                total_steps: 0,
-            }
+        Self {
+            context,
+            data_segments: Vec::new(),
+            element_segments: Vec::new(),
+            start_function: None,
+            current_step: 0,
+            total_steps: 0,
         }
     }
 
@@ -728,24 +652,11 @@ impl RuntimeModuleInitializer {
     /// Execute initialization process
     pub fn execute_initialization(&mut self) -> Result<()> {
         // Initialize active data segments - use indices to avoid borrowing conflicts
-        #[cfg(any(feature = "std", feature = "alloc"))]
         let mut active_indices = Vec::new();
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        let mut active_indices = {
-            let provider = kiln_foundation::NoStdProvider::<1024>::default();
-            Vec::new(provider).map_err(|_| {
-                Error::runtime_execution_error("Failed to create active indices vector")
-            })?
-        };
 
         for (idx, segment) in self.data_segments.iter().enumerate() {
             if segment.memory_index.is_some() {
-                #[cfg(any(feature = "std", feature = "alloc"))]
                 active_indices.push(idx);
-                #[cfg(not(any(feature = "std", feature = "alloc")))]
-                active_indices.push(idx).map_err(|_| {
-                    Error::runtime_execution_error("Failed to add index to active indices")
-                })?;
             }
         }
 
@@ -757,24 +668,11 @@ impl RuntimeModuleInitializer {
         }
 
         // Initialize active element segments - use indices to avoid borrowing conflicts
-        #[cfg(any(feature = "std", feature = "alloc"))]
         let mut active_element_indices = Vec::new();
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        let mut active_element_indices = {
-            let provider = kiln_foundation::NoStdProvider::<1024>::default();
-            Vec::new(provider).map_err(|_| {
-                Error::runtime_execution_error("Failed to create active element indices vector")
-            })?
-        };
 
         for (idx, segment) in self.element_segments.iter().enumerate() {
             if segment.table_index.is_some() {
-                #[cfg(any(feature = "std", feature = "alloc"))]
                 active_element_indices.push(idx);
-                #[cfg(not(any(feature = "std", feature = "alloc")))]
-                active_element_indices.push(idx).map_err(|_| {
-                    Error::runtime_execution_error("Failed to add index to active element indices")
-                })?;
             }
         }
 
@@ -828,16 +726,7 @@ impl RuntimeModuleInitializer {
             index,
             memory_index: extraction.memory_index,
             evaluated_offset: None, // Will be computed during initialization
-            data: {
-                #[cfg(any(feature = "std", feature = "alloc"))]
-                {
-                    Vec::new()
-                }
-                #[cfg(not(any(feature = "std", feature = "alloc")))]
-                {
-                    kiln_foundation::BoundedVec::new(kiln_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
-                }
-            },
+            data: Vec::new(),
             initialization_state: InitializationState::Pending,
             runtime_handle: self.generate_runtime_handle(),
         })
@@ -853,16 +742,7 @@ impl RuntimeModuleInitializer {
             index,
             table_index: extraction.table_index,
             evaluated_offset: None, // Will be computed during initialization
-            elements: {
-                #[cfg(any(feature = "std", feature = "alloc"))]
-                {
-                    Vec::new()
-                }
-                #[cfg(not(any(feature = "std", feature = "alloc")))]
-                {
-                    kiln_foundation::BoundedVec::new(kiln_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
-                }
-            },
+            elements: Vec::new(),
             initialization_state: InitializationState::Pending,
             runtime_handle: self.generate_runtime_handle(),
         })
@@ -941,7 +821,6 @@ pub struct FormatDataExtraction {
     pub requires_initialization: bool,
 }
 
-
 impl Checksummable for FormatDataExtraction {
     fn update_checksum(&self, checksum: &mut kiln_foundation::verification::Checksum) {
         self.memory_index.update_checksum(checksum);
@@ -963,10 +842,7 @@ impl ToBytes for FormatDataExtraction {
         self.memory_index.to_bytes_with_provider(writer, provider)?;
         (self.offset_expr_bytes.len() as u32).to_bytes_with_provider(writer, provider)?;
         for byte in &self.offset_expr_bytes {
-            #[cfg(any(feature = "std", feature = "alloc"))]
             writer.write_u8(*byte)?;
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            writer.write_u8(byte)?;
         }
         (self.data_size as u32).to_bytes_with_provider(writer, provider)?;
         self.requires_initialization.to_bytes_with_provider(writer, provider)?;
@@ -983,26 +859,11 @@ impl FromBytes for FormatDataExtraction {
         let bytes_len = u32::from_bytes_with_provider(reader, provider)? as usize;
 
         let offset_expr_bytes = {
-            #[cfg(any(feature = "std", feature = "alloc"))]
-            {
-                let mut vec = Vec::with_capacity(bytes_len);
-                for _ in 0..bytes_len {
-                    vec.push(reader.read_u8()?);
-                }
-                vec
+            let mut vec = Vec::with_capacity(bytes_len);
+            for _ in 0..bytes_len {
+                vec.push(reader.read_u8()?);
             }
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            {
-                let bytes_provider = kiln_foundation::NoStdProvider::<1024>::default();
-                let mut vec = kiln_foundation::BoundedVec::new(bytes_provider)
-                    .map_err(|_| Error::parse_error("Failed to create offset bytes vector"))?;
-                for _ in 0..bytes_len {
-                    vec.push(reader.read_u8()?).map_err(|_| {
-                        Error::parse_error("Offset expression too large for bounded vector")
-                    })?;
-                }
-                vec
-            }
+            vec
         };
 
         let data_size = u32::from_bytes_with_provider(reader, provider)? as usize;
@@ -1034,16 +895,7 @@ impl Default for FormatElementExtraction {
     fn default() -> Self {
         Self {
             table_index:             None,
-            offset_expr_bytes:       {
-                #[cfg(any(feature = "std", feature = "alloc"))]
-                {
-                    Vec::new()
-                }
-                #[cfg(not(any(feature = "std", feature = "alloc")))]
-                {
-                    kiln_foundation::BoundedVec::new(kiln_foundation::NoStdProvider::<1024>::default()).unwrap_or_default()
-                }
-            },
+            offset_expr_bytes:       Vec::new(),
             init_data_type:          FormatElementInitType::FunctionIndices,
             requires_initialization: false,
         }
@@ -1071,10 +923,7 @@ impl ToBytes for FormatElementExtraction {
         self.table_index.to_bytes_with_provider(writer, provider)?;
         (self.offset_expr_bytes.len() as u32).to_bytes_with_provider(writer, provider)?;
         for byte in &self.offset_expr_bytes {
-            #[cfg(any(feature = "std", feature = "alloc"))]
             writer.write_u8(*byte)?;
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            writer.write_u8(byte)?;
         }
         self.init_data_type.to_bytes_with_provider(writer, provider)?;
         self.requires_initialization.to_bytes_with_provider(writer, provider)?;
@@ -1091,26 +940,11 @@ impl FromBytes for FormatElementExtraction {
         let bytes_len = u32::from_bytes_with_provider(reader, provider)? as usize;
 
         let offset_expr_bytes = {
-            #[cfg(any(feature = "std", feature = "alloc"))]
-            {
-                let mut vec = Vec::with_capacity(bytes_len);
-                for _ in 0..bytes_len {
-                    vec.push(reader.read_u8()?);
-                }
-                vec
+            let mut vec = Vec::with_capacity(bytes_len);
+            for _ in 0..bytes_len {
+                vec.push(reader.read_u8()?);
             }
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            {
-                let bytes_provider = kiln_foundation::NoStdProvider::<1024>::default();
-                let mut vec = kiln_foundation::BoundedVec::new(bytes_provider)
-                    .map_err(|_| Error::parse_error("Failed to create offset bytes vector"))?;
-                for _ in 0..bytes_len {
-                    vec.push(reader.read_u8()?).map_err(|_| {
-                        Error::parse_error("Offset expression too large for bounded vector")
-                    })?;
-                }
-                vec
-            }
+            vec
         };
 
         let init_data_type = FormatElementInitType::from_bytes_with_provider(reader, provider)?;
@@ -1177,26 +1011,11 @@ impl FromBytes for FormatElementInitType {
 
 impl Default for RuntimeContext {
     fn default() -> Self {
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            Self {
-                memory_providers:         Vec::new(),
-                table_providers:          Vec::new(),
-                max_initialization_steps: 1000,
-                asil_constraints:         ASILConstraints::default(),
-            }
-        }
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            let provider = kiln_foundation::NoStdProvider::<1024>::default();
-            Self {
-                memory_providers:         kiln_foundation::BoundedVec::new(provider.clone())
-                    .unwrap_or_default(),
-                table_providers:          kiln_foundation::BoundedVec::new(provider)
-                    .unwrap_or_default(),
-                max_initialization_steps: 1000,
-                asil_constraints:         ASILConstraints::default(),
-            }
+        Self {
+            memory_providers:         Vec::new(),
+            table_providers:          Vec::new(),
+            max_initialization_steps: 1000,
+            asil_constraints:         ASILConstraints::default(),
         }
     }
 }

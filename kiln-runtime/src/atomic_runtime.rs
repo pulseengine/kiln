@@ -44,7 +44,6 @@ use crate::atomic_execution::{
     AtomicMemoryContext,
 };
 
-#[cfg(any(feature = "std", feature = "alloc"))]
 use crate::thread_manager::ThreadId;
 
 /// Provider trait for atomic operations across ASIL levels

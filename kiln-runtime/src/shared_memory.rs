@@ -55,7 +55,6 @@ use kiln_instructions::{
 
 use crate::prelude::CoreMemoryType;
 
-#[cfg(any(feature = "std", feature = "alloc"))]
 use crate::thread_manager::{
     ThreadId,
     ThreadManager,

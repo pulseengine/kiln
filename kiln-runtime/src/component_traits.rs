@@ -11,7 +11,6 @@ pub type SafeStackValue = kiln_foundation::safe_memory::SafeStack<Value, 64, kil
 pub type FuncType = kiln_foundation::types::FuncType;
 
 /// Represents a runtime component instance
-#[cfg(feature = "std")]
 pub trait ComponentInstance {
     /// Execute a function by name with the given arguments
     fn execute_function(&self, name: &str, args: &[Value]) -> Result<SafeStackValue>;
@@ -29,7 +28,6 @@ pub trait ComponentInstance {
 }
 
 /// Represents a host function implementation
-#[cfg(feature = "std")]
 pub trait HostFunction {
     /// Call the host function with the given arguments
     fn call(&self, args: &[Value]) -> Result<SafeStackValue>;
@@ -40,18 +38,15 @@ pub trait HostFunction {
 }
 
 /// Represents a host function factory
-#[cfg(feature = "std")]
 pub trait HostFunctionFactory {
     /// Create a host function implementation
     fn create_function(&self, name: &str, ty: &FuncType) -> Result<Box<dyn HostFunction>>;
 }
 
 // Re-export HostImportHandler from kiln-foundation for convenience
-#[cfg(feature = "std")]
 pub use kiln_foundation::HostImportHandler;
 
 /// Represents a component runtime environment
-#[cfg(feature = "std")]
 pub trait ComponentRuntime {
     /// Create a new runtime instance
     fn new() -> Self

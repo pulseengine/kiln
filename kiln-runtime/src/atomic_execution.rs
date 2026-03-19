@@ -23,7 +23,6 @@ use core::sync::atomic::{
     Ordering as AtomicOrdering,
 };
 use core::time::Duration;
-#[cfg(feature = "std")]
 use alloc::{
     collections::BTreeMap,
     sync::Arc,
@@ -35,8 +34,6 @@ use kiln_error::{
     ErrorCategory,
     Result,
 };
-#[cfg(all(not(feature = "std"), not(feature = "std")))]
-use kiln_foundation::bounded::BoundedVec;
 use kiln_foundation::{
     traits::BoundedCapacity,
     MemArg,
@@ -65,12 +62,7 @@ use crate::{
 
 // Type alias for return results
 /// Result vector type for std environments
-#[cfg(feature = "std")]
 pub type ResultVec = Vec<u32>;
-/// Result vector type for `no_std` environments with bounded capacity
-#[cfg(all(not(feature = "std"), not(feature = "std")))]
-pub type ResultVec =
-    kiln_foundation::bounded::BoundedVec<u32, 256, kiln_foundation::safe_memory::NoStdProvider<8192>>;
 
 // Type alias for thread ID vectors - use bounded collections consistently
 type ThreadIdVec = kiln_foundation::bounded::BoundedVec<
@@ -83,47 +75,17 @@ type ThreadIdVec = kiln_foundation::bounded::BoundedVec<
 macro_rules! result_vec {
     () => {
         {
-            #[cfg(feature = "std")]
-            {
-                Ok(Vec::new())
-            }
-            #[cfg(all(not(feature = "std"), not(feature = "std")))]
-            {
-                let provider = kiln_foundation::safe_managed_alloc!(8192, kiln_foundation::budget_aware_provider::CrateId::Runtime)?;
-                kiln_foundation::bounded::BoundedVec::new(provider)?
-            }
+            Ok(Vec::new())
         }
     };
     ($item:expr; $count:expr) => {
         {
-            #[cfg(feature = "std")]
-            {
-                Ok(vec![$item; $count])
-            }
-            #[cfg(all(not(feature = "std"), not(feature = "std")))]
-            {
-                let provider = kiln_foundation::safe_managed_alloc!(8192, kiln_foundation::budget_aware_provider::CrateId::Runtime)?;
-                let mut v = kiln_foundation::bounded::BoundedVec::new(provider)?;
-                for _ in 0..$count {
-                    v.push($item)?;
-                }
-                Ok(v)
-            }
+            Ok(vec![$item; $count])
         }
     };
     ($($item:expr),+) => {
         {
-            #[cfg(feature = "std")]
-            {
-                Ok(vec![$($item),+])
-            }
-            #[cfg(all(not(feature = "std"), not(feature = "std")))]
-            {
-                let provider = kiln_foundation::safe_managed_alloc!(8192, kiln_foundation::budget_aware_provider::CrateId::Runtime)?;
-                let mut v = kiln_foundation::bounded::BoundedVec::new(provider)?;
-                $(v.push($item)?;)+
-                v
-            }
+            Ok(vec![$($item),+])
         }
     };
 }

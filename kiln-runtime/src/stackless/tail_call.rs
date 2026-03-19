@@ -4,8 +4,6 @@
 //! make tail calls without growing the call stack. This is essential for
 //! functional programming patterns and recursive algorithms.
 
-// alloc is imported in lib.rs with proper feature gates
-
 use kiln_error::{
     Error,
     Result,
@@ -17,6 +15,8 @@ use kiln_foundation::{
 use kiln_instructions::control_ops::ControlContext;
 
 // Type alias for FuncType to match module_instance.rs
+use alloc::vec::Vec;
+
 use crate::bounded_runtime_infra::RuntimeProvider;
 use crate::{
     module_instance::ModuleInstance,
@@ -27,9 +27,6 @@ use crate::{
     },
 };
 type KilnFuncType = kiln_foundation::types::FuncType;
-
-#[cfg(feature = "std")]
-use alloc::vec::Vec;
 
 /// Tail call implementation for the stackless engine
 impl StacklessEngine {

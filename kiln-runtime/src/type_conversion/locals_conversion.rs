@@ -3,8 +3,6 @@
 //! This module provides conversion between different representations of local
 //! variables used in the Kiln execution pipeline.
 
-// alloc is imported in lib.rs with proper feature gates
-#[cfg(any(feature = "std", feature = "alloc"))]
 use alloc::vec::Vec;
 
 use kiln_error::Result;
@@ -82,7 +80,6 @@ pub fn convert_locals_to_bounded(
 /// Convert a BoundedVec<LocalEntry> back to a flat Vec<ValueType>
 /// This is useful for compatibility with APIs that expect the flat
 /// representation
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub fn expand_locals_to_flat(
     bounded_locals: &BoundedVec<LocalEntry, 256, RuntimeProvider>,
 ) -> Result<Vec<ValueType>> {

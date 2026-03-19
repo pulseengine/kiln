@@ -3,13 +3,6 @@
 //! This module provides utilities for serializing and deserializing WebAssembly
 //! runtime state using custom sections.
 
-// alloc is imported in lib.rs with proper feature gates
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{
-    string::String,
-    vec::Vec,
-};
-#[cfg(feature = "std")]
 use alloc::{
     string::String,
     vec::Vec,
@@ -32,16 +25,6 @@ use kiln_format::{
         STATE_VERSION,
     },
 };
-#[cfg(not(any(feature = "std")))]
-use kiln_format::{
-    WasmString,
-    WasmVec,
-};
-#[cfg(not(any(feature = "std")))]
-use kiln_foundation::{
-    MemoryProvider,
-    NoStdProvider,
-};
 
 /// Constants for state section names
 pub const STATE_SECTION_PREFIX: &str = "kiln-state";
@@ -63,7 +46,6 @@ pub enum StateSection {
 
 impl StateSection {
     /// Get the section name for this state section type
-    #[cfg(feature = "std")]
     pub fn name(&self) -> String {
         match self {
             Self::Meta => format!("{}-meta", STATE_SECTION_PREFIX),
@@ -71,18 +53,6 @@ impl StateSection {
             Self::Frames => format!("{}-frames", STATE_SECTION_PREFIX),
             Self::Globals => format!("{}-globals", STATE_SECTION_PREFIX),
             Self::Memory => format!("{}-memory", STATE_SECTION_PREFIX),
-        }
-    }
-
-    /// Get the section name for this state section type (no_std version)
-    #[cfg(not(any(feature = "std")))]
-    pub fn name(&self) -> &'static str {
-        match self {
-            Self::Meta => "kiln-state-meta",
-            Self::Stack => "kiln-state-stack",
-            Self::Frames => "kiln-state-frames",
-            Self::Globals => "kiln-state-globals",
-            Self::Memory => "kiln-state-memory",
         }
     }
 
@@ -125,7 +95,6 @@ pub struct StateHeader {
 }
 
 /// Create a custom section containing serialized state
-#[cfg(feature = "std")]
 pub fn create_state_section(
     section_type: StateSection,
     data: &[u8],
@@ -170,7 +139,6 @@ pub fn create_state_section(
 }
 
 /// Extract state data from a custom section
-#[cfg(feature = "std")]
 pub fn extract_state_section(section: &CustomSection) -> Result<(StateHeader, Vec<u8>)> {
     // Verify that this is a valid state section
     let section_type = StateSection::from_name(&section.name)
@@ -265,14 +233,7 @@ pub fn extract_state_section(section: &CustomSection) -> Result<(StateHeader, Ve
 /// `true` if the module contains at least one state section
 pub fn has_state_sections(custom_sections: &[CustomSection]) -> bool {
     custom_sections.iter().any(|section| {
-        #[cfg(feature = "std")]
-        {
-            section.name.starts_with(STATE_SECTION_PREFIX)
-        }
-        #[cfg(not(any(feature = "std")))]
-        {
-            section.name.starts_with(STATE_SECTION_PREFIX)
-        }
+        section.name.starts_with(STATE_SECTION_PREFIX)
     })
 }
 

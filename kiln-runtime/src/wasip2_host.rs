@@ -74,7 +74,6 @@ pub struct ResourceHandle(pub u32);
 /// Callback type for cabi_realloc invocation
 ///
 /// Parameters: (old_ptr, old_size, align, new_size) -> Result<new_ptr>
-#[cfg(feature = "std")]
 pub type ReallocCallback<'a> = &'a mut dyn FnMut(i32, i32, i32, i32) -> Result<i32>;
 
 /// Context for lowering ComponentValues to core WASM values
@@ -85,7 +84,6 @@ pub struct LoweringContext<'a> {
     /// Mutable reference to linear memory
     pub memory: &'a mut [u8],
     /// Callback to invoke cabi_realloc for memory allocation
-    #[cfg(feature = "std")]
     pub realloc: Option<ReallocCallback<'a>>,
     /// Current allocation offset (for no_std fallback)
     pub alloc_offset: u32,
@@ -1259,22 +1257,16 @@ impl Wasip2Host {
         // Write to the appropriate target
         match &self.output_streams[stream_idx].target {
             OutputTarget::Stdout => {
-                #[cfg(feature = "std")]
-                {
-                    use std::io::{self, Write};
-                    #[cfg(feature = "tracing")]
-                    kiln_foundation::tracing::trace!(bytes = trimmed_data.len(), "Writing to STDOUT");
-                    let _ = io::stdout().write_all(trimmed_data);
-                    let _ = io::stdout().flush();
-                }
+                use std::io::{self, Write};
+                #[cfg(feature = "tracing")]
+                kiln_foundation::tracing::trace!(bytes = trimmed_data.len(), "Writing to STDOUT");
+                let _ = io::stdout().write_all(trimmed_data);
+                let _ = io::stdout().flush();
             },
             OutputTarget::Stderr => {
-                #[cfg(feature = "std")]
-                {
-                    use std::io::{self, Write};
-                    let _ = io::stderr().write_all(trimmed_data);
-                    let _ = io::stderr().flush();
-                }
+                use std::io::{self, Write};
+                let _ = io::stderr().write_all(trimmed_data);
+                let _ = io::stderr().flush();
             },
             OutputTarget::File(_path) => {
                 // File output not yet implemented
@@ -1453,7 +1445,6 @@ impl Wasip2Host {
                 Ok(vec![Value::I32((handle + 1000) as i32)])
             },
             _ => {
-                #[cfg(feature = "std")]
                 eprintln!("[WASIP2] Unknown function: {}/{}", base_interface, function);
                 Err(kiln_error::Error::runtime_error("Unknown wasip2 function"))
             }
@@ -1605,25 +1596,19 @@ impl Wasip2Host {
 
         match &self.output_streams[stream_idx].target {
             OutputTarget::Stdout => {
-                #[cfg(feature = "std")]
-                {
-                    use std::io::{self, Write};
-                    io::stdout().write_all(data).map_err(|_|
-                        kiln_error::Error::runtime_error("stdout write failed"))?;
-                    io::stdout().flush().map_err(|_|
-                        kiln_error::Error::runtime_error("stdout flush failed"))?;
-                }
+                use std::io::{self, Write};
+                io::stdout().write_all(data).map_err(|_|
+                    kiln_error::Error::runtime_error("stdout write failed"))?;
+                io::stdout().flush().map_err(|_|
+                    kiln_error::Error::runtime_error("stdout flush failed"))?;
                 Ok(())
             },
             OutputTarget::Stderr => {
-                #[cfg(feature = "std")]
-                {
-                    use std::io::{self, Write};
-                    io::stderr().write_all(data).map_err(|_|
-                        kiln_error::Error::runtime_error("stderr write failed"))?;
-                    io::stderr().flush().map_err(|_|
-                        kiln_error::Error::runtime_error("stderr flush failed"))?;
-                }
+                use std::io::{self, Write};
+                io::stderr().write_all(data).map_err(|_|
+                    kiln_error::Error::runtime_error("stderr write failed"))?;
+                io::stderr().flush().map_err(|_|
+                    kiln_error::Error::runtime_error("stderr flush failed"))?;
                 Ok(())
             },
             OutputTarget::File(_) => {
