@@ -2437,23 +2437,13 @@ impl<'a> StreamingDecoder<'a> {
                     )
                 },
                 1 => {
-                    // Passive, element type, expressions
-                    let elem_type = data[offset];
+                    // Passive, elemkind, vec(funcidx)
+                    // Per spec: flags=1 uses elemkind (0x00=funcref), NOT reftype encoding
+                    let elemkind = data[offset];
                     offset += 1;
-                    let ref_type = match elem_type {
-                        0x70 => kiln_format::types::RefType::Funcref,
-                        0x6F => kiln_format::types::RefType::Externref,
-                        0x6E => kiln_format::types::RefType::Gc(GcRefType::ANYREF),
-                        0x6D => kiln_format::types::RefType::Gc(GcRefType::EQREF),
-                        0x6C => kiln_format::types::RefType::Gc(GcRefType::I31REF),
-                        0x6B => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Struct)),
-                        0x6A => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Array)),
-                        0x69 => kiln_format::types::RefType::Gc(GcRefType::EXNREF),
-                        0x73 => kiln_format::types::RefType::Gc(GcRefType::NULLFUNCREF),
-                        0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
-                        0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
-                        0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
-                        _ => return Err(Error::parse_error("malformed reference type")),
+                    let ref_type = match elemkind {
+                        0x00 => kiln_format::types::RefType::Funcref,
+                        _ => return Err(Error::parse_error("malformed element kind")),
                     };
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: passive");
@@ -2494,23 +2484,13 @@ impl<'a> StreamingDecoder<'a> {
                     )
                 },
                 3 => {
-                    // Declarative, element type, expressions
-                    let elem_type = data[offset];
+                    // Declarative, elemkind, vec(funcidx)
+                    // Per spec: flags=3 uses elemkind (0x00=funcref), NOT reftype encoding
+                    let elemkind = data[offset];
                     offset += 1;
-                    let ref_type = match elem_type {
-                        0x70 => kiln_format::types::RefType::Funcref,
-                        0x6F => kiln_format::types::RefType::Externref,
-                        0x6E => kiln_format::types::RefType::Gc(GcRefType::ANYREF),
-                        0x6D => kiln_format::types::RefType::Gc(GcRefType::EQREF),
-                        0x6C => kiln_format::types::RefType::Gc(GcRefType::I31REF),
-                        0x6B => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Struct)),
-                        0x6A => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Array)),
-                        0x69 => kiln_format::types::RefType::Gc(GcRefType::EXNREF),
-                        0x73 => kiln_format::types::RefType::Gc(GcRefType::NULLFUNCREF),
-                        0x72 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::NoExtern)),
-                        0x71 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::None)),
-                        0x74 => kiln_format::types::RefType::Gc(GcRefType::new(true, HeapType::Exn)),
-                        _ => return Err(Error::parse_error("malformed reference type")),
+                    let ref_type = match elemkind {
+                        0x00 => kiln_format::types::RefType::Funcref,
+                        _ => return Err(Error::parse_error("malformed element kind")),
                     };
                     #[cfg(feature = "tracing")]
                     trace!(elem_idx = elem_idx, ref_type = ?ref_type, "element: declarative");
