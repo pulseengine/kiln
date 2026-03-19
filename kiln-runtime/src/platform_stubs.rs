@@ -24,10 +24,7 @@ use core::marker::PhantomData;
 use kiln_error::{Error, ErrorCategory, Result};
 
 // Box for trait objects
-#[cfg(feature = "std")]
 use std::boxed::Box;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::boxed::Box;
 
 // Re-export ASIL levels from foundation stubs temporarily
 use super::foundation_stubs::AsilLevel;
@@ -179,32 +176,7 @@ pub use kiln_platform::sync::{AtomicU32, AtomicU64, AtomicUsize, Ordering as Pla
 pub use self::atomic_fallback::{AtomicU32, AtomicU64, AtomicUsize, Ordering as PlatformOrdering};
 
 // Duration abstraction
-#[cfg(feature = "std")]
 pub use std::time::Duration;
-
-#[cfg(all(not(feature = "std"), feature = "platform-sync"))]
-pub use kiln_platform::sync::Duration;
-
-#[cfg(all(not(feature = "std"), not(feature = "platform-sync")))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Duration {
-    secs: u64,
-    nanos: u32,
-}
-
-#[cfg(all(not(feature = "std"), not(feature = "platform-sync")))]
-impl Duration {
-    pub const fn from_millis(millis: u64) -> Self {
-        Self {
-            secs: millis / 1000,
-            nanos: ((millis % 1000) * 1_000_000) as u32,
-        }
-    }
-    
-    pub const fn as_millis(&self) -> u128 {
-        self.secs as u128 * 1000 + self.nanos as u128 / 1_000_000
-    }
-}
 
 /// Platform identification enum with ASIL mapping
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -407,37 +379,18 @@ pub enum PlatformFeature {
 pub trait PlatformConfig: Send + Sync + 'static {}
 
 /// Create platform abstraction based on compile-time features
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub fn create_platform_interface() -> Result<Box<dyn PlatformInterface>> {
     #[cfg(feature = "platform-sync")]
     {
         // Use full platform abstraction from kiln-platform
         create_full_platform_interface()
     }
-    
+
     #[cfg(not(feature = "platform-sync"))]
     {
         // Use minimal fallback implementation
         Ok(Box::new(MinimalPlatform::new()))
     }
-}
-
-/// Create platform interface for pure no_std environments
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-pub fn create_platform_interface() -> Result<&'static dyn PlatformInterface> {
-    // In pure no_std, return a static reference
-    static MINIMAL_PLATFORM: MinimalPlatform = MinimalPlatform {
-        limits: ComprehensivePlatformLimits {
-            platform_id: PlatformId::Embedded,
-            max_total_memory: 256 * 1024,
-            max_wasm_linear_memory: 64 * 1024,
-            max_stack_bytes: 16 * 1024,
-            max_components: 8,
-            max_debug_overhead: 0,
-            asil_level: AsilLevel::D,
-        },
-    };
-    Ok(&MINIMAL_PLATFORM)
 }
 
 /// Minimal platform implementation for no_std without platform features
@@ -479,7 +432,6 @@ fn create_full_platform_interface() -> Result<Box<dyn PlatformInterface>> {
 }
 
 /// Create platform-appropriate limit provider (legacy compatibility)
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub fn create_limit_provider() -> Box<dyn ComprehensiveLimitProvider> {
     match PlatformId::default() {
         PlatformId::Linux => Box::new(LinuxLimitProvider),
@@ -488,33 +440,11 @@ pub fn create_limit_provider() -> Box<dyn ComprehensiveLimitProvider> {
     }
 }
 
-/// Create platform limit provider for pure no_std
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-pub fn create_limit_provider() -> &'static dyn ComprehensiveLimitProvider {
-    static DEFAULT_PROVIDER: DefaultLimitProvider = DefaultLimitProvider;
-    &DEFAULT_PROVIDER
-}
-
 /// Platform-agnostic time functions
 pub fn current_time_ns() -> u64 {
-    #[cfg(feature = "std")]
-    {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_nanos() as u64)
-            .unwrap_or(0)
-    }
-    
-    #[cfg(all(not(feature = "std"), feature = "platform-sync"))]
-    {
-        kiln_platform::time::current_time_ns()
-    }
-    
-    #[cfg(all(not(feature = "std"), not(feature = "platform-sync")))]
-    {
-        // Fallback: use a simple counter for no_std environments
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-        COUNTER.fetch_add(1, core::sync::atomic::Ordering::Relaxed)
-    }
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0)
 }

@@ -1,5 +1,4 @@
 #[cfg(test)]
-#[cfg(feature = "std")]
 mod tests {
     use kiln_error::Result;
     use kiln_foundation::{

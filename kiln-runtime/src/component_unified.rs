@@ -4,12 +4,6 @@
 //! platform-aware memory system and resolve type conflicts between different
 //! runtime components.
 
-// alloc is imported in lib.rs with proper feature gates
-
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::boxed::Box;
-// Import Box for no_std compatibility
-#[cfg(feature = "std")]
 use alloc::boxed::Box;
 
 use kiln_error::{
@@ -29,8 +23,6 @@ use kiln_foundation::{
     },
 };
 
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-use crate::unified_types::PlatformMemoryAdapter as GenericMemoryAdapter;
 use crate::{
     bounded_runtime_infra::{
         create_runtime_provider,
@@ -94,11 +86,6 @@ where
     pub component_type: ComponentType<Provider>,
 
     /// Memory adapter for this component's allocations
-    #[cfg(any(feature = "std", feature = "alloc"))]
-    pub memory_adapter: PlatformMemoryAdapter<DefaultRuntimeProvider>,
-
-    /// Memory adapter for this component's allocations (no_std version)
-    #[cfg(not(any(feature = "std", feature = "alloc")))]
     pub memory_adapter: PlatformMemoryAdapter<DefaultRuntimeProvider>,
 
     /// Exported functions and types from this component
@@ -268,12 +255,7 @@ where
     /// Create a new component instance
     pub fn new(
         component_type: ComponentType<Provider>,
-        #[cfg(any(feature = "std", feature = "alloc"))] memory_adapter: PlatformMemoryAdapter<
-            DefaultRuntimeProvider,
-        >,
-        #[cfg(not(any(feature = "std", feature = "alloc")))] memory_adapter: PlatformMemoryAdapter<
-            DefaultRuntimeProvider,
-        >,
+        memory_adapter: PlatformMemoryAdapter<DefaultRuntimeProvider>,
     ) -> Result<Self> {
         let exports = ExportMap::new(create_runtime_provider()?)?;
         let imports = ImportMap::new(create_runtime_provider()?)?;
@@ -354,12 +336,7 @@ where
     Provider: MemoryProvider + Default + Clone + PartialEq + Eq,
 {
     /// Collection of active component instances
-    /// Using Vec because BoundedVec stores serialized data and can't return
-    /// references
-    #[cfg(any(feature = "std", feature = "alloc"))]
     instances: Vec<UnifiedComponentInstance<Provider>>,
-    #[cfg(not(any(feature = "std", feature = "alloc")))]
-    instances: BoundedVec<UnifiedComponentInstance<Provider>, 32, DefaultRuntimeProvider>,
 
     /// Platform-specific limits and configuration
     #[cfg(feature = "comprehensive-limits")]
@@ -369,10 +346,6 @@ where
     memory_budget: ComponentMemoryBudget,
 
     /// Global memory adapter for cross-component resources
-    #[cfg(any(feature = "std", feature = "alloc"))]
-    global_memory_adapter: PlatformMemoryAdapter<DefaultRuntimeProvider>,
-
-    #[cfg(not(any(feature = "std", feature = "alloc")))]
     global_memory_adapter: PlatformMemoryAdapter<DefaultRuntimeProvider>,
 }
 
@@ -390,10 +363,7 @@ where
             .map_err(|_| Error::memory_error("Failed to create memory adapter"))?;
 
         Ok(Self {
-            #[cfg(any(feature = "std", feature = "alloc"))]
             instances: Vec::new(),
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            instances: BoundedVec::new(create_runtime_provider()?)?,
             platform_limits: limits,
             memory_budget,
             global_memory_adapter,
@@ -408,10 +378,7 @@ where
             .map_err(|_| Error::memory_error("Failed to create memory adapter"))?; // 64MB default
 
         Ok(Self {
-            #[cfg(any(feature = "std", feature = "alloc"))]
             instances: Vec::new(),
-            #[cfg(not(any(feature = "std", feature = "alloc")))]
-            instances: BoundedVec::new(create_runtime_provider()?)?,
             memory_budget,
             global_memory_adapter,
         })
@@ -464,15 +431,7 @@ where
 
     /// Get a reference to a component instance
     pub fn get_instance(&self, id: ComponentId) -> Option<&UnifiedComponentInstance<Provider>> {
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        return self.instances.iter().find(|instance| instance.id == id);
-
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            // BoundedVec stores serialized data, so we can't return references
-            // This is a limitation of the no_std implementation
-            None
-        }
+        self.instances.iter().find(|instance| instance.id == id)
     }
 
     /// Get a mutable reference to a component instance
@@ -480,15 +439,7 @@ where
         &mut self,
         id: ComponentId,
     ) -> Option<&mut UnifiedComponentInstance<Provider>> {
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        return self.instances.iter_mut().find(|instance| instance.id == id);
-
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            // BoundedVec stores serialized data, so we can't return mutable references
-            // This is a limitation of the no_std implementation
-            None
-        }
+        self.instances.iter_mut().find(|instance| instance.id == id)
     }
 
     /// Get the number of active component instances

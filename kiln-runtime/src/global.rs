@@ -2,13 +2,6 @@
 //!
 //! This module provides the implementation for WebAssembly globals.
 
-// Use KilnGlobalType directly from kiln_foundation, and KilnValueType, KilnValue
-// alloc is imported in lib.rs with proper feature gates
-
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::format;
-// Import format! macro for string formatting
-#[cfg(feature = "std")]
 use std::format;
 
 use kiln_foundation::{

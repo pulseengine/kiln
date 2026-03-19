@@ -14,24 +14,12 @@
 
 #![allow(clippy::module_name_repetitions)]
 
-// alloc is imported in lib.rs with proper feature gates
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{
-    boxed::Box,
-    vec,
-    vec::Vec,
-};
 // Import Box, Vec, and other types for allocating memory adapters
-#[cfg(feature = "std")]
 use alloc::{
     boxed::Box,
     vec,
     vec::Vec,
 };
-
-// For no_std without alloc, use BoundedVec instead of Vec
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-use kiln_foundation::bounded::BoundedVec;
 
 use crate::{
     cfi_engine::{
@@ -50,14 +38,8 @@ use crate::{
     prelude::*,
     unified_types::UnifiedMemoryAdapter as UnifiedMemoryAdapterTrait,
 };
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-type PlatformVec<T> = BoundedVec<T, 16, kiln_foundation::NoStdProvider<1024>>;
-
 // Type alias for Vec that works in all feature configurations
-#[cfg(any(feature = "std", feature = "alloc"))]
 type ValueVec = Vec<Value>;
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-type ValueVec = PlatformVec<Value>;
 
 // Import Value type
 use kiln_error::{
@@ -74,7 +56,6 @@ use kiln_platform::MacOsAllocatorBuilder;
 #[cfg(all(feature = "platform-qnx", target_os = "nto"))]
 use kiln_platform::QnxAllocatorBuilder;
 // Import from kiln-platform for all platform abstractions
-#[cfg(feature = "std")]
 use kiln_platform::{
     ComprehensivePlatformLimits,
     PageAllocator,
@@ -88,7 +69,6 @@ use kiln_platform::{
 use crate::cfi_engine::CfiControlFlowProtection;
 
 // Helper function to convert between ASIL level types
-#[cfg(feature = "std")]
 fn convert_asil_level(platform_asil: kiln_platform::AsilLevel) -> AsilLevel {
     match platform_asil {
         kiln_platform::AsilLevel::QM => AsilLevel::QM,
@@ -106,10 +86,9 @@ pub struct PlatformAwareRuntime {
     /// Execution engine with CFI protection
     execution_engine: CfiExecutionEngine,
     /// Platform-specific memory allocator
-    #[cfg(all(any(feature = "std", feature = "alloc"), feature = "platform"))]
+    #[cfg(feature = "platform")]
     memory_allocator: Box<dyn PageAllocator>,
     /// Platform-specific limits and capabilities
-    #[cfg(feature = "std")]
     platform_limits:  ComprehensivePlatformLimits,
     /// Safety context for ASIL compliance
     safety_context:   SafetyContext,
@@ -146,7 +125,7 @@ impl PlatformAwareRuntime {
 
     /// Create new platform-aware runtime with specific limits
     pub fn new_with_limits(limits: ComprehensivePlatformLimits) -> Result<Self> {
-        #[cfg(all(any(feature = "std", feature = "alloc"), feature = "platform"))]
+        #[cfg(feature = "platform")]
         let memory_allocator = Self::create_memory_allocator(&limits)?;
 
         let cfi_protection = Self::create_cfi_protection(&limits);
@@ -155,7 +134,7 @@ impl PlatformAwareRuntime {
 
         Ok(Self {
             execution_engine,
-            #[cfg(all(any(feature = "std", feature = "alloc"), feature = "platform"))]
+            #[cfg(feature = "platform")]
             memory_allocator,
             platform_limits: limits,
             safety_context,
@@ -164,12 +143,11 @@ impl PlatformAwareRuntime {
     }
 
     /// Create runtime with custom CFI violation policy
-    #[cfg(feature = "std")]
     pub fn new_with_cfi_policy(
         limits: ComprehensivePlatformLimits,
         cfi_policy: CfiViolationPolicy,
     ) -> Result<Self> {
-        #[cfg(all(any(feature = "std", feature = "alloc"), feature = "platform"))]
+        #[cfg(feature = "platform")]
         let memory_allocator = Self::create_memory_allocator(&limits)?;
 
         let cfi_protection = Self::create_cfi_protection(&limits);
@@ -178,7 +156,7 @@ impl PlatformAwareRuntime {
 
         Ok(Self {
             execution_engine,
-            #[cfg(all(any(feature = "std", feature = "alloc"), feature = "platform"))]
+            #[cfg(feature = "platform")]
             memory_allocator,
             platform_limits: limits,
             safety_context,
@@ -195,7 +173,6 @@ impl PlatformAwareRuntime {
         let start_time = self.get_timestamp();
 
         // Validate execution against platform limits
-        #[cfg(feature = "std")]
         self.validate_execution_limits(function, args)?;
 
         // Create execution context with platform limits
@@ -273,7 +250,7 @@ impl PlatformAwareRuntime {
     }
 
     /// Create platform-specific memory allocator using kiln-platform
-    #[cfg(all(any(feature = "std", feature = "alloc"), feature = "platform"))]
+    #[cfg(feature = "platform")]
     fn create_memory_allocator(
         limits: &ComprehensivePlatformLimits,
     ) -> Result<Box<dyn PageAllocator>> {
@@ -359,7 +336,6 @@ impl PlatformAwareRuntime {
     // No-std environments use NoStdProvider from kiln-platform
 
     /// Create CFI protection configuration based on platform capabilities
-    #[cfg(feature = "std")]
     fn create_cfi_protection(limits: &ComprehensivePlatformLimits) -> CfiControlFlowProtection {
         let protection_level = match convert_asil_level(limits.asil_level) {
             AsilLevel::QM => 0,               // Basic protection level
@@ -414,7 +390,6 @@ impl PlatformAwareRuntime {
     }
 
     /// Update memory usage metrics
-    #[cfg(feature = "std")]
     fn update_memory_metrics(&mut self) {
         let current_usage = self.total_memory() - self.available_memory();
         self.metrics.memory_allocated = current_usage;
@@ -430,43 +405,19 @@ impl PlatformAwareRuntime {
         _arg_count: usize,
     ) -> Result<ValueVec> {
         // Simplified implementation - in real scenario this would extract actual values
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            use kiln_foundation::{
-                budget_aware_provider::CrateId,
-                capability_allocators::capability_alloc::capability_vec,
-                memory_init::get_global_capability_context,
-            };
+        use kiln_foundation::{
+            budget_aware_provider::CrateId,
+            capability_allocators::capability_alloc::capability_vec,
+            memory_init::get_global_capability_context,
+        };
 
-            // Get capability context
-            let context = get_global_capability_context()?;
+        // Get capability context
+        let context = get_global_capability_context()?;
 
-            // Use capability-aware allocation
-            let mut result = capability_vec(context, CrateId::Runtime, 1)?;
-            result.push(Value::I32(0));
-            Ok(result)
-        }
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            // For no_std no_alloc, return a fixed array wrapped as Vec-like
-            use kiln_foundation::{
-                bounded::BoundedVec,
-                budget_aware_provider::CrateId,
-                safe_managed_alloc,
-            };
-            let provider = safe_managed_alloc!(1024, CrateId::Runtime)?;
-            let mut result: BoundedVec<Value, 16, _> = BoundedVec::new(provider)
-                .map_err(|_| Error::runtime_execution_error("Failed to create bounded vector"))?;
-            result.push(Value::I32(0)).map_err(|_| {
-                Error::new(
-                    ErrorCategory::Memory,
-                    kiln_error::codes::MEMORY_ALLOCATION_ERROR,
-                    "Failed to push value to result",
-                )
-            })?;
-            // Convert to Vec for compatibility - this is a temporary workaround
-            Err(Error::runtime_execution_error("Not implemented for no_std"))
-        }
+        // Use capability-aware allocation
+        let mut result = capability_vec(context, CrateId::Runtime, 1)?;
+        result.push(Value::I32(0));
+        Ok(result)
     }
 
     /// Get current timestamp for performance tracking

@@ -61,18 +61,12 @@ type ResourceVec = kiln_foundation::bounded::BoundedVec<usize, 16, AtomicProvide
 type ViolationString = kiln_foundation::bounded::BoundedString<64>;
 type OperationTypeVec = kiln_foundation::bounded::BoundedVec<ViolationString, 16, AtomicProvider1K>;
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::{
     sync::Arc,
     vec::Vec,
 };
-#[cfg(feature = "std")]
-use alloc::{
-    sync::Arc,
-    vec::Vec,
-};
-#[cfg(feature = "std")]
 use std::time::Instant;
+
 /// WebAssembly atomic memory model implementation
 #[derive(Debug)]
 pub struct AtomicMemoryModel {
@@ -120,7 +114,6 @@ impl AtomicMemoryModel {
         self.apply_pre_operation_ordering(&operation)?;
 
         // Record operation timing
-        #[cfg(feature = "std")]
         let start_time = Instant::now();
 
         // Execute the atomic operation
@@ -187,13 +180,10 @@ impl AtomicMemoryModel {
         };
 
         // Record operation timing
-        #[cfg(feature = "std")]
-        {
-            let duration = start_time.elapsed();
-            self.model_stats.total_execution_time += duration.as_nanos() as u64;
-            if duration.as_nanos() as u64 > self.model_stats.max_operation_time {
-                self.model_stats.max_operation_time = duration.as_nanos() as u64;
-            }
+        let duration = start_time.elapsed();
+        self.model_stats.total_execution_time += duration.as_nanos() as u64;
+        if duration.as_nanos() as u64 > self.model_stats.max_operation_time {
+            self.model_stats.max_operation_time = duration.as_nanos() as u64;
         }
 
         // Apply memory ordering constraints after operation
@@ -808,7 +798,6 @@ mod tests {
         assert!(result.data_races.is_empty());
     }
 
-    #[cfg(feature = "std")]
     #[test]
     fn test_atomic_memory_model_creation() {
         let thread_manager = ThreadManager::new(ThreadConfig::default()).unwrap();

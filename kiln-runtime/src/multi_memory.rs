@@ -309,7 +309,6 @@ impl MultiMemoryInstance {
 #[derive(Debug)]
 pub struct MultiMemoryContext {
     /// Memory instances indexed by memory index.
-    #[cfg(feature = "std")]
     memories: HashMap<u32, Arc<MultiMemoryInstance>>,
 
     /// Thread-safe counter for memory allocation.

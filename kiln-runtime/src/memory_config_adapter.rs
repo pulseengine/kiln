@@ -9,7 +9,6 @@ use kiln_error::{
     Error,
     ErrorCategory,
 };
-#[cfg(any(feature = "std", feature = "alloc"))]
 use kiln_foundation::capabilities::{
     factory::CapabilityGuardedProvider,
     MemoryCapabilityContext,
@@ -29,12 +28,6 @@ use kiln_foundation::{
 };
 
 // Type alias for the provider type that works with BoundedVec
-// In std/alloc environments, use CapabilityAwareProvider wrapper
-#[cfg(any(feature = "std", feature = "alloc"))]
-type AllocatedProvider<const N: usize> = CapabilityAwareProvider<NoStdProvider<N>>;
-
-// In no_std environments, also use CapabilityAwareProvider for consistency
-#[cfg(not(any(feature = "std", feature = "alloc")))]
 type AllocatedProvider<const N: usize> = CapabilityAwareProvider<NoStdProvider<N>>;
 
 // Import provider creation functions from prelude which handles conditionals
@@ -201,17 +194,7 @@ pub mod platform_types {
 
     /// Create a platform-aware memory provider for runtime operations
     pub fn create_platform_provider() -> Result<AllocatedProvider<8192>> {
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            // For no_std, use safe allocation
-            let context = capability_context!(dynamic(CrateId::Runtime, 8192))?;
-            let provider = safe_capability_alloc!(context, CrateId::Runtime, 8192)?;
-            Ok(provider)
-        }
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            MemoryFactory::create_wrapped::<8192>(CrateId::Runtime)
-        }
+        MemoryFactory::create_wrapped::<8192>(CrateId::Runtime)
     }
 }
 
@@ -221,50 +204,17 @@ pub struct DynamicProviderFactory;
 impl DynamicProviderFactory {
     /// Create a provider sized for the current platform
     pub fn create_for_use_case(use_case: MemoryUseCase) -> Result<AllocatedProvider<16384>> {
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            // For no_std, use safe allocation
-            let context = capability_context!(dynamic(CrateId::Runtime, 16384))?;
-            let provider = safe_capability_alloc!(context, CrateId::Runtime, 16384)?;
-            Ok(provider)
-        }
-
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            MemoryFactory::create_wrapped::<16384>(CrateId::Runtime)
-        }
+        MemoryFactory::create_wrapped::<16384>(CrateId::Runtime)
     }
 
     /// Create a string provider with platform-appropriate size
     pub fn create_string_provider() -> Result<AllocatedProvider<8192>> {
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            // For no_std, use safe allocation
-            let context = capability_context!(dynamic(CrateId::Runtime, 8192))?;
-            let provider = safe_capability_alloc!(context, CrateId::Runtime, 8192)?;
-            Ok(provider)
-        }
-
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            MemoryFactory::create_wrapped::<8192>(CrateId::Runtime)
-        }
+        MemoryFactory::create_wrapped::<8192>(CrateId::Runtime)
     }
 
     /// Create a collection provider with platform-appropriate size
     pub fn create_collection_provider() -> Result<AllocatedProvider<16384>> {
-        #[cfg(not(any(feature = "std", feature = "alloc")))]
-        {
-            // For no_std, use safe allocation
-            let context = capability_context!(dynamic(CrateId::Runtime, 16384))?;
-            let provider = safe_capability_alloc!(context, CrateId::Runtime, 16384)?;
-            Ok(provider)
-        }
-
-        #[cfg(any(feature = "std", feature = "alloc"))]
-        {
-            MemoryFactory::create_wrapped::<16384>(CrateId::Runtime)
-        }
+        MemoryFactory::create_wrapped::<16384>(CrateId::Runtime)
     }
 }
 

@@ -17,12 +17,6 @@
 //! All execution operations are bounds-checked and memory-safe, preventing
 //! stack overflows and maintaining WebAssembly's sandboxing guarantees.
 
-// alloc is imported in lib.rs with proper feature gates
-
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::format;
-// Import format! macro for string formatting
-#[cfg(feature = "std")]
 use std::format;
 
 use crate::prelude::{

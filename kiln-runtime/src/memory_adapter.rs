@@ -6,15 +6,9 @@
 // Use our prelude for consistent imports
 // alloc is imported in lib.rs with proper feature gates
 
-// Import Arc from the correct location to match ArcMemoryExt
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::format;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::sync::Arc;
 // Import format! macro for string formatting
-#[cfg(feature = "std")]
 use std::format;
-#[cfg(feature = "std")]
+// Import Arc from the correct location to match ArcMemoryExt
 use alloc::sync::Arc;
 
 use crate::{

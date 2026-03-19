@@ -4,13 +4,6 @@
 //! WebAssembly engines with clear separation of concerns and configurable
 //! capabilities.
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{
-    boxed::Box,
-    vec,
-    vec::Vec,
-};
-#[cfg(feature = "std")]
 use alloc::{
     boxed::Box,
     vec,
@@ -179,7 +172,6 @@ impl EngineFactory {
     }
 
     /// Create a preconfigured WAST testing engine
-    #[cfg(feature = "std")]
     pub fn wast_testing() -> Result<Box<dyn RuntimeEngine>> {
         Self::create(
             EngineConfig::new(EngineType::Wast)
@@ -207,7 +199,6 @@ pub trait RuntimeEngine {
     fn get_statistics(&self) -> EngineStatistics;
 
     /// Set the host function registry for imported function calls
-    #[cfg(feature = "std")]
     fn set_host_registry(&mut self, registry: std::sync::Arc<kiln_host::CallbackRegistry>);
 }
 
@@ -235,7 +226,6 @@ impl RuntimeEngine for crate::stackless::StacklessEngine {
         EngineStatistics::default()
     }
 
-    #[cfg(feature = "std")]
     fn set_host_registry(&mut self, registry: std::sync::Arc<kiln_host::CallbackRegistry>) {
         self.set_host_registry(registry);
     }

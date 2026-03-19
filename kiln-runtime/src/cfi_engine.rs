@@ -134,10 +134,7 @@ mod cfi_types {
 }
 
 // CFI imports temporarily disabled since CFI module is disabled
-// #[cfg(not(feature = "std"))]
-// use kiln_instructions::cfi_control_ops::{CfiHardwareInstruction,
-// CfiSoftwareValidation}; Available for both std and no_std since CFI module is
-// disabled
+// Available for both std and no_std since CFI module is disabled
 use kiln_foundation::traits::DefaultMemoryProvider;
 
 use self::cfi_types::ShadowStackRequirement;
@@ -148,11 +145,6 @@ pub use self::cfi_types::{
     ShadowStackEntry,
 };
 // CFI imports temporarily disabled since CFI module is disabled
-// #[cfg(feature = "std")]
-// use kiln_instructions::cfi_control_ops::{
-//     CfiHardwareInstruction, ArmBtiMode, CfiSoftwareValidation,
-//     ShadowStackRequirement, ShadowStackEntry
-// };
 use crate::{
     execution::ExecutionContext,
     prelude::{

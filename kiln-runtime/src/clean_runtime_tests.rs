@@ -4,7 +4,6 @@
 //! instead of provider-embedded types, serving as a prototype for the
 //! full kiln-runtime migration.
 
-#[cfg(any(feature = "std", feature = "alloc"))]
 use alloc::{
     string::String,
     vec::Vec,
@@ -16,7 +15,6 @@ use kiln_error::{
     ErrorCategory,
     Result,
 };
-#[cfg(any(feature = "std", feature = "alloc"))]
 use kiln_foundation::{
     CleanFuncType,
     CleanMemoryType,
@@ -28,7 +26,6 @@ use kiln_foundation::{
 };
 
 /// Clean runtime module using provider-free types
-#[cfg(any(feature = "std", feature = "alloc"))]
 pub struct CleanRuntime {
     /// Runtime type factory for allocation
     factory:   RuntimeTypeFactory<65536>,
@@ -40,7 +37,6 @@ pub struct CleanRuntime {
     tables:    Vec<CleanTable>,
 }
 
-#[cfg(any(feature = "std", feature = "alloc"))]
 impl CleanRuntime {
     /// Create a new clean runtime
     pub fn new() -> Self {
@@ -124,7 +120,6 @@ impl CleanRuntime {
     }
 }
 
-#[cfg(any(feature = "std", feature = "alloc"))]
 impl Default for CleanRuntime {
     fn default() -> Self {
         Self::new()
@@ -132,7 +127,6 @@ impl Default for CleanRuntime {
 }
 
 /// Clean function representation without provider embedding
-#[cfg(any(feature = "std", feature = "alloc"))]
 #[derive(Debug, Clone)]
 pub struct CleanFunction {
     /// Function name
@@ -143,8 +137,7 @@ pub struct CleanFunction {
     pub id:        u32,
 }
 
-/// Clean memory representation without provider embedding  
-#[cfg(any(feature = "std", feature = "alloc"))]
+/// Clean memory representation without provider embedding
 #[derive(Debug, Clone)]
 pub struct CleanMemory {
     /// Memory name
@@ -158,7 +151,6 @@ pub struct CleanMemory {
     pub data:        Vec<u8>,
 }
 
-#[cfg(any(feature = "std", feature = "alloc"))]
 impl CleanMemory {
     /// Read from memory
     pub fn read(&self, offset: u32, size: u32) -> Result<Vec<u8>> {
@@ -188,7 +180,6 @@ impl CleanMemory {
 }
 
 /// Clean table representation without provider embedding
-#[cfg(any(feature = "std", feature = "alloc"))]
 #[derive(Debug, Clone)]
 pub struct CleanTable {
     /// Table name
@@ -199,16 +190,5 @@ pub struct CleanTable {
     pub id:         u32,
     /// Table elements (simplified)
     pub elements:   Vec<Option<u32>>, // Function references
-}
-
-// Provide empty implementations for no-alloc environments
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-pub struct CleanRuntime;
-
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-impl CleanRuntime {
-    pub fn new() -> Self {
-        Self
-    }
 }
 

@@ -8,14 +8,11 @@
 #[cfg(feature = "tracing")]
 use kiln_foundation::tracing::{debug, trace, warn};
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::sync::Arc;
 use core::sync::atomic::{
     AtomicU32,
     Ordering,
 };
-#[cfg(feature = "std")]
-use alloc::sync::Arc;
 
 // Import decoder function
 use kiln_decoder::decoder::decode_module;
@@ -256,10 +253,8 @@ pub struct CapabilityAwareEngine {
     /// Bounded host integration manager for safety-critical environments
     host_manager:      Option<BoundedHostIntegrationManager>,
     /// Import links: module_handle -> (module::name -> ImportLink)
-    #[cfg(feature = "std")]
     import_links:      std::collections::HashMap<ModuleHandle, std::collections::HashMap<String, ImportLink>>,
     /// Instance handle to instance_idx mapping for cross-instance calls
-    #[cfg(feature = "std")]
     handle_to_idx:     std::collections::HashMap<InstanceHandle, usize>,
 }
 
@@ -299,7 +294,6 @@ impl CapabilityAwareEngine {
         let mut inner_engine = StacklessEngine::new();
 
         // Pass the host registry to the inner engine if available
-        #[cfg(feature = "std")]
         if let Some(ref registry) = host_registry {
             use std::sync::Arc as StdArc;
             inner_engine.set_host_registry(StdArc::new(registry.clone()));
@@ -314,9 +308,7 @@ impl CapabilityAwareEngine {
             next_instance_idx: 0,
             host_registry,
             host_manager,
-            #[cfg(feature = "std")]
             import_links: std::collections::HashMap::new(),
-            #[cfg(feature = "std")]
             handle_to_idx: std::collections::HashMap::new(),
         })
     }
@@ -325,7 +317,6 @@ impl CapabilityAwareEngine {
     ///
     /// This allows updating the registry after engine creation, which is needed
     /// for component model instantiation where the registry is created separately.
-    #[cfg(feature = "std")]
     pub fn set_host_registry(&mut self, registry: std::sync::Arc<kiln_host::CallbackRegistry>) {
         self.host_registry = Some((*registry).clone());
         self.inner.set_host_registry(registry);
@@ -336,7 +327,6 @@ impl CapabilityAwareEngine {
     /// This handler will be used for ALL host function calls including WASI.
     /// The engine has no knowledge of specific host interfaces - it delegates
     /// all import resolution to this handler.
-    #[cfg(feature = "std")]
     pub fn set_host_handler(&mut self, handler: Box<dyn kiln_foundation::HostImportHandler>) {
         self.inner.set_host_handler(handler);
     }
@@ -499,7 +489,6 @@ impl CapabilityAwareEngine {
     /// When a module calls a function at this (instance_id, func_idx), the engine
     /// will dispatch to the canonical executor instead of executing bytecode.
     /// This prevents infinite recursion in shim modules with self-referential tables.
-    #[cfg(feature = "std")]
     pub fn register_lowered_function(
         &mut self,
         instance_id: usize,
@@ -557,7 +546,6 @@ impl CapabilityEngine for CapabilityAwareEngine {
         );
 
         // Debug: list all exports
-        #[cfg(feature = "std")]
         #[cfg(feature = "tracing")]
         {
             let elem_count = runtime_module.elements.len();
@@ -579,7 +567,6 @@ impl CapabilityEngine for CapabilityAwareEngine {
         }
 
         // TODO: Initialize data segments into memory
-        // #[cfg(feature = "std")]
         // runtime_module.initialize_data_segments()?;
 
         // Stack pointer is now initialized early during global creation in from_kiln_module()
@@ -635,13 +622,11 @@ impl CapabilityEngine for CapabilityAwareEngine {
 
         // Get pending import links EARLY - we need to apply table/memory/global imports
         // BEFORE element segment initialization
-        #[cfg(feature = "std")]
         let pending_links = self.import_links.get(&module_handle).cloned();
 
         // CRITICAL: Apply table/memory/global imports BEFORE element segments!
         // Tables must be available before element segments try to populate them.
         // Function imports can be applied later (resolved at call time).
-        #[cfg(feature = "std")]
         if let Some(ref links) = pending_links {
             for (import_key, link) in links {
                 match link.import_kind {
@@ -722,19 +707,13 @@ impl CapabilityEngine for CapabilityAwareEngine {
         }
 
         // Initialize data segments into instance memory (critical for static data!)
-        #[cfg(feature = "std")]
-        {
-            #[cfg(feature = "tracing")]
-            debug!("Initializing data segments...");
-            instance.initialize_data_segments()?;
-        }
+        #[cfg(feature = "tracing")]
+        debug!("Initializing data segments...");
+        instance.initialize_data_segments()?;
 
         // Initialize element segments into tables (critical for call_indirect!)
         // IMPORTANT: This MUST come AFTER table imports are applied above
-        #[cfg(feature = "std")]
-        {
-            instance.initialize_element_segments()?;
-        }
+        instance.initialize_element_segments()?;
 
         // Don't clone! Cloning creates a fresh empty instance, losing all our populate work
         let instance_arc = Arc::new(instance);
@@ -748,11 +727,9 @@ impl CapabilityEngine for CapabilityAwareEngine {
         self.instances.insert(handle, instance_arc)?;
 
         // Store handle -> instance_idx mapping for cross-instance calls
-        #[cfg(feature = "std")]
         self.handle_to_idx.insert(handle, instance_idx);
 
         // Register FUNCTION import links with the inner engine (for call-time resolution)
-        #[cfg(feature = "std")]
         if let Some(links) = pending_links {
             #[cfg(feature = "tracing")]
             trace!(
@@ -817,7 +794,6 @@ impl CapabilityEngine for CapabilityAwareEngine {
         Ok(handle)
     }
 
-    #[cfg(feature = "std")]
     fn link_import(
         &mut self,
         module: ModuleHandle,
@@ -837,16 +813,13 @@ impl CapabilityEngine for CapabilityAwareEngine {
         // Add to inner StacklessEngine's import_links
         // Key: (instance_id, import_module, import_name)
         // Value: (target_instance_id, export_name)
-        #[cfg(feature = "std")]
-        {
-            self.inner.add_import_link(
-                module_id,
-                import_module.to_string(),
-                import_name.to_string(),
-                provider_id,
-                export_name.to_string(),
-            );
-        }
+        self.inner.add_import_link(
+            module_id,
+            import_module.to_string(),
+            import_name.to_string(),
+            provider_id,
+            export_name.to_string(),
+        );
 
         // Also store in our own links map for tracking
         let import_key = if import_module.is_empty() {
@@ -917,72 +890,69 @@ impl CapabilityEngine for CapabilityAwareEngine {
 
         // Check if this is a directly callable host function by name
         // This allows test code to directly invoke WASI functions
-        #[cfg(feature = "std")]
-        {
-            // Try to split func_name into module::function format
-            if func_name.contains("::") {
-                let parts: Vec<&str> = func_name.split("::").collect();
-                if parts.len() >= 2 {
-                    let module_str = parts[0];
-                    let func_str = parts[1..].join("::");
+        // Try to split func_name into module::function format
+        if func_name.contains("::") {
+            let parts: Vec<&str> = func_name.split("::").collect();
+            if parts.len() >= 2 {
+                let module_str = parts[0];
+                let func_str = parts[1..].join("::");
 
-                    if let Some(ref registry) = self.host_registry {
-                        if registry.has_host_function(module_str, &func_str) {
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                module = module_str,
-                                function = func_str,
-                                "Direct call to host function"
-                            );
+                if let Some(ref registry) = self.host_registry {
+                    if registry.has_host_function(module_str, &func_str) {
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            module = module_str,
+                            function = func_str,
+                            "Direct call to host function"
+                        );
 
-                            let mut dummy_engine = ();
-                            let results = registry.call_host_function(
-                                &mut dummy_engine as &mut dyn core::any::Any,
-                                module_str,
-                                &func_str,
-                                args.to_vec()
-                            )?;
+                        let mut dummy_engine = ();
+                        let results = registry.call_host_function(
+                            &mut dummy_engine as &mut dyn core::any::Any,
+                            module_str,
+                            &func_str,
+                            args.to_vec()
+                        )?;
 
-                            #[cfg(feature = "tracing")]
-                            trace!(result_count = results.len(), "Host function returned");
-                            return Ok(results);
-                        }
+                        #[cfg(feature = "tracing")]
+                        trace!(result_count = results.len(), "Host function returned");
+                        return Ok(results);
                     }
                 }
             }
+        }
 
-            // Also try wasi: prefix format like "wasi:cli/stdout@0.2.0"
-            // BUT ONLY if this function is NOT exported by the module!
-            // If the module exports it (like wasi:cli/run@0.2.3#run), we should call
-            // the module's implementation, not dispatch to host.
-            let is_module_export = instance.module().find_function_by_name(func_name).is_some();
-            if func_name.starts_with("wasi:") && !is_module_export {
-                // Extract just the function name part (last component after #)
-                if let Some(hash_pos) = func_name.rfind('#') {
-                    let module_part = &func_name[..hash_pos];
-                    let func_part = &func_name[hash_pos+1..];
+        // Also try wasi: prefix format like "wasi:cli/stdout@0.2.0"
+        // BUT ONLY if this function is NOT exported by the module!
+        // If the module exports it (like wasi:cli/run@0.2.3#run), we should call
+        // the module's implementation, not dispatch to host.
+        let is_module_export = instance.module().find_function_by_name(func_name).is_some();
+        if func_name.starts_with("wasi:") && !is_module_export {
+            // Extract just the function name part (last component after #)
+            if let Some(hash_pos) = func_name.rfind('#') {
+                let module_part = &func_name[..hash_pos];
+                let func_part = &func_name[hash_pos+1..];
 
-                    if let Some(ref registry) = self.host_registry {
-                        if registry.has_host_function(module_part, func_part) {
-                            #[cfg(feature = "tracing")]
-                            trace!(
-                                module = module_part,
-                                function = func_part,
-                                "WASI host function call"
-                            );
+                if let Some(ref registry) = self.host_registry {
+                    if registry.has_host_function(module_part, func_part) {
+                        #[cfg(feature = "tracing")]
+                        trace!(
+                            module = module_part,
+                            function = func_part,
+                            "WASI host function call"
+                        );
 
-                            let mut dummy_engine = ();
-                            let results = registry.call_host_function(
-                                &mut dummy_engine as &mut dyn core::any::Any,
-                                module_part,
-                                func_part,
-                                args.to_vec()
-                            )?;
+                        let mut dummy_engine = ();
+                        let results = registry.call_host_function(
+                            &mut dummy_engine as &mut dyn core::any::Any,
+                            module_part,
+                            func_part,
+                            args.to_vec()
+                        )?;
 
-                            #[cfg(feature = "tracing")]
-                            trace!(result_count = results.len(), "Host function returned");
-                            return Ok(results);
-                        }
+                        #[cfg(feature = "tracing")]
+                        trace!(result_count = results.len(), "Host function returned");
+                        return Ok(results);
                     }
                 }
             }
@@ -1088,7 +1058,6 @@ impl CapabilityAwareEngine {
 
     /// Determine the kind of import (function, table, memory, global) from the module's import
     /// declarations
-    #[cfg(feature = "std")]
     fn determine_import_kind(
         &self,
         module_handle: ModuleHandle,

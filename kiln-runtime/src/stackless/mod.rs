@@ -7,20 +7,13 @@
 //! The stackless engine uses a state machine approach to track execution state
 //! and allows for pausing and resuming execution at any point.
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::string::String;
-#[cfg(feature = "std")]
-use alloc::string::String;
-#[cfg(not(any(feature = "std", feature = "alloc")))]
-type String =
-    kiln_foundation::bounded::BoundedString<256>;
 
 pub mod engine;
 pub mod extensions;
 pub mod frame;
 pub mod simd_ops;
 
-#[cfg(feature = "std")]
 pub mod tail_call;
 
 pub use engine::{

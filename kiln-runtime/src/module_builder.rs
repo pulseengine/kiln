@@ -6,17 +6,9 @@
 
 // Decoder imports are optional during development
 // use kiln_decoder::{module::CodeSection,
-// runtime_adapter::RuntimeModuleBuilder}; alloc is imported in lib.rs with
-// proper feature gates
+// runtime_adapter::RuntimeModuleBuilder};
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::format;
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
-// Import format! macro for string formatting
-#[cfg(feature = "std")]
 use std::format;
-#[cfg(feature = "std")]
 use alloc::vec::Vec;
 
 use kiln_format::{
@@ -399,7 +391,6 @@ impl ModuleBuilder {
     }
 
     /// Sets the binary representation of the module.
-    #[cfg(any(feature = "std", feature = "alloc"))]
     pub fn set_binary(&mut self, _binary: Vec<u8>) -> Result<()> {
         Ok(())
     }
