@@ -387,11 +387,9 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<()> {
             0xFD => {
                 let (subop, bytes) = read_leb128_u32(data, offset)?;
                 offset += bytes;
-                // SIMD load/store ops (0-11, etc.) have memarg
-                if subop <= 11 || (subop >= 84 && subop <= 97) || (subop >= 88 && subop <= 91)
-                    || (subop >= 92 && subop <= 95)
-                {
-                    // memarg
+                // SIMD load/store ops have memarg
+                if subop <= 11 {
+                    // v128.load, v128.loadNxM_s/u, etc. — memarg only
                     let (align_raw, bytes) = read_leb128_u32(data, offset)?;
                     offset += bytes;
                     if (align_raw & 0x40) != 0 {
@@ -400,6 +398,18 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<()> {
                     }
                     let (_, bytes) = read_leb128_u64(data, offset)?;
                     offset += bytes;
+                } else if subop >= 84 && subop <= 91 {
+                    // v128.loadN_lane (84-87) / v128.storeN_lane (88-91) — memarg + lane byte
+                    let (align_raw, bytes) = read_leb128_u32(data, offset)?;
+                    offset += bytes;
+                    if (align_raw & 0x40) != 0 {
+                        let (_, bytes) = read_leb128_u32(data, offset)?;
+                        offset += bytes;
+                    }
+                    let (_, bytes) = read_leb128_u64(data, offset)?;
+                    offset += bytes;
+                    // lane index byte
+                    if offset < data.len() { offset += 1; }
                 } else if subop == 12 {
                     // v128.const - 16 raw bytes
                     offset += 16;
