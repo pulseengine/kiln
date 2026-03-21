@@ -416,8 +416,8 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<()> {
                 } else if subop == 13 {
                     // i8x16.shuffle - 16 lane bytes
                     offset += 16;
-                } else if (14..=21).contains(&subop) || subop == 256 + 21 {
-                    // Lane extract/replace - 1 lane byte
+                } else if (21..=34).contains(&subop) {
+                    // Lane extract/replace (i8x16.extract_lane_s through f64x2.replace_lane) - 1 lane byte
                     if offset < data.len() { offset += 1; }
                 }
                 // Other SIMD ops have no additional operands
