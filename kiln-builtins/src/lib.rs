@@ -13,7 +13,7 @@
 //! - [`__meld_get_memory_base`] — Returns linear memory base address
 //! - [`cabi_realloc`] — Canonical ABI memory allocator
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
@@ -55,6 +55,7 @@ pub extern "C" fn __meld_dispatch_import(import_index: u32) -> u32 {
 ///
 /// The linker provides `__wasm_memory_start` as the base of the
 /// linear memory section in the ELF binary.
+#[cfg(not(test))]
 #[unsafe(no_mangle)]
 pub extern "C" fn __meld_get_memory_base() -> *mut u8 {
     unsafe extern "C" {
@@ -100,9 +101,13 @@ pub extern "C" fn cabi_realloc(
             return 0;
         }
 
-        // Align up
-        let aligned = (current + align - 1) & !(align - 1);
-        let next = aligned + new_size;
+        // Align up: (current + align - 1) & !(align - 1)
+        // Safe because align is non-zero (set to 1 above if 0)
+        let aligned = (current.wrapping_add(align - 1)) & !(align - 1);
+        let next = match aligned.checked_add(new_size) {
+            Some(n) => n,
+            None => return 0, // Overflow — allocation would exceed u32 range
+        };
 
         match BUMP_PTR.compare_exchange_weak(
             current,
@@ -113,5 +118,131 @@ pub extern "C" fn cabi_realloc(
             Ok(_) => return aligned,
             Err(_) => continue, // Retry on contention
         }
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn reset_bump() {
+        BUMP_PTR.store(0, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn test_cabi_realloc_uninitialized_returns_zero() {
+        reset_bump();
+        assert_eq!(cabi_realloc(0, 0, 1, 16), 0);
+    }
+
+    #[test]
+    fn test_cabi_realloc_zero_size_returns_zero() {
+        reset_bump();
+        __kiln_builtins_init(0x1000);
+        assert_eq!(cabi_realloc(0, 0, 1, 0), 0);
+    }
+
+    #[test]
+    fn test_cabi_realloc_basic_allocation() {
+        reset_bump();
+        __kiln_builtins_init(0x1000);
+        let ptr = cabi_realloc(0, 0, 1, 16);
+        assert_eq!(ptr, 0x1000);
+        // Next allocation follows
+        let ptr2 = cabi_realloc(0, 0, 1, 8);
+        assert_eq!(ptr2, 0x1010);
+    }
+
+    #[test]
+    fn test_cabi_realloc_alignment() {
+        reset_bump();
+        __kiln_builtins_init(0x1001); // Misaligned start
+        // Request 8-byte alignment
+        let ptr = cabi_realloc(0, 0, 8, 4);
+        assert_eq!(ptr, 0x1008); // Aligned up to 8
+        // Next with 4-byte alignment
+        let ptr2 = cabi_realloc(0, 0, 4, 4);
+        assert_eq!(ptr2, 0x100C); // 0x1008 + 4 = 0x100C, already 4-aligned
+    }
+
+    #[test]
+    fn test_cabi_realloc_overflow_returns_zero() {
+        reset_bump();
+        __kiln_builtins_init(u32::MAX - 10);
+        let ptr = cabi_realloc(0, 0, 1, 100);
+        assert_eq!(ptr, 0); // Would overflow u32
+    }
+
+    #[test]
+    fn test_dispatch_import_stub() {
+        assert_eq!(__meld_dispatch_import(0), 0);
+        assert_eq!(__meld_dispatch_import(42), 0);
+        assert_eq!(__meld_dispatch_import(u32::MAX), 0);
+    }
+}
+
+// ============================================================================
+// Kani proofs
+// ============================================================================
+
+#[cfg(kani)]
+mod proofs {
+    use super::*;
+
+    #[kani::proof]
+    fn cabi_realloc_never_overflows() {
+        let heap_start: u32 = kani::any();
+        let align: u32 = kani::any();
+        let new_size: u32 = kani::any();
+
+        // Preconditions
+        kani::assume(heap_start > 0); // initialized
+        kani::assume(align <= 4096); // reasonable alignment
+        kani::assume(align == 0 || (align & (align - 1)) == 0); // power of 2 or 0
+
+        BUMP_PTR.store(heap_start, Ordering::SeqCst);
+        let result = cabi_realloc(0, 0, align, new_size);
+
+        // Post-conditions
+        if result != 0 {
+            // Result must be >= heap_start
+            assert!(result >= heap_start);
+            // Result must be aligned
+            let effective_align = if align == 0 { 1 } else { align };
+            assert!(result % effective_align == 0);
+            // result + new_size must not overflow (checked_add returned Some)
+            assert!(result as u64 + new_size as u64 <= u32::MAX as u64 + 1);
+        }
+    }
+
+    #[kani::proof]
+    fn cabi_realloc_alignment_correct() {
+        let heap_start: u32 = kani::any();
+        kani::assume(heap_start > 0 && heap_start < 0x1000_0000);
+
+        // Test all power-of-2 alignments from 1 to 256
+        let align_shift: u32 = kani::any();
+        kani::assume(align_shift <= 8);
+        let align = 1u32 << align_shift;
+
+        let new_size: u32 = kani::any();
+        kani::assume(new_size > 0 && new_size <= 1024);
+
+        BUMP_PTR.store(heap_start, Ordering::SeqCst);
+        let result = cabi_realloc(0, 0, align, new_size);
+
+        if result != 0 {
+            assert!(result % align == 0, "Result not properly aligned");
+        }
+    }
+
+    #[kani::proof]
+    fn dispatch_import_always_returns_zero() {
+        let idx: u32 = kani::any();
+        assert_eq!(__meld_dispatch_import(idx), 0);
     }
 }
