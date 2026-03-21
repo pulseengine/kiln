@@ -1355,21 +1355,27 @@ impl WasiDispatcher {
             // C/C++ runtime needs these to determine buffering behavior
 
             ("wasi:cli/terminal-stdin", "get-terminal-stdin") => {
-                // Return option<terminal-input> - None means not a terminal
-                // For CLI execution, return None (discriminant 0)
-                Ok(vec![CoreValue::I32(0)])
+                // option<terminal-input> lowered: write discriminant 0 (None) at retptr
+                if let (Some(mem), Some(CoreValue::I32(retptr))) = (memory, args.first()) {
+                    mem.write_bytes(*retptr as u32, &0u32.to_le_bytes())?;
+                }
+                Ok(vec![])
             }
 
             ("wasi:cli/terminal-stdout", "get-terminal-stdout") => {
-                // Return option<terminal-output> - None means not a terminal
-                // For CLI execution, return None (discriminant 0)
-                Ok(vec![CoreValue::I32(0)])
+                // option<terminal-output> lowered: write discriminant 0 (None) at retptr
+                if let (Some(mem), Some(CoreValue::I32(retptr))) = (memory, args.first()) {
+                    mem.write_bytes(*retptr as u32, &0u32.to_le_bytes())?;
+                }
+                Ok(vec![])
             }
 
             ("wasi:cli/terminal-stderr", "get-terminal-stderr") => {
-                // Return option<terminal-output> - None means not a terminal
-                // For CLI execution, return None (discriminant 0)
-                Ok(vec![CoreValue::I32(0)])
+                // option<terminal-output> lowered: write discriminant 0 (None) at retptr
+                if let (Some(mem), Some(CoreValue::I32(retptr))) = (memory, args.first()) {
+                    mem.write_bytes(*retptr as u32, &0u32.to_le_bytes())?;
+                }
+                Ok(vec![])
             }
 
             // ================================================================

@@ -137,7 +137,7 @@ pub struct KilndConfig {
 impl Default for KilndConfig {
     fn default() -> Self {
         Self {
-            max_fuel: 1_000_000, // 1M fuel for large components
+            max_fuel: 100_000_000, // 100M fuel for large components (yolo, etc.)
             max_memory: 64 * 1024 * 1024, // 64MB default
             function_name: None,
             module_data: None,
