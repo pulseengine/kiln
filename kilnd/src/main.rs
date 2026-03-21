@@ -482,38 +482,40 @@ impl KilndEngine {
             // Wrap host_registry in Arc for passing to component
             use std::sync::Arc;
             let registry_arc = Arc::new(self.host_registry.clone());
-            let mut instance = ComponentInstance::from_parsed(0, &mut *parsed_component, Some(registry_arc))
-                .map_err(|_| {
-                    Error::runtime_error("Failed to create and initialize component instance")
-                })?;
-            // parsed_component is now dropped - we only keep runtime instance
 
-            // Wire up WASI dispatcher as the host import handler for this component
-            // This is CRITICAL - without this, WASI functions won't work
-            #[cfg(feature = "wasi")]
-            if self.config.enable_wasi {
-                use kiln_wasi::WasiDispatcher;
-                match WasiDispatcher::with_defaults() {
-                    Ok(dispatcher) => {
-                        instance.set_host_handler(Box::new(dispatcher));
-                        let _ = self.logger.handle_minimal_log(
-                            LogLevel::Info,
-                            "WASI dispatcher connected to component instance"
-                        );
-                    }
-                    Err(_e) => {
-                        let _ = self.logger.handle_minimal_log(
-                            LogLevel::Warn,
-                            "Failed to create WASI dispatcher for component"
-                        );
+            // Create WASI dispatcher BEFORE component instantiation so start functions
+            // can call WASI functions (e.g., C/C++ components call WASI during _initialize)
+            let wasi_handler: Option<Box<dyn kiln_foundation::traits::HostImportHandler>> = {
+                #[cfg(feature = "wasi")]
+                {
+                    if self.config.enable_wasi {
+                        match kiln_wasi::WasiDispatcher::with_defaults() {
+                            Ok(dispatcher) => {
+                                let _ = self.logger.handle_minimal_log(
+                                    LogLevel::Info,
+                                    "WASI dispatcher connected to component instance"
+                                );
+                                Some(Box::new(dispatcher))
+                            }
+                            Err(_e) => {
+                                let _ = self.logger.handle_minimal_log(
+                                    LogLevel::Warn,
+                                    "Failed to create WASI dispatcher for component"
+                                );
+                                None
+                            }
+                        }
+                    } else {
+                        None
                     }
                 }
+                #[cfg(not(feature = "wasi"))]
+                { None }
+            };
 
-                // NOTE: WASI args allocation is now done ON-DEMAND when get-arguments
-                // is called (see kiln-runtime engine.rs ON-DEMAND ALLOCATION).
-                // Pre-allocating before _start caused memory collisions where the
-                // component's allocator reused our memory.
-            }
+            let mut instance = ComponentInstance::from_parsed_with_handler(
+                0, &mut *parsed_component, Some(registry_arc), wasi_handler
+            )?;
 
             let _ = self.logger.handle_minimal_log(
                 LogLevel::Info,

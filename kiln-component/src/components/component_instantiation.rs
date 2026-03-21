@@ -837,6 +837,16 @@ impl ComponentInstance {
         parsed: &mut kiln_format::component::Component,
         host_registry: Option<std::sync::Arc<kiln_host::CallbackRegistry>>,
     ) -> Result<Self> {
+        Self::from_parsed_with_handler(id, parsed, host_registry, None)
+    }
+
+    /// Create a ComponentInstance with an optional host handler for WASI dispatch during start functions.
+    pub fn from_parsed_with_handler(
+        id: InstanceId,
+        parsed: &mut kiln_format::component::Component,
+        host_registry: Option<std::sync::Arc<kiln_host::CallbackRegistry>>,
+        host_handler: Option<Box<dyn kiln_foundation::traits::HostImportHandler>>,
+    ) -> Result<Self> {
         #[cfg(feature = "tracing")]
         trace!("from_parsed: ENTERED, Component passed by reference");
 
@@ -956,6 +966,11 @@ impl ComponentInstance {
             engine.set_host_registry(registry.clone());
             #[cfg(feature = "tracing")]
             trace!("from_parsed: Host registry set successfully");
+        }
+
+        // Set host handler for WASI dispatch during start function execution
+        if let Some(handler) = host_handler {
+            engine.set_host_handler(handler);
         }
 
         // Track instantiated modules by core instance index
@@ -1687,11 +1702,15 @@ impl ComponentInstance {
 
                                     },
                                     Err(e) => {
+                                        #[cfg(feature = "tracing")]
+                                        tracing::warn!(core_instance_idx, %e, "Core instance instantiation failed");
                                         // Continue with other modules
                                     },
                                 }
                             },
                             Err(e) => {
+                                #[cfg(feature = "tracing")]
+                                tracing::warn!(module_idx, %e, "Core module load failed");
                             },
                         }
                     },
