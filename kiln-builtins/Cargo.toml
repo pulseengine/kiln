@@ -1,0 +1,14 @@
+[package]
+name = "kiln-builtins"
+version = "0.1.0"
+edition = "2024"
+description = "Runtime builtins for synth-compiled WebAssembly on embedded targets"
+license = "MIT"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+
+[features]
+default = []
