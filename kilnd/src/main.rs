@@ -522,6 +522,15 @@ impl KilndEngine {
                 "Component initialized and running successfully"
             );
 
+            // Pre-allocate WASI args memory via cabi_realloc before calling entry point.
+            // This is needed for components that call get-arguments (e.g., calculator).
+            #[cfg(all(feature = "kiln-execution", feature = "wasi"))]
+            if self.config.enable_wasi {
+                if let Err(e) = instance.pre_allocate_wasi_args() {
+                    eprintln!("[WASI-PREALLOC] Failed: {}", e);
+                }
+            }
+
             // Check for WASI CLI entry point and invoke it
             // Find wasi:cli/run export with any version
             let run_export = instance.exports.iter()

@@ -2084,6 +2084,69 @@ impl WasiDispatcher {
                 Ok(vec![CoreValue::I64(val as i64)])
             }
 
+            // wasi:random - core dispatch
+            #[cfg(feature = "wasi-random")]
+            ("wasi:random/random", "get-random-bytes") => {
+                use kiln_platform::random::PlatformRandom;
+                // Args: len (i64 or i32), retptr (i32)
+                let len = match args.first() {
+                    Some(CoreValue::I64(v)) => *v as usize,
+                    Some(CoreValue::I32(v)) => *v as usize,
+                    _ => return Err(Error::wasi_invalid_argument("get-random-bytes: missing length")),
+                };
+                let retptr = match args.get(1) {
+                    Some(CoreValue::I32(v)) => *v as u32,
+                    _ => return Err(Error::wasi_invalid_argument("get-random-bytes: missing retptr")),
+                };
+                let mut bytes = vec![0u8; len];
+                PlatformRandom::get_secure_bytes(&mut bytes)
+                    .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
+                if let Some(mem) = memory {
+                    // Write data directly at retptr+8, then set list ptr/len at retptr
+                    let data_ptr = retptr + 8;
+                    mem.write_bytes(data_ptr, &bytes)?;
+                    mem.write_bytes(retptr, &data_ptr.to_le_bytes())?;
+                    mem.write_bytes(retptr + 4, &(len as u32).to_le_bytes())?;
+                }
+                Ok(vec![])
+            }
+
+            #[cfg(feature = "wasi-random")]
+            ("wasi:random/insecure-seed", "insecure-seed") => {
+                use kiln_platform::random::PlatformRandom;
+                let mut bytes = [0u8; 16];
+                PlatformRandom::get_secure_bytes(&mut bytes)
+                    .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
+                let v0 = u64::from_le_bytes(bytes[..8].try_into().unwrap());
+                let v1 = u64::from_le_bytes(bytes[8..].try_into().unwrap());
+                Ok(vec![CoreValue::I64(v0 as i64), CoreValue::I64(v1 as i64)])
+            }
+
+            // wasi:cli/exit - core dispatch
+            ("wasi:cli/exit", "exit") => {
+                Ok(vec![])
+            }
+
+            // wasi:io/error - core dispatch
+            ("wasi:io/error", "[resource-drop]error") => {
+                Ok(vec![])
+            }
+
+            // wasi:filesystem/preopens - core dispatch
+            #[cfg(feature = "wasi-filesystem")]
+            ("wasi:filesystem/preopens", "get-directories") => {
+                // Return empty directory list at retptr
+                if let Some(mem) = memory {
+                    let retptr = match args.first() {
+                        Some(CoreValue::I32(v)) => *v as u32,
+                        _ => return Err(Error::wasi_invalid_argument("get-directories: missing retptr")),
+                    };
+                    mem.write_bytes(retptr, &0u32.to_le_bytes())?;
+                    mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
+                }
+                Ok(vec![])
+            }
+
             _ => {
                 #[cfg(feature = "tracing")]
                 warn!(interface = %base_interface, function = %function, "unknown WASI function (core)");
