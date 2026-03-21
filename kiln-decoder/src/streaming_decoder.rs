@@ -104,10 +104,12 @@ fn skip_leb128_i64(data: &[u8], offset: usize) -> usize {
 /// This catches malformed LEB128 encodings (overlong, overflow) in memarg,
 /// FC/FD sub-opcodes, and other instruction operands.
 /// Returns Ok(()) if all LEB128 values are valid, or the first LEB128 error.
-fn validate_code_body_leb128(data: &[u8]) -> Result<()> {
+/// Returns (Ok(()), uses_data_count_instructions) on success.
+fn validate_code_body_leb128(data: &[u8]) -> Result<bool> {
     use kiln_format::binary::{read_leb128_u32, read_leb128_i32, read_leb128_i64, read_leb128_u64};
 
     let mut offset = 0;
+    let mut uses_data_count = false;
 
     while offset < data.len() {
         let opcode = data[offset];
@@ -335,12 +337,14 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<()> {
                     0x00..=0x07 => {},
                     // memory.init - data_idx + mem_idx
                     0x08 => {
+                        uses_data_count = true;
                         let (_, bytes) = read_leb128_u32(data, offset)?;
                         offset += bytes;
                         if offset < data.len() { offset += 1; } // mem index byte
                     },
                     // data.drop
                     0x09 => {
+                        uses_data_count = true;
                         let (_, bytes) = read_leb128_u32(data, offset)?;
                         offset += bytes;
                     },
@@ -458,7 +462,7 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<()> {
         }
     }
 
-    Ok(())
+    Ok(uses_data_count)
 }
 
 /// Find the end of an expression by properly parsing instructions.
@@ -2866,27 +2870,14 @@ impl<'a> StreamingDecoder<'a> {
                 // This catches overlong/overflow LEB128 in memarg, FC sub-opcodes, etc.
                 // The validation runs before the END opcode check because truncated bodies
                 // from malformed LEB128 would cause misleading "END opcode expected" errors.
-                validate_code_body_leb128(instructions_data)?;
+                let has_data_count_ops = validate_code_body_leb128(instructions_data)?;
+                if has_data_count_ops {
+                    self.uses_data_count_instructions = true;
+                }
 
                 // Validate function body ends with END opcode (0x0B)
                 if instructions_data.is_empty() || instructions_data[instructions_data.len() - 1] != 0x0B {
                     return Err(Error::parse_error("END opcode expected"));
-                }
-
-                // Scan for data.drop (0xFC 0x09) and memory.init (0xFC 0x08) instructions
-                // These require data count section to be present
-                if !self.uses_data_count_instructions {
-                    let mut scan_pos = 0;
-                    while scan_pos < instructions_data.len() {
-                        if instructions_data[scan_pos] == 0xFC && scan_pos + 1 < instructions_data.len() {
-                            let sub_opcode = instructions_data[scan_pos + 1];
-                            if sub_opcode == 0x08 || sub_opcode == 0x09 {
-                                self.uses_data_count_instructions = true;
-                                break;
-                            }
-                        }
-                        scan_pos += 1;
-                    }
                 }
 
                 #[cfg(feature = "allocation-tracing")]

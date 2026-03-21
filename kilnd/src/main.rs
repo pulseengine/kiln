@@ -482,10 +482,7 @@ impl KilndEngine {
             // Wrap host_registry in Arc for passing to component
             use std::sync::Arc;
             let registry_arc = Arc::new(self.host_registry.clone());
-            let mut instance = ComponentInstance::from_parsed(0, &mut *parsed_component, Some(registry_arc))
-                .map_err(|_| {
-                    Error::runtime_error("Failed to create and initialize component instance")
-                })?;
+            let mut instance = ComponentInstance::from_parsed(0, &mut *parsed_component, Some(registry_arc))?;
             // parsed_component is now dropped - we only keep runtime instance
 
             // Wire up WASI dispatcher as the host import handler for this component

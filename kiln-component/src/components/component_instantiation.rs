@@ -1687,11 +1687,15 @@ impl ComponentInstance {
 
                                     },
                                     Err(e) => {
+                                        #[cfg(feature = "tracing")]
+                                        tracing::warn!(core_instance_idx, %e, "Core instance instantiation failed");
                                         // Continue with other modules
                                     },
                                 }
                             },
                             Err(e) => {
+                                #[cfg(feature = "tracing")]
+                                tracing::warn!(module_idx, %e, "Core module load failed");
                             },
                         }
                     },
