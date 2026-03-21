@@ -11100,9 +11100,8 @@ impl StacklessEngine {
         #[cfg(feature = "tracing")]
         trace!(args = ?args, "[CABI_REALLOC] Arguments prepared");
 
-        // Use execute_leaf_function instead of execute() to avoid nested trampolines.
-        // cabi_realloc is guaranteed by canonical ABI to be a leaf function (no calls).
-        let results = self.execute_leaf_function(instance_id, func_idx, args)?;
+        // Use full execute() — cabi_realloc may call the allocator (e.g., __rust_alloc).
+        let results = self.execute(instance_id, func_idx, args)?;
 
         if let Some(Value::I32(ptr)) = results.first() {
             Ok(*ptr as u32)
