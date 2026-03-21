@@ -43,7 +43,7 @@ tracing-subscriber = { version = "0.3", optional = true, default-features = fals
 # No external dependencies - use internal capabilities only
 
 [features]
-default = ["std", "kiln-execution", "component-model", "wasi"]
+default = ["std", "kiln-execution", "component-model", "wasi", "wasi-cli", "wasi-io", "wasi-clocks", "wasi-random", "wasi-filesystem"]
 
 # Binary choice: std OR no_std (no alloc middle ground)
 std = [
