@@ -529,33 +529,53 @@ impl StacklessEngine {
         function: &str,
         args: Vec<Value>,
     ) -> Result<Vec<Value>> {
-        // Dispatch through HostImportHandler trait (same path as call_wasi_function)
-        if let Some(ref mut handler) = self.host_handler {
-            // Get instance and memory for the handler
-            let instance = self.instances.get(&instance_id)
-                .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found for canon-lowered dispatch"))?
-                .clone();
+        use crate::wasip2_host::get_wasi_function_signature;
 
-            let mem_wrapper = instance.memory(0).ok();
-            let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
-                .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
-
-            #[cfg(feature = "tracing")]
-            trace!(
-                interface = %interface,
-                function = %function,
-                args_count = args.len(),
-                has_memory = memory.is_some(),
-                "[CANON_LOWER] Dispatching via HostImportHandler"
-            );
-
-            let results = handler.call_import(interface, function, &args, memory)?;
-            Ok(results)
-        } else {
-            Err(kiln_error::Error::runtime_error(
+        let handler = self.host_handler.as_mut().ok_or_else(|| {
+            kiln_error::Error::runtime_error(
                 "Canon-lowered function called but no host_handler configured. \
                  Use engine.set_host_handler() with a WasiDispatcher to enable WASI support."
-            ))
+            )
+        })?;
+
+        let instance = self.instances.get(&instance_id)
+            .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found for canon-lowered dispatch"))?
+            .clone();
+
+        let mem_wrapper = instance.memory(0).ok();
+        let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+            .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
+
+        // Look up function signature to determine if results use retptr
+        let sig = get_wasi_function_signature(interface, function);
+        let needs_retptr = sig.as_ref().map_or(false, |s| s.result_needs_retptr());
+
+        // Always pass all args to handler (including retptr if present).
+        // Handlers that already handle memory writes (e.g., get-arguments)
+        // will use the retptr themselves. Handlers that return component values
+        // as core Values get automatic retptr lowering below.
+        let results = handler.call_import(interface, function, &args, memory)?;
+
+        if needs_retptr && !results.is_empty() && !args.is_empty() {
+            // Handler returned core values for a retptr-based function.
+            // Write them to memory at the retptr address using canonical ABI layout.
+            let retptr = match args.last() {
+                Some(Value::I32(p)) => *p as u32,
+                _ => return Ok(results), // Can't determine retptr, return as-is
+            };
+
+            if let (Some(mem), Some(sig)) = (memory, &sig) {
+                let mut offset = retptr;
+                crate::wasip2_host::lower_results_to_retptr(
+                    &sig.results, &results, mem, &mut offset,
+                )?;
+            }
+            // retptr-based results consumed — return empty
+            Ok(vec![])
+        } else {
+            // Either simple return (values go on stack) or handler already
+            // wrote to memory (returned empty vec)
+            Ok(results)
         }
     }
 

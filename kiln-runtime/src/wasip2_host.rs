@@ -183,6 +183,52 @@ impl WasiFunctionSignature {
     fn new(params: Vec<WasiComponentType>, results: Vec<WasiComponentType>) -> Self {
         Self { params, results }
     }
+
+    /// Check if the result type requires a retptr (return pointer in memory).
+    ///
+    /// Per canonical ABI: results that don't fit in a single i32/i64 need
+    /// a retptr. This includes: strings, lists, options, results with payloads,
+    /// records, and tuples with complex elements.
+    /// Check if the result type requires a retptr (return pointer in memory).
+    ///
+    /// Per canonical ABI: if the flattened result fits within the max flat
+    /// results limit (1 for core wasm), results go on the stack. Otherwise
+    /// a retptr is used. In practice:
+    /// - Single scalar/handle: on stack
+    /// - option<handle>/result<_, _> with simple payloads: on stack (≤ 2 flat values)
+    /// - Strings, lists, tuples, complex options/results: via retptr
+    pub fn result_needs_retptr(&self) -> bool {
+        if self.results.is_empty() {
+            return false;
+        }
+        // Count total flat values needed for all results
+        let flat_count: u32 = self.results.iter().map(Self::flat_count).sum();
+        // Canonical ABI: max 1 flat result for core wasm → anything > 1 needs retptr
+        flat_count > 1
+    }
+
+    /// Count the number of flat (i32/i64) values a type occupies.
+    fn flat_count(ty: &WasiComponentType) -> u32 {
+        match ty {
+            WasiComponentType::Bool | WasiComponentType::U8 | WasiComponentType::S8 |
+            WasiComponentType::U16 | WasiComponentType::S16 |
+            WasiComponentType::U32 | WasiComponentType::S32 |
+            WasiComponentType::F32 | WasiComponentType::Char |
+            WasiComponentType::Handle => 1,
+            WasiComponentType::U64 | WasiComponentType::S64 |
+            WasiComponentType::F64 => 1, // i64 is 1 flat value
+            WasiComponentType::String | WasiComponentType::ListU8 |
+            WasiComponentType::List(_) => 2, // ptr + len
+            WasiComponentType::Option(inner) => 1 + Self::flat_count(inner), // discriminant + payload
+            WasiComponentType::Result(ok, err) => {
+                let ok_flat = ok.as_ref().map_or(0, |t| Self::flat_count(t));
+                let err_flat = err.as_ref().map_or(0, |t| Self::flat_count(t));
+                1 + core::cmp::max(ok_flat, err_flat) // discriminant + max payload
+            }
+            WasiComponentType::Tuple(types) => types.iter().map(Self::flat_count).sum(),
+            WasiComponentType::Unit => 0,
+        }
+    }
 }
 
 /// Get the function signature for a WASI function.
@@ -865,6 +911,181 @@ fn lower_single_value_with_context(
         }
     }
     Ok(())
+}
+
+/// Lower handler results to memory at retptr using canonical ABI layout.
+///
+/// The handler returns core Values that represent the lowered component result.
+/// This function writes them to memory at the retptr address according to
+/// the canonical ABI memory layout for the result types.
+///
+/// For example, `option<handle>` is lowered as:
+///   - discriminant: i32 at retptr+0 (0=none, 1=some)
+///   - payload: i32 at retptr+4 (handle value, only if some)
+///
+/// For `result<_, stream-error>`:
+///   - discriminant: i32 at retptr+0 (0=ok, 1=err)
+///   - error payload at retptr+4 (if err)
+pub fn lower_results_to_retptr(
+    result_types: &[WasiComponentType],
+    core_values: &[Value],
+    memory: &dyn kiln_foundation::MemoryAccessor,
+    offset: &mut u32,
+) -> Result<()> {
+    let mut val_idx = 0;
+
+    for ty in result_types {
+        lower_type_to_memory(ty, core_values, &mut val_idx, memory, offset)?;
+    }
+    Ok(())
+}
+
+/// Lower a single typed value from core values to memory.
+fn lower_type_to_memory(
+    ty: &WasiComponentType,
+    core_values: &[Value],
+    val_idx: &mut usize,
+    memory: &dyn kiln_foundation::MemoryAccessor,
+    offset: &mut u32,
+) -> Result<()> {
+    match ty {
+        WasiComponentType::Bool | WasiComponentType::U8 | WasiComponentType::S8 |
+        WasiComponentType::U16 | WasiComponentType::S16 |
+        WasiComponentType::U32 | WasiComponentType::S32 |
+        WasiComponentType::Handle => {
+            let val = core_values.get(*val_idx).and_then(|v| match v {
+                Value::I32(i) => Some(*i),
+                _ => None,
+            }).unwrap_or(0);
+            memory.write_bytes(*offset, &val.to_le_bytes())?;
+            *offset += 4;
+            *val_idx += 1;
+        }
+        WasiComponentType::U64 | WasiComponentType::S64 => {
+            let val = core_values.get(*val_idx).and_then(|v| match v {
+                Value::I64(i) => Some(*i),
+                _ => None,
+            }).unwrap_or(0);
+            memory.write_bytes(*offset, &val.to_le_bytes())?;
+            *offset += 8;
+            *val_idx += 1;
+        }
+        WasiComponentType::F32 => {
+            let val = core_values.get(*val_idx).and_then(|v| match v {
+                Value::F32(f) => Some(f.to_bits()),
+                Value::I32(i) => Some(*i as u32),
+                _ => None,
+            }).unwrap_or(0);
+            memory.write_bytes(*offset, &val.to_le_bytes())?;
+            *offset += 4;
+            *val_idx += 1;
+        }
+        WasiComponentType::F64 => {
+            let val = core_values.get(*val_idx).and_then(|v| match v {
+                Value::F64(f) => Some(f.to_bits()),
+                Value::I64(i) => Some(*i as u64),
+                _ => None,
+            }).unwrap_or(0);
+            memory.write_bytes(*offset, &val.to_le_bytes())?;
+            *offset += 8;
+            *val_idx += 1;
+        }
+        WasiComponentType::Char => {
+            let val = core_values.get(*val_idx).and_then(|v| match v {
+                Value::I32(i) => Some(*i),
+                _ => None,
+            }).unwrap_or(0);
+            memory.write_bytes(*offset, &val.to_le_bytes())?;
+            *offset += 4;
+            *val_idx += 1;
+        }
+        WasiComponentType::String | WasiComponentType::ListU8 |
+        WasiComponentType::List(_) => {
+            // ptr (i32) + len (i32)
+            let ptr = core_values.get(*val_idx).and_then(|v| match v {
+                Value::I32(i) => Some(*i),
+                _ => None,
+            }).unwrap_or(0);
+            let len = core_values.get(*val_idx + 1).and_then(|v| match v {
+                Value::I32(i) => Some(*i),
+                _ => None,
+            }).unwrap_or(0);
+            memory.write_bytes(*offset, &ptr.to_le_bytes())?;
+            memory.write_bytes(*offset + 4, &len.to_le_bytes())?;
+            *offset += 8;
+            *val_idx += 2;
+        }
+        WasiComponentType::Option(inner_ty) => {
+            // discriminant (i32) + optional payload
+            let disc = core_values.get(*val_idx).and_then(|v| match v {
+                Value::I32(i) => Some(*i),
+                _ => None,
+            }).unwrap_or(0);
+            memory.write_bytes(*offset, &disc.to_le_bytes())?;
+            *offset += 4;
+            *val_idx += 1;
+            if disc != 0 {
+                // Some — lower payload
+                lower_type_to_memory(inner_ty, core_values, val_idx, memory, offset)?;
+            } else {
+                // None — skip payload space (advance offset by payload size)
+                *offset += canonical_flat_size(inner_ty);
+            }
+        }
+        WasiComponentType::Result(ok_ty, err_ty) => {
+            // discriminant (i32) + payload
+            let disc = core_values.get(*val_idx).and_then(|v| match v {
+                Value::I32(i) => Some(*i),
+                _ => None,
+            }).unwrap_or(0);
+            memory.write_bytes(*offset, &disc.to_le_bytes())?;
+            *offset += 4;
+            *val_idx += 1;
+            if disc == 0 {
+                // Ok
+                if let Some(ok) = ok_ty {
+                    lower_type_to_memory(ok, core_values, val_idx, memory, offset)?;
+                }
+            } else {
+                // Err
+                if let Some(err) = err_ty {
+                    lower_type_to_memory(err, core_values, val_idx, memory, offset)?;
+                }
+            }
+        }
+        WasiComponentType::Tuple(types) => {
+            for t in types {
+                lower_type_to_memory(t, core_values, val_idx, memory, offset)?;
+            }
+        }
+        WasiComponentType::Unit => {
+            // Unit has no representation — skip
+        }
+    }
+    Ok(())
+}
+
+/// Get the flat size in bytes of a canonical ABI type in memory.
+fn canonical_flat_size(ty: &WasiComponentType) -> u32 {
+    match ty {
+        WasiComponentType::Bool | WasiComponentType::U8 | WasiComponentType::S8 |
+        WasiComponentType::U16 | WasiComponentType::S16 |
+        WasiComponentType::U32 | WasiComponentType::S32 |
+        WasiComponentType::Handle | WasiComponentType::F32 |
+        WasiComponentType::Char => 4,
+        WasiComponentType::U64 | WasiComponentType::S64 |
+        WasiComponentType::F64 => 8,
+        WasiComponentType::String | WasiComponentType::ListU8 |
+        WasiComponentType::List(_) => 8, // ptr + len
+        WasiComponentType::Option(inner) => 4 + canonical_flat_size(inner),
+        WasiComponentType::Result(ok, err) => {
+            let ok_size = ok.as_ref().map_or(0, |t| canonical_flat_size(t));
+            let err_size = err.as_ref().map_or(0, |t| canonical_flat_size(t));
+            4 + core::cmp::max(ok_size, err_size)
+        }
+        WasiComponentType::Tuple(types) => types.iter().map(canonical_flat_size).sum(),
+        WasiComponentType::Unit => 0,
+    }
 }
 
 /// Write a single element to memory at the given offset
