@@ -199,6 +199,12 @@ pub trait CapabilityEngine: Send + Sync {
         func: &str,
         args: &[Value],
     ) -> Result<Vec<Value>>;
+
+    /// Get the ordered list of function imports from a loaded module.
+    ///
+    /// Returns `(module_name, field_name)` for each function import in order.
+    /// The index in this list corresponds to the function import index in the module.
+    fn get_module_function_imports(&self, module_handle: ModuleHandle) -> Vec<(String, String)>;
 }
 
 /// Maximum number of modules and instances
@@ -991,6 +997,20 @@ impl CapabilityEngine for CapabilityAwareEngine {
         trace!(results_len = results.len(), "[CAP_ENGINE] Execution completed");
 
         Ok(results)
+    }
+
+    fn get_module_function_imports(&self, module_handle: ModuleHandle) -> Vec<(String, String)> {
+        if let Some(module) = self.modules.get(&module_handle) {
+            let mut func_imports = Vec::new();
+            for (i, (module_name, field_name)) in module.import_order.iter().enumerate() {
+                if let Some(crate::module::RuntimeImportDesc::Function(_)) = module.import_types.get(i) {
+                    func_imports.push((module_name.clone(), field_name.clone()));
+                }
+            }
+            func_imports
+        } else {
+            Vec::new()
+        }
     }
 }
 
