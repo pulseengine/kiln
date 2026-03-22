@@ -210,6 +210,18 @@ impl GcStructRef {
         Self(Arc::new(Mutex::new(inner)))
     }
 
+    /// Create a sentinel value used in WAST test comparison.
+    /// Matches any non-null struct reference.
+    pub fn sentinel() -> Self {
+        Self::new(StructRef::new(u32::MAX, DefaultMemoryProvider::default())
+            .unwrap_or_else(|_| StructRef { type_index: u32::MAX, fields: Default::default() }))
+    }
+
+    /// Check if this is a sentinel (used for "any non-null" matching).
+    pub fn is_sentinel(&self) -> bool {
+        self.type_index() == u32::MAX
+    }
+
     /// Acquire the lock (abstracts over std vs no_std Mutex API differences)
     #[cfg(feature = "std")]
     fn lock_inner(&self) -> std::sync::MutexGuard<'_, StructRef<DefaultMemoryProvider>> {
@@ -276,6 +288,18 @@ impl GcArrayRef {
     /// Create a new GC array reference wrapping the given ArrayRef
     pub fn new(inner: ArrayRef<DefaultMemoryProvider>) -> Self {
         Self(Arc::new(Mutex::new(inner)))
+    }
+
+    /// Create a sentinel value used in WAST test comparison.
+    /// Matches any non-null array reference.
+    pub fn sentinel() -> Self {
+        Self::new(ArrayRef::new(u32::MAX, DefaultMemoryProvider::default())
+            .unwrap_or_else(|_| ArrayRef { type_index: u32::MAX, elements: Default::default() }))
+    }
+
+    /// Check if this is a sentinel (used for "any non-null" matching).
+    pub fn is_sentinel(&self) -> bool {
+        self.type_index() == u32::MAX
     }
 
     /// Acquire the lock (abstracts over std vs no_std Mutex API differences)

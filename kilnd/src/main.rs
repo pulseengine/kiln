@@ -119,6 +119,9 @@ pub struct KilndConfig {
     /// Arguments to pass to WASI program
     #[cfg(feature = "wasi")]
     pub wasi_args: Vec<String>,
+    /// Filesystem paths to preopen for WASI access
+    #[cfg(feature = "wasi")]
+    pub wasi_fs_paths: Vec<String>,
     /// Enable component model support
     #[cfg(feature = "component-model")]
     pub enable_component_model: bool,
@@ -153,6 +156,8 @@ impl Default for KilndConfig {
             wasi_env_vars: Vec::new(),
             #[cfg(feature = "wasi")]
             wasi_args: Vec::new(),
+            #[cfg(feature = "wasi")]
+            wasi_fs_paths: Vec::new(),
             #[cfg(feature = "component-model")]
             enable_component_model: true,
             #[cfg(feature = "component-model")]
@@ -490,7 +495,11 @@ impl KilndEngine {
                 {
                     if self.config.enable_wasi {
                         match kiln_wasi::WasiDispatcher::with_defaults() {
-                            Ok(dispatcher) => {
+                            Ok(mut dispatcher) => {
+                                // Add filesystem preopens from CLI args
+                                for path in &self.config.wasi_fs_paths {
+                                    let _ = dispatcher.add_preopen(path);
+                                }
                                 let _ = self.logger.handle_minimal_log(
                                     LogLevel::Info,
                                     "WASI dispatcher connected to component instance"
@@ -646,7 +655,11 @@ impl KilndEngine {
             #[cfg(feature = "wasi")]
             if self.config.enable_wasi {
                 match WasiDispatcher::with_defaults() {
-                    Ok(dispatcher) => {
+                    Ok(mut dispatcher) => {
+                        // Add filesystem preopens from CLI args
+                        for path in &self.config.wasi_fs_paths {
+                            let _ = dispatcher.add_preopen(path);
+                        }
                         engine.set_host_handler(Box::new(dispatcher));
                         let _ = self.logger.handle_minimal_log(LogLevel::Info, "WASI dispatcher connected");
                     }
@@ -985,7 +998,7 @@ impl SimpleArgs {
                     {
                         println!("  --wasi               Enable WASI support");
                         println!("  --wasi-version <v>   WASI version (preview2)");
-                        println!("  --wasi-fs <path>     Allow filesystem access to path");
+                        println!("  --wasi-fs <path>     Allow filesystem access to path (alias: --dir)");
                         println!("  --wasi-env <var>     Expose environment variable to WASI");
                         println!("  --wasi-arg <arg>     Pass argument to WASI program");
                     }
@@ -1039,7 +1052,7 @@ impl SimpleArgs {
                     }
                 },
                 #[cfg(feature = "wasi")]
-                "--wasi-fs" => {
+                "--wasi-fs" | "--dir" => {
                     i += 1;
                     if i < args.len() {
                         result.wasi_fs_paths.push(args[i].clone());
@@ -1199,6 +1212,7 @@ fn main_with_stack() -> Result<()> {
             config.wasi_capabilities = Some(capabilities);
             config.wasi_env_vars = args.wasi_env_vars.clone();
             config.wasi_args = args.wasi_args.clone();
+            config.wasi_fs_paths = args.wasi_fs_paths.clone();
 
             println!("✓ WASI enabled:");
             println!("  - Version: {:?}", config.wasi_version);

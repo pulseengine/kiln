@@ -169,7 +169,11 @@ pub fn convert_wast_ret_core_to_value(ret: &WastRetCore) -> Result<Value> {
         },
         WastRetCore::RefExtern(x) => match x {
             Some(idx) => Ok(Value::ExternRef(Some(ExternRef { index: *idx as u32 }))),
-            None => Ok(Value::ExternRef(None)),
+            None => {
+                // (ref.extern) without value means "any non-null externref"
+                // Use u32::MAX as sentinel
+                Ok(Value::ExternRef(Some(ExternRef { index: u32::MAX })))
+            },
         },
         WastRetCore::RefHost(x) => Ok(Value::ExternRef(Some(ExternRef { index: *x as u32 }))),
         WastRetCore::RefFunc(x) => {
@@ -195,6 +199,23 @@ pub fn convert_wast_ret_core_to_value(ret: &WastRetCore) -> Result<Value> {
             // (ref.i31) - any non-null i31 reference
             // Use a sentinel value to indicate "any non-null i31ref"
             Ok(Value::I31Ref(Some(i32::MAX)))
+        },
+        WastRetCore::RefArray => {
+            // (ref.array) - any non-null array reference
+            Ok(Value::ArrayRef(Some(kiln_foundation::values::GcArrayRef::sentinel())))
+        },
+        WastRetCore::RefStruct => {
+            // (ref.struct) - any non-null struct reference
+            Ok(Value::StructRef(Some(kiln_foundation::values::GcStructRef::sentinel())))
+        },
+        WastRetCore::RefAny => {
+            // (ref.any) - any non-null reference (anyref)
+            // Use I32 sentinel — any non-null GC ref matches
+            Ok(Value::I32(i32::MAX))
+        },
+        WastRetCore::RefEq => {
+            // (ref.eq) - any non-null eq reference
+            Ok(Value::I32(i32::MAX))
         },
         _ => {
             // Handle other reference types with default FuncRef
@@ -385,8 +406,23 @@ pub fn values_equal(actual: &Value, expected: &Value) -> bool {
         (Value::I31Ref(Some(_)), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => true,
         (Value::I31Ref(None), Value::I31Ref(Some(sentinel))) if *sentinel == i32::MAX => false,
         (Value::I31Ref(a), Value::I31Ref(b)) => a == b,
-        (Value::StructRef(a), Value::StructRef(b)) => a == b,
+        // ArrayRef: sentinel means "any non-null arrayref" (from (ref.array) in WAST)
+        (Value::ArrayRef(Some(_)), Value::ArrayRef(Some(sentinel))) if sentinel.is_sentinel() => true,
+        (Value::ArrayRef(None), Value::ArrayRef(Some(sentinel))) if sentinel.is_sentinel() => false,
         (Value::ArrayRef(a), Value::ArrayRef(b)) => a == b,
+        // StructRef: sentinel means "any non-null structref" (from (ref.struct) in WAST)
+        (Value::StructRef(Some(_)), Value::StructRef(Some(sentinel))) if sentinel.is_sentinel() => true,
+        (Value::StructRef(None), Value::StructRef(Some(sentinel))) if sentinel.is_sentinel() => false,
+        (Value::StructRef(a), Value::StructRef(b)) => a == b,
+        // Any non-null GC ref matches (ref.any) sentinel (I32(MAX))
+        (Value::ArrayRef(Some(_)), Value::I32(sentinel)) if *sentinel == i32::MAX => true,
+        (Value::StructRef(Some(_)), Value::I32(sentinel)) if *sentinel == i32::MAX => true,
+        (Value::I31Ref(Some(_)), Value::I32(sentinel)) if *sentinel == i32::MAX => true,
+        (Value::ExternRef(Some(_)), Value::I32(sentinel)) if *sentinel == i32::MAX => true,
+        // Any non-null GC ref matches (ref.extern) sentinel after extern.convert_any
+        (Value::I31Ref(Some(_)), Value::ExternRef(Some(ExternRef { index: u32::MAX }))) => true,
+        (Value::ArrayRef(Some(_)), Value::ExternRef(Some(ExternRef { index: u32::MAX }))) => true,
+        (Value::StructRef(Some(_)), Value::ExternRef(Some(ExternRef { index: u32::MAX }))) => true,
         // Cross-type null reference comparisons for WAST testing
         // In GC spec, (ref.null) without type is polymorphic and matches any null reference
         // Also handle subtyping: none ⊂ any, nofunc ⊂ func, noextern ⊂ extern, noexn ⊂ exn
