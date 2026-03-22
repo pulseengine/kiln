@@ -109,9 +109,6 @@ pub mod value_compat;
 pub mod dispatcher;
 #[cfg(feature = "preview2")]
 pub use dispatcher::WasiDispatcher;
-// Re-export types for two-phase dispatch protocol
-#[cfg(feature = "preview2")]
-pub use dispatcher::{AllocationRequest, DispatchResult};
 // Re-export global args/env functions for use by kilnd
 #[cfg(all(feature = "preview2", feature = "std"))]
 pub use dispatcher::{

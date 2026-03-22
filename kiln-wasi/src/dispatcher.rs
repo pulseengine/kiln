@@ -221,35 +221,6 @@ pub struct WasiDispatcher {
     preopens: Vec<(u32, PathBuf)>,
 }
 
-/// Describes memory that needs to be allocated via `cabi_realloc`
-/// before a WASI function can complete its return value.
-#[derive(Debug, Clone)]
-pub struct AllocationRequest {
-    /// Total size in bytes to allocate
-    pub size: u32,
-    /// Required alignment (typically 4 or 8)
-    pub align: u32,
-    /// Description for debugging
-    pub purpose: &'static str,
-}
-
-/// Result of a WASI dispatch that may need allocation
-#[derive(Debug)]
-pub enum DispatchResult {
-    /// Dispatch completed successfully with these return values
-    Complete(Vec<kiln_foundation::values::Value>),
-    /// Dispatch needs memory allocation before it can complete
-    /// Returns (allocation request, continuation data)
-    NeedsAllocation {
-        /// The allocation request specifying memory needed
-        request: AllocationRequest,
-        /// The args to return (we'll write them once memory is allocated)
-        args_to_write: Vec<String>,
-        /// The return pointer where we'll write (`list_ptr`, len)
-        retptr: u32,
-    },
-}
-
 impl WasiDispatcher {
     /// Create a new WASI dispatcher with the given capabilities
     ///
@@ -2090,33 +2061,6 @@ impl WasiDispatcher {
                 Ok(vec![CoreValue::I64(val as i64)])
             }
 
-            // wasi:random - core dispatch
-            #[cfg(feature = "wasi-random")]
-            ("wasi:random/random", "get-random-bytes") => {
-                use kiln_platform::random::PlatformRandom;
-                // Args: len (i64 or i32), retptr (i32)
-                let len = match args.first() {
-                    Some(CoreValue::I64(v)) => *v as usize,
-                    Some(CoreValue::I32(v)) => *v as usize,
-                    _ => return Err(Error::wasi_invalid_argument("get-random-bytes: missing length")),
-                };
-                let retptr = match args.get(1) {
-                    Some(CoreValue::I32(v)) => *v as u32,
-                    _ => return Err(Error::wasi_invalid_argument("get-random-bytes: missing retptr")),
-                };
-                let mut bytes = vec![0u8; len];
-                PlatformRandom::get_secure_bytes(&mut bytes)
-                    .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
-                if let Some(mem) = memory {
-                    // Write data directly at retptr+8, then set list ptr/len at retptr
-                    let data_ptr = retptr + 8;
-                    mem.write_bytes(data_ptr, &bytes)?;
-                    mem.write_bytes(retptr, &data_ptr.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &(len as u32).to_le_bytes())?;
-                }
-                Ok(vec![])
-            }
-
             #[cfg(feature = "wasi-random")]
             ("wasi:random/insecure-seed", "insecure-seed") => {
                 use kiln_platform::random::PlatformRandom;
@@ -2126,16 +2070,6 @@ impl WasiDispatcher {
                 let v0 = u64::from_le_bytes(bytes[..8].try_into().unwrap());
                 let v1 = u64::from_le_bytes(bytes[8..].try_into().unwrap());
                 Ok(vec![CoreValue::I64(v0 as i64), CoreValue::I64(v1 as i64)])
-            }
-
-            // wasi:cli/exit - core dispatch
-            ("wasi:cli/exit", "exit") => {
-                Ok(vec![])
-            }
-
-            // wasi:io/error - core dispatch
-            ("wasi:io/error", "[resource-drop]error") => {
-                Ok(vec![])
             }
 
             // ================================================================
@@ -2395,10 +2329,6 @@ impl WasiDispatcher {
                 Ok(vec![CoreValue::I32(handle as i32)])
             }
 
-            ("wasi:io/streams", "[resource-drop]input-stream") => {
-                Ok(vec![])
-            }
-
             // wasi:filesystem/preopens - core dispatch
             #[cfg(feature = "wasi-filesystem")]
             ("wasi:filesystem/preopens", "get-directories") => {
@@ -2439,339 +2369,268 @@ impl WasiDispatcher {
                 Ok(vec![])
             }
 
-            _ => {
-                // Fallback: lift core values to component values, delegate to
-                // dispatch() which has full WASI handler coverage (filesystem, etc.),
-                // then lower results back to core values.
-                self.dispatch_core_via_lift_lower(interface, function, args, memory)
-            }
-        }
-    }
-
-    /// Lift core args → component values, dispatch, lower results.
-    ///
-    /// This bridges dispatch_core (used by the engine) to dispatch()
-    /// (which has full WASI handler coverage). Enables all handlers in
-    /// dispatch() to be called from core WASM without duplicating them.
-    fn dispatch_core_via_lift_lower(
-        &mut self,
-        interface: &str,
-        function: &str,
-        args: &[kiln_foundation::values::Value],
-        _memory: Option<&dyn MemoryAccessor>,
-    ) -> Result<Vec<kiln_foundation::values::Value>> {
-        use kiln_foundation::values::Value as CoreValue;
-        use crate::value_compat::Value as WasiValue;
-
-        // Convert core values to WASI compat values
-        let wasi_args: Vec<WasiValue> = args.iter().map(|v| match v {
-            CoreValue::I32(n) => WasiValue::S32(*n),
-            CoreValue::I64(n) => WasiValue::S64(*n),
-            CoreValue::F32(f) => WasiValue::F32(f.to_f32()),
-            CoreValue::F64(f) => WasiValue::F64(f.to_f64()),
-            _ => WasiValue::S32(0),
-        }).collect();
-
-        // Dispatch through the full handler set
-        let wasi_results = self.dispatch(interface, function, &wasi_args)?;
-
-        // Convert results back to core values
-        let core_results: Vec<CoreValue> = wasi_results.iter().map(|v| match v {
-            WasiValue::S32(n) => CoreValue::I32(*n),
-            WasiValue::S64(n) => CoreValue::I64(*n),
-            WasiValue::U32(n) => CoreValue::I32(*n as i32),
-            WasiValue::U64(n) => CoreValue::I64(*n as i64),
-            WasiValue::Bool(b) => CoreValue::I32(if *b { 1 } else { 0 }),
-            _ => CoreValue::I32(0),
-        }).collect();
-
-        Ok(core_results)
-    }
-
-    /// Two-phase dispatch for functions that may need memory allocation.
-    ///
-    /// This method implements the spec-compliant approach where:
-    /// 1. If the function doesn't need allocation, it completes immediately
-    /// 2. If allocation is needed (e.g., returning `list<string>`), it returns
-    ///    a `NeedsAllocation` result with the size/alignment requirements
-    /// 3. The caller then calls `cabi_realloc`, then calls `complete_allocation`
-    ///
-    /// This allows the HOST to call `cabi_realloc` as required by the Canonical ABI.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the interface/function is unknown or unsupported.
-    pub fn dispatch_core_v2(
-        &mut self,
-        interface: &str,
-        function: &str,
-        args: &[kiln_foundation::values::Value],
-        _memory: Option<&mut [u8]>,
-    ) -> Result<DispatchResult> {
-        use kiln_foundation::values::Value as CoreValue;
-
-        let base_interface = Self::strip_version(interface);
-
-        match (base_interface, function) {
-            // Simple functions that complete immediately
-            ("wasi:cli/stdout", "get-stdout") => {
-                // Preview2: dynamically allocate output-stream resource
-                let handle = self.resource_manager.create_output_stream("stdout")?;
-                Ok(DispatchResult::Complete(vec![CoreValue::I32(handle as i32)]))
-            }
-
-            ("wasi:cli/stderr", "get-stderr") => {
-                // Preview2: dynamically allocate output-stream resource
-                let handle = self.resource_manager.create_output_stream("stderr")?;
-                Ok(DispatchResult::Complete(vec![CoreValue::I32(handle as i32)]))
-            }
-
-            ("wasi:cli/stdin", "get-stdin") => {
-                // Preview2: dynamically allocate input-stream resource
-                let handle = self.resource_manager.create_input_stream("stdin")?;
-                Ok(DispatchResult::Complete(vec![CoreValue::I32(handle as i32)]))
-            }
-
-            // Terminal detection interfaces - C/C++ runtime needs these
-            ("wasi:cli/terminal-stdin", "get-terminal-stdin") => {
-                // Return option<terminal-input> - None means not a terminal
-                Ok(DispatchResult::Complete(vec![CoreValue::I32(0)]))
-            }
-
-            ("wasi:cli/terminal-stdout", "get-terminal-stdout") => {
-                // Return option<terminal-output> - None means not a terminal
-                Ok(DispatchResult::Complete(vec![CoreValue::I32(0)]))
-            }
-
-            ("wasi:cli/terminal-stderr", "get-terminal-stderr") => {
-                // Return option<terminal-output> - None means not a terminal
-                Ok(DispatchResult::Complete(vec![CoreValue::I32(0)]))
-            }
-
-            // Poll interfaces - async I/O support
-            ("wasi:io/poll", "poll") => {
-                // For synchronous execution, complete immediately
-                Ok(DispatchResult::Complete(vec![]))
-            }
-
-            ("wasi:io/poll", "[method]pollable.block" | "pollable.block") => {
-                // Block until ready - for sync, return immediately
-                Ok(DispatchResult::Complete(vec![]))
-            }
-
-            ("wasi:io/poll", "[resource-drop]pollable") => {
-                // Resource drop - no action needed
-                Ok(DispatchResult::Complete(vec![]))
-            }
-
-            // Stream operations
-            ("wasi:io/streams", "[method]output-stream.check-write" | "output-stream.check-write") => {
-                // Return large capacity to indicate ready for writes
-                Ok(DispatchResult::Complete(vec![CoreValue::I64(65536)]))
-            }
-
-            ("wasi:io/streams", "[method]output-stream.subscribe" | "output-stream.subscribe") => {
-                // Return a pollable handle
-                Ok(DispatchResult::Complete(vec![CoreValue::I32(0)]))
-            }
-
-            // get-arguments needs allocation for list<string>
-            ("wasi:cli/environment", "get-arguments") => {
-                // Get args - prefer local args, fall back to global args
+            // ================================================================
+            // wasi:cli/environment - initial-cwd (core dispatch)
+            // ================================================================
+            ("wasi:cli/environment", "initial-cwd") => {
+                // Return the actual current working directory
+                // Core lowering: option<string> = (discriminant, ptr, len) via retptr
                 #[cfg(feature = "std")]
-                let args_to_use: Vec<String> = if self.args.is_empty() {
-                    get_global_wasi_args()
-                } else {
-                    self.args.clone()
-                };
-                #[cfg(not(feature = "std"))]
-                let args_to_use = self.args.clone();
-
-                // Extract return pointer from args
-                let retptr = match args.first() {
-                    Some(CoreValue::I32(ptr)) => *ptr as u32,
-                    _ => {
-                        #[cfg(feature = "tracing")]
-                        warn!("get-arguments v2: no return pointer provided");
-                        return Ok(DispatchResult::Complete(vec![]));
+                {
+                    let cwd_opt = std::env::current_dir().ok();
+                    if let Some(mem) = memory {
+                        let retptr = match args.first() {
+                            Some(CoreValue::I32(p)) => *p as u32,
+                            _ => return Ok(vec![CoreValue::I32(0)]),  // None
+                        };
+                        if let Some(cwd) = cwd_opt {
+                            let cwd_str = cwd.to_string_lossy();
+                            let bytes = cwd_str.as_bytes();
+                            // Write string data after retptr area
+                            let data_ptr = retptr + 12;
+                            mem.write_bytes(data_ptr, bytes)?;
+                            // Write Some discriminant (1), ptr, len
+                            mem.write_bytes(retptr, &1u32.to_le_bytes())?;
+                            mem.write_bytes(retptr + 4, &data_ptr.to_le_bytes())?;
+                            mem.write_bytes(retptr + 8, &(bytes.len() as u32).to_le_bytes())?;
+                        } else {
+                            // Write None discriminant (0)
+                            mem.write_bytes(retptr, &0u32.to_le_bytes())?;
+                        }
+                        Ok(vec![])
+                    } else {
+                        // No memory, return None discriminant
+                        Ok(vec![CoreValue::I32(0)])
                     }
-                };
-
-                #[cfg(feature = "tracing")]
-                trace!(
-                    arg_count = args_to_use.len(),
-                    retptr = format_args!("0x{:x}", retptr),
-                    has_alloc = self.args_alloc.is_some(),
-                    "get-arguments v2 dispatch"
-                );
-
-                // If no args, complete immediately with empty list
-                if args_to_use.is_empty() {
-                    return Ok(DispatchResult::Complete(vec![]));
                 }
-
-                // If we already have allocated memory, we can complete
-                if self.args_alloc.is_some() {
-                    return Ok(DispatchResult::Complete(vec![]));
+                #[cfg(not(feature = "std"))]
+                {
+                    // No cwd in no_std - return None
+                    Ok(vec![CoreValue::I32(0)])
                 }
-
-                // Calculate required allocation size:
-                // - list array: args.len() * 8 bytes (ptr + len for each string)
-                // - string data: sum of all string bytes, each aligned to 8 bytes
-                let list_size = args_to_use.len() * 8;
-                let mut string_total: usize = 0;
-                for arg in &args_to_use {
-                    let len = arg.len();
-                    // Align each string to 8 bytes
-                    string_total += (len + 7) & !7;
-                }
-                let total_size = list_size + string_total;
-
-                #[cfg(feature = "tracing")]
-                trace!(
-                    list_size = list_size,
-                    string_total = string_total,
-                    total = total_size,
-                    "get-arguments v2 needs allocation"
-                );
-
-                Ok(DispatchResult::NeedsAllocation {
-                    request: AllocationRequest {
-                        size: total_size as u32,
-                        align: 8,
-                        purpose: "list<string> for get-arguments",
-                    },
-                    args_to_write: args_to_use,
-                    retptr,
-                })
             }
 
-            // All other functions - delegate to regular dispatch_core
-            _ => {
-                // For functions that don't need allocation, use regular dispatch
-                // This is a fallback - most functions complete immediately
-                #[cfg(feature = "tracing")]
-                trace!(interface = %base_interface, function = %function, "delegating to dispatch_core");
+            // ================================================================
+            // wasi:io/error - error.to-debug-string (core dispatch)
+            // ================================================================
+            ("wasi:io/error", "[method]error.to-debug-string") => {
+                // Returns a debug string for the error resource
+                // Core lowering: string = (ptr, len) via retptr
+                if let Some(mem) = memory {
+                    let retptr = match args.get(1) {
+                        Some(CoreValue::I32(p)) => *p as u32,
+                        _ => {
+                            // No retptr, return minimal string info
+                            return Ok(vec![CoreValue::I32(0), CoreValue::I32(0)]);
+                        }
+                    };
+                    let debug_str = b"error";
+                    let data_ptr = retptr + 8;
+                    mem.write_bytes(data_ptr, debug_str)?;
+                    mem.write_bytes(retptr, &data_ptr.to_le_bytes())?;
+                    mem.write_bytes(retptr + 4, &(debug_str.len() as u32).to_le_bytes())?;
+                    Ok(vec![])
+                } else {
+                    Ok(vec![CoreValue::I32(0), CoreValue::I32(0)])
+                }
+            }
 
-                // We can't forward memory here since we consumed it, so return error for now
-                // In practice, this path shouldn't be hit for functions needing memory
+            // ================================================================
+            // wasi:clocks/monotonic-clock - resolution (core dispatch)
+            // ================================================================
+            #[cfg(feature = "wasi-clocks")]
+            ("wasi:clocks/monotonic-clock", "resolution") => {
+                if !self.capabilities.clocks.monotonic_access {
+                    return Err(Error::wasi_permission_denied("Monotonic clock access denied"));
+                }
+                // Monotonic clock resolution is 1 nanosecond
+                Ok(vec![CoreValue::I64(1)])
+            }
+
+            // ================================================================
+            // wasi:random/insecure - insecure random (core dispatch)
+            // ================================================================
+            #[cfg(feature = "wasi-random")]
+            ("wasi:random/insecure", "get-insecure-random-bytes") => {
+                use kiln_platform::random::PlatformRandom;
+
+                if !self.capabilities.random.pseudo_random {
+                    return Err(Error::wasi_permission_denied("Pseudo-random access denied"));
+                }
+
+                // Args: len (i64 or i32), retptr (i32)
+                let len = match args.first() {
+                    Some(CoreValue::I64(v)) => *v as usize,
+                    Some(CoreValue::I32(v)) => *v as usize,
+                    _ => return Err(Error::wasi_invalid_argument("get-insecure-random-bytes: missing length")),
+                };
+                let retptr = match args.get(1) {
+                    Some(CoreValue::I32(v)) => *v as u32,
+                    _ => return Err(Error::wasi_invalid_argument("get-insecure-random-bytes: missing retptr")),
+                };
+                let len = len.min(1024 * 1024);
+                let mut bytes = vec![0u8; len];
+                PlatformRandom::get_secure_bytes(&mut bytes)
+                    .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
+                if let Some(mem) = memory {
+                    let data_ptr = retptr + 8;
+                    mem.write_bytes(data_ptr, &bytes)?;
+                    mem.write_bytes(retptr, &data_ptr.to_le_bytes())?;
+                    mem.write_bytes(retptr + 4, &(len as u32).to_le_bytes())?;
+                }
+                Ok(vec![])
+            }
+
+            #[cfg(feature = "wasi-random")]
+            ("wasi:random/insecure", "get-insecure-random-u64") => {
+                use kiln_platform::random::PlatformRandom;
+
+                if !self.capabilities.random.pseudo_random {
+                    return Err(Error::wasi_permission_denied("Pseudo-random access denied"));
+                }
+
+                let mut bytes = [0u8; 8];
+                PlatformRandom::get_secure_bytes(&mut bytes)
+                    .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
+                let val = u64::from_le_bytes(bytes);
+                Ok(vec![CoreValue::I64(val as i64)])
+            }
+
+            // ================================================================
+            // wasi:sockets/* - Socket interfaces (core dispatch)
+            // ================================================================
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/tcp", "create-tcp-socket") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_tcp_create(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/tcp", "start-connect") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_tcp_connect(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/tcp", "start-bind") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_tcp_bind(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/tcp", "listen") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_tcp_listen(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/tcp", "accept") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_tcp_accept(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/tcp", "send") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_tcp_send(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/tcp", "receive") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_tcp_recv(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/tcp", "shutdown") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_tcp_shutdown(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/udp", "create-udp-socket") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_udp_create(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/udp", "start-bind") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_udp_bind(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/udp", "send") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_udp_send(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/udp", "receive") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_udp_recv(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+            ("wasi:sockets/ip-name-lookup", "resolve-addresses") => {
+                let wasi_args = Self::core_to_component_values(args);
+                let results = wasi_resolve_addresses(&mut () as &mut dyn core::any::Any, wasi_args)?;
+                Ok(Self::component_to_core_values(&results))
+            }
+
+            // ================================================================
+            // Unknown function - return error
+            // ================================================================
+            _ => {
+                #[cfg(feature = "tracing")]
+                warn!(interface = %base_interface, function = %function, "unknown WASI function in dispatch_core");
+
                 Err(Error::runtime_not_implemented(
-                    "dispatch_core_v2 fallback not implemented for this function"
+                    "Unknown WASI function"
                 ))
             }
         }
     }
 
-    /// Complete an allocation request by writing data to allocated memory.
-    ///
-    /// Called after the caller has used `cabi_realloc` to allocate memory.
-    /// Writes the `list<string>` data to the allocated region and updates
-    /// the return pointer.
-    ///
-    /// # Arguments
-    /// * `allocated_ptr` - Pointer returned by `cabi_realloc`
-    /// * `args_to_write` - The strings to write
-    /// * `retptr` - Where to write `(list_ptr, len)`
-    /// * `memory` - Linear memory to write to
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the memory write fails (e.g., out of bounds).
-    pub fn complete_allocation(
-        &mut self,
-        allocated_ptr: u32,
-        args_to_write: &[String],
-        retptr: u32,
-        memory: &mut [u8],
-    ) -> Result<()> {
-        #[cfg(feature = "tracing")]
-        trace!(
-            arg_count = args_to_write.len(),
-            ptr = format_args!("0x{:x}", allocated_ptr),
-            retptr = format_args!("0x{:x}", retptr),
-            "completing allocation"
-        );
+    /// Convert core values to component values for delegating to preview2 functions
+    #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+    fn core_to_component_values(args: &[kiln_foundation::values::Value]) -> Vec<Value> {
+        use kiln_foundation::values::Value as CoreValue;
 
-        if args_to_write.is_empty() {
-            // Write empty list
-            let retptr_usize = retptr as usize;
-            if retptr_usize + 8 <= memory.len() {
-                memory[retptr_usize..retptr_usize + 4].copy_from_slice(&0u32.to_le_bytes());
-                memory[retptr_usize + 4..retptr_usize + 8].copy_from_slice(&0u32.to_le_bytes());
-            }
-            return Ok(());
-        }
+        args.iter().map(|v| match v {
+            CoreValue::I32(n) => Value::S32(*n),
+            CoreValue::I64(n) => Value::S64(*n),
+            CoreValue::F32(f) => Value::F32(f.to_f32()),
+            CoreValue::F64(f) => Value::F64(f.to_f64()),
+            _ => Value::S32(0),
+        }).collect()
+    }
 
-        // Layout: [list_ptr_array][string_data...]
-        // list_ptr_array: N * 8 bytes (ptr, len pairs)
-        // string_data: strings packed with 8-byte alignment
-        let list_ptr = allocated_ptr;
-        let list_array_size = args_to_write.len() * 8;
-        let mut string_data_ptr = allocated_ptr + list_array_size as u32;
+    /// Convert component values back to core values
+    #[cfg(all(feature = "wasi-sockets", feature = "std"))]
+    fn component_to_core_values(results: &[Value]) -> Vec<kiln_foundation::values::Value> {
+        use kiln_foundation::values::Value as CoreValue;
 
-        // First pass: write string data and collect pointers
-        let mut string_entries: Vec<(u32, u32)> = Vec::new();
-        for arg in args_to_write {
-            let bytes = arg.as_bytes();
-            let len = bytes.len() as u32;
-
-            // Bounds check
-            if (string_data_ptr as usize + bytes.len()) > memory.len() {
-                return Err(Error::memory_out_of_bounds(
-                    "Not enough memory for string data"
-                ));
-            }
-
-            // Write string bytes
-            memory[string_data_ptr as usize..(string_data_ptr as usize + bytes.len())]
-                .copy_from_slice(bytes);
-
-            #[cfg(feature = "tracing")]
-            trace!(
-                arg = %arg,
-                byte_count = bytes.len(),
-                addr = format_args!("0x{:x}", string_data_ptr),
-                "wrote string (complete)"
-            );
-
-            string_entries.push((string_data_ptr, len));
-            string_data_ptr += len;
-            // Align to 8 bytes
-            string_data_ptr = (string_data_ptr + 7) & !7;
-        }
-
-        // Second pass: write (ptr, len) array at list_ptr
-        for (i, (ptr, len)) in string_entries.iter().enumerate() {
-            let offset = list_ptr as usize + i * 8;
-            if offset + 8 > memory.len() {
-                return Err(Error::memory_out_of_bounds(
-                    "Not enough memory for list array"
-                ));
-            }
-            memory[offset..offset + 4].copy_from_slice(&ptr.to_le_bytes());
-            memory[offset + 4..offset + 8].copy_from_slice(&len.to_le_bytes());
-
-            #[cfg(feature = "tracing")]
-            trace!(index = i, ptr = format_args!("0x{:x}", ptr), len = len, "list entry written (complete)");
-        }
-
-        // Write (list_ptr, count) to the return pointer
-        let retptr_usize = retptr as usize;
-        if retptr_usize + 8 <= memory.len() {
-            memory[retptr_usize..retptr_usize + 4].copy_from_slice(&list_ptr.to_le_bytes());
-            memory[retptr_usize + 4..retptr_usize + 8]
-                .copy_from_slice(&(args_to_write.len() as u32).to_le_bytes());
-
-            #[cfg(feature = "tracing")]
-            trace!(
-                retptr = format_args!("0x{:x}", retptr),
-                list_ptr = format_args!("0x{:x}", list_ptr),
-                count = args_to_write.len(),
-                "wrote to retptr (complete)"
-            );
-        }
-
-        Ok(())
+        results.iter().map(|v| match v {
+            Value::S32(n) => CoreValue::I32(*n),
+            Value::S64(n) => CoreValue::I64(*n),
+            Value::U32(n) => CoreValue::I32(*n as i32),
+            Value::U64(n) => CoreValue::I64(*n as i64),
+            Value::Bool(b) => CoreValue::I32(if *b { 1 } else { 0 }),
+            _ => CoreValue::I32(0),
+        }).collect()
     }
 }
 
