@@ -444,7 +444,7 @@ impl ModuleInstance {
 
             // Now copy defined globals
             for idx in 0..self.module.globals.len() {
-                if let Ok(global_wrapper) = self.module.globals.get(idx) {
+                if let Some(global_wrapper) = self.module.globals.get(idx) {
                     #[cfg(feature = "tracing")]
                     debug!(
                         "Copying defined global {} (global index {}) to instance",
@@ -1304,7 +1304,7 @@ impl FromBytes for ModuleInstance {
             functions: Vec::new(),
             tables: Vec::new(),
             memories: Vec::new(),
-            globals: kiln_foundation::bounded::BoundedVec::new(provider.clone())?,
+            globals: Vec::new(),
             tags: Vec::new(),
             elements: Vec::new(),
             data: Vec::new(),

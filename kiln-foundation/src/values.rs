@@ -633,6 +633,18 @@ impl Value {
             (Self::I31Ref(_), ValueType::I31Ref) => true,
             (Self::I31Ref(_), ValueType::EqRef) => true,   // i31ref <: eqref
             (Self::I31Ref(_), ValueType::AnyRef) => true,   // i31ref <: anyref
+            // TypedFuncRef is used for any concrete typed reference (ref null? $t)
+            // Match with the appropriate Value variant based on the value's actual type
+            (Self::FuncRef(_), ValueType::TypedFuncRef(_, _)) => true,
+            (Self::ArrayRef(Some(a)), ValueType::TypedFuncRef(idx, _)) => a.type_index() == *idx,
+            (Self::ArrayRef(None), ValueType::TypedFuncRef(_, _)) => true,
+            (Self::StructRef(Some(s)), ValueType::TypedFuncRef(idx, _)) => s.type_index() == *idx,
+            (Self::StructRef(None), ValueType::TypedFuncRef(_, _)) => true,
+            // Subtyping: struct/array refs are subtypes of anyref/eqref
+            (Self::StructRef(_), ValueType::AnyRef) => true,
+            (Self::StructRef(_), ValueType::EqRef) => true,
+            (Self::ArrayRef(_), ValueType::AnyRef) => true,
+            (Self::ArrayRef(_), ValueType::EqRef) => true,
             _ => false,
         }
     }
