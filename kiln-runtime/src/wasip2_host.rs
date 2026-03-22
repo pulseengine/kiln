@@ -378,6 +378,91 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
             vec![],
         )),
 
+        // wasi:filesystem/types - descriptor operations
+        ("wasi:filesystem/types", "[method]descriptor.get-type") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle],
+            vec![WasiComponentType::Result(
+                Some(Box::new(WasiComponentType::U8)), // descriptor-type enum
+                Some(Box::new(WasiComponentType::U8)), // error-code enum
+            )],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.open-at") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle, WasiComponentType::U32, WasiComponentType::String, WasiComponentType::U32, WasiComponentType::U32],
+            vec![WasiComponentType::Result(
+                Some(Box::new(WasiComponentType::Handle)),
+                Some(Box::new(WasiComponentType::U8)),
+            )],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.stat") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle],
+            vec![WasiComponentType::Result(
+                Some(Box::new(WasiComponentType::Tuple(vec![
+                    WasiComponentType::U8,  // type
+                    WasiComponentType::U64, // link-count
+                    WasiComponentType::U64, // size
+                    WasiComponentType::U64, WasiComponentType::U32, // data-access-timestamp
+                    WasiComponentType::U64, WasiComponentType::U32, // data-modification-timestamp
+                    WasiComponentType::U64, WasiComponentType::U32, // status-change-timestamp
+                ]))),
+                Some(Box::new(WasiComponentType::U8)),
+            )],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.stat-at") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle, WasiComponentType::U32, WasiComponentType::String],
+            vec![WasiComponentType::Result(
+                Some(Box::new(WasiComponentType::Tuple(vec![
+                    WasiComponentType::U8, WasiComponentType::U64, WasiComponentType::U64,
+                    WasiComponentType::U64, WasiComponentType::U32,
+                    WasiComponentType::U64, WasiComponentType::U32,
+                    WasiComponentType::U64, WasiComponentType::U32,
+                ]))),
+                Some(Box::new(WasiComponentType::U8)),
+            )],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.read-via-stream") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle, WasiComponentType::U64],
+            vec![WasiComponentType::Result(
+                Some(Box::new(WasiComponentType::Handle)),
+                Some(Box::new(WasiComponentType::U8)),
+            )],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.metadata-hash") |
+        ("wasi:filesystem/types", "[method]descriptor.metadata-hash-at") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle],
+            vec![WasiComponentType::Result(
+                Some(Box::new(WasiComponentType::Tuple(vec![WasiComponentType::U64, WasiComponentType::U64]))),
+                Some(Box::new(WasiComponentType::U8)),
+            )],
+        )),
+        ("wasi:filesystem/types", "[resource-drop]descriptor") |
+        ("wasi:filesystem/types", "[resource-drop]directory-entry-stream") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle],
+            vec![],
+        )),
+        ("wasi:filesystem/preopens", "get-directories") => Some(WasiFunctionSignature::new(
+            vec![],
+            vec![WasiComponentType::List(Box::new(WasiComponentType::Tuple(vec![
+                WasiComponentType::Handle, WasiComponentType::String,
+            ])))],
+        )),
+        // wasi:io/streams - input stream operations
+        ("wasi:io/streams", "[method]input-stream.read" | "input-stream.read") |
+        ("wasi:io/streams", "[method]input-stream.blocking-read" | "input-stream.blocking-read") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle, WasiComponentType::U64],
+            vec![WasiComponentType::Result(
+                Some(Box::new(WasiComponentType::ListU8)),
+                Some(Box::new(WasiComponentType::U8)), // stream-error
+            )],
+        )),
+        ("wasi:io/streams", "[method]input-stream.subscribe" | "input-stream.subscribe") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle],
+            vec![WasiComponentType::Handle],
+        )),
+        ("wasi:io/streams", "[resource-drop]input-stream") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle],
+            vec![],
+        )),
+
         _ => None,
     }
 }
