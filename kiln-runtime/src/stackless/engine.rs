@@ -10173,7 +10173,7 @@ impl StacklessEngine {
                             if let Ok(elem) = a.get(index) {
                                 operand_stack.push(elem.clone());
                             } else {
-                                return Err(kiln_error::Error::runtime_trap("array.get: index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
@@ -10192,7 +10192,7 @@ impl StacklessEngine {
                             if let Ok(elem) = a.get(index) {
                                 operand_stack.push(elem.clone());
                             } else {
-                                return Err(kiln_error::Error::runtime_trap("array.get_s: index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
@@ -10211,7 +10211,7 @@ impl StacklessEngine {
                             if let Ok(elem) = a.get(index) {
                                 operand_stack.push(elem.clone());
                             } else {
-                                return Err(kiln_error::Error::runtime_trap("array.get_u: index out of bounds"));
+                                return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
@@ -10230,7 +10230,7 @@ impl StacklessEngine {
                         };
                         if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
                             a.set(index, value).map_err(|_|
-                                kiln_error::Error::runtime_trap("array.set: index out of bounds"))?;
+                                kiln_error::Error::runtime_trap("out of bounds array access"))?;
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));
                         }
@@ -10402,7 +10402,7 @@ impl StacklessEngine {
                             }
                             for i in 0..size {
                                 a.set((offset_val + i) as usize, fill_value.clone()).map_err(|_|
-                                    kiln_error::Error::runtime_trap("array.fill: set failed"))?;
+                                    kiln_error::Error::runtime_trap("out of bounds array access"))?;
                             }
                         } else {
                             return Err(kiln_error::Error::runtime_trap("null array reference"));

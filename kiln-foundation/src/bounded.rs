@@ -1205,7 +1205,8 @@ where
             return Ok(());
         }
 
-        let bytes_written = {
+        // Serialize the item into the zero-filled buffer
+        {
             let buffer_slice =
                 SliceMut::new(&mut item_bytes_buffer[..item_size]).map_err(|_| {
                     BoundedError::new(BoundedErrorKind::ConversionError, "Failed to create slice")
@@ -1213,12 +1214,16 @@ where
             let mut write_stream = WriteStream::new(buffer_slice);
             item.to_bytes_with_provider(&mut write_stream, &self.provider)
                 .map_err(|_| BoundedError::runtime_execution_error("Failed to serialize item"))?;
-            write_stream.position()
-        };
+        }
 
+        // Write the full slot (item_serialized_size bytes) to ensure provider is
+        // properly sized for subsequent get() calls that read full slots.
+        // The buffer is zero-initialized, so unused bytes are zero-padded.
+        let write_size = core::cmp::max(item_size, self.item_serialized_size);
+        let write_size = core::cmp::min(write_size, MAX_ITEM_SERIALIZED_SIZE);
         self.provider
-            .write_data(offset, &item_bytes_buffer[..bytes_written])
-            .map_err(|e| {
+            .write_data(offset, &item_bytes_buffer[..write_size])
+            .map_err(|_| {
                 BoundedError::new(BoundedErrorKind::SliceError, "Slice operation failed")
             })?;
 
@@ -1741,20 +1746,22 @@ where
             ));
         }
 
-        let bytes_written = {
+        // Serialize into zero-filled buffer
+        {
             let buffer_slice = SliceMut::new(&mut item_bytes_buffer[..item_size])
                 .map_err(|_| BoundedError::runtime_execution_error("Operation failed"))?;
             let mut write_stream = WriteStream::new(buffer_slice);
             value.to_bytes_with_provider(&mut write_stream, &self.provider).map_err(|_| {
                 BoundedError::new(BoundedErrorKind::ConversionError, "Operation failed")
             })?;
-            write_stream.position()
-        };
+        }
 
-        // Write new value to memory
+        // Write full slot to ensure provider is properly sized for get()
+        let write_size = core::cmp::max(item_size, self.item_serialized_size);
+        let write_size = core::cmp::min(write_size, MAX_ITEM_SERIALIZED_SIZE);
         self.provider
-            .write_data(offset, &item_bytes_buffer[..bytes_written])
-            .map_err(|e| BoundedError::runtime_execution_error("Operation failed"))?;
+            .write_data(offset, &item_bytes_buffer[..write_size])
+            .map_err(|_| BoundedError::runtime_execution_error("Operation failed"))?;
 
         // Update checksum if needed
         if self.verification_level >= VerificationLevel::Full {
