@@ -2141,25 +2141,90 @@ impl WasiDispatcher {
             // wasi:filesystem/preopens - core dispatch
             #[cfg(feature = "wasi-filesystem")]
             ("wasi:filesystem/preopens", "get-directories") => {
-                // Return empty directory list at retptr
+                // Return list of (descriptor, path) tuples at retptr
                 if let Some(mem) = memory {
                     let retptr = match args.first() {
                         Some(CoreValue::I32(v)) => *v as u32,
                         _ => return Err(Error::wasi_invalid_argument("get-directories: missing retptr")),
                     };
-                    mem.write_bytes(retptr, &0u32.to_le_bytes())?;
-                    mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
+                    if self.preopens.is_empty() {
+                        // No preopens: empty list (ptr=0, len=0)
+                        mem.write_bytes(retptr, &0u32.to_le_bytes())?;
+                        mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
+                    } else {
+                        // Each entry is (descriptor: u32, path_ptr: u32, path_len: u32) = 12 bytes
+                        let entry_size = 12u32;
+                        let list_size = self.preopens.len() as u32 * entry_size;
+                        // Write entries starting after retptr+8 (the list header)
+                        let data_start = retptr + 8;
+                        for (i, (fd, path)) in self.preopens.iter().enumerate() {
+                            let entry_offset = data_start + (i as u32 * entry_size);
+                            let path_bytes = path.to_string_lossy();
+                            let path_bytes = path_bytes.as_bytes();
+                            // Write path string after all entries
+                            let path_offset = data_start + list_size + (i as u32 * 256);
+                            let path_len = core::cmp::min(path_bytes.len(), 255) as u32;
+                            mem.write_bytes(path_offset, &path_bytes[..path_len as usize])?;
+                            // Write entry: (fd, path_ptr, path_len)
+                            mem.write_bytes(entry_offset, &(*fd).to_le_bytes())?;
+                            mem.write_bytes(entry_offset + 4, &path_offset.to_le_bytes())?;
+                            mem.write_bytes(entry_offset + 8, &path_len.to_le_bytes())?;
+                        }
+                        // Write list header: (ptr, len)
+                        mem.write_bytes(retptr, &data_start.to_le_bytes())?;
+                        mem.write_bytes(retptr + 4, &(self.preopens.len() as u32).to_le_bytes())?;
+                    }
                 }
                 Ok(vec![])
             }
 
             _ => {
-                #[cfg(feature = "tracing")]
-                warn!(interface = %base_interface, function = %function, "unknown WASI function (core)");
-
-                Err(Error::runtime_not_implemented("Unknown WASI function"))
+                // Fallback: lift core values to component values, delegate to
+                // dispatch() which has full WASI handler coverage (filesystem, etc.),
+                // then lower results back to core values.
+                self.dispatch_core_via_lift_lower(interface, function, args, memory)
             }
         }
+    }
+
+    /// Lift core args → component values, dispatch, lower results.
+    ///
+    /// This bridges dispatch_core (used by the engine) to dispatch()
+    /// (which has full WASI handler coverage). Enables all handlers in
+    /// dispatch() to be called from core WASM without duplicating them.
+    fn dispatch_core_via_lift_lower(
+        &mut self,
+        interface: &str,
+        function: &str,
+        args: &[kiln_foundation::values::Value],
+        _memory: Option<&dyn MemoryAccessor>,
+    ) -> Result<Vec<kiln_foundation::values::Value>> {
+        use kiln_foundation::values::Value as CoreValue;
+        use crate::value_compat::Value as WasiValue;
+
+        // Convert core values to WASI compat values
+        let wasi_args: Vec<WasiValue> = args.iter().map(|v| match v {
+            CoreValue::I32(n) => WasiValue::S32(*n),
+            CoreValue::I64(n) => WasiValue::S64(*n),
+            CoreValue::F32(f) => WasiValue::F32(f.to_f32()),
+            CoreValue::F64(f) => WasiValue::F64(f.to_f64()),
+            _ => WasiValue::S32(0),
+        }).collect();
+
+        // Dispatch through the full handler set
+        let wasi_results = self.dispatch(interface, function, &wasi_args)?;
+
+        // Convert results back to core values
+        let core_results: Vec<CoreValue> = wasi_results.iter().map(|v| match v {
+            WasiValue::S32(n) => CoreValue::I32(*n),
+            WasiValue::S64(n) => CoreValue::I64(*n),
+            WasiValue::U32(n) => CoreValue::I32(*n as i32),
+            WasiValue::U64(n) => CoreValue::I64(*n as i64),
+            WasiValue::Bool(b) => CoreValue::I32(if *b { 1 } else { 0 }),
+            _ => CoreValue::I32(0),
+        }).collect();
+
+        Ok(core_results)
     }
 
     /// Two-phase dispatch for functions that may need memory allocation.
