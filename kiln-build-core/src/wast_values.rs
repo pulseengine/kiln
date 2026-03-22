@@ -169,7 +169,11 @@ pub fn convert_wast_ret_core_to_value(ret: &WastRetCore) -> Result<Value> {
         },
         WastRetCore::RefExtern(x) => match x {
             Some(idx) => Ok(Value::ExternRef(Some(ExternRef { index: *idx as u32 }))),
-            None => Ok(Value::ExternRef(None)),
+            None => {
+                // (ref.extern) without value means "any non-null externref"
+                // Use u32::MAX as sentinel
+                Ok(Value::ExternRef(Some(ExternRef { index: u32::MAX })))
+            },
         },
         WastRetCore::RefHost(x) => Ok(Value::ExternRef(Some(ExternRef { index: *x as u32 }))),
         WastRetCore::RefFunc(x) => {
@@ -415,6 +419,10 @@ pub fn values_equal(actual: &Value, expected: &Value) -> bool {
         (Value::StructRef(Some(_)), Value::I32(sentinel)) if *sentinel == i32::MAX => true,
         (Value::I31Ref(Some(_)), Value::I32(sentinel)) if *sentinel == i32::MAX => true,
         (Value::ExternRef(Some(_)), Value::I32(sentinel)) if *sentinel == i32::MAX => true,
+        // Any non-null GC ref matches (ref.extern) sentinel after extern.convert_any
+        (Value::I31Ref(Some(_)), Value::ExternRef(Some(ExternRef { index: u32::MAX }))) => true,
+        (Value::ArrayRef(Some(_)), Value::ExternRef(Some(ExternRef { index: u32::MAX }))) => true,
+        (Value::StructRef(Some(_)), Value::ExternRef(Some(ExternRef { index: u32::MAX }))) => true,
         // Cross-type null reference comparisons for WAST testing
         // In GC spec, (ref.null) without type is polymorphic and matches any null reference
         // Also handle subtyping: none ⊂ any, nofunc ⊂ func, noextern ⊂ extern, noexn ⊂ exn
