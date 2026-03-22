@@ -1618,71 +1618,55 @@ impl ComponentInstance {
                                         } else {
                                         }
 
-                                        // Register canon-lowered functions for this instance
-                                        // When this module calls an imported canon-lowered function,
-                                        // the engine dispatches through the WASI canonical executor
-                                        // instead of executing bytecode (preventing infinite recursion).
-                                        //
-                                        // The func_idx in the module's index space depends on the ORDER
-                                        // of arg_refs and how many function imports each provides.
-                                        // We track the cumulative function import offset.
+                                        // Register canon-lowered functions for this instance.
+                                        // We match each canon-lowered function's export name against the
+                                        // module's actual import order to find the correct function index.
+                                        // This is necessary because the module's import section groups
+                                        // imports by namespace, which may differ from arg_ref ordering.
                                         {
-                                            let mut func_import_offset: usize = 0;
+                                            // Collect all lowered export names → (interface, function) from arg_ref instances
+                                            let mut lowered_by_export_name: HashMap<String, (String, String)> = HashMap::new();
                                             for arg_ref in arg_refs {
-                                                match arg_ref.kind {
-                                                    0x12 => {
-                                                        // Instance kind - provides multiple imports
-                                                        // Count function exports from this instance
-                                                        let func_export_count = inline_exports_map
-                                                            .get(&(arg_ref.idx as usize))
-                                                            .map(|mappings| {
-                                                                mappings
-                                                                    .iter()
-                                                                    .filter(|(_, _, sort, _)| {
-                                                                        *sort == CoreSort::Function
-                                                                    })
-                                                                    .count()
-                                                            })
-                                                            .unwrap_or(0);
-
-                                                        if let Some(lowered_exports) =
-                                                            canon_lowered_for_instance
-                                                                .get(&(arg_ref.idx as usize))
-                                                        {
-                                                            for
-                                                                (_name, _idx, interface, function, export_position)
-                                                             in
-                                                                lowered_exports.iter()
-                                                            {
-                                                                // Use the stored position within the full export list
-                                                                // (not the index in the lowered-only list)
-                                                                let func_idx =
-                                                                    func_import_offset + export_position;
-                                                                engine.register_lowered_function(
-                                                                    instance_handle.index(),
-                                                                    func_idx,
-                                                                    interface.clone(),
-                                                                    function.clone(),
-                                                                    None, // memory_idx
-                                                                    None, // realloc_idx
-                                                                );
+                                                if arg_ref.kind == 0x12 {
+                                                    if let Some(exports) = inline_exports_map.get(&(arg_ref.idx as usize)) {
+                                                        for (semantic_name, actual_name, sort, _) in exports {
+                                                            if *sort == CoreSort::Function && actual_name.starts_with("__canon_lower_") {
+                                                                let suffix = &actual_name["__canon_lower_".len()..];
+                                                                if let Some(sep) = suffix.rfind("::") {
+                                                                    let iface = &suffix[..sep];
+                                                                    let func = &suffix[sep + 2..];
+                                                                    lowered_by_export_name.insert(
+                                                                        semantic_name.clone(),
+                                                                        (iface.to_string(), func.to_string()),
+                                                                    );
+                                                                }
                                                             }
                                                         }
+                                                    }
+                                                    if let Some(lowered_exports) = canon_lowered_for_instance.get(&(arg_ref.idx as usize)) {
+                                                        for (name, _idx, interface, function, _pos) in lowered_exports {
+                                                            lowered_by_export_name.insert(
+                                                                name.clone(),
+                                                                (interface.clone(), function.clone()),
+                                                            );
+                                                        }
+                                                    }
+                                                }
+                                            }
 
-                                                        // Mixed InlineExports (containing both aliased and
-                                                        // canon-lowered functions) are handled at call time
-                                                        // by detecting __canon_lower_ export name prefixes.
-                                                        // Position-based registration was removed because
-                                                        // arg_ref order may not match the module's import
-                                                        // section order, leading to incorrect func_idx mapping.
-
-                                                        func_import_offset += func_export_count;
-                                                    },
-                                                    0x00 => {
-                                                        // Function kind - single function import
-                                                        func_import_offset += 1;
-                                                    },
-                                                    _ => {}, // Table (0x01), Memory (0x02), Global (0x03) don't affect function index
+                                            // Use the module's actual import order to find correct indices
+                                            let func_imports = engine.get_module_function_imports(module_handle);
+                                            for (func_idx, (module_name, field_name)) in func_imports.iter().enumerate() {
+                                                // Check if this import matches a canon-lowered function
+                                                if let Some((interface, function)) = lowered_by_export_name.get(field_name) {
+                                                    engine.register_lowered_function(
+                                                        instance_handle.index(),
+                                                        func_idx,
+                                                        interface.clone(),
+                                                        function.clone(),
+                                                        None,
+                                                        None,
+                                                    );
                                                 }
                                             }
                                         }
@@ -3985,9 +3969,7 @@ impl ComponentInstance {
                         functions: Vec::new(),
                         tables: Vec::new(),
                         memories: Vec::new(),
-                        globals: kiln_foundation::bounded::BoundedVec::new(provider.clone()).map_err(|e| {
-                            Error::runtime_execution_error("Failed to create globals")
-                        })?,
+                        globals: Vec::new(),
                         tags: Vec::new(),
                         elements: Vec::new(),
                         data: Vec::new(),
