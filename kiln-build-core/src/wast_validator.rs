@@ -1754,8 +1754,16 @@ impl WastModuleValidator {
                     let called_type = &module.types[type_idx as usize];
                     let frame_height = Self::current_frame_height(&frames);
 
-                    // Pop the typed function reference (top of stack)
-                    Self::pop_type(&mut stack, StackType::Unknown, frame_height, Self::is_unreachable(&frames));
+                    // Pop the typed function reference — must be (ref null $t)
+                    if !Self::pop_type_with_module(
+                        &mut stack,
+                        StackType::TypedFuncRef(type_idx, true),
+                        frame_height,
+                        Self::is_unreachable(&frames),
+                        Some(module),
+                    ) {
+                        return Err(anyhow!("type mismatch"));
+                    }
 
                     // Pop arguments in reverse order
                     for param in called_type.params.iter().rev() {
@@ -1803,8 +1811,16 @@ impl WastModuleValidator {
 
                     let frame_height = Self::current_frame_height(&frames);
 
-                    // Pop the typed function reference (top of stack)
-                    Self::pop_type(&mut stack, StackType::Unknown, frame_height, Self::is_unreachable(&frames));
+                    // Pop the typed function reference — must be (ref null $t)
+                    if !Self::pop_type_with_module(
+                        &mut stack,
+                        StackType::TypedFuncRef(type_idx, true),
+                        frame_height,
+                        Self::is_unreachable(&frames),
+                        Some(module),
+                    ) {
+                        return Err(anyhow!("type mismatch"));
+                    }
 
                     // Pop arguments in reverse order
                     for param in called_type.params.iter().rev() {
