@@ -2,17 +2,18 @@ use core::ptr::NonNull;
 
 use kiln_error::{
     Error,
-    ErrorKind,
+    ErrorCategory,
+    Result,
+    codes,
 };
 
-use crate::{
+use crate::memory::{
     PageAllocator,
     WASM_PAGE_SIZE,
 };
 
 #[cfg(target_os = "vxworks")]
 unsafe extern "C" {
-    // Binary std/no_std choice
     fn memPartAlloc(mem_part_id: usize, size: usize) -> *mut u8;
     fn memPartAlignedAlloc(mem_part_id: usize, size: usize, alignment: usize) -> *mut u8;
     fn memPartFree(mem_part_id: usize, ptr: *mut u8) -> i32;
@@ -23,10 +24,6 @@ unsafe extern "C" {
     fn malloc(size: usize) -> *mut u8;
     fn free(ptr: *mut u8);
     fn aligned_alloc(alignment: usize, size: usize) -> *mut u8;
-
-    // Memory information
-    fn memInfoGet() -> i32;
-    fn sysMemTop() -> *mut u8;
 }
 
 /// VxWorks execution context
@@ -38,11 +35,11 @@ pub enum VxWorksContext {
     Rtp,
 }
 
-/// Binary std/no_std choice
+/// Configuration for VxWorks memory allocation
 #[derive(Debug, Clone)]
 pub struct VxWorksMemoryConfig {
     pub context:                 VxWorksContext,
-    pub max_pages:               usize,
+    pub max_pages:               u32,
     pub use_dedicated_partition: bool,
     pub partition_size:          Option<usize>,
     pub enable_guard_pages:      bool,
@@ -60,22 +57,36 @@ impl Default for VxWorksMemoryConfig {
     }
 }
 
-/// Binary std/no_std choice
+/// VxWorks page allocator supporting both LKM and RTP contexts
+#[derive(Debug)]
 pub struct VxWorksAllocator {
-    config:          VxWorksMemoryConfig,
-    allocated_pages: usize,
-    mem_part_id:     Option<usize>,
-    _pool_memory:    Option<Vec<u8>>,
+    config:             VxWorksMemoryConfig,
+    mem_part_id:        Option<usize>,
+    current_allocation: Option<NonNull<u8>>,
+    current_size:       usize,
+    current_pages:      u32,
+    maximum_pages:      Option<u32>,
+    #[cfg(target_os = "vxworks")]
+    _pool_memory:       Option<Vec<u8>>,
 }
 
+// Safety: VxWorksAllocator only contains pointers to VxWorks kernel objects
+// which are thread-safe, and the allocator is used single-threaded per instance.
+unsafe impl Send for VxWorksAllocator {}
+unsafe impl Sync for VxWorksAllocator {}
+
 impl VxWorksAllocator {
-    /// Binary std/no_std choice
-    pub fn new(config: VxWorksMemoryConfig) -> Result<Self, Error> {
+    /// Create a new VxWorks allocator with the given configuration
+    pub fn new(config: VxWorksMemoryConfig) -> Result<Self> {
         let mut allocator = Self {
-            config,
-            allocated_pages: 0,
-            mem_part_id: None,
-            _pool_memory: None,
+            config:             config.clone(),
+            mem_part_id:        None,
+            current_allocation: None,
+            current_size:       0,
+            current_pages:      0,
+            maximum_pages:      None,
+            #[cfg(target_os = "vxworks")]
+            _pool_memory:       None,
         };
 
         // Create dedicated memory partition if requested
@@ -87,11 +98,13 @@ impl VxWorksAllocator {
     }
 
     /// Create a dedicated memory partition for WASM pages
-    fn create_memory_partition(&mut self) -> Result<(), Error> {
+    fn create_memory_partition(&mut self) -> Result<()> {
         #[cfg(target_os = "vxworks")]
         {
-            let partition_size =
-                self.config.partition_size.unwrap_or(self.config.max_pages * WASM_PAGE_SIZE);
+            let partition_size = self
+                .config
+                .partition_size
+                .unwrap_or(self.config.max_pages as usize * WASM_PAGE_SIZE);
 
             // Allocate pool memory
             let mut pool_memory = vec![0u8; partition_size];
@@ -100,27 +113,24 @@ impl VxWorksAllocator {
             // Create memory partition
             let mem_part_id = unsafe { memPartCreate(pool_ptr, partition_size) };
             if mem_part_id == 0 {
-                return Err(Error::runtime_execution_error(
+                return Err(Error::platform_memory_allocation_failed(
                     "Failed to create VxWorks memory partition",
                 ));
             }
 
             self.mem_part_id = Some(mem_part_id);
             self._pool_memory = Some(pool_memory);
+            Ok(())
         }
 
         #[cfg(not(target_os = "vxworks"))]
-        {
-            return Err(Error::runtime_execution_error(
-                "VxWorks memory partition creation not supported on this platform",
-            ));
-        }
-
-        Ok(())
+        Err(Error::platform_memory_allocation_failed(
+            "VxWorks memory partition creation not supported on this platform",
+        ))
     }
 
     /// Allocate memory using the appropriate VxWorks API based on context
-    fn allocate_memory(&self, size: usize, alignment: usize) -> Result<*mut u8, Error> {
+    fn allocate_memory(&self, size: usize, alignment: usize) -> Result<*mut u8> {
         #[cfg(target_os = "vxworks")]
         {
             let ptr = match (self.mem_part_id, alignment) {
@@ -137,7 +147,9 @@ impl VxWorksAllocator {
             };
 
             if ptr.is_null() {
-                return Err(Error::runtime_execution_error("Failed to allocate memory"));
+                return Err(Error::platform_memory_allocation_failed(
+                    "Failed to allocate memory",
+                ));
             }
 
             Ok(ptr)
@@ -145,21 +157,22 @@ impl VxWorksAllocator {
 
         #[cfg(not(target_os = "vxworks"))]
         {
-            Err(Error::runtime_execution_error(
+            let _ = (size, alignment);
+            Err(Error::platform_memory_allocation_failed(
                 "VxWorks memory allocation not supported on this platform",
             ))
         }
     }
 
     /// Free memory using the appropriate VxWorks API
-    fn free_memory(&self, ptr: *mut u8) -> Result<(), Error> {
+    fn free_memory(&self, ptr: *mut u8) -> Result<()> {
         #[cfg(target_os = "vxworks")]
         {
             match self.mem_part_id {
                 Some(mem_part_id) => {
                     let result = unsafe { memPartFree(mem_part_id, ptr) };
                     if result != 0 {
-                        return Err(Error::runtime_execution_error(
+                        return Err(Error::platform_memory_allocation_failed(
                             "Failed to free memory from partition",
                         ));
                     }
@@ -168,101 +181,156 @@ impl VxWorksAllocator {
                     unsafe { free(ptr) };
                 },
             }
+            Ok(())
         }
 
         #[cfg(not(target_os = "vxworks"))]
         {
-            return Err(Error::runtime_execution_error(
+            let _ = ptr;
+            Err(Error::platform_memory_allocation_failed(
                 "VxWorks memory free not supported on this platform",
-            ));
+            ))
         }
+    }
 
-        Ok(())
+    /// Convert page count to byte size with overflow check
+    fn pages_to_bytes(pages: u32) -> Result<usize> {
+        (pages as usize)
+            .checked_mul(WASM_PAGE_SIZE)
+            .ok_or_else(|| Error::memory_error("Page count overflow"))
     }
 }
 
 impl PageAllocator for VxWorksAllocator {
-    fn allocate_pages(&mut self, pages: usize) -> Result<NonNull<u8>, Error> {
-        if self.allocated_pages + pages > self.config.max_pages {
-            return Err(Error::new(
-                ErrorKind::Memory,
-                "Maximum page allocation exceeded",
+    fn allocate(
+        &mut self,
+        initial_pages: u32,
+        maximum_pages: Option<u32>,
+    ) -> Result<(NonNull<u8>, usize)> {
+        if self.current_allocation.is_some() {
+            return Err(Error::memory_error(
+                "Memory already allocated; deallocate first",
             ));
         }
 
-        let size = pages * WASM_PAGE_SIZE;
+        if initial_pages == 0 {
+            return Err(Error::memory_error("Initial pages cannot be zero"));
+        }
+
+        let max_pages = maximum_pages
+            .unwrap_or(self.config.max_pages)
+            .min(self.config.max_pages);
+
+        if initial_pages > max_pages {
+            return Err(Error::memory_error(
+                "Initial pages exceed maximum page limit",
+            ));
+        }
+
+        let size = Self::pages_to_bytes(initial_pages)?;
         let alignment = WASM_PAGE_SIZE; // 64KB alignment for WASM pages
 
         let ptr = self.allocate_memory(size, alignment)?;
 
-        // Binary std/no_std choice
+        // Zero-initialize memory
         unsafe {
             core::ptr::write_bytes(ptr, 0, size);
         }
 
-        self.allocated_pages += pages;
+        let nonnull = NonNull::new(ptr).ok_or_else(|| {
+            Error::platform_memory_allocation_failed("Memory allocation returned null")
+        })?;
 
-        NonNull::new(ptr).ok_or_else(|| Error::runtime_execution_error("Memory allocation failed"))
+        self.current_allocation = Some(nonnull);
+        self.current_size = size;
+        self.current_pages = initial_pages;
+        self.maximum_pages = Some(max_pages);
+
+        Ok((nonnull, size))
     }
 
-    fn deallocate_pages(&mut self, ptr: NonNull<u8>, pages: usize) -> Result<(), Error> {
-        if pages > self.allocated_pages {
-            return Err(Error::new(
-                ErrorKind::Memory,
-                "Invalid page count for deallocation",
+    fn grow(&mut self, current_pages: u32, additional_pages: u32) -> Result<()> {
+        let Some(old_ptr) = self.current_allocation else {
+            return Err(Error::memory_error("No current allocation to grow"));
+        };
+
+        if additional_pages == 0 {
+            return Ok(());
+        }
+
+        let current_bytes = Self::pages_to_bytes(current_pages)?;
+        if current_bytes != self.current_size {
+            return Err(Error::memory_error(
+                "Current page count does not match internal state",
             ));
         }
 
-        self.free_memory(ptr.as_ptr())?;
-        self.allocated_pages -= pages;
+        let new_pages = current_pages
+            .checked_add(additional_pages)
+            .ok_or_else(|| Error::memory_error("Page count overflow during grow"))?;
+
+        if let Some(max) = self.maximum_pages {
+            if new_pages > max {
+                return Err(Error::memory_error(
+                    "Cannot grow memory beyond maximum pages",
+                ));
+            }
+        }
+
+        let new_size = Self::pages_to_bytes(new_pages)?;
+        let alignment = WASM_PAGE_SIZE;
+
+        // Allocate new region, copy, free old
+        let new_ptr = self.allocate_memory(new_size, alignment)?;
+
+        unsafe {
+            // Zero-initialize entire new region
+            core::ptr::write_bytes(new_ptr, 0, new_size);
+            // Copy old data
+            core::ptr::copy_nonoverlapping(old_ptr.as_ptr(), new_ptr, current_bytes);
+        }
+
+        // Free old allocation
+        self.free_memory(old_ptr.as_ptr())?;
+
+        let nonnull = NonNull::new(new_ptr).ok_or_else(|| {
+            Error::platform_memory_allocation_failed("Grow allocation returned null")
+        })?;
+
+        self.current_allocation = Some(nonnull);
+        self.current_size = new_size;
+        self.current_pages = new_pages;
 
         Ok(())
     }
 
-    fn grow_pages(
-        &mut self,
-        old_ptr: NonNull<u8>,
-        old_pages: usize,
-        new_pages: usize,
-    ) -> Result<NonNull<u8>, Error> {
-        if new_pages <= old_pages {
-            return Ok(old_ptr);
-        }
+    unsafe fn deallocate(&mut self, ptr: NonNull<u8>, _size: usize) -> Result<()> {
+        let Some(current_ptr) = self.current_allocation.take() else {
+            return Err(Error::memory_error("No memory allocated to deallocate"));
+        };
 
-        let additional_pages = new_pages - old_pages;
-        if self.allocated_pages + additional_pages > self.config.max_pages {
-            return Err(Error::runtime_execution_error(
-                "Cannot grow pages beyond maximum limit",
+        if ptr.as_ptr() != current_ptr.as_ptr() {
+            self.current_allocation = Some(current_ptr); // Restore
+            return Err(Error::memory_error(
+                "Attempted to deallocate with mismatched pointer",
             ));
         }
 
-        // Binary std/no_std choice
-        let new_ptr = self.allocate_pages(new_pages)?;
+        self.free_memory(ptr.as_ptr())?;
+        self.current_size = 0;
+        self.current_pages = 0;
 
-        // Copy old data
-        let old_size = old_pages * WASM_PAGE_SIZE;
-        unsafe {
-            core::ptr::copy_nonoverlapping(old_ptr.as_ptr(), new_ptr.as_ptr(), old_size);
-        }
-
-        // Free old memory
-        self.allocated_pages -= old_pages; // Binary std/no_std choice
-        self.deallocate_pages(old_ptr, old_pages)?;
-
-        Ok(new_ptr)
-    }
-
-    fn allocated_pages(&self) -> usize {
-        self.allocated_pages
-    }
-
-    fn max_pages(&self) -> usize {
-        self.config.max_pages
+        Ok(())
     }
 }
 
 impl Drop for VxWorksAllocator {
     fn drop(&mut self) {
+        // Free current allocation if any
+        if let Some(ptr) = self.current_allocation.take() {
+            let _ = self.free_memory(ptr.as_ptr());
+        }
+
         #[cfg(target_os = "vxworks")]
         {
             if let Some(mem_part_id) = self.mem_part_id {
@@ -274,9 +342,17 @@ impl Drop for VxWorksAllocator {
     }
 }
 
-/// Binary std/no_std choice
+/// Builder for VxWorks allocator
 pub struct VxWorksAllocatorBuilder {
     config: VxWorksMemoryConfig,
+}
+
+impl core::fmt::Debug for VxWorksAllocatorBuilder {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("VxWorksAllocatorBuilder")
+            .field("config", &self.config)
+            .finish()
+    }
 }
 
 impl VxWorksAllocatorBuilder {
@@ -291,7 +367,7 @@ impl VxWorksAllocatorBuilder {
         self
     }
 
-    pub fn max_pages(mut self, max_pages: usize) -> Self {
+    pub fn max_pages(mut self, max_pages: u32) -> Self {
         self.config.max_pages = max_pages;
         self
     }
@@ -311,7 +387,7 @@ impl VxWorksAllocatorBuilder {
         self
     }
 
-    pub fn build(self) -> Result<VxWorksAllocator, Error> {
+    pub fn build(self) -> Result<VxWorksAllocator> {
         VxWorksAllocator::new(self.config)
     }
 }

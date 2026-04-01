@@ -1,9 +1,6 @@
 use core::ffi::c_void;
 
-use kiln_error::{
-    Error,
-    ErrorKind,
-};
+use kiln_error::Error;
 
 use crate::vxworks_memory::VxWorksContext;
 
@@ -203,16 +200,16 @@ impl VxWorksThread {
             }
 
             self.task_id = Some(task_id);
+            Ok(())
         }
 
         #[cfg(not(target_os = "vxworks"))]
         {
-            return Err(Error::runtime_execution_error(
+            let _ = (config, f);
+            Err(Error::runtime_execution_error(
                 "VxWorks task spawn not supported on this platform",
-            ));
+            ))
         }
-
-        Ok(())
     }
 
     /// Spawn a POSIX thread (RTP context)
@@ -270,23 +267,22 @@ impl VxWorksThread {
                 unsafe {
                     let _ = Box::from_raw(closure_ptr as *mut ThreadEntryPoint);
                 }
-                return Err(Error::new(
-                    ErrorKind::Platform,
+                return Err(Error::platform_thread_creation_failed(
                     "Failed to create POSIX thread",
                 ));
             }
 
             self.pthread = Some(pthread);
+            Ok(())
         }
 
         #[cfg(not(target_os = "vxworks"))]
         {
-            return Err(Error::runtime_execution_error(
+            let _ = (config, f);
+            Err(Error::runtime_execution_error(
                 "VxWorks thread spawn not supported on this platform",
-            ));
+            ))
         }
-
-        Ok(())
     }
 
     /// Join the thread (wait for completion)
@@ -316,16 +312,13 @@ impl VxWorksThread {
                     }
                 },
             }
+            Ok(())
         }
 
         #[cfg(not(target_os = "vxworks"))]
-        {
-            return Err(Error::runtime_execution_error(
-                "VxWorks thread join not supported on this platform",
-            ));
-        }
-
-        Ok(())
+        Err(Error::runtime_execution_error(
+            "VxWorks thread join not supported on this platform",
+        ))
     }
 
     /// Detach the thread

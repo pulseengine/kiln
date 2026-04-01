@@ -110,6 +110,16 @@ jobs:
         # continue-on-error: true due to occasional compiler panics in CI environment
         run: cargo clippy --workspace --lib --bins -- -D warnings
         continue-on-error: true
+      - name: Check platform feature compilation (VxWorks, Zephyr, Tock)
+        run: |
+          echo "=== VxWorks platform feature check ==="
+          cargo check -p kiln-platform --features "platform-vxworks,std"
+          cargo check -p kiln-platform --features "platform-vxworks,real-time,std"
+          echo "=== Zephyr platform feature check ==="
+          cargo check -p kiln-platform --features "platform-zephyr"
+          echo "=== Tock platform feature check ==="
+          cargo check -p kiln-platform --features "platform-tock"
+          echo "All platform feature checks passed"
       - name: Check for WASI stub implementations in engine (architectural invariant)
         run: |
           # Engine must NOT contain hardcoded WASI function implementations
@@ -356,4 +366,43 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions-rs/audit-check@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }} 
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  vxworks_cross_build:
+    name: VxWorks Cross-Compilation
+    runs-on: ubuntu-latest
+    # Real cross-compilation with VxWorks SDK — runs on push to main and manual triggers
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Cache VxWorks SDK
+        id: cache-vxworks-sdk
+        uses: actions/cache@v5
+        with:
+          path: /opt/wrsdk
+          key: vxworks-sdk-qemu-1.16.1
+      - name: Download VxWorks SDK
+        if: steps.cache-vxworks-sdk.outputs.cache-hit != 'true'
+        run: |
+          # VxWorks QEMU SDK — free under Non-Commercial License Agreement (NCLA)
+          # https://forums.windriver.com/t/vxworks-software-development-kit-sdk/43
+          mkdir -p /opt/wrsdk
+          curl -fSL https://d13321s3lxgewa.cloudfront.net/wrsdk-vxworks7-qemu-1.16.1.tar.bz2 \
+            -o /tmp/wrsdk.tar.bz2
+          tar xjf /tmp/wrsdk.tar.bz2 -C /opt/wrsdk --strip-components=1
+          rm /tmp/wrsdk.tar.bz2
+      - name: Build kiln-platform for VxWorks (x86_64)
+        run: |
+          # Source SDK environment
+          . /opt/wrsdk/sdkenv.sh
+          . "${WIND_SDK_HOME}/vxsdk/sysroot/usr/rust/rustenv.linux"
+          export RUST_VSB_DIR="${WIND_CC_SYSROOT}"
+          # Verify toolchain
+          echo "Rust toolchain: $(rustc --version)"
+          echo "Cargo: $(cargo --version)"
+          # Build kiln-platform with VxWorks features — tests real linking
+          cargo build \
+            -p kiln-platform \
+            --target x86_64-wrs-vxworks \
+            --features "platform-vxworks,real-time,std"
+          echo "VxWorks cross-compilation and linking succeeded"
