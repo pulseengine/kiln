@@ -173,12 +173,13 @@ pub mod tock_memory;
 #[cfg(feature = "platform-tock")]
 pub mod tock_sync;
 
-// VxWorks-specific modules
-#[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
+// VxWorks-specific modules (feature-only gate, matching Zephyr/Tock pattern;
+// internal FFI calls are independently gated on target_os = "vxworks")
+#[cfg(feature = "platform-vxworks")]
 pub mod vxworks_memory;
-#[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
+#[cfg(feature = "platform-vxworks")]
 pub mod vxworks_sync;
-#[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
+#[cfg(feature = "platform-vxworks")]
 pub mod vxworks_threading;
 
 // Publicly export items via the prelude
@@ -372,20 +373,20 @@ pub use tock_sync::{
     TockFutexBuilder,
     TockSemaphoreFutex,
 };
-// Export VxWorks specific implementations if enabled and on VxWorks
-#[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
+// Export VxWorks specific implementations if enabled
+#[cfg(feature = "platform-vxworks")]
 pub use vxworks_memory::{
     VxWorksAllocator,
     VxWorksAllocatorBuilder,
     VxWorksContext,
     VxWorksMemoryConfig,
 };
-#[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
+#[cfg(feature = "platform-vxworks")]
 pub use vxworks_sync::{
     VxWorksFutex,
     VxWorksFutexBuilder,
 };
-#[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
+#[cfg(feature = "platform-vxworks")]
 pub use vxworks_threading::{
     VxWorksThread,
     VxWorksThreadBuilder,
@@ -606,7 +607,7 @@ mod tests {
         );
     }
 
-    #[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
+    #[cfg(feature = "platform-vxworks")]
     #[test]
     fn test_vxworks_allocator_builder() {
         let allocator = VxWorksAllocatorBuilder::new()
@@ -619,7 +620,7 @@ mod tests {
         assert!(allocator.is_ok());
     }
 
-    #[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
+    #[cfg(feature = "platform-vxworks")]
     #[test]
     fn test_vxworks_futex_builder() {
         let futex = VxWorksFutexBuilder::new(VxWorksContext::Rtp).initial_value(42).build();
@@ -627,7 +628,7 @@ mod tests {
         assert!(futex.is_ok());
     }
 
-    #[cfg(all(feature = "platform-vxworks", target_os = "vxworks"))]
+    #[cfg(feature = "platform-vxworks")]
     #[test]
     fn test_vxworks_thread_builder() {
         let thread_config = VxWorksThreadConfig {

@@ -61,6 +61,7 @@ platform-qnx = [] # QNX Neutrino RTOS support
 platform-tock = [] # Tock OS support
 platform-zephyr = [] # Zephyr RTOS support
 platform-vxworks = [] # VxWorks RTOS support (LKM and RTP)
+real-time = ["deterministic-timing", "platform-sync"] # Real-time features for RTOS platforms
 # platform-baremetal = []
 # arm-hardening = [] # If any platform code depends on this
 helper-mode = [] # Added for C-ABI runtime
