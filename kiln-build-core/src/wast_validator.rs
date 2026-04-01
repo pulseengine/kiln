@@ -74,6 +74,10 @@ impl StackType {
             ValueType::I31Ref => StackType::I31Ref,
             ValueType::StructRef(_) => StackType::StructRef,
             ValueType::ArrayRef(_) => StackType::ArrayRef,
+            // GC bottom types
+            ValueType::NoneRef => StackType::NoneRef,
+            ValueType::NoExternRef => StackType::NullExternRef,
+            ValueType::NoExnRef => StackType::NullExnRef,
             // I16x8 is a SIMD sub-type, not a reference type
             ValueType::I16x8 => StackType::Unknown,
         }
@@ -6197,7 +6201,11 @@ impl WastModuleValidator {
         match (s1, s2) {
             (GcStorageType::I8, GcStorageType::I8) |
             (GcStorageType::I16, GcStorageType::I16) => true,
-            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => v1 == v2,
+            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => {
+                // For mutable fields (invariance), types must be exactly equal.
+                // Abstract ref types stored as Value bytes are equal iff same byte.
+                v1 == v2
+            },
             (GcStorageType::RefType(idx1), GcStorageType::RefType(idx2)) |
             (GcStorageType::RefTypeNull(idx1), GcStorageType::RefTypeNull(idx2)) => {
                 Self::are_types_equivalent(*idx1, *idx2, module)
@@ -6216,7 +6224,16 @@ impl WastModuleValidator {
         match (sub, sup) {
             (GcStorageType::I8, GcStorageType::I8) |
             (GcStorageType::I16, GcStorageType::I16) => true,
-            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => v1 == v2,
+            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => {
+                if v1 == v2 { return true; }
+                // For abstract ref types, check subtype relationship
+                let sub_st = Self::value_byte_to_stack_type(*v1);
+                let sup_st = Self::value_byte_to_stack_type(*v2);
+                if matches!(sub_st, StackType::Unknown) || matches!(sup_st, StackType::Unknown) {
+                    return false; // Non-ref Value types: exact match only
+                }
+                Self::is_subtype_of_in_module(&sub_st, &sup_st, module)
+            },
             (GcStorageType::RefType(sub_idx), GcStorageType::RefType(sup_idx)) => {
                 Self::is_concrete_subtype(*sub_idx, *sup_idx, module)
             },

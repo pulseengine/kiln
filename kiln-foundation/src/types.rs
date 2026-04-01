@@ -222,6 +222,12 @@ pub enum ValueType {
     /// Typed function reference (WebAssembly 3.0 GC) - (ref null? $t) where $t is a func type
     /// First field is the type index, second is whether it's nullable
     TypedFuncRef(u32, bool),
+    /// None reference (bottom type for any hierarchy) - ref null none
+    NoneRef,
+    /// No-extern reference (bottom type for extern hierarchy) - ref null noextern
+    NoExternRef,
+    /// No-exception reference (bottom type for exn hierarchy) - ref null noexn
+    NoExnRef,
 }
 
 impl core::fmt::Debug for ValueType {
@@ -250,6 +256,9 @@ impl core::fmt::Debug for ValueType {
                     write!(f, "(ref ${idx})")
                 }
             }
+            Self::NoneRef => write!(f, "NoneRef"),
+            Self::NoExternRef => write!(f, "NoExternRef"),
+            Self::NoExnRef => write!(f, "NoExnRef"),
         }
     }
 }
@@ -339,6 +348,9 @@ impl ValueType {
             ValueType::ArrayRef(_) => 0x6A,  // GC: array heap type
             ValueType::ExnRef => 0x69,
             ValueType::TypedFuncRef(_, _) => 0x63, // Function references: typed funcref
+            ValueType::NoneRef => 0x71,       // none - bottom for any hierarchy
+            ValueType::NoExternRef => 0x72,   // noextern - bottom for extern hierarchy
+            ValueType::NoExnRef => 0x74,      // noexn - bottom for exn hierarchy
         }
     }
 
@@ -367,6 +379,9 @@ impl ValueType {
             | Self::I31Ref
             | Self::AnyRef
             | Self::EqRef
+            | Self::NoneRef
+            | Self::NoExternRef
+            | Self::NoExnRef
             | Self::TypedFuncRef(_, _) => {
                 // Size of a reference can vary. Using usize for simplicity.
                 // In a real scenario, this might depend on target architecture (32/64 bit).

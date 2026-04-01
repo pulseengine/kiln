@@ -578,6 +578,9 @@ impl Value {
             ValueType::AnyRef => Value::ExternRef(None), // AnyRef uses externref representation
             ValueType::EqRef => Value::I31Ref(None),     // EqRef defaults to i31ref
             ValueType::TypedFuncRef(_, _) => Value::FuncRef(None), // Typed funcref defaults to null
+            ValueType::NoneRef => Value::StructRef(None),     // Bottom of any hierarchy
+            ValueType::NoExternRef => Value::ExternRef(None), // Bottom of extern hierarchy
+            ValueType::NoExnRef => Value::ExnRef(None),       // Bottom of exn hierarchy
         }
     }
 
@@ -1122,6 +1125,9 @@ impl Value {
                 // Typed function references not yet supported for byte deserialization
                 Ok(Value::FuncRef(None))
             },
+            ValueType::NoneRef => Ok(Value::StructRef(None)),     // Bottom of any hierarchy
+            ValueType::NoExternRef => Ok(Value::ExternRef(None)), // Bottom of extern hierarchy
+            ValueType::NoExnRef => Ok(Value::ExnRef(None)),       // Bottom of exn hierarchy
         }
     }
 }

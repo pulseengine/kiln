@@ -3945,6 +3945,9 @@ fn value_type_to_u8(vt: KilnValueType) -> u8 {
         // Serialize as FuncRef (4) since the value representation is identical
         KilnValueType::TypedFuncRef(_, _) => 4,
         KilnValueType::NullFuncRef => 4,
+        KilnValueType::NoneRef => 14,       // Bottom of any hierarchy
+        KilnValueType::NoExternRef => 15,   // Bottom of extern hierarchy
+        KilnValueType::NoExnRef => 16,      // Bottom of exn hierarchy
     }
 }
 

@@ -133,6 +133,9 @@ fn value_type_to_u8(value_type: &KilnValueType) -> u8 {
         KilnValueType::AnyRef => 12,
         KilnValueType::EqRef => 13,
         KilnValueType::TypedFuncRef(_, _) => 14,
+        KilnValueType::NoneRef => 16,
+        KilnValueType::NoExternRef => 17,
+        KilnValueType::NoExnRef => 18,
     }
 }
 

@@ -1122,6 +1122,20 @@ impl<'a> StreamingDecoder<'a> {
                     Ok((GcStorageType::RefType(idx), new_offset))
                 }
             }
+            // Store abstract ref types with their canonical value type byte
+            // so the validator can distinguish (ref none) from (ref any) etc.
+            ValueType::AnyRef => Ok((GcStorageType::Value(0x6E), new_offset)),
+            ValueType::EqRef => Ok((GcStorageType::Value(0x6D), new_offset)),
+            ValueType::I31Ref => Ok((GcStorageType::Value(0x6C), new_offset)),
+            ValueType::StructRef(_) => Ok((GcStorageType::Value(0x6B), new_offset)),
+            ValueType::ArrayRef(_) => Ok((GcStorageType::Value(0x6A), new_offset)),
+            ValueType::FuncRef => Ok((GcStorageType::Value(0x70), new_offset)),
+            ValueType::ExternRef => Ok((GcStorageType::Value(0x6F), new_offset)),
+            ValueType::NullFuncRef => Ok((GcStorageType::Value(0x73), new_offset)),
+            ValueType::NoneRef => Ok((GcStorageType::Value(0x71), new_offset)),
+            ValueType::NoExternRef => Ok((GcStorageType::Value(0x72), new_offset)),
+            ValueType::ExnRef => Ok((GcStorageType::Value(0x69), new_offset)),
+            ValueType::NoExnRef => Ok((GcStorageType::Value(0x74), new_offset)),
             _ => Ok((GcStorageType::Value(byte), new_offset)),
         }
     }
@@ -1159,9 +1173,9 @@ impl<'a> StreamingDecoder<'a> {
             0x6B => Ok((ValueType::StructRef(0), offset + 1)), // structref (abstract)
             0x6A => Ok((ValueType::ArrayRef(0), offset + 1)), // arrayref (abstract)
             0x73 => Ok((ValueType::NullFuncRef, offset + 1)), // nofunc (bottom for func)
-            0x72 => Ok((ValueType::ExternRef, offset + 1)), // noextern (bottom for extern)
-            0x71 => Ok((ValueType::AnyRef, offset + 1)), // none (bottom for any)
-            0x74 => Ok((ValueType::ExnRef, offset + 1)), // noexn (bottom for exn)
+            0x72 => Ok((ValueType::NoExternRef, offset + 1)), // noextern (bottom for extern)
+            0x71 => Ok((ValueType::NoneRef, offset + 1)), // none (bottom for any)
+            0x74 => Ok((ValueType::NoExnRef, offset + 1)), // noexn (bottom for exn)
             // GC typed references: (ref null? ht)
             REF_TYPE_NULLABLE | REF_TYPE_NON_NULLABLE => {
                 let nullable = byte == REF_TYPE_NULLABLE;
@@ -1195,9 +1209,9 @@ impl<'a> StreamingDecoder<'a> {
                         -22 => Ok((ValueType::ArrayRef(0), new_offset)), // array (0x6A)
                         -23 => Ok((ValueType::ExnRef, new_offset)),  // exn (0x69)
                         -13 => Ok((ValueType::NullFuncRef, new_offset)), // nofunc (0x73) - bottom for func
-                        -14 => Ok((ValueType::ExternRef, new_offset)),   // noextern (0x72)
-                        -15 => Ok((ValueType::AnyRef, new_offset)), // none (0x71) - bottom for any
-                        -12 => Ok((ValueType::ExnRef, new_offset)), // noexn (0x74) - bottom for exn
+                        -14 => Ok((ValueType::NoExternRef, new_offset)), // noextern (0x72) - bottom for extern
+                        -15 => Ok((ValueType::NoneRef, new_offset)), // none (0x71) - bottom for any
+                        -12 => Ok((ValueType::NoExnRef, new_offset)), // noexn (0x74) - bottom for exn
                         _ => Ok((ValueType::AnyRef, new_offset)),   // fallback for unknown
                     }
                 } else {
