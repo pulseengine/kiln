@@ -231,7 +231,7 @@ jobs:
         run: cargo-kiln verify --asil d --detailed || true
       - name: Upload Safety Artifacts
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: safety-verification-artifacts
           path: |
