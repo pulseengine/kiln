@@ -4155,10 +4155,14 @@ impl WastModuleValidator {
                         0x11 => {
                             let (type_idx1, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            let (_type_idx2, new_off2) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx2, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
                             if !Self::is_array_mutable(type_idx1, module) {
                                 return Err(anyhow!("immutable array"));
+                            }
+                            // Source element type must be compatible with destination
+                            if !Self::are_array_element_types_compatible(type_idx2, type_idx1, module) {
+                                return Err(anyhow!("array types do not match"));
                             }
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
@@ -4172,6 +4176,9 @@ impl WastModuleValidator {
                             offset = new_off;
                             if !Self::is_array_mutable(type_idx, module) {
                                 return Err(anyhow!("immutable array"));
+                            }
+                            if !Self::is_array_numeric_or_vector(type_idx, module) {
+                                return Err(anyhow!("array type is not numeric or vector"));
                             }
                             let (_data_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
@@ -6102,6 +6109,47 @@ impl WastModuleValidator {
             }
         }
         Ok(())
+    }
+
+    /// Check if source array element type is compatible with destination for array.copy.
+    /// The source element type must be a subtype of the destination element type.
+    fn are_array_element_types_compatible(src_idx: u32, dst_idx: u32, module: &Module) -> bool {
+        let src_sub = Self::find_subtype_by_index(src_idx, module);
+        let dst_sub = Self::find_subtype_by_index(dst_idx, module);
+        if let (Some(src), Some(dst)) = (src_sub, dst_sub) {
+            if let (
+                CompositeTypeKind::ArrayWithElement(src_field),
+                CompositeTypeKind::ArrayWithElement(dst_field),
+            ) = (&src.composite_kind, &dst.composite_kind) {
+                // For mutable destination, source must be exact match (invariance)
+                if dst_field.mutable {
+                    return Self::are_storage_types_equal_in_module(
+                        &src_field.storage_type, &dst_field.storage_type, module
+                    );
+                }
+                // For immutable destination, source must be subtype (covariance)
+                return Self::is_storage_type_subtype(
+                    &src_field.storage_type, &dst_field.storage_type, module
+                );
+            }
+        }
+        true // If we can't determine, allow (other checks will catch real errors)
+    }
+
+    /// Check if array element type is numeric or vector (not a reference type).
+    /// Required for array.init_data which copies raw bytes from data segments.
+    fn is_array_numeric_or_vector(type_idx: u32, module: &Module) -> bool {
+        use kiln_format::module::GcStorageType;
+        if let Some(sub) = Self::find_subtype_by_index(type_idx, module) {
+            if let CompositeTypeKind::ArrayWithElement(field) = &sub.composite_kind {
+                return matches!(field.storage_type,
+                    GcStorageType::I8 | GcStorageType::I16 | GcStorageType::Value(
+                        0x7F | 0x7E | 0x7D | 0x7C | 0x7B // i32, i64, f32, f64, v128
+                    )
+                );
+            }
+        }
+        false
     }
 
     /// Check if array type at given index has a mutable element.
