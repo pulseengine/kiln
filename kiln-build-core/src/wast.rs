@@ -542,6 +542,110 @@ impl WastTestRunner {
                 // Handle WastInvoke directly
                 self.handle_invoke_directive_direct(exec, file_path)
             },
+            WastDirective::ModuleDefinition(wast_module) => {
+                // Module definition: (module definition $name ...) — defines a module template
+                // that can be instantiated multiple times via (module instance $i $name)
+                let module_name =
+                    if let wast::QuoteWat::Wat(wast::Wat::Module(module)) = wast_module {
+                        module.id.as_ref().map(|id| id.name())
+                    } else {
+                        None
+                    };
+
+                match wast_module.encode() {
+                    Ok(binary) => {
+                        // Store in registry under the definition name
+                        self.module_registry.insert("current".to_string(), binary.clone());
+                        if let Some(name) = module_name {
+                            self.module_registry.insert(name.to_string(), binary.clone());
+                        }
+                        self.stats.passed += 1;
+                        Ok(WastDirectiveInfo {
+                            test_type: WastTestType::Integration,
+                            directive_name: "module_definition".to_string(),
+                            requires_module_state: false,
+                            modifies_engine_state: true,
+                            result: TestResult::Passed,
+                            error_message: None,
+                        })
+                    },
+                    Err(e) => {
+                        self.stats.failed += 1;
+                        Ok(WastDirectiveInfo {
+                            test_type: WastTestType::Integration,
+                            directive_name: "module_definition".to_string(),
+                            requires_module_state: false,
+                            modifies_engine_state: false,
+                            result: TestResult::Failed,
+                            error_message: Some(format!("Module definition encoding failed: {}", e)),
+                        })
+                    },
+                }
+            },
+            WastDirective::ModuleInstance { instance, module, .. } => {
+                // Module instance: (module instance $inst $def) — instantiate from a definition
+                let def_name = module.map(|id| id.name().to_string());
+                let inst_name = instance.map(|id| id.name().to_string());
+
+                // Look up the module definition binary
+                let binary = def_name
+                    .as_deref()
+                    .and_then(|name| self.module_registry.get(name).cloned())
+                    .or_else(|| self.module_registry.get("current").cloned());
+
+                match binary {
+                    Some(binary) => {
+                        // Store under instance name
+                        if let Some(ref name) = inst_name {
+                            self.module_registry.insert(name.clone(), binary.clone());
+                        }
+                        self.module_registry.insert("current".to_string(), binary.clone());
+
+                        // Load into engine with instance name
+                        match self.engine.load_module(inst_name.as_deref(), &binary) {
+                            Ok(()) => {
+                                self.stats.modules_loaded_count += 1;
+                                self.stats.passed += 1;
+                                Ok(WastDirectiveInfo {
+                                    test_type: WastTestType::Integration,
+                                    directive_name: "module_instance".to_string(),
+                                    requires_module_state: false,
+                                    modifies_engine_state: true,
+                                    result: TestResult::Passed,
+                                    error_message: None,
+                                })
+                            },
+                            Err(e) => {
+                                self.stats.failed += 1;
+                                Ok(WastDirectiveInfo {
+                                    test_type: WastTestType::Integration,
+                                    directive_name: "module_instance".to_string(),
+                                    requires_module_state: false,
+                                    modifies_engine_state: true,
+                                    result: TestResult::Failed,
+                                    error_message: Some(format!(
+                                        "Module instance instantiation failed: {:#}", e
+                                    )),
+                                })
+                            },
+                        }
+                    },
+                    None => {
+                        self.stats.failed += 1;
+                        Ok(WastDirectiveInfo {
+                            test_type: WastTestType::Integration,
+                            directive_name: "module_instance".to_string(),
+                            requires_module_state: false,
+                            modifies_engine_state: false,
+                            result: TestResult::Failed,
+                            error_message: Some(format!(
+                                "Module definition '{}' not found",
+                                def_name.unwrap_or_else(|| "unknown".to_string())
+                            )),
+                        })
+                    },
+                }
+            },
             _ => {
                 // Handle any other directive types
                 Ok(WastDirectiveInfo {
