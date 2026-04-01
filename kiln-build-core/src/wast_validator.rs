@@ -4043,10 +4043,13 @@ impl WastModuleValidator {
                         },
                         // struct.set $t $f: [(ref null $t) field_type] -> []
                         0x05 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            let (_field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            let (field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
+                            if !Self::is_struct_field_mutable(type_idx, field_idx, module) {
+                                return Err(anyhow!("immutable field"));
+                            }
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                         },
@@ -4122,8 +4125,11 @@ impl WastModuleValidator {
                         },
                         // array.set $t: [(ref null $t) i32 elem_type] -> []
                         0x0E => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
+                            if !Self::is_array_mutable(type_idx, module) {
+                                return Err(anyhow!("immutable array"));
+                            }
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
@@ -4135,8 +4141,11 @@ impl WastModuleValidator {
                         },
                         // array.fill $t: [(ref null $t) i32 val i32] -> []
                         0x10 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
+                            if !Self::is_array_mutable(type_idx, module) {
+                                return Err(anyhow!("immutable array"));
+                            }
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
@@ -4144,10 +4153,13 @@ impl WastModuleValidator {
                         },
                         // array.copy $t1 $t2: [(ref null $t1) i32 (ref null $t2) i32 i32] -> []
                         0x11 => {
-                            let (_type_idx1, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx1, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
                             let (_type_idx2, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
+                            if !Self::is_array_mutable(type_idx1, module) {
+                                return Err(anyhow!("immutable array"));
+                            }
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
@@ -4156,8 +4168,11 @@ impl WastModuleValidator {
                         },
                         // array.init_data $t $d: [(ref null $t) i32 i32 i32] -> []
                         0x12 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
+                            if !Self::is_array_mutable(type_idx, module) {
+                                return Err(anyhow!("immutable array"));
+                            }
                             let (_data_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
@@ -4167,8 +4182,11 @@ impl WastModuleValidator {
                         },
                         // array.init_elem $t $e: [(ref null $t) i32 i32 i32] -> []
                         0x13 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
+                            if !Self::is_array_mutable(type_idx, module) {
+                                return Err(anyhow!("immutable array"));
+                            }
                             let (_elem_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
@@ -6084,6 +6102,28 @@ impl WastModuleValidator {
             }
         }
         Ok(())
+    }
+
+    /// Check if array type at given index has a mutable element.
+    fn is_array_mutable(type_idx: u32, module: &Module) -> bool {
+        if let Some(sub) = Self::find_subtype_by_index(type_idx, module) {
+            if let CompositeTypeKind::ArrayWithElement(field) = &sub.composite_kind {
+                return field.mutable;
+            }
+        }
+        false
+    }
+
+    /// Check if struct field at given index is mutable.
+    fn is_struct_field_mutable(type_idx: u32, field_idx: u32, module: &Module) -> bool {
+        if let Some(sub) = Self::find_subtype_by_index(type_idx, module) {
+            if let CompositeTypeKind::StructWithFields(fields) = &sub.composite_kind {
+                if let Some(field) = fields.get(field_idx as usize) {
+                    return field.mutable;
+                }
+            }
+        }
+        false
     }
 
     /// Find a SubType by its type index across all rec_groups.
