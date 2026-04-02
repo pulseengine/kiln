@@ -4017,12 +4017,14 @@ impl WastModuleValidator {
                         },
                         // struct.get $t $f: [(ref null $t)] -> [field_type]
                         0x02 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            let (_field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            let (field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
-                            stack.push(StackType::Unknown);
+                            // Push the field's value type (or Unknown if we can't determine it)
+                            let field_type = Self::get_struct_field_type(type_idx, field_idx, module);
+                            stack.push(field_type);
                         },
                         // struct.get_s $t $f: [(ref null $t)] -> [i32]
                         0x03 => {
@@ -6135,6 +6137,29 @@ impl WastModuleValidator {
             }
         }
         true // If we can't determine, allow (other checks will catch real errors)
+    }
+
+    /// Get the StackType for a struct field by looking up the GC type info.
+    fn get_struct_field_type(type_idx: u32, field_idx: u32, module: &Module) -> StackType {
+        use kiln_format::module::GcStorageType;
+        if let Some(sub) = Self::find_subtype_by_index(type_idx, module) {
+            if let CompositeTypeKind::StructWithFields(fields) = &sub.composite_kind {
+                if let Some(field) = fields.get(field_idx as usize) {
+                    return match &field.storage_type {
+                        GcStorageType::I8 | GcStorageType::I16 => StackType::I32, // packed → i32
+                        GcStorageType::Value(0x7F) => StackType::I32,
+                        GcStorageType::Value(0x7E) => StackType::I64,
+                        GcStorageType::Value(0x7D) => StackType::F32,
+                        GcStorageType::Value(0x7C) => StackType::F64,
+                        GcStorageType::Value(0x7B) => StackType::V128,
+                        GcStorageType::RefType(idx) => StackType::TypedFuncRef(*idx, false),
+                        GcStorageType::RefTypeNull(idx) => StackType::TypedFuncRef(*idx, true),
+                        GcStorageType::Value(v) => Self::value_byte_to_stack_type(*v),
+                    };
+                }
+            }
+        }
+        StackType::Unknown
     }
 
     /// Check if array element type is numeric or vector (not a reference type).
