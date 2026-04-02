@@ -353,15 +353,13 @@ impl WastEngine {
         use kiln_runtime::memory::Memory;
         use kiln_runtime::module::{MemoryWrapper, RuntimeImportDesc};
 
+        let mut memory_import_idx = 0usize;
+
         // Look for memory imports from spectest
         for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
-            if mod_name == "spectest" && (field_name == "memory" || field_name == "shared_memory") {
-                // Check if this is actually a memory import
-                if let Some(RuntimeImportDesc::Memory(_mem_type)) = module.import_types.get(i) {
+            if let Some(RuntimeImportDesc::Memory(_)) = module.import_types.get(i) {
+                if mod_name == "spectest" && (field_name == "memory" || field_name == "shared_memory") {
                     let is_shared = field_name == "shared_memory";
-                    // The spectest module provides a memory with 1-2 pages
-                    // The import type specifies minimum requirements, but the actual
-                    // spectest memory always has at least 1 page
                     let core_mem_type = CoreMemoryType {
                         limits: Limits { min: 1, max: Some(2) },
                         shared: is_shared,
@@ -375,11 +373,12 @@ impl WastEngine {
 
                     let wrapper = MemoryWrapper::new(memory);
 
-                    // Add the memory to the instance (at index 0 since it's an import)
+                    // Add the memory at the correct import index
                     module_instance
-                        .set_memory(0, wrapper)
+                        .set_memory(memory_import_idx, wrapper)
                         .map_err(|e| anyhow::anyhow!("Failed to set spectest memory: {:?}", e))?;
                 }
+                memory_import_idx += 1;
             }
         }
 
