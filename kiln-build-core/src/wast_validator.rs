@@ -4151,8 +4151,13 @@ impl WastModuleValidator {
                             if !Self::is_array_mutable(type_idx, module) {
                                 return Err(anyhow!("immutable array"));
                             }
+                            // array.fill $t: [(ref null $t) i32 val i32] -> []
+                            // val must match the array element type
+                            let elem_type = Self::get_array_element_type(type_idx, module);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
-                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            if !Self::pop_type_with_module(&mut stack, elem_type, frame_height, unreachable, Some(module)) {
+                                return Err(anyhow!("type mismatch"));
+                            }
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                         },
