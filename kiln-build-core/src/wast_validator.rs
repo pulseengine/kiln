@@ -4104,11 +4104,13 @@ impl WastModuleValidator {
                         },
                         // array.get $t: [(ref null $t) i32] -> [elem_type]
                         0x0B => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
-                            stack.push(StackType::Unknown);
+                            // Push the array element type
+                            let elem_type = Self::get_array_element_type(type_idx, module);
+                            stack.push(elem_type);
                         },
                         // array.get_s $t: [(ref null $t) i32] -> [i32]
                         0x0C => {
@@ -6157,6 +6159,27 @@ impl WastModuleValidator {
                         GcStorageType::Value(v) => Self::value_byte_to_stack_type(*v),
                     };
                 }
+            }
+        }
+        StackType::Unknown
+    }
+
+    /// Get the StackType for an array element by looking up the GC type info.
+    fn get_array_element_type(type_idx: u32, module: &Module) -> StackType {
+        use kiln_format::module::GcStorageType;
+        if let Some(sub) = Self::find_subtype_by_index(type_idx, module) {
+            if let CompositeTypeKind::ArrayWithElement(field) = &sub.composite_kind {
+                return match &field.storage_type {
+                    GcStorageType::I8 | GcStorageType::I16 => StackType::I32, // packed → i32
+                    GcStorageType::Value(0x7F) => StackType::I32,
+                    GcStorageType::Value(0x7E) => StackType::I64,
+                    GcStorageType::Value(0x7D) => StackType::F32,
+                    GcStorageType::Value(0x7C) => StackType::F64,
+                    GcStorageType::Value(0x7B) => StackType::V128,
+                    GcStorageType::RefType(idx) => StackType::TypedFuncRef(*idx, false),
+                    GcStorageType::RefTypeNull(idx) => StackType::TypedFuncRef(*idx, true),
+                    GcStorageType::Value(v) => Self::value_byte_to_stack_type(*v),
+                };
             }
         }
         StackType::Unknown
