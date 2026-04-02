@@ -4239,36 +4239,58 @@ impl WastModuleValidator {
                             stack.push(StackType::Unknown);
                         },
                         // br_on_cast: flags(1 byte) + label(u32) + ht1(s33) + ht2(s33)
-                        // [(ref rt1)] -> [(ref rt1)]
+                        // Spec: rt2 <: rt1 required
                         0x18 => {
                             if offset >= code.len() {
                                 return Err(anyhow!("unexpected end in br_on_cast"));
                             }
-                            let _flags = code[offset];
+                            let flags = code[offset];
                             offset += 1;
                             let (_label, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            let (_ht1, new_off2) = Self::read_leb128_signed(code, offset)?;
+                            let (ht1_raw, new_off2) = Self::read_leb128_signed(code, offset)?;
                             offset = new_off2;
-                            let (_ht2, new_off3) = Self::read_leb128_signed(code, offset)?;
+                            let (ht2_raw, new_off3) = Self::read_leb128_signed(code, offset)?;
                             offset = new_off3;
+                            // Validate: rt2 must be a subtype of rt1
+                            let ht1_nullable = (flags & 1) != 0;
+                            let ht2_nullable = (flags & 2) != 0;
+                            let ht1_st = Self::heap_type_to_stack_type(ht1_raw, ht1_nullable);
+                            let ht2_st = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
+                            if ht1_st != StackType::Unknown && ht2_st != StackType::Unknown
+                                && !Self::is_subtype_of_in_module(&ht2_st, &ht1_st, module)
+                            {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Keep permissive stack handling for fall-through
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                             stack.push(StackType::Unknown);
                         },
                         // br_on_cast_fail: flags(1 byte) + label(u32) + ht1(s33) + ht2(s33)
-                        // [(ref rt1)] -> [(ref rt2)]
+                        // Spec: rt2 <: rt1 required
                         0x19 => {
                             if offset >= code.len() {
                                 return Err(anyhow!("unexpected end in br_on_cast_fail"));
                             }
-                            let _flags = code[offset];
+                            let flags = code[offset];
                             offset += 1;
                             let (_label, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            let (_ht1, new_off2) = Self::read_leb128_signed(code, offset)?;
+                            let (ht1_raw, new_off2) = Self::read_leb128_signed(code, offset)?;
                             offset = new_off2;
-                            let (_ht2, new_off3) = Self::read_leb128_signed(code, offset)?;
+                            let (ht2_raw, new_off3) = Self::read_leb128_signed(code, offset)?;
                             offset = new_off3;
+                            // Validate: rt2 must be a subtype of rt1
+                            let ht1_nullable = (flags & 1) != 0;
+                            let ht2_nullable = (flags & 2) != 0;
+                            let ht1_st = Self::heap_type_to_stack_type(ht1_raw, ht1_nullable);
+                            let ht2_st = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
+                            if ht1_st != StackType::Unknown && ht2_st != StackType::Unknown
+                                && !Self::is_subtype_of_in_module(&ht2_st, &ht1_st, module)
+                            {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                            // Keep permissive stack handling for fall-through
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                             stack.push(StackType::Unknown);
                         },
@@ -6439,6 +6461,31 @@ impl WastModuleValidator {
             0x73 => StackType::NullFuncRef, // nofunc
             0x72 => StackType::NullExternRef, // noextern
             _ => StackType::Unknown,
+        }
+    }
+
+    /// Convert a raw s33 heap type value + nullability flag to a StackType.
+    /// Used by br_on_cast/br_on_cast_fail validation.
+    fn heap_type_to_stack_type(ht_raw: i32, nullable: bool) -> StackType {
+        if ht_raw >= 0 {
+            // Concrete type index
+            StackType::TypedFuncRef(ht_raw as u32, nullable)
+        } else {
+            // Abstract heap type (s33 negative values)
+            match ht_raw {
+                -16 => StackType::FuncRef,       // func
+                -17 => StackType::ExternRef,     // extern
+                -18 => StackType::AnyRef,        // any
+                -19 => StackType::EqRef,         // eq
+                -20 => StackType::I31Ref,        // i31
+                -21 => StackType::StructRef,     // struct
+                -22 => StackType::ArrayRef,      // array
+                -23 => StackType::ExnRef,        // exn
+                -13 => StackType::NullFuncRef,   // nofunc
+                -14 => StackType::NullExternRef, // noextern
+                -15 => StackType::NoneRef,       // none
+                _ => StackType::Unknown,
+            }
         }
     }
 

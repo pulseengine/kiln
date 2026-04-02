@@ -234,7 +234,7 @@ mod posix_impl {
         fn create_allocator(config: &Self::Config) -> Result<Self::Allocator, Error> {
             crate::VxWorksAllocatorBuilder::new()
                 .context(crate::vxworks_memory::VxWorksContext::Rtp) // RTP for POSIX-like usage
-                .max_pages(config.max_pages as usize)
+                .max_pages(config.max_pages)
                 .enable_guard_pages(config.guard_pages)
                 .use_dedicated_partition(false) // Use system heap for RTP
                 .build()
@@ -295,7 +295,7 @@ mod realtime_impl {
         fn create_allocator(config: &Self::Config) -> Result<Self::Allocator, Error> {
             let mut builder = crate::VxWorksAllocatorBuilder::new()
                 .context(crate::vxworks_memory::VxWorksContext::Lkm) // LKM for real-time usage
-                .max_pages(config.max_pages as usize)
+                .max_pages(config.max_pages)
                 .enable_guard_pages(config.guard_pages)
                 .use_dedicated_partition(true); // Binary std/no_std choice
 
