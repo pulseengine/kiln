@@ -717,6 +717,11 @@ impl CapabilityEngine for CapabilityAwareEngine {
         debug!("Initializing data segments...");
         instance.initialize_data_segments()?;
 
+        // Evaluate table init expressions (fills tables with computed values)
+        // Must happen after globals and table imports are resolved,
+        // but before element segment initialization
+        instance.evaluate_table_init_exprs()?;
+
         // Initialize element segments into tables (critical for call_indirect!)
         // IMPORTANT: This MUST come AFTER table imports are applied above
         instance.initialize_element_segments()?;

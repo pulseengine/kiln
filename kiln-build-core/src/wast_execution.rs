@@ -133,6 +133,13 @@ impl WastEngine {
             .populate_tables_from_module()
             .context("Failed to populate tables")?;
 
+        // Evaluate table init expressions (fills tables with computed values)
+        // Must happen after globals are resolved and tables are populated,
+        // but before element segment initialization (which can override individual slots)
+        module_instance
+            .evaluate_table_init_exprs()
+            .context("Failed to evaluate table init expressions")?;
+
         // Initialize dropped segment tracking (for elem.drop and data.drop)
         module_instance
             .initialize_dropped_segments()
