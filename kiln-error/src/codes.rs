@@ -691,6 +691,8 @@ pub const PLATFORM_MEMORY_PROTECTION_FAILED: u16 = 25006;
 pub const PLATFORM_WATCHDOG_TIMEOUT: u16 = 25007;
 /// Platform IPC failed
 pub const PLATFORM_IPC_FAILED: u16 = 25008;
+/// Platform feature not supported
+pub const PLATFORM_UNSUPPORTED: u16 = 25009;
 
 // Foundation Runtime error codes (26000-26999)
 /// Foundation bounded capacity exceeded
