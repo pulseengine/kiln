@@ -865,12 +865,7 @@ impl Memory {
     /// ASIL-B COMPLIANT: Thread-safe write operation for Arc<Memory> usage.
     /// Uses interior mutability via Mutex for deterministic, bounded-time writes.
     pub fn write_shared(&self, offset: u32, buffer: &[u8]) -> Result<()> {
-        // Empty write is always successful
-        if buffer.is_empty() {
-            return Ok(());
-        }
-
-        // Calculate and verify bounds
+        // Calculate and verify bounds (even empty writes must check offset per spec)
         let offset_usize = wasm_offset_to_usize(offset)?;
         let size = buffer.len();
         let end = offset_usize
@@ -891,7 +886,12 @@ impl Memory {
                 use kiln_foundation::tracing::error;
                 error!("write_shared bounds check FAILED: end {} > mem_size {}", end, mem_size);
             }
-            return Err(Error::memory_out_of_bounds("Memory write out of bounds"));
+            return Err(Error::memory_out_of_bounds("out of bounds memory access"));
+        }
+
+        // Empty write that passed bounds check is done
+        if buffer.is_empty() {
+            return Ok(());
         }
 
         // Track access

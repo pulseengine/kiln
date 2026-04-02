@@ -544,6 +544,80 @@ impl ModuleInstance {
         Ok(())
     }
 
+    /// Evaluate table init expressions and fill tables with the computed values.
+    /// This must be called after globals have been fully resolved (including
+    /// imported globals), because table init expressions can reference globals.
+    ///
+    /// Per the WebAssembly spec, tables with init expressions should have all
+    /// their elements initialized to the value produced by the expression.
+    pub fn evaluate_table_init_exprs(&self) -> Result<()> {
+        #[cfg(feature = "tracing")]
+        use kiln_foundation::tracing::{debug, trace};
+
+        let table_init_exprs = &self.module.table_init_exprs;
+        if table_init_exprs.is_empty() {
+            return Ok(());
+        }
+
+        #[cfg(feature = "tracing")]
+        debug!(count = table_init_exprs.len(), "Evaluating table init expressions");
+
+        // Lock globals for reading init expression values
+        let globals_guard = self
+            .globals
+            .lock()
+            .map_err(|_| Error::runtime_error("Failed to lock globals for table init expr evaluation"))?;
+        let globals_slice: &[crate::module::GlobalWrapper] = &globals_guard;
+
+        // Lock tables for writing
+        let mut tables_guard = self
+            .tables
+            .lock()
+            .map_err(|_| Error::runtime_error("Failed to lock tables for init expr evaluation"))?;
+
+        // Count imported tables to get the correct offset for defined table indices
+        let num_table_imports = self.module.import_types.iter()
+            .filter(|desc| matches!(desc, crate::module::RuntimeImportDesc::Table(_)))
+            .count();
+
+        for (defined_idx, init_expr_opt) in table_init_exprs.iter().enumerate() {
+            let init_bytes = match init_expr_opt {
+                Some(bytes) => bytes,
+                None => continue,
+            };
+
+            // Evaluate the init expression using instance globals
+            let init_value = crate::module::Module::evaluate_const_expr_with_instance_globals(
+                init_bytes,
+                self.module.num_global_imports,
+                globals_slice,
+                &self.module.gc_types,
+            )?;
+
+            #[cfg(feature = "tracing")]
+            trace!(defined_idx = defined_idx, value = ?init_value, "Table init expression evaluated");
+
+            // The table index in the instance includes imported tables first
+            let instance_table_idx = num_table_imports + defined_idx;
+            if let Some(table_wrapper) = tables_guard.get(instance_table_idx) {
+                let table_size = table_wrapper.size();
+                // Fill all elements with the init value
+                for slot in 0..table_size {
+                    table_wrapper.0.set_shared(slot, Some(init_value.clone()))?;
+                }
+
+                #[cfg(feature = "tracing")]
+                debug!(
+                    instance_table_idx = instance_table_idx,
+                    table_size = table_size,
+                    "Filled table with init expression value"
+                );
+            }
+        }
+
+        Ok(())
+    }
+
     /// Initialize dropped segment tracking arrays based on module's segment counts
     /// Call this during instance initialization before any elem.drop/data.drop operations
     pub fn initialize_dropped_segments(&self) -> Result<()> {
@@ -1337,6 +1411,7 @@ impl FromBytes for ModuleInstance {
             num_import_functions: 0,
             gc_types: Vec::new(),
             type_supertypes: Vec::new(),
+            table_init_exprs: Vec::new(),
         };
 
         // Create the instance using the new method

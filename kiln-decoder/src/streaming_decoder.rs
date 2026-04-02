@@ -1853,6 +1853,9 @@ impl<'a> StreamingDecoder<'a> {
                     .filter(|imp| matches!(imp.desc, ImportDesc::Global(..)))
                     .count();
 
+                // Record start position so we can capture the init expression bytes
+                let init_expr_start = offset;
+
                 // Scan for the end opcode (0x0B), handling nested blocks
                 let mut block_depth = 0u32;
                 loop {
@@ -1912,13 +1915,46 @@ impl<'a> StreamingDecoder<'a> {
                                 offset += 1;
                             }
                         },
+                        // GC prefix (0xFB) - skip sub-opcode LEB128
+                        0xFB => {
+                            // Read and skip the sub-opcode (LEB128 encoded)
+                            while offset < data.len() && (data[offset] & 0x80) != 0 {
+                                offset += 1;
+                            }
+                            if offset < data.len() {
+                                offset += 1;
+                            }
+                        },
+                        // ref.func - skip LEB128 function index
+                        0xD2 => {
+                            while offset < data.len() && (data[offset] & 0x80) != 0 {
+                                offset += 1;
+                            }
+                            if offset < data.len() {
+                                offset += 1;
+                            }
+                        },
                         _ => {
                             // Other opcodes - continue scanning
                         },
                     }
                 }
+
+                // Store the init expression bytes (up to and including the 0x0B end opcode)
+                #[cfg(feature = "std")]
+                {
+                    let init_expr_bytes = data[init_expr_start..offset].to_vec();
+                    self.module.table_init_exprs.push(Some(init_expr_bytes));
+                }
+
                 #[cfg(feature = "tracing")]
-                trace!(table_index = i, "table has init expression (validated)");
+                trace!(table_index = i, "table has init expression (validated and stored)");
+            } else {
+                // No init expression — push None to keep indices aligned
+                #[cfg(feature = "std")]
+                {
+                    self.module.table_init_exprs.push(None);
+                }
             }
 
             #[cfg(feature = "tracing")]

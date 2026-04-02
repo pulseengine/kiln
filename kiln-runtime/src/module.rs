@@ -773,6 +773,10 @@ pub struct Module {
     /// Supertype index for each type (None if no supertype declared)
     /// Used by ref_test_value to walk the type hierarchy for subtype checking
     pub type_supertypes: Vec<Option<u32>>,
+    /// Init expression bytes for tables with explicit init expressions.
+    /// Indexed by table definition index (not including imported tables).
+    /// None means the table uses the default null value for its element type.
+    pub table_init_exprs: Vec<Option<Vec<u8>>>,
 }
 
 impl Module {
@@ -1245,7 +1249,7 @@ impl Module {
     }
 
     /// Evaluate a constant expression using instance globals (for deferred evaluation)
-    fn evaluate_const_expr_with_instance_globals(
+    pub(crate) fn evaluate_const_expr_with_instance_globals(
         init_bytes: &[u8],
         num_global_imports: usize,
         instance_globals: &[GlobalWrapper],
@@ -1572,6 +1576,7 @@ impl Module {
             num_import_functions: 0,
             gc_types: Vec::new(),
             type_supertypes: Vec::new(),
+            table_init_exprs: Vec::new(),
         })
     }
 
@@ -1623,6 +1628,7 @@ impl Module {
             num_import_functions: 0, // Will be set after processing imports
             gc_types: Vec::new(), // Will be populated from rec_groups
             type_supertypes: Vec::new(), // Will be populated from rec_groups
+            table_init_exprs: Vec::new(), // Will be populated from table section
         };
 
         // Populate GC type info from rec_groups
@@ -1969,6 +1975,9 @@ impl Module {
         }
         #[cfg(feature = "tracing")]
         debug!(total_tables = runtime_module.tables.len(), "Tables converted");
+
+        // Copy table init expressions from the format module
+        runtime_module.table_init_exprs = kiln_module.table_init_exprs.clone();
 
         // Convert memories - NOW ENABLED (stack overflow fixed)
         #[cfg(feature = "tracing")]
@@ -2996,6 +3005,7 @@ impl Module {
             num_import_functions: 0,
             gc_types: Vec::new(),
             type_supertypes: Vec::new(),
+            table_init_exprs: Vec::new(),
         };
 
         // Set start function if present
@@ -3442,6 +3452,7 @@ impl kiln_foundation::traits::FromBytes for Module {
             num_import_functions: 0,
             gc_types: Vec::new(),
             type_supertypes: Vec::new(),
+            table_init_exprs: Vec::new(),
         };
 
         Ok(module)

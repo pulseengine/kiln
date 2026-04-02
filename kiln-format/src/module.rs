@@ -1791,6 +1791,10 @@ pub struct Module {
     pub type_info_section: Option<TypeInformationSection>,
     /// GC proposal: recursive type groups with sub type declarations
     pub rec_groups:        Vec<RecGroup>,
+    /// Init expression bytes for tables that have an init expression.
+    /// Indexed by table definition index (not including imported tables).
+    /// None means the table uses the default null value for its element type.
+    pub table_init_exprs:  Vec<Option<Vec<u8>>>,
 }
 
 #[cfg(feature = "std")]
@@ -1821,6 +1825,7 @@ impl Module {
             core_version:      CoreWasmVersion::default(),
             type_info_section: None,
             rec_groups:        Vec::new(),
+            table_init_exprs:  Vec::new(),
         }
     }
 
