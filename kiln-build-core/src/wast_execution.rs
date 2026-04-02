@@ -165,9 +165,14 @@ impl WastEngine {
         self.validate_imports(&module)?;
 
         // Store the module and instance ID for later reference
+        // Always store as "current" (last loaded module) AND under the given name
+        self.modules.insert("current".to_string(), Arc::clone(&module));
+        self.instance_ids.insert("current".to_string(), instance_idx);
         let module_name = name.unwrap_or("current").to_string();
-        self.modules.insert(module_name.clone(), Arc::clone(&module));
-        self.instance_ids.insert(module_name.clone(), instance_idx);
+        if module_name != "current" {
+            self.modules.insert(module_name.clone(), Arc::clone(&module));
+            self.instance_ids.insert(module_name.clone(), instance_idx);
+        }
 
         // Register instance name for cross-module exception handling
         self.engine.register_instance_name(instance_idx, &module_name);
