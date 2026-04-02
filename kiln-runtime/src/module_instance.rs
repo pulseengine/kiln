@@ -1320,6 +1320,7 @@ impl FromBytes for ModuleInstance {
             import_types: Vec::new(),
             num_import_functions: 0,
             gc_types: Vec::new(),
+            type_supertypes: Vec::new(),
         };
 
         // Create the instance using the new method
