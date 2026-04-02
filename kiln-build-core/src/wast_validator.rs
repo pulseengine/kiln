@@ -4204,8 +4204,18 @@ impl WastModuleValidator {
                             if !Self::is_array_mutable(type_idx, module) {
                                 return Err(anyhow!("immutable array"));
                             }
-                            let (_elem_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            let (elem_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
+                            // Check element segment type is compatible with array element type
+                            if let Some(elem_seg) = module.elements.get(elem_idx as usize) {
+                                let array_elem = Self::get_array_element_type(type_idx, module);
+                                let seg_type = StackType::from_value_type(elem_seg.element_type.to_value_type());
+                                if array_elem != StackType::Unknown
+                                    && !Self::is_subtype_of_in_module(&seg_type, &array_elem, module)
+                                {
+                                    return Err(anyhow!("type mismatch"));
+                                }
+                            }
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
