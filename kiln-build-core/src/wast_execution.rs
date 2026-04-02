@@ -1329,8 +1329,8 @@ impl WastEngine {
                 Some(MemoryType {
                     limits: core_ty.limits,
                     shared: core_ty.shared,
-                    memory64: false,
-                    page_size: None,
+                    memory64: core_ty.memory64,
+                    page_size: core_ty.page_size,
                 })
             } else {
                 None
@@ -1459,6 +1459,13 @@ fn validate_table_import_compatibility(import: &TableType, actual: &TableType) -
 /// - If import has max, actual must have max and actual max <= import max
 /// - shared flag must match
 fn validate_memory_import_compatibility(import: &MemoryType, actual: &MemoryType) -> Result<()> {
+    // Memory64 flag must match (memory32 and memory64 are incompatible)
+    if import.memory64 != actual.memory64 {
+        return Err(anyhow::anyhow!(
+            "incompatible import type: memory types incompatible"
+        ));
+    }
+
     // Shared flag must match
     if import.shared != actual.shared {
         return Err(anyhow::anyhow!(
