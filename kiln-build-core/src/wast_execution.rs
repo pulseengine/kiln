@@ -463,16 +463,13 @@ impl WastEngine {
         use kiln_runtime::module::{RuntimeImportDesc, TableWrapper};
         use kiln_runtime::table::Table;
 
-        // The spectest table types:
-        //   "table"   = (table 10 20 funcref)
-        //   "table64" = (table i64 10 20 funcref)
+        let mut table_import_idx = 0usize;
+
         // Look for table imports from spectest
         for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
-            if mod_name == "spectest" && (field_name == "table" || field_name == "table64") {
-                // Check if this is actually a table import
-                if let Some(RuntimeImportDesc::Table(_table_type)) = module.import_types.get(i) {
+            if let Some(RuntimeImportDesc::Table(_)) = module.import_types.get(i) {
+                if mod_name == "spectest" && (field_name == "table" || field_name == "table64") {
                     let is_table64 = field_name == "table64";
-                    // The spectest module provides a table with 10-20 funcref elements
                     let spectest_table_type = TableType {
                         element_type: RefType::Funcref,
                         limits: Limits { min: 10, max: Some(20) },
@@ -484,11 +481,12 @@ impl WastEngine {
 
                     let wrapper = TableWrapper::new(table);
 
-                    // Add the table to the instance (at the appropriate import index)
+                    // Add the table at the correct import index
                     module_instance
-                        .set_table(0, wrapper)
+                        .set_table(table_import_idx, wrapper)
                         .map_err(|e| anyhow::anyhow!("Failed to set spectest table: {:?}", e))?;
                 }
+                table_import_idx += 1;
             }
         }
 
