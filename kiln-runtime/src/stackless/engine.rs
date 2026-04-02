@@ -10545,7 +10545,7 @@ impl StacklessEngine {
                         trace!("RefTest: {:?}", heap_type);
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("ref.test: expected reference"))?;
-                        let result = ref_test_value(&val, &heap_type, false);
+                        let result = ref_test_value_with_module(&val, &heap_type, false, Some(&module));
                         operand_stack.push(Value::I32(if result { 1 } else { 0 }));
                     }
 
@@ -10556,7 +10556,7 @@ impl StacklessEngine {
                         trace!("RefTestNull: {:?}", heap_type);
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("ref.test: expected reference"))?;
-                        let result = ref_test_value(&val, &heap_type, true);
+                        let result = ref_test_value_with_module(&val, &heap_type, true, Some(&module));
                         operand_stack.push(Value::I32(if result { 1 } else { 0 }));
                     }
 
@@ -10567,7 +10567,7 @@ impl StacklessEngine {
                         trace!("RefCast: {:?}", heap_type);
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("ref.cast: expected reference"))?;
-                        if !ref_test_value(&val, &heap_type, false) {
+                        if !ref_test_value_with_module(&val, &heap_type, false, Some(&module)) {
                             return Err(kiln_error::Error::runtime_trap("cast failure"));
                         }
                         operand_stack.push(val);
@@ -10580,7 +10580,7 @@ impl StacklessEngine {
                         trace!("RefCastNull: {:?}", heap_type);
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("ref.cast: expected reference"))?;
-                        if !ref_test_value(&val, &heap_type, true) {
+                        if !ref_test_value_with_module(&val, &heap_type, true, Some(&module)) {
                             return Err(kiln_error::Error::runtime_trap("cast failure"));
                         }
                         operand_stack.push(val);
@@ -10596,7 +10596,7 @@ impl StacklessEngine {
                             kiln_error::Error::runtime_trap("br_on_cast: expected reference"))?;
                         // Test if cast would succeed
                         let to_nullable = (flags & 2) != 0;
-                        if ref_test_value(&val, &to_type, to_nullable) {
+                        if ref_test_value_with_module(&val, &to_type, to_nullable, Some(&module)) {
                             // Cast succeeds - push value and branch
                             operand_stack.push(val);
                             // Branch logic (similar to Br)
@@ -10648,7 +10648,7 @@ impl StacklessEngine {
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("br_on_cast_fail: expected reference"))?;
                         let to_nullable = (flags & 2) != 0;
-                        if !ref_test_value(&val, &to_type, to_nullable) {
+                        if !ref_test_value_with_module(&val, &to_type, to_nullable, Some(&module)) {
                             // Cast fails - push value and branch
                             operand_stack.push(val);
                             if (label_idx as usize) < block_stack.len() {
@@ -11557,6 +11557,15 @@ impl StacklessEngine {
 /// - `false`: ref.test / ref.cast (non-nullable) - null fails
 /// - `true`: ref.test null / ref.cast null (nullable) - null passes
 fn ref_test_value(val: &Value, heap_type: &kiln_foundation::types::HeapType, allow_null: bool) -> bool {
+    ref_test_value_with_module(val, heap_type, allow_null, None)
+}
+
+fn ref_test_value_with_module(
+    val: &Value,
+    heap_type: &kiln_foundation::types::HeapType,
+    allow_null: bool,
+    module: Option<&crate::module::Module>,
+) -> bool {
     use kiln_foundation::types::HeapType;
 
     // Check if the value is null
@@ -11580,14 +11589,51 @@ fn ref_test_value(val: &Value, heap_type: &kiln_foundation::types::HeapType, all
         HeapType::Array => matches!(val, Value::ArrayRef(Some(_))),
         HeapType::Exn => matches!(val, Value::ExnRef(Some(_))),
         HeapType::None | HeapType::NoFunc | HeapType::NoExtern => false,
-        // Concrete type index - check if the value's type index matches
-        HeapType::Concrete(type_idx) => match val {
-            Value::StructRef(Some(sref)) => sref.type_index() == *type_idx,
-            Value::ArrayRef(Some(aref)) => aref.type_index() == *type_idx,
-            Value::FuncRef(Some(_fref)) => true, // FuncRef doesn't carry type index
-            _ => false,
+        // Concrete type index - check if the value's type is a subtype
+        HeapType::Concrete(target_idx) => {
+            let val_type_idx = match val {
+                Value::StructRef(Some(sref)) => Some(sref.type_index()),
+                Value::ArrayRef(Some(aref)) => Some(aref.type_index()),
+                // FuncRef doesn't carry a type index — accept any funcref for
+                // concrete func type targets (best effort without full type info)
+                Value::FuncRef(Some(_)) => return true,
+                _ => None,
+            };
+
+            match val_type_idx {
+                Some(val_idx) if val_idx == *target_idx => true,
+                Some(val_idx) => {
+                    // Walk the supertype chain to check subtyping
+                    if let Some(module) = module {
+                        is_runtime_subtype(val_idx, *target_idx, &module.type_supertypes)
+                    } else {
+                        false
+                    }
+                },
+                None => false,
+            }
         },
     }
+}
+
+/// Check if child_idx is a subtype of parent_idx by walking the declared supertype chain.
+fn is_runtime_subtype(child_idx: u32, parent_idx: u32, supertypes: &[Option<u32>]) -> bool {
+    if child_idx == parent_idx {
+        return true;
+    }
+    let mut current = child_idx;
+    let mut visited = 0u32; // Simple cycle guard
+    while let Some(Some(super_idx)) = supertypes.get(current as usize) {
+        if *super_idx == parent_idx {
+            return true;
+        }
+        current = *super_idx;
+        visited += 1;
+        if visited > 1000 {
+            break; // Prevent infinite loops
+        }
+    }
+    false
 }
 
 /// Test if a value is a null reference

@@ -150,13 +150,22 @@ impl ModuleInstance {
             .map_err(|_| Error::runtime_error("Failed to lock memories"))?;
         if idx < memories.len() {
             memories[idx] = memory;
-            Ok(())
-        } else if idx == memories.len() {
-            memories.push(memory);
-            Ok(())
         } else {
-            Err(Error::runtime_error("Memory index out of bounds for set_memory"))
+            // Fill gaps with placeholder memories for import slots resolved out of order
+            use kiln_foundation::clean_core_types::CoreMemoryType;
+            use kiln_foundation::types::Limits;
+            while memories.len() < idx {
+                let placeholder = crate::memory::Memory::new(CoreMemoryType {
+                    limits: Limits { min: 0, max: None },
+                    shared: false,
+                    memory64: false,
+                    page_size: None,
+                }).map_err(|e| Error::runtime_error("Failed to create placeholder memory"))?;
+                memories.push(MemoryWrapper::new(placeholder));
+            }
+            memories.push(memory);
         }
+        Ok(())
     }
 
     /// Get a memory by export name from this instance
@@ -192,13 +201,20 @@ impl ModuleInstance {
             .map_err(|_| Error::runtime_error("Failed to lock tables"))?;
         if idx < tables.len() {
             tables[idx] = table;
-            Ok(())
-        } else if idx == tables.len() {
-            tables.push(table);
-            Ok(())
         } else {
-            Err(Error::runtime_error("Table index out of bounds for set_table"))
+            // Fill gaps with placeholder tables for import slots resolved out of order
+            use kiln_foundation::types::{Limits, RefType, TableType};
+            while tables.len() < idx {
+                let placeholder = crate::table::Table::new(TableType {
+                    element_type: RefType::Funcref,
+                    limits: Limits { min: 0, max: None },
+                    table64: false,
+                }).map_err(|e| Error::runtime_error("Failed to create placeholder table"))?;
+                tables.push(TableWrapper::new(placeholder));
+            }
+            tables.push(table);
         }
+        Ok(())
     }
 
     /// Get a table by export name from this instance
@@ -1320,6 +1336,7 @@ impl FromBytes for ModuleInstance {
             import_types: Vec::new(),
             num_import_functions: 0,
             gc_types: Vec::new(),
+            type_supertypes: Vec::new(),
         };
 
         // Create the instance using the new method

@@ -3987,6 +3987,7 @@ impl ComponentInstance {
                         import_types: Vec::new(),
                         num_import_functions: 0,
                         gc_types: Vec::new(),
+                        type_supertypes: Vec::new(),
                     };
                     m.load_from_binary(&binary_clone)
                 }

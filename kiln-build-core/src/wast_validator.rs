@@ -74,6 +74,10 @@ impl StackType {
             ValueType::I31Ref => StackType::I31Ref,
             ValueType::StructRef(_) => StackType::StructRef,
             ValueType::ArrayRef(_) => StackType::ArrayRef,
+            // GC bottom types
+            ValueType::NoneRef => StackType::NoneRef,
+            ValueType::NoExternRef => StackType::NullExternRef,
+            ValueType::NoExnRef => StackType::NullExnRef,
             // I16x8 is a SIMD sub-type, not a reference type
             ValueType::I16x8 => StackType::Unknown,
         }
@@ -1750,8 +1754,16 @@ impl WastModuleValidator {
                     let called_type = &module.types[type_idx as usize];
                     let frame_height = Self::current_frame_height(&frames);
 
-                    // Pop the typed function reference (top of stack)
-                    Self::pop_type(&mut stack, StackType::Unknown, frame_height, Self::is_unreachable(&frames));
+                    // Pop the typed function reference — must be (ref null $t)
+                    if !Self::pop_type_with_module(
+                        &mut stack,
+                        StackType::TypedFuncRef(type_idx, true),
+                        frame_height,
+                        Self::is_unreachable(&frames),
+                        Some(module),
+                    ) {
+                        return Err(anyhow!("type mismatch"));
+                    }
 
                     // Pop arguments in reverse order
                     for param in called_type.params.iter().rev() {
@@ -1792,15 +1804,24 @@ impl WastModuleValidator {
                     {
                         let called_st = StackType::from_value_type(*called_result);
                         let current_st = StackType::from_value_type(*current_result);
-                        if !called_st.is_subtype_of(&current_st) && !current_st.is_subtype_of(&called_st) {
+                        // Callee result must be subtype of caller result (covariant)
+                        if !Self::is_subtype_of_in_module(&called_st, &current_st, module) {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
 
                     let frame_height = Self::current_frame_height(&frames);
 
-                    // Pop the typed function reference (top of stack)
-                    Self::pop_type(&mut stack, StackType::Unknown, frame_height, Self::is_unreachable(&frames));
+                    // Pop the typed function reference — must be (ref null $t)
+                    if !Self::pop_type_with_module(
+                        &mut stack,
+                        StackType::TypedFuncRef(type_idx, true),
+                        frame_height,
+                        Self::is_unreachable(&frames),
+                        Some(module),
+                    ) {
+                        return Err(anyhow!("type mismatch"));
+                    }
 
                     // Pop arguments in reverse order
                     for param in called_type.params.iter().rev() {
@@ -3996,12 +4017,14 @@ impl WastModuleValidator {
                         },
                         // struct.get $t $f: [(ref null $t)] -> [field_type]
                         0x02 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            let (_field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            let (field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
-                            stack.push(StackType::Unknown);
+                            // Push the field's value type (or Unknown if we can't determine it)
+                            let field_type = Self::get_struct_field_type(type_idx, field_idx, module);
+                            stack.push(field_type);
                         },
                         // struct.get_s $t $f: [(ref null $t)] -> [i32]
                         0x03 => {
@@ -4023,10 +4046,13 @@ impl WastModuleValidator {
                         },
                         // struct.set $t $f: [(ref null $t) field_type] -> []
                         0x05 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            let (_field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            let (field_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
+                            if !Self::is_struct_field_mutable(type_idx, field_idx, module) {
+                                return Err(anyhow!("immutable field"));
+                            }
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                         },
@@ -4078,11 +4104,13 @@ impl WastModuleValidator {
                         },
                         // array.get $t: [(ref null $t) i32] -> [elem_type]
                         0x0B => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
-                            stack.push(StackType::Unknown);
+                            // Push the array element type
+                            let elem_type = Self::get_array_element_type(type_idx, module);
+                            stack.push(elem_type);
                         },
                         // array.get_s $t: [(ref null $t) i32] -> [i32]
                         0x0C => {
@@ -4102,8 +4130,11 @@ impl WastModuleValidator {
                         },
                         // array.set $t: [(ref null $t) i32 elem_type] -> []
                         0x0E => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
+                            if !Self::is_array_mutable(type_idx, module) {
+                                return Err(anyhow!("immutable array"));
+                            }
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
@@ -4115,19 +4146,34 @@ impl WastModuleValidator {
                         },
                         // array.fill $t: [(ref null $t) i32 val i32] -> []
                         0x10 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
+                            if !Self::is_array_mutable(type_idx, module) {
+                                return Err(anyhow!("immutable array"));
+                            }
+                            // array.fill $t: [(ref null $t) i32 val i32] -> []
+                            // val must match the array element type
+                            let elem_type = Self::get_array_element_type(type_idx, module);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
-                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
+                            if !Self::pop_type_with_module(&mut stack, elem_type, frame_height, unreachable, Some(module)) {
+                                return Err(anyhow!("type mismatch"));
+                            }
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
                         },
                         // array.copy $t1 $t2: [(ref null $t1) i32 (ref null $t2) i32 i32] -> []
                         0x11 => {
-                            let (_type_idx1, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx1, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            let (_type_idx2, new_off2) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx2, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
+                            if !Self::is_array_mutable(type_idx1, module) {
+                                return Err(anyhow!("immutable array"));
+                            }
+                            // Source element type must be compatible with destination
+                            if !Self::are_array_element_types_compatible(type_idx2, type_idx1, module) {
+                                return Err(anyhow!("array types do not match"));
+                            }
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
@@ -4136,8 +4182,14 @@ impl WastModuleValidator {
                         },
                         // array.init_data $t $d: [(ref null $t) i32 i32 i32] -> []
                         0x12 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
+                            if !Self::is_array_mutable(type_idx, module) {
+                                return Err(anyhow!("immutable array"));
+                            }
+                            if !Self::is_array_numeric_or_vector(type_idx, module) {
+                                return Err(anyhow!("array type is not numeric or vector"));
+                            }
                             let (_data_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
@@ -4147,10 +4199,23 @@ impl WastModuleValidator {
                         },
                         // array.init_elem $t $e: [(ref null $t) i32 i32 i32] -> []
                         0x13 => {
-                            let (_type_idx, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (type_idx, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
-                            let (_elem_idx, new_off2) = Self::parse_varuint32(code, offset)?;
+                            if !Self::is_array_mutable(type_idx, module) {
+                                return Err(anyhow!("immutable array"));
+                            }
+                            let (elem_idx, new_off2) = Self::parse_varuint32(code, offset)?;
                             offset = new_off2;
+                            // Check element segment type is compatible with array element type
+                            if let Some(elem_seg) = module.elements.get(elem_idx as usize) {
+                                let array_elem = Self::get_array_element_type(type_idx, module);
+                                let seg_type = StackType::from_value_type(elem_seg.element_type.to_value_type());
+                                if array_elem != StackType::Unknown
+                                    && !Self::is_subtype_of_in_module(&seg_type, &array_elem, module)
+                                {
+                                    return Err(anyhow!("type mismatch"));
+                                }
+                            }
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
                             Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable);
@@ -6066,6 +6131,113 @@ impl WastModuleValidator {
         Ok(())
     }
 
+    /// Check if source array element type is compatible with destination for array.copy.
+    /// The source element type must be a subtype of the destination element type.
+    fn are_array_element_types_compatible(src_idx: u32, dst_idx: u32, module: &Module) -> bool {
+        let src_sub = Self::find_subtype_by_index(src_idx, module);
+        let dst_sub = Self::find_subtype_by_index(dst_idx, module);
+        if let (Some(src), Some(dst)) = (src_sub, dst_sub) {
+            if let (
+                CompositeTypeKind::ArrayWithElement(src_field),
+                CompositeTypeKind::ArrayWithElement(dst_field),
+            ) = (&src.composite_kind, &dst.composite_kind) {
+                // For mutable destination, source must be exact match (invariance)
+                if dst_field.mutable {
+                    return Self::are_storage_types_equal_in_module(
+                        &src_field.storage_type, &dst_field.storage_type, module
+                    );
+                }
+                // For immutable destination, source must be subtype (covariance)
+                return Self::is_storage_type_subtype(
+                    &src_field.storage_type, &dst_field.storage_type, module
+                );
+            }
+        }
+        true // If we can't determine, allow (other checks will catch real errors)
+    }
+
+    /// Get the StackType for a struct field by looking up the GC type info.
+    fn get_struct_field_type(type_idx: u32, field_idx: u32, module: &Module) -> StackType {
+        use kiln_format::module::GcStorageType;
+        if let Some(sub) = Self::find_subtype_by_index(type_idx, module) {
+            if let CompositeTypeKind::StructWithFields(fields) = &sub.composite_kind {
+                if let Some(field) = fields.get(field_idx as usize) {
+                    return match &field.storage_type {
+                        GcStorageType::I8 | GcStorageType::I16 => StackType::I32, // packed → i32
+                        GcStorageType::Value(0x7F) => StackType::I32,
+                        GcStorageType::Value(0x7E) => StackType::I64,
+                        GcStorageType::Value(0x7D) => StackType::F32,
+                        GcStorageType::Value(0x7C) => StackType::F64,
+                        GcStorageType::Value(0x7B) => StackType::V128,
+                        GcStorageType::RefType(idx) => StackType::TypedFuncRef(*idx, false),
+                        GcStorageType::RefTypeNull(idx) => StackType::TypedFuncRef(*idx, true),
+                        GcStorageType::Value(v) => Self::value_byte_to_stack_type(*v),
+                    };
+                }
+            }
+        }
+        StackType::Unknown
+    }
+
+    /// Get the StackType for an array element by looking up the GC type info.
+    fn get_array_element_type(type_idx: u32, module: &Module) -> StackType {
+        use kiln_format::module::GcStorageType;
+        if let Some(sub) = Self::find_subtype_by_index(type_idx, module) {
+            if let CompositeTypeKind::ArrayWithElement(field) = &sub.composite_kind {
+                return match &field.storage_type {
+                    GcStorageType::I8 | GcStorageType::I16 => StackType::I32, // packed → i32
+                    GcStorageType::Value(0x7F) => StackType::I32,
+                    GcStorageType::Value(0x7E) => StackType::I64,
+                    GcStorageType::Value(0x7D) => StackType::F32,
+                    GcStorageType::Value(0x7C) => StackType::F64,
+                    GcStorageType::Value(0x7B) => StackType::V128,
+                    GcStorageType::RefType(idx) => StackType::TypedFuncRef(*idx, false),
+                    GcStorageType::RefTypeNull(idx) => StackType::TypedFuncRef(*idx, true),
+                    GcStorageType::Value(v) => Self::value_byte_to_stack_type(*v),
+                };
+            }
+        }
+        StackType::Unknown
+    }
+
+    /// Check if array element type is numeric or vector (not a reference type).
+    /// Required for array.init_data which copies raw bytes from data segments.
+    fn is_array_numeric_or_vector(type_idx: u32, module: &Module) -> bool {
+        use kiln_format::module::GcStorageType;
+        if let Some(sub) = Self::find_subtype_by_index(type_idx, module) {
+            if let CompositeTypeKind::ArrayWithElement(field) = &sub.composite_kind {
+                return matches!(field.storage_type,
+                    GcStorageType::I8 | GcStorageType::I16 | GcStorageType::Value(
+                        0x7F | 0x7E | 0x7D | 0x7C | 0x7B // i32, i64, f32, f64, v128
+                    )
+                );
+            }
+        }
+        false
+    }
+
+    /// Check if array type at given index has a mutable element.
+    fn is_array_mutable(type_idx: u32, module: &Module) -> bool {
+        if let Some(sub) = Self::find_subtype_by_index(type_idx, module) {
+            if let CompositeTypeKind::ArrayWithElement(field) = &sub.composite_kind {
+                return field.mutable;
+            }
+        }
+        false
+    }
+
+    /// Check if struct field at given index is mutable.
+    fn is_struct_field_mutable(type_idx: u32, field_idx: u32, module: &Module) -> bool {
+        if let Some(sub) = Self::find_subtype_by_index(type_idx, module) {
+            if let CompositeTypeKind::StructWithFields(fields) = &sub.composite_kind {
+                if let Some(field) = fields.get(field_idx as usize) {
+                    return field.mutable;
+                }
+            }
+        }
+        false
+    }
+
     /// Find a SubType by its type index across all rec_groups.
     fn find_subtype_by_index(type_idx: u32, module: &Module) -> Option<&kiln_format::module::SubType> {
         for group in &module.rec_groups {
@@ -6197,7 +6369,11 @@ impl WastModuleValidator {
         match (s1, s2) {
             (GcStorageType::I8, GcStorageType::I8) |
             (GcStorageType::I16, GcStorageType::I16) => true,
-            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => v1 == v2,
+            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => {
+                // For mutable fields (invariance), types must be exactly equal.
+                // Abstract ref types stored as Value bytes are equal iff same byte.
+                v1 == v2
+            },
             (GcStorageType::RefType(idx1), GcStorageType::RefType(idx2)) |
             (GcStorageType::RefTypeNull(idx1), GcStorageType::RefTypeNull(idx2)) => {
                 Self::are_types_equivalent(*idx1, *idx2, module)
@@ -6216,7 +6392,16 @@ impl WastModuleValidator {
         match (sub, sup) {
             (GcStorageType::I8, GcStorageType::I8) |
             (GcStorageType::I16, GcStorageType::I16) => true,
-            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => v1 == v2,
+            (GcStorageType::Value(v1), GcStorageType::Value(v2)) => {
+                if v1 == v2 { return true; }
+                // For abstract ref types, check subtype relationship
+                let sub_st = Self::value_byte_to_stack_type(*v1);
+                let sup_st = Self::value_byte_to_stack_type(*v2);
+                if matches!(sub_st, StackType::Unknown) || matches!(sup_st, StackType::Unknown) {
+                    return false; // Non-ref Value types: exact match only
+                }
+                Self::is_subtype_of_in_module(&sub_st, &sup_st, module)
+            },
             (GcStorageType::RefType(sub_idx), GcStorageType::RefType(sup_idx)) => {
                 Self::is_concrete_subtype(*sub_idx, *sup_idx, module)
             },

@@ -165,9 +165,14 @@ impl WastEngine {
         self.validate_imports(&module)?;
 
         // Store the module and instance ID for later reference
+        // Always store as "current" (last loaded module) AND under the given name
+        self.modules.insert("current".to_string(), Arc::clone(&module));
+        self.instance_ids.insert("current".to_string(), instance_idx);
         let module_name = name.unwrap_or("current").to_string();
-        self.modules.insert(module_name.clone(), Arc::clone(&module));
-        self.instance_ids.insert(module_name.clone(), instance_idx);
+        if module_name != "current" {
+            self.modules.insert(module_name.clone(), Arc::clone(&module));
+            self.instance_ids.insert(module_name.clone(), instance_idx);
+        }
 
         // Register instance name for cross-module exception handling
         self.engine.register_instance_name(instance_idx, &module_name);
@@ -348,15 +353,13 @@ impl WastEngine {
         use kiln_runtime::memory::Memory;
         use kiln_runtime::module::{MemoryWrapper, RuntimeImportDesc};
 
+        let mut memory_import_idx = 0usize;
+
         // Look for memory imports from spectest
         for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
-            if mod_name == "spectest" && (field_name == "memory" || field_name == "shared_memory") {
-                // Check if this is actually a memory import
-                if let Some(RuntimeImportDesc::Memory(_mem_type)) = module.import_types.get(i) {
+            if let Some(RuntimeImportDesc::Memory(_)) = module.import_types.get(i) {
+                if mod_name == "spectest" && (field_name == "memory" || field_name == "shared_memory") {
                     let is_shared = field_name == "shared_memory";
-                    // The spectest module provides a memory with 1-2 pages
-                    // The import type specifies minimum requirements, but the actual
-                    // spectest memory always has at least 1 page
                     let core_mem_type = CoreMemoryType {
                         limits: Limits { min: 1, max: Some(2) },
                         shared: is_shared,
@@ -370,11 +373,12 @@ impl WastEngine {
 
                     let wrapper = MemoryWrapper::new(memory);
 
-                    // Add the memory to the instance (at index 0 since it's an import)
+                    // Add the memory at the correct import index
                     module_instance
-                        .set_memory(0, wrapper)
+                        .set_memory(memory_import_idx, wrapper)
                         .map_err(|e| anyhow::anyhow!("Failed to set spectest memory: {:?}", e))?;
                 }
+                memory_import_idx += 1;
             }
         }
 
@@ -459,16 +463,13 @@ impl WastEngine {
         use kiln_runtime::module::{RuntimeImportDesc, TableWrapper};
         use kiln_runtime::table::Table;
 
-        // The spectest table types:
-        //   "table"   = (table 10 20 funcref)
-        //   "table64" = (table i64 10 20 funcref)
+        let mut table_import_idx = 0usize;
+
         // Look for table imports from spectest
         for (i, (mod_name, field_name)) in module.import_order.iter().enumerate() {
-            if mod_name == "spectest" && (field_name == "table" || field_name == "table64") {
-                // Check if this is actually a table import
-                if let Some(RuntimeImportDesc::Table(_table_type)) = module.import_types.get(i) {
+            if let Some(RuntimeImportDesc::Table(_)) = module.import_types.get(i) {
+                if mod_name == "spectest" && (field_name == "table" || field_name == "table64") {
                     let is_table64 = field_name == "table64";
-                    // The spectest module provides a table with 10-20 funcref elements
                     let spectest_table_type = TableType {
                         element_type: RefType::Funcref,
                         limits: Limits { min: 10, max: Some(20) },
@@ -480,11 +481,12 @@ impl WastEngine {
 
                     let wrapper = TableWrapper::new(table);
 
-                    // Add the table to the instance (at the appropriate import index)
+                    // Add the table at the correct import index
                     module_instance
-                        .set_table(0, wrapper)
+                        .set_table(table_import_idx, wrapper)
                         .map_err(|e| anyhow::anyhow!("Failed to set spectest table: {:?}", e))?;
                 }
+                table_import_idx += 1;
             }
         }
 
@@ -1327,8 +1329,8 @@ impl WastEngine {
                 Some(MemoryType {
                     limits: core_ty.limits,
                     shared: core_ty.shared,
-                    memory64: false,
-                    page_size: None,
+                    memory64: core_ty.memory64,
+                    page_size: core_ty.page_size,
                 })
             } else {
                 None
@@ -1457,6 +1459,13 @@ fn validate_table_import_compatibility(import: &TableType, actual: &TableType) -
 /// - If import has max, actual must have max and actual max <= import max
 /// - shared flag must match
 fn validate_memory_import_compatibility(import: &MemoryType, actual: &MemoryType) -> Result<()> {
+    // Memory64 flag must match (memory32 and memory64 are incompatible)
+    if import.memory64 != actual.memory64 {
+        return Err(anyhow::anyhow!(
+            "incompatible import type: memory types incompatible"
+        ));
+    }
+
     // Shared flag must match
     if import.shared != actual.shared {
         return Err(anyhow::anyhow!(

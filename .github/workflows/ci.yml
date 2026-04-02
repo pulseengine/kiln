@@ -393,10 +393,10 @@ jobs:
           rm /tmp/wrsdk.tar.bz2
       - name: Build kiln-platform for VxWorks (x86_64)
         shell: bash
-        env:
-          SHELL: /bin/bash
         run: |
-          # Source SDK environment (requires bash as default shell)
+          # sdkenv.sh checks that /bin/sh is bash — change the default shell on Ubuntu
+          sudo ln -sf /bin/bash /bin/sh
+          # Source SDK environment
           . /opt/wrsdk/sdkenv.sh
           . "${WIND_SDK_HOME}/vxsdk/sysroot/usr/rust/rustenv.linux"
           export RUST_VSB_DIR="${WIND_CC_SYSROOT}"

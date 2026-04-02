@@ -770,6 +770,9 @@ pub struct Module {
     /// GC type information indexed by type index
     /// Stores struct field info and array element info needed for GC instructions
     pub gc_types: Vec<GcTypeInfo>,
+    /// Supertype index for each type (None if no supertype declared)
+    /// Used by ref_test_value to walk the type hierarchy for subtype checking
+    pub type_supertypes: Vec<Option<u32>>,
 }
 
 impl Module {
@@ -1568,6 +1571,7 @@ impl Module {
             import_types: Vec::new(),
             num_import_functions: 0,
             gc_types: Vec::new(),
+            type_supertypes: Vec::new(),
         })
     }
 
@@ -1618,6 +1622,7 @@ impl Module {
             import_types: Vec::new(), // Will be populated when processing imports
             num_import_functions: 0, // Will be set after processing imports
             gc_types: Vec::new(), // Will be populated from rec_groups
+            type_supertypes: Vec::new(), // Will be populated from rec_groups
         };
 
         // Populate GC type info from rec_groups
@@ -1652,10 +1657,23 @@ impl Module {
                     gc_type_entries.push((sub_type.type_index, info));
                 }
             }
-            // Sort by type index and fill gc_types
+            // Also collect supertype info
+            let mut supertype_entries: Vec<(u32, Option<u32>)> = Vec::new();
+            for rec_group in &kiln_module.rec_groups {
+                for sub_type in &rec_group.types {
+                    let supertype = sub_type.supertype_indices.first().copied();
+                    supertype_entries.push((sub_type.type_index, supertype));
+                }
+            }
+
+            // Sort by type index and fill both vectors
             gc_type_entries.sort_by_key(|(idx, _)| *idx);
+            supertype_entries.sort_by_key(|(idx, _)| *idx);
             for (_, info) in gc_type_entries {
                 runtime_module.gc_types.push(info);
+            }
+            for (_, supertype) in supertype_entries {
+                runtime_module.type_supertypes.push(supertype);
             }
         }
 
@@ -2977,6 +2995,7 @@ impl Module {
             import_types: Vec::new(),
             num_import_functions: 0,
             gc_types: Vec::new(),
+            type_supertypes: Vec::new(),
         };
 
         // Set start function if present
@@ -3422,6 +3441,7 @@ impl kiln_foundation::traits::FromBytes for Module {
             import_types: Vec::new(),
             num_import_functions: 0,
             gc_types: Vec::new(),
+            type_supertypes: Vec::new(),
         };
 
         Ok(module)
@@ -3945,6 +3965,9 @@ fn value_type_to_u8(vt: KilnValueType) -> u8 {
         // Serialize as FuncRef (4) since the value representation is identical
         KilnValueType::TypedFuncRef(_, _) => 4,
         KilnValueType::NullFuncRef => 4,
+        KilnValueType::NoneRef => 14,       // Bottom of any hierarchy
+        KilnValueType::NoExternRef => 15,   // Bottom of extern hierarchy
+        KilnValueType::NoExnRef => 16,      // Bottom of exn hierarchy
     }
 }
 

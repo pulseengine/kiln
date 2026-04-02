@@ -578,6 +578,9 @@ impl Value {
             ValueType::AnyRef => Value::ExternRef(None), // AnyRef uses externref representation
             ValueType::EqRef => Value::I31Ref(None),     // EqRef defaults to i31ref
             ValueType::TypedFuncRef(_, _) => Value::FuncRef(None), // Typed funcref defaults to null
+            ValueType::NoneRef => Value::StructRef(None),     // Bottom of any hierarchy
+            ValueType::NoExternRef => Value::ExternRef(None), // Bottom of extern hierarchy
+            ValueType::NoExnRef => Value::ExnRef(None),       // Bottom of exn hierarchy
         }
     }
 
@@ -1122,6 +1125,9 @@ impl Value {
                 // Typed function references not yet supported for byte deserialization
                 Ok(Value::FuncRef(None))
             },
+            ValueType::NoneRef => Ok(Value::StructRef(None)),     // Bottom of any hierarchy
+            ValueType::NoExternRef => Ok(Value::ExternRef(None)), // Bottom of extern hierarchy
+            ValueType::NoExnRef => Ok(Value::ExnRef(None)),       // Bottom of exn hierarchy
         }
     }
 }
@@ -1444,6 +1450,16 @@ impl Checksummable for Value {
 
 impl ToBytes for Value {
     fn serialized_size(&self) -> usize {
+        // All reference types MUST return the same size for BoundedVec compatibility.
+        // Tables store Option<Value> and the BoundedVec uses fixed-size slots based on
+        // the default value's serialized_size. All ref variants that can appear in tables
+        // must report the same size so set() doesn't overflow the allocated slot.
+        //
+        // The maximum ref type is FuncRef at 1+8=9 bytes. StructRef/ArrayRef serialize
+        // just their type_index (4 bytes) in the table slot — the GC heap data lives in
+        // the Arc, not in the serialized bytes.
+        const REF_SERIALIZED_SIZE: usize = 1 + 8; // 1 flag + 8 data (matches FuncRef)
+
         // 1 byte for discriminant + variant-specific size
         1 + match self {
             Value::I32(_) => 4,
@@ -1451,15 +1467,14 @@ impl ToBytes for Value {
             Value::F32(_) => 4,
             Value::F64(_) => 8,
             Value::V128(_) | Value::I16x8(_) => 16,
-            // Reference types with Option: always use max size for BoundedVec compatibility
-            // 1 byte for Some/None flag + 4 bytes for index (always reserved)
-            Value::FuncRef(_) => 1 + 8, // 1 flag + 4 index + 4 instance_id
-            Value::ExternRef(_) => 1 + 4,
-            Value::ExnRef(_) => 1 + 4,
-            Value::I31Ref(_) => 1 + 4,
-            Value::Ref(_) => 4,
-            Value::StructRef(_) => 1 + 4,
-            Value::ArrayRef(_) => 1 + 4,
+            // All reference types use the same fixed size for BoundedVec table compatibility
+            Value::FuncRef(_) => REF_SERIALIZED_SIZE,
+            Value::ExternRef(_) => REF_SERIALIZED_SIZE,
+            Value::ExnRef(_) => REF_SERIALIZED_SIZE,
+            Value::I31Ref(_) => REF_SERIALIZED_SIZE,
+            Value::Ref(_) => REF_SERIALIZED_SIZE,
+            Value::StructRef(_) => REF_SERIALIZED_SIZE,
+            Value::ArrayRef(_) => REF_SERIALIZED_SIZE,
             Value::Bool(_) => 1,
             Value::S8(_) | Value::U8(_) => 1,
             Value::S16(_) | Value::U16(_) => 2,
@@ -1545,28 +1560,33 @@ impl ToBytes for Value {
                 }
             },
             Value::ExternRef(opt_v) => {
-                // Write Some/None flag + always write 4 bytes for fixed size
+                // All ref types write exactly REF_SERIALIZED_SIZE (9) bytes
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => v.to_bytes_with_provider(writer, provider)?,
-                    None => writer.write_u32_le(0)?, // Padding for fixed size
+                    Some(v) => { v.to_bytes_with_provider(writer, provider)?; writer.write_u32_le(0)?; },
+                    None => { writer.write_u32_le(0)?; writer.write_u32_le(0)?; },
                 }
             },
-            Value::Ref(v) => v.to_bytes_with_provider(writer, provider)?,
+            Value::Ref(v) => {
+                v.to_bytes_with_provider(writer, provider)?;
+                // Pad to REF_SERIALIZED_SIZE
+                writer.write_u32_le(0)?;
+                writer.write_u8(0)?;
+            },
             Value::StructRef(opt_v) => {
-                // Write Some/None flag + always write 4 bytes for fixed size
+                // Write fixed-size: flag + type_index + padding (GC data lives in Arc heap)
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => v.lock_inner().to_bytes_with_provider(writer, provider)?,
-                    None => writer.write_u32_le(0)?, // Padding for fixed size
+                    Some(v) => { writer.write_u32_le(v.type_index())?; writer.write_u32_le(0)?; },
+                    None => { writer.write_u32_le(0)?; writer.write_u32_le(0)?; },
                 }
             },
             Value::ArrayRef(opt_v) => {
-                // Write Some/None flag + always write 4 bytes for fixed size
+                // Write fixed-size: flag + type_index + padding (GC data lives in Arc heap)
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => v.lock_inner().to_bytes_with_provider(writer, provider)?,
-                    None => writer.write_u32_le(0)?, // Padding for fixed size
+                    Some(v) => { writer.write_u32_le(v.type_index())?; writer.write_u32_le(0)?; },
+                    None => { writer.write_u32_le(0)?; writer.write_u32_le(0)?; },
                 }
             },
             // Component Model types - simplified serialization
@@ -1591,19 +1611,19 @@ impl ToBytes for Value {
             },
             Value::Void => {},
             Value::ExnRef(opt_v) => {
-                // Write Some/None flag + always write 4 bytes for fixed size
+                // All ref types write exactly REF_SERIALIZED_SIZE (9) bytes
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => writer.write_u32_le(*v)?,
-                    None => writer.write_u32_le(0)?, // Padding for fixed size
+                    Some(v) => { writer.write_u32_le(*v)?; writer.write_u32_le(0)?; },
+                    None => { writer.write_u32_le(0)?; writer.write_u32_le(0)?; },
                 }
             },
             Value::I31Ref(opt_v) => {
-                // Write Some/None flag + always write 4 bytes for fixed size
+                // All ref types write exactly REF_SERIALIZED_SIZE (9) bytes
                 writer.write_u8(if opt_v.is_some() { 1 } else { 0 })?;
                 match opt_v {
-                    Some(v) => writer.write_i32_le(*v)?,
-                    None => writer.write_i32_le(0)?, // Padding for fixed size
+                    Some(v) => { writer.write_i32_le(*v)?; writer.write_u32_le(0)?; },
+                    None => { writer.write_i32_le(0)?; writer.write_u32_le(0)?; },
                 }
             },
         }
@@ -1654,19 +1674,23 @@ impl FromBytes for Value {
                 }
             },
             6 => {
-                // ExternRef - always read 5 bytes (1 flag + 4 data) for fixed size
+                // ExternRef - read 9 bytes (1 flag + 4 data + 4 padding) for fixed ref size
                 let is_some = reader.read_u8()? == 1;
                 if is_some {
                     let v = ExternRef::from_bytes_with_provider(reader, provider)?;
+                    let _ = reader.read_u32_le()?; // Skip padding
                     Ok(Value::ExternRef(Some(v)))
                 } else {
+                    let _ = reader.read_u32_le()?; // Skip data
                     let _ = reader.read_u32_le()?; // Skip padding
                     Ok(Value::ExternRef(None))
                 }
             },
             7 => {
-                // Ref (u32)
+                // Ref (u32) - read 9 bytes for fixed ref size
                 let v = u32::from_bytes_with_provider(reader, provider)?;
+                let _ = reader.read_u32_le()?; // Skip padding
+                let _ = reader.read_u8()?; // Skip padding
                 Ok(Value::Ref(v))
             },
             8 => {
@@ -1675,23 +1699,33 @@ impl FromBytes for Value {
                 Ok(Value::I16x8(v))
             },
             9 => {
-                // StructRef - always read 5 bytes (1 flag + 4 data) for fixed size
+                // StructRef - read 9 bytes (1 flag + 4 type_index + 4 padding)
+                // Note: GC data lives in Arc heap, not serialized here.
+                // On deserialization we create an empty StructRef with the type index.
                 let is_some = reader.read_u8()? == 1;
                 if is_some {
-                    let v = StructRef::from_bytes_with_provider(reader, provider)?;
-                    Ok(Value::StructRef(Some(GcStructRef::new(v))))
+                    let type_index = reader.read_u32_le()?;
+                    let _ = reader.read_u32_le()?; // Skip padding
+                    let sref = StructRef::new(type_index, DefaultMemoryProvider::default())
+                        .map_err(|_| Error::runtime_execution_error("Failed to create StructRef"))?;
+                    Ok(Value::StructRef(Some(GcStructRef::new(sref))))
                 } else {
+                    let _ = reader.read_u32_le()?; // Skip data
                     let _ = reader.read_u32_le()?; // Skip padding
                     Ok(Value::StructRef(None))
                 }
             },
             10 => {
-                // ArrayRef - always read 5 bytes (1 flag + 4 data) for fixed size
+                // ArrayRef - read 9 bytes (1 flag + 4 type_index + 4 padding)
                 let is_some = reader.read_u8()? == 1;
                 if is_some {
-                    let v = ArrayRef::from_bytes_with_provider(reader, provider)?;
-                    Ok(Value::ArrayRef(Some(GcArrayRef::new(v))))
+                    let type_index = reader.read_u32_le()?;
+                    let _ = reader.read_u32_le()?; // Skip padding
+                    let aref = ArrayRef::new(type_index, DefaultMemoryProvider::default())
+                        .map_err(|_| Error::runtime_execution_error("Failed to create ArrayRef"))?;
+                    Ok(Value::ArrayRef(Some(GcArrayRef::new(aref))))
                 } else {
+                    let _ = reader.read_u32_le()?; // Skip data
                     let _ = reader.read_u32_le()?; // Skip padding
                     Ok(Value::ArrayRef(None))
                 }
@@ -1722,24 +1756,28 @@ impl FromBytes for Value {
                 Ok(Value::Future(h))
             },
             35 => {
-                // ExnRef - always read 5 bytes (1 flag + 4 data) for fixed size
+                // ExnRef - read 9 bytes (1 flag + 4 data + 4 padding) for fixed ref size
                 let flag = reader.read_u8()?;
                 if flag != 0 {
                     let idx = reader.read_u32_le()?;
+                    let _ = reader.read_u32_le()?; // Skip padding
                     Ok(Value::ExnRef(Some(idx)))
                 } else {
+                    let _ = reader.read_u32_le()?; // Skip data
                     let _ = reader.read_u32_le()?; // Skip padding
                     Ok(Value::ExnRef(None))
                 }
             },
             36 => {
-                // I31Ref - always read 5 bytes (1 flag + 4 data) for fixed size
+                // I31Ref - read 9 bytes (1 flag + 4 data + 4 padding) for fixed ref size
                 let flag = reader.read_u8()?;
                 if flag != 0 {
                     let v = reader.read_i32_le()?;
+                    let _ = reader.read_u32_le()?; // Skip padding
                     Ok(Value::I31Ref(Some(v)))
                 } else {
-                    let _ = reader.read_i32_le()?; // Skip padding
+                    let _ = reader.read_i32_le()?; // Skip data
+                    let _ = reader.read_u32_le()?; // Skip padding
                     Ok(Value::I31Ref(None))
                 }
             },
