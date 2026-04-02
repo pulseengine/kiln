@@ -23,8 +23,9 @@ use kiln_foundation::{
     verification::VerificationLevel,
 };
 
-// Platform-aware memory provider for table operations
-type TableProvider = kiln_foundation::safe_memory::NoStdProvider<8192>; // 8KB for table operations
+// Platform-aware memory provider for table operations (kept for no_std compatibility)
+#[allow(dead_code)]
+type TableProvider = kiln_foundation::safe_memory::NoStdProvider<8192>;
 
 use std::format;
 
@@ -85,8 +86,11 @@ fn usize_to_wasm_u32(size: usize) -> Result<u32> {
     })
 }
 
-/// Type alias for the inner elements storage
-type TableElements = kiln_foundation::bounded::BoundedVec<Option<KilnValue>, 1024, TableProvider>;
+/// Type alias for the inner elements storage.
+/// Uses Vec for std builds to preserve GC ref identity (Arc pointers)
+/// through table.get/set operations. BoundedVec serialization loses Arc
+/// identity which breaks ref.eq and GC field access after table round-trips.
+type TableElements = Vec<Option<KilnValue>>;
 
 /// A WebAssembly table is a vector of opaque values of a single type.
 /// Uses interior mutability (Mutex) for thread-safe element access.
@@ -117,27 +121,11 @@ impl Debug for Table {
 
 impl Clone for Table {
     fn clone(&self) -> Self {
-        let mut new_elements: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default())
-                .expect("Failed to allocate table elements during clone");
-
-        // Lock the source elements for reading
         let source_elements = self.elements.lock()
             .expect("Table mutex poisoned during clone");
-
-        for i in 0..source_elements.len() {
-            // Use BoundedVec get method for safe access
-            if let Ok(elem) = source_elements.get(i) {
-                assert!(
-                    new_elements.push(elem.clone()).is_ok(),
-                    "Failed to clone table: out of memory"
-                );
-            }
-        }
-
         Self {
             ty:                 self.ty.clone(),
-            elements:           Mutex::new(new_elements),
+            elements:           Mutex::new(source_elements.clone()),
             debug_name:         self.debug_name.clone(),
             verification_level: self.verification_level,
         }
@@ -152,29 +140,11 @@ impl PartialEq for Table {
         {
             return false;
         }
-
-        // Lock both tables for comparison
         let self_elements = self.elements.lock()
             .expect("Table mutex poisoned during comparison");
-
         let other_elements = other.elements.lock()
             .expect("Table mutex poisoned during comparison");
-
-        // Compare elements manually since BoundedStack doesn't have to_vec()
-        if self_elements.len() != other_elements.len() {
-            return false;
-        }
-        for i in 0..self_elements.len() {
-            // Use get() method instead of direct indexing for BoundedVec
-            let (self_elem, other_elem) = match (self_elements.get(i), other_elements.get(i)) {
-                (Ok(a), Ok(b)) => (a, b),
-                _ => return false,
-            };
-            if self_elem != other_elem {
-                return false;
-            }
-        }
-        true
+        *self_elements == *other_elements
     }
 }
 
@@ -289,26 +259,10 @@ impl Table {
         let initial_size = wasm_index_to_usize(ty.limits.min)?;
 
         #[cfg(feature = "tracing")]
-        kiln_foundation::tracing::trace!(capacity = 1024, elements = initial_size, "Creating Table BoundedVec");
+        kiln_foundation::tracing::trace!(elements = initial_size, "Creating Table Vec");
 
-        let mut elements: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).map_err(|e| {
-                #[cfg(feature = "tracing")]
-                kiln_foundation::tracing::error!(error = ?e, "BoundedVec::new failed");
-                e
-            })?;
-        // Note: BoundedVec doesn't have set_verification_level method
-
-        #[cfg(feature = "tracing")]
-        kiln_foundation::tracing::trace!(elements = initial_size, "Pushing elements to table");
-
-        for i in 0..initial_size {
-            if let Err(e) = elements.push(init_val.clone()) {
-                #[cfg(feature = "tracing")]
-                kiln_foundation::tracing::error!(index = i, error = ?e, "Failed to push element");
-                return Err(e.into());
-            }
-        }
+        // Use Vec for direct value storage — preserves GC ref identity (Arc pointers)
+        let elements: TableElements = vec![init_val; initial_size];
 
         Ok(Self {
             ty,
@@ -378,21 +332,8 @@ impl Table {
             return Err(Error::invalid_function_index("Table access out of bounds"));
         }
 
-        // Implement verification if needed based on verification level
-        if self.verification_level.should_verify(128) {
-            // Verify table integrity - this is a simplified version
-            // In a real implementation, we would do more thorough checks
-            if idx_usize >= elements.len() {
-                return Err(Error::validation_error(
-                    "Table integrity check failed: index out of bounds",
-                ));
-            }
-        }
-
-        // Use BoundedVec's get method for direct access
-        elements
-            .get(idx_usize)
-            .map_err(|_| Error::invalid_function_index("Table index out of bounds"))
+        // Direct Vec access — returns clone of the value, preserving Arc identity
+        Ok(elements[idx_usize].clone())
     }
 
     /// Sets an element at the specified index
@@ -437,27 +378,12 @@ impl Table {
                 ));
             }
         }
-        elements.set(idx_usize, value)?;
+        // Direct Vec assignment — preserves Arc identity for GC refs
+        elements[idx_usize] = value;
         Ok(())
     }
 
     /// Sets an element at the specified index through a shared reference.
-    /// This method provides interior mutability for use when the table is
-    /// wrapped in an Arc.
-    ///
-    /// # Arguments
-    ///
-    /// * `idx` - The index to set
-    /// * `value` - The value to set
-    ///
-    /// # Returns
-    ///
-    /// Ok(()) if the set was successful
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the index is out of bounds or if the value type
-    /// doesn't match the table element type
     pub fn set_shared(&self, idx: u32, value: Option<KilnValue>) -> Result<()> {
         let idx_usize = wasm_index_to_usize(idx)?;
 
@@ -468,24 +394,8 @@ impl Table {
             return Err(Error::invalid_function_index("Table access out of bounds"));
         }
 
-        if let Some(ref val) = value {
-            let val_matches = matches!(
-                (&val, &self.ty.element_type),
-                (KilnValue::FuncRef(_), KilnRefType::Funcref)
-                | (KilnValue::FuncRef(_), KilnRefType::Gc(_))
-                | (KilnValue::ExternRef(_), KilnRefType::Externref)
-                | (KilnValue::ExternRef(_), KilnRefType::Gc(_))
-                | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
-                | (KilnValue::StructRef(_), KilnRefType::Gc(_))
-                | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
-            );
-            if !val_matches {
-                return Err(Error::validation_error(
-                    "Element value type doesn't match table element type",
-                ));
-            }
-        }
-        elements.set(idx_usize, value)?;
+        // Direct Vec assignment — preserves Arc identity for GC refs
+        elements[idx_usize] = value;
         Ok(())
     }
 
@@ -542,7 +452,7 @@ impl Table {
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         for _ in 0..delta {
-            elements.push(Some(init_value_from_arg.clone()))?;
+            elements.push(Some(init_value_from_arg.clone()));
         }
 
         Ok(old_size)
@@ -572,23 +482,10 @@ impl Table {
             return Ok(());
         }
 
-        // Create a new stack with the filled elements
-        let mut result_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-
-        // Copy elements with fill applied
-        for i in 0..elements.len() {
-            if i >= offset && i < offset + len {
-                // This is in the fill range
-                result_vec.push(value.clone())?;
-            } else {
-                // Outside fill range, use original value
-                result_vec.push(elements.get(i)?)?;
-            }
+        // Fill the range directly
+        for i in offset..offset + len {
+            elements[i] = value.clone();
         }
-
-        // Replace the elements stack
-        *elements = result_vec;
 
         Ok(())
     }
@@ -614,32 +511,14 @@ impl Table {
             return Ok(());
         }
 
-        // Create temporary stack to store elements during copy
-        let mut temp_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
+        // Copy source elements to temp buffer, then write to destination
+        let temp: Vec<Option<KilnValue>> = (0..len)
+            .map(|i| elements[src + i].clone())
+            .collect();
 
-        // Read source elements into temporary stack
-        for i in 0..len {
-            temp_vec.push(elements.get(src + i)?)?;
+        for (i, val) in temp.into_iter().enumerate() {
+            elements[dst + i] = val;
         }
-
-        // Create a new stack for the full result
-        let mut result_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-
-        // Copy elements with the updated values
-        for i in 0..elements.len() {
-            if i >= dst && i < dst + len {
-                // This is in the destination range, use value from temp_vec
-                result_vec.push(temp_vec.get(i - dst)?)?;
-            } else {
-                // Outside destination range, use original value
-                result_vec.push(elements.get(i)?)?;
-            }
-        }
-
-        // Replace the elements stack
-        *elements = result_vec;
 
         Ok(())
     }
@@ -663,7 +542,7 @@ impl Table {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }
             }
-            elements.set((offset as usize) + i, val_opt.clone())?;
+            elements[(offset as usize) + i] = val_opt.clone();
         }
         Ok(())
     }
@@ -720,7 +599,7 @@ impl Table {
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
         for _ in 0..delta {
-            elements.push(Some(init_value_from_arg.clone()))?;
+            elements.push(Some(init_value_from_arg.clone()));
         }
         // Update the min limit in the table type if it changes due to growth (spec is a
         // bit unclear if ty should reflect current size) For now, ty.limits.min
@@ -786,7 +665,7 @@ impl Table {
                     return Err(Error::validation_error("Table init value type mismatch"));
                 }
             }
-            elements.set((offset as usize) + i, val_opt.clone())?;
+            elements[(offset as usize) + i] = val_opt.clone();
         }
         Ok(())
     }
@@ -810,34 +689,13 @@ impl Table {
             return Ok(());
         }
 
-        // Create temporary stack to store elements during copy
-        let mut temp_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-        // Note: verification level handled by provider
-
-        // Read source elements into temporary stack
-        for i in 0..len {
-            temp_vec.push(elements.get(src + i)?)?;
+        // Copy source elements to temp buffer, then write to destination
+        let temp: Vec<Option<KilnValue>> = (0..len)
+            .map(|i| elements[src + i].clone())
+            .collect();
+        for (i, val) in temp.into_iter().enumerate() {
+            elements[dst + i] = val;
         }
-
-        // Create a new stack for the full result
-        let mut result_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-        // Note: verification level handled by provider
-
-        // Copy elements with the updated values
-        for i in 0..elements.len() {
-            if i >= dst && i < dst + len {
-                // This is in the destination range, use value from temp_vec
-                result_vec.push(temp_vec.get(i - dst)?)?;
-            } else {
-                // Outside destination range, use original value
-                result_vec.push(elements.get(i)?)?;
-            }
-        }
-
-        // Replace the elements stack
-        *elements = result_vec;
 
         Ok(())
     }
@@ -852,35 +710,19 @@ impl Table {
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
 
-        // Verify bounds - use checked arithmetic to prevent overflow
         let end = offset.checked_add(len)
             .ok_or_else(|| Error::runtime_trap("out of bounds table access"))?;
         if end > elements.len() {
             return Err(Error::runtime_trap("out of bounds table access"));
         }
 
-        // Handle empty fill (after bounds check per spec)
         if len == 0 {
             return Ok(());
         }
 
-        // Create a new stack with the filled elements
-        let mut result_vec: TableElements =
-            kiln_foundation::bounded::BoundedVec::new(TableProvider::default()).unwrap();
-
-        // Copy elements with fill applied
-        for i in 0..elements.len() {
-            if i >= offset && i < offset + len {
-                // This is in the fill range
-                result_vec.push(value.clone())?;
-            } else {
-                // Outside fill range, use original value
-                result_vec.push(elements.get(i)?)?;
-            }
+        for i in offset..offset + len {
+            elements[i] = value.clone();
         }
-
-        // Replace the elements stack
-        *elements = result_vec;
 
         Ok(())
     }
@@ -916,8 +758,8 @@ impl Table {
             return Err(Error::runtime_trap("out of bounds table access"));
         }
 
-        // Set the element directly using BoundedVec's set method
-        elements.set(idx, value)?;
+        // Set the element directly
+        elements[idx] = value;
 
         Ok(())
     }
@@ -973,51 +815,32 @@ impl ArcTableExt for Arc<Table> {
     }
 
     fn set(&self, idx: u32, value: Option<KilnValue>) -> Result<()> {
-        // Clone-and-mutate pattern for thread safety
-        let mut table_clone = self.as_ref().clone();
-
-        // Return the result from the mutation
-        table_clone.set(idx, value)
+        // Use interior mutability via Mutex — preserves Arc identity
+        self.as_ref().set_shared(idx, value)
     }
 
     fn grow(&self, delta: u32, init_value: KilnValue) -> Result<u32> {
-        // Clone-and-mutate pattern for thread safety
-        let mut table_clone = self.as_ref().clone();
-
-        // Return the result from the mutation
-        table_clone.grow(delta, init_value)
+        // Use interior mutability via Mutex
+        self.as_ref().grow_shared(delta, init_value)
     }
 
     fn set_func(&self, idx: u32, func_idx: u32) -> Result<()> {
-        // Clone-and-mutate pattern for thread safety
-        let mut table_clone = self.as_ref().clone();
-
-        // Return the result from the mutation
-        table_clone.set_func(idx, func_idx)
+        // Use interior mutability via Mutex
+        self.as_ref().set_shared(idx, Some(KilnValue::FuncRef(Some(
+            kiln_foundation::values::FuncRef::from_index(func_idx),
+        ))))
     }
 
     fn init(&self, offset: u32, init: &[Option<KilnValue>]) -> Result<()> {
-        // Clone-and-mutate pattern for thread safety
-        let mut table_clone = self.as_ref().clone();
-
-        // Return the result from the mutation
-        table_clone.init(offset, init)
+        self.as_ref().init_shared(offset, init)
     }
 
     fn copy(&self, dst: u32, src: u32, len: u32) -> Result<()> {
-        // Clone-and-mutate pattern for thread safety
-        let mut table_clone = self.as_ref().clone();
-
-        // Return the result from the mutation
-        table_clone.copy_elements(dst as usize, src as usize, len as usize)
+        self.as_ref().copy_elements_shared(dst as usize, src as usize, len as usize)
     }
 
     fn fill(&self, offset: u32, len: u32, value: Option<KilnValue>) -> Result<()> {
-        // Clone-and-mutate pattern for thread safety
-        let mut table_clone = self.as_ref().clone();
-
-        // Return the result from the mutation
-        table_clone.fill_elements(offset as usize, value, len as usize)
+        self.as_ref().fill_elements_shared(offset as usize, value, len as usize)
     }
 }
 

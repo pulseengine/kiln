@@ -6336,12 +6336,12 @@ impl StacklessEngine {
                                 (Value::FuncRef(Some(f1)), Value::FuncRef(Some(f2))) => {
                                     if f1.index == f2.index { 1i32 } else { 0i32 }
                                 }
-                                // struct/array refs: identity comparison (pointer equality)
+                                // struct/array refs: identity comparison (Arc pointer equality)
                                 (Value::StructRef(Some(s1)), Value::StructRef(Some(s2))) => {
-                                    if core::ptr::eq(s1 as *const _, s2 as *const _) { 1i32 } else { 0i32 }
+                                    if s1.arc_ptr_eq(s2) { 1i32 } else { 0i32 }
                                 }
                                 (Value::ArrayRef(Some(a1)), Value::ArrayRef(Some(a2))) => {
-                                    if core::ptr::eq(a1 as *const _, a2 as *const _) { 1i32 } else { 0i32 }
+                                    if a1.arc_ptr_eq(a2) { 1i32 } else { 0i32 }
                                 }
                                 // Different types are not equal
                                 _ => 0i32,
