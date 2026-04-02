@@ -347,8 +347,9 @@ impl WastModuleValidator {
             }
         }
 
-        // Validate element segments - function indices must be valid
-        Self::validate_element_segments(module)?;
+        // Validate element segments - function indices, init expression types,
+        // and active segment element type vs table element type
+        Self::validate_element_segments(module, all_globals_ctx, &declared_functions)?;
 
         // Validate start function
         Self::validate_start_function(module)?;
@@ -417,11 +418,18 @@ impl WastModuleValidator {
     }
 
     /// Validate element segments
-    /// Function indices in element segments must be valid
-    fn validate_element_segments(module: &Module) -> Result<()> {
+    /// Function indices in element segments must be valid, init expressions must
+    /// type-check against the segment's element type, and active segment element
+    /// types must be subtypes of their target table's element type.
+    fn validate_element_segments(
+        module: &Module,
+        all_globals_ctx: usize,
+        declared_functions: &HashSet<u32>,
+    ) -> Result<()> {
         let total_funcs = Self::total_functions(module);
 
         for elem in &module.elements {
+            // Validate function indices and init expression types
             match &elem.init_data {
                 PureElementInit::FunctionIndices(indices) => {
                     for &idx in indices {
@@ -431,49 +439,29 @@ impl WastModuleValidator {
                     }
                 },
                 PureElementInit::ExpressionBytes(exprs) => {
-                    // Parse expressions to find ref.func instructions
+                    // Validate each element init expression as a constant expression
+                    // that must produce a value matching the segment's element type.
+                    let expected_type = StackType::from_ref_type(elem.element_type);
                     for expr_bytes in exprs {
-                        Self::validate_element_expr_functions(expr_bytes, total_funcs)?;
+                        Self::validate_const_expr_typed(
+                            expr_bytes,
+                            module,
+                            all_globals_ctx,
+                            expected_type,
+                            declared_functions,
+                        )?;
                     }
                 },
             }
-        }
-        Ok(())
-    }
 
-    /// Validate function references in element expression bytes
-    fn validate_element_expr_functions(expr: &[u8], total_funcs: usize) -> Result<()> {
-        let mut pos = 0;
-        while pos < expr.len() {
-            let opcode = expr[pos];
-            pos += 1;
-
-            match opcode {
-                0xD2 => {
-                    // ref.func - validate the function index
-                    if let Ok((func_idx, new_pos)) = Self::read_leb128_unsigned(expr, pos) {
-                        if (func_idx as usize) >= total_funcs {
-                            return Err(anyhow!("unknown function"));
-                        }
-                        pos = new_pos;
-                    } else {
-                        break;
+            // For active segments, the element segment type must be a subtype
+            // of the target table's element type.
+            if let Some(table_idx) = elem.table_index() {
+                if let Some(table_elem_type) = Self::get_table_element_type(module, table_idx) {
+                    if !Self::is_ref_type_subtype(&elem.element_type, &table_elem_type, module) {
+                        return Err(anyhow!("type mismatch"));
                     }
-                },
-                0xD0 => {
-                    // ref.null - skip heap type
-                    if pos < expr.len() {
-                        pos += 1;
-                    }
-                },
-                0x0B => {
-                    // end
-                    break;
-                },
-                _ => {
-                    // Skip other opcodes - may need to parse their immediates
-                    // For now, just continue
-                },
+                }
             }
         }
         Ok(())
@@ -3457,6 +3445,14 @@ impl WastModuleValidator {
                             }
                             if table_idx as usize >= Self::total_tables(module) {
                                 return Err(anyhow!("unknown table {}", table_idx));
+                            }
+                            // The element segment type must be a subtype of the table element type
+                            if let Some(table_elem_type) = Self::get_table_element_type(module, table_idx) {
+                                if let Some(elem_seg) = module.elements.get(elem_idx as usize) {
+                                    if !Self::is_ref_type_subtype(&elem_seg.element_type, &table_elem_type, module) {
+                                        return Err(anyhow!("type mismatch"));
+                                    }
+                                }
                             }
                             let it = if Self::is_table64(module, table_idx) { StackType::I64 } else { StackType::I32 };
                             // Pop n (length: i32), s (source: i32), d (dest: it) in reverse
@@ -6543,6 +6539,98 @@ impl WastModuleValidator {
             ValueType::StructRef(idx) |
             ValueType::ArrayRef(idx) => Some(*idx),
             _ => None,
+        }
+    }
+
+    /// Check if RefType `sub` is a subtype of RefType `sup`.
+    ///
+    /// This works directly on RefType values preserving nullability information,
+    /// which is lost when converting to StackType (where FuncRef is always nullable).
+    ///
+    /// Subtyping rules for reference types:
+    /// - `(ref ht1)` <: `(ref null ht1)` (non-nullable <: nullable)
+    /// - `(ref null ht1)` is NOT a subtype of `(ref ht1)` (nullable NOT <: non-nullable)
+    /// - Heap type subtyping must also hold
+    fn is_ref_type_subtype(sub: &RefType, sup: &RefType, module: &Module) -> bool {
+        // Normalize both to (nullable, heap_type) form
+        let (sub_nullable, sub_ht) = Self::ref_type_to_nullable_heap(sub);
+        let (sup_nullable, sup_ht) = Self::ref_type_to_nullable_heap(sup);
+
+        // Nullability check: nullable is NOT a subtype of non-nullable
+        if sub_nullable && !sup_nullable {
+            return false;
+        }
+
+        // Check heap type subtyping
+        Self::is_heap_type_subtype(&sub_ht, &sup_ht, module)
+    }
+
+    /// Decompose a RefType into (nullable, HeapType) form.
+    fn ref_type_to_nullable_heap(rt: &RefType) -> (bool, kiln_foundation::types::HeapType) {
+        use kiln_foundation::types::HeapType;
+        match rt {
+            RefType::Funcref => (true, HeapType::Func),
+            RefType::Externref => (true, HeapType::Extern),
+            RefType::Gc(gc) => (gc.nullable, gc.heap_type),
+        }
+    }
+
+    /// Check if heap type `sub` is a subtype of heap type `sup`.
+    fn is_heap_type_subtype(
+        sub: &kiln_foundation::types::HeapType,
+        sup: &kiln_foundation::types::HeapType,
+        module: &Module,
+    ) -> bool {
+        use kiln_foundation::types::HeapType;
+
+        if sub == sup {
+            return true;
+        }
+
+        match (sub, sup) {
+            // func hierarchy: nofunc <: concrete func <: func
+            (HeapType::NoFunc, HeapType::Func) => true,
+            (HeapType::NoFunc, HeapType::Concrete(idx)) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
+            },
+            (HeapType::Concrete(sub_idx), HeapType::Func) => {
+                Self::concrete_type_is_kind(module, *sub_idx, CompositeKindClass::Func)
+            },
+
+            // extern hierarchy: noextern <: extern
+            (HeapType::NoExtern, HeapType::Extern) => true,
+
+            // exn hierarchy: noexn is not modeled in HeapType, but exn is terminal
+
+            // any hierarchy: none <: i31/struct/array <: eq <: any
+            (HeapType::None, HeapType::I31 | HeapType::Struct | HeapType::Array | HeapType::Eq | HeapType::Any) => true,
+            (HeapType::None, HeapType::Concrete(idx)) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+                    || Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
+            },
+            (HeapType::I31, HeapType::Eq | HeapType::Any) => true,
+            (HeapType::Struct, HeapType::Eq | HeapType::Any) => true,
+            (HeapType::Array, HeapType::Eq | HeapType::Any) => true,
+            (HeapType::Eq, HeapType::Any) => true,
+
+            // concrete struct/array <: struct/array/eq/any
+            (HeapType::Concrete(idx), HeapType::Struct) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+            },
+            (HeapType::Concrete(idx), HeapType::Array) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
+            },
+            (HeapType::Concrete(idx), HeapType::Eq | HeapType::Any) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+                    || Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
+            },
+
+            // concrete <: concrete (declared subtyping)
+            (HeapType::Concrete(sub_idx), HeapType::Concrete(sup_idx)) => {
+                Self::is_concrete_subtype(*sub_idx, *sup_idx, module)
+            },
+
+            _ => false,
         }
     }
 }
