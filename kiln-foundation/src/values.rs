@@ -211,7 +211,6 @@ impl GcStructRef {
     }
 
     /// Create a sentinel value used in WAST test comparison.
-    /// Matches any non-null struct reference.
     pub fn sentinel() -> Self {
         Self::new(StructRef::new(u32::MAX, DefaultMemoryProvider::default())
             .unwrap_or_else(|_| StructRef { type_index: u32::MAX, fields: Default::default() }))
@@ -220,6 +219,11 @@ impl GcStructRef {
     /// Check if this is a sentinel (used for "any non-null" matching).
     pub fn is_sentinel(&self) -> bool {
         self.type_index() == u32::MAX
+    }
+
+    /// Identity comparison: true if both point to the same allocation
+    pub fn arc_ptr_eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
     }
 
     /// Acquire the lock (abstracts over std vs no_std Mutex API differences)
@@ -300,6 +304,11 @@ impl GcArrayRef {
     /// Check if this is a sentinel (used for "any non-null" matching).
     pub fn is_sentinel(&self) -> bool {
         self.type_index() == u32::MAX
+    }
+
+    /// Identity comparison: true if both point to the same allocation
+    pub fn arc_ptr_eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
     }
 
     /// Acquire the lock (abstracts over std vs no_std Mutex API differences)
