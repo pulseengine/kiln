@@ -1924,6 +1924,17 @@ impl<'a> StreamingDecoder<'a> {
             #[cfg(feature = "tracing")]
             trace!(table_index = i, element_type = ?element_type, min = min, max = ?max, "table parsed");
 
+            // Validate: non-defaultable element types require an init expression
+            if !has_init_expr {
+                let is_non_nullable = match &element_type {
+                    RefType::Funcref | RefType::Externref => false, // nullable shorthand
+                    RefType::Gc(gc_ref) => !gc_ref.nullable,
+                };
+                if is_non_nullable {
+                    return Err(Error::validation_error("type mismatch"));
+                }
+            }
+
             // Create table type and add to module
             let is_table64 = flags & 0x04 != 0;
             let table_type = TableType::new_with_table64(element_type, Limits { min, max }, is_table64);
