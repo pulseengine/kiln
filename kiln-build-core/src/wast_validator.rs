@@ -1804,7 +1804,8 @@ impl WastModuleValidator {
                     {
                         let called_st = StackType::from_value_type(*called_result);
                         let current_st = StackType::from_value_type(*current_result);
-                        if !called_st.is_subtype_of(&current_st) && !current_st.is_subtype_of(&called_st) {
+                        // Callee result must be subtype of caller result (covariant)
+                        if !Self::is_subtype_of_in_module(&called_st, &current_st, module) {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
