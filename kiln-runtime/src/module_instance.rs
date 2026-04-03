@@ -983,6 +983,15 @@ impl ModuleInstance {
                     let table_wrapper = &tables[table_idx];
                     let table = table_wrapper.inner();
 
+                    // Per the WebAssembly spec, check that offset + n <= table.size
+                    // BEFORE writing any elements. This must trap even for empty
+                    // segments when the offset exceeds the table size.
+                    let n = elem_segment.items.len() as u64;
+                    let end = actual_offset as u64 + n;
+                    if end > table.size() as u64 {
+                        return Err(Error::runtime_trap("out of bounds table access"));
+                    }
+
                     // Set each element in the table
                     // Use the element segment's type to determine if we're dealing with
                     // funcref or externref elements
@@ -1088,6 +1097,19 @@ impl ModuleInstance {
                     #[cfg(feature = "tracing")]
                     debug!("Skipping non-active element segment {}", idx);
                 }
+            }
+        }
+
+        // Per the WebAssembly spec, active element segments are implicitly
+        // dropped after instantiation, and declarative segments are also
+        // considered dropped. Subsequent table.init on these segments must
+        // see them as having length 0 and trap for any non-zero size.
+        for (idx, elem_segment) in self.module.elements.iter().enumerate() {
+            match &elem_segment.mode {
+                KilnElementMode::Active { .. } | KilnElementMode::Declarative => {
+                    self.drop_element_segment(idx as u32)?;
+                }
+                KilnElementMode::Passive => {}
             }
         }
 

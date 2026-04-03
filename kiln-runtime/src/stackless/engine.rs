@@ -6472,7 +6472,7 @@ impl StacklessEngine {
                                                         if depth == 0 {
                                                             target_depth -= 1;
                                                             if target_depth == 0 {
-                                                                pc = new_pc - 1;
+                                                                pc = new_pc;
                                                                 break;
                                                             }
                                                         } else {
@@ -11724,9 +11724,16 @@ fn ref_test_value_with_module(
             let val_type_idx = match val {
                 Value::StructRef(Some(sref)) => Some(sref.type_index()),
                 Value::ArrayRef(Some(aref)) => Some(aref.type_index()),
-                // FuncRef doesn't carry a type index — accept any funcref for
-                // concrete func type targets (best effort without full type info)
-                Value::FuncRef(Some(_)) => return true,
+                // FuncRef: look up the function's declared type index from the module
+                Value::FuncRef(Some(fref)) => {
+                    if let Some(module) = module {
+                        module.get_function(fref.index)
+                            .map(|f| f.type_idx)
+                    } else {
+                        // Without module info we cannot resolve the function's type
+                        None
+                    }
+                },
                 _ => None,
             };
 
