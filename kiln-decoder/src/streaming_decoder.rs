@@ -49,6 +49,41 @@ fn decode_heap_type(val: i64) -> kiln_foundation::types::HeapType {
     }
 }
 
+/// Check if heap type `sub` is a subtype of heap type `sup` per the WebAssembly spec.
+///
+/// The heap type hierarchy:
+/// - Func > Concrete(n) > NoFunc  (for function types)
+/// - Extern > NoExtern            (for external types)
+/// - Any > Eq > I31/Struct/Array > None (for aggregate types)
+/// - Exn > NoExn                  (for exception types)
+fn heap_type_is_subtype(
+    sub: kiln_foundation::types::HeapType,
+    sup: kiln_foundation::types::HeapType,
+) -> bool {
+    use kiln_foundation::types::HeapType;
+    // Equal types are always subtypes
+    if sub == sup {
+        return true;
+    }
+    match (sub, sup) {
+        // Function hierarchy: Concrete(n) <: Func, NoFunc <: Func, NoFunc <: Concrete(n)
+        (HeapType::Concrete(_), HeapType::Func) => true,
+        (HeapType::NoFunc, HeapType::Func) => true,
+        (HeapType::NoFunc, HeapType::Concrete(_)) => true,
+        // Extern hierarchy: NoExtern <: Extern
+        (HeapType::NoExtern, HeapType::Extern) => true,
+        // Any hierarchy: Eq <: Any, I31/Struct/Array <: Eq, None <: everything in Any hierarchy
+        (HeapType::Eq, HeapType::Any) => true,
+        (HeapType::I31 | HeapType::Struct | HeapType::Array, HeapType::Any) => true,
+        (HeapType::I31 | HeapType::Struct | HeapType::Array, HeapType::Eq) => true,
+        (HeapType::None, HeapType::Any | HeapType::Eq | HeapType::I31 | HeapType::Struct | HeapType::Array) => true,
+        (HeapType::None, HeapType::Concrete(_)) => true,
+        // Exn hierarchy: currently no bottom type modeled
+        // Everything else is not a subtype
+        _ => false,
+    }
+}
+
 /// Skip an LEB128-encoded unsigned integer and return the number of bytes consumed
 fn skip_leb128_u32(data: &[u8], offset: usize) -> usize {
     let mut bytes = 0;
@@ -1233,6 +1268,47 @@ impl<'a> StreamingDecoder<'a> {
         }
     }
 
+    /// Parse a value type for local declarations, preserving non-nullability.
+    ///
+    /// Like `parse_value_type`, but for non-nullable abstract heap types
+    /// (e.g., `(ref func)`, `(ref extern)`), this returns `TypedFuncRef`
+    /// with a sentinel index (bit 31 set) instead of the nullable shorthand.
+    /// This allows the validator to detect non-defaultable locals for
+    /// initialization tracking per the WebAssembly spec.
+    ///
+    /// Sentinel encoding: `TypedFuncRef(0x8000_0000 | abstract_code, false)`
+    /// where `abstract_code` is the absolute value of the s33 heap type.
+    fn parse_value_type_for_local(
+        &self,
+        data: &[u8],
+        offset: usize,
+    ) -> Result<(kiln_foundation::types::ValueType, usize)> {
+        use kiln_format::binary::REF_TYPE_NON_NULLABLE;
+        use kiln_foundation::types::ValueType;
+
+        if offset >= data.len() {
+            return Err(Error::parse_error("Unexpected end of value type"));
+        }
+
+        let byte = data[offset];
+
+        // Only the 0x64 (non-nullable ref) path with abstract heap types differs
+        if byte == REF_TYPE_NON_NULLABLE {
+            let off = offset + 1;
+            let (heap_type_idx, new_offset) = self.parse_heap_type(data, off)?;
+            if heap_type_idx < 0 {
+                // Non-nullable abstract heap type: encode as sentinel TypedFuncRef
+                let sentinel = 0x8000_0000u32 | ((-heap_type_idx) as u32 & 0xFF);
+                return Ok((ValueType::TypedFuncRef(sentinel, false), new_offset));
+            }
+            // Concrete type: non-nullable typed ref
+            return Ok((ValueType::TypedFuncRef(heap_type_idx as u32, false), new_offset));
+        }
+
+        // For all other cases, delegate to the standard parser
+        self.parse_value_type(data, offset)
+    }
+
     /// Parse a heap type (for GC reference types)
     fn parse_heap_type(&self, data: &[u8], offset: usize) -> Result<(i64, usize)> {
         use kiln_format::binary::read_leb128_i64;
@@ -1846,12 +1922,25 @@ impl<'a> StreamingDecoder<'a> {
             if has_init_expr {
                 // Count global imports - at table section time, only imported globals exist
                 use kiln_format::module::ImportDesc;
-                let num_global_imports = self
+                use kiln_format::types::FormatGlobalType as FGT;
+                use kiln_foundation::types::ValueType;
+                let global_imports: Vec<&FGT> = self
                     .module
                     .imports
                     .iter()
-                    .filter(|imp| matches!(imp.desc, ImportDesc::Global(..)))
-                    .count();
+                    .filter_map(|imp| match &imp.desc {
+                        ImportDesc::Global(gt, ..) => Some(gt),
+                        _ => None,
+                    })
+                    .collect();
+                let num_global_imports = global_imports.len();
+
+                // Track the result type of the init expression.
+                // None = not yet determined or non-ref (e.g. i32/i64).
+                // Some((nullable, heap_type)) = a reference type result.
+                let mut init_expr_is_ref = false;
+                let mut init_expr_nullable = false;
+                let mut init_expr_heap_type = HeapType::Func;
 
                 // Record start position so we can capture the init expression bytes
                 let init_expr_start = offset;
@@ -1879,7 +1968,7 @@ impl<'a> StreamingDecoder<'a> {
                             }
                             block_depth -= 1;
                         },
-                        // global.get - validate global index
+                        // global.get - validate global index and track type
                         0x23 => {
                             // Read global index (LEB128)
                             let (global_idx, bytes_read) = read_leb128_u32(data, offset)?;
@@ -1889,10 +1978,84 @@ impl<'a> StreamingDecoder<'a> {
                             if global_idx as usize >= num_global_imports {
                                 return Err(Error::validation_error("unknown global"));
                             }
+                            // Track result type from global's value type
+                            let global_type = global_imports[global_idx as usize];
+                            match global_type.value_type {
+                                ValueType::FuncRef => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::Func;
+                                },
+                                ValueType::ExternRef => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::Extern;
+                                },
+                                ValueType::NullFuncRef => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::NoFunc;
+                                },
+                                ValueType::I31Ref => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::I31;
+                                },
+                                ValueType::AnyRef => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::Any;
+                                },
+                                ValueType::EqRef => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::Eq;
+                                },
+                                ValueType::ExnRef => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::Exn;
+                                },
+                                ValueType::StructRef(idx) => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::Concrete(idx);
+                                },
+                                ValueType::ArrayRef(idx) => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::Concrete(idx);
+                                },
+                                ValueType::TypedFuncRef(idx, nullable) => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = nullable;
+                                    init_expr_heap_type = HeapType::Concrete(idx);
+                                },
+                                ValueType::NoneRef => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::None;
+                                },
+                                ValueType::NoExternRef => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::NoExtern;
+                                },
+                                ValueType::NoExnRef => {
+                                    init_expr_is_ref = true;
+                                    init_expr_nullable = true;
+                                    init_expr_heap_type = HeapType::Exn;
+                                },
+                                _ => {
+                                    // Non-ref type (i32, i64, etc.)
+                                    init_expr_is_ref = false;
+                                },
+                            }
                         },
                         // Skip LEB128 immediates for common opcodes
                         0x41 => {
-                            // i32.const - skip LEB128
+                            // i32.const - produces i32, not a ref type
+                            init_expr_is_ref = false;
                             while offset < data.len() && (data[offset] & 0x80) != 0 {
                                 offset += 1;
                             }
@@ -1901,7 +2064,8 @@ impl<'a> StreamingDecoder<'a> {
                             }
                         },
                         0x42 => {
-                            // i64.const - skip LEB128
+                            // i64.const - produces i64, not a ref type
+                            init_expr_is_ref = false;
                             while offset < data.len() && (data[offset] & 0x80) != 0 {
                                 offset += 1;
                             }
@@ -1910,23 +2074,32 @@ impl<'a> StreamingDecoder<'a> {
                             }
                         },
                         0xD0 => {
-                            // ref.null - skip heap type byte
-                            if offset < data.len() {
-                                offset += 1;
-                            }
+                            // ref.null ht - produces (ref null ht)
+                            // Heap type is encoded as signed LEB128 (s33)
+                            use kiln_format::binary::read_leb128_i64;
+                            let (ht_val, ht_bytes) = read_leb128_i64(data, offset)?;
+                            offset += ht_bytes;
+                            init_expr_is_ref = true;
+                            init_expr_nullable = true;
+                            init_expr_heap_type = decode_heap_type(ht_val);
                         },
                         // GC prefix (0xFB) - skip sub-opcode LEB128
                         0xFB => {
-                            // Read and skip the sub-opcode (LEB128 encoded)
-                            while offset < data.len() && (data[offset] & 0x80) != 0 {
-                                offset += 1;
-                            }
-                            if offset < data.len() {
-                                offset += 1;
+                            // Read the sub-opcode (LEB128 encoded)
+                            let (sub_opcode, sub_bytes) = read_leb128_u32(data, offset)?;
+                            offset += sub_bytes;
+                            // ref.i31 (0xFB 0x1C) produces non-nullable (ref i31)
+                            if sub_opcode == 0x1C {
+                                init_expr_is_ref = true;
+                                init_expr_nullable = false;
+                                init_expr_heap_type = HeapType::I31;
                             }
                         },
-                        // ref.func - skip LEB128 function index
+                        // ref.func - produces non-nullable (ref func)
                         0xD2 => {
+                            init_expr_is_ref = true;
+                            init_expr_nullable = false;
+                            init_expr_heap_type = HeapType::Func;
                             while offset < data.len() && (data[offset] & 0x80) != 0 {
                                 offset += 1;
                             }
@@ -1937,6 +2110,32 @@ impl<'a> StreamingDecoder<'a> {
                         _ => {
                             // Other opcodes - continue scanning
                         },
+                    }
+                }
+
+                // Validate init expression type against table element type.
+                // The init expression result must be a subtype of the table's element type.
+                {
+                    // Convert table element_type to (nullable, heap_type)
+                    let (table_nullable, table_heap) = match &element_type {
+                        RefType::Funcref => (true, HeapType::Func),
+                        RefType::Externref => (true, HeapType::Extern),
+                        RefType::Gc(gc) => (gc.nullable, gc.heap_type),
+                    };
+
+                    if !init_expr_is_ref {
+                        // Init expression produces a non-ref type (e.g. i32) - not valid for a table
+                        return Err(Error::validation_error("type mismatch"));
+                    }
+
+                    // Nullability check: nullable init can only satisfy nullable table type
+                    if init_expr_nullable && !table_nullable {
+                        return Err(Error::validation_error("type mismatch"));
+                    }
+
+                    // Heap type subtyping check
+                    if !heap_type_is_subtype(init_expr_heap_type, table_heap) {
+                        return Err(Error::validation_error("type mismatch"));
                     }
                 }
 
@@ -2880,8 +3079,10 @@ impl<'a> StreamingDecoder<'a> {
                 }
 
                 // Parse value type using the full GC-aware parser to handle
-                // multi-byte ref type encodings (0x63/0x64 + heap type index)
-                let (vt, new_body_offset) = self.parse_value_type(
+                // multi-byte ref type encodings (0x63/0x64 + heap type index).
+                // Use the nullability-preserving variant so the validator can detect
+                // non-defaultable locals (non-nullable abstract refs like (ref extern)).
+                let (vt, new_body_offset) = self.parse_value_type_for_local(
                     &data[body_start..body_end],
                     body_offset,
                 )?;

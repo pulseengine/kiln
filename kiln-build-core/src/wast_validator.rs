@@ -66,8 +66,31 @@ impl StackType {
             ValueType::NullFuncRef => StackType::NullFuncRef,
             ValueType::ExternRef => StackType::ExternRef,
             ValueType::ExnRef => StackType::ExnRef,
-            // Typed function reference - preserves type index and nullability
-            ValueType::TypedFuncRef(idx, nullable) => StackType::TypedFuncRef(idx, nullable),
+            // Typed function reference - preserves type index and nullability.
+            // Sentinel indices (bit 31 set) encode non-nullable abstract heap types
+            // from local declarations. Map them back to the abstract StackType for
+            // correct type checking on the operand stack.
+            ValueType::TypedFuncRef(idx, nullable) => {
+                if idx & WastModuleValidator::ABSTRACT_HEAP_SENTINEL != 0 {
+                    let abstract_code = idx & 0xFF;
+                    match abstract_code {
+                        16 => StackType::FuncRef,      // func
+                        17 => StackType::ExternRef,    // extern
+                        18 => StackType::AnyRef,       // any
+                        19 => StackType::EqRef,        // eq
+                        20 => StackType::I31Ref,       // i31
+                        21 => StackType::StructRef,    // struct
+                        22 => StackType::ArrayRef,     // array
+                        23 => StackType::ExnRef,       // exn
+                        13 => StackType::NullFuncRef,  // nofunc
+                        14 => StackType::NullExternRef,// noextern
+                        15 => StackType::NoneRef,      // none
+                        _  => StackType::Unknown,
+                    }
+                } else {
+                    StackType::TypedFuncRef(idx, nullable)
+                }
+            },
             // GC types
             ValueType::AnyRef => StackType::AnyRef,
             ValueType::EqRef => StackType::EqRef,
@@ -242,6 +265,11 @@ struct ControlFrame {
     /// but NOT phantom values from polymorphic underflow.
     /// Used to reject blocks that push too many concrete values in unreachable code.
     concrete_push_count: u32,
+    /// Saved local initialization state at frame entry.
+    /// When the frame ends, the init state reverts to this saved state.
+    /// This ensures that local.set inside a block/loop/if does not propagate
+    /// initialization to the outer scope (per WebAssembly spec).
+    saved_local_init: Vec<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -685,19 +713,59 @@ impl WastModuleValidator {
         Ok(())
     }
 
+    /// Sentinel bit for non-nullable abstract heap types encoded as TypedFuncRef.
+    /// When set in the type index, the index represents an abstract heap type
+    /// (func, extern, any, etc.) rather than a concrete type index.
+    const ABSTRACT_HEAP_SENTINEL: u32 = 0x8000_0000;
+
     /// Check if a ValueType contains a type index reference and validate it
     fn check_value_type_ref(vt: &ValueType, num_types: usize) -> Result<()> {
         match vt {
             ValueType::TypedFuncRef(idx, _)
             | ValueType::StructRef(idx)
             | ValueType::ArrayRef(idx) => {
-                if (*idx as usize) >= num_types {
+                // Skip bounds check for abstract heap type sentinels (bit 31 set).
+                // These encode non-nullable abstract refs like (ref func), (ref extern).
+                if *idx & Self::ABSTRACT_HEAP_SENTINEL == 0
+                    && (*idx as usize) >= num_types
+                {
                     return Err(anyhow!("unknown type"));
                 }
             }
             _ => {}
         }
         Ok(())
+    }
+
+    /// Check if a ValueType is defaultable (has a default value).
+    /// Per the WebAssembly spec, nullable reference types are defaultable (default is null),
+    /// while non-nullable reference types and numeric types are defaultable.
+    /// Non-nullable refs like (ref $t), (ref func), (ref extern) are NOT defaultable.
+    fn is_defaultable(vt: &ValueType) -> bool {
+        match vt {
+            // Numeric and vector types are always defaultable
+            ValueType::I32
+            | ValueType::I64
+            | ValueType::F32
+            | ValueType::F64
+            | ValueType::V128
+            | ValueType::I16x8 => true,
+            // Nullable abstract reference types are defaultable
+            ValueType::FuncRef
+            | ValueType::ExternRef
+            | ValueType::ExnRef
+            | ValueType::AnyRef
+            | ValueType::EqRef
+            | ValueType::I31Ref
+            | ValueType::NullFuncRef
+            | ValueType::NoneRef
+            | ValueType::NoExternRef
+            | ValueType::NoExnRef => true,
+            // StructRef and ArrayRef with index 0 are abstract nullable refs (defaultable)
+            ValueType::StructRef(_) | ValueType::ArrayRef(_) => true,
+            // TypedFuncRef: defaultable only when nullable
+            ValueType::TypedFuncRef(_, nullable) => *nullable,
+        }
     }
 
     /// Check if a RefType contains a type index reference and validate it
@@ -859,6 +927,22 @@ impl WastModuleValidator {
             local_types.push(*local);
         }
 
+        // Initialize local initialization tracking.
+        // Parameters are always initialized. Locals with defaultable types
+        // (numeric, nullable refs) are initialized by default. Locals with
+        // non-defaultable types (non-nullable refs) start uninitialized.
+        let mut local_init: Vec<bool> = Vec::with_capacity(local_types.len());
+        let num_params = func_type.params.len();
+        for (i, vt) in local_types.iter().enumerate() {
+            if i < num_params {
+                // Parameters are always initialized
+                local_init.push(true);
+            } else {
+                // Locals: initialized if their type is defaultable
+                local_init.push(Self::is_defaultable(vt));
+            }
+        }
+
         // Initialize operand stack (empty - parameters are accessed via local.get, not on stack)
         let mut stack: Vec<StackType> = Vec::new();
 
@@ -875,6 +959,7 @@ impl WastModuleValidator {
             stack_height: 0,
             unreachable_height: None,
             concrete_push_count: 0,
+            saved_local_init: Vec::new(),
         }];
 
         // Parse bytecode
@@ -934,6 +1019,7 @@ impl WastModuleValidator {
                         stack_height,
                         unreachable_height: None,
                         concrete_push_count: 0,
+                        saved_local_init: local_init.clone(),
                     });
 
                     // Push inputs back - they're now on the block's stack
@@ -973,6 +1059,7 @@ impl WastModuleValidator {
                         stack_height,
                         unreachable_height: None,
                         concrete_push_count: 0,
+                        saved_local_init: local_init.clone(),
                     });
 
                     // Push inputs back - they're now on the loop's stack
@@ -1022,6 +1109,7 @@ impl WastModuleValidator {
                         stack_height,
                         unreachable_height: None,
                         concrete_push_count: 0,
+                        saved_local_init: local_init.clone(),
                     });
 
                     // Push inputs back - they're now on the if's stack
@@ -1078,6 +1166,12 @@ impl WastModuleValidator {
                         stack.push(*input_type);
                     }
 
+                    // Reset local init state for the else branch to the state at if entry.
+                    // Initializations from the then branch don't carry to the else branch.
+                    if let Some(frame) = frames.last() {
+                        local_init = frame.saved_local_init.clone();
+                    }
+
                     if let Some(frame) = frames.last_mut() {
                         frame.frame_type = FrameType::Else;
                         frame.reachable = true;
@@ -1117,6 +1211,7 @@ impl WastModuleValidator {
                         stack_height,
                         unreachable_height: None,
                         concrete_push_count: 0,
+                        saved_local_init: local_init.clone(),
                     });
 
                     for input_type in &input_types {
@@ -1293,6 +1388,11 @@ impl WastModuleValidator {
 
                     // Pop block/loop/if frame
                     let frame = frames.pop().unwrap();
+
+                    // Restore local initialization state to what it was at frame entry.
+                    // Per the WebAssembly spec, local.set inside a structured block does
+                    // NOT propagate initialization to the outer scope.
+                    local_init = frame.saved_local_init.clone();
 
                     // If this is an if without else, the input and output types must match
                     // (because when condition is false, the else is implicitly empty,
@@ -1980,6 +2080,7 @@ impl WastModuleValidator {
                         stack_height,
                         unreachable_height: None,
                         concrete_push_count: 0,
+                        saved_local_init: local_init.clone(),
                     });
 
                     for input_type in &input_types {
@@ -2340,7 +2441,13 @@ impl WastModuleValidator {
                         return Err(anyhow!("local.get: invalid local index {}", local_idx));
                     }
 
-                    stack.push(StackType::from_value_type(local_types[local_idx as usize]));
+                    // Check that non-defaultable locals have been initialized
+                    let idx = local_idx as usize;
+                    if !Self::is_defaultable(&local_types[idx]) && !local_init[idx] {
+                        return Err(anyhow!("uninitialized local"));
+                    }
+
+                    stack.push(StackType::from_value_type(local_types[idx]));
                 },
                 0x21 => {
                     // local.set
@@ -2361,6 +2468,9 @@ impl WastModuleValidator {
                     ) {
                         return Err(anyhow!("type mismatch"));
                     }
+
+                    // Mark the local as initialized
+                    local_init[local_idx as usize] = true;
                 },
                 0x22 => {
                     // local.tee
@@ -2380,6 +2490,9 @@ impl WastModuleValidator {
                             return Err(anyhow!("local.tee: type mismatch"));
                         }
                     }
+
+                    // Mark the local as initialized
+                    local_init[local_idx as usize] = true;
                 },
                 0x23 => {
                     // global.get

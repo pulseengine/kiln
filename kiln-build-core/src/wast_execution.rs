@@ -1248,7 +1248,21 @@ impl WastEngine {
         // Get the source table type from the module definition
         let source_table_type = self.get_table_type_from_module(source_module, export_table_idx);
 
-        if let Some(source_type) = source_table_type {
+        if let Some(mut source_type) = source_table_type {
+            // Per the WebAssembly spec, import validation must use the table's
+            // *current* size (which may have been grown via table.grow), not the
+            // original declared minimum. Query the live instance to get the
+            // actual current table size.
+            if let Some(instance_id) = self.instance_ids.get(mod_name) {
+                if let Some(instance) = self.engine.get_instance(*instance_id) {
+                    if let Ok(live_table) = instance.table(export_table_idx as u32) {
+                        let current_size = live_table.size();
+                        if current_size > source_type.limits.min {
+                            source_type.limits.min = current_size;
+                        }
+                    }
+                }
+            }
             validate_table_import_compatibility(import_table_type, &source_type)?;
         }
 
