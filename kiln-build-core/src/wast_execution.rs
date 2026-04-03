@@ -1143,11 +1143,15 @@ impl WastEngine {
             ));
         }
 
+        // Parameters are contravariant: import's param type must be a subtype of export's param type
         for (i, (import_param, export_param)) in import_func_type.params.iter()
             .zip(export_func_type.params.iter())
             .enumerate()
         {
-            if import_param != export_param {
+            if !is_value_type_subtype_cross_module(
+                import_param, importing_module,
+                export_param, source_module,
+            ) {
                 return Err(anyhow::anyhow!(
                     "incompatible import type: {}::{} param {} type mismatch ({:?} vs {:?})",
                     mod_name, field_name, i, import_param, export_param
@@ -1155,11 +1159,15 @@ impl WastEngine {
             }
         }
 
+        // Results are covariant: export's result type must be a subtype of import's result type
         for (i, (import_result, export_result)) in import_func_type.results.iter()
             .zip(export_func_type.results.iter())
             .enumerate()
         {
-            if import_result != export_result {
+            if !is_value_type_subtype_cross_module(
+                export_result, source_module,
+                import_result, importing_module,
+            ) {
                 return Err(anyhow::anyhow!(
                     "incompatible import type: {}::{} result {} type mismatch ({:?} vs {:?})",
                     mod_name, field_name, i, import_result, export_result
@@ -1439,6 +1447,12 @@ fn is_value_type_subtype(sub: &ValueType, sup: &ValueType) -> bool {
         // Any concrete function ref is a subtype of funcref
         (ValueType::FuncRef, ValueType::FuncRef) => true,
         (ValueType::NullFuncRef, ValueType::FuncRef) => true,
+        // TypedFuncRef is a subtype of FuncRef (funcref = (ref null func))
+        // Any (ref null? $t) where $t is a func type is a subtype of (ref null func)
+        (ValueType::TypedFuncRef(_, _), ValueType::FuncRef) => true,
+        // Non-nullable typed func ref is subtype of nullable with same index
+        (ValueType::TypedFuncRef(idx_a, false), ValueType::TypedFuncRef(idx_b, true))
+            if idx_a == idx_b => true,
         // ExternRef subtyping
         (ValueType::ExternRef, ValueType::ExternRef) => true,
         // AnyRef hierarchy
@@ -1450,6 +1464,157 @@ fn is_value_type_subtype(sub: &ValueType, sup: &ValueType) -> bool {
         (ValueType::ArrayRef(_), ValueType::AnyRef) => true,
         (ValueType::ArrayRef(_), ValueType::EqRef) => true,
         // Numeric types require exact match
+        _ => false,
+    }
+}
+
+/// Check if value type `sub` (from `sub_module`) is a subtype of `sup` (from `sup_module`)
+///
+/// This performs cross-module subtyping for import validation. It extends the basic
+/// `is_value_type_subtype` with support for typed function references that may use
+/// different type indices in different modules but refer to structurally equivalent types.
+///
+/// Key rules for function type import subtyping:
+/// - Results are covariant: export result must be subtype of import result
+/// - Parameters are contravariant: import param must be subtype of export param
+/// - TypedFuncRef(_, _) <: FuncRef (any concrete func ref is subtype of funcref)
+/// - TypedFuncRef(a, false) <: TypedFuncRef(b, true) with structural type match
+/// - TypedFuncRef(a, n) <: TypedFuncRef(b, n) if type a (in sub_module) is a subtype
+///   of type b (in sup_module), checked structurally and via supertype chains
+fn is_value_type_subtype_cross_module(
+    sub: &ValueType, sub_module: &Module,
+    sup: &ValueType, sup_module: &Module,
+) -> bool {
+    if sub == sup {
+        return true;
+    }
+
+    match (sub, sup) {
+        // TypedFuncRef is a subtype of FuncRef (funcref = (ref null func))
+        (ValueType::TypedFuncRef(_, _), ValueType::FuncRef) => true,
+
+        // TypedFuncRef subtyping with cross-module structural check
+        (ValueType::TypedFuncRef(sub_idx, sub_nullable), ValueType::TypedFuncRef(sup_idx, sup_nullable)) => {
+            // Nullable check: non-nullable is subtype of nullable, but not vice versa
+            if *sub_nullable && !*sup_nullable {
+                return false;
+            }
+            // Check if type at sub_idx in sub_module is a subtype of type at sup_idx in sup_module
+            is_type_idx_subtype_cross_module(
+                *sub_idx, sub_module,
+                *sup_idx, sup_module,
+                0, // recursion depth
+            )
+        }
+
+        // Fall back to single-module subtype check for all other cases
+        _ => is_value_type_subtype(sub, sup),
+    }
+}
+
+/// Check if type index `sub_idx` in `sub_module` is a subtype of `sup_idx` in `sup_module`.
+///
+/// This walks the supertype chain of `sub_idx` checking for structural equivalence
+/// with `sup_idx`. Two func types are structurally equivalent if their param/result
+/// counts match and each corresponding type is structurally compatible.
+///
+/// Uses a recursion depth limit to prevent infinite loops with recursive types.
+const MAX_SUBTYPE_RECURSION_DEPTH: u32 = 16;
+
+fn is_type_idx_subtype_cross_module(
+    sub_idx: u32, sub_module: &Module,
+    sup_idx: u32, sup_module: &Module,
+    depth: u32,
+) -> bool {
+    if depth > MAX_SUBTYPE_RECURSION_DEPTH {
+        return false;
+    }
+
+    // Check if sub_idx's func type is structurally compatible with sup_idx's func type
+    if are_func_types_structurally_compatible(sub_idx, sub_module, sup_idx, sup_module, depth) {
+        return true;
+    }
+
+    // Walk the supertype chain of sub_idx in sub_module
+    if let Some(Some(parent_idx)) = sub_module.type_supertypes.get(sub_idx as usize) {
+        return is_type_idx_subtype_cross_module(
+            *parent_idx, sub_module,
+            sup_idx, sup_module,
+            depth + 1,
+        );
+    }
+
+    false
+}
+
+/// Check if two func types (by index, potentially in different modules) are structurally compatible.
+///
+/// Structural compatibility means: same number of params and results, and each corresponding
+/// value type is compatible (using cross-module subtype checking for reference types).
+fn are_func_types_structurally_compatible(
+    idx_a: u32, module_a: &Module,
+    idx_b: u32, module_b: &Module,
+    depth: u32,
+) -> bool {
+    let type_a = match module_a.types.get(idx_a as usize) {
+        Some(t) => t,
+        None => return false,
+    };
+    let type_b = match module_b.types.get(idx_b as usize) {
+        Some(t) => t,
+        None => return false,
+    };
+
+    if type_a.params.len() != type_b.params.len()
+        || type_a.results.len() != type_b.results.len()
+    {
+        return false;
+    }
+
+    // Check params match structurally
+    for (pa, pb) in type_a.params.iter().zip(type_b.params.iter()) {
+        if !are_value_types_structurally_compatible(pa, module_a, pb, module_b, depth + 1) {
+            return false;
+        }
+    }
+
+    // Check results match structurally
+    for (ra, rb) in type_a.results.iter().zip(type_b.results.iter()) {
+        if !are_value_types_structurally_compatible(ra, module_a, rb, module_b, depth + 1) {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Check if two value types are structurally compatible across modules.
+///
+/// For non-reference types, this is exact equality. For typed references,
+/// this recursively checks structural compatibility of the referenced types.
+fn are_value_types_structurally_compatible(
+    a: &ValueType, module_a: &Module,
+    b: &ValueType, module_b: &Module,
+    depth: u32,
+) -> bool {
+    if a == b {
+        return true;
+    }
+
+    if depth > MAX_SUBTYPE_RECURSION_DEPTH {
+        return false;
+    }
+
+    match (a, b) {
+        // TypedFuncRef: compare structurally by looking at the referenced func types
+        (ValueType::TypedFuncRef(idx_a, nullable_a), ValueType::TypedFuncRef(idx_b, nullable_b)) => {
+            if nullable_a != nullable_b {
+                return false;
+            }
+            are_func_types_structurally_compatible(*idx_a, module_a, *idx_b, module_b, depth + 1)
+        }
+        // StructRef/ArrayRef with same index may differ across modules but we
+        // only handle func types for now; exact match required for others
         _ => false,
     }
 }
