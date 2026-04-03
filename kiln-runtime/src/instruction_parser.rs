@@ -142,22 +142,22 @@ fn parse_instruction_with_provider(
         0x01 => Instruction::Nop,
         0x02 => {
             // Block with block type
-            let block_type = parse_block_type(bytecode, offset + 1)?;
-            consumed += 1; // Simplified - actual block type parsing may consume more
+            let (block_type, bt_bytes) = parse_block_type(bytecode, offset + 1)?;
+            consumed += bt_bytes;
             let block_type_idx = block_type_to_index(&block_type);
             Instruction::Block { block_type_idx }
         },
         0x03 => {
             // Loop with block type
-            let block_type = parse_block_type(bytecode, offset + 1)?;
-            consumed += 1;
+            let (block_type, bt_bytes) = parse_block_type(bytecode, offset + 1)?;
+            consumed += bt_bytes;
             let block_type_idx = block_type_to_index(&block_type);
             Instruction::Loop { block_type_idx }
         },
         0x04 => {
             // If with block type
-            let block_type = parse_block_type(bytecode, offset + 1)?;
-            consumed += 1;
+            let (block_type, bt_bytes) = parse_block_type(bytecode, offset + 1)?;
+            consumed += bt_bytes;
             let block_type_idx = block_type_to_index(&block_type);
             Instruction::If { block_type_idx }
         },
@@ -165,8 +165,8 @@ fn parse_instruction_with_provider(
         // Exception handling instructions (exception handling proposal)
         0x06 => {
             // try (legacy) - takes block type
-            let block_type = parse_block_type(bytecode, offset + 1)?;
-            consumed += 1;
+            let (block_type, bt_bytes) = parse_block_type(bytecode, offset + 1)?;
+            consumed += bt_bytes;
             let block_type_idx = block_type_to_index(&block_type);
             Instruction::Try { block_type_idx }
         },
@@ -296,8 +296,8 @@ fn parse_instruction_with_provider(
         0x19 => Instruction::CatchAll,
         0x1F => {
             // try_table - takes block type + catch handler list
-            let block_type = parse_block_type(bytecode, offset + 1)?;
-            consumed += 1;
+            let (block_type, bt_bytes) = parse_block_type(bytecode, offset + 1)?;
+            consumed += bt_bytes;
             let block_type_idx = block_type_to_index(&block_type);
 
             // Parse handler count
@@ -1622,13 +1622,18 @@ fn decode_value_type(b: u8) -> Result<kiln_foundation::types::ValueType> {
     }
 }
 
-/// Parse a block type
+/// Parse a block type, returning the BlockType and the number of bytes consumed.
 ///
-/// Block types in WebAssembly are encoded as:
-/// - 0x40: empty type (no results)
-/// - Value type bytes (0x7F=i32, 0x7E=i64, 0x7D=f32, 0x7C=f64, etc.): single result type
-/// - Otherwise: type index encoded as s33 (signed 33-bit LEB128)
-fn parse_block_type(bytecode: &[u8], offset: usize) -> Result<BlockType> {
+/// Block types in WebAssembly are encoded as s33 (signed 33-bit LEB128):
+/// - Negative values represent value types (0x40=empty, 0x7F=i32, 0x70=funcref, etc.)
+/// - Non-negative values represent type indices
+///
+/// In single-byte s33 encoding:
+/// - Bytes 0x00..=0x3F: non-negative type indices 0..63
+/// - Bytes 0x40..=0x7F: negative values (value types)
+///
+/// Multi-byte s33 values (first byte has bit 7 set) encode type indices >= 64.
+fn parse_block_type(bytecode: &[u8], offset: usize) -> Result<(BlockType, usize)> {
     if offset >= bytecode.len() {
         return Err(Error::parse_error(
             "Unexpected end while parsing block type",
@@ -1637,41 +1642,103 @@ fn parse_block_type(bytecode: &[u8], offset: usize) -> Result<BlockType> {
 
     let b = bytecode[offset];
 
-    // Check for specific value type encodings first
+    // Single-byte value types (negative s33 values, 0x40..=0x7F range)
+    // These are recognized by having bit 6 set (sign bit in single-byte s33)
+    // and bit 7 clear (single byte, no continuation).
     match b {
-        0x40 => Ok(BlockType::Value(None)), // Empty type
-        0x7F => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::I32))),
-        0x7E => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::I64))),
-        0x7D => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::F32))),
-        0x7C => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::F64))),
-        0x7B => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::V128))),
-        0x70 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::FuncRef))),
-        0x6F => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ExternRef))),
-        0x69 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ExnRef))),
-        // GC reference types
-        0x6E => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::AnyRef))),
-        0x6D => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::EqRef))),
-        0x6C => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::I31Ref))),
-        0x6B => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::StructRef(0)))),
-        0x6A => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ArrayRef(0)))),
-        0x73 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::NullFuncRef))),
-        0x72 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ExternRef))),
-        0x71 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::AnyRef))),
-        0x74 => Ok(BlockType::Value(Some(kiln_foundation::types::ValueType::ExnRef))),
-        _ => {
-            // Type index: parse as s33 (for small positive values, it's just the byte)
-            // For now, handle single-byte type indices (0-63)
-            if b & 0x80 == 0 {
-                // Single byte LEB128 - the value is the type index
-                Ok(BlockType::FuncType(b as u32))
-            } else {
-                // Multi-byte LEB128 - parse as signed LEB128
-                // For simplicity, treat as empty for now (rare case)
-                // TODO: Implement full s33 parsing for large type indices
-                Ok(BlockType::Value(None))
-            }
-        },
+        0x40 => return Ok((BlockType::Value(None), 1)), // Empty type
+        0x7F => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::I32)), 1)),
+        0x7E => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::I64)), 1)),
+        0x7D => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::F32)), 1)),
+        0x7C => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::F64)), 1)),
+        0x7B => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::V128)), 1)),
+        0x70 => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::FuncRef)), 1)),
+        0x6F => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::ExternRef)), 1)),
+        0x69 => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::ExnRef)), 1)),
+        // GC reference types (single-byte shorthand forms)
+        0x6E => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::AnyRef)), 1)),
+        0x6D => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::EqRef)), 1)),
+        0x6C => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::I31Ref)), 1)),
+        0x6B => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::StructRef(0))), 1)),
+        0x6A => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::ArrayRef(0))), 1)),
+        0x73 => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::NullFuncRef)), 1)),
+        0x72 => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::ExternRef)), 1)),
+        0x71 => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::AnyRef)), 1)),
+        0x74 => return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::ExnRef)), 1)),
+        _ => {}
     }
+
+    // Not a recognized single-byte value type.
+    // Parse as s33 (signed 33-bit LEB128) type index.
+    let (value, bytes_consumed) = read_leb128_s33(bytecode, offset)?;
+
+    if value < 0 {
+        // Negative s33 values that weren't caught above are ref type prefixes
+        // (e.g., 0x63 = ref null, 0x64 = ref). These are multi-byte value types
+        // that include a heap type. For block type purposes, they represent a
+        // single-result block returning that ref type. Map them to FuncRef since
+        // the exact ref subtype doesn't affect the result COUNT (always 1).
+        // The heap type bytes are already consumed by read_leb128_s33, but we
+        // need to also consume the heap type that follows.
+        //
+        // However, the s33 encoding of these negative values is single-byte
+        // (0x63, 0x64 are in the 0x40..0x7F range). The actual multi-byte
+        // encoding would be for the heap type following. Since we parsed just
+        // the s33 value, we need to also consume the heap type.
+        //
+        // For 0x63/0x64: these are single-byte s33 = -29/-28 respectively.
+        // They SHOULD have been caught in the match above if they were simple
+        // value types. But 0x63/0x64 are multi-byte VALUE TYPES (ref null ht /
+        // ref ht) that include a heap type index. Since the s33 parse consumed
+        // only the single byte, we need to consume the heap type too.
+        let heap_offset = offset + bytes_consumed;
+        if heap_offset < bytecode.len() {
+            // Parse heap type as s33 to consume the correct number of bytes
+            let (_heap_val, heap_bytes) = read_leb128_s33(bytecode, heap_offset)?;
+            // This is a block with a single ref-type result
+            return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::FuncRef)), bytes_consumed + heap_bytes));
+        }
+        // Fallback: treat as funcref (single result)
+        return Ok((BlockType::Value(Some(kiln_foundation::types::ValueType::FuncRef)), bytes_consumed));
+    }
+
+    // Non-negative: type index
+    Ok((BlockType::FuncType(value as u32), bytes_consumed))
+}
+
+/// Read a signed 33-bit LEB128 value from bytecode.
+/// Returns the decoded value and the number of bytes consumed.
+fn read_leb128_s33(bytecode: &[u8], offset: usize) -> Result<(i64, usize)> {
+    let mut result: i64 = 0;
+    let mut shift: u32 = 0;
+    let mut consumed = 0usize;
+    let mut byte;
+
+    loop {
+        if offset + consumed >= bytecode.len() {
+            return Err(Error::parse_error("Unexpected end in LEB128 s33"));
+        }
+        byte = bytecode[offset + consumed];
+        consumed += 1;
+
+        result |= ((byte & 0x7F) as i64) << shift;
+        shift += 7;
+
+        if byte & 0x80 == 0 {
+            break;
+        }
+
+        if shift >= 35 {
+            return Err(Error::parse_error("LEB128 s33 too long"));
+        }
+    }
+
+    // Sign extend if the sign bit (bit at position shift-1) is set
+    if shift < 64 && (byte & 0x40) != 0 {
+        result |= !0i64 << shift;
+    }
+
+    Ok((result, consumed))
 }
 
 /// Parse a memarg (alignment + optional memory index + offset for multi-memory)
