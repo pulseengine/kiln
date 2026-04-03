@@ -670,6 +670,159 @@ impl ModuleInstance {
         }
     }
 
+    /// Evaluate an offset constant expression using a stack-based evaluator.
+    ///
+    /// Supports extended constant expressions including:
+    /// - `i32.const`, `i64.const` — push constants
+    /// - `global.get` — push global value
+    /// - `i32.add`, `i32.sub`, `i32.mul` — binary arithmetic on i32 values
+    /// - `i64.add`, `i64.sub`, `i64.mul` — binary arithmetic on i64 values
+    ///
+    /// Returns the final stack value as a `u32` offset.
+    fn evaluate_offset_expr(
+        instructions: &[kiln_foundation::types::Instruction<RuntimeProvider>],
+        globals: &[GlobalWrapper],
+    ) -> Result<u32> {
+        use kiln_foundation::types::Instruction;
+        use kiln_foundation::values::Value;
+
+        let mut stack: Vec<Value> = Vec::new();
+
+        for instr in instructions {
+            match instr {
+                Instruction::I32Const(value) => {
+                    stack.push(Value::I32(*value));
+                }
+                Instruction::I64Const(value) => {
+                    stack.push(Value::I64(*value));
+                }
+                Instruction::GlobalGet(global_idx) => {
+                    let global_wrapper = globals.iter().nth(*global_idx as usize)
+                        .ok_or_else(|| Error::runtime_error(
+                            "Global index out of bounds in offset expression"
+                        ))?;
+                    let global = global_wrapper.0.read()
+                        .map_err(|_| Error::runtime_error(
+                            "Failed to read global in offset expression"
+                        ))?;
+                    stack.push(global.get().clone());
+                }
+                Instruction::I32Add => {
+                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i32.add offset expression"
+                    ))?;
+                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i32.add offset expression"
+                    ))?;
+                    if let (Value::I32(va), Value::I32(vb)) = (a, b) {
+                        stack.push(Value::I32(va.wrapping_add(vb)));
+                    } else {
+                        return Err(Error::runtime_error(
+                            "Type mismatch in i32.add offset expression"
+                        ));
+                    }
+                }
+                Instruction::I32Sub => {
+                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i32.sub offset expression"
+                    ))?;
+                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i32.sub offset expression"
+                    ))?;
+                    if let (Value::I32(va), Value::I32(vb)) = (a, b) {
+                        stack.push(Value::I32(va.wrapping_sub(vb)));
+                    } else {
+                        return Err(Error::runtime_error(
+                            "Type mismatch in i32.sub offset expression"
+                        ));
+                    }
+                }
+                Instruction::I32Mul => {
+                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i32.mul offset expression"
+                    ))?;
+                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i32.mul offset expression"
+                    ))?;
+                    if let (Value::I32(va), Value::I32(vb)) = (a, b) {
+                        stack.push(Value::I32(va.wrapping_mul(vb)));
+                    } else {
+                        return Err(Error::runtime_error(
+                            "Type mismatch in i32.mul offset expression"
+                        ));
+                    }
+                }
+                Instruction::I64Add => {
+                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i64.add offset expression"
+                    ))?;
+                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i64.add offset expression"
+                    ))?;
+                    if let (Value::I64(va), Value::I64(vb)) = (a, b) {
+                        stack.push(Value::I64(va.wrapping_add(vb)));
+                    } else {
+                        return Err(Error::runtime_error(
+                            "Type mismatch in i64.add offset expression"
+                        ));
+                    }
+                }
+                Instruction::I64Sub => {
+                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i64.sub offset expression"
+                    ))?;
+                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i64.sub offset expression"
+                    ))?;
+                    if let (Value::I64(va), Value::I64(vb)) = (a, b) {
+                        stack.push(Value::I64(va.wrapping_sub(vb)));
+                    } else {
+                        return Err(Error::runtime_error(
+                            "Type mismatch in i64.sub offset expression"
+                        ));
+                    }
+                }
+                Instruction::I64Mul => {
+                    let b = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i64.mul offset expression"
+                    ))?;
+                    let a = stack.pop().ok_or_else(|| Error::runtime_error(
+                        "Stack underflow in i64.mul offset expression"
+                    ))?;
+                    if let (Value::I64(va), Value::I64(vb)) = (a, b) {
+                        stack.push(Value::I64(va.wrapping_mul(vb)));
+                    } else {
+                        return Err(Error::runtime_error(
+                            "Type mismatch in i64.mul offset expression"
+                        ));
+                    }
+                }
+                Instruction::End => {
+                    break;
+                }
+                _other => {
+                    return Err(Error::runtime_error(
+                        "Unsupported instruction in offset expression"
+                    ));
+                }
+            }
+        }
+
+        // Extract the final value from the stack as u32
+        let result = stack.pop().ok_or_else(|| Error::runtime_error(
+            "Empty stack after evaluating offset expression"
+        ))?;
+        match result {
+            Value::I32(v) => Ok(v as u32),
+            Value::I64(v) => u32::try_from(v).map_err(|_| {
+                Error::runtime_error("Offset expression result too large for u32")
+            }),
+            _ => Err(Error::runtime_error(
+                "Offset expression did not produce an integer value"
+            )),
+        }
+    }
+
     /// Initialize data segments into memory
     /// This copies the static data from data segments into the appropriate memory locations
     pub fn initialize_data_segments(&self) -> Result<()> {
@@ -700,82 +853,16 @@ impl ModuleInstance {
                 // Get the memory index (default to 0 if not specified)
                 let memory_idx = data_segment.memory_idx.unwrap_or(0);
 
-                // Get the offset expression and evaluate it
+                // Get the offset expression and evaluate it using stack-based evaluation
+                // to support extended constant expressions (i32.add, i32.sub, i32.mul, etc.)
                 let offset = if let Some(ref offset_expr) = data_segment.offset_expr {
-                    // Evaluate the offset expression - for now, assume it's a constant
-                    // In a complete implementation, we'd need to evaluate the expression
-                    // Most data segments use simple i32.const instructions for offsets
-                    // KilnExpr has instructions field that contains parsed Instructions
-                    let expr_instructions = &offset_expr.instructions;
-
-                    // Check if we have an I32Const or GlobalGet instruction
-                    if !expr_instructions.is_empty() {
-                        match &expr_instructions[0] {
-                            kiln_foundation::types::Instruction::I32Const(value) => {
-                                #[cfg(feature = "tracing")]
-                                debug!("Data segment {} has I32Const offset: {}", idx, value);
-                                *value as u32
-                            }
-                            kiln_foundation::types::Instruction::I64Const(value) => {
-                                #[cfg(feature = "tracing")]
-                                debug!("Data segment {} has I64Const offset: {}", idx, value);
-                                *value as u32
-                            }
-                            kiln_foundation::types::Instruction::GlobalGet(global_idx) => {
-                                // Look up the global value for the offset
-                                #[cfg(feature = "tracing")]
-                                debug!("Data segment {} has GlobalGet({}) offset", idx, global_idx);
-
-                                let globals = self.globals.lock()
-                                    .map_err(|_| Error::runtime_error("Failed to lock globals"))?;
-
-                                // Get the global value
-                                if let Some(global_wrapper) = globals.iter().nth(*global_idx as usize) {
-                                    match global_wrapper.0.read() {
-                                        Ok(global) => {
-                                            match global.get() {
-                                                kiln_foundation::values::Value::I32(v) => {
-                                                    #[cfg(feature = "tracing")]
-                                                    debug!("Data segment {} global offset value: {}", idx, v);
-                                                    *v as u32
-                                                },
-                                                kiln_foundation::values::Value::I64(v) => {
-                                                    #[cfg(feature = "tracing")]
-                                                    debug!("Data segment {} global offset value (i64): {}", idx, v);
-                                                    *v as u32
-                                                },
-                                                _ => {
-                                                    #[cfg(feature = "tracing")]
-                                                    debug!("Data segment {} global has non-i32/i64 type, using 0", idx);
-                                                    0
-                                                }
-                                            }
-                                        },
-                                        Err(_) => {
-                                            #[cfg(feature = "tracing")]
-                                            debug!("Data segment {} failed to read global, using 0", idx);
-                                            0
-                                        }
-                                    }
-                                } else {
-                                    #[cfg(feature = "tracing")]
-                                    debug!("Data segment {} global index {} out of range, using 0", idx, global_idx);
-                                    0
-                                }
-                            }
-                            _ => {
-                                // For other instructions, default to 0
-                                #[cfg(feature = "tracing")]
-                                debug!("Data segment {} has non-constant offset expression, using 0", idx);
-                                0
-                            }
-                        }
-                    } else {
-                        // Empty expression means offset 0
-                        #[cfg(feature = "tracing")]
-                        debug!("Data segment {} has empty offset expression, using 0", idx);
-                        0
-                    }
+                    let globals = self.globals.lock()
+                        .map_err(|_| Error::runtime_error("Failed to lock globals for data segment offset"))?;
+                    let value = Self::evaluate_offset_expr(&offset_expr.instructions, &globals)?;
+                    drop(globals);
+                    #[cfg(feature = "tracing")]
+                    debug!("Data segment {} offset evaluated to: {}", idx, value);
+                    value
                 } else {
                     0
                 };
@@ -863,59 +950,13 @@ impl ModuleInstance {
                 debug!("Processing element segment {}", idx);
                 // Only process active element segments
                 if let KilnElementMode::Active { table_index, offset: mode_offset } = &elem_segment.mode {
-                    // Evaluate the actual offset - check offset_expr for GlobalGet
+                    // Evaluate the actual offset using stack-based evaluation
+                    // to support extended constant expressions (i32.add, i32.sub, i32.mul, etc.)
                     let actual_offset = if let Some(ref offset_expr) = elem_segment.offset_expr {
-                        let instructions = &offset_expr.instructions;
-                        if !instructions.is_empty() {
-                            match &instructions[0] {
-                                kiln_foundation::types::Instruction::I32Const(value) => {
-                                    #[cfg(feature = "tracing")]
-                                    debug!("Element segment {} has I32Const offset: {}", idx, value);
-                                    *value as u32
-                                }
-                                kiln_foundation::types::Instruction::I64Const(value) => {
-                                    // table64: element segment offset is i64
-                                    #[cfg(feature = "tracing")]
-                                    debug!("Element segment {} has I64Const offset: {}", idx, value);
-                                    u32::try_from(*value).map_err(|_| {
-                                        Error::runtime_error("Element segment offset too large for table")
-                                    })?
-                                }
-                                kiln_foundation::types::Instruction::GlobalGet(global_idx) => {
-                                    // Look up the global value for the offset
-                                    #[cfg(feature = "tracing")]
-                                    debug!("Element segment {} has GlobalGet({}) offset", idx, global_idx);
-                                    if let Some(global_wrapper) = globals.iter().nth(*global_idx as usize) {
-                                        match global_wrapper.0.read() {
-                                            Ok(global) => {
-                                                match global.get() {
-                                                    kiln_foundation::values::Value::I32(v) => {
-                                                        #[cfg(feature = "tracing")]
-                                                        debug!("Element segment {} global offset value: {}", idx, v);
-                                                        *v as u32
-                                                    },
-                                                    kiln_foundation::values::Value::I64(v) => {
-                                                        // table64: global offset is i64
-                                                        #[cfg(feature = "tracing")]
-                                                        debug!("Element segment {} global i64 offset value: {}", idx, v);
-                                                        u32::try_from(*v).map_err(|_| {
-                                                            Error::runtime_error("Element segment offset too large for table")
-                                                        })?
-                                                    },
-                                                    _ => *mode_offset
-                                                }
-                                            },
-                                            Err(_) => *mode_offset
-                                        }
-                                    } else {
-                                        *mode_offset
-                                    }
-                                }
-                                _ => *mode_offset
-                            }
-                        } else {
-                            *mode_offset
-                        }
+                        let value = Self::evaluate_offset_expr(&offset_expr.instructions, &globals)?;
+                        #[cfg(feature = "tracing")]
+                        debug!("Element segment {} offset evaluated to: {}", idx, value);
+                        value
                     } else {
                         *mode_offset
                     };

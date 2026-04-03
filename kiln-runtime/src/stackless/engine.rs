@@ -756,6 +756,7 @@ impl StacklessEngine {
         let mut found_handler = false;
         let mut handler_label = 0u32;
         let mut handler_is_ref = false;
+        let mut handler_is_catch_all = false;
         let mut try_block_idx = 0usize;
 
         for (idx, (block_type, try_pc, _, _)) in frame.block_stack.iter().enumerate().rev() {
@@ -765,7 +766,7 @@ impl StacklessEngine {
                         for i in 0..handlers.len() {
                             if let Ok(handler) = handlers.get(i) {
                                 let handler_val = handler.clone();
-                                let (matches, lbl, is_ref) = match handler_val {
+                                let (matches, lbl, is_ref, is_catch_all) = match handler_val {
                                     kiln_foundation::types::CatchHandler::Catch { tag_idx: htag, label: hlbl } => {
                                         // Get the handler tag's effective identity
                                         let handler_identity = self.get_effective_tag_identity(frame.instance_id, &actual_module, htag);
@@ -775,7 +776,7 @@ impl StacklessEngine {
                                             (None, None) => htag == ex_tag_idx,
                                             _ => false,
                                         };
-                                        (tag_matches, hlbl, false)
+                                        (tag_matches, hlbl, false, false)
                                     }
                                     kiln_foundation::types::CatchHandler::CatchRef { tag_idx: htag, label: hlbl } => {
                                         // Get the handler tag's effective identity
@@ -786,18 +787,19 @@ impl StacklessEngine {
                                             (None, None) => htag == ex_tag_idx,
                                             _ => false,
                                         };
-                                        (tag_matches, hlbl, true)
+                                        (tag_matches, hlbl, true, false)
                                     }
                                     kiln_foundation::types::CatchHandler::CatchAll { label } => {
-                                        (true, label, false)
+                                        (true, label, false, true)
                                     }
                                     kiln_foundation::types::CatchHandler::CatchAllRef { label } => {
-                                        (true, label, true)
+                                        (true, label, true, true)
                                     }
                                 };
                                 if matches {
                                     handler_label = lbl;
                                     handler_is_ref = is_ref;
+                                    handler_is_catch_all = is_catch_all;
                                     found_handler = true;
                                     try_block_idx = idx;
                                     break;
@@ -835,8 +837,10 @@ impl StacklessEngine {
             try_block_idx - 1 - handler_label as usize
         } else {
             // Branch out of function - push payload and set pc past end
-            for val in payload.iter() {
-                frame.operand_stack.push(val.clone());
+            if !handler_is_catch_all {
+                for val in payload.iter() {
+                    frame.operand_stack.push(val.clone());
+                }
             }
             if handler_is_ref {
                 let exn_idx = self.exception_storage.len() as u32;
@@ -862,9 +866,13 @@ impl StacklessEngine {
             frame.operand_stack.pop();
         }
 
-        // Push payload values
-        for val in payload.iter() {
-            frame.operand_stack.push(val.clone());
+        // Push payload values for catch/catch_ref (NOT for catch_all/catch_all_ref)
+        // Per WebAssembly spec: catch/catch_ref push the exception's payload values,
+        // while catch_all/catch_all_ref do not push payload values.
+        if !handler_is_catch_all {
+            for val in payload.iter() {
+                frame.operand_stack.push(val.clone());
+            }
         }
         if handler_is_ref {
             let exn_idx = self.exception_storage.len() as u32;
@@ -6195,6 +6203,8 @@ impl StacklessEngine {
                                     0x40 => 0, // empty type - no results
                                     0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1, // i32, i64, f32, f64, v128
                                     0x70 | 0x6F => 1, // funcref, externref
+                                    // GC and exception reference types (single result)
+                                    0x69 | 0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 => 1,
                                     _ => {
                                         // Type index - look up actual result count
                                         if let Some(ft) = module.types.get(block_type_idx as usize) {
@@ -6415,25 +6425,8 @@ impl StacklessEngine {
                                     trace!("BrOnNonNull: branching out of function");
                                     break;
                                 }
-                                let target_depth = block_stack.len() - 1 - br_label_idx as usize;
-                                if let Some((block_type, start_pc, _block_type_idx, entry_stack_height)) = block_stack.get(target_depth).copied() {
-                                    if block_type == "loop" {
-                                        pc = start_pc;
-                                    } else {
-                                        let mut depth = 1;
-                                        let mut search_pc = pc + 1;
-                                        while depth > 0 && search_pc < instructions.len() {
-                                            if let Some(search_instr) = instructions.get(search_pc) {
-                                                match search_instr {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
-                                            }
-                                            if depth > 0 { search_pc += 1; }
-                                        }
-                                        pc = search_pc;
-                                    }
+                                let stack_idx = block_stack.len() - 1 - br_label_idx as usize;
+                                if let Some((block_type, start_pc, _block_type_idx, entry_stack_height)) = block_stack.get(stack_idx).copied() {
                                     // Keep branch value, restore stack below
                                     let branch_val = operand_stack.pop();
                                     while operand_stack.len() > entry_stack_height {
@@ -6441,6 +6434,56 @@ impl StacklessEngine {
                                     }
                                     if let Some(bv) = branch_val {
                                         operand_stack.push(bv);
+                                    }
+
+                                    if block_type == "loop" {
+                                        // Pop inner blocks for loop branch
+                                        let blocks_to_pop = br_label_idx as usize;
+                                        for _ in 0..blocks_to_pop {
+                                            if !block_stack.is_empty() {
+                                                block_stack.pop();
+                                                block_depth -= 1;
+                                            }
+                                        }
+                                        pc = start_pc;
+                                    } else {
+                                        // Pop inner blocks for forward branch
+                                        let blocks_to_pop = br_label_idx as usize;
+                                        for _ in 0..blocks_to_pop {
+                                            if !block_stack.is_empty() {
+                                                block_stack.pop();
+                                                block_depth -= 1;
+                                            }
+                                        }
+
+                                        // Scan forward to find the target block's End
+                                        // Skip past (label_idx + 1) End instructions at depth 0
+                                        let mut target_depth = br_label_idx as i32 + 1;
+                                        let mut new_pc = pc + 1;
+                                        let mut depth: i32 = 0;
+
+                                        while new_pc < instructions.len() && target_depth > 0 {
+                                            if let Some(search_instr) = instructions.get(new_pc) {
+                                                match search_instr {
+                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => {
+                                                        depth += 1;
+                                                    }
+                                                    Instruction::End => {
+                                                        if depth == 0 {
+                                                            target_depth -= 1;
+                                                            if target_depth == 0 {
+                                                                pc = new_pc - 1;
+                                                                break;
+                                                            }
+                                                        } else {
+                                                            depth -= 1;
+                                                        }
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                            new_pc += 1;
+                                        }
                                     }
                                 }
                                 continue;
@@ -9465,6 +9508,7 @@ impl StacklessEngine {
                         let mut found_handler = false;
                         let mut handler_label = 0u32;
                         let mut handler_is_ref = false;
+                        let mut handler_is_catch_all = false;
                         let mut try_block_idx = 0usize;
 
                         for (idx, (block_type, try_pc, _, _)) in block_stack.iter().enumerate().rev() {
@@ -9476,7 +9520,7 @@ impl StacklessEngine {
                                         for i in 0..handlers.len() {
                                             if let Ok(handler) = handlers.get(i) {
                                                 let handler_val = handler.clone();
-                                                let (matches, lbl, is_ref) = match handler_val {
+                                                let (matches, lbl, is_ref, is_catch_all) = match handler_val {
                                                     kiln_foundation::types::CatchHandler::Catch { tag_idx: htag, label: hlbl } => {
                                                         // Get handler tag's effective identity for comparison
                                                         let handler_identity = self.get_effective_tag_identity(instance_id, &module, htag);
@@ -9486,7 +9530,7 @@ impl StacklessEngine {
                                                             (None, None) => htag == tag_idx,
                                                             _ => false,
                                                         };
-                                                        (tag_matches, hlbl, false)
+                                                        (tag_matches, hlbl, false, false)
                                                     }
                                                     kiln_foundation::types::CatchHandler::CatchRef { tag_idx: htag, label: hlbl } => {
                                                         // Get handler tag's effective identity for comparison
@@ -9497,18 +9541,19 @@ impl StacklessEngine {
                                                             (None, None) => htag == tag_idx,
                                                             _ => false,
                                                         };
-                                                        (tag_matches, hlbl, true)
+                                                        (tag_matches, hlbl, true, false)
                                                     }
                                                     kiln_foundation::types::CatchHandler::CatchAll { label } => {
-                                                        (true, label, false)
+                                                        (true, label, false, true)
                                                     }
                                                     kiln_foundation::types::CatchHandler::CatchAllRef { label } => {
-                                                        (true, label, true)
+                                                        (true, label, true, true)
                                                     }
                                                 };
                                                 if matches {
                                                     handler_label = lbl;
                                                     handler_is_ref = is_ref;
+                                                    handler_is_catch_all = is_catch_all;
                                                     found_handler = true;
                                                     try_block_idx = idx;
                                                     break;
@@ -9564,9 +9609,11 @@ impl StacklessEngine {
                                 operand_stack.pop();
                             }
 
-                            // Push exception payload values to stack (for catch handlers)
-                            for val in exception_payload.iter() {
-                                operand_stack.push(val.clone());
+                            // Push exception payload values for catch/catch_ref (NOT catch_all/catch_all_ref)
+                            if !handler_is_catch_all {
+                                for val in exception_payload.iter() {
+                                    operand_stack.push(val.clone());
+                                }
                             }
 
                             // If handler is *Ref variant, store exception and push exnref
@@ -9681,6 +9728,7 @@ impl StacklessEngine {
                             let mut found_handler = false;
                             let mut handler_label = 0u32;
                             let mut handler_is_ref = false;
+                            let mut handler_is_catch_all = false;
                             let mut try_block_idx = 0usize;
 
                             for (idx, (block_type, try_pc, _, _)) in block_stack.iter().enumerate().rev() {
@@ -9690,7 +9738,7 @@ impl StacklessEngine {
                                             for i in 0..handlers.len() {
                                                 if let Ok(handler) = handlers.get(i) {
                                                     let handler_val = handler.clone();
-                                                    let (matches, lbl, is_ref) = match handler_val {
+                                                    let (matches, lbl, is_ref, is_catch_all) = match handler_val {
                                                         kiln_foundation::types::CatchHandler::Catch { tag_idx: htag, label: hlbl } => {
                                                             // Get handler tag's effective identity for comparison
                                                             let handler_identity = self.get_effective_tag_identity(instance_id, &module, htag);
@@ -9700,7 +9748,7 @@ impl StacklessEngine {
                                                                 (None, None) => htag == tag_idx,
                                                                 _ => false,
                                                             };
-                                                            (tag_matches, hlbl, false)
+                                                            (tag_matches, hlbl, false, false)
                                                         }
                                                         kiln_foundation::types::CatchHandler::CatchRef { tag_idx: htag, label: hlbl } => {
                                                             // Get handler tag's effective identity for comparison
@@ -9711,18 +9759,19 @@ impl StacklessEngine {
                                                                 (None, None) => htag == tag_idx,
                                                                 _ => false,
                                                             };
-                                                            (tag_matches, hlbl, true)
+                                                            (tag_matches, hlbl, true, false)
                                                         }
                                                         kiln_foundation::types::CatchHandler::CatchAll { label } => {
-                                                            (true, label, false)
+                                                            (true, label, false, true)
                                                         }
                                                         kiln_foundation::types::CatchHandler::CatchAllRef { label } => {
-                                                            (true, label, true)
+                                                            (true, label, true, true)
                                                         }
                                                     };
                                                     if matches {
                                                         handler_label = lbl;
                                                         handler_is_ref = is_ref;
+                                                        handler_is_catch_all = is_catch_all;
                                                         found_handler = true;
                                                         try_block_idx = idx;
                                                         break;
@@ -9761,9 +9810,11 @@ impl StacklessEngine {
                                     operand_stack.pop();
                                 }
 
-                                // Push exception payload
-                                for val in exception_payload.iter() {
-                                    operand_stack.push(val.clone());
+                                // Push exception payload for catch/catch_ref (NOT catch_all/catch_all_ref)
+                                if !handler_is_catch_all {
+                                    for val in exception_payload.iter() {
+                                        operand_stack.push(val.clone());
+                                    }
                                 }
 
                                 // If handler is *Ref variant, store and push new exnref
@@ -10322,10 +10373,17 @@ impl StacklessEngine {
                         // Get data segment
                         let data_segment = module.data.get(data_idx as usize)
                             .ok_or_else(|| kiln_error::Error::runtime_trap("array.new_data: invalid data index"))?;
+                        // Check if the data segment has been dropped (via data.drop)
+                        let is_dropped = self.dropped_data_segments
+                            .get(&instance_id)
+                            .and_then(|v| v.get(data_idx as usize))
+                            .copied()
+                            .unwrap_or(false);
                         let data_bytes = data_segment.data()?;
+                        let data_len = if is_dropped { 0usize } else { data_bytes.len() };
                         let byte_offset = offset_val as usize;
                         let byte_length = size as usize * elem_size;
-                        if byte_offset + byte_length > data_bytes.len() {
+                        if byte_offset + byte_length > data_len {
                             return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                         }
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
@@ -10472,10 +10530,17 @@ impl StacklessEngine {
                             };
                             let data_segment = module.data.get(data_idx as usize)
                                 .ok_or_else(|| kiln_error::Error::runtime_trap("array.init_data: invalid data index"))?;
+                            // Check if the data segment has been dropped (via data.drop)
+                            let is_dropped = self.dropped_data_segments
+                                .get(&instance_id)
+                                .and_then(|v| v.get(data_idx as usize))
+                                .copied()
+                                .unwrap_or(false);
                             let data_bytes = data_segment.data()?;
+                            let data_len = if is_dropped { 0usize } else { data_bytes.len() };
                             let byte_offset = src_offset as usize;
                             let byte_length = len as usize * elem_size;
-                            if byte_offset + byte_length > data_bytes.len() {
+                            if byte_offset + byte_length > data_len {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds memory access"));
                             }
                             if dst_offset + len > a.len() as u32 {
@@ -10599,38 +10664,70 @@ impl StacklessEngine {
                         if ref_test_value_with_module(&val, &to_type, to_nullable, Some(&module)) {
                             // Cast succeeds - push value and branch
                             operand_stack.push(val);
-                            // Branch logic (similar to Br)
-                            if (label_idx as usize) < block_stack.len() {
-                                let target_depth = block_stack.len() - 1 - label_idx as usize;
-                                if let Some((block_type, start_pc, _bti, entry_stack_height)) = block_stack.get(target_depth).copied() {
-                                    if block_type == "loop" {
-                                        pc = start_pc;
-                                    } else {
-                                        let mut depth = 1;
-                                        let mut search_pc = pc + 1;
-                                        while depth > 0 && search_pc < instructions.len() {
-                                            if let Some(si) = instructions.get(search_pc) {
-                                                match si {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
-                                            }
-                                            if depth > 0 { search_pc += 1; }
+                            // Branch logic (consistent with Br)
+                            if (label_idx as usize) >= block_stack.len() {
+                                break; // Branch out of function
+                            }
+                            let stack_idx = block_stack.len() - 1 - label_idx as usize;
+                            if let Some((block_type, start_pc, _bti, entry_stack_height)) = block_stack.get(stack_idx).copied() {
+                                // Keep branch target values, restore stack below
+                                let branch_val = operand_stack.pop();
+                                while operand_stack.len() > entry_stack_height {
+                                    operand_stack.pop();
+                                }
+                                if let Some(bv) = branch_val {
+                                    operand_stack.push(bv);
+                                }
+
+                                if block_type == "loop" {
+                                    let blocks_to_pop = label_idx as usize;
+                                    for _ in 0..blocks_to_pop {
+                                        if !block_stack.is_empty() {
+                                            block_stack.pop();
+                                            block_depth -= 1;
                                         }
-                                        pc = search_pc;
                                     }
-                                    // Keep branch target values, restore stack below
-                                    let branch_val = operand_stack.pop();
-                                    while operand_stack.len() > entry_stack_height {
-                                        operand_stack.pop();
+                                    pc = start_pc;
+                                } else {
+                                    let blocks_to_pop = label_idx as usize;
+                                    for _ in 0..blocks_to_pop {
+                                        if !block_stack.is_empty() {
+                                            block_stack.pop();
+                                            block_depth -= 1;
+                                        }
                                     }
-                                    if let Some(bv) = branch_val {
-                                        operand_stack.push(bv);
+
+                                    // Scan forward to find the target block's End
+                                    let mut target_depth = label_idx as i32 + 1;
+                                    let mut new_pc = pc + 1;
+                                    let mut depth: i32 = 0;
+
+                                    while new_pc < instructions.len() && target_depth > 0 {
+                                        if let Some(si) = instructions.get(new_pc) {
+                                            match si {
+                                                Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => {
+                                                    depth += 1;
+                                                }
+                                                Instruction::End => {
+                                                    if depth == 0 {
+                                                        target_depth -= 1;
+                                                        if target_depth == 0 {
+                                                            // Point pc at the End instruction.
+                                                            // `continue` skips the main loop's pc += 1,
+                                                            // so the End handler will execute next iteration.
+                                                            pc = new_pc;
+                                                            break;
+                                                        }
+                                                    } else {
+                                                        depth -= 1;
+                                                    }
+                                                }
+                                                _ => {}
+                                            }
+                                        }
+                                        new_pc += 1;
                                     }
                                 }
-                            } else {
-                                break; // Branch out of function
                             }
                             continue;
                         } else {
@@ -10651,36 +10748,69 @@ impl StacklessEngine {
                         if !ref_test_value_with_module(&val, &to_type, to_nullable, Some(&module)) {
                             // Cast fails - push value and branch
                             operand_stack.push(val);
-                            if (label_idx as usize) < block_stack.len() {
-                                let target_depth = block_stack.len() - 1 - label_idx as usize;
-                                if let Some((block_type, start_pc, _bti, entry_stack_height)) = block_stack.get(target_depth).copied() {
-                                    if block_type == "loop" {
-                                        pc = start_pc;
-                                    } else {
-                                        let mut depth = 1;
-                                        let mut search_pc = pc + 1;
-                                        while depth > 0 && search_pc < instructions.len() {
-                                            if let Some(si) = instructions.get(search_pc) {
-                                                match si {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
-                                                }
-                                            }
-                                            if depth > 0 { search_pc += 1; }
+                            if (label_idx as usize) >= block_stack.len() {
+                                break; // Branch out of function
+                            }
+                            let stack_idx = block_stack.len() - 1 - label_idx as usize;
+                            if let Some((block_type, start_pc, _bti, entry_stack_height)) = block_stack.get(stack_idx).copied() {
+                                // Keep branch target values, restore stack below
+                                let branch_val = operand_stack.pop();
+                                while operand_stack.len() > entry_stack_height {
+                                    operand_stack.pop();
+                                }
+                                if let Some(bv) = branch_val {
+                                    operand_stack.push(bv);
+                                }
+
+                                if block_type == "loop" {
+                                    let blocks_to_pop = label_idx as usize;
+                                    for _ in 0..blocks_to_pop {
+                                        if !block_stack.is_empty() {
+                                            block_stack.pop();
+                                            block_depth -= 1;
                                         }
-                                        pc = search_pc;
                                     }
-                                    let branch_val = operand_stack.pop();
-                                    while operand_stack.len() > entry_stack_height {
-                                        operand_stack.pop();
+                                    pc = start_pc;
+                                } else {
+                                    let blocks_to_pop = label_idx as usize;
+                                    for _ in 0..blocks_to_pop {
+                                        if !block_stack.is_empty() {
+                                            block_stack.pop();
+                                            block_depth -= 1;
+                                        }
                                     }
-                                    if let Some(bv) = branch_val {
-                                        operand_stack.push(bv);
+
+                                    // Scan forward to find the target block's End
+                                    let mut target_depth = label_idx as i32 + 1;
+                                    let mut new_pc = pc + 1;
+                                    let mut depth: i32 = 0;
+
+                                    while new_pc < instructions.len() && target_depth > 0 {
+                                        if let Some(si) = instructions.get(new_pc) {
+                                            match si {
+                                                Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => {
+                                                    depth += 1;
+                                                }
+                                                Instruction::End => {
+                                                    if depth == 0 {
+                                                        target_depth -= 1;
+                                                        if target_depth == 0 {
+                                                            // Point pc at the End instruction.
+                                                            // `continue` skips the main loop's pc += 1,
+                                                            // so the End handler will execute next iteration.
+                                                            pc = new_pc;
+                                                            break;
+                                                        }
+                                                    } else {
+                                                        depth -= 1;
+                                                    }
+                                                }
+                                                _ => {}
+                                            }
+                                        }
+                                        new_pc += 1;
                                     }
                                 }
-                            } else {
-                                break;
                             }
                             continue;
                         } else {
