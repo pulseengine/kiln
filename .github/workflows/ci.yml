@@ -167,6 +167,42 @@ jobs:
           cargo-kiln setup --all # Setup all required tools for testing and analysis
       - name: Run Tests
         run: cargo-kiln test
+      - name: WASI Component Smoke Tests
+        run: |
+          # Download pre-built WASI component examples
+          mkdir -p /tmp/wasm-components && cd /tmp/wasm-components
+          gh release download v0.2.0 --repo pulseengine/wasm-component-examples \
+            --pattern "wasm-components-0.2.0.tar.gz" --skip-existing
+          tar -xzf wasm-components-0.2.0.tar.gz
+          cd "$GITHUB_WORKSPACE"
+
+          # Build kilnd
+          cargo build -p kilnd
+
+          # Test hello_rust.wasm
+          echo "=== hello_rust.wasm ==="
+          OUTPUT=$(./target/debug/kilnd /tmp/wasm-components/release-0.2.0/rust/hello_rust.wasm 2>&1)
+          echo "$OUTPUT" | grep -q "Hello wasm component world from Rust!" \
+            || { echo "FAIL: hello_rust.wasm did not produce expected output"; echo "$OUTPUT"; exit 1; }
+          echo "PASS: hello_rust.wasm"
+
+          # Test calculator.wasm
+          echo "=== calculator.wasm 8 + 8 ==="
+          OUTPUT=$(./target/debug/kilnd /tmp/wasm-components/release-0.2.0/rust/calculator.wasm -- 8 + 8 2>&1)
+          echo "$OUTPUT" | grep -q "8 + 8 = 16" \
+            || { echo "FAIL: calculator.wasm did not produce expected output"; echo "$OUTPUT"; exit 1; }
+          echo "PASS: calculator.wasm"
+
+          # Test datetime.wasm
+          echo "=== datetime.wasm ==="
+          OUTPUT=$(./target/debug/kilnd /tmp/wasm-components/release-0.2.0/rust/datetime.wasm 2>&1)
+          echo "$OUTPUT" | grep -q "Hello Rust on" \
+            || { echo "FAIL: datetime.wasm did not produce expected output"; echo "$OUTPUT"; exit 1; }
+          echo "PASS: datetime.wasm"
+
+          echo "All WASI component smoke tests passed"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Run Code Validation Checks
         run: cargo-kiln validate --all
         continue-on-error: true  # Documentation audit has pre-existing findings
