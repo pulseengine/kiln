@@ -192,11 +192,11 @@ jobs:
             ./target/coverage/cobertura.xml
           fail_ci_if_error: false  # Coverage uploads are best-effort
       - name: Upload test results to Codecov (JUnit)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && hashFiles('./target/coverage/junit.xml') != '' }}
         uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./target/coverage/junit.xml # Ensure this path is correct
+          files: ./target/coverage/junit.xml
 
   safety_verification:
     name: SCORE-Inspired Safety Verification
