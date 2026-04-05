@@ -1323,7 +1323,21 @@ impl WastEngine {
         // Get the source memory type from the module definition
         let source_mem_type = self.get_memory_type_from_module(source_module, export_mem_idx);
 
-        if let Some(source_type) = source_mem_type {
+        if let Some(mut source_type) = source_mem_type {
+            // Per the WebAssembly spec, import validation must use the memory's
+            // *current* size (which may have been grown via memory.grow), not the
+            // original declared minimum. Query the live instance to get the
+            // actual current memory size.
+            if let Some(instance_id) = self.instance_ids.get(mod_name) {
+                if let Some(instance) = self.engine.get_instance(*instance_id) {
+                    if let Ok(live_memory) = instance.memory(export_mem_idx as u32) {
+                        let current_size = live_memory.size();
+                        if current_size > source_type.limits.min {
+                            source_type.limits.min = current_size;
+                        }
+                    }
+                }
+            }
             validate_memory_import_compatibility(import_mem_type, &source_type)?;
         }
 
@@ -1626,6 +1640,13 @@ fn are_value_types_structurally_compatible(
 /// - Import min must be <= actual min
 /// - If import has max, actual must have max and actual max <= import max
 fn validate_table_import_compatibility(import: &TableType, actual: &TableType) -> Result<()> {
+    // Table64 flag must match (table32 and table64 are incompatible)
+    if import.table64 != actual.table64 {
+        return Err(anyhow::anyhow!(
+            "incompatible import type: table types incompatible"
+        ));
+    }
+
     // Element types must match exactly
     if import.element_type != actual.element_type {
         return Err(anyhow::anyhow!(
