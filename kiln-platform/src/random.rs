@@ -181,19 +181,20 @@ impl PlatformRandom {
         Ok(())
     }
 
-    /// VxWorks implementation using /dev/random
-    /// Note: randBytes FFI was unreliable in RTP mode, /dev/random works reliably
-    /// Fix contributed by @razr in #201
+    /// VxWorks implementation using randBytes
     #[cfg(all(feature = "std", target_os = "vxworks"))]
     fn vxworks_random(buffer: &mut [u8]) -> Result<()> {
-        use std::{fs::File, io::Read};
+        // SAFETY: Edition 2024 requires unsafe extern blocks
+        unsafe extern "C" {
+            fn randBytes(pBuf: *mut u8, numBytes: i32) -> i32;
+        }
 
-        let mut random = File::open("/dev/random")
-            .map_err(|_| Error::runtime_execution_error("Failed to open /dev/random"))?;
+        // Safety: randBytes is a documented VxWorks API
+        let result = unsafe { randBytes(buffer.as_mut_ptr(), buffer.len() as i32) };
 
-        random
-            .read_exact(buffer)
-            .map_err(|_| Error::system_io_error("Failed to read from /dev/random"))?;
+        if result != 0 {
+            return Err(Error::system_io_error("randBytes failed"));
+        }
 
         Ok(())
     }

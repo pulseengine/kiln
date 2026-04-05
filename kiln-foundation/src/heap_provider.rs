@@ -223,9 +223,11 @@ impl Allocator for HeapProvider {
 
 impl Clone for HeapProvider {
     fn clone(&self) -> Self {
-        let mut data = Vec::new();
-        data.try_reserve_exact(self.data.len()).expect("Failed to allocate for clone");
-        data.extend_from_slice(&self.data);
+        // Clone only the used portion to avoid huge allocations on
+        // memory-constrained platforms (VxWorks RTP, embedded).
+        let clone_size = self.used.min(self.data.len());
+        let mut data = Vec::with_capacity(clone_size);
+        data.extend_from_slice(&self.data[..clone_size]);
 
         Self {
             data,
