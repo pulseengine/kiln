@@ -118,17 +118,68 @@ VxWorks threading leverages Wind River's priority-based scheduler:
 Build Configuration
 -------------------
 
-Building for VxWorks requires the Wind River development environment:
+Building for VxWorks requires the Wind River development environment or the VxWorks SDK, which can be obtained from `WRLabs <https://forums.windriver.com/t/vxworks-software-development-kit-sdk/43>`_.
 
 .. code-block:: bash
 
+   # Download QEMU x86_64 SDK
+   mkdir -p /opt/wrsdk
+   curl -fSL https://d13321s3lxgewa.cloudfront.net/wrsdk-vxworks7-qemu-1.16.1.tar.bz2 \
+       -o /tmp/wrsdk.tar.bz2
+   tar xjf /tmp/wrsdk.tar.bz2 -C /opt/wrsdk --strip-components=1
+   rm /tmp/wrsdk.tar.bz2
+
    # Set VxWorks environment
-   export WIND_HOME=/opt/windriver
-   export WIND_BASE=$WIND_HOME/vxworks-7
+   source /opt/wrsdk/sdkenv.sh
+   source "${WIND_SDK_HOME}/vxsdk/sysroot/usr/rust/rustenv.linux"
+   export RUST_VSB_DIR="${WIND_CC_SYSROOT}"
+
+   # Verify toolchain
+   echo "Rust toolchain: $(rustc --version)"
+   echo "Cargo: $(cargo --version)"
 
    # Build for VxWorks target
-   cargo build --target=aarch64-wrs-vxworks \
-       --features="platform-vxworks,real-time"
+   cargo build --bin kilnd --target x86_64-wrs-vxworks \
+       --features "std,kiln-execution,platform-vxworks"
+
+   # Verify the produced kilnd binary (SYSV, statically linked)
+   file target/x86_64-wrs-vxworks/debug/kilnd.vxe
+
+Run Configuration
+-------------------
+
+Running the ``kilnd`` binary on a QEMU target
+
+.. code-block:: bash
+
+    mkdir /tmp/kiln
+    cp target/x86_64-wrs-vxworks/debug/kilnd.vxe /tmp/kiln
+    sudo qemu-system-x86_64 -m 2G -machine q35 -cpu Nehalem -kernel /opt/wrsdk/vxsdk/bsps/*/vxWorks \
+        -display none -serial mon:stdio -usb -device usb-ehci,id=ehci \
+        -device usb-storage,drive=fat32 -drive file=fat:rw:/tmp/kiln,id=fat32,format=raw,if=none
+    -> cmd
+    [vxWorks *]# cd /bd0a
+    [vxWorks *]# kilnd.vxe --help
+    Launching process 'kilnd.vxe' ...
+    Process 'kilnd.vxe' (process Id = 0xffff800007026000) launched.
+    WebAssembly Runtime Daemon (kilnd)
+    Usage: kilnd [OPTIONS] <module.wasm>
+
+    Options:
+      --function <name>     Function to execute (default: start)
+      --fuel <amount>       Maximum fuel limit
+      --memory <bytes>      Maximum memory limit
+      --no-std             Force no-std execution mode
+      --memory-profile     Enable memory profiling
+      --no-platform-opt    Disable platform optimizations
+      --wasi               Enable WASI support
+      --wasi-version <v>   WASI version (preview2)
+      --wasi-fs <path>     Allow filesystem access to path (alias: --dir)
+      --wasi-env <var>     Expose environment variable to WASI
+      --wasi-arg <arg>     Pass argument to WASI program
+      --component          Enable component model support
+      --interface <name>   Register component interface
+      --help               Show this help message
 
 Target Support
 --------------
