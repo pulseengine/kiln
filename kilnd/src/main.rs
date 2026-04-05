@@ -517,9 +517,11 @@ impl KilndEngine {
                 { None }
             };
 
+            eprintln!("[VXDBG] Creating ComponentInstance (this may take a moment for large components)");
             let mut instance = ComponentInstance::from_parsed_with_handler(
                 0, &mut *parsed_component, Some(registry_arc), wasi_handler
             )?;
+            eprintln!("[VXDBG] ComponentInstance created OK");
 
             let _ = self.logger.handle_minimal_log(
                 LogLevel::Info,

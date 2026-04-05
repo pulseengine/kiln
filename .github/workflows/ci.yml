@@ -167,6 +167,61 @@ jobs:
           cargo-kiln setup --all # Setup all required tools for testing and analysis
       - name: Run Tests
         run: cargo-kiln test
+      - name: WASI Component Smoke Tests
+        run: |
+          # Download pre-built WASI component examples
+          mkdir -p /tmp/wasm-components && cd /tmp/wasm-components
+          gh release download v0.2.0 --repo pulseengine/wasm-component-examples \
+            --pattern "wasm-components-0.2.0.tar.gz" --skip-existing
+          tar -xzf wasm-components-0.2.0.tar.gz
+          cd "$GITHUB_WORKSPACE"
+
+          # Build kilnd
+          cargo build -p kilnd
+
+          # === Rust CLI components ===
+          echo "=== Rust: hello_rust.wasm ==="
+          OUTPUT=$(./target/debug/kilnd /tmp/wasm-components/release-0.2.0/rust/hello_rust.wasm 2>&1)
+          echo "$OUTPUT" | grep -q "Hello wasm component world from Rust!" \
+            || { echo "FAIL: hello_rust.wasm"; echo "$OUTPUT"; exit 1; }
+          echo "PASS: hello_rust.wasm"
+
+          echo "=== Rust: calculator.wasm 8 + 8 ==="
+          OUTPUT=$(./target/debug/kilnd /tmp/wasm-components/release-0.2.0/rust/calculator.wasm -- 8 + 8 2>&1)
+          echo "$OUTPUT" | grep -q "8 + 8 = 16" \
+            || { echo "FAIL: calculator.wasm"; echo "$OUTPUT"; exit 1; }
+          echo "PASS: calculator.wasm"
+
+          echo "=== Rust: datetime.wasm ==="
+          OUTPUT=$(./target/debug/kilnd /tmp/wasm-components/release-0.2.0/rust/datetime.wasm 2>&1)
+          echo "$OUTPUT" | grep -q "Hello Rust on" \
+            || { echo "FAIL: datetime.wasm"; echo "$OUTPUT"; exit 1; }
+          echo "PASS: datetime.wasm"
+
+          # === C CLI component ===
+          echo "=== C: hello_c_cli.wasm ==="
+          OUTPUT=$(./target/debug/kilnd /tmp/wasm-components/release-0.2.0/c/hello_c_cli.wasm 2>&1)
+          echo "$OUTPUT" | grep -q "Hello wasm component world from C!" \
+            || { echo "FAIL: hello_c_cli.wasm"; echo "$OUTPUT"; exit 1; }
+          echo "PASS: hello_c_cli.wasm"
+
+          # === C++ CLI component ===
+          echo "=== C++: hello_cpp_cli.wasm ==="
+          OUTPUT=$(./target/debug/kilnd /tmp/wasm-components/release-0.2.0/cpp/hello_cpp_cli.wasm 2>&1)
+          echo "$OUTPUT" | grep -q "Hello wasm component world from C++!" \
+            || { echo "FAIL: hello_cpp_cli.wasm"; echo "$OUTPUT"; exit 1; }
+          echo "PASS: hello_cpp_cli.wasm"
+
+          # === WASI-NN: YOLO inference ===
+          echo "=== Rust: yolo_inference_release.wasm (WASI-NN) ==="
+          OUTPUT=$(timeout 120 ./target/debug/kilnd /tmp/wasm-components/release-0.2.0/rust/yolo_inference_release.wasm 2>&1)
+          echo "$OUTPUT" | grep -q "Execution completed" \
+            || { echo "FAIL: yolo_inference_release.wasm"; echo "$OUTPUT" | tail -10; exit 1; }
+          echo "PASS: yolo_inference_release.wasm"
+
+          echo "All 6 WASI component smoke tests passed (Rust x4, C x1, C++ x1)"
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Run Code Validation Checks
         run: cargo-kiln validate --all
         continue-on-error: true  # Documentation audit has pre-existing findings
@@ -408,4 +463,87 @@ jobs:
             -p kiln-platform \
             --target x86_64-wrs-vxworks \
             --features "platform-vxworks,real-time,std"
-          echo "VxWorks cross-compilation and linking succeeded"
+          echo "VxWorks kiln-platform cross-compilation succeeded"
+
+          # Build kilnd for VxWorks
+          cargo build --bin kilnd --target x86_64-wrs-vxworks \
+            --features "std,kiln-execution,platform-vxworks"
+          echo "VxWorks kilnd cross-compilation succeeded"
+      - name: Install QEMU and expect
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86 expect
+      - name: VxWorks QEMU smoke test
+        shell: bash
+        run: |
+          sudo ln -sf /bin/bash /bin/sh
+          . /opt/wrsdk/sdkenv.sh
+
+          # Download test components
+          mkdir -p /tmp/wasm-components && cd /tmp/wasm-components
+          curl -fSL -o wasm-components-0.2.0.tar.gz \
+            https://github.com/pulseengine/wasm-component-examples/releases/download/v0.2.0/wasm-components-0.2.0.tar.gz
+          tar -xzf wasm-components-0.2.0.tar.gz
+          cd "$GITHUB_WORKSPACE"
+
+          # Prepare QEMU disk with kilnd + test wasm files
+          mkdir -p /tmp/kiln-disk
+          cp target/x86_64-wrs-vxworks/debug/kilnd.vxe /tmp/kiln-disk/
+          cp /tmp/wasm-components/release-0.2.0/rust/hello_rust.wasm /tmp/kiln-disk/
+
+          # Find VxWorks kernel
+          KERNEL=$(find /opt/wrsdk -name "vxWorks" -path "*/bsps/*" | head -1)
+          echo "VxWorks kernel: $KERNEL"
+
+          # Boot VxWorks QEMU and run kilnd smoke test
+          export KERNEL
+          cat > /tmp/vxworks_test.exp << 'EXPECT'
+          set timeout 120
+          spawn qemu-system-x86_64 -m 2G -machine q35 -cpu Nehalem \
+            -kernel $env(KERNEL) \
+            -display none -serial mon:stdio \
+            -usb -device usb-ehci,id=ehci \
+            -device usb-storage,drive=fat32 \
+            -drive file=fat:rw:/tmp/kiln-disk,id=fat32,format=raw,if=none
+
+          expect {
+            -- "->" { puts "\n>>> VxWorks booted" }
+            timeout { puts "\n>>> TIMEOUT boot"; exit 1 }
+          }
+
+          send "cd /bd0a\r"
+          expect -- "->"
+
+          # Test 1: kilnd --help
+          send "kilnd.vxe --help\r"
+          expect {
+            "Usage:" { puts "\n>>> PASS: kilnd --help" }
+            "signal" { puts "\n>>> CRASH: --help"; exit 1 }
+            timeout { puts "\n>>> TIMEOUT: --help"; exit 1 }
+          }
+          expect -- "->"
+
+          # Test 2: hello_rust.wasm
+          send "kilnd.vxe hello_rust.wasm\r"
+          expect {
+            "Hello wasm component world from Rust!" {
+              puts "\n>>> PASS: hello_rust.wasm on VxWorks!"
+            }
+            "signal" {
+              puts "\n>>> CRASH: hello_rust.wasm signal 11"
+              exit 1
+            }
+            timeout {
+              puts "\n>>> TIMEOUT: hello_rust.wasm"
+              exit 1
+            }
+          }
+
+          send "\001x"
+          expect eof
+          puts "\n>>> All VxWorks QEMU smoke tests passed"
+          exit 0
+          EXPECT
+
+          expect /tmp/vxworks_test.exp
+        continue-on-error: true  # VxWorks QEMU tests are best-effort until stabilized

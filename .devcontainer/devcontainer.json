@@ -1,0 +1,28 @@
+{
+  "name": "Kiln VxWorks Development",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "runArgs": [
+    "--platform=linux/amd64",
+    "--privileged"
+  ],
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+  ],
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb"
+      ]
+    }
+  },
+  "postStartCommand": ". /opt/wrsdk/sdkenv.sh && . ${WIND_SDK_HOME}/vxsdk/sysroot/usr/rust/rustenv.linux && echo 'VxWorks SDK ready'",
+  "remoteEnv": {
+    "WIND_SDK_HOME": "/opt/wrsdk",
+    "SHELL": "/bin/bash"
+  }
+}

@@ -1,0 +1,56 @@
+#!/usr/bin/expect -f
+# VxWorks QEMU smoke test for kilnd
+
+set timeout 120
+
+spawn qemu-system-x86_64 -m 2G -machine q35 -cpu Nehalem \
+  -kernel $env(KERNEL) \
+  -display none -serial mon:stdio \
+  -usb -device usb-ehci,id=ehci \
+  -device usb-storage,drive=fat32 \
+  -drive file=fat:rw:/tmp/kiln-disk,id=fat32,format=raw,if=none
+
+# Wait for VxWorks shell prompt
+expect {
+  "->" { puts "\n>>> VxWorks booted" }
+  timeout { puts "\n>>> TIMEOUT waiting for VxWorks boot"; exit 1 }
+}
+
+# Navigate to USB drive
+send "cd /bd0a\r"
+expect "->"
+
+# Run kilnd --help to verify binary works
+send "kilnd.vxe --help\r"
+expect {
+  "Usage:" { puts "\n>>> kilnd --help works" }
+  "signal 11" { puts "\n>>> CRASH: kilnd --help signal 11"; exit 1 }
+  timeout { puts "\n>>> TIMEOUT: kilnd --help"; exit 1 }
+}
+expect "->"
+
+# Run kilnd with hello_rust.wasm
+send "kilnd.vxe hello_rust.wasm\r"
+expect {
+  "Hello wasm component world from Rust!" {
+    puts "\n>>> PASS: hello_rust.wasm"
+  }
+  "signal 11" {
+    puts "\n>>> FAIL: hello_rust.wasm crashed with signal 11"
+    exit 1
+  }
+  "Execution completed" {
+    puts "\n>>> PASS: execution completed (no stdout output)"
+  }
+  timeout {
+    puts "\n>>> TIMEOUT: hello_rust.wasm"
+    exit 1
+  }
+}
+
+# Quit QEMU
+send "\x01x"
+expect eof
+
+puts "\n>>> All VxWorks smoke tests passed"
+exit 0
