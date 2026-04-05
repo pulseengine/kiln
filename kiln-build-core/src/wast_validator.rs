@@ -484,9 +484,20 @@ impl WastModuleValidator {
 
             // For active segments, the element segment type must be a subtype
             // of the target table's element type.
+            //
+            // For function-index segments (modes 0, 2, 3 in binary), each index
+            // implicitly produces a ref.func instruction whose result is non-nullable.
+            // The binary format declares these as funcref (nullable) but the effective
+            // element type for validation is (ref func) (non-nullable).
             if let Some(table_idx) = elem.table_index() {
                 if let Some(table_elem_type) = Self::get_table_element_type(module, table_idx) {
-                    if !Self::is_ref_type_subtype(&elem.element_type, &table_elem_type, module) {
+                    let effective_elem_type = match &elem.init_data {
+                        PureElementInit::FunctionIndices(_) => {
+                            Self::make_non_nullable(&elem.element_type)
+                        }
+                        PureElementInit::ExpressionBytes(_) => elem.element_type,
+                    };
+                    if !Self::is_ref_type_subtype(&effective_elem_type, &table_elem_type, module) {
                         return Err(anyhow!("type mismatch"));
                     }
                 }
@@ -6685,6 +6696,21 @@ impl WastModuleValidator {
             RefType::Funcref => (true, HeapType::Func),
             RefType::Externref => (true, HeapType::Extern),
             RefType::Gc(gc) => (gc.nullable, gc.heap_type),
+        }
+    }
+
+    /// Return the non-nullable version of a RefType.
+    ///
+    /// For function-index element segments, each index implicitly produces a
+    /// non-nullable `ref.func` reference. This converts the segment's declared
+    /// type (e.g. `funcref` = `ref null func`) to its non-nullable counterpart
+    /// (`ref func`) for accurate subtype checking.
+    fn make_non_nullable(rt: &RefType) -> RefType {
+        use kiln_foundation::types::{GcRefType, HeapType};
+        match rt {
+            RefType::Funcref => RefType::Gc(GcRefType::new(false, HeapType::Func)),
+            RefType::Externref => RefType::Gc(GcRefType::new(false, HeapType::Extern)),
+            RefType::Gc(gc) => RefType::Gc(GcRefType::new(false, gc.heap_type)),
         }
     }
 
