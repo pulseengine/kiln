@@ -688,10 +688,27 @@ impl WastEngine {
                                         if let Ok(source_wrapper) = source_instance.global(source_global_idx as u32) {
                                             if let Ok(guard) = source_wrapper.0.read() {
                                                 let value = guard.get();
+                                                // Stamp FuncRef values with the source instance ID.
+                                                // FuncRefs created during module init use instance_id=None
+                                                // (meaning "current instance"), which becomes wrong when
+                                                // the value is copied to a different instance.
+                                                let value = match value {
+                                                    kiln_foundation::values::Value::FuncRef(Some(fref))
+                                                        if fref.instance_id.is_none() =>
+                                                    {
+                                                        kiln_foundation::values::Value::FuncRef(Some(
+                                                            kiln_foundation::values::FuncRef::from_index_with_instance(
+                                                                fref.index,
+                                                                *source_instance_id as u32,
+                                                            ),
+                                                        ))
+                                                    }
+                                                    other => other.clone(),
+                                                };
                                                 let global = Global::new(
                                                     global_type.value_type,
                                                     global_type.mutable,
-                                                    value.clone(),
+                                                    value,
                                                 )
                                                 .map_err(|e| {
                                                     anyhow::anyhow!("Failed to create imported global: {:?}", e)
