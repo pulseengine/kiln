@@ -6362,47 +6362,123 @@ impl StacklessEngine {
                         }
                     }
                     Instruction::BrOnNull(br_label_idx) => {
-                        // Pop reference, branch if null, push back if not null
+                        // Pop reference, branch if null (consuming ref), push back if not null.
+                        // br_on_null does NOT carry the ref value on the branch path,
+                        // but the branch still carries the label's type values (result
+                        // values for blocks, parameter values for loops) from the stack.
                         if let Some(ref_val) = operand_stack.pop() {
                             let is_null = is_null_ref(&ref_val);
                             #[cfg(feature = "tracing")]
                             trace!("BrOnNull: label={}, is_null={}", br_label_idx, is_null);
                             if is_null {
-                                // Branch to label - similar to Br instruction
+                                // Branch to label - matches Br handler structure
                                 if br_label_idx as usize >= block_stack.len() {
-                                    // Branch out of function
                                     #[cfg(feature = "tracing")]
                                     trace!("BrOnNull: branching out of function");
                                     break;
                                 }
-                                // Find the target block in the stack
-                                let target_depth = block_stack.len() - 1 - br_label_idx as usize;
-                                if let Some((block_type, start_pc, _block_type_idx, entry_stack_height)) = block_stack.get(target_depth).copied() {
-                                    // For loops, branch to start; for blocks, branch to end
-                                    if block_type == "loop" {
-                                        pc = start_pc;
-                                    } else {
-                                        // Skip to end of block
-                                        let mut depth = 1;
-                                        let mut search_pc = pc + 1;
-                                        while depth > 0 && search_pc < instructions.len() {
-                                            if let Some(search_instr) = instructions.get(search_pc) {
-                                                match search_instr {
-                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => depth += 1,
-                                                    Instruction::End => depth -= 1,
-                                                    _ => {}
+                                let stack_idx = block_stack.len() - 1 - br_label_idx as usize;
+                                if let Some((block_type, start_pc, block_type_idx, entry_stack_height)) = block_stack.get(stack_idx).copied() {
+                                    // Determine how many values to preserve (matching Br handler)
+                                    let values_to_preserve = if block_type == "loop" {
+                                        match block_type_idx {
+                                            0x40 => 0,
+                                            0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 0,
+                                            0x70 | 0x6F => 0,
+                                            _ => {
+                                                if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                                    func_type.params.len()
+                                                } else {
+                                                    0
                                                 }
                                             }
-                                            if depth > 0 { search_pc += 1; }
                                         }
-                                        pc = search_pc;
+                                    } else {
+                                        match block_type_idx {
+                                            0x40 => 0,
+                                            0x7F | 0x7E | 0x7D | 0x7C | 0x7B => 1,
+                                            0x70 | 0x6F => 1,
+                                            0x69 | 0x6E | 0x6D | 0x6C | 0x6B | 0x6A | 0x73 => 1,
+                                            _ => {
+                                                if let Some(func_type) = module.types.get(block_type_idx as usize) {
+                                                    func_type.results.len()
+                                                } else {
+                                                    1
+                                                }
+                                            }
+                                        }
+                                    };
+
+                                    // Save label type values from top of stack
+                                    let mut preserved_values = Vec::new();
+                                    for _ in 0..values_to_preserve {
+                                        if let Some(v) = operand_stack.pop() {
+                                            preserved_values.push(v);
+                                        }
                                     }
-                                    // Restore stack to entry height
+
+                                    // Trim stack to entry height
                                     while operand_stack.len() > entry_stack_height {
                                         operand_stack.pop();
                                     }
+
+                                    if block_type == "loop" {
+                                        // Pop inner blocks for loop branch
+                                        let blocks_to_pop = br_label_idx as usize;
+                                        for _ in 0..blocks_to_pop {
+                                            if !block_stack.is_empty() {
+                                                block_stack.pop();
+                                                block_depth -= 1;
+                                            }
+                                        }
+                                        // pc = start_pc, then pc += 1 at end of iteration
+                                        pc = start_pc;
+                                    } else {
+                                        // Pop inner blocks for forward branch
+                                        let blocks_to_pop = br_label_idx as usize;
+                                        for _ in 0..blocks_to_pop {
+                                            if !block_stack.is_empty() {
+                                                block_stack.pop();
+                                                block_depth -= 1;
+                                            }
+                                        }
+
+                                        // Scan forward to find the target block's End
+                                        let mut target_depth = br_label_idx as i32 + 1;
+                                        let mut new_pc = pc + 1;
+                                        let mut depth: i32 = 0;
+
+                                        while new_pc < instructions.len() && target_depth > 0 {
+                                            if let Some(search_instr) = instructions.get(new_pc) {
+                                                match search_instr {
+                                                    Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::Try { .. } | Instruction::TryTable { .. } => {
+                                                        depth += 1;
+                                                    }
+                                                    Instruction::End => {
+                                                        if depth == 0 {
+                                                            target_depth -= 1;
+                                                            if target_depth == 0 {
+                                                                // Set pc one before End; pc += 1 lands on End
+                                                                pc = new_pc - 1;
+                                                                break;
+                                                            }
+                                                        } else {
+                                                            depth -= 1;
+                                                        }
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                            new_pc += 1;
+                                        }
+                                    }
+
+                                    // Restore preserved values back to stack
+                                    for v in preserved_values.into_iter().rev() {
+                                        operand_stack.push(v);
+                                    }
                                 }
-                                continue;
+                                // Fall through to pc += 1 (no continue)
                             } else {
                                 // Not null, push reference back
                                 operand_stack.push(ref_val);
@@ -6419,6 +6495,8 @@ impl StacklessEngine {
                             trace!("BrOnNonNull: label={}, is_null={}", br_label_idx, is_null);
                             if !is_null {
                                 // Not null - push reference and branch
+                                // (matches Br handler structure: set pc so that pc += 1
+                                // at end of iteration lands on the correct instruction)
                                 operand_stack.push(ref_val);
                                 if br_label_idx as usize >= block_stack.len() {
                                     #[cfg(feature = "tracing")]
@@ -6445,6 +6523,9 @@ impl StacklessEngine {
                                                 block_depth -= 1;
                                             }
                                         }
+                                        // pc = start_pc, then pc += 1 at end of iteration
+                                        // -> first instruction inside the loop body
+                                        // (loop block_stack entry is NOT popped, matching Br behavior)
                                         pc = start_pc;
                                     } else {
                                         // Pop inner blocks for forward branch
@@ -6472,7 +6553,10 @@ impl StacklessEngine {
                                                         if depth == 0 {
                                                             target_depth -= 1;
                                                             if target_depth == 0 {
-                                                                pc = new_pc;
+                                                                // Set pc one before End; pc += 1 at
+                                                                // end of iteration will land on End,
+                                                                // matching the Br handler pattern.
+                                                                pc = new_pc - 1;
                                                                 break;
                                                             }
                                                         } else {
@@ -6486,7 +6570,9 @@ impl StacklessEngine {
                                         }
                                     }
                                 }
-                                continue;
+                                // Fall through to pc += 1 (do NOT use continue here;
+                                // it would skip pc += 1 and for loops would re-execute
+                                // the Loop instruction, creating duplicate block_stack entries)
                             }
                             // Null - consume the reference (don't push back)
                         }
@@ -7092,21 +7178,36 @@ impl StacklessEngine {
                             trace!("[TableInit] Zero size, no-op");
                             // Continue to next instruction
                         } else {
+                            // Use pre-resolved element values when available (handles GC types like i31ref)
+                            let has_resolved = module.resolved_elem_items.get(elem_seg_idx as usize)
+                                .map_or(false, |v| !v.is_empty());
+
                             // Copy elements from segment to table
                             for i in 0..init_size as usize {
                                 let item_idx = src_idx as usize + i;
-                                let func_idx = elem_segment.items.get(item_idx)
-                                    .map_err(|_| kiln_error::Error::runtime_trap(
-                                        "table.init: element segment access error"
-                                    ))?;
 
-                                // u32::MAX is sentinel for null reference
-                                let value = if func_idx == u32::MAX {
-                                    Some(Value::FuncRef(None))  // null funcref
+                                let value = if has_resolved {
+                                    // Use pre-resolved values (handles i31ref, structref, etc.)
+                                    let resolved = &module.resolved_elem_items[elem_seg_idx as usize];
+                                    if item_idx < resolved.len() {
+                                        Some(resolved[item_idx].clone())
+                                    } else {
+                                        Some(Value::FuncRef(None))
+                                    }
                                 } else {
-                                    Some(Value::FuncRef(Some(
-                                        kiln_foundation::values::FuncRef::from_index(func_idx)
-                                    )))
+                                    let func_idx = elem_segment.items.get(item_idx)
+                                        .map_err(|_| kiln_error::Error::runtime_trap(
+                                            "table.init: element segment access error"
+                                        ))?;
+
+                                    // u32::MAX is sentinel for null reference
+                                    if func_idx == u32::MAX {
+                                        Some(Value::FuncRef(None))
+                                    } else {
+                                        Some(Value::FuncRef(Some(
+                                            kiln_foundation::values::FuncRef::from_index(func_idx)
+                                        )))
+                                    }
                                 };
                                 table.set(dst_idx + i as u32, value)?;
                             }
@@ -10663,8 +10764,8 @@ impl StacklessEngine {
                         let to_nullable = (flags & 2) != 0;
                         if ref_test_value_with_module(&val, &to_type, to_nullable, Some(&module)) {
                             // Cast succeeds - push value and branch
+                            // (matches Br handler structure)
                             operand_stack.push(val);
-                            // Branch logic (consistent with Br)
                             if (label_idx as usize) >= block_stack.len() {
                                 break; // Branch out of function
                             }
@@ -10687,6 +10788,7 @@ impl StacklessEngine {
                                             block_depth -= 1;
                                         }
                                     }
+                                    // pc = start_pc, then pc += 1 at end of iteration
                                     pc = start_pc;
                                 } else {
                                     let blocks_to_pop = label_idx as usize;
@@ -10712,10 +10814,8 @@ impl StacklessEngine {
                                                     if depth == 0 {
                                                         target_depth -= 1;
                                                         if target_depth == 0 {
-                                                            // Point pc at the End instruction.
-                                                            // `continue` skips the main loop's pc += 1,
-                                                            // so the End handler will execute next iteration.
-                                                            pc = new_pc;
+                                                            // Set pc one before End; pc += 1 lands on End
+                                                            pc = new_pc - 1;
                                                             break;
                                                         }
                                                     } else {
@@ -10729,7 +10829,7 @@ impl StacklessEngine {
                                     }
                                 }
                             }
-                            continue;
+                            // Fall through to pc += 1 (no continue)
                         } else {
                             // Cast fails - push original value back, don't branch
                             operand_stack.push(val);
@@ -10747,6 +10847,7 @@ impl StacklessEngine {
                         let to_nullable = (flags & 2) != 0;
                         if !ref_test_value_with_module(&val, &to_type, to_nullable, Some(&module)) {
                             // Cast fails - push value and branch
+                            // (matches Br handler structure)
                             operand_stack.push(val);
                             if (label_idx as usize) >= block_stack.len() {
                                 break; // Branch out of function
@@ -10770,6 +10871,7 @@ impl StacklessEngine {
                                             block_depth -= 1;
                                         }
                                     }
+                                    // pc = start_pc, then pc += 1 at end of iteration
                                     pc = start_pc;
                                 } else {
                                     let blocks_to_pop = label_idx as usize;
@@ -10795,10 +10897,8 @@ impl StacklessEngine {
                                                     if depth == 0 {
                                                         target_depth -= 1;
                                                         if target_depth == 0 {
-                                                            // Point pc at the End instruction.
-                                                            // `continue` skips the main loop's pc += 1,
-                                                            // so the End handler will execute next iteration.
-                                                            pc = new_pc;
+                                                            // Set pc one before End; pc += 1 lands on End
+                                                            pc = new_pc - 1;
                                                             break;
                                                         }
                                                     } else {
@@ -10812,7 +10912,7 @@ impl StacklessEngine {
                                     }
                                 }
                             }
-                            continue;
+                            // Fall through to pc += 1 (no continue)
                         } else {
                             // Cast succeeds - push value back, don't branch
                             operand_stack.push(val);
