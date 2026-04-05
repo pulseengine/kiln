@@ -460,20 +460,25 @@ impl KilndEngine {
     /// Execute a component using the component model
     #[cfg(feature = "component-model")]
     fn execute_component(&mut self, data: &[u8]) -> Result<()> {
-        eprintln!("[VXDBG] execute_component: {} bytes", data.len());
+        let _ = self
+            .logger
+            .handle_minimal_log(LogLevel::Info, "Executing WebAssembly component");
 
         #[cfg(feature = "component-model")]
         {
-            eprintln!("[VXDBG] Initializing memory system (component path)");
+            // Initialize the memory system before decoding component
             use kiln_foundation::memory_init::MemoryInitializer;
             MemoryInitializer::initialize()
-                .map_err(|e| { eprintln!("[VXDBG] Memory init failed: {:?}", e); Error::runtime_error("Failed to initialize memory system") })?;
-            eprintln!("[VXDBG] Memory system OK");
+                .map_err(|_| Error::runtime_error("Failed to initialize memory system"))?;
 
-            eprintln!("[VXDBG] Decoding component");
+            // Decode the component from binary data and immediately Box it to avoid stack overflow
             let mut parsed_component = Box::new(decode_component(data)
-                .map_err(|e| { eprintln!("[VXDBG] Component decode failed: {:?}", e); Error::parse_error("Failed to parse component binary") })?);
-            eprintln!("[VXDBG] Component decoded OK");
+                .map_err(|_| Error::parse_error("Failed to parse component binary"))?);
+
+            let _ = self.logger.handle_minimal_log(
+                LogLevel::Info,
+                "Component parsed successfully"
+            );
 
             // Create and initialize component instance (passes by reference to avoid stack overflow)
             // This includes executing start functions and transitioning to Running state
@@ -609,24 +614,26 @@ impl KilndEngine {
 
     /// Execute a traditional WebAssembly module
     fn execute_traditional_module(&mut self, data: &[u8]) -> Result<()> {
-        eprintln!("[VXDBG] execute_traditional_module: {} bytes", data.len());
+        let _ = self.logger.handle_minimal_log(LogLevel::Info, "Executing WebAssembly module");
 
         // Execute with actual Kiln engine if available
         #[cfg(all(feature = "std", feature = "kiln-execution"))]
         {
-            eprintln!("[VXDBG] Initializing memory system");
+            let _ = self
+                .logger
+                .handle_minimal_log(LogLevel::Info, "Using real Kiln execution engine");
+
+            // Initialize the memory system before creating engine
             use kiln_foundation::memory_init::MemoryInitializer;
             MemoryInitializer::initialize()
-                .map_err(|e| { eprintln!("[VXDBG] Memory init failed: {:?}", e); Error::runtime_error("Failed to initialize memory system") })?;
-            eprintln!("[VXDBG] Memory system OK");
-
+                .map_err(|_| Error::runtime_error("Failed to initialize memory system"))?;
             use kiln_runtime::engine::{
                 CapabilityAwareEngine,
                 CapabilityEngine,
                 EnginePreset,
             };
 
-            eprintln!("[VXDBG] Creating engine");
+            // Determine engine preset from features
             let preset = if cfg!(feature = "asil-d") {
                 EnginePreset::AsilD
             } else if cfg!(feature = "asil-c") {
@@ -642,10 +649,8 @@ impl KilndEngine {
             };
 
             // Create engine with appropriate capabilities
-            eprintln!("[VXDBG] Creating CapabilityAwareEngine with preset {:?}", preset);
             let mut engine = CapabilityAwareEngine::with_preset(preset)
-                .map_err(|e| { eprintln!("[VXDBG] Engine creation failed: {:?}", e); Error::runtime_error("Failed to create engine") })?;
-            eprintln!("[VXDBG] Engine created OK");
+                .map_err(|_e| Error::runtime_error("Failed to create engine"))?;
 
             // Wire up WASI dispatcher as the host import handler
             // This is the SINGLE dispatch path for ALL host function calls
@@ -769,14 +774,11 @@ impl KilndEngine {
         const MAX_MODULE_SIZE: usize = 8 * 1024 * 1024; // 8 MiB limit
 
         if let Some(ref path) = self.config.module_path {
-            eprintln!("[VXDBG] load_module_bounded: path={}", path);
             // Check file size first
-            eprintln!("[VXDBG] Calling fs::metadata");
             let metadata = fs::metadata(path)
-                .map_err(|e| { eprintln!("[VXDBG] metadata error: {:?}", e); Error::system_io_error("Failed to read module metadata") })?;
+                .map_err(|_| Error::system_io_error("Failed to read module metadata"))?;
 
             let file_size = metadata.len() as usize;
-            eprintln!("[VXDBG] File size: {} bytes", file_size);
             if file_size > MAX_MODULE_SIZE {
                 return Err(Error::runtime_execution_error("Module file too large"));
             }
@@ -815,10 +817,7 @@ impl KilndEngine {
             // For non-safety-critical mode, use standard loading but with size check
             #[cfg(not(feature = "safety-critical"))]
             {
-                eprintln!("[VXDBG] Calling fs::read");
-                let data = fs::read(path).map_err(|e| { eprintln!("[VXDBG] fs::read error: {:?}", e); Error::system_io_error("Failed to read module") })?;
-                eprintln!("[VXDBG] fs::read OK: {} bytes", data.len());
-                Ok(data)
+                fs::read(path).map_err(|_| Error::system_io_error("Failed to read module"))
             }
         } else if let Some(data) = &self.config.module_data {
             if data.len() > MAX_MODULE_SIZE {
@@ -834,13 +833,9 @@ impl KilndEngine {
     pub fn execute_module(&mut self) -> Result<()> {
         let _ = self.logger.handle_minimal_log(LogLevel::Info, "Starting module execution");
 
-        // VxWorks debug: trace each step with direct stderr writes
-        eprintln!("[VXDBG] About to load module file");
-
         // Determine execution mode and module source with bounded allocations
         #[cfg(feature = "std")]
         let module_data = self.load_module_bounded()?;
-        eprintln!("[VXDBG] Module loaded: {} bytes", module_data.len());
 
         #[cfg(not(feature = "std"))]
         let module_data = self
@@ -849,9 +844,7 @@ impl KilndEngine {
             .ok_or_else(|| Error::parse_error("No module data provided for no_std execution"))?;
 
         // Check if this is a component or module
-        eprintln!("[VXDBG] Detecting component format");
         let is_component = self.detect_component_format(&module_data)?;
-        eprintln!("[VXDBG] is_component={}", is_component);
 
         // Get module size for resource estimation
         #[cfg(feature = "std")]
@@ -879,14 +872,11 @@ impl KilndEngine {
         }
 
         // Route execution based on binary type
-        eprintln!("[VXDBG] Routing execution: is_component={}, module_size={}", is_component, module_size);
         if is_component {
             // Execute as WebAssembly component
             #[cfg(feature = "component-model")]
             {
-                eprintln!("[VXDBG] Calling execute_component");
                 self.execute_component(&module_data)?;
-                eprintln!("[VXDBG] execute_component returned OK");
             }
             #[cfg(not(feature = "component-model"))]
             {
@@ -894,9 +884,7 @@ impl KilndEngine {
             }
         } else {
             // Execute as traditional WebAssembly module
-            eprintln!("[VXDBG] Calling execute_traditional_module");
             self.execute_traditional_module(&module_data)?;
-            eprintln!("[VXDBG] execute_traditional_module returned OK");
         }
 
         // Update statistics
@@ -1132,9 +1120,7 @@ impl SimpleArgs {
 #[cfg(feature = "std")]
 fn main() -> Result<()> {
     // Run main logic in a thread with a larger stack for deep WebAssembly processing.
-    // Module parsing and type validation can recurse deeply, requiring more stack
-    // than the platform default. 8MB works on Linux/macOS/VxWorks.
-    // Override with KILN_STACK_SIZE env var (in bytes) if needed.
+    // 8MB works on Linux/macOS/VxWorks. Override with KILN_STACK_SIZE env var.
     let stack_size: usize = std::env::var("KILN_STACK_SIZE")
         .ok()
         .and_then(|s| s.parse().ok())

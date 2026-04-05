@@ -24,6 +24,106 @@ pub use crate::wast_values::{
     results_match_with_either, values_equal,
 };
 
+/// Composite type kind for rec-group structural comparison
+#[derive(Debug, Clone, PartialEq)]
+enum CompositeKind {
+    /// Function type (compared via Module.types)
+    Func,
+    /// Struct type with field storage types (preserving type index references)
+    Struct(Vec<FieldStorageType>),
+    /// Array type with element storage type
+    Array(FieldStorageType),
+}
+
+/// Storage type for GC fields, preserving type index references for cross-module comparison
+#[derive(Debug, Clone, PartialEq)]
+enum FieldStorageType {
+    /// Standard value byte (i32, i64, f32, f64, etc.)
+    Value(u8),
+    /// Packed i8
+    I8,
+    /// Packed i16
+    I16,
+    /// Non-nullable reference to a concrete type index: (ref $t)
+    RefType(u32),
+    /// Nullable reference to a concrete type index: (ref null $t)
+    RefTypeNull(u32),
+}
+
+/// Per-module type metadata extracted from the decoded module for cross-module linking.
+///
+/// The WebAssembly GC spec requires that cross-module type equivalence checks
+/// use structural equivalence based on rec-group identity. Two types from different
+/// modules are considered equivalent only if their entire rec groups are structurally
+/// equivalent (same size, same finality flags, same composite kinds, and structurally
+/// compatible type references with intra-group references mapped positionally).
+#[derive(Debug, Clone)]
+struct ModuleTypeMetadata {
+    /// For each type index: (rec_group_id, position_in_group, is_final)
+    type_info: Vec<(usize, usize, bool)>,
+    /// For each rec group: number of types in that group
+    rec_group_sizes: Vec<usize>,
+    /// For each rec group: the starting type index
+    rec_group_starts: Vec<u32>,
+    /// For each type index: the composite type kind (func, struct, array)
+    composite_kinds: Vec<CompositeKind>,
+}
+
+/// Extract type metadata from a decoded KilnModule's rec_groups
+fn extract_type_metadata(kiln_module: &kiln_format::module::Module) -> ModuleTypeMetadata {
+    use kiln_format::module::CompositeTypeKind;
+
+    let total_types: usize = kiln_module.rec_groups.iter().map(|rg| rg.types.len()).sum();
+    let mut type_info = Vec::with_capacity(total_types);
+    let mut rec_group_sizes = Vec::with_capacity(kiln_module.rec_groups.len());
+    let mut rec_group_starts = Vec::with_capacity(kiln_module.rec_groups.len());
+    let mut composite_kinds = Vec::with_capacity(total_types);
+
+    for (group_id, rec_group) in kiln_module.rec_groups.iter().enumerate() {
+        rec_group_sizes.push(rec_group.types.len());
+        rec_group_starts.push(rec_group.start_type_index);
+        for (pos, sub_type) in rec_group.types.iter().enumerate() {
+            let idx = sub_type.type_index as usize;
+            // Ensure vectors are sized correctly
+            while type_info.len() <= idx {
+                type_info.push((0, 0, true)); // placeholder
+            }
+            while composite_kinds.len() <= idx {
+                composite_kinds.push(CompositeKind::Func); // placeholder
+            }
+            type_info[idx] = (group_id, pos, sub_type.is_final);
+
+            // Extract composite kind with field/element type info
+            let kind = match &sub_type.composite_kind {
+                CompositeTypeKind::Func => CompositeKind::Func,
+                CompositeTypeKind::Struct => CompositeKind::Struct(Vec::new()),
+                CompositeTypeKind::Array => CompositeKind::Array(FieldStorageType::Value(0x7F)),
+                CompositeTypeKind::StructWithFields(fields) => {
+                    CompositeKind::Struct(fields.iter().map(convert_gc_field_storage).collect())
+                }
+                CompositeTypeKind::ArrayWithElement(elem) => {
+                    CompositeKind::Array(convert_gc_field_storage(elem))
+                }
+            };
+            composite_kinds[idx] = kind;
+        }
+    }
+
+    ModuleTypeMetadata { type_info, rec_group_sizes, rec_group_starts, composite_kinds }
+}
+
+/// Convert a kiln_format GcFieldType to our FieldStorageType
+fn convert_gc_field_storage(field: &kiln_format::module::GcFieldType) -> FieldStorageType {
+    use kiln_format::module::GcStorageType;
+    match &field.storage_type {
+        GcStorageType::Value(byte) => FieldStorageType::Value(*byte),
+        GcStorageType::I8 => FieldStorageType::I8,
+        GcStorageType::I16 => FieldStorageType::I16,
+        GcStorageType::RefType(idx) => FieldStorageType::RefType(*idx),
+        GcStorageType::RefTypeNull(idx) => FieldStorageType::RefTypeNull(*idx),
+    }
+}
+
 /// Minimal WAST execution engine for testing
 ///
 /// This engine focuses on basic functionality:
@@ -42,6 +142,8 @@ pub struct WastEngine {
     current_module: Option<Arc<Module>>,
     /// Current instance ID for module execution
     current_instance_id: Option<usize>,
+    /// Type metadata per registered module for cross-module linking
+    module_type_metadata: HashMap<String, ModuleTypeMetadata>,
 }
 
 impl WastEngine {
@@ -53,6 +155,7 @@ impl WastEngine {
             instance_ids: HashMap::new(),
             current_module: None,
             current_instance_id: None,
+            module_type_metadata: HashMap::new(),
         })
     }
 
@@ -68,6 +171,9 @@ impl WastEngine {
         crate::wast_validator::WastModuleValidator::validate(&kiln_module)
             .map_err(|e| anyhow::anyhow!("Module validation failed: {:#}", e))?;
 
+        // Extract type metadata from the decoded module for cross-module linking
+        let importing_metadata = extract_type_metadata(&kiln_module);
+
         // Convert KilnModule to RuntimeModule
         // Wrap in Arc immediately to avoid clone() which loses BoundedMap data
         use kiln_runtime::module_instance::ModuleInstance;
@@ -78,7 +184,7 @@ impl WastEngine {
 
         // Validate all imports against registered modules and spectest
         // This catches unknown imports and incompatible types BEFORE instantiation
-        self.validate_imports(&module)?;
+        self.validate_imports(&module, &importing_metadata)?;
 
         // Pre-compute the engine instance ID so ModuleInstance.instance_id matches
         // the engine's key. This ensures FuncRef.instance_id values stamped during
@@ -169,16 +275,18 @@ impl WastEngine {
         // Validate that all non-spectest imports are satisfied
         // Per WebAssembly spec: if any import cannot be resolved, the module
         // is unlinkable and instantiation must fail.
-        self.validate_imports(&module)?;
+        self.validate_imports(&module, &importing_metadata)?;
 
         // Store the module and instance ID for later reference
         // Always store as "current" (last loaded module) AND under the given name
         self.modules.insert("current".to_string(), Arc::clone(&module));
         self.instance_ids.insert("current".to_string(), instance_idx);
+        self.module_type_metadata.insert("current".to_string(), importing_metadata.clone());
         let module_name = name.unwrap_or("current").to_string();
         if module_name != "current" {
             self.modules.insert(module_name.clone(), Arc::clone(&module));
             self.instance_ids.insert(module_name.clone(), instance_idx);
+            self.module_type_metadata.insert(module_name.clone(), importing_metadata);
         }
 
         // Register instance name for cross-module exception handling
@@ -321,6 +429,10 @@ impl WastEngine {
                 self.instance_ids.insert(name.to_string(), instance_id);
                 // Register the new name for cross-module exception handling
                 self.engine.register_instance_name(instance_id, name);
+            }
+            // Copy type metadata for cross-module linking
+            if let Some(metadata) = self.module_type_metadata.get(module_name) {
+                self.module_type_metadata.insert(name.to_string(), metadata.clone());
             }
             Ok(())
         } else {
@@ -784,7 +896,7 @@ impl WastEngine {
     /// - The named export must exist in the source module
     /// - The export kind must match the import kind (function, global, table, memory, tag)
     /// - Type signatures must be compatible
-    fn validate_imports(&self, module: &Module) -> Result<()> {
+    fn validate_imports(&self, module: &Module, importing_metadata: &ModuleTypeMetadata) -> Result<()> {
         let import_order = &module.import_order;
         let import_types = &module.import_types;
 
@@ -804,7 +916,7 @@ impl WastEngine {
                 self.validate_spectest_import(field_name, import_desc, module)?;
             } else {
                 // Validate against registered modules
-                self.validate_registered_import(mod_name, field_name, import_desc, module)?;
+                self.validate_registered_import(mod_name, field_name, import_desc, module, importing_metadata)?;
             }
         }
 
@@ -1004,6 +1116,7 @@ impl WastEngine {
         field_name: &str,
         import_desc: &RuntimeImportDesc,
         module: &Module,
+        importing_metadata: &ModuleTypeMetadata,
     ) -> Result<()> {
         // Check if the module is registered
         let source_module = match self.modules.get(mod_name) {
@@ -1015,6 +1128,9 @@ impl WastEngine {
                 ));
             }
         };
+
+        // Get the source module's type metadata
+        let source_metadata = self.module_type_metadata.get(mod_name);
 
         // Find the export in the source module
         let export = match source_module.get_export(field_name) {
@@ -1039,6 +1155,7 @@ impl WastEngine {
                 // Validate function type signature
                 self.validate_function_type_compatibility(
                     mod_name, field_name, *type_idx, module, source_module, &export,
+                    importing_metadata, source_metadata,
                 )?;
             }
             RuntimeImportDesc::Global(import_global_type) => {
@@ -1050,7 +1167,8 @@ impl WastEngine {
                 }
                 // Validate global type compatibility
                 self.validate_global_type_compatibility(
-                    mod_name, field_name, import_global_type, source_module, &export,
+                    mod_name, field_name, import_global_type, module, source_module, &export,
+                    importing_metadata, source_metadata,
                 )?;
             }
             RuntimeImportDesc::Table(import_table_type) => {
@@ -1106,16 +1224,10 @@ impl WastEngine {
         importing_module: &Module,
         source_module: &Module,
         export: &kiln_runtime::module::Export,
+        importing_metadata: &ModuleTypeMetadata,
+        source_metadata: Option<&ModuleTypeMetadata>,
     ) -> Result<()> {
-        // Get the importing module's expected function type
-        let import_func_type = importing_module.types.get(import_type_idx as usize).ok_or_else(|| {
-            anyhow::anyhow!(
-                "incompatible import type: type index {} out of bounds",
-                import_type_idx
-            )
-        })?;
-
-        // Get the exported function's type from the source module
+        // Get the exported function's type index from the source module
         let export_func_idx = export.index as usize;
         let export_func = source_module.functions.get(export_func_idx).ok_or_else(|| {
             anyhow::anyhow!(
@@ -1123,8 +1235,31 @@ impl WastEngine {
                 mod_name, field_name, export_func_idx
             )
         })?;
+        let export_type_idx = export_func.type_idx;
 
-        let export_func_type = source_module.types.get(export_func.type_idx as usize).ok_or_else(|| {
+        // Use rec-group-aware type equivalence checking when metadata is available
+        if let Some(src_meta) = source_metadata {
+            if !is_type_idx_subtype_cross_module_with_metadata(
+                export_type_idx, source_module, src_meta,
+                import_type_idx, importing_module, importing_metadata,
+            ) {
+                return Err(anyhow::anyhow!(
+                    "incompatible import type: {}::{} type mismatch (export type {} vs import type {})",
+                    mod_name, field_name, export_type_idx, import_type_idx
+                ));
+            }
+            return Ok(());
+        }
+
+        // Fallback: param/result comparison without rec-group metadata
+        let import_func_type = importing_module.types.get(import_type_idx as usize).ok_or_else(|| {
+            anyhow::anyhow!(
+                "incompatible import type: type index {} out of bounds",
+                import_type_idx
+            )
+        })?;
+
+        let export_func_type = source_module.types.get(export_type_idx as usize).ok_or_else(|| {
             anyhow::anyhow!(
                 "incompatible import type: {}::{} has invalid type index",
                 mod_name, field_name
@@ -1184,8 +1319,11 @@ impl WastEngine {
         mod_name: &str,
         field_name: &str,
         import_global_type: &GlobalType,
+        importing_module: &Module,
         source_module: &Module,
         export: &kiln_runtime::module::Export,
+        _importing_metadata: &ModuleTypeMetadata,
+        _source_metadata: Option<&ModuleTypeMetadata>,
     ) -> Result<()> {
         let export_global_idx = export.index as usize;
 
@@ -1201,11 +1339,19 @@ impl WastEngine {
                 ));
             }
 
-            // For mutable globals, the value type must match exactly
+            // For mutable globals, the value type must match exactly (using cross-module check)
             // For immutable globals, the import type must be a supertype of the export type
             if import_global_type.mutable {
-                // Mutable: exact type match required
-                if import_global_type.value_type != source_type.value_type {
+                // Mutable: exact type match required (both directions of subtyping)
+                let fwd = is_value_type_subtype_cross_module(
+                    &source_type.value_type, source_module,
+                    &import_global_type.value_type, importing_module,
+                );
+                let bwd = is_value_type_subtype_cross_module(
+                    &import_global_type.value_type, importing_module,
+                    &source_type.value_type, source_module,
+                );
+                if !fwd || !bwd {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} value type mismatch ({:?} vs {:?})",
                         mod_name, field_name, import_global_type.value_type, source_type.value_type
@@ -1213,7 +1359,10 @@ impl WastEngine {
                 }
             } else {
                 // Immutable: import type must be supertype of export type
-                if !is_value_type_subtype(&source_type.value_type, &import_global_type.value_type) {
+                if !is_value_type_subtype_cross_module(
+                    &source_type.value_type, source_module,
+                    &import_global_type.value_type, importing_module,
+                ) {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} value type mismatch ({:?} is not subtype of {:?})",
                         mod_name, field_name, source_type.value_type, import_global_type.value_type
@@ -1428,7 +1577,7 @@ impl WastEngine {
     }
 }
 
-/// Check if value type `sub` is a subtype of value type `sup`
+/// Check if value type `sub` is a subtype of value type `sup` (single-module context)
 ///
 /// Per the WebAssembly spec, subtyping rules for reference types:
 /// - funcref <: funcref
@@ -1436,25 +1585,24 @@ impl WastEngine {
 /// - (ref null $t) <: funcref (if $t is a function type)
 /// - (ref $t) <: (ref null $t)
 /// - (ref $t) <: funcref (if $t is a function type)
+/// - nofunc <: any nullable funcref
+/// - none <: any nullable anyref descendant
+/// - noextern <: any nullable externref descendant
 /// For numeric types, only exact match is allowed.
 fn is_value_type_subtype(sub: &ValueType, sup: &ValueType) -> bool {
     if sub == sup {
         return true;
     }
 
-    // Reference type subtyping
     match (sub, sup) {
-        // Any concrete function ref is a subtype of funcref
-        (ValueType::FuncRef, ValueType::FuncRef) => true,
+        // FuncRef hierarchy
         (ValueType::NullFuncRef, ValueType::FuncRef) => true,
-        // TypedFuncRef is a subtype of FuncRef (funcref = (ref null func))
-        // Any (ref null? $t) where $t is a func type is a subtype of (ref null func)
+        (ValueType::NullFuncRef, ValueType::TypedFuncRef(_, true)) => true,
         (ValueType::TypedFuncRef(_, _), ValueType::FuncRef) => true,
-        // Non-nullable typed func ref is subtype of nullable with same index
         (ValueType::TypedFuncRef(idx_a, false), ValueType::TypedFuncRef(idx_b, true))
             if idx_a == idx_b => true,
-        // ExternRef subtyping
-        (ValueType::ExternRef, ValueType::ExternRef) => true,
+        // ExternRef hierarchy
+        (ValueType::NoExternRef, ValueType::ExternRef) => true,
         // AnyRef hierarchy
         (ValueType::EqRef, ValueType::AnyRef) => true,
         (ValueType::I31Ref, ValueType::AnyRef) => true,
@@ -1463,6 +1611,13 @@ fn is_value_type_subtype(sub: &ValueType, sup: &ValueType) -> bool {
         (ValueType::StructRef(_), ValueType::EqRef) => true,
         (ValueType::ArrayRef(_), ValueType::AnyRef) => true,
         (ValueType::ArrayRef(_), ValueType::EqRef) => true,
+        (ValueType::NoneRef, ValueType::AnyRef) => true,
+        (ValueType::NoneRef, ValueType::EqRef) => true,
+        (ValueType::NoneRef, ValueType::I31Ref) => true,
+        (ValueType::NoneRef, ValueType::StructRef(_)) => true,
+        (ValueType::NoneRef, ValueType::ArrayRef(_)) => true,
+        // ExnRef hierarchy
+        (ValueType::NoExnRef, ValueType::ExnRef) => true,
         // Numeric types require exact match
         _ => false,
     }
@@ -1473,14 +1628,6 @@ fn is_value_type_subtype(sub: &ValueType, sup: &ValueType) -> bool {
 /// This performs cross-module subtyping for import validation. It extends the basic
 /// `is_value_type_subtype` with support for typed function references that may use
 /// different type indices in different modules but refer to structurally equivalent types.
-///
-/// Key rules for function type import subtyping:
-/// - Results are covariant: export result must be subtype of import result
-/// - Parameters are contravariant: import param must be subtype of export param
-/// - TypedFuncRef(_, _) <: FuncRef (any concrete func ref is subtype of funcref)
-/// - TypedFuncRef(a, false) <: TypedFuncRef(b, true) with structural type match
-/// - TypedFuncRef(a, n) <: TypedFuncRef(b, n) if type a (in sub_module) is a subtype
-///   of type b (in sup_module), checked structurally and via supertype chains
 fn is_value_type_subtype_cross_module(
     sub: &ValueType, sub_module: &Module,
     sup: &ValueType, sup_module: &Module,
@@ -1493,6 +1640,9 @@ fn is_value_type_subtype_cross_module(
         // TypedFuncRef is a subtype of FuncRef (funcref = (ref null func))
         (ValueType::TypedFuncRef(_, _), ValueType::FuncRef) => true,
 
+        // NullFuncRef is subtype of any nullable typed func ref
+        (ValueType::NullFuncRef, ValueType::TypedFuncRef(_, true)) => true,
+
         // TypedFuncRef subtyping with cross-module structural check
         (ValueType::TypedFuncRef(sub_idx, sub_nullable), ValueType::TypedFuncRef(sup_idx, sup_nullable)) => {
             // Nullable check: non-nullable is subtype of nullable, but not vice versa
@@ -1500,10 +1650,12 @@ fn is_value_type_subtype_cross_module(
                 return false;
             }
             // Check if type at sub_idx in sub_module is a subtype of type at sup_idx in sup_module
+            // Use coinductive equivalence checking with assumption set
+            let mut assumptions = Vec::new();
             is_type_idx_subtype_cross_module(
                 *sub_idx, sub_module,
                 *sup_idx, sup_module,
-                0, // recursion depth
+                &mut assumptions,
             )
         }
 
@@ -1512,50 +1664,54 @@ fn is_value_type_subtype_cross_module(
     }
 }
 
+/// Maximum depth for supertype chain walking to prevent infinite loops
+const MAX_SUPERTYPE_CHAIN_DEPTH: u32 = 32;
+
 /// Check if type index `sub_idx` in `sub_module` is a subtype of `sup_idx` in `sup_module`.
 ///
-/// This walks the supertype chain of `sub_idx` checking for structural equivalence
-/// with `sup_idx`. Two func types are structurally equivalent if their param/result
-/// counts match and each corresponding type is structurally compatible.
-///
-/// Uses a recursion depth limit to prevent infinite loops with recursive types.
-const MAX_SUBTYPE_RECURSION_DEPTH: u32 = 16;
-
+/// This first checks structural equivalence (using coinductive reasoning for recursive types),
+/// then walks the supertype chain of `sub_idx` if direct equivalence fails.
 fn is_type_idx_subtype_cross_module(
     sub_idx: u32, sub_module: &Module,
     sup_idx: u32, sup_module: &Module,
-    depth: u32,
+    assumptions: &mut Vec<(u32, u32)>,
 ) -> bool {
-    if depth > MAX_SUBTYPE_RECURSION_DEPTH {
-        return false;
-    }
-
-    // Check if sub_idx's func type is structurally compatible with sup_idx's func type
-    if are_func_types_structurally_compatible(sub_idx, sub_module, sup_idx, sup_module, depth) {
+    // Check structural equivalence first
+    if are_types_structurally_equivalent(sub_idx, sub_module, sup_idx, sup_module, assumptions) {
         return true;
     }
 
     // Walk the supertype chain of sub_idx in sub_module
-    if let Some(Some(parent_idx)) = sub_module.type_supertypes.get(sub_idx as usize) {
-        return is_type_idx_subtype_cross_module(
-            *parent_idx, sub_module,
-            sup_idx, sup_module,
-            depth + 1,
-        );
+    let mut current = sub_idx;
+    for _ in 0..MAX_SUPERTYPE_CHAIN_DEPTH {
+        if let Some(Some(parent_idx)) = sub_module.type_supertypes.get(current as usize) {
+            if are_types_structurally_equivalent(*parent_idx, sub_module, sup_idx, sup_module, assumptions) {
+                return true;
+            }
+            current = *parent_idx;
+        } else {
+            break;
+        }
     }
 
     false
 }
 
-/// Check if two func types (by index, potentially in different modules) are structurally compatible.
+/// Check if two types (by index in possibly different modules) are structurally equivalent.
 ///
-/// Structural compatibility means: same number of params and results, and each corresponding
-/// value type is compatible (using cross-module subtype checking for reference types).
-fn are_func_types_structurally_compatible(
+/// Uses coinductive reasoning: when comparing type A from module X with type B from module Y,
+/// if we encounter the same (A, B) pair again during recursion, we assume they're equivalent.
+/// This correctly handles recursive types like `(rec (type $t (sub (func (result (ref null $t))))))`.
+fn are_types_structurally_equivalent(
     idx_a: u32, module_a: &Module,
     idx_b: u32, module_b: &Module,
-    depth: u32,
+    assumptions: &mut Vec<(u32, u32)>,
 ) -> bool {
+    // Coinductive base case: if we've already assumed this pair is equivalent, return true
+    if assumptions.contains(&(idx_a, idx_b)) {
+        return true;
+    }
+
     let type_a = match module_a.types.get(idx_a as usize) {
         Some(t) => t,
         None => return false,
@@ -1565,44 +1721,40 @@ fn are_func_types_structurally_compatible(
         None => return false,
     };
 
+    // Quick check: param/result counts must match
     if type_a.params.len() != type_b.params.len()
         || type_a.results.len() != type_b.results.len()
     {
         return false;
     }
 
-    // Check params match structurally
-    for (pa, pb) in type_a.params.iter().zip(type_b.params.iter()) {
-        if !are_value_types_structurally_compatible(pa, module_a, pb, module_b, depth + 1) {
-            return false;
-        }
-    }
+    // Assume equivalence for this pair (coinductive step)
+    assumptions.push((idx_a, idx_b));
 
-    // Check results match structurally
-    for (ra, rb) in type_a.results.iter().zip(type_b.results.iter()) {
-        if !are_value_types_structurally_compatible(ra, module_a, rb, module_b, depth + 1) {
-            return false;
-        }
-    }
+    // Check all params and results are structurally compatible
+    let params_ok = type_a.params.iter().zip(type_b.params.iter()).all(|(pa, pb)| {
+        are_value_types_structurally_compatible_coinductive(pa, module_a, pb, module_b, assumptions)
+    });
 
-    true
+    let results_ok = params_ok && type_a.results.iter().zip(type_b.results.iter()).all(|(ra, rb)| {
+        are_value_types_structurally_compatible_coinductive(ra, module_a, rb, module_b, assumptions)
+    });
+
+    // Remove our assumption before returning (we've finished checking this pair)
+    assumptions.pop();
+
+    results_ok
 }
 
-/// Check if two value types are structurally compatible across modules.
-///
-/// For non-reference types, this is exact equality. For typed references,
-/// this recursively checks structural compatibility of the referenced types.
-fn are_value_types_structurally_compatible(
+/// Check if two value types are structurally compatible across modules,
+/// using coinductive assumptions for recursive type references.
+fn are_value_types_structurally_compatible_coinductive(
     a: &ValueType, module_a: &Module,
     b: &ValueType, module_b: &Module,
-    depth: u32,
+    assumptions: &mut Vec<(u32, u32)>,
 ) -> bool {
     if a == b {
         return true;
-    }
-
-    if depth > MAX_SUBTYPE_RECURSION_DEPTH {
-        return false;
     }
 
     match (a, b) {
@@ -1611,10 +1763,309 @@ fn are_value_types_structurally_compatible(
             if nullable_a != nullable_b {
                 return false;
             }
-            are_func_types_structurally_compatible(*idx_a, module_a, *idx_b, module_b, depth + 1)
+            are_types_structurally_equivalent(*idx_a, module_a, *idx_b, module_b, assumptions)
         }
-        // StructRef/ArrayRef with same index may differ across modules but we
-        // only handle func types for now; exact match required for others
+        _ => false,
+    }
+}
+
+/// Check if type index `sub_idx` in `sub_module` is a subtype of `sup_idx` in `sup_module`,
+/// using full rec-group-aware structural equivalence with finality checking.
+///
+/// Per the WebAssembly GC spec, two types from different modules are equivalent only if:
+/// 1. They belong to rec groups of the same size
+/// 2. Each corresponding type in the rec groups has matching finality flags
+/// 3. Each corresponding type has matching supertype structure
+/// 4. Each corresponding type has structurally compatible signatures
+///    (with intra-group references mapped positionally)
+fn is_type_idx_subtype_cross_module_with_metadata(
+    sub_idx: u32, sub_module: &Module, sub_meta: &ModuleTypeMetadata,
+    sup_idx: u32, sup_module: &Module, sup_meta: &ModuleTypeMetadata,
+) -> bool {
+    // Check structural equivalence first
+    if are_types_equivalent_with_metadata(
+        sub_idx, sub_module, sub_meta,
+        sup_idx, sup_module, sup_meta,
+    ) {
+        return true;
+    }
+
+    // Walk the supertype chain of sub_idx
+    let mut current = sub_idx;
+    for _ in 0..MAX_SUPERTYPE_CHAIN_DEPTH {
+        if let Some(Some(parent_idx)) = sub_module.type_supertypes.get(current as usize) {
+            if are_types_equivalent_with_metadata(
+                *parent_idx, sub_module, sub_meta,
+                sup_idx, sup_module, sup_meta,
+            ) {
+                return true;
+            }
+            current = *parent_idx;
+        } else {
+            break;
+        }
+    }
+
+    false
+}
+
+/// Check if two types are structurally equivalent using rec-group-aware comparison.
+///
+/// Two types are equivalent if and only if their entire rec groups are structurally
+/// equivalent when compared position-by-position.
+fn are_types_equivalent_with_metadata(
+    idx_a: u32, module_a: &Module, meta_a: &ModuleTypeMetadata,
+    idx_b: u32, module_b: &Module, meta_b: &ModuleTypeMetadata,
+) -> bool {
+    // Get rec group info for both types
+    let info_a = match meta_a.type_info.get(idx_a as usize) {
+        Some(info) => info,
+        None => return false,
+    };
+    let info_b = match meta_b.type_info.get(idx_b as usize) {
+        Some(info) => info,
+        None => return false,
+    };
+
+    let (group_id_a, pos_a, _final_a) = *info_a;
+    let (group_id_b, pos_b, _final_b) = *info_b;
+
+    // The two types must be at the same position within their rec groups
+    if pos_a != pos_b {
+        return false;
+    }
+
+    // The rec groups must have the same size
+    let group_size_a = meta_a.rec_group_sizes.get(group_id_a).copied().unwrap_or(0);
+    let group_size_b = meta_b.rec_group_sizes.get(group_id_b).copied().unwrap_or(0);
+    if group_size_a != group_size_b {
+        return false;
+    }
+
+    let group_start_a = meta_a.rec_group_starts.get(group_id_a).copied().unwrap_or(0);
+    let group_start_b = meta_b.rec_group_starts.get(group_id_b).copied().unwrap_or(0);
+
+    // Compare every type in the rec group pairwise
+    for offset in 0..group_size_a {
+        let type_idx_a = group_start_a + offset as u32;
+        let type_idx_b = group_start_b + offset as u32;
+
+        // Finality must match
+        let ti_a = match meta_a.type_info.get(type_idx_a as usize) {
+            Some(info) => info,
+            None => return false,
+        };
+        let ti_b = match meta_b.type_info.get(type_idx_b as usize) {
+            Some(info) => info,
+            None => return false,
+        };
+        if ti_a.2 != ti_b.2 {
+            return false; // finality mismatch
+        }
+
+        // Supertype structure must match: both must have supertypes at the same
+        // position within their respective rec groups, OR both have no supertype,
+        // OR both have supertypes outside their rec group that are themselves equivalent.
+        let sup_a = module_a.type_supertypes.get(type_idx_a as usize).and_then(|s| *s);
+        let sup_b = module_b.type_supertypes.get(type_idx_b as usize).and_then(|s| *s);
+        match (sup_a, sup_b) {
+            (None, None) => {} // both have no supertype - ok
+            (Some(sa), Some(sb)) => {
+                // Check if supertypes are within the same rec group
+                let sa_in_group = sa >= group_start_a && sa < group_start_a + group_size_a as u32;
+                let sb_in_group = sb >= group_start_b && sb < group_start_b + group_size_b as u32;
+                match (sa_in_group, sb_in_group) {
+                    (true, true) => {
+                        // Both within their rec groups - positions must match
+                        if (sa - group_start_a) != (sb - group_start_b) {
+                            return false;
+                        }
+                    }
+                    (false, false) => {
+                        // Both outside their rec groups - they must be equivalent types
+                        // Use recursive check (the supertypes are in earlier rec groups,
+                        // so this won't infinite-loop)
+                        if !are_types_equivalent_with_metadata(sa, module_a, meta_a, sb, module_b, meta_b) {
+                            return false;
+                        }
+                    }
+                    _ => return false, // one inside, one outside - not equivalent
+                }
+            }
+            _ => return false, // one has supertype, other doesn't
+        }
+
+        // Compare composite type structure
+        let kind_a = meta_a.composite_kinds.get(type_idx_a as usize);
+        let kind_b = meta_b.composite_kinds.get(type_idx_b as usize);
+
+        match (kind_a, kind_b) {
+            (Some(CompositeKind::Func), Some(CompositeKind::Func)) => {
+                // Compare function type signatures with intra-group reference mapping
+                let type_a = match module_a.types.get(type_idx_a as usize) {
+                    Some(t) => t,
+                    None => return false,
+                };
+                let type_b = match module_b.types.get(type_idx_b as usize) {
+                    Some(t) => t,
+                    None => return false,
+                };
+
+                if type_a.params.len() != type_b.params.len()
+                    || type_a.results.len() != type_b.results.len()
+                {
+                    return false;
+                }
+
+                for (pa, pb) in type_a.params.iter().zip(type_b.params.iter()) {
+                    if !are_value_types_equivalent_with_metadata(
+                        pa, module_a, meta_a, group_start_a, group_size_a,
+                        pb, module_b, meta_b, group_start_b, group_size_b,
+                    ) {
+                        return false;
+                    }
+                }
+
+                for (ra, rb) in type_a.results.iter().zip(type_b.results.iter()) {
+                    if !are_value_types_equivalent_with_metadata(
+                        ra, module_a, meta_a, group_start_a, group_size_a,
+                        rb, module_b, meta_b, group_start_b, group_size_b,
+                    ) {
+                        return false;
+                    }
+                }
+            }
+            (Some(CompositeKind::Struct(fields_a)), Some(CompositeKind::Struct(fields_b))) => {
+                // Compare struct field types with intra-group reference mapping
+                if fields_a.len() != fields_b.len() {
+                    return false;
+                }
+                for (fa, fb) in fields_a.iter().zip(fields_b.iter()) {
+                    if !are_field_storage_types_equivalent(
+                        fa, module_a, meta_a, group_start_a, group_size_a,
+                        fb, module_b, meta_b, group_start_b, group_size_b,
+                    ) {
+                        return false;
+                    }
+                }
+            }
+            (Some(CompositeKind::Array(elem_a)), Some(CompositeKind::Array(elem_b))) => {
+                // Compare array element types
+                if !are_field_storage_types_equivalent(
+                    elem_a, module_a, meta_a, group_start_a, group_size_a,
+                    elem_b, module_b, meta_b, group_start_b, group_size_b,
+                ) {
+                    return false;
+                }
+            }
+            (None, None) => {
+                // No composite kind info - fall back to func type comparison
+                let type_a = match module_a.types.get(type_idx_a as usize) {
+                    Some(t) => t,
+                    None => return false,
+                };
+                let type_b = match module_b.types.get(type_idx_b as usize) {
+                    Some(t) => t,
+                    None => return false,
+                };
+                if type_a.params.len() != type_b.params.len()
+                    || type_a.results.len() != type_b.results.len()
+                {
+                    return false;
+                }
+                for (pa, pb) in type_a.params.iter().zip(type_b.params.iter()) {
+                    if !are_value_types_equivalent_with_metadata(
+                        pa, module_a, meta_a, group_start_a, group_size_a,
+                        pb, module_b, meta_b, group_start_b, group_size_b,
+                    ) {
+                        return false;
+                    }
+                }
+                for (ra, rb) in type_a.results.iter().zip(type_b.results.iter()) {
+                    if !are_value_types_equivalent_with_metadata(
+                        ra, module_a, meta_a, group_start_a, group_size_a,
+                        rb, module_b, meta_b, group_start_b, group_size_b,
+                    ) {
+                        return false;
+                    }
+                }
+            }
+            _ => return false, // different composite kinds
+        }
+    }
+
+    true
+}
+
+/// Check if two GC field storage types are equivalent with rec-group-aware reference mapping.
+fn are_field_storage_types_equivalent(
+    a: &FieldStorageType, module_a: &Module, meta_a: &ModuleTypeMetadata,
+    group_start_a: u32, group_size_a: usize,
+    b: &FieldStorageType, module_b: &Module, meta_b: &ModuleTypeMetadata,
+    group_start_b: u32, group_size_b: usize,
+) -> bool {
+    match (a, b) {
+        (FieldStorageType::Value(va), FieldStorageType::Value(vb)) => va == vb,
+        (FieldStorageType::I8, FieldStorageType::I8) => true,
+        (FieldStorageType::I16, FieldStorageType::I16) => true,
+        (FieldStorageType::RefType(idx_a), FieldStorageType::RefType(idx_b))
+        | (FieldStorageType::RefTypeNull(idx_a), FieldStorageType::RefTypeNull(idx_b)) => {
+            // Check if references are within the current rec group
+            let a_in_group = *idx_a >= group_start_a && *idx_a < group_start_a + group_size_a as u32;
+            let b_in_group = *idx_b >= group_start_b && *idx_b < group_start_b + group_size_b as u32;
+            match (a_in_group, b_in_group) {
+                (true, true) => (*idx_a - group_start_a) == (*idx_b - group_start_b),
+                (false, false) => {
+                    are_types_equivalent_with_metadata(
+                        *idx_a, module_a, meta_a,
+                        *idx_b, module_b, meta_b,
+                    )
+                }
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+/// Check if two value types are structurally equivalent with rec-group-aware comparison.
+///
+/// For TypedFuncRef, intra-group references are compared by position within the group,
+/// while inter-group references are compared by recursive structural equivalence.
+fn are_value_types_equivalent_with_metadata(
+    a: &ValueType, module_a: &Module, meta_a: &ModuleTypeMetadata,
+    group_start_a: u32, group_size_a: usize,
+    b: &ValueType, module_b: &Module, meta_b: &ModuleTypeMetadata,
+    group_start_b: u32, group_size_b: usize,
+) -> bool {
+    if a == b {
+        return true;
+    }
+
+    match (a, b) {
+        (ValueType::TypedFuncRef(idx_a, nullable_a), ValueType::TypedFuncRef(idx_b, nullable_b)) => {
+            if nullable_a != nullable_b {
+                return false;
+            }
+            // Check if the referenced types are within the current rec group
+            let a_in_group = *idx_a >= group_start_a && *idx_a < group_start_a + group_size_a as u32;
+            let b_in_group = *idx_b >= group_start_b && *idx_b < group_start_b + group_size_b as u32;
+
+            match (a_in_group, b_in_group) {
+                (true, true) => {
+                    // Both within their respective rec groups - compare by position
+                    (*idx_a - group_start_a) == (*idx_b - group_start_b)
+                }
+                (false, false) => {
+                    // Both outside their rec groups - recursively check equivalence
+                    are_types_equivalent_with_metadata(
+                        *idx_a, module_a, meta_a,
+                        *idx_b, module_b, meta_b,
+                    )
+                }
+                _ => false, // one inside, one outside - not equivalent
+            }
+        }
         _ => false,
     }
 }
