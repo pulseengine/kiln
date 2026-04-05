@@ -1129,12 +1129,17 @@ impl SimpleArgs {
 /// Main entry point
 #[cfg(feature = "std")]
 fn main() -> Result<()> {
-    // Run main logic in a thread with 32MB stack to handle deep WebAssembly processing
-    // This is necessary because Module struct initialization requires significant stack space
-    const STACK_SIZE: usize = 32 * 1024 * 1024; // 32MB
+    // Run main logic in a thread with a larger stack for deep WebAssembly processing.
+    // Module parsing and type validation can recurse deeply, requiring more stack
+    // than the platform default. 8MB works on Linux/macOS/VxWorks.
+    // Override with KILN_STACK_SIZE env var (in bytes) if needed.
+    let stack_size: usize = std::env::var("KILN_STACK_SIZE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8 * 1024 * 1024); // 8MB default
 
     std::thread::Builder::new()
-        .stack_size(STACK_SIZE)
+        .stack_size(stack_size)
         .spawn(|| main_with_stack())
         .expect("Failed to spawn main thread")
         .join()
