@@ -2095,17 +2095,19 @@ impl<'a> StreamingDecoder<'a> {
                                 init_expr_heap_type = HeapType::I31;
                             }
                         },
-                        // ref.func - produces non-nullable (ref func)
+                        // ref.func - produces non-nullable (ref $t) where $t is the function's type
                         0xD2 => {
+                            let (func_idx, bytes_read) = read_leb128_u32(data, offset)?;
+                            offset += bytes_read;
                             init_expr_is_ref = true;
                             init_expr_nullable = false;
-                            init_expr_heap_type = HeapType::Func;
-                            while offset < data.len() && (data[offset] & 0x80) != 0 {
-                                offset += 1;
-                            }
-                            if offset < data.len() {
-                                offset += 1;
-                            }
+                            // Look up the function's type index to get the concrete heap type.
+                            // ref.func produces (ref $type_idx), not just (ref func).
+                            init_expr_heap_type = if (func_idx as usize) < self.module.functions.len() {
+                                HeapType::Concrete(self.module.functions[func_idx as usize].type_idx)
+                            } else {
+                                HeapType::Func
+                            };
                         },
                         _ => {
                             // Other opcodes - continue scanning

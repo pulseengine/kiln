@@ -1460,6 +1460,7 @@ impl FromBytes for ModuleInstance {
             globals: Vec::new(),
             tags: Vec::new(),
             elements: Vec::new(),
+            resolved_elem_items: Vec::new(),
             data: Vec::new(),
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,

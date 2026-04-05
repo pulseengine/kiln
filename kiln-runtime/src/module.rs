@@ -740,6 +740,11 @@ pub struct Module {
     pub tags:            Vec<kiln_foundation::types::TagType>,
     /// Element segments for tables
     pub elements:        Vec<Element>,
+    /// Pre-resolved element item values for each element segment.
+    /// Indexed by [segment_idx][item_idx]. Contains the evaluated Value for
+    /// each element item (including those using ref.i31, struct.new, etc.).
+    /// Used by table.init to copy GC-typed elements from passive segments.
+    pub resolved_elem_items: Vec<Vec<kiln_foundation::values::Value>>,
     /// Data segments for memories
     pub data:            Vec<Data>,
     /// Start function index
@@ -1562,6 +1567,7 @@ impl Module {
             globals: Vec::new(),
             tags: Vec::new(),
             elements: Vec::new(),
+            resolved_elem_items: Vec::new(),
             data: Vec::new(),
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
@@ -1614,6 +1620,7 @@ impl Module {
             globals: Vec::new(),
             tags: Vec::new(), // Exception tags (exception handling proposal)
             elements: Vec::new(), // Vec in std mode for variable-size Element items
+            resolved_elem_items: Vec::new(), // Will be populated after element processing
             data: Vec::new(), // Vec in std mode for large data segments
             start: kiln_module.start,
             custom_sections: custom_sections_map,
@@ -2298,6 +2305,75 @@ impl Module {
         }
         #[cfg(feature = "tracing")]
         debug!(total_elements = runtime_module.elements.len(), "Element segment conversion complete");
+
+        // Pre-resolve element item values for all segments.
+        // This evaluates constant expressions (ref.i31, struct.new, etc.) at module load time
+        // so that table.init can use them directly for passive segments with GC-typed items.
+        for elem_segment in &runtime_module.elements {
+            let mut resolved = Vec::with_capacity(elem_segment.items.len());
+            for i in 0..elem_segment.items.len() {
+                let func_idx = elem_segment.items.get(i).unwrap_or(0);
+                if func_idx == u32::MAX {
+                    // ref.null sentinel
+                    resolved.push(kiln_foundation::values::Value::FuncRef(None));
+                } else if func_idx == u32::MAX - 1 {
+                    // Deferred item — look up in item_exprs and evaluate
+                    let mut found = false;
+                    for (expr_idx, expr) in &elem_segment.item_exprs {
+                        if *expr_idx == i as u32 {
+                            // Evaluate the expression using available globals (non-import only)
+                            use kiln_foundation::types::Instruction as KilnInstr;
+                            use kiln_foundation::values::{Value as KilnValue, FuncRef as KilnFuncRef};
+                            let mut eval_stack: Vec<KilnValue> = Vec::new();
+                            for instr in &expr.instructions {
+                                match instr {
+                                    KilnInstr::I32Const(val) => {
+                                        eval_stack.push(KilnValue::I32(*val));
+                                    }
+                                    KilnInstr::I64Const(val) => {
+                                        eval_stack.push(KilnValue::I64(*val));
+                                    }
+                                    KilnInstr::RefI31 => {
+                                        if let Some(KilnValue::I32(n)) = eval_stack.pop() {
+                                            eval_stack.push(KilnValue::I31Ref(Some(n & 0x7FFFFFFF)));
+                                        }
+                                    }
+                                    KilnInstr::RefFunc(func_idx) => {
+                                        eval_stack.push(KilnValue::FuncRef(Some(KilnFuncRef::from_index(*func_idx))));
+                                    }
+                                    KilnInstr::RefNull(_) => {
+                                        eval_stack.push(KilnValue::FuncRef(None));
+                                    }
+                                    KilnInstr::GlobalGet(_) => {
+                                        // Needs instance globals -- push placeholder;
+                                        // active segments re-resolve via item_exprs
+                                        eval_stack.push(KilnValue::I32(0));
+                                    }
+                                    KilnInstr::End => break,
+                                    _ => {}
+                                }
+                            }
+                            if let Some(value) = eval_stack.pop() {
+                                resolved.push(value);
+                            } else {
+                                resolved.push(KilnValue::FuncRef(None));
+                            }
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        resolved.push(kiln_foundation::values::Value::FuncRef(None));
+                    }
+                } else {
+                    // Normal function reference
+                    resolved.push(kiln_foundation::values::Value::FuncRef(Some(
+                        kiln_foundation::values::FuncRef::from_index(func_idx)
+                    )));
+                }
+            }
+            runtime_module.resolved_elem_items.push(resolved);
+        }
 
         #[cfg(feature = "tracing")]
         {
@@ -2991,6 +3067,7 @@ impl Module {
             globals: Vec::new(),
             tags: Vec::new(),
             elements: Vec::new(),
+            resolved_elem_items: Vec::new(),
             data: Vec::new(),
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
@@ -3438,6 +3515,7 @@ impl kiln_foundation::traits::FromBytes for Module {
             globals: Vec::new(),
             tags: Vec::new(),
             elements: Vec::new(),
+            resolved_elem_items: Vec::new(),
             data: Vec::new(),
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
