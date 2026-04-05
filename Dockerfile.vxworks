@@ -1,0 +1,35 @@
+# VxWorks development environment for cross-compilation and QEMU testing
+# Usage:
+#   docker build -f Dockerfile.vxworks -t kiln-vxworks .
+#   docker run -v $(pwd):/workspace kiln-vxworks build
+#   docker run -v $(pwd):/workspace kiln-vxworks test
+FROM --platform=linux/amd64 ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies + QEMU system emulator + expect
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates git build-essential \
+    qemu-system-x86 expect \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and extract VxWorks SDK (free under NCLA)
+RUN mkdir -p /opt/wrsdk && \
+    curl -fSL https://d13321s3lxgewa.cloudfront.net/wrsdk-vxworks7-qemu-1.16.1.tar.bz2 \
+      -o /tmp/wrsdk.tar.bz2 && \
+    tar xjf /tmp/wrsdk.tar.bz2 -C /opt/wrsdk --strip-components=1 && \
+    rm /tmp/wrsdk.tar.bz2
+
+# sdkenv.sh requires bash as /bin/sh
+RUN ln -sf /bin/bash /bin/sh
+
+ENV WIND_SDK_HOME=/opt/wrsdk
+ENV SHELL=/bin/bash
+
+# Copy entrypoint and test scripts
+COPY scripts/kiln-vxworks-entrypoint.sh /usr/local/bin/kiln-vxworks
+COPY scripts/vxworks-smoke-test.exp /usr/local/bin/vxworks-smoke-test.exp
+
+WORKDIR /workspace
+ENTRYPOINT ["kiln-vxworks"]
+CMD ["help"]
