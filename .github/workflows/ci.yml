@@ -212,7 +212,14 @@ jobs:
             || { echo "FAIL: hello_cpp_cli.wasm"; echo "$OUTPUT"; exit 1; }
           echo "PASS: hello_cpp_cli.wasm"
 
-          echo "All 5 WASI component smoke tests passed (Rust x3, C x1, C++ x1)"
+          # === WASI-NN: YOLO inference ===
+          echo "=== Rust: yolo_inference_release.wasm (WASI-NN) ==="
+          OUTPUT=$(timeout 120 ./target/debug/kilnd /tmp/wasm-components/release-0.2.0/rust/yolo_inference_release.wasm 2>&1)
+          echo "$OUTPUT" | grep -q "Execution completed" \
+            || { echo "FAIL: yolo_inference_release.wasm"; echo "$OUTPUT" | tail -10; exit 1; }
+          echo "PASS: yolo_inference_release.wasm"
+
+          echo "All 6 WASI component smoke tests passed (Rust x4, C x1, C++ x1)"
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Run Code Validation Checks
