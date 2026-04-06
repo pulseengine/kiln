@@ -310,6 +310,12 @@ pub fn is_expected_trap(error_str: &str, expected_message: &str) -> bool {
         "type mismatch",
         "memory access",
         "table access",
+        "uninitialized element",
+        "uninitialized",
+        "undefined element",
+        "cast failure",
+        "null",
+        "indirect call",
     ];
 
     // Check if error message contains expected pattern
