@@ -1968,11 +1968,12 @@ fn contains_malformed_keyword(error_msg: &str, expected_msg: &str) -> bool {
         return true;
     }
 
-    // Opcode-related errors: "illegal opcode" matches "unknown instruction opcode"
+    // Opcode-related errors: "illegal opcode" matches various rejection messages
     let opcode_errors = [
         "illegal opcode",
         "unknown instruction opcode",
         "unknown opcode",
+        "constant expression required", // Illegal opcode in const expr context
     ];
     let expected_is_opcode = opcode_errors.iter().any(|e| expected_msg.contains(e));
     let error_is_opcode = opcode_errors.iter().any(|e| error_msg.contains(e));
