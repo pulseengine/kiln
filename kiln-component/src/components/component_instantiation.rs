@@ -837,7 +837,7 @@ impl ComponentInstance {
         parsed: &mut kiln_format::component::Component,
         host_registry: Option<std::sync::Arc<kiln_host::CallbackRegistry>>,
     ) -> Result<Self> {
-        Self::from_parsed_with_handler(id, parsed, host_registry, None)
+        Self::from_parsed_internal(id, parsed, host_registry, None, false)
     }
 
     /// Create a ComponentInstance with an optional host handler for WASI dispatch during start functions.
@@ -846,6 +846,28 @@ impl ComponentInstance {
         parsed: &mut kiln_format::component::Component,
         host_registry: Option<std::sync::Arc<kiln_host::CallbackRegistry>>,
         host_handler: Option<Box<dyn kiln_foundation::traits::HostImportHandler>>,
+    ) -> Result<Self> {
+        Self::from_parsed_internal(id, parsed, host_registry, host_handler, false)
+    }
+
+    /// Create a ComponentInstance in library mode (no _start required).
+    /// Used for nested/library components in WAC-composed P3 components.
+    pub fn from_parsed_library(
+        id: InstanceId,
+        parsed: &mut kiln_format::component::Component,
+        host_registry: Option<std::sync::Arc<kiln_host::CallbackRegistry>>,
+        host_handler: Option<Box<dyn kiln_foundation::traits::HostImportHandler>>,
+    ) -> Result<Self> {
+        Self::from_parsed_internal(id, parsed, host_registry, host_handler, true)
+    }
+
+    /// Internal constructor supporting both command and library modes.
+    fn from_parsed_internal(
+        id: InstanceId,
+        parsed: &mut kiln_format::component::Component,
+        host_registry: Option<std::sync::Arc<kiln_host::CallbackRegistry>>,
+        host_handler: Option<Box<dyn kiln_foundation::traits::HostImportHandler>>,
+        library_mode: bool,
     ) -> Result<Self> {
         #[cfg(feature = "tracing")]
         trace!("from_parsed: ENTERED, Component passed by reference");
@@ -1978,9 +2000,8 @@ impl ComponentInstance {
                             let mut nested_component_clone = nested_component.clone();
 
                             // Recursively instantiate the nested component
-                            // Note: We pass None for host_registry - imports should come from args
-                            // TODO: Implement proper import resolution from arg_refs
-                            match Self::from_parsed(nested_id, &mut nested_component_clone, None) {
+                            // Pass the parent's host_registry so nested components can resolve WASI imports
+                            match Self::from_parsed_library(nested_id, &mut nested_component_clone, host_registry.clone(), None) {
                                 Ok(child_instance) => {
 
                                     // Build exports map for this nested instance
@@ -2029,7 +2050,6 @@ impl ComponentInstance {
                                     // Provide detailed error context for debugging via println
                                     // (the static error message is complemented by this output)
 
-                                    // Use static error message - dynamic details are already printed
                                     // Check if this looks like a circular dependency
                                     let is_circular = e.to_string().contains("nesting depth");
                                     let static_msg = if is_circular {
@@ -2037,7 +2057,6 @@ impl ComponentInstance {
                                     } else {
                                         "Failed to instantiate nested component"
                                     };
-
                                     return Err(Error::new(
                                         kiln_error::ErrorCategory::ComponentRuntime,
                                         kiln_error::codes::COMPONENT_INSTANTIATION_RUNTIME_ERROR,
@@ -2174,7 +2193,19 @@ impl ComponentInstance {
             // by scanning the aliases. This is GENERIC and works for any component.
             // NO FALLBACKS - per spec, command components MUST export _start
 
-            let main_handle = match start_export_instance_idx {
+            let main_handle = if library_mode {
+                // Library mode: no _start required. Use first available instance.
+                // The parent component will call specific exports, not _start.
+                if let Some(&handle) = core_instances_map.values().next() {
+                    instance.main_instance_handle = Some(handle);
+                    handle
+                } else {
+                    use kiln_runtime::engine::InstanceHandle;
+                    let handle = InstanceHandle::from_index(0);
+                    instance.main_instance_handle = Some(handle);
+                    handle
+                }
+            } else { match start_export_instance_idx {
                 Some(start_idx) => match core_instances_map.get(&(start_idx as usize)) {
                     Some(&handle) => {
                         #[cfg(feature = "tracing")]
@@ -2274,7 +2305,7 @@ impl ComponentInstance {
                         ));
                     }
                 },
-            };
+            } }; // close match + close else
 
             #[cfg(feature = "tracing")]
             if is_interface_style {
