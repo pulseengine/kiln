@@ -44,11 +44,25 @@ pub struct WastEngine {
     current_instance_id: Option<usize>,
 }
 
+/// No-op host handler for spectest print functions
+struct SpectestHandler;
+impl kiln_foundation::HostImportHandler for SpectestHandler {
+    fn call_import(
+        &mut self, _module: &str, _function: &str,
+        _args: &[kiln_foundation::Value],
+        _memory: Option<&dyn kiln_foundation::traits::MemoryAccessor>,
+    ) -> kiln_error::Result<Vec<kiln_foundation::Value>> {
+        Ok(vec![])
+    }
+}
+
 impl WastEngine {
     /// Create a new WAST execution engine
     pub fn new() -> Result<Self> {
+        let mut engine = StacklessEngine::new();
+        engine.set_host_handler(Box::new(SpectestHandler));
         Ok(Self {
-            engine: StacklessEngine::new(),
+            engine,
             modules: HashMap::new(),
             instance_ids: HashMap::new(),
             current_module: None,
@@ -342,8 +356,9 @@ impl WastEngine {
         self.instance_ids.clear();
         self.current_module = None;
         self.current_instance_id = None;
-        // Create a new engine to reset state
+        // Create a new engine to reset state, with spectest handler
         self.engine = StacklessEngine::new();
+        self.engine.set_host_handler(Box::new(SpectestHandler));
         Ok(())
     }
 
