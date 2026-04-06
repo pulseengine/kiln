@@ -278,6 +278,18 @@ pub struct StacklessEngine {
     /// Not used directly as a field - the trampoline in execute() uses a local Vec instead.
     /// Kept for potential future use (e.g., stack inspection).
     call_stack:            Vec<SuspendedFrame>,
+    // ── P3 Async Task Protocol State ──────────────────────────────────
+    // These fields implement the host-provided builtins that Meld-fused
+    // P3 components import from the $root namespace.
+    /// Per-(instance, context_index) context slot for [context-get-N]/[context-set-N].
+    /// Used by wit-bindgen's async support to thread FutureState pointers.
+    p3_context_slots:      HashMap<(usize, u32), i32>,
+    /// Last [task-return] values per instance. The async-lift wrapper's
+    /// implementation calls [task-return]N to signal completion with a result.
+    /// We capture the values here for the caller to retrieve.
+    p3_task_return_values: HashMap<usize, Vec<Value>>,
+    /// Monotonic handle counter for waitable sets.
+    p3_next_waitable_set:  u32,
 }
 
 /// Simple RuntimeState implementation for debugger callbacks
@@ -441,6 +453,10 @@ impl StacklessEngine {
             lowered_functions:   HashMap::new(),
             instance_registry:   HashMap::new(),
             call_stack:          Vec::with_capacity(256),
+            // P3 async protocol state
+            p3_context_slots:      HashMap::new(),
+            p3_task_return_values: HashMap::new(),
+            p3_next_waitable_set:  1, // 0 is reserved
         }
     }
 
@@ -543,6 +559,115 @@ impl StacklessEngine {
 
         // Local tag without export or unregistered instance - no cross-module identity
         None
+    }
+
+    // ── P3 Async Task Built-in Intrinsics ─────────────────────────────
+    //
+    // Meld fuses P3 async components into a single core module that imports
+    // these builtins from the "$root" namespace.  For synchronous interpreter
+    // execution the semantics collapse to simple state-machine operations.
+    //
+    // Returns Some(results) if the import was a P3 builtin, None otherwise.
+    fn try_dispatch_p3_builtin(
+        &mut self,
+        instance_id: usize,
+        module_name: &str,
+        field_name: &str,
+        args: &[Value],
+    ) -> Option<Result<Vec<Value>>> {
+        // Only handle $root and [export]$root namespaces
+        if module_name != "$root" && module_name != "[export]$root" {
+            return None;
+        }
+
+        // Strip optional instance suffix ($2, $3, …) added by Meld for
+        // second/third component instance of the same type.
+        let base_name = if let Some(pos) = field_name.rfind('$') {
+            // Only strip if the suffix is numeric
+            if field_name[pos+1..].chars().all(|c| c.is_ascii_digit()) {
+                &field_name[..pos]
+            } else {
+                field_name
+            }
+        } else {
+            field_name
+        };
+
+        match base_name {
+            // ── [context-get-N] ──────────────────────────────────────
+            // () -> i32 — return the value stored in context slot N
+            name if name.starts_with("[context-get-") => {
+                let slot_str = &name["[context-get-".len()..name.len()-1];
+                let slot: u32 = slot_str.parse().unwrap_or(0);
+                let val = self.p3_context_slots
+                    .get(&(instance_id, slot))
+                    .copied()
+                    .unwrap_or(0);
+                Some(Ok(vec![Value::I32(val)]))
+            }
+
+            // ── [context-set-N] ──────────────────────────────────────
+            // (i32) -> () — store value in context slot N
+            name if name.starts_with("[context-set-") => {
+                let slot_str = &name["[context-set-".len()..name.len()-1];
+                let slot: u32 = slot_str.parse().unwrap_or(0);
+                let val = match args.first() {
+                    Some(Value::I32(v)) => *v,
+                    _ => 0,
+                };
+                self.p3_context_slots.insert((instance_id, slot), val);
+                Some(Ok(vec![]))
+            }
+
+            // ── [task-return]N ───────────────────────────────────────
+            // Variadic signature — captures ALL args as the task result.
+            // The async-lift wrapper calls this to signal completion.
+            name if name.starts_with("[task-return]") => {
+                self.p3_task_return_values
+                    .insert(instance_id, args.to_vec());
+                Some(Ok(vec![]))
+            }
+
+            // ── [waitable-set-new] ───────────────────────────────────
+            // () -> i32 — allocate a new waitable set handle
+            "[waitable-set-new]" => {
+                let handle = self.p3_next_waitable_set;
+                self.p3_next_waitable_set += 1;
+                Some(Ok(vec![Value::I32(handle as i32)]))
+            }
+
+            // ── [waitable-set-poll] ──────────────────────────────────
+            // (i32, i32) -> i32  — poll set; synchronous mode: return 0
+            // (no pending async work in single-threaded interpreter)
+            "[waitable-set-poll]" => {
+                Some(Ok(vec![Value::I32(0)]))
+            }
+
+            // ── [waitable-set-drop] ──────────────────────────────────
+            // (i32) -> () — destroy waitable set (no-op)
+            "[waitable-set-drop]" => {
+                Some(Ok(vec![]))
+            }
+
+            // ── [waitable-join] ──────────────────────────────────────
+            // (i32, i32) -> () — join waitable to set (no-op for sync)
+            "[waitable-join]" => {
+                Some(Ok(vec![]))
+            }
+
+            // ── [task-cancel] ────────────────────────────────────────
+            // () -> () or (i32) -> i32 — cancel task (no-op for sync)
+            "[task-cancel]" => {
+                Some(Ok(vec![]))
+            }
+
+            _ => None, // Not a P3 builtin
+        }
+    }
+
+    /// Retrieve and clear the task-return values captured for an instance.
+    pub fn take_p3_task_return_values(&mut self, instance_id: usize) -> Option<Vec<Value>> {
+        self.p3_task_return_values.remove(&instance_id)
     }
 
     /// Check if a function is a lowered function (from canon.lower)
@@ -1449,6 +1574,29 @@ impl StacklessEngine {
                             },
                         }
                     }
+                    // Try P3 async builtin dispatch before falling through to defaults.
+                    // Fused P3 modules import builtins from "$root" and "[export]$root".
+                    if let Some(result) = self.try_dispatch_p3_builtin(
+                        instance_id, &module_name, &field_name, &args,
+                    ) {
+                        return result.map(ExecutionOutcome::Complete);
+                    }
+
+                    // Try host handler for unlinked WASI imports
+                    #[cfg(feature = "wasi")]
+                    if let Some(ref mut handler) = self.host_handler {
+                        let instance = self.instances.get(&instance_id)
+                            .cloned();
+                        if let Some(inst) = instance {
+                            let mem_wrapper = inst.memory(0).ok();
+                            let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+                                .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
+                            if let Ok(results) = handler.call_import(&module_name, &field_name, &args, memory) {
+                                return Ok(ExecutionOutcome::Complete(results));
+                            }
+                        }
+                    }
+
                     // Import not linked or link unresolvable - return correct number of default results
                     // based on the imported function's type signature
                     // NOTE: Do NOT decrement here - execute() will decrement on Complete
@@ -1957,6 +2105,29 @@ impl StacklessEngine {
                                         }
                                     }
                                     // Not linked or link unresolvable - fall through to WASI dispatch
+                                }
+
+                                // Try P3 async builtins first (fused modules import from $root)
+                                {
+                                    let p3_args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
+                                    if let Some(result) = self.try_dispatch_p3_builtin(
+                                        instance_id, &module_name, &field_name, &p3_args,
+                                    ) {
+                                        match result {
+                                            Ok(results) => {
+                                                for r in results {
+                                                    operand_stack.push(r);
+                                                }
+                                                pc += 1;
+                                                continue;
+                                            }
+                                            Err(e) => return Err(e),
+                                        }
+                                    }
+                                    // Not a P3 builtin — push args back for WASI dispatch
+                                    for arg in p3_args.into_iter().rev() {
+                                        operand_stack.push(arg);
+                                    }
                                 }
 
                                 // Dispatch to WASI implementation
