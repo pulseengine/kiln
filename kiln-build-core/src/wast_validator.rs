@@ -3631,7 +3631,8 @@ impl WastModuleValidator {
                             let src64 = Self::is_table64(module, src_table);
                             let it_d = if dst64 { StackType::I64 } else { StackType::I32 };
                             let it_s = if src64 { StackType::I64 } else { StackType::I32 };
-                            let it_n = if dst64 || src64 { StackType::I64 } else { StackType::I32 };
+                            // Per spec: length operand uses destination table's index type
+                            let it_n = if dst64 { StackType::I64 } else { StackType::I32 };
                             // Pop n (length), s (source), d (dest) in reverse
                             if !Self::pop_type(&mut stack, it_n, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
