@@ -93,6 +93,70 @@ use kiln_wasi::{
     set_global_wasi_args,
 };
 
+/// Chained host import handler for WAC-composed P3 components.
+/// Routes WASI calls to WasiDispatcher and inter-component calls
+/// to nested component engines.
+#[cfg(all(feature = "wasi", feature = "kiln-execution"))]
+struct InterComponentHandler {
+    wasi: WasiDispatcher,
+    engines: std::collections::HashMap<
+        usize,
+        std::sync::Arc<std::sync::Mutex<kiln_runtime::engine::CapabilityAwareEngine>>,
+    >,
+    /// Maps interface name → nested component index
+    routes: std::collections::HashMap<String, usize>,
+}
+
+#[cfg(all(feature = "wasi", feature = "kiln-execution"))]
+impl kiln_foundation::traits::HostImportHandler for InterComponentHandler {
+    fn call_import(
+        &mut self,
+        module: &str,
+        function: &str,
+        args: &[kiln_foundation::Value],
+        memory: Option<&dyn kiln_foundation::traits::MemoryAccessor>,
+    ) -> kiln_error::Result<Vec<kiln_foundation::Value>> {
+        // Try WASI first
+        if module.starts_with("wasi:") {
+            return self.wasi.call_import(module, function, args, memory);
+        }
+
+        // Try inter-component routing
+        if let Some(&comp_idx) = self.routes.get(module) {
+            if let Some(engine_arc) = self.engines.get(&comp_idx) {
+                if let Ok(mut engine) = engine_arc.lock() {
+                    // Find the function in the nested engine's instances
+                    use kiln_runtime::engine::{CapabilityEngine, InstanceHandle};
+                    // Try multiple name formats for the function:
+                    // 1. Plain name: "fibonacci"
+                    // 2. Interface-qualified: "compute:concurrent/tasks@1.0.0#fibonacci"
+                    // 3. Async-lift: "[async-lift]compute:concurrent/tasks@1.0.0#fibonacci"
+                    let candidates = [
+                        function.to_string(),
+                        format!("{}#{}", module, function),
+                        format!("[async-lift]{}#{}", module, function),
+                    ];
+                    for idx in 0..16u32 {
+                        let handle = InstanceHandle::from_index(idx as usize);
+                        for candidate in &candidates {
+                            if engine.has_function(handle, candidate).unwrap_or(false) {
+                                return engine.execute(handle, candidate, args);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback: try WASI dispatcher for any unrecognized calls
+        self.wasi.call_import(module, function, args, memory)
+    }
+
+    fn set_args_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
+        self.wasi.set_args_allocation(list_ptr, string_ptrs);
+    }
+}
+
 /// Configuration for the runtime daemon
 #[derive(Debug, Clone)]
 pub struct KilndConfig {
@@ -458,6 +522,9 @@ impl KilndEngine {
     }
 
     /// Execute a component using the component model
+    ///
+    /// For WAC-composed P3 components with nested library components,
+    /// inter-component calls are routed through the nested component engines.
     #[cfg(feature = "component-model")]
     fn execute_component(&mut self, data: &[u8]) -> Result<()> {
         eprintln!("[VXDBG] execute_component: {} bytes", data.len());
@@ -527,12 +594,39 @@ impl KilndEngine {
             );
 
             // For P3-style components where the engine was swapped to a nested component's
-            // engine, re-set the WASI handler since the nested engine doesn't have one.
-            // Detect this by checking if nested components were instantiated.
+            // engine, set up a chained handler that routes:
+            // 1. WASI calls → WasiDispatcher
+            // 2. Inter-component calls → nested component engines
             #[cfg(all(feature = "kiln-execution", feature = "wasi"))]
             if self.config.enable_wasi && !instance.nested_component_instances.is_empty() {
-                if let Ok(dispatcher) = kiln_wasi::WasiDispatcher::with_defaults() {
-                    instance.set_host_handler(Box::new(dispatcher));
+                if let Ok(wasi_dispatcher) = kiln_wasi::WasiDispatcher::with_defaults() {
+                    // Build inter-component route map and extract nested engines
+                    let mut routes: std::collections::HashMap<String, usize> =
+                        std::collections::HashMap::new();
+                    let mut engines: std::collections::HashMap<
+                        usize,
+                        std::sync::Arc<std::sync::Mutex<kiln_runtime::engine::CapabilityAwareEngine>>,
+                    > = std::collections::HashMap::new();
+
+                    for nested in instance.nested_component_instances.iter_mut() {
+                        for (export_name, _) in &nested.exports {
+                            routes.insert(export_name.clone(), nested.instance_index as usize);
+                        }
+                        // Take the engine from the nested instance and wrap in Arc<Mutex>
+                        if let Some(engine) = nested.instance.runtime_engine.take() {
+                            engines.insert(
+                                nested.instance_index as usize,
+                                std::sync::Arc::new(std::sync::Mutex::new(*engine)),
+                            );
+                        }
+                    }
+
+                    let handler = InterComponentHandler {
+                        wasi: wasi_dispatcher,
+                        engines,
+                        routes,
+                    };
+                    instance.set_host_handler(Box::new(handler));
                 }
             }
 
