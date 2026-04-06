@@ -3456,12 +3456,15 @@ impl<'a> StreamingDecoder<'a> {
     /// Process custom section
     /// Returns the number of bytes consumed (entire section for custom sections).
     fn process_custom_section(&mut self, data: &[u8]) -> Result<usize> {
+        // Custom sections must contain at least a name (name-length LEB128 + name bytes).
+        // An empty custom section is malformed per the spec.
+        if data.is_empty() {
+            return Err(Error::parse_error("unexpected end"));
+        }
         // Validate custom section name is valid UTF-8 per WebAssembly spec
-        if !data.is_empty() {
-            let (name_bytes, _name_end) = read_name(data, 0)?;
-            if core::str::from_utf8(name_bytes).is_err() {
-                return Err(Error::parse_error("malformed UTF-8 encoding"));
-            }
+        let (name_bytes, _name_end) = read_name(data, 0)?;
+        if core::str::from_utf8(name_bytes).is_err() {
+            return Err(Error::parse_error("malformed UTF-8 encoding"));
         }
         // Custom sections are otherwise skipped - consume all bytes
         Ok(data.len())
