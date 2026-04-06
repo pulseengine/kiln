@@ -3627,6 +3627,15 @@ impl WastModuleValidator {
                             if src_table as usize >= Self::total_tables(module) {
                                 return Err(anyhow!("unknown table {}", src_table));
                             }
+                            // Validate element type compatibility: src element type must be subtype of dst
+                            if let (Some(dst_elem), Some(src_elem)) = (
+                                Self::get_table_element_type(module, dst_table),
+                                Self::get_table_element_type(module, src_table),
+                            ) {
+                                if !Self::is_ref_type_subtype(&src_elem, &dst_elem, module) {
+                                    return Err(anyhow!("type mismatch"));
+                                }
+                            }
                             let dst64 = Self::is_table64(module, dst_table);
                             let src64 = Self::is_table64(module, src_table);
                             let it_d = if dst64 { StackType::I64 } else { StackType::I32 };
