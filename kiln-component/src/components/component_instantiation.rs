@@ -987,6 +987,11 @@ impl ComponentInstance {
         #[cfg(feature = "std")]
         let mut inline_exports_map: BTreeMap<usize, Vec<(String, String, CoreSort, Option<usize>)>> =
             BTreeMap::new();
+        // Deferred InlineExports: (core_instance_idx, source_idx, export_mappings)
+        // For WAC-composed components where source instance is instantiated after InlineExports
+        #[cfg(feature = "std")]
+        let mut deferred_inline_exports: Vec<(usize, usize, Vec<(String, String, CoreSort, Option<usize>)>)> =
+            Vec::new();
         // Track which core instance index exports _start (the main executable module)
         // This is the GENERIC way to find the main module - it's the one that exports _start
         let mut start_export_instance_idx: Option<u32> = None;
@@ -1788,9 +1793,10 @@ impl ComponentInstance {
                                 // Store the actual export names for later use when linking instance imports
                                 inline_exports_map.insert(core_instance_idx, export_mappings);
                             } else {
-                                return Err(Error::runtime_error(
-                                    "InlineExports source instance not instantiated",
-                                ));
+                                // Source instance not yet instantiated — defer resolution.
+                                // This handles WAC-composed components where InlineExports
+                                // references an instance instantiated later in the section order.
+                                deferred_inline_exports.push((core_instance_idx, src_idx as usize, export_mappings));
                             }
                         } else if !canon_lowered_exports.is_empty() {
                             // All exports are canon-lowered functions - this is a canonical function provider
@@ -1839,6 +1845,19 @@ impl ComponentInstance {
                         }
                     },
                 }
+            }
+        }
+
+        // Resolve deferred InlineExports now that all core instances are created
+        #[cfg(feature = "std")]
+        for (core_inst_idx, src_idx, export_mappings) in deferred_inline_exports {
+            if let Some(&source_handle) = core_instances_map.get(&src_idx) {
+                core_instances_map.insert(core_inst_idx, source_handle);
+                inline_exports_map.insert(core_inst_idx, export_mappings);
+            } else {
+                return Err(Error::runtime_error(
+                    "InlineExports source instance not instantiated (deferred resolution failed)",
+                ));
             }
         }
 
