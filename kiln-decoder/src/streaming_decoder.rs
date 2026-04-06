@@ -293,6 +293,11 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<bool> {
                 // memarg: alignment (u32 LEB128) + optional memory index + offset (u64 LEB128)
                 let (align_raw, bytes) = read_leb128_u32(data, offset)?;
                 offset += bytes;
+                // Alignment power (bits 0-5) must be valid; bit 6 = multi-memory flag
+                // Values > 0x7F (or alignment power > 63) indicate malformed memop flags
+                if align_raw > 0x7F {
+                    return Err(Error::parse_error("malformed memop flags"));
+                }
                 if (align_raw & 0x40) != 0 {
                     // Multi-memory: memory index follows
                     let (_, bytes) = read_leb128_u32(data, offset)?;
@@ -1059,7 +1064,11 @@ impl<'a> StreamingDecoder<'a> {
                     if offset >= data.len() {
                         return Err(Error::parse_error("Unexpected end of struct field"));
                     }
-                    let mutable = data[offset] != 0;
+                    let mut_byte = data[offset];
+                    if mut_byte > 1 {
+                        return Err(Error::parse_error("malformed mutability"));
+                    }
+                    let mutable = mut_byte != 0;
                     offset += 1;
 
                     gc_fields.push(GcFieldType { storage_type, mutable });
