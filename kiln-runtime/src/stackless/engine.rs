@@ -2651,15 +2651,43 @@ impl StacklessEngine {
                                             return_state: Some(saved_state),
                                         });
                                     } else {
-                                        // Not linked - dispatch to WASI if applicable
-                                        #[cfg(feature = "tracing")]
-                                        trace!(
-                                            module_name = %module_name,
-                                            field_name = %field_name,
-                                            "[CALL_INDIRECT] Import not linked, trying WASI dispatch"
-                                        );
+                                        // Not linked — try P3 builtins first, then WASI
+                                        if let Some(result) = self.try_dispatch_p3_builtin(
+                                            instance_id, &module_name, &field_name, &call_args,
+                                        ) {
+                                            match result {
+                                                Ok(results) => {
+                                                    for r in results {
+                                                        operand_stack.push(r);
+                                                    }
+                                                    pc += 1;
+                                                    continue;
+                                                }
+                                                Err(e) => return Err(e),
+                                            }
+                                        }
 
-                                        // Call WASI function (need to push args back for call_wasi_function)
+                                        // Not P3 — try host handler for unlinked imports
+                                        #[cfg(feature = "wasi")]
+                                        {
+                                            let inst = self.instances.get(&instance_id).cloned();
+                                            if let Some(ref mut handler) = self.host_handler {
+                                                if let Some(inst_arc) = inst {
+                                                    let mem_wrapper = inst_arc.memory(0).ok();
+                                                    let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+                                                        .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
+                                                    if let Ok(results) = handler.call_import(&module_name, &field_name, &call_args, memory) {
+                                                        for r in results {
+                                                            operand_stack.push(r);
+                                                        }
+                                                        pc += 1;
+                                                        continue;
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Fall through to legacy WASI dispatch
                                         for arg in call_args.iter().rev() {
                                             operand_stack.push(arg.clone());
                                         }

@@ -814,28 +814,54 @@ impl KilndEngine {
             let function_name = self.config.function_name.as_deref().unwrap_or("_start");
             let _ = self.logger.handle_minimal_log(LogLevel::Info, "Executing function");
 
-            // Check if function exists before execution
-            if !engine.has_function(instance, function_name).map_err(|_e| {
-                Error::runtime_function_not_found("Failed to check function existence")
-            })? {
-                let _ = self
-                    .logger
-                    .handle_minimal_log(LogLevel::Error, "Function not found in module exports");
-                return Err(Error::runtime_function_not_found("Function not found"));
-            }
+            // Check if function exists — if not, try Meld-fused P3 module entry points
+            let has_main = engine.has_function(instance, function_name).unwrap_or(false);
 
-            let results = engine
-                .execute(instance, function_name, &[])
-                .map_err(|_| Error::runtime_execution_error("Function execution failed"))?;
+            if has_main {
+                let results = engine
+                    .execute(instance, function_name, &[])
+                    .map_err(|e| {
+                        Error::runtime_execution_error("Function execution failed")
+                    })?;
 
-            // Display execution results
-            if !results.is_empty() {
-                println!("\n✓ Function '{}' returned {} value(s):", function_name, results.len());
-                for (i, value) in results.iter().enumerate() {
-                    println!("  [{}] {:?}", i, value);
+                if !results.is_empty() {
+                    println!("\n✓ Function '{}' returned {} value(s):", function_name, results.len());
+                    for (i, value) in results.iter().enumerate() {
+                        println!("  [{}] {:?}", i, value);
+                    }
+                } else {
+                    println!("\n✓ Function '{}' completed (no return values)", function_name);
                 }
             } else {
-                println!("\n✓ Function '{}' completed (no return values)", function_name);
+                // No _start — check for Meld-fused P3 module.
+                // These export [async-lift] functions and import P3 builtins from $root.
+                // The numbered exports (0, 1, 2, ...) are the wasi:cli/run entry points.
+                // Try calling export "0" which is typically the first component's entry.
+                let mut executed = false;
+
+                // Look for wasi:cli/run entry via numbered exports
+                for entry in &["0", "1", "_start", "main"] {
+                    if engine.has_function(instance, entry).unwrap_or(false) {
+                        let _ = self.logger.handle_minimal_log(LogLevel::Info,
+                            "Executing Meld-fused P3 module entry point");
+                        match engine.execute(instance, entry, &[]) {
+                            Ok(results) => {
+                                if !results.is_empty() {
+                                    println!("\n✓ Entry '{}' returned: {:?}", entry, results);
+                                }
+                                executed = true;
+                                break;
+                            }
+                            Err(_) => continue,
+                        }
+                    }
+                }
+
+                if !executed {
+                    let _ = self.logger.handle_minimal_log(
+                        LogLevel::Error, "No entry point found (_start or P3 fused entries)");
+                    return Err(Error::runtime_function_not_found("Function not found"));
+                }
             }
 
             self.stats.modules_executed += 1;
