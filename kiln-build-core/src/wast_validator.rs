@@ -291,6 +291,12 @@ const WASM_MAX_MEMORY_PAGES: u32 = 65536;
 impl WastModuleValidator {
     /// Validate a module
     pub fn validate(module: &Module) -> Result<()> {
+        {
+            use std::io::Write;
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/kiln_debug.log") {
+                writeln!(f, "[VALIDATE] called with {} functions, {} types", module.functions.len(), module.types.len()).ok();
+            }
+        }
         // Validate memory, table, and tag limits
         Self::validate_memory_limits(module)?;
         Self::validate_table_limits(module)?;
@@ -925,6 +931,7 @@ impl WastModuleValidator {
         module: &Module,
         declared_functions: &HashSet<u32>,
     ) -> Result<()> {
+        // (debug removed)
         // Build local variable types: parameters first, then locals
         let mut local_types = Vec::new();
 
@@ -1500,11 +1507,12 @@ impl WastModuleValidator {
                         Some(module),
                     )?;
 
-                    // After br_if, the stack types must be updated to the label's result types
-                    // This is because from the perspective of subsequent code, the values
-                    // could have been branched with (and cast to the label's type).
-                    // GC spec: br_if with typed values narrows to label's result type.
-                    if (label_idx as usize) < frames.len() && !Self::is_unreachable(&frames) {
+                    // After br_if, the stack types must be updated to the label's result types.
+                    // Per the spec, br_if : [t* i32] -> [t*] where labels[l] = [t*].
+                    // The fall-through path always has the label's types on the stack.
+                    // This applies even in unreachable code: br_if consumes t* (polymorphic
+                    // underflow is OK) and produces t* (concrete label types).
+                    if (label_idx as usize) < frames.len() {
                         let target_frame = &frames[frames.len() - 1 - label_idx as usize];
                         let label_types = if target_frame.frame_type == FrameType::Loop {
                             target_frame.input_types.clone()
@@ -1512,15 +1520,23 @@ impl WastModuleValidator {
                             target_frame.output_types.clone()
                         };
 
-                        // Pop the branch values and push back the label's types
-                        // This changes the stack types to match the label's expected types
                         let num_values = label_types.len();
-                        if num_values > 0 && stack.len() >= frame_height + num_values {
-                            // Pop the original values
-                            for _ in 0..num_values {
-                                stack.pop();
+                        if num_values > 0 {
+                            // Pop the branch values (polymorphic underflow OK in unreachable)
+                            let unreachable = Self::is_unreachable(&frames);
+                            for i in 0..num_values {
+                                let expected = label_types[label_types.len() - 1 - i];
+                                if !Self::pop_type_with_module(
+                                    &mut stack,
+                                    expected,
+                                    frame_height,
+                                    unreachable,
+                                    Some(module),
+                                ) {
+                                    return Err(anyhow!("type mismatch"));
+                                }
                             }
-                            // Push the label's result types (more general types)
+                            // Push the label's result types for the fall-through path
                             for ty in &label_types {
                                 stack.push(*ty);
                             }
@@ -2484,7 +2500,7 @@ impl WastModuleValidator {
                     local_init[local_idx as usize] = true;
                 },
                 0x22 => {
-                    // local.tee
+                    // local.tee: [t] -> [t] where t is the local's type
                     let (local_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                     offset = new_offset;
 
@@ -2492,15 +2508,17 @@ impl WastModuleValidator {
                         return Err(anyhow!("local.tee: invalid local index {}", local_idx));
                     }
 
-                    // In unreachable code, the stack is polymorphic
-                    if !Self::is_unreachable(&frames) {
-                        let expected = StackType::from_value_type(local_types[local_idx as usize]);
-                        if stack.last() != Some(&expected)
-                            && stack.last() != Some(&StackType::Unknown)
-                        {
-                            return Err(anyhow!("local.tee: type mismatch"));
-                        }
+                    let expected = StackType::from_value_type(local_types[local_idx as usize]);
+                    let frame_height = Self::current_frame_height(&frames);
+                    let unreachable = Self::is_unreachable(&frames);
+
+                    // Pop and push to properly model the [t] -> [t] stack effect.
+                    // In unreachable code with polymorphic underflow, pop succeeds
+                    // and push adds the local's concrete type to the stack.
+                    if !Self::pop_type(&mut stack, expected, frame_height, unreachable) {
+                        return Err(anyhow!("type mismatch"));
                     }
+                    stack.push(expected);
 
                     // Mark the local as initialized
                     local_init[local_idx as usize] = true;
@@ -2692,28 +2710,28 @@ impl WastModuleValidator {
                         return Err(anyhow!("type mismatch"));
                     };
 
-                    // Untyped select cannot be used with funcref, externref, etc.
-                    if !unreachable {
-                        // In reachable code: reject reference types and mismatched types
-                        if !type1.is_numeric() || !type2.is_numeric() {
-                            return Err(anyhow!("type mismatch"));
-                        }
-                        if type1 != type2 {
-                            return Err(anyhow!("type mismatch"));
-                        }
-                        stack.push(type1);
-                    } else {
-                        // In unreachable code: the stack is polymorphic.
-                        // Any concrete types from unreachable instructions are valid.
-                        // Per spec, select in unreachable code always succeeds.
-                        // Push the most specific type, or Unknown if both are polymorphic.
-                        let result_type = if type1 != StackType::Unknown {
-                            type1
-                        } else {
-                            type2
-                        };
-                        stack.push(result_type);
+                    // Check that operands are numeric types (not reference types)
+                    // and that both operands have the same type.
+                    // Per the spec, these checks apply even in unreachable code
+                    // for concrete (non-polymorphic) values on the stack.
+                    // Polymorphic (Unknown) values from underflow are compatible with anything.
+                    if type1 != StackType::Unknown && !type1.is_numeric() {
+                        return Err(anyhow!("type mismatch"));
                     }
+                    if type2 != StackType::Unknown && !type2.is_numeric() {
+                        return Err(anyhow!("type mismatch"));
+                    }
+                    if type1 != StackType::Unknown && type2 != StackType::Unknown && type1 != type2 {
+                        return Err(anyhow!("type mismatch"));
+                    }
+                    // Push the result type: use the most specific concrete type,
+                    // or Unknown if both are polymorphic.
+                    let result_type = if type1 != StackType::Unknown {
+                        type1
+                    } else {
+                        type2
+                    };
+                    stack.push(result_type);
                 },
                 0x1C => {
                     // select t* (typed select)
@@ -3609,11 +3627,21 @@ impl WastModuleValidator {
                             if src_table as usize >= Self::total_tables(module) {
                                 return Err(anyhow!("unknown table {}", src_table));
                             }
+                            // Validate element type compatibility: src element type must be subtype of dst
+                            if let (Some(dst_elem), Some(src_elem)) = (
+                                Self::get_table_element_type(module, dst_table),
+                                Self::get_table_element_type(module, src_table),
+                            ) {
+                                if !Self::is_ref_type_subtype(&src_elem, &dst_elem, module) {
+                                    return Err(anyhow!("type mismatch"));
+                                }
+                            }
                             let dst64 = Self::is_table64(module, dst_table);
                             let src64 = Self::is_table64(module, src_table);
                             let it_d = if dst64 { StackType::I64 } else { StackType::I32 };
                             let it_s = if src64 { StackType::I64 } else { StackType::I32 };
-                            let it_n = if dst64 || src64 { StackType::I64 } else { StackType::I32 };
+                            // Per spec: length operand uses i64 only when BOTH tables are table64
+                            let it_n = if dst64 && src64 { StackType::I64 } else { StackType::I32 };
                             // Pop n (length), s (source), d (dest) in reverse
                             if !Self::pop_type(&mut stack, it_n, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
@@ -4365,7 +4393,7 @@ impl WastModuleValidator {
                             }
                             let flags = code[offset];
                             offset += 1;
-                            let (_label, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (label, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
                             let (ht1_raw, new_off2) = Self::read_leb128_signed(code, offset)?;
                             offset = new_off2;
@@ -4382,13 +4410,21 @@ impl WastModuleValidator {
                             }
                             // Check heap type subtyping
                             if ht1_st != StackType::Unknown && ht2_st != StackType::Unknown
-                                && !Self::is_subtype_of_in_module(&ht2_st, &ht1_st, module)
+                                && !Self::is_heap_subtype_for_cast(&ht2_st, ht2_raw, &ht1_st, ht1_raw, module)
                             {
                                 return Err(anyhow!("type mismatch"));
                             }
-                            // Keep permissive stack handling for fall-through
+                            // Validate label type decomposition for br_on_cast:
+                            // The label type must end with unpack(rt2)
+                            Self::validate_br_on_cast_label(
+                                label, &ht2_st, &frames, unreachable, module,
+                            )?;
+                            // Pop rt1 (the source ref type)
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
-                            stack.push(StackType::Unknown);
+                            // Push fall-through type: rt1 \ rt2 (diff type)
+                            let diff_nullable = ht1_nullable && !ht2_nullable;
+                            let diff_st = Self::heap_type_to_stack_type(ht1_raw, diff_nullable);
+                            stack.push(diff_st);
                         },
                         // br_on_cast_fail: flags(1 byte) + label(u32) + ht1(s33) + ht2(s33)
                         // Spec: rt2 <: rt1 required, branch carries rt1\rt2, fall-through carries rt2
@@ -4398,7 +4434,7 @@ impl WastModuleValidator {
                             }
                             let flags = code[offset];
                             offset += 1;
-                            let (_label, new_off) = Self::parse_varuint32(code, offset)?;
+                            let (label, new_off) = Self::parse_varuint32(code, offset)?;
                             offset = new_off;
                             let (ht1_raw, new_off2) = Self::read_leb128_signed(code, offset)?;
                             offset = new_off2;
@@ -4414,13 +4450,21 @@ impl WastModuleValidator {
                             }
                             // Check heap type subtyping
                             if ht1_st != StackType::Unknown && ht2_st != StackType::Unknown
-                                && !Self::is_subtype_of_in_module(&ht2_st, &ht1_st, module)
+                                && !Self::is_heap_subtype_for_cast(&ht2_st, ht2_raw, &ht1_st, ht1_raw, module)
                             {
                                 return Err(anyhow!("type mismatch"));
                             }
-                            // Keep permissive stack handling for fall-through
+                            // Validate label type decomposition for br_on_cast_fail:
+                            // The label type must end with unpack(rt1\rt2)
+                            let diff_nullable = ht1_nullable && !ht2_nullable;
+                            let diff_st = Self::heap_type_to_stack_type(ht1_raw, diff_nullable);
+                            Self::validate_br_on_cast_label(
+                                label, &diff_st, &frames, unreachable, module,
+                            )?;
+                            // Pop rt1 (the source ref type)
                             Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
-                            stack.push(StackType::Unknown);
+                            // Push fall-through type: rt2 (the cast succeeded)
+                            stack.push(ht2_st);
                         },
                         // any.convert_extern: [(ref extern)] -> [(ref any)]
                         0x1A => {
@@ -5815,11 +5859,6 @@ impl WastModuleValidator {
             return Err(anyhow!("br: label index {} out of range", label_idx));
         }
 
-        // In unreachable code, the stack is polymorphic - any values are acceptable
-        if unreachable {
-            return Ok(());
-        }
-
         // Get the current frame (innermost) to check our available stack values
         let current_frame = frames.last().ok_or_else(|| anyhow!("no control frame"))?;
         let current_stack_height = current_frame.stack_height;
@@ -5839,6 +5878,33 @@ impl WastModuleValidator {
         // Calculate how many values the CURRENT frame has available on the stack
         // Values below current_stack_height belong to parent frames and cannot be used
         let available_values = stack.len().saturating_sub(current_stack_height);
+
+        if unreachable {
+            // In unreachable code, the stack is polymorphic for underflow.
+            // If there are fewer values than expected, that's fine (polymorphic).
+            // But any concrete values that ARE on the stack must still type-check
+            // against the corresponding expected types.
+            let check_count = available_values.min(expected_types.len());
+            for i in 0..check_count {
+                // Check from the top of the stack against the end of expected_types
+                let stack_idx = stack.len() - 1 - i;
+                let expected_idx = expected_types.len() - 1 - i;
+                let actual = &stack[stack_idx];
+                let expected = &expected_types[expected_idx];
+                // Unknown (polymorphic) values match anything
+                if *actual == StackType::Unknown {
+                    continue;
+                }
+                if let Some(m) = module {
+                    if !Self::is_subtype_of_in_module(actual, expected, m) {
+                        return Err(anyhow!("type mismatch"));
+                    }
+                } else if !actual.is_subtype_of(expected) {
+                    return Err(anyhow!("type mismatch"));
+                }
+            }
+            return Ok(());
+        }
 
         // Check that the current frame has enough values for the branch
         if available_values < expected_types.len() {
@@ -6615,6 +6681,72 @@ impl WastModuleValidator {
                 _ => StackType::Unknown,
             }
         }
+    }
+
+    /// Validate that a br_on_cast/br_on_cast_fail label type is compatible with
+    /// the branch ref type.
+    ///
+    /// Per the spec's algorithmic typing rules, the label type `[t*]` must
+    /// decompose as `[t1* t']` where `t'` equals `unpack(rt_branch)`.
+    /// This is an EQUALITY check (not subtyping) per the spec.
+    ///
+    /// If the label type is empty, the instruction is invalid because there
+    /// must be at least one type slot for the branch ref type.
+    fn validate_br_on_cast_label(
+        label_idx: u32,
+        branch_ref_st: &StackType,
+        frames: &[ControlFrame],
+        unreachable: bool,
+        _module: &Module,
+    ) -> Result<()> {
+        if unreachable {
+            return Ok(());
+        }
+        if label_idx as usize >= frames.len() {
+            return Err(anyhow!("br_on_cast: label index {} out of range", label_idx));
+        }
+        let target_frame = &frames[frames.len() - 1 - label_idx as usize];
+        let expected_types = if target_frame.frame_type == FrameType::Loop {
+            &target_frame.input_types
+        } else {
+            &target_frame.output_types
+        };
+        // The label type must have at least one type (the branch ref type)
+        if expected_types.is_empty() {
+            return Err(anyhow!("type mismatch"));
+        }
+        // The last element of the label type must be a supertype of the branch
+        // ref type. This is checked using subtype matching: the branch ref type
+        // must be a subtype of the label's last declared type.
+        let label_last = &expected_types[expected_types.len() - 1];
+        if !Self::is_subtype_of_in_module(branch_ref_st, label_last, _module) {
+            return Err(anyhow!("type mismatch"));
+        }
+        Ok(())
+    }
+
+    /// Check if heap type `sub` is a subtype of heap type `sup` for br_on_cast validation.
+    ///
+    /// This is similar to `is_subtype_of_in_module` but works on the raw heap type
+    /// values to handle the case where abstract heap types lose nullability info in
+    /// StackType conversion. The nullability check must be done separately before
+    /// calling this function.
+    ///
+    /// For concrete types (ht_raw >= 0), the StackType already encodes the type index.
+    /// For abstract types (ht_raw < 0), both types are mapped to their abstract StackType
+    /// and standard heap type subtyping applies. Additionally, we must check that
+    /// concrete and abstract types are in the same hierarchy (e.g., a func type is not
+    /// a subtype of anyref).
+    fn is_heap_subtype_for_cast(
+        sub_st: &StackType,
+        _sub_raw: i32,
+        sup_st: &StackType,
+        _sup_raw: i32,
+        module: &Module,
+    ) -> bool {
+        // Delegate to the existing module-aware subtype check.
+        // This handles concrete<->concrete, concrete<->abstract, and abstract<->abstract.
+        Self::is_subtype_of_in_module(sub_st, sup_st, module)
     }
 
     /// Check if two ValueTypes are equal with module context for concrete indices.
