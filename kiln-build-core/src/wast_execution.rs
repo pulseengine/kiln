@@ -2000,8 +2000,36 @@ fn are_types_rec_group_compatible(
                     return false;
                 }
                 for (fa, fb) in fields_a.iter().zip(fields_b.iter()) {
-                    if fa.storage != fb.storage || fa.mutable != fb.mutable {
+                    if fa.mutable != fb.mutable {
                         return false;
+                    }
+                    // Compare field storage types, relativizing type index references
+                    // to their rec group positions for cross-module comparison
+                    use kiln_runtime::module::GcFieldStorage;
+                    match (&fa.storage, &fb.storage) {
+                        (GcFieldStorage::Ref(idx_a), GcFieldStorage::Ref(idx_b))
+                        | (GcFieldStorage::RefNull(idx_a), GcFieldStorage::RefNull(idx_b)) => {
+                            // Check if the referenced types are inside their rec groups
+                            let a_inside = *idx_a >= rg_a_start && *idx_a < rg_a_start + rg_a_count;
+                            let b_inside = *idx_b >= rg_b_start && *idx_b < rg_b_start + rg_b_count;
+                            if a_inside && b_inside {
+                                // Both inside: compare relative offsets
+                                if idx_a - rg_a_start != idx_b - rg_b_start {
+                                    return false;
+                                }
+                            } else if !a_inside && !b_inside {
+                                // Both outside: check recursively
+                                if !are_types_rec_group_compatible(
+                                    *idx_a, precise_a, *idx_b, precise_b, module_a, module_b,
+                                ) {
+                                    return false;
+                                }
+                            } else {
+                                return false; // One inside, one outside
+                            }
+                        }
+                        (a_stor, b_stor) if a_stor == b_stor => {} // Non-ref types: direct equality
+                        _ => return false, // Different storage kinds
                     }
                 }
             }
@@ -2011,8 +2039,8 @@ fn are_types_rec_group_compatible(
                     return false;
                 }
             }
-            (Some(kiln_runtime::module::GcTypeInfo::Func),
-             Some(kiln_runtime::module::GcTypeInfo::Func)) => {
+            (Some(kiln_runtime::module::GcTypeInfo::Func(..)),
+             Some(kiln_runtime::module::GcTypeInfo::Func(..))) => {
                 // Func types: use structural comparison
                 if !are_func_types_structurally_compatible(idx_a, module_a, idx_b, module_b, 0) {
                     return false;
