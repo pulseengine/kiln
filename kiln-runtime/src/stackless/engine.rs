@@ -30,6 +30,14 @@ use kiln_debug::runtime_traits::{RuntimeDebugger, RuntimeState, DebugAction};
 // GC heap reference wrapper types for WebAssembly GC proposal
 use kiln_foundation::values::{GcStructRef, GcArrayRef};
 
+// Side table for extern.convert_any / any.convert_extern round-trip.
+// Stores the original anyref value so it can be recovered when externalized
+// and then re-internalized. Uses thread-local storage for safety.
+use std::cell::RefCell;
+thread_local! {
+    static EXTERN_TABLE: RefCell<Vec<Value>> = RefCell::new(Vec::new());
+}
+
 use kiln_error::Result;
 use kiln_foundation::{
     traits::BoundedCapacity,
@@ -11079,7 +11087,23 @@ impl StacklessEngine {
                             kiln_error::Error::runtime_trap("any.convert_extern: expected reference"))?;
                         let result = match val {
                             Value::ExternRef(None) => Value::I31Ref(None), // null extern -> null any
-                            Value::ExternRef(Some(er)) => Value::Ref(er.index), // non-null -> opaque any
+                            Value::ExternRef(Some(er)) => {
+                                // Check if this externref was created by extern.convert_any
+                                // (marked with high bit set in the index)
+                                if er.index & 0x80000000 != 0 {
+                                    let table_idx = (er.index & 0x7FFFFFFF) as usize;
+                                    EXTERN_TABLE.with(|table| {
+                                        let t = table.borrow();
+                                        if let Some(original) = t.get(table_idx) {
+                                            original.clone()
+                                        } else {
+                                            Value::Ref(er.index)
+                                        }
+                                    })
+                                } else {
+                                    Value::Ref(er.index) // opaque any for host-provided externrefs
+                                }
+                            }
                             other => other, // pass through (shouldn't happen per spec)
                         };
                         operand_stack.push(result);
@@ -11099,7 +11123,16 @@ impl StacklessEngine {
                             | Value::ExnRef(None) | Value::FuncRef(None) => Value::ExternRef(None),
                             Value::StructRef(Some(_)) | Value::ArrayRef(Some(_))
                             | Value::I31Ref(Some(_)) | Value::Ref(_) => {
-                                Value::ExternRef(Some(kiln_foundation::values::ExternRef { index: 0 }))
+                                // Store the original value in the extern table so
+                                // any.convert_extern can recover it for round-trip identity.
+                                // Use high bit (0x80000000) to distinguish from host externrefs.
+                                let idx = EXTERN_TABLE.with(|table| {
+                                    let mut t = table.borrow_mut();
+                                    let idx = t.len() as u32;
+                                    t.push(val.clone());
+                                    idx | 0x80000000
+                                });
+                                Value::ExternRef(Some(kiln_foundation::values::ExternRef { index: idx }))
                             }
                             _ => val, // pass through for non-null ExternRef etc.
                         };
