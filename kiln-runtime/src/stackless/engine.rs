@@ -10188,7 +10188,23 @@ impl StacklessEngine {
                         trace!("StructGetS: type_idx={}, field_idx={}", type_idx, field_idx);
                         if let Some(Value::StructRef(Some(s))) = operand_stack.pop() {
                             if let Ok(field) = s.get_field(field_idx as usize) {
-                                operand_stack.push(field.clone());
+                                // Sign-extend packed i8/i16 fields
+                                let val = match &field {
+                                    Value::I32(v) => {
+                                        match module.gc_types.get(type_idx as usize) {
+                                            Some(crate::module::GcTypeInfo::Struct(fields)) if (field_idx as usize) < fields.len() => {
+                                                match fields[field_idx as usize].storage {
+                                                    crate::module::GcFieldStorage::I8 => Value::I32((*v as i8) as i32),
+                                                    crate::module::GcFieldStorage::I16 => Value::I32((*v as i16) as i32),
+                                                    _ => field.clone(),
+                                                }
+                                            }
+                                            _ => field.clone(),
+                                        }
+                                    }
+                                    _ => field.clone(),
+                                };
+                                operand_stack.push(val);
                             } else {
                                 return Err(kiln_error::Error::runtime_trap("struct.get_s: field index out of bounds"));
                             }
@@ -10203,7 +10219,23 @@ impl StacklessEngine {
                         trace!("StructGetU: type_idx={}, field_idx={}", type_idx, field_idx);
                         if let Some(Value::StructRef(Some(s))) = operand_stack.pop() {
                             if let Ok(field) = s.get_field(field_idx as usize) {
-                                operand_stack.push(field.clone());
+                                // Zero-extend packed i8/i16 fields
+                                let val = match &field {
+                                    Value::I32(v) => {
+                                        match module.gc_types.get(type_idx as usize) {
+                                            Some(crate::module::GcTypeInfo::Struct(fields)) if (field_idx as usize) < fields.len() => {
+                                                match fields[field_idx as usize].storage {
+                                                    crate::module::GcFieldStorage::I8 => Value::I32(*v & 0xFF),
+                                                    crate::module::GcFieldStorage::I16 => Value::I32(*v & 0xFFFF),
+                                                    _ => field.clone(),
+                                                }
+                                            }
+                                            _ => field.clone(),
+                                        }
+                                    }
+                                    _ => field.clone(),
+                                };
+                                operand_stack.push(val);
                             } else {
                                 return Err(kiln_error::Error::runtime_trap("struct.get_u: field index out of bounds"));
                             }
@@ -10218,6 +10250,22 @@ impl StacklessEngine {
                         trace!("StructSet: type_idx={}, field_idx={}", type_idx, field_idx);
                         let value = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("struct.set: expected value"))?;
+                        // Truncate packed i8/i16 fields
+                        let value = match &value {
+                            Value::I32(v) => {
+                                match module.gc_types.get(type_idx as usize) {
+                                    Some(crate::module::GcTypeInfo::Struct(fields)) if (field_idx as usize) < fields.len() => {
+                                        match fields[field_idx as usize].storage {
+                                            crate::module::GcFieldStorage::I8 => Value::I32(*v & 0xFF),
+                                            crate::module::GcFieldStorage::I16 => Value::I32(*v & 0xFFFF),
+                                            _ => value,
+                                        }
+                                    }
+                                    _ => value,
+                                }
+                            }
+                            _ => value,
+                        };
                         if let Some(Value::StructRef(Some(mut s))) = operand_stack.pop() {
                             s.set_field(field_idx as usize, value).map_err(|_|
                                 kiln_error::Error::runtime_trap("struct.set: field index out of bounds"))?;
@@ -10333,16 +10381,25 @@ impl StacklessEngine {
                     }
 
                     Instruction::ArrayGetS(type_idx) => {
-                        // array.get_s: [arrayref i32] -> [i32] (sign-extend)
-                        #[cfg(feature = "tracing")]
-                        trace!("ArrayGetS: type_idx={}", type_idx);
+                        // array.get_s: [arrayref i32] -> [i32] (sign-extend packed)
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
                             _ => return Err(kiln_error::Error::runtime_trap("array.get_s: expected i32 index")),
                         };
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             if let Ok(elem) = a.get(index) {
-                                operand_stack.push(elem.clone());
+                                let val = match &elem {
+                                    Value::I32(v) => match module.gc_types.get(type_idx as usize) {
+                                        Some(crate::module::GcTypeInfo::Array(f)) => match f.storage {
+                                            crate::module::GcFieldStorage::I8 => Value::I32((*v as i8) as i32),
+                                            crate::module::GcFieldStorage::I16 => Value::I32((*v as i16) as i32),
+                                            _ => elem.clone(),
+                                        },
+                                        _ => elem.clone(),
+                                    },
+                                    _ => elem.clone(),
+                                };
+                                operand_stack.push(val);
                             } else {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
                             }
@@ -10352,16 +10409,25 @@ impl StacklessEngine {
                     }
 
                     Instruction::ArrayGetU(type_idx) => {
-                        // array.get_u: [arrayref i32] -> [i32] (zero-extend)
-                        #[cfg(feature = "tracing")]
-                        trace!("ArrayGetU: type_idx={}", type_idx);
+                        // array.get_u: [arrayref i32] -> [i32] (zero-extend packed)
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
                             _ => return Err(kiln_error::Error::runtime_trap("array.get_u: expected i32 index")),
                         };
                         if let Some(Value::ArrayRef(Some(a))) = operand_stack.pop() {
                             if let Ok(elem) = a.get(index) {
-                                operand_stack.push(elem.clone());
+                                let val = match &elem {
+                                    Value::I32(v) => match module.gc_types.get(type_idx as usize) {
+                                        Some(crate::module::GcTypeInfo::Array(f)) => match f.storage {
+                                            crate::module::GcFieldStorage::I8 => Value::I32(*v & 0xFF),
+                                            crate::module::GcFieldStorage::I16 => Value::I32(*v & 0xFFFF),
+                                            _ => elem.clone(),
+                                        },
+                                        _ => elem.clone(),
+                                    },
+                                    _ => elem.clone(),
+                                };
+                                operand_stack.push(val);
                             } else {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
                             }
