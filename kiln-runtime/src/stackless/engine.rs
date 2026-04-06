@@ -6497,8 +6497,8 @@ impl StacklessEngine {
                             trace!("BrOnNonNull: label={}, is_null={}", br_label_idx, is_null);
                             if !is_null {
                                 // Not null - push reference and branch
-                                // (matches Br handler structure: set pc so that pc += 1
-                                // at end of iteration lands on the correct instruction)
+                                // br_on_non_null branches with the label's arity values
+                                // The ref is part of the branch values (pushed back on stack)
                                 operand_stack.push(ref_val);
                                 if br_label_idx as usize >= block_stack.len() {
                                     #[cfg(feature = "tracing")]
@@ -6506,14 +6506,36 @@ impl StacklessEngine {
                                     break;
                                 }
                                 let stack_idx = block_stack.len() - 1 - br_label_idx as usize;
-                                if let Some((block_type, start_pc, _block_type_idx, entry_stack_height)) = block_stack.get(stack_idx).copied() {
-                                    // Keep branch value, restore stack below
-                                    let branch_val = operand_stack.pop();
+                                if let Some((block_type, start_pc, block_type_idx, entry_stack_height)) = block_stack.get(stack_idx).copied() {
+                                    // Determine how many values to preserve (same logic as Br)
+                                    let values_to_preserve = if block_type == "loop" {
+                                        match block_type_idx {
+                                            0x40 => 0,
+                                            0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F => 0,
+                                            _ => module.types.get(block_type_idx as usize)
+                                                .map_or(0, |ft| ft.params.len()),
+                                        }
+                                    } else {
+                                        match block_type_idx {
+                                            0x40 => 0,
+                                            0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F => 1,
+                                            _ => module.types.get(block_type_idx as usize)
+                                                .map_or(1, |ft| ft.results.len()),
+                                        }
+                                    };
+                                    // Save the values to preserve from top of stack
+                                    let mut preserved = Vec::new();
+                                    for _ in 0..values_to_preserve {
+                                        if let Some(v) = operand_stack.pop() {
+                                            preserved.push(v);
+                                        }
+                                    }
                                     while operand_stack.len() > entry_stack_height {
                                         operand_stack.pop();
                                     }
-                                    if let Some(bv) = branch_val {
-                                        operand_stack.push(bv);
+                                    // Restore preserved values in correct order
+                                    for v in preserved.into_iter().rev() {
+                                        operand_stack.push(v);
                                     }
 
                                     if block_type == "loop" {
