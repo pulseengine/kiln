@@ -1064,6 +1064,99 @@ impl ModuleInstance {
                                         eval_stack.push(KilnValue::I31Ref(Some(n & 0x7FFFFFFF)));
                                     }
                                 }
+                                KilnInstr::StructNew(type_idx) => {
+                                    use kiln_foundation::values::GcStructRef;
+                                    let field_count = match self.module.gc_types.get(*type_idx as usize) {
+                                        Some(crate::module::GcTypeInfo::Struct(fields)) => fields.len(),
+                                        _ => 0,
+                                    };
+                                    let mut field_values = Vec::new();
+                                    for _ in 0..field_count {
+                                        if let Some(val) = eval_stack.pop() {
+                                            field_values.push(val);
+                                        }
+                                    }
+                                    field_values.reverse();
+                                    if let Ok(mut s) = kiln_foundation::values::StructRef::new(
+                                        *type_idx,
+                                        kiln_foundation::traits::DefaultMemoryProvider::default(),
+                                    ) {
+                                        for val in field_values {
+                                            let _ = s.add_field(val);
+                                        }
+                                        eval_stack.push(KilnValue::StructRef(Some(GcStructRef::new(s))));
+                                    }
+                                }
+                                KilnInstr::StructNewDefault(type_idx) => {
+                                    use kiln_foundation::values::GcStructRef;
+                                    if let Ok(mut s) = kiln_foundation::values::StructRef::new(
+                                        *type_idx,
+                                        kiln_foundation::traits::DefaultMemoryProvider::default(),
+                                    ) {
+                                        if let Some(crate::module::GcTypeInfo::Struct(fields)) = self.module.gc_types.get(*type_idx as usize) {
+                                            for field in fields {
+                                                let _ = s.add_field(field.default_value());
+                                            }
+                                        }
+                                        eval_stack.push(KilnValue::StructRef(Some(GcStructRef::new(s))));
+                                    }
+                                }
+                                KilnInstr::ArrayNew(type_idx) => {
+                                    use kiln_foundation::values::GcArrayRef;
+                                    let length = match eval_stack.pop() {
+                                        Some(KilnValue::I32(n)) => n as u32,
+                                        _ => 0,
+                                    };
+                                    let init_val = eval_stack.pop().unwrap_or(KilnValue::I32(0));
+                                    if let Ok(mut a) = kiln_foundation::values::ArrayRef::new(
+                                        *type_idx,
+                                        kiln_foundation::traits::DefaultMemoryProvider::default(),
+                                    ) {
+                                        for _ in 0..length {
+                                            let _ = a.push(init_val.clone());
+                                        }
+                                        eval_stack.push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
+                                    }
+                                }
+                                KilnInstr::ArrayNewDefault(type_idx) => {
+                                    use kiln_foundation::values::GcArrayRef;
+                                    let length = match eval_stack.pop() {
+                                        Some(KilnValue::I32(n)) => n as u32,
+                                        _ => 0,
+                                    };
+                                    let default_val = match self.module.gc_types.get(*type_idx as usize) {
+                                        Some(crate::module::GcTypeInfo::Array(field)) => field.default_value(),
+                                        _ => KilnValue::I32(0),
+                                    };
+                                    if let Ok(mut a) = kiln_foundation::values::ArrayRef::new(
+                                        *type_idx,
+                                        kiln_foundation::traits::DefaultMemoryProvider::default(),
+                                    ) {
+                                        for _ in 0..length {
+                                            let _ = a.push(default_val.clone());
+                                        }
+                                        eval_stack.push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
+                                    }
+                                }
+                                KilnInstr::ArrayNewFixed(type_idx, count) => {
+                                    use kiln_foundation::values::GcArrayRef;
+                                    let mut values = Vec::new();
+                                    for _ in 0..*count {
+                                        if let Some(val) = eval_stack.pop() {
+                                            values.push(val);
+                                        }
+                                    }
+                                    values.reverse();
+                                    if let Ok(mut a) = kiln_foundation::values::ArrayRef::new(
+                                        *type_idx,
+                                        kiln_foundation::traits::DefaultMemoryProvider::default(),
+                                    ) {
+                                        for val in values {
+                                            let _ = a.push(val);
+                                        }
+                                        eval_stack.push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
+                                    }
+                                }
                                 KilnInstr::End => {
                                     // End of expression - stop evaluating
                                     break;
@@ -1475,6 +1568,8 @@ impl FromBytes for ModuleInstance {
             num_import_functions: 0,
             gc_types: Vec::new(),
             type_supertypes: Vec::new(),
+            type_is_final: Vec::new(),
+            type_canonical_ids: Vec::new(),
             table_init_exprs: Vec::new(),
         };
 

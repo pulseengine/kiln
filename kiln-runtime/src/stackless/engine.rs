@@ -6290,6 +6290,7 @@ impl StacklessEngine {
                                 Value::StructRef(Some(_)) => 0i32,
                                 Value::ArrayRef(None) => 1i32,
                                 Value::ArrayRef(Some(_)) => 0i32,
+                                Value::Ref(_) => 0i32, // internalized extern is never null
                                 _ => {
                                     #[cfg(feature = "tracing")]
                                     error!("RefIsNull: expected reference type, got {:?}", ref_val);
@@ -6316,7 +6317,8 @@ impl StacklessEngine {
                                 }
                                 Value::FuncRef(Some(_)) | Value::ExternRef(Some(_))
                                 | Value::ExnRef(Some(_)) | Value::I31Ref(Some(_))
-                                | Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) => {
+                                | Value::StructRef(Some(_)) | Value::ArrayRef(Some(_))
+                                | Value::Ref(_) => {
                                     operand_stack.push(ref_val);
                                 }
                                 _ => {
@@ -10587,6 +10589,9 @@ impl StacklessEngine {
 
                     Instruction::ArrayNewElem(type_idx, elem_idx) => {
                         // array.new_elem: [offset i32, size i32] -> [arrayref]
+                        // Creates an array from elements of a passive element segment.
+                        // Uses resolved_elem_items which contain pre-evaluated values
+                        // (arrays, structs, i31refs, etc. — not just function indices).
                         #[cfg(feature = "tracing")]
                         trace!("ArrayNewElem: type_idx={}, elem_idx={}", type_idx, elem_idx);
                         let size = match operand_stack.pop() {
@@ -10597,9 +10602,19 @@ impl StacklessEngine {
                             Some(Value::I32(n)) => n as u32,
                             _ => return Err(kiln_error::Error::runtime_trap("array.new_elem: expected i32 offset")),
                         };
-                        let elem_segment = module.elements.get(elem_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_trap("array.new_elem: invalid elem index"))?;
-                        if offset_val as usize + size as usize > elem_segment.items.len() {
+                        // Use resolved_elem_items for pre-evaluated values (GC types),
+                        // fall back to raw items for plain funcref segments
+                        let resolved = module.resolved_elem_items.get(elem_idx as usize);
+                        let elem_len = if let Some(r) = resolved {
+                            if !r.is_empty() { r.len() } else {
+                                module.elements.get(elem_idx as usize)
+                                    .map_or(0, |e| e.items.len())
+                            }
+                        } else {
+                            module.elements.get(elem_idx as usize)
+                                .map_or(0, |e| e.items.len())
+                        };
+                        if offset_val as u64 + size as u64 > elem_len as u64 {
                             return Err(kiln_error::Error::runtime_trap("out of bounds table access"));
                         }
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
@@ -10607,9 +10622,23 @@ impl StacklessEngine {
                             kiln_foundation::traits::DefaultMemoryProvider::default()
                         ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for i in 0..size as usize {
-                            let item_idx = elem_segment.items.get(offset_val as usize + i)
-                                .map_err(|_| kiln_error::Error::runtime_trap("array.new_elem: element access failed"))?;
-                            let item_val = Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)));
+                            let idx = offset_val as usize + i;
+                            let item_val = if let Some(resolved_items) = resolved {
+                                if !resolved_items.is_empty() && idx < resolved_items.len() {
+                                    resolved_items[idx].clone()
+                                } else {
+                                    // Fallback to raw function index
+                                    let elem_segment = &module.elements[elem_idx as usize];
+                                    let func_idx = elem_segment.items.get(idx)
+                                        .map_err(|_| kiln_error::Error::runtime_trap("array.new_elem: element access failed"))?;
+                                    Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(func_idx)))
+                                }
+                            } else {
+                                let elem_segment = &module.elements[elem_idx as usize];
+                                let func_idx = elem_segment.items.get(idx)
+                                    .map_err(|_| kiln_error::Error::runtime_trap("array.new_elem: element access failed"))?;
+                                Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(func_idx)))
+                            };
                             array_ref.push(item_val).map_err(|_|
                                 kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
@@ -10998,24 +11027,39 @@ impl StacklessEngine {
                     Instruction::AnyConvertExtern => {
                         // any.convert_extern: [externref] -> [anyref]
                         // Convert an externref to an anyref (internalize)
+                        // Per the spec, null stays null, non-null becomes an opaque anyref
+                        // that is NOT eq/i31/struct/array. We represent this as Value::Ref.
                         #[cfg(feature = "tracing")]
                         trace!("AnyConvertExtern");
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("any.convert_extern: expected reference"))?;
-                        // In our representation, externref and anyref share Value::ExternRef
-                        // The spec says null stays null, non-null wraps
-                        operand_stack.push(val);
+                        let result = match val {
+                            Value::ExternRef(None) => Value::I31Ref(None), // null extern -> null any
+                            Value::ExternRef(Some(er)) => Value::Ref(er.index), // non-null -> opaque any
+                            other => other, // pass through (shouldn't happen per spec)
+                        };
+                        operand_stack.push(result);
                     }
 
                     Instruction::ExternConvertAny => {
                         // extern.convert_any: [anyref] -> [externref]
                         // Convert an anyref to an externref (externalize)
+                        // Per the spec, null stays null, non-null becomes an externref.
                         #[cfg(feature = "tracing")]
                         trace!("ExternConvertAny");
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("extern.convert_any: expected reference"))?;
-                        // In our representation, just pass through
-                        operand_stack.push(val);
+                        let result = match &val {
+                            Value::StructRef(None) | Value::ArrayRef(None)
+                            | Value::I31Ref(None) | Value::ExternRef(None)
+                            | Value::ExnRef(None) | Value::FuncRef(None) => Value::ExternRef(None),
+                            Value::StructRef(Some(_)) | Value::ArrayRef(Some(_))
+                            | Value::I31Ref(Some(_)) | Value::Ref(_) => {
+                                Value::ExternRef(Some(kiln_foundation::values::ExternRef { index: 0 }))
+                            }
+                            _ => val, // pass through for non-null ExternRef etc.
+                        };
+                        operand_stack.push(result);
                     }
 
                     // ========================================
@@ -11886,6 +11930,7 @@ fn ref_test_value_with_module(
         HeapType::Extern => matches!(val, Value::ExternRef(Some(_))),
         HeapType::Any => matches!(val,
             Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_))
+            | Value::Ref(_) // internalized extern (via any.convert_extern)
         ),
         HeapType::Eq => matches!(val,
             Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_))
@@ -11914,13 +11959,16 @@ fn ref_test_value_with_module(
             };
 
             match val_type_idx {
-                Some(val_idx) if val_idx == *target_idx => true,
                 Some(val_idx) => {
-                    // Walk the supertype chain to check subtyping
                     if let Some(module) = module {
-                        is_runtime_subtype(val_idx, *target_idx, &module.type_supertypes)
+                        is_runtime_subtype_canonical(
+                            val_idx,
+                            *target_idx,
+                            &module.type_supertypes,
+                            &module.type_canonical_ids,
+                        )
                     } else {
-                        false
+                        val_idx == *target_idx
                     }
                 },
                 None => false,
@@ -11929,15 +11977,30 @@ fn ref_test_value_with_module(
     }
 }
 
-/// Check if child_idx is a subtype of parent_idx by walking the declared supertype chain.
-fn is_runtime_subtype(child_idx: u32, parent_idx: u32, supertypes: &[Option<u32>]) -> bool {
-    if child_idx == parent_idx {
+/// Check if child_idx is a subtype of parent_idx using canonical type IDs.
+///
+/// Two types are considered equal if they have the same canonical ID. Subtyping
+/// is checked by walking the declared supertype chain and comparing canonical IDs
+/// at each step. This handles structurally equivalent types (e.g., `$t1` and `$t1'`
+/// both defined as `(sub $t0 (struct (field i32)))`) correctly.
+fn is_runtime_subtype_canonical(
+    child_idx: u32,
+    parent_idx: u32,
+    supertypes: &[Option<u32>],
+    canonical_ids: &[u32],
+) -> bool {
+    // Resolve to canonical IDs
+    let canon_child = canonical_ids.get(child_idx as usize).copied().unwrap_or(child_idx);
+    let canon_parent = canonical_ids.get(parent_idx as usize).copied().unwrap_or(parent_idx);
+
+    if canon_child == canon_parent {
         return true;
     }
     let mut current = child_idx;
     let mut visited = 0u32; // Simple cycle guard
     while let Some(Some(super_idx)) = supertypes.get(current as usize) {
-        if *super_idx == parent_idx {
+        let canon_super = canonical_ids.get(*super_idx as usize).copied().unwrap_or(*super_idx);
+        if canon_super == canon_parent {
             return true;
         }
         current = *super_idx;

@@ -3989,7 +3989,9 @@ impl ComponentInstance {
                         num_import_functions: 0,
                         gc_types: Vec::new(),
                         type_supertypes: Vec::new(),
+                        type_is_final: Vec::new(),
                         table_init_exprs: Vec::new(),
+                        type_canonical_ids: Vec::new(),
                     };
                     m.load_from_binary(&binary_clone)
                 }

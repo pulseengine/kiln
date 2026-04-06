@@ -778,6 +778,14 @@ pub struct Module {
     /// Supertype index for each type (None if no supertype declared)
     /// Used by ref_test_value to walk the type hierarchy for subtype checking
     pub type_supertypes: Vec<Option<u32>>,
+    /// Whether each type is final (cannot be further subtyped).
+    /// Indexed by type index, parallel to gc_types and type_supertypes.
+    pub type_is_final: Vec<bool>,
+    /// Canonical type ID for each type index.
+    /// Types that are structurally equivalent (same definition, same canonical
+    /// supertype, and same finality) share the same canonical ID. Used for
+    /// ref.test / br_on_cast with concrete types.
+    pub type_canonical_ids: Vec<u32>,
     /// Init expression bytes for tables with explicit init expressions.
     /// Indexed by table definition index (not including imported tables).
     /// None means the table uses the default null value for its element type.
@@ -785,6 +793,50 @@ pub struct Module {
 }
 
 impl Module {
+    /// Compute canonical type IDs for structural type equivalence.
+    ///
+    /// Two types in separate rec groups are considered equivalent if they have the
+    /// same composite definition (GcTypeInfo) and the same canonical supertype.
+    /// This enables ref.test / br_on_cast with concrete types to work correctly
+    /// when multiple type definitions are structurally identical (e.g., `$t1` and
+    /// `$t1'` both declared as `(sub $t0 (struct (field i32)))`).
+    pub fn compute_canonical_type_ids(&mut self) {
+        let n = self.gc_types.len();
+        if n == 0 {
+            return;
+        }
+        // canonical_ids[i] = canonical representative for type i
+        let mut canonical_ids: Vec<u32> = (0..n as u32).collect();
+        // Map from (canonical_supertype, is_final, gc_type_info) -> first type index
+        // Two types are structurally equivalent only if they have the same composite type,
+        // the same canonical supertype, AND the same finality.
+        let mut seen: Vec<(Option<u32>, bool, GcTypeInfo, u32)> = Vec::new();
+        for i in 0..n {
+            // Get the canonical supertype (already canonicalized since we process in order)
+            let canonical_super = self.type_supertypes.get(i).copied().flatten()
+                .map(|s| canonical_ids[s as usize]);
+            let gc_info = &self.gc_types[i];
+            let is_final = self.type_is_final.get(i).copied().unwrap_or(true);
+            // Look for a matching existing canonical type
+            let mut found = false;
+            for (existing_super, existing_final, existing_info, existing_id) in &seen {
+                if *existing_super == canonical_super
+                    && *existing_final == is_final
+                    && existing_info == gc_info
+                {
+                    canonical_ids[i] = *existing_id;
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                canonical_ids[i] = i as u32;
+                seen.push((canonical_super, is_final, gc_info.clone(), i as u32));
+            }
+        }
+        self.type_canonical_ids = canonical_ids;
+    }
+
     /// Push memory
     pub fn push_memory(&mut self, memory: MemoryWrapper) -> Result<()> {
         self.memories.push(memory);
@@ -1157,12 +1209,27 @@ impl Module {
                         // any.convert_extern: [(ref extern)] -> [(ref any)]
                         0x1A => {
                             let val = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in any.convert_extern"))?;
-                            stack.push(val); // Type conversion (representation unchanged)
+                            let result = match val {
+                                Value::ExternRef(None) => Value::I31Ref(None),
+                                Value::ExternRef(Some(er)) => Value::Ref(er.index),
+                                other => other,
+                            };
+                            stack.push(result);
                         }
                         // extern.convert_any: [(ref any)] -> [(ref extern)]
                         0x1B => {
                             let val = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in extern.convert_any"))?;
-                            stack.push(val); // Type conversion (representation unchanged)
+                            let result = match &val {
+                                Value::StructRef(None) | Value::ArrayRef(None)
+                                | Value::I31Ref(None) | Value::ExternRef(None)
+                                | Value::ExnRef(None) | Value::FuncRef(None) => Value::ExternRef(None),
+                                Value::StructRef(Some(_)) | Value::ArrayRef(Some(_))
+                                | Value::I31Ref(Some(_)) | Value::Ref(_) => {
+                                    Value::ExternRef(Some(kiln_foundation::values::ExternRef { index: 0 }))
+                                }
+                                _ => val,
+                            };
+                            stack.push(result);
                         }
                         _ => {
                             return Err(Error::parse_error("Unsupported GC opcode in constant expression"));
@@ -1528,12 +1595,27 @@ impl Module {
                         // any.convert_extern
                         0x1A => {
                             let val = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in any.convert_extern"))?;
-                            stack.push(val);
+                            let result = match val {
+                                Value::ExternRef(None) => Value::I31Ref(None),
+                                Value::ExternRef(Some(er)) => Value::Ref(er.index),
+                                other => other,
+                            };
+                            stack.push(result);
                         }
                         // extern.convert_any
                         0x1B => {
                             let val = stack.pop().ok_or_else(|| Error::parse_error("Stack underflow in extern.convert_any"))?;
-                            stack.push(val);
+                            let result = match &val {
+                                Value::StructRef(None) | Value::ArrayRef(None)
+                                | Value::I31Ref(None) | Value::ExternRef(None)
+                                | Value::ExnRef(None) | Value::FuncRef(None) => Value::ExternRef(None),
+                                Value::StructRef(Some(_)) | Value::ArrayRef(Some(_))
+                                | Value::I31Ref(Some(_)) | Value::Ref(_) => {
+                                    Value::ExternRef(Some(kiln_foundation::values::ExternRef { index: 0 }))
+                                }
+                                _ => val,
+                            };
+                            stack.push(result);
                         }
                         _ => {
                             return Err(Error::parse_error("Unsupported GC opcode in deferred const expr"));
@@ -1582,6 +1664,8 @@ impl Module {
             num_import_functions: 0,
             gc_types: Vec::new(),
             type_supertypes: Vec::new(),
+            type_is_final: Vec::new(),
+            type_canonical_ids: Vec::new(),
             table_init_exprs: Vec::new(),
         })
     }
@@ -1635,6 +1719,8 @@ impl Module {
             num_import_functions: 0, // Will be set after processing imports
             gc_types: Vec::new(), // Will be populated from rec_groups
             type_supertypes: Vec::new(), // Will be populated from rec_groups
+            type_is_final: Vec::new(), // Will be populated from rec_groups
+            type_canonical_ids: Vec::new(), // Will be computed after gc_types and type_supertypes
             table_init_exprs: Vec::new(), // Will be populated from table section
         };
 
@@ -1670,24 +1756,32 @@ impl Module {
                     gc_type_entries.push((sub_type.type_index, info));
                 }
             }
-            // Also collect supertype info
+            // Also collect supertype and finality info
             let mut supertype_entries: Vec<(u32, Option<u32>)> = Vec::new();
+            let mut finality_entries: Vec<(u32, bool)> = Vec::new();
             for rec_group in &kiln_module.rec_groups {
                 for sub_type in &rec_group.types {
                     let supertype = sub_type.supertype_indices.first().copied();
                     supertype_entries.push((sub_type.type_index, supertype));
+                    finality_entries.push((sub_type.type_index, sub_type.is_final));
                 }
             }
 
-            // Sort by type index and fill both vectors
+            // Sort by type index and fill all vectors
             gc_type_entries.sort_by_key(|(idx, _)| *idx);
             supertype_entries.sort_by_key(|(idx, _)| *idx);
+            finality_entries.sort_by_key(|(idx, _)| *idx);
             for (_, info) in gc_type_entries {
                 runtime_module.gc_types.push(info);
             }
             for (_, supertype) in supertype_entries {
                 runtime_module.type_supertypes.push(supertype);
             }
+            for (_, is_final) in finality_entries {
+                runtime_module.type_is_final.push(is_final);
+            }
+            // Compute canonical type IDs for structural equivalence
+            runtime_module.compute_canonical_type_ids();
         }
 
         // Convert types
@@ -2348,6 +2442,99 @@ impl Module {
                                         // Needs instance globals -- push placeholder;
                                         // active segments re-resolve via item_exprs
                                         eval_stack.push(KilnValue::I32(0));
+                                    }
+                                    KilnInstr::StructNew(type_idx) => {
+                                        use kiln_foundation::values::GcStructRef;
+                                        let field_count = match runtime_module.gc_types.get(*type_idx as usize) {
+                                            Some(GcTypeInfo::Struct(fields)) => fields.len(),
+                                            _ => 0,
+                                        };
+                                        let mut field_values = Vec::new();
+                                        for _ in 0..field_count {
+                                            if let Some(val) = eval_stack.pop() {
+                                                field_values.push(val);
+                                            }
+                                        }
+                                        field_values.reverse();
+                                        if let Ok(mut s) = kiln_foundation::values::StructRef::new(
+                                            *type_idx,
+                                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                                        ) {
+                                            for val in field_values {
+                                                let _ = s.add_field(val);
+                                            }
+                                            eval_stack.push(KilnValue::StructRef(Some(GcStructRef::new(s))));
+                                        }
+                                    }
+                                    KilnInstr::StructNewDefault(type_idx) => {
+                                        use kiln_foundation::values::GcStructRef;
+                                        if let Ok(mut s) = kiln_foundation::values::StructRef::new(
+                                            *type_idx,
+                                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                                        ) {
+                                            if let Some(GcTypeInfo::Struct(fields)) = runtime_module.gc_types.get(*type_idx as usize) {
+                                                for field in fields {
+                                                    let _ = s.add_field(field.default_value());
+                                                }
+                                            }
+                                            eval_stack.push(KilnValue::StructRef(Some(GcStructRef::new(s))));
+                                        }
+                                    }
+                                    KilnInstr::ArrayNew(type_idx) => {
+                                        use kiln_foundation::values::GcArrayRef;
+                                        let length = match eval_stack.pop() {
+                                            Some(KilnValue::I32(n)) => n as u32,
+                                            _ => 0,
+                                        };
+                                        let init_val = eval_stack.pop().unwrap_or(KilnValue::I32(0));
+                                        if let Ok(mut a) = kiln_foundation::values::ArrayRef::new(
+                                            *type_idx,
+                                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                                        ) {
+                                            for _ in 0..length {
+                                                let _ = a.push(init_val.clone());
+                                            }
+                                            eval_stack.push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
+                                        }
+                                    }
+                                    KilnInstr::ArrayNewDefault(type_idx) => {
+                                        use kiln_foundation::values::GcArrayRef;
+                                        let length = match eval_stack.pop() {
+                                            Some(KilnValue::I32(n)) => n as u32,
+                                            _ => 0,
+                                        };
+                                        let default_val = match runtime_module.gc_types.get(*type_idx as usize) {
+                                            Some(GcTypeInfo::Array(field)) => field.default_value(),
+                                            _ => KilnValue::I32(0),
+                                        };
+                                        if let Ok(mut a) = kiln_foundation::values::ArrayRef::new(
+                                            *type_idx,
+                                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                                        ) {
+                                            for _ in 0..length {
+                                                let _ = a.push(default_val.clone());
+                                            }
+                                            eval_stack.push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
+                                        }
+                                    }
+                                    KilnInstr::ArrayNewFixed(type_idx, count) => {
+                                        use kiln_foundation::values::GcArrayRef;
+                                        let mut values = Vec::new();
+                                        for _ in 0..*count {
+                                            if let Some(val) = eval_stack.pop() {
+                                                values.push(val);
+                                            }
+                                        }
+                                        values.reverse();
+                                        if let Ok(mut a) = kiln_foundation::values::ArrayRef::new(
+                                            *type_idx,
+                                            kiln_foundation::traits::DefaultMemoryProvider::default(),
+                                        ) {
+                                            for val in values {
+                                                let _ = a.push(val);
+                                            }
+                                            eval_stack.push(KilnValue::ArrayRef(Some(GcArrayRef::new(a))));
+                                        }
                                     }
                                     KilnInstr::End => break,
                                     _ => {}
@@ -3082,6 +3269,8 @@ impl Module {
             num_import_functions: 0,
             gc_types: Vec::new(),
             type_supertypes: Vec::new(),
+            type_is_final: Vec::new(),
+            type_canonical_ids: Vec::new(),
             table_init_exprs: Vec::new(),
         };
 
@@ -3530,6 +3719,8 @@ impl kiln_foundation::traits::FromBytes for Module {
             num_import_functions: 0,
             gc_types: Vec::new(),
             type_supertypes: Vec::new(),
+            type_is_final: Vec::new(),
+            type_canonical_ids: Vec::new(),
             table_init_exprs: Vec::new(),
         };
 
