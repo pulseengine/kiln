@@ -1570,6 +1570,8 @@ impl FromBytes for ModuleInstance {
             type_supertypes: Vec::new(),
             type_is_final: Vec::new(),
             type_canonical_ids: Vec::new(),
+            type_rec_group_id: Vec::new(),
+            rec_group_ranges: Vec::new(),
             table_init_exprs: Vec::new(),
         };
 

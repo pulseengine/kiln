@@ -649,6 +649,10 @@ pub enum GcFieldStorage {
     I8,
     /// Packed i16
     I16,
+    /// Non-nullable reference to a concrete type index: (ref $t)
+    Ref(u32),
+    /// Nullable reference to a concrete type index: (ref null $t)
+    RefNull(u32),
 }
 
 /// A single field in a GC struct type
@@ -666,8 +670,10 @@ pub struct GcField {
 /// for GC instructions like struct.new, array.new, etc.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GcTypeInfo {
-    /// This type index is a function type (no GC info needed)
-    Func,
+    /// This type index is a function type.
+    /// Carries param and result types so that canonical type ID computation
+    /// can distinguish structurally different function signatures.
+    Func(Vec<ValueType>, Vec<ValueType>),
     /// Struct type with field definitions
     Struct(Vec<GcField>),
     /// Array type with element definition
@@ -680,6 +686,7 @@ impl GcField {
         match self.storage {
             GcFieldStorage::I8 => 1,
             GcFieldStorage::I16 => 2,
+            GcFieldStorage::Ref(_) | GcFieldStorage::RefNull(_) => 4, // Reference types are 4 bytes
             GcFieldStorage::Value(byte) => match byte {
                 0x7F => 4,  // i32
                 0x7E => 8,  // i64
@@ -712,8 +719,134 @@ impl GcField {
             GcFieldStorage::Value(0x6D) => Value::StructRef(None),  // eqref
             GcFieldStorage::Value(0x63) |
             GcFieldStorage::Value(0x64) => Value::FuncRef(None),    // ref null/non-null
+            GcFieldStorage::Ref(_) => Value::FuncRef(None),         // non-null concrete ref
+            GcFieldStorage::RefNull(_) => Value::FuncRef(None),     // nullable concrete ref
             _ => Value::I32(0),
         }
+    }
+}
+
+/// A normalized type reference used during canonical type ID computation.
+/// Internal references point to a position within the same rec group,
+/// while external references use already-computed canonical IDs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum NormalizedRef {
+    /// Reference to a type at position `pos` within the same rec group
+    Internal(usize),
+    /// Reference to a type outside the rec group, identified by canonical ID
+    External(u32),
+}
+
+/// A value type with type references normalized for canonical comparison.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum NormalizedValueType {
+    /// A plain value type with no type index reference (I32, I64, FuncRef, etc.)
+    Plain(ValueType),
+    /// A typed reference with normalized type index: StructRef, ArrayRef, TypedFuncRef
+    TypedRef(NormalizedRef, u8), // ref, variant discriminant (for StructRef vs ArrayRef vs TypedFuncRef)
+}
+
+/// Normalized GC field storage for canonical comparison.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum NormalizedFieldStorage {
+    /// Non-reference storage (same as original)
+    Plain(GcFieldStorage),
+    /// Non-nullable reference with normalized type index
+    Ref(NormalizedRef),
+    /// Nullable reference with normalized type index
+    RefNull(NormalizedRef),
+}
+
+/// Normalized GC field for canonical comparison.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NormalizedGcField {
+    storage: NormalizedFieldStorage,
+    mutable: bool,
+}
+
+/// Normalized GC type info for canonical comparison.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum NormalizedGcInfo {
+    Func(Vec<NormalizedValueType>, Vec<NormalizedValueType>),
+    Struct(Vec<NormalizedGcField>),
+    Array(NormalizedGcField),
+}
+
+/// A single normalized type entry within a rec group, used for rec-group comparison.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NormalizedType {
+    is_final: bool,
+    supertype: Option<NormalizedRef>,
+    info: NormalizedGcInfo,
+}
+
+/// Normalize a ValueType by replacing type index references with NormalizedRef.
+fn normalize_value_type(
+    vt: ValueType,
+    rg_start: usize,
+    rg_count: usize,
+    canonical_ids: &[u32],
+) -> NormalizedValueType {
+    match vt {
+        ValueType::StructRef(idx) => {
+            let idx_usize = idx as usize;
+            let norm_ref = if idx_usize >= rg_start && idx_usize < rg_start + rg_count {
+                NormalizedRef::Internal(idx_usize - rg_start)
+            } else {
+                NormalizedRef::External(canonical_ids.get(idx_usize).copied().unwrap_or(idx))
+            };
+            NormalizedValueType::TypedRef(norm_ref, 0)
+        }
+        ValueType::ArrayRef(idx) => {
+            let idx_usize = idx as usize;
+            let norm_ref = if idx_usize >= rg_start && idx_usize < rg_start + rg_count {
+                NormalizedRef::Internal(idx_usize - rg_start)
+            } else {
+                NormalizedRef::External(canonical_ids.get(idx_usize).copied().unwrap_or(idx))
+            };
+            NormalizedValueType::TypedRef(norm_ref, 1)
+        }
+        ValueType::TypedFuncRef(idx, nullable) => {
+            let idx_usize = idx as usize;
+            let norm_ref = if idx_usize >= rg_start && idx_usize < rg_start + rg_count {
+                NormalizedRef::Internal(idx_usize - rg_start)
+            } else {
+                NormalizedRef::External(canonical_ids.get(idx_usize).copied().unwrap_or(idx))
+            };
+            // Encode nullability in the discriminant
+            NormalizedValueType::TypedRef(norm_ref, if nullable { 2 } else { 3 })
+        }
+        other => NormalizedValueType::Plain(other),
+    }
+}
+
+/// Normalize a GcFieldStorage, relativizing type index references within rec groups.
+fn normalize_field_storage(
+    storage: &GcFieldStorage,
+    rg_start: usize,
+    rg_count: usize,
+    canonical_ids: &[u32],
+) -> NormalizedFieldStorage {
+    match storage {
+        GcFieldStorage::Ref(idx) => {
+            let idx_usize = *idx as usize;
+            let norm_ref = if idx_usize >= rg_start && idx_usize < rg_start + rg_count {
+                NormalizedRef::Internal(idx_usize - rg_start)
+            } else {
+                NormalizedRef::External(canonical_ids.get(idx_usize).copied().unwrap_or(*idx))
+            };
+            NormalizedFieldStorage::Ref(norm_ref)
+        }
+        GcFieldStorage::RefNull(idx) => {
+            let idx_usize = *idx as usize;
+            let norm_ref = if idx_usize >= rg_start && idx_usize < rg_start + rg_count {
+                NormalizedRef::Internal(idx_usize - rg_start)
+            } else {
+                NormalizedRef::External(canonical_ids.get(idx_usize).copied().unwrap_or(*idx))
+            };
+            NormalizedFieldStorage::RefNull(norm_ref)
+        }
+        other => NormalizedFieldStorage::Plain(other.clone()),
     }
 }
 
@@ -784,8 +917,13 @@ pub struct Module {
     /// Canonical type ID for each type index.
     /// Types that are structurally equivalent (same definition, same canonical
     /// supertype, and same finality) share the same canonical ID. Used for
-    /// ref.test / br_on_cast with concrete types.
+    /// ref.test / br_on_cast with concrete types and call_indirect type checking.
     pub type_canonical_ids: Vec<u32>,
+    /// Rec-group ID for each type index.
+    /// Types in the same rec group share the same rec-group ID.
+    pub type_rec_group_id: Vec<usize>,
+    /// Rec-group ranges: (start_type_idx, count) for each rec group.
+    pub rec_group_ranges: Vec<(u32, u32)>,
     /// Init expression bytes for tables with explicit init expressions.
     /// Indexed by table definition index (not including imported tables).
     /// None means the table uses the default null value for its element type.
@@ -793,48 +931,125 @@ pub struct Module {
 }
 
 impl Module {
-    /// Compute canonical type IDs for structural type equivalence.
+    /// Compute canonical type IDs using iso-recursive equivalence at the rec-group level.
     ///
-    /// Two types in separate rec groups are considered equivalent if they have the
-    /// same composite definition (GcTypeInfo) and the same canonical supertype.
-    /// This enables ref.test / br_on_cast with concrete types to work correctly
-    /// when multiple type definitions are structurally identical (e.g., `$t1` and
-    /// `$t1'` both declared as `(sub $t0 (struct (field i32)))`).
+    /// Per the WebAssembly GC spec, two types from different rec groups are
+    /// canonically equivalent only if their entire rec groups are structurally
+    /// equivalent (with internal type references relativized to positions within
+    /// the group).
     pub fn compute_canonical_type_ids(&mut self) {
         let n = self.gc_types.len();
         if n == 0 {
             return;
         }
-        // canonical_ids[i] = canonical representative for type i
+        let num_rgs = self.rec_group_ranges.len();
+        if num_rgs == 0 {
+            // No rec group info available; fall back to identity mapping
+            self.type_canonical_ids = (0..n as u32).collect();
+            return;
+        }
+
         let mut canonical_ids: Vec<u32> = (0..n as u32).collect();
-        // Map from (canonical_supertype, is_final, gc_type_info) -> first type index
-        // Two types are structurally equivalent only if they have the same composite type,
-        // the same canonical supertype, AND the same finality.
-        let mut seen: Vec<(Option<u32>, bool, GcTypeInfo, u32)> = Vec::new();
-        for i in 0..n {
-            // Get the canonical supertype (already canonicalized since we process in order)
-            let canonical_super = self.type_supertypes.get(i).copied().flatten()
-                .map(|s| canonical_ids[s as usize]);
-            let gc_info = &self.gc_types[i];
-            let is_final = self.type_is_final.get(i).copied().unwrap_or(true);
-            // Look for a matching existing canonical type
-            let mut found = false;
-            for (existing_super, existing_final, existing_info, existing_id) in &seen {
-                if *existing_super == canonical_super
-                    && *existing_final == is_final
-                    && existing_info == gc_info
-                {
-                    canonical_ids[i] = *existing_id;
-                    found = true;
+
+        // Process rec groups in order. Earlier groups get canonical IDs first,
+        // so later groups can reference them via canonical IDs.
+        let mut seen_groups: Vec<(Vec<NormalizedType>, usize)> = Vec::new();
+
+        for rg_idx in 0..num_rgs {
+            let (rg_start, rg_count) = self.rec_group_ranges[rg_idx];
+            let rg_start = rg_start as usize;
+            let rg_count = rg_count as usize;
+
+            // Build normalized representation for this rec group
+            let mut normalized: Vec<NormalizedType> = Vec::with_capacity(rg_count);
+            for pos in 0..rg_count {
+                let type_idx = rg_start + pos;
+                let is_final = self.type_is_final.get(type_idx).copied().unwrap_or(true);
+
+                // Normalize supertype reference
+                let norm_super = self.type_supertypes.get(type_idx).copied().flatten()
+                    .map(|s| {
+                        let s_usize = s as usize;
+                        if s_usize >= rg_start && s_usize < rg_start + rg_count {
+                            NormalizedRef::Internal(s_usize - rg_start)
+                        } else {
+                            NormalizedRef::External(canonical_ids[s_usize])
+                        }
+                    });
+
+                // Normalize GC type info
+                let norm_info = self.normalize_gc_type_info(
+                    type_idx, rg_start, rg_count, &canonical_ids,
+                );
+
+                normalized.push(NormalizedType {
+                    is_final,
+                    supertype: norm_super,
+                    info: norm_info,
+                });
+            }
+
+            // Check if we've seen an equivalent rec group before
+            let mut matched_rg: Option<usize> = None;
+            for (seen_norm, seen_rg_idx) in &seen_groups {
+                if *seen_norm == normalized {
+                    matched_rg = Some(*seen_rg_idx);
                     break;
                 }
             }
-            if !found {
-                canonical_ids[i] = i as u32;
-                seen.push((canonical_super, is_final, gc_info.clone(), i as u32));
+
+            if let Some(prev_rg_idx) = matched_rg {
+                // This rec group matches a previous one
+                let (prev_start, _) = self.rec_group_ranges[prev_rg_idx];
+                for pos in 0..rg_count {
+                    canonical_ids[rg_start + pos] = canonical_ids[prev_start as usize + pos];
+                }
+            } else {
+                // New unique rec group
+                for pos in 0..rg_count {
+                    canonical_ids[rg_start + pos] = (rg_start + pos) as u32;
+                }
+                seen_groups.push((normalized, rg_idx));
             }
         }
+
         self.type_canonical_ids = canonical_ids;
+    }
+
+    /// Normalize a GcTypeInfo for canonical comparison.
+    fn normalize_gc_type_info(
+        &self,
+        type_idx: usize,
+        rg_start: usize,
+        rg_count: usize,
+        canonical_ids: &[u32],
+    ) -> NormalizedGcInfo {
+        match &self.gc_types[type_idx] {
+            GcTypeInfo::Func(params, results) => {
+                let norm_params: Vec<NormalizedValueType> = params.iter()
+                    .map(|vt| normalize_value_type(*vt, rg_start, rg_count, canonical_ids))
+                    .collect();
+                let norm_results: Vec<NormalizedValueType> = results.iter()
+                    .map(|vt| normalize_value_type(*vt, rg_start, rg_count, canonical_ids))
+                    .collect();
+                NormalizedGcInfo::Func(norm_params, norm_results)
+            }
+            GcTypeInfo::Struct(fields) => {
+                let norm_fields: Vec<NormalizedGcField> = fields.iter()
+                    .map(|f| NormalizedGcField {
+                        storage: normalize_field_storage(&f.storage, rg_start, rg_count, canonical_ids),
+                        mutable: f.mutable,
+                    })
+                    .collect();
+                NormalizedGcInfo::Struct(norm_fields)
+            }
+            GcTypeInfo::Array(field) => {
+                NormalizedGcInfo::Array(NormalizedGcField {
+                    storage: normalize_field_storage(&field.storage, rg_start, rg_count, canonical_ids),
+                    mutable: field.mutable,
+                })
+            }
+        }
     }
 
     /// Push memory
@@ -1666,6 +1881,8 @@ impl Module {
             type_supertypes: Vec::new(),
             type_is_final: Vec::new(),
             type_canonical_ids: Vec::new(),
+            type_rec_group_id: Vec::new(),
+            rec_group_ranges: Vec::new(),
             table_init_exprs: Vec::new(),
         })
     }
@@ -1676,9 +1893,9 @@ impl Module {
             kiln_format::module::GcStorageType::I8 => GcFieldStorage::I8,
             kiln_format::module::GcStorageType::I16 => GcFieldStorage::I16,
             kiln_format::module::GcStorageType::Value(b) => GcFieldStorage::Value(*b),
-            // Reference types use 0x64/0x63 (ref/ref null) encoding byte for field storage
-            kiln_format::module::GcStorageType::RefType(_) => GcFieldStorage::Value(0x64),
-            kiln_format::module::GcStorageType::RefTypeNull(_) => GcFieldStorage::Value(0x63),
+            // Reference types carry the concrete type index for canonical comparison
+            kiln_format::module::GcStorageType::RefType(idx) => GcFieldStorage::Ref(*idx),
+            kiln_format::module::GcStorageType::RefTypeNull(idx) => GcFieldStorage::RefNull(*idx),
         }
     }
 
@@ -1721,6 +1938,8 @@ impl Module {
             type_supertypes: Vec::new(), // Will be populated from rec_groups
             type_is_final: Vec::new(), // Will be populated from rec_groups
             type_canonical_ids: Vec::new(), // Will be computed after gc_types and type_supertypes
+            type_rec_group_id: Vec::new(), // Will be populated from rec_groups
+            rec_group_ranges: Vec::new(), // Will be populated from rec_groups
             table_init_exprs: Vec::new(), // Will be populated from table section
         };
 
@@ -1735,12 +1954,28 @@ impl Module {
 
             // Collect types ordered by type_index
             let mut gc_type_entries: Vec<(u32, GcTypeInfo)> = Vec::new();
-            for rec_group in &kiln_module.rec_groups {
+            // Also collect rec-group membership info
+            let mut rec_group_id_entries: Vec<(u32, usize)> = Vec::new();
+            for (rg_idx, rec_group) in kiln_module.rec_groups.iter().enumerate() {
+                runtime_module.rec_group_ranges.push((rec_group.start_type_index, rec_group.types.len() as u32));
                 for sub_type in &rec_group.types {
+                    rec_group_id_entries.push((sub_type.type_index, rg_idx));
+                    // Look up function signature from kiln_module.types for Func variants
+                    let func_sig = kiln_module.types.get(sub_type.type_index as usize)
+                        .map(|ft| (ft.params.clone(), ft.results.clone()));
                     let info = match &sub_type.composite_kind {
-                        CompositeTypeKind::Func => GcTypeInfo::Func,
-                        CompositeTypeKind::Struct => GcTypeInfo::Func, // Legacy variant, treat as func
-                        CompositeTypeKind::Array => GcTypeInfo::Func, // Legacy variant, treat as func
+                        CompositeTypeKind::Func => {
+                            let (params, results) = func_sig.unwrap_or_default();
+                            GcTypeInfo::Func(params, results)
+                        }
+                        CompositeTypeKind::Struct => {
+                            let (params, results) = func_sig.unwrap_or_default();
+                            GcTypeInfo::Func(params, results)
+                        }
+                        CompositeTypeKind::Array => {
+                            let (params, results) = func_sig.unwrap_or_default();
+                            GcTypeInfo::Func(params, results)
+                        }
                         CompositeTypeKind::StructWithFields(fields) => {
                             let gc_fields: Vec<GcField> = fields.iter().map(|f| {
                                 let storage = Self::convert_gc_storage_type(&f.storage_type);
@@ -1771,6 +2006,7 @@ impl Module {
             gc_type_entries.sort_by_key(|(idx, _)| *idx);
             supertype_entries.sort_by_key(|(idx, _)| *idx);
             finality_entries.sort_by_key(|(idx, _)| *idx);
+            rec_group_id_entries.sort_by_key(|(idx, _)| *idx);
             for (_, info) in gc_type_entries {
                 runtime_module.gc_types.push(info);
             }
@@ -1779,6 +2015,9 @@ impl Module {
             }
             for (_, is_final) in finality_entries {
                 runtime_module.type_is_final.push(is_final);
+            }
+            for (_, rg_id) in rec_group_id_entries {
+                runtime_module.type_rec_group_id.push(rg_id);
             }
             // Compute canonical type IDs for structural equivalence
             runtime_module.compute_canonical_type_ids();
@@ -3271,6 +3510,8 @@ impl Module {
             type_supertypes: Vec::new(),
             type_is_final: Vec::new(),
             type_canonical_ids: Vec::new(),
+            type_rec_group_id: Vec::new(),
+            rec_group_ranges: Vec::new(),
             table_init_exprs: Vec::new(),
         };
 
@@ -3721,6 +3962,8 @@ impl kiln_foundation::traits::FromBytes for Module {
             type_supertypes: Vec::new(),
             type_is_final: Vec::new(),
             type_canonical_ids: Vec::new(),
+            type_rec_group_id: Vec::new(),
+            rec_group_ranges: Vec::new(),
             table_init_exprs: Vec::new(),
         };
 

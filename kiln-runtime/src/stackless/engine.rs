@@ -93,6 +93,32 @@ fn func_types_match(expected: &kiln_foundation::types::FuncType, actual: &kiln_f
     true
 }
 
+/// Check if a function type matches for call_indirect, using canonical type IDs
+/// when available (for proper GC subtype support), or falling back to structural comparison.
+///
+/// Falls back to structural comparison when canonical type IDs are not available
+/// (e.g., modules without GC types).
+fn call_indirect_type_matches(
+    expected_type_idx: u32,
+    actual_type_idx: u32,
+    module: &crate::module::Module,
+) -> bool {
+    // If canonical type IDs are available, use them for proper GC type matching
+    if !module.type_canonical_ids.is_empty() {
+        return is_runtime_subtype_canonical(
+            actual_type_idx,
+            expected_type_idx,
+            &module.type_supertypes,
+            &module.type_canonical_ids,
+        );
+    }
+    // Fallback for modules without canonical IDs: structural comparison
+    match (module.types.get(expected_type_idx as usize), module.types.get(actual_type_idx as usize)) {
+        (Some(expected), Some(actual)) => func_types_match(expected, actual),
+        _ => false,
+    }
+}
+
 /// Maximum number of concurrent module instances
 /// Set to 512 to handle large WAST test files that may have hundreds of module directives
 /// (e.g., align.wast has 117 module directives including assert_invalid)
@@ -2373,19 +2399,19 @@ impl StacklessEngine {
                         let func_type = module.types.get(func.type_idx as usize)
                             .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
 
-                        // Validate type matches expected type (structural equivalence)
-                        let expected_type = module.types.get(type_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid expected function type"))?;
-
-                        if !func_types_match(expected_type, func_type) {
+                        // Validate type matches expected type using canonical IDs when available
+                        if !call_indirect_type_matches(type_idx, func.type_idx, &module) {
                             #[cfg(feature = "tracing")]
-                            warn!(
-                                expected_params = expected_type.params.len(),
-                                expected_results = expected_type.results.len(),
-                                got_params = func_type.params.len(),
-                                got_results = func_type.results.len(),
-                                "[CALL_INDIRECT] Type mismatch"
-                            );
+                            {
+                                let expected_type = module.types.get(type_idx as usize);
+                                warn!(
+                                    expected_params = expected_type.map(|t| t.params.len()).unwrap_or(0),
+                                    expected_results = expected_type.map(|t| t.results.len()).unwrap_or(0),
+                                    got_params = func_type.params.len(),
+                                    got_results = func_type.results.len(),
+                                    "[CALL_INDIRECT] Type mismatch"
+                                );
+                            }
                             return Err(kiln_error::Error::runtime_trap("indirect call type mismatch"));
                         }
 
@@ -2724,15 +2750,12 @@ impl StacklessEngine {
                             return Err(kiln_error::Error::runtime_trap("return_call_indirect: function index out of bounds"));
                         }
 
-                        // Get function type and validate
+                        // Get function type and validate using canonical IDs when available
                         let func = &module.functions[func_idx];
                         let func_type = module.types.get(func.type_idx as usize)
                             .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
 
-                        let expected_type = module.types.get(type_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid expected function type"))?;
-
-                        if !func_types_match(expected_type, func_type) {
+                        if !call_indirect_type_matches(type_idx, func.type_idx, &module) {
                             return Err(kiln_error::Error::runtime_trap("indirect call type mismatch"));
                         }
 

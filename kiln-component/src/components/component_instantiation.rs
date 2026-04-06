@@ -4108,6 +4108,8 @@ impl ComponentInstance {
                         type_is_final: Vec::new(),
                         table_init_exprs: Vec::new(),
                         type_canonical_ids: Vec::new(),
+                        type_rec_group_id: Vec::new(),
+                        rec_group_ranges: Vec::new(),
                     };
                     m.load_from_binary(&binary_clone)
                 }
