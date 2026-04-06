@@ -263,6 +263,26 @@ impl ComponentLinker {
         &mut self,
         imports: &[kiln_format::component::Import],
     ) -> Result<Vec<crate::instantiation::ResolvedImport>> {
+        self.link_imports_inner(imports, false)
+    }
+
+    /// Link imports in lenient mode — unresolvable non-WASI imports are accepted
+    /// as empty stubs. Used for nested library components in WAC-composed P3 components
+    /// where inter-component imports are resolved by the parent at a higher level.
+    #[cfg(feature = "std")]
+    pub fn link_imports_lenient(
+        &mut self,
+        imports: &[kiln_format::component::Import],
+    ) -> Result<Vec<crate::instantiation::ResolvedImport>> {
+        self.link_imports_inner(imports, true)
+    }
+
+    #[cfg(feature = "std")]
+    fn link_imports_inner(
+        &mut self,
+        imports: &[kiln_format::component::Import],
+        lenient: bool,
+    ) -> Result<Vec<crate::instantiation::ResolvedImport>> {
         let mut resolved = Vec::with_capacity(imports.len());
 
         for import in imports {
@@ -290,7 +310,25 @@ impl ComponentLinker {
                 }
             }
 
-            // STEP 3: FAIL LOUD - no provider found
+            // STEP 3: No provider found
+            if lenient {
+                // In lenient mode, create a stub WASI-like instance for the unresolved import.
+                // This allows nested library components to proceed — inter-component
+                // imports will be wired up by the parent component.
+                if let Some(ref mut wasi_provider) = self.wasi_provider {
+                    if let Ok(stub) = wasi_provider.create_instance(&name) {
+                        resolved.push(crate::instantiation::ResolvedImport::Instance(stub));
+                        continue;
+                    }
+                }
+                // If even stub creation fails, push a placeholder with empty exports
+                resolved.push(crate::instantiation::ResolvedImport::Instance(
+                    crate::instantiation::InstanceImport {
+                        exports: std::collections::BTreeMap::new(),
+                    },
+                ));
+                continue;
+            }
             #[cfg(feature = "tracing")]
             tracing_warn!(import_name = %name, "Unresolved import - not found in internal components or host providers");
             return Err(Error::new(

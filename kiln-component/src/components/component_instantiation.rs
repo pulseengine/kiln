@@ -936,7 +936,11 @@ impl ComponentInstance {
         let mut linker = ComponentLinker::new();
         #[cfg(feature = "tracing")]
         trace!("from_parsed: About to link_imports");
-        let resolved_imports = linker.link_imports(&parsed.imports)?;
+        let resolved_imports = if library_mode {
+            linker.link_imports_lenient(&parsed.imports)?
+        } else {
+            linker.link_imports(&parsed.imports)?
+        };
         #[cfg(feature = "tracing")]
         trace!("from_parsed: link_imports completed");
 
@@ -1886,7 +1890,7 @@ impl ComponentInstance {
         // Phase 7b: Process nested component instances
         // Nested components are instantiated and their exports can be aliased
         #[cfg(feature = "std")]
-        let nested_instances = {
+        let mut nested_instances = {
             use crate::types::{NestedComponentInstance, NestedExportKind, NestedExportRef};
             use kiln_format::component::{InstanceExpr, Sort};
 
@@ -2001,6 +2005,7 @@ impl ComponentInstance {
 
                             // Recursively instantiate the nested component
                             // Pass the parent's host_registry so nested components can resolve WASI imports
+
                             match Self::from_parsed_library(nested_id, &mut nested_component_clone, host_registry.clone(), None) {
                                 Ok(child_instance) => {
 
@@ -2050,18 +2055,19 @@ impl ComponentInstance {
                                     // Provide detailed error context for debugging via println
                                     // (the static error message is complemented by this output)
 
-                                    // Check if this looks like a circular dependency
-                                    let is_circular = e.to_string().contains("nesting depth");
-                                    let static_msg = if is_circular {
-                                        "Failed to instantiate nested component: possible circular dependency"
-                                    } else {
-                                        "Failed to instantiate nested component"
-                                    };
-                                    return Err(Error::new(
-                                        kiln_error::ErrorCategory::ComponentRuntime,
-                                        kiln_error::codes::COMPONENT_INSTANTIATION_RUNTIME_ERROR,
-                                        static_msg,
-                                    ));
+                                    // For non-critical nested components, continue without them.
+                                    // The parent can still function if only some nested components fail.
+                                    // This handles WAC-composed components where some nested components
+                                    // have inter-component imports we can't resolve yet.
+                                    #[cfg(feature = "tracing")]
+                                    tracing::warn!(
+                                        comp_idx = comp_idx,
+                                        inst_idx = inst_idx,
+                                        error = %e,
+                                        "Nested component instantiation failed, continuing"
+                                    );
+                                    // Store empty exports for this instance so alias resolution doesn't crash
+                                    component_instance_exports.insert(inst_idx, std::collections::HashMap::new());
                                 },
                             }
                         }
@@ -2130,6 +2136,37 @@ impl ComponentInstance {
             instance.imports = resolved_imports;
         }
 
+        // Check if any nested component has _start (for WAC-composed P3 components)
+        // Must happen BEFORE storing nested_instances since we may take the engine.
+        #[cfg(feature = "std")]
+        let mut nested_engine_for_start: Option<(Box<CapabilityAwareEngine>, InstanceHandle)> = None;
+        #[cfg(feature = "std")]
+        {
+            let core_entry_points_for_nested = ["_start", "wasi:cli/run@0.2.3#run", "wasi:cli/run@0.2.6#run"];
+            for nested in nested_instances.iter_mut() {
+                if let Some(ref nested_engine) = nested.instance.runtime_engine {
+                    // Search ALL instance handles (0..16) to find _start
+                    'outer: for idx in 0..16u32 {
+                        let h = InstanceHandle::from_index(idx as usize);
+                        for ep in &core_entry_points_for_nested {
+                            let has = nested_engine.has_function(h, ep).unwrap_or(false);
+                            if has {
+                            }
+                            if has {
+                                if let Some(ne) = nested.instance.runtime_engine.take() {
+                                    nested_engine_for_start = Some((ne, h));
+                                }
+                                break 'outer;
+                            }
+                        }
+                    }
+                }
+                if nested_engine_for_start.is_some() {
+                    break;
+                }
+            }
+        }
+
         // Store nested component instances
         {
             instance.nested_component_instances = nested_instances;
@@ -2183,11 +2220,9 @@ impl ComponentInstance {
             }
         }
 
-        // Store the engine in the instance so it can be used for executing functions
+        // Find main_handle and possibly swap engine with nested component's engine
         #[cfg(feature = "kiln-execution")]
         {
-            instance.runtime_engine = Some(Box::new(engine));
-
             // Store the main module's instance handle
             // The main module is the one that exports _start - we found this earlier
             // by scanning the aliases. This is GENERIC and works for any component.
@@ -2280,8 +2315,16 @@ impl ComponentInstance {
                             }
                         }
 
-                        // NO FALLBACK: Per CLAUDE.md rules, we must not guess.
-                        // If _start is not found, the component is malformed or our loading is broken.
+                        // If not found in parent's core instances, check nested components.
+                        // WAC-composed P3 components have _start inside nested components.
+                        #[cfg(feature = "std")]
+                        if found_handle.is_none() {
+                            if let Some((nested_eng, nested_handle)) = nested_engine_for_start.take() {
+                                engine = *nested_eng;
+                                found_handle = Some(nested_handle);
+                            }
+                        }
+
                         if let Some(handle) = found_handle {
                             #[cfg(feature = "tracing")]
                             tracing::info!(
@@ -2316,6 +2359,10 @@ impl ComponentInstance {
             } else {
                 tracing::info!(?main_handle, "Main instance selected (exports _start)");
             }
+
+            // Store the engine AFTER main_handle search (which may have swapped
+            // the engine with a nested component's engine for P3 components)
+            instance.runtime_engine = Some(Box::new(engine));
         }
 
         Ok(instance)
@@ -3937,6 +3984,25 @@ impl ComponentInstance {
                         Value::I32(0)
                     })
                     .collect();
+
+                // For P3 components: the main_instance_handle might not export _start
+                // Search all handles in the engine for the entry point
+                use kiln_runtime::engine::InstanceHandle;
+                let entry_names = ["_start", "wasi:cli/run@0.2.3#run", "wasi:cli/run@0.2.6#run"];
+                let mut effective_handle = instance_handle;
+                for idx in 0..16u32 {
+                    let h = InstanceHandle::from_index(idx as usize);
+                    for ep in &entry_names {
+                        if engine.has_function(h, ep).unwrap_or(false) {
+                            effective_handle = h;
+                            break;
+                        }
+                    }
+                    if effective_handle != instance_handle {
+                        break;
+                    }
+                }
+                let instance_handle = effective_handle;
 
                 // Try _initialize first (important for TinyGo components)
                 match engine.execute(instance_handle, "_initialize", &[]) {

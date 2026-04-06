@@ -526,6 +526,16 @@ impl KilndEngine {
                 "Component initialized and running successfully"
             );
 
+            // For P3-style components where the engine was swapped to a nested component's
+            // engine, re-set the WASI handler since the nested engine doesn't have one.
+            // Detect this by checking if nested components were instantiated.
+            #[cfg(all(feature = "kiln-execution", feature = "wasi"))]
+            if self.config.enable_wasi && !instance.nested_component_instances.is_empty() {
+                if let Ok(dispatcher) = kiln_wasi::WasiDispatcher::with_defaults() {
+                    instance.set_host_handler(Box::new(dispatcher));
+                }
+            }
+
             // Pre-allocate WASI args memory via cabi_realloc before calling entry point.
             // This is needed for components that call get-arguments (e.g., calculator).
             #[cfg(all(feature = "kiln-execution", feature = "wasi"))]
