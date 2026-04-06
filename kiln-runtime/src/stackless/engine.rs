@@ -10438,10 +10438,20 @@ impl StacklessEngine {
 
                     Instruction::ArraySet(type_idx) => {
                         // array.set: [arrayref i32 value] -> []
-                        #[cfg(feature = "tracing")]
-                        trace!("ArraySet: type_idx={}", type_idx);
                         let value = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("array.set: expected value"))?;
+                        // Truncate packed i8/i16 fields
+                        let value = match &value {
+                            Value::I32(v) => match module.gc_types.get(type_idx as usize) {
+                                Some(crate::module::GcTypeInfo::Array(f)) => match f.storage {
+                                    crate::module::GcFieldStorage::I8 => Value::I32(*v & 0xFF),
+                                    crate::module::GcFieldStorage::I16 => Value::I32(*v & 0xFFFF),
+                                    _ => value,
+                                },
+                                _ => value,
+                            },
+                            _ => value,
+                        };
                         let index = match operand_stack.pop() {
                             Some(Value::I32(n)) => n as usize,
                             _ => return Err(kiln_error::Error::runtime_trap("array.set: expected i32 index")),
