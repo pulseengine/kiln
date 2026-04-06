@@ -371,6 +371,7 @@ impl Table {
                 | (KilnValue::I31Ref(_), KilnRefType::Gc(_))
                 | (KilnValue::StructRef(_), KilnRefType::Gc(_))
                 | (KilnValue::ArrayRef(_), KilnRefType::Gc(_))
+                | (KilnValue::Ref(_), KilnRefType::Gc(_)) // internalized extern (any.convert_extern)
             );
             if !val_matches {
                 return Err(Error::validation_error(
