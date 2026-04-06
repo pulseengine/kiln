@@ -24,6 +24,26 @@ pub use crate::wast_values::{
     results_match_with_either, values_equal,
 };
 
+/// Precise type information extracted from the WASM binary.
+///
+/// Used to supplement the lossy type info in the runtime Module.
+/// The runtime's ValueType loses nullability for abstract heap types
+/// (e.g., `(ref func)` and `(ref null func)` both decode to `FuncRef`),
+/// and doesn't track rec group membership or finality.
+#[derive(Clone, Debug)]
+struct PreciseTypeInfo {
+    /// Rec group boundaries: vec of (start_type_idx, type_count) for each rec group
+    rec_groups: Vec<(u32, u32)>,
+    /// Whether each type index is final (cannot be further subtyped)
+    type_finality: Vec<bool>,
+    /// For each global (imported then defined), precise reference type info:
+    /// `Some((nullable, heap_type_s33))` for reference-typed globals,
+    /// `None` for non-reference globals.
+    /// heap_type_s33 is the s33 heap type value: negative for abstract types
+    /// (-16 = func, -17 = extern, etc.), non-negative for concrete type indices.
+    global_precise_ref: Vec<Option<(bool, i64)>>,
+}
+
 /// Minimal WAST execution engine for testing
 ///
 /// This engine focuses on basic functionality:
@@ -42,6 +62,9 @@ pub struct WastEngine {
     current_module: Option<Arc<Module>>,
     /// Current instance ID for module execution
     current_instance_id: Option<usize>,
+    /// Precise type info per module, keyed by module name.
+    /// Supplements the lossy type info in the runtime Module.
+    precise_types: HashMap<String, PreciseTypeInfo>,
 }
 
 /// No-op host handler for spectest print functions
@@ -67,6 +90,7 @@ impl WastEngine {
             instance_ids: HashMap::new(),
             current_module: None,
             current_instance_id: None,
+            precise_types: HashMap::new(),
         })
     }
 
@@ -77,6 +101,10 @@ impl WastEngine {
             anyhow::anyhow!("XYZZY_DECODE_FAILED({} bytes): {} [code={}, category={:?}]",
                 wasm_binary.len(), e, e.code, e.category)
         })?;
+
+        // Extract precise type info from kiln_module and binary before
+        // the lossy conversion to runtime Module
+        let precise_info = extract_precise_type_info(&kiln_module, wasm_binary);
 
         // Validate the module before proceeding (Phase 1 of WAST conformance)
         crate::wast_validator::WastModuleValidator::validate(&kiln_module)
@@ -92,7 +120,7 @@ impl WastEngine {
 
         // Validate all imports against registered modules and spectest
         // This catches unknown imports and incompatible types BEFORE instantiation
-        self.validate_imports(&module)?;
+        self.validate_imports(&module, &precise_info)?;
 
         // Pre-compute the engine instance ID so ModuleInstance.instance_id matches
         // the engine's key. This ensures FuncRef.instance_id values stamped during
@@ -183,16 +211,18 @@ impl WastEngine {
         // Validate that all non-spectest imports are satisfied
         // Per WebAssembly spec: if any import cannot be resolved, the module
         // is unlinkable and instantiation must fail.
-        self.validate_imports(&module)?;
+        self.validate_imports(&module, &precise_info)?;
 
-        // Store the module and instance ID for later reference
+        // Store the module, instance ID, and precise type info for later reference
         // Always store as "current" (last loaded module) AND under the given name
         self.modules.insert("current".to_string(), Arc::clone(&module));
         self.instance_ids.insert("current".to_string(), instance_idx);
+        self.precise_types.insert("current".to_string(), precise_info.clone());
         let module_name = name.unwrap_or("current").to_string();
         if module_name != "current" {
             self.modules.insert(module_name.clone(), Arc::clone(&module));
             self.instance_ids.insert(module_name.clone(), instance_idx);
+            self.precise_types.insert(module_name.clone(), precise_info);
         }
 
         // Register instance name for cross-module exception handling
@@ -336,6 +366,10 @@ impl WastEngine {
                 // Register the new name for cross-module exception handling
                 self.engine.register_instance_name(instance_id, name);
             }
+            // Copy precise type info if available
+            if let Some(info) = self.precise_types.get(module_name) {
+                self.precise_types.insert(name.to_string(), info.clone());
+            }
             Ok(())
         } else {
             Err(anyhow::anyhow!(
@@ -354,6 +388,7 @@ impl WastEngine {
     pub fn reset(&mut self) -> Result<()> {
         self.modules.clear();
         self.instance_ids.clear();
+        self.precise_types.clear();
         self.current_module = None;
         self.current_instance_id = None;
         // Create a new engine to reset state, with spectest handler
@@ -816,7 +851,7 @@ impl WastEngine {
     /// - The named export must exist in the source module
     /// - The export kind must match the import kind (function, global, table, memory, tag)
     /// - Type signatures must be compatible
-    fn validate_imports(&self, module: &Module) -> Result<()> {
+    fn validate_imports(&self, module: &Module, import_precise: &PreciseTypeInfo) -> Result<()> {
         let import_order = &module.import_order;
         let import_types = &module.import_types;
 
@@ -836,7 +871,9 @@ impl WastEngine {
                 self.validate_spectest_import(field_name, import_desc, module)?;
             } else {
                 // Validate against registered modules
-                self.validate_registered_import(mod_name, field_name, import_desc, module)?;
+                self.validate_registered_import(
+                    mod_name, field_name, import_desc, module, import_precise, i,
+                )?;
             }
         }
 
@@ -1036,6 +1073,8 @@ impl WastEngine {
         field_name: &str,
         import_desc: &RuntimeImportDesc,
         module: &Module,
+        import_precise: &PreciseTypeInfo,
+        import_idx: usize,
     ) -> Result<()> {
         // Check if the module is registered
         let source_module = match self.modules.get(mod_name) {
@@ -1047,6 +1086,9 @@ impl WastEngine {
                 ));
             }
         };
+
+        // Get precise type info for the exporting module
+        let export_precise = self.precise_types.get(mod_name);
 
         // Find the export in the source module
         let export = match source_module.get_export(field_name) {
@@ -1071,6 +1113,7 @@ impl WastEngine {
                 // Validate function type signature
                 self.validate_function_type_compatibility(
                     mod_name, field_name, *type_idx, module, source_module, &export,
+                    import_precise, export_precise,
                 )?;
             }
             RuntimeImportDesc::Global(import_global_type) => {
@@ -1080,9 +1123,11 @@ impl WastEngine {
                         mod_name, field_name, export.kind
                     ));
                 }
-                // Validate global type compatibility
+                // Validate global type compatibility using precise type info
                 self.validate_global_type_compatibility(
-                    mod_name, field_name, import_global_type, source_module, &export,
+                    mod_name, field_name, import_global_type, module,
+                    source_module, &export,
+                    import_precise, import_idx, export_precise,
                 )?;
             }
             RuntimeImportDesc::Table(import_table_type) => {
@@ -1119,6 +1164,7 @@ impl WastEngine {
                 // Validate tag type compatibility
                 self.validate_tag_type_compatibility(
                     mod_name, field_name, import_tag_type, module, source_module, &export,
+                    import_precise, export_precise,
                 )?;
             }
             _ => {
@@ -1138,6 +1184,8 @@ impl WastEngine {
         importing_module: &Module,
         source_module: &Module,
         export: &kiln_runtime::module::Export,
+        import_precise: &PreciseTypeInfo,
+        export_precise: Option<&PreciseTypeInfo>,
     ) -> Result<()> {
         // Get the importing module's expected function type
         let import_func_type = importing_module.types.get(import_type_idx as usize).ok_or_else(|| {
@@ -1156,12 +1204,34 @@ impl WastEngine {
             )
         })?;
 
-        let export_func_type = source_module.types.get(export_func.type_idx as usize).ok_or_else(|| {
+        let export_type_idx = export_func.type_idx;
+
+        let export_func_type = source_module.types.get(export_type_idx as usize).ok_or_else(|| {
             anyhow::anyhow!(
                 "incompatible import type: {}::{} has invalid type index",
                 mod_name, field_name
             )
         })?;
+
+        // For function imports, use rec group-aware type matching.
+        // The export type must be a subtype of the import type, where type
+        // identity requires matching rec group structure AND finality.
+        if let Some(ep) = export_precise {
+            // Use the full rec-group-aware subtype check
+            let is_match = is_type_idx_match_cross_module(
+                export_type_idx, source_module, ep,
+                import_type_idx, importing_module, import_precise,
+                0,
+            );
+
+            if !is_match {
+                return Err(anyhow::anyhow!(
+                    "incompatible import type: {}::{} type mismatch (export_idx={}, import_idx={})",
+                    mod_name, field_name, export_type_idx, import_type_idx
+                ));
+            }
+            return Ok(());
+        }
 
         // Compare function signatures
         if import_func_type.params.len() != export_func_type.params.len()
@@ -1216,8 +1286,12 @@ impl WastEngine {
         mod_name: &str,
         field_name: &str,
         import_global_type: &GlobalType,
+        module: &Module,
         source_module: &Module,
         export: &kiln_runtime::module::Export,
+        import_precise: &PreciseTypeInfo,
+        import_idx: usize,
+        export_precise: Option<&PreciseTypeInfo>,
     ) -> Result<()> {
         let export_global_idx = export.index as usize;
 
@@ -1233,19 +1307,41 @@ impl WastEngine {
                 ));
             }
 
+            // Get precise ref type info for import and export globals.
+            // The import_idx is the position in the module's full import list.
+            // The global_precise_ref vec is indexed by global index (imported + defined).
+            // We need to find which global-import-index corresponds to import_idx.
+            let import_global_idx = count_global_imports_up_to(
+                &module.import_types, import_idx,
+            );
+            let import_ref = import_precise.global_precise_ref
+                .get(import_global_idx)
+                .copied()
+                .flatten();
+            let export_ref = export_precise
+                .and_then(|ep| ep.global_precise_ref.get(export_global_idx))
+                .copied()
+                .flatten();
+
             // For mutable globals, the value type must match exactly
             // For immutable globals, the import type must be a supertype of the export type
             if import_global_type.mutable {
-                // Mutable: exact type match required
-                if import_global_type.value_type != source_type.value_type {
+                // Mutable: exact type match required, including nullability
+                if !precise_ref_types_equal(
+                    &import_global_type.value_type, import_ref,
+                    &source_type.value_type, export_ref,
+                ) {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} value type mismatch ({:?} vs {:?})",
                         mod_name, field_name, import_global_type.value_type, source_type.value_type
                     ));
                 }
             } else {
-                // Immutable: import type must be supertype of export type
-                if !is_value_type_subtype(&source_type.value_type, &import_global_type.value_type) {
+                // Immutable: export type must be subtype of import type
+                if !precise_ref_type_is_subtype(
+                    &source_type.value_type, export_ref,
+                    &import_global_type.value_type, import_ref,
+                ) {
                     return Err(anyhow::anyhow!(
                         "incompatible import type: {}::{} value type mismatch ({:?} is not subtype of {:?})",
                         mod_name, field_name, source_type.value_type, import_global_type.value_type
@@ -1422,6 +1518,8 @@ impl WastEngine {
         importing_module: &Module,
         source_module: &Module,
         export: &kiln_runtime::module::Export,
+        import_precise: &PreciseTypeInfo,
+        export_precise: Option<&PreciseTypeInfo>,
     ) -> Result<()> {
         // Get the import's function type from the type index
         let import_func_type = importing_module.types.get(import_tag_type.type_idx as usize);
@@ -1449,6 +1547,22 @@ impl WastEngine {
         };
 
         if let (Some(import_ft), Some(export_tt)) = (import_func_type, export_tag_type) {
+            // Tags require EXACT type matching, including rec group membership.
+            // Two structurally identical (func) types in different rec groups
+            // are considered different types per the GC spec.
+            if let Some(ep) = export_precise {
+                if !are_types_rec_group_compatible(
+                    import_tag_type.type_idx, import_precise,
+                    export_tt.type_idx, ep,
+                    importing_module, source_module,
+                ) {
+                    return Err(anyhow::anyhow!(
+                        "incompatible import type: {}::{} tag type in different rec group structure",
+                        mod_name, field_name
+                    ));
+                }
+            }
+
             let export_func_type = source_module.types.get(export_tt.type_idx as usize);
             if let Some(export_ft) = export_func_type {
                 // Tag types must match exactly (params only, tags have no results)
@@ -1471,6 +1585,631 @@ impl WastEngine {
         }
 
         Ok(())
+    }
+}
+
+/// Extract precise type information from a decoded KilnModule and raw binary.
+///
+/// The runtime Module loses precision for:
+/// - Global reference type nullability (both `(ref func)` and `(ref null func)` map to FuncRef)
+/// - Type finality (`sub final` vs `sub`)
+/// - Rec group membership (which types share a rec group)
+///
+/// This function extracts that info from the richer format-level module.
+fn extract_precise_type_info(
+    kiln_module: &kiln_format::module::Module,
+    wasm_binary: &[u8],
+) -> PreciseTypeInfo {
+    // Extract rec group boundaries and finality from the type section
+    let mut rec_groups = Vec::new();
+    let mut type_finality = Vec::new();
+
+    for rg in &kiln_module.rec_groups {
+        let start = rg.start_type_index;
+        let count = rg.types.len() as u32;
+        rec_groups.push((start, count));
+        for sub_type in &rg.types {
+            type_finality.push(sub_type.is_final);
+        }
+    }
+
+    // Extract precise global reference types from the binary.
+    // We need to walk the import section and global section to find
+    // global types with their exact nullable/non-nullable encoding.
+    let global_precise_ref = extract_precise_global_ref_types(wasm_binary);
+
+    PreciseTypeInfo {
+        rec_groups,
+        type_finality,
+        global_precise_ref,
+    }
+}
+
+/// Parse the raw WASM binary to extract precise reference type info for globals.
+///
+/// Returns a vec of `Option<(nullable, heap_type_s33)>` for each global
+/// (imported globals first, then defined globals), where:
+/// - `None` = not a reference type
+/// - `Some((true, -16))` = (ref null func)
+/// - `Some((false, -16))` = (ref func)
+/// - `Some((true, -17))` = (ref null extern) / externref
+/// - `Some((true, idx))` = (ref null $idx)
+/// - `Some((false, idx))` = (ref $idx)
+fn extract_precise_global_ref_types(wasm_binary: &[u8]) -> Vec<Option<(bool, i64)>> {
+    let mut result = Vec::new();
+
+    // Parse WASM binary sections to find import section (id=2) and global section (id=6)
+    if wasm_binary.len() < 8 {
+        return result;
+    }
+
+    let mut offset = 8; // Skip magic + version
+
+    while offset < wasm_binary.len() {
+        let section_id = wasm_binary[offset];
+        offset += 1;
+
+        let (section_len, bytes_read) = match read_leb128_u32_from_slice(wasm_binary, offset) {
+            Some(v) => v,
+            None => break,
+        };
+        offset += bytes_read;
+
+        let section_end = offset + section_len as usize;
+        if section_end > wasm_binary.len() {
+            break;
+        }
+
+        match section_id {
+            2 => {
+                // Import section - extract global import ref types
+                parse_import_section_global_refs(wasm_binary, offset, section_end, &mut result);
+            }
+            6 => {
+                // Global section - extract defined global ref types
+                parse_global_section_refs(wasm_binary, offset, section_end, &mut result);
+            }
+            _ => {}
+        }
+
+        offset = section_end;
+    }
+
+    result
+}
+
+/// Parse the import section to extract precise ref types for global imports.
+fn parse_import_section_global_refs(
+    data: &[u8], mut offset: usize, end: usize,
+    result: &mut Vec<Option<(bool, i64)>>,
+) {
+    let (count, br) = match read_leb128_u32_from_slice(data, offset) {
+        Some(v) => v,
+        None => return,
+    };
+    offset += br;
+
+    for _ in 0..count {
+        if offset >= end { return; }
+        // Skip module name (length-prefixed string)
+        let (name_len, br) = match read_leb128_u32_from_slice(data, offset) {
+            Some(v) => v,
+            None => return,
+        };
+        offset += br + name_len as usize;
+
+        // Skip field name
+        let (name_len, br) = match read_leb128_u32_from_slice(data, offset) {
+            Some(v) => v,
+            None => return,
+        };
+        offset += br + name_len as usize;
+
+        if offset >= end { return; }
+        let kind = data[offset];
+        offset += 1;
+
+        match kind {
+            0x00 => {
+                // Function import: skip type index
+                let (_, br) = match read_leb128_u32_from_slice(data, offset) {
+                    Some(v) => v,
+                    None => return,
+                };
+                offset += br;
+            }
+            0x01 => {
+                // Table import: skip ref_type + limits
+                if offset >= end { return; }
+                let rt_byte = data[offset];
+                offset += 1;
+                if rt_byte == 0x63 || rt_byte == 0x64 {
+                    // Consume heap type LEB128
+                    let (_, br) = match read_leb128_i64_from_slice(data, offset) {
+                        Some(v) => v,
+                        None => return,
+                    };
+                    offset += br;
+                }
+                // Skip limits
+                if offset >= end { return; }
+                let flags = data[offset];
+                offset += 1;
+                let is_table64 = flags & 0x04 != 0;
+                offset = skip_leb128_limit(data, offset, flags & 0x01 != 0, is_table64);
+            }
+            0x02 => {
+                // Memory import: skip limits
+                if offset >= end { return; }
+                let flags = data[offset];
+                offset += 1;
+                let is_mem64 = flags & 0x04 != 0;
+                let has_max = flags & 0x01 != 0;
+                let has_page_size = flags & 0x08 != 0;
+                offset = skip_leb128_limit(data, offset, has_max, is_mem64);
+                if has_page_size {
+                    let (_, br) = match read_leb128_u32_from_slice(data, offset) {
+                        Some(v) => v,
+                        None => return,
+                    };
+                    offset += br;
+                }
+            }
+            0x03 => {
+                // Global import: THIS IS WHAT WE WANT
+                let ref_info = parse_precise_ref_type(data, &mut offset);
+                result.push(ref_info);
+                // Skip mutability byte
+                if offset < end {
+                    offset += 1;
+                }
+            }
+            0x04 => {
+                // Tag import: skip attribute + type_idx
+                offset += 1; // attribute
+                let (_, br) = match read_leb128_u32_from_slice(data, offset) {
+                    Some(v) => v,
+                    None => return,
+                };
+                offset += br;
+            }
+            _ => return,
+        }
+    }
+}
+
+/// Parse the global section to extract precise ref types for defined globals.
+fn parse_global_section_refs(
+    data: &[u8], mut offset: usize, end: usize,
+    result: &mut Vec<Option<(bool, i64)>>,
+) {
+    let (count, br) = match read_leb128_u32_from_slice(data, offset) {
+        Some(v) => v,
+        None => return,
+    };
+    offset += br;
+
+    for _ in 0..count {
+        if offset >= end { return; }
+        // Parse value type
+        let ref_info = parse_precise_ref_type(data, &mut offset);
+        result.push(ref_info);
+        // Skip mutability byte
+        if offset < end {
+            offset += 1;
+        }
+        // Skip init expression (scan for END = 0x0B)
+        while offset < end && data[offset] != 0x0B {
+            offset += 1;
+        }
+        if offset < end {
+            offset += 1; // skip END
+        }
+    }
+}
+
+/// Parse a value type at the given offset and return precise ref type info.
+/// Returns `Some((nullable, heap_type_s33))` for reference types, `None` otherwise.
+/// Advances `offset` past the value type bytes.
+fn parse_precise_ref_type(data: &[u8], offset: &mut usize) -> Option<(bool, i64)> {
+    if *offset >= data.len() { return None; }
+    let byte = data[*offset];
+    match byte {
+        0x70 => { *offset += 1; Some((true, -16)) }  // funcref = (ref null func)
+        0x6F => { *offset += 1; Some((true, -17)) }  // externref = (ref null extern)
+        0x6E => { *offset += 1; Some((true, -18)) }  // anyref
+        0x6D => { *offset += 1; Some((true, -19)) }  // eqref
+        0x6C => { *offset += 1; Some((true, -20)) }  // i31ref
+        0x6B => { *offset += 1; Some((true, -21)) }  // structref
+        0x6A => { *offset += 1; Some((true, -22)) }  // arrayref
+        0x69 => { *offset += 1; Some((true, -23)) }  // exnref
+        0x73 => { *offset += 1; Some((true, -13)) }  // nofunc
+        0x72 => { *offset += 1; Some((true, -14)) }  // noextern
+        0x71 => { *offset += 1; Some((true, -15)) }  // none
+        0x74 => { *offset += 1; Some((true, -12)) }  // noexn
+        0x63 | 0x64 => {
+            // ref null heaptype (0x63) or ref heaptype (0x64)
+            let nullable = byte == 0x63;
+            *offset += 1;
+            let (ht, br) = read_leb128_i64_from_slice(data, *offset)?;
+            *offset += br;
+            Some((nullable, ht))
+        }
+        // Non-reference types
+        _ => { *offset += 1; None }
+    }
+}
+
+/// Read a u32 LEB128 from a byte slice at the given offset.
+/// Returns (value, bytes_consumed).
+fn read_leb128_u32_from_slice(data: &[u8], offset: usize) -> Option<(u32, usize)> {
+    let mut result: u32 = 0;
+    let mut shift = 0u32;
+    let mut i = 0usize;
+    loop {
+        if offset + i >= data.len() { return None; }
+        let byte = data[offset + i];
+        i += 1;
+        result |= ((byte & 0x7F) as u32) << shift;
+        if byte & 0x80 == 0 {
+            return Some((result, i));
+        }
+        shift += 7;
+        if shift >= 35 { return None; } // overflow protection
+    }
+}
+
+/// Read an i64 (s33-compatible) LEB128 from a byte slice at the given offset.
+/// Returns (value, bytes_consumed).
+fn read_leb128_i64_from_slice(data: &[u8], offset: usize) -> Option<(i64, usize)> {
+    let mut result: i64 = 0;
+    let mut shift = 0u32;
+    let mut i = 0usize;
+    let mut last_byte = 0u8;
+    loop {
+        if offset + i >= data.len() { return None; }
+        last_byte = data[offset + i];
+        i += 1;
+        result |= ((last_byte & 0x7F) as i64) << shift;
+        shift += 7;
+        if last_byte & 0x80 == 0 {
+            break;
+        }
+        if shift >= 70 { return None; } // overflow protection
+    }
+    // Sign extend if the sign bit of the last byte is set
+    if shift < 64 && (last_byte & 0x40) != 0 {
+        result |= !0i64 << shift;
+    }
+    Some((result, i))
+}
+
+/// Skip LEB128-encoded limits (min, optional max) at the given offset.
+fn skip_leb128_limit(data: &[u8], mut offset: usize, has_max: bool, is_64: bool) -> usize {
+    if is_64 {
+        if let Some((_, br)) = read_leb128_i64_from_slice(data, offset) { offset += br; }
+        if has_max {
+            if let Some((_, br)) = read_leb128_i64_from_slice(data, offset) { offset += br; }
+        }
+    } else {
+        if let Some((_, br)) = read_leb128_u32_from_slice(data, offset) { offset += br; }
+        if has_max {
+            if let Some((_, br)) = read_leb128_u32_from_slice(data, offset) { offset += br; }
+        }
+    }
+    offset
+}
+
+/// Check if two types belong to structurally compatible rec groups.
+///
+/// Per the GC spec, two types are only compatible if they occupy the same
+/// position within rec groups of the same structure. A type in a singleton
+/// rec group is different from a type in a multi-type rec group, even if
+/// structurally identical.
+fn are_types_rec_group_compatible(
+    type_a_idx: u32, precise_a: &PreciseTypeInfo,
+    type_b_idx: u32, precise_b: &PreciseTypeInfo,
+    module_a: &Module, module_b: &Module,
+) -> bool {
+    // Find which rec group each type belongs to
+    let rg_a = find_rec_group(type_a_idx, &precise_a.rec_groups);
+    let rg_b = find_rec_group(type_b_idx, &precise_b.rec_groups);
+
+
+    let (rg_a_start, rg_a_count) = match rg_a {
+        Some(rg) => rg,
+        None => return true, // No rec group info, assume compatible
+    };
+    let (rg_b_start, rg_b_count) = match rg_b {
+        Some(rg) => rg,
+        None => return true,
+    };
+
+    // Rec groups must have the same number of types
+    if rg_a_count != rg_b_count {
+        return false;
+    }
+
+    // The type must be at the same offset within its rec group
+    let offset_a = type_a_idx - rg_a_start;
+    let offset_b = type_b_idx - rg_b_start;
+    if offset_a != offset_b {
+        return false;
+    }
+
+    // For each pair of types in the rec group, check structural compatibility
+    // This includes checking that supertypes match and composite types match
+    for i in 0..rg_a_count {
+        let idx_a = rg_a_start + i;
+        let idx_b = rg_b_start + i;
+
+        // Supertypes must match (relative to their rec group starts)
+        let super_a = module_a.type_supertypes.get(idx_a as usize).copied().flatten();
+        let super_b = module_b.type_supertypes.get(idx_b as usize).copied().flatten();
+        match (super_a, super_b) {
+            (None, None) => {}
+            (Some(sa), Some(sb)) => {
+                // Supertype indices must refer to the same relative position.
+                // Both must be either inside or outside their rec groups.
+                let sa_inside = sa >= rg_a_start && sa < rg_a_start + rg_a_count;
+                let sb_inside = sb >= rg_b_start && sb < rg_b_start + rg_b_count;
+
+                if sa_inside != sb_inside {
+
+                    return false; // One inside, one outside -> mismatch
+                }
+                if sa_inside {
+                    // Both inside their respective rec groups: compare offsets
+                    let sa_offset = sa - rg_a_start;
+                    let sb_offset = sb - rg_b_start;
+                    if sa_offset != sb_offset {
+                        return false;
+                    }
+                } else {
+                    // Both outside their rec groups: must refer to
+                    // rec-group-compatible types (recursively)
+                    if !are_types_rec_group_compatible(
+                        sa, precise_a, sb, precise_b, module_a, module_b,
+                    ) {
+    
+                        return false;
+                    }
+                }
+            }
+            _ => return false, // One has supertype, other doesn't
+        }
+
+        // Check that finality matches
+        let final_a = precise_a.type_finality.get(idx_a as usize).copied().unwrap_or(true);
+        let final_b = precise_b.type_finality.get(idx_b as usize).copied().unwrap_or(true);
+        if final_a != final_b {
+            return false;
+        }
+
+        // Check structural compatibility of the composite types.
+        // First check GC type kind (func vs struct vs array) matches
+        let gc_a = module_a.gc_types.get(idx_a as usize);
+        let gc_b = module_b.gc_types.get(idx_b as usize);
+        match (gc_a, gc_b) {
+            (Some(kiln_runtime::module::GcTypeInfo::Struct(fields_a)),
+             Some(kiln_runtime::module::GcTypeInfo::Struct(fields_b))) => {
+                // Struct types: compare field counts and storage types.
+                // Field reference types that point to type indices must be
+                // resolved relative to rec groups (handled by the overall check).
+                if fields_a.len() != fields_b.len() {
+                    return false;
+                }
+                for (fa, fb) in fields_a.iter().zip(fields_b.iter()) {
+                    if fa.storage != fb.storage || fa.mutable != fb.mutable {
+                        return false;
+                    }
+                }
+            }
+            (Some(kiln_runtime::module::GcTypeInfo::Array(elem_a)),
+             Some(kiln_runtime::module::GcTypeInfo::Array(elem_b))) => {
+                if elem_a.storage != elem_b.storage || elem_a.mutable != elem_b.mutable {
+                    return false;
+                }
+            }
+            (Some(kiln_runtime::module::GcTypeInfo::Func),
+             Some(kiln_runtime::module::GcTypeInfo::Func)) => {
+                // Func types: use structural comparison
+                if !are_func_types_structurally_compatible(idx_a, module_a, idx_b, module_b, 0) {
+                    return false;
+                }
+            }
+            (None, None) => {
+                // No GC info: fall back to func type comparison
+                if !are_func_types_structurally_compatible(idx_a, module_a, idx_b, module_b, 0) {
+                    return false;
+                }
+            }
+            _ => {
+                // Different GC type kinds (e.g., Func vs Struct)
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
+/// Find which rec group a type index belongs to.
+/// Returns (start_type_idx, type_count) for the rec group, or None.
+fn find_rec_group(type_idx: u32, rec_groups: &[(u32, u32)]) -> Option<(u32, u32)> {
+    for &(start, count) in rec_groups {
+        if type_idx >= start && type_idx < start + count {
+            return Some((start, count));
+        }
+    }
+    None
+}
+
+/// Count how many global imports appear at or before `import_idx` in the import list.
+/// Returns the global-specific index for the import at position `import_idx`.
+fn count_global_imports_up_to(import_types: &[RuntimeImportDesc], import_idx: usize) -> usize {
+    let mut global_count = 0;
+    for (i, desc) in import_types.iter().enumerate() {
+        if matches!(desc, RuntimeImportDesc::Global(_)) {
+            if i == import_idx {
+                return global_count;
+            }
+            global_count += 1;
+        }
+    }
+    global_count
+}
+
+/// Check if two precise reference types are exactly equal.
+///
+/// Uses the precise ref info (from binary parsing) when available to distinguish
+/// nullable from non-nullable abstract heap types that the runtime ValueType
+/// conflates (e.g., both `(ref null func)` and `(ref func)` map to FuncRef).
+fn precise_ref_types_equal(
+    a_vt: &ValueType, a_precise: Option<(bool, i64)>,
+    b_vt: &ValueType, b_precise: Option<(bool, i64)>,
+) -> bool {
+    // If we have precise info for both, use it for definitive comparison
+    match (a_precise, b_precise) {
+        (Some((a_null, a_ht)), Some((b_null, b_ht))) => {
+            a_null == b_null && a_ht == b_ht
+        }
+        (Some(_), None) | (None, Some(_)) => {
+            // One has precise info, one doesn't. For abstract ref types that
+            // lose info (FuncRef, ExternRef), the precise info is the authority.
+            // For non-ref or concrete ref types, ValueType is sufficient.
+            // If the ValueTypes match AND neither is an abstract ref type that
+            // could be lossy, they're equal.
+            if a_vt == b_vt {
+                // Check if this is a potentially lossy type
+                match a_vt {
+                    ValueType::FuncRef | ValueType::ExternRef
+                    | ValueType::AnyRef | ValueType::EqRef
+                    | ValueType::I31Ref | ValueType::ExnRef => {
+                        // These could be lossy - can't confirm equality without
+                        // precise info on both sides. Be conservative: they match
+                        // only if we have no evidence of mismatch.
+                        // The side with precise info tells us the nullability.
+                        // The side without precise info is assumed nullable
+                        // (since the shorthand forms like 0x70 are nullable).
+                        let (precise_null, _) = a_precise.or(b_precise).unwrap();
+                        // If the precise side says non-nullable but the other side
+                        // decoded to a nullable shorthand, they're different.
+                        precise_null // If nullable, they match; if non-nullable, mismatch
+                    }
+                    _ => true, // Non-ref or concrete ref types are not lossy
+                }
+            } else {
+                false
+            }
+        }
+        (None, None) => {
+            // No precise info - fall back to ValueType comparison
+            a_vt == b_vt
+        }
+    }
+}
+
+/// Check if `sub_vt` (with precise info) is a subtype of `sup_vt` (with precise info).
+///
+/// This extends `is_value_type_subtype` with precise nullability info from the binary.
+fn precise_ref_type_is_subtype(
+    sub_vt: &ValueType, sub_precise: Option<(bool, i64)>,
+    sup_vt: &ValueType, sup_precise: Option<(bool, i64)>,
+) -> bool {
+    // First check: if we have precise info, use it for definitive nullability
+    if let (Some((sub_null, sub_ht)), Some((sup_null, sup_ht))) = (sub_precise, sup_precise) {
+        // Non-nullable is subtype of nullable but not vice versa
+        if sub_null && !sup_null {
+            return false;
+        }
+        // Heap type subtyping
+        return is_heap_type_subtype(sub_ht, sup_ht);
+    }
+
+    // If only one side has precise info, use it to refine the check
+    if let Some((sup_null, sup_ht)) = sup_precise {
+        if !sup_null {
+            // Supertype is non-nullable. Check if sub is nullable.
+            if let Some((sub_null, _)) = sub_precise {
+                if sub_null {
+                    return false; // nullable is NOT subtype of non-nullable
+                }
+            } else {
+                // Sub has no precise info. If it's FuncRef (which is nullable),
+                // it's NOT a subtype of a non-nullable sup.
+                match sub_vt {
+                    ValueType::FuncRef | ValueType::ExternRef
+                    | ValueType::AnyRef | ValueType::EqRef => {
+                        return false;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        // Check if sub's heap type is a subtype of sup's heap type
+        if let Some((_, sub_ht)) = sub_precise {
+            return is_heap_type_subtype(sub_ht, sup_ht);
+        }
+    }
+
+    if let Some((sub_null, _sub_ht)) = sub_precise {
+        if sub_null {
+            // Sub is nullable. Sup must also be nullable for subtyping.
+            if let Some((sup_null, _)) = sup_precise {
+                if !sup_null {
+                    return false;
+                }
+            }
+            // Without precise sup info, check if sup ValueType represents nullable
+            // FuncRef = (ref null func), ExternRef = (ref null extern) - all nullable
+        }
+    }
+
+    // Fall back to standard ValueType subtyping
+    is_value_type_subtype(sub_vt, sup_vt)
+}
+
+/// Check if heap type `sub_ht` (as s33) is a subtype of `sup_ht` (as s33).
+///
+/// Heap type hierarchy:
+/// - func is supertype of all function types (concrete indices that are func types)
+/// - extern is supertype of all extern types
+/// - any > eq > i31, struct, array
+/// - nofunc <: all func types, noextern <: all extern types, none <: all any types
+fn is_heap_type_subtype(sub_ht: i64, sup_ht: i64) -> bool {
+    if sub_ht == sup_ht {
+        return true;
+    }
+    // Abstract heap type codes (negative s33):
+    // -16 = func, -17 = extern, -18 = any, -19 = eq
+    // -20 = i31, -21 = struct, -22 = array, -23 = exn
+    // -13 = nofunc, -14 = noextern, -15 = none, -12 = noexn
+    match (sub_ht, sup_ht) {
+        // nofunc is bottom of func hierarchy
+        (-13, -16) => true,           // nofunc <: func
+        (-13, _) if sup_ht >= 0 => true, // nofunc <: any concrete func type
+        // noextern is bottom of extern hierarchy
+        (-14, -17) => true,           // noextern <: extern
+        // none is bottom of any hierarchy
+        (-15, -18) => true,           // none <: any
+        (-15, -19) => true,           // none <: eq
+        (-15, -20) => true,           // none <: i31
+        (-15, -21) => true,           // none <: struct
+        (-15, -22) => true,           // none <: array
+        // any hierarchy
+        (-19, -18) => true,           // eq <: any
+        (-20, -18) => true,           // i31 <: any
+        (-20, -19) => true,           // i31 <: eq
+        (-21, -18) => true,           // struct <: any
+        (-21, -19) => true,           // struct <: eq
+        (-22, -18) => true,           // array <: any
+        (-22, -19) => true,           // array <: eq
+        // noexn is bottom of exn hierarchy
+        (-12, -23) => true,           // noexn <: exn
+        // Concrete type index <: func (all concrete func types are subtypes of func)
+        (idx, -16) if idx >= 0 => true,
+        _ => false,
     }
 }
 
@@ -1556,6 +2295,73 @@ fn is_value_type_subtype_cross_module(
         // Fall back to single-module subtype check for all other cases
         _ => is_value_type_subtype(sub, sup),
     }
+}
+
+/// Check if type `sub_idx` in `sub_module` matches `sup_idx` in `sup_module`,
+/// using rec group structure and finality for type identity.
+///
+/// This is used for function import matching. The sub_idx type must be either
+/// identical to or a subtype of the sup_idx type. Type identity requires:
+/// - Matching rec group structure (same size, same supertypes, same finality)
+/// - Same position within the rec group
+/// - Structurally compatible composite types
+fn is_type_idx_match_cross_module(
+    sub_idx: u32, sub_module: &Module, sub_precise: &PreciseTypeInfo,
+    sup_idx: u32, sup_module: &Module, sup_precise: &PreciseTypeInfo,
+    depth: u32,
+) -> bool {
+    if depth > MAX_SUBTYPE_RECURSION_DEPTH {
+        return false;
+    }
+
+    // Check type identity using rec group and finality awareness
+    if are_types_identical_cross_module(
+        sub_idx, sub_module, sub_precise,
+        sup_idx, sup_module, sup_precise,
+    ) {
+        return true;
+    }
+
+    // Walk the supertype chain of sub_idx
+    if let Some(Some(parent_idx)) = sub_module.type_supertypes.get(sub_idx as usize) {
+        return is_type_idx_match_cross_module(
+            *parent_idx, sub_module, sub_precise,
+            sup_idx, sup_module, sup_precise,
+            depth + 1,
+        );
+    }
+
+    false
+}
+
+/// Check if two types are identical across modules, accounting for rec group
+/// structure and finality.
+///
+/// Two types are identical if:
+/// 1. They have the same finality
+/// 2. They belong to rec groups with the same structure
+/// 3. They occupy the same position within their rec groups
+/// 4. Their composite types (params, results) are structurally compatible
+fn are_types_identical_cross_module(
+    idx_a: u32, module_a: &Module, precise_a: &PreciseTypeInfo,
+    idx_b: u32, module_b: &Module, precise_b: &PreciseTypeInfo,
+) -> bool {
+    // Check finality matches
+    let final_a = precise_a.type_finality.get(idx_a as usize).copied().unwrap_or(true);
+    let final_b = precise_b.type_finality.get(idx_b as usize).copied().unwrap_or(true);
+    if final_a != final_b {
+        return false;
+    }
+
+    // Check rec group compatibility
+    if !are_types_rec_group_compatible(
+        idx_a, precise_a, idx_b, precise_b, module_a, module_b,
+    ) {
+        return false;
+    }
+
+    // Check structural compatibility of the types themselves
+    are_func_types_structurally_compatible(idx_a, module_a, idx_b, module_b, 0)
 }
 
 /// Check if type index `sub_idx` in `sub_module` is a subtype of `sup_idx` in `sup_module`.
