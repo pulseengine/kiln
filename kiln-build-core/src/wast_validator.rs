@@ -1451,6 +1451,14 @@ impl WastModuleValidator {
                             return Err(anyhow!("type mismatch"));
                         }
                         for &expected in frame.output_types.iter().rev() {
+                            {
+                                use std::io::Write;
+                                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/kiln_block_end_debug.log") {
+                                    let actual_top = stack.last();
+                                    writeln!(f, "[BLOCK_END] reachable: expected={:?}, actual_top={:?}, stack_len={}, frame_height={}",
+                                        expected, actual_top, stack.len(), frame_height).ok();
+                                }
+                            }
                             if !Self::pop_type_with_module(&mut stack, expected, frame_height, false, Some(module)) {
                                 return Err(anyhow!("type mismatch"));
                             }
