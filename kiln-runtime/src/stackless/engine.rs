@@ -10603,9 +10603,12 @@ impl StacklessEngine {
                             _ => return Err(kiln_error::Error::runtime_trap("array.new_elem: expected i32 offset")),
                         };
                         // Use resolved_elem_items for pre-evaluated values (GC types),
-                        // fall back to raw items for plain funcref segments
+                        // fall back to raw items for plain funcref segments.
+                        // Dropped segments have effective length 0.
                         let resolved = module.resolved_elem_items.get(elem_idx as usize);
-                        let elem_len = if let Some(r) = resolved {
+                        let elem_len = if instance.is_element_segment_dropped(elem_idx) {
+                            0
+                        } else if let Some(r) = resolved {
                             if !r.is_empty() { r.len() } else {
                                 module.elements.get(elem_idx as usize)
                                     .map_or(0, |e| e.items.len())
@@ -10791,16 +10794,35 @@ impl StacklessEngine {
                         if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
                             let elem_segment = module.elements.get(elem_idx as usize)
                                 .ok_or_else(|| kiln_error::Error::runtime_trap("array.init_elem: invalid elem index"))?;
-                            if src_offset as usize + len as usize > elem_segment.items.len() {
+                            // Check if element segment has been dropped (effective length 0)
+                            let effective_len = if instance.is_element_segment_dropped(elem_idx) {
+                                0
+                            } else {
+                                elem_segment.items.len()
+                            };
+                            if src_offset as u64 + len as u64 > effective_len as u64 {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds table access"));
                             }
-                            if dst_offset + len > a.len() as u32 {
+                            if dst_offset as u64 + len as u64 > a.len() as u64 {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
                             }
+                            // Use resolved_elem_items for pre-evaluated values
+                            let resolved = module.resolved_elem_items.get(elem_idx as usize);
                             for i in 0..len as usize {
-                                let item_idx = elem_segment.items.get(src_offset as usize + i)
-                                    .map_err(|_| kiln_error::Error::runtime_trap("array.init_elem: element access failed"))?;
-                                let item_val = Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)));
+                                let idx = src_offset as usize + i;
+                                let item_val = if let Some(resolved_items) = resolved {
+                                    if !resolved_items.is_empty() && idx < resolved_items.len() {
+                                        resolved_items[idx].clone()
+                                    } else {
+                                        let item_idx = elem_segment.items.get(idx)
+                                            .map_err(|_| kiln_error::Error::runtime_trap("array.init_elem: element access failed"))?;
+                                        Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)))
+                                    }
+                                } else {
+                                    let item_idx = elem_segment.items.get(idx)
+                                        .map_err(|_| kiln_error::Error::runtime_trap("array.init_elem: element access failed"))?;
+                                    Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)))
+                                };
                                 a.set((dst_offset as usize) + i, item_val).map_err(|_|
                                     kiln_error::Error::runtime_trap("array.init_elem: set failed"))?;
                             }

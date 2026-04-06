@@ -1099,11 +1099,15 @@ impl<'a> StreamingDecoder<'a> {
                 let (storage_type, new_offset) = self.parse_storage_type(data, offset)?;
                 offset = new_offset;
 
-                // Parse mutability flag
+                // Parse mutability flag (must be 0 or 1)
                 if offset >= data.len() {
                     return Err(Error::parse_error("Unexpected end of array type"));
                 }
-                let mutable = data[offset] != 0;
+                let mut_byte = data[offset];
+                if mut_byte > 1 {
+                    return Err(Error::parse_error("malformed mutability"));
+                }
+                let mutable = mut_byte != 0;
                 offset += 1;
 
                 let gc_element = GcFieldType { storage_type, mutable };
