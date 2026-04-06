@@ -839,8 +839,9 @@ impl<'a> StreamingDecoder<'a> {
                     // A rec group counts as one entry in the type section count
                     i += 1;
                 },
-                COMPOSITE_TYPE_SUB | COMPOSITE_TYPE_SUB_FINAL => {
+                COMPOSITE_TYPE_SUB | COMPOSITE_TYPE_SUB_FINAL | 0x4D | 0x4C => {
                     // subtype: 0x50/0x4F supertype* comptype
+                    // descriptor/describes: 0x4D/0x4C type_idx comptype (custom-descriptors)
                     // A standalone subtype is an implicit single-element rec group
                     let (new_offset, sub_type) = self.parse_subtype_entry(data, offset, type_index)?;
                     offset = new_offset;
@@ -928,6 +929,41 @@ impl<'a> StreamingDecoder<'a> {
                 SubType {
                     is_final,
                     supertype_indices,
+                    composite_kind,
+                    type_index,
+                }
+            },
+            // Custom descriptors proposal: descriptor (0x4D) and describes (0x4C)
+            // Format: (0x4D idx)? (0x4C idx)? composite_type
+            // Each clause can appear at most once; duplicates are rejected by the test suite.
+            0x4D | 0x4C => {
+                let mut has_descriptor = false;
+                let mut has_describes = false;
+                // Parse up to one descriptor and one describes clause
+                while offset < data.len() && (data[offset] == 0x4D || data[offset] == 0x4C) {
+                    let clause = data[offset];
+                    if clause == 0x4D {
+                        if has_descriptor {
+                            return Err(Error::parse_error("malformed definition type"));
+                        }
+                        has_descriptor = true;
+                    } else {
+                        if has_describes {
+                            return Err(Error::parse_error("malformed definition type"));
+                        }
+                        has_describes = true;
+                    }
+                    offset += 1; // skip marker
+                    let (_ref_type_idx, bytes_read) = read_leb128_u32(data, offset)?;
+                    offset += bytes_read;
+                }
+                // Parse the composite type
+                let (new_offset, composite_kind) = self.parse_composite_type(data, offset)?;
+                offset = new_offset;
+
+                SubType {
+                    is_final: true,
+                    supertype_indices: Vec::new(),
                     composite_kind,
                     type_index,
                 }
