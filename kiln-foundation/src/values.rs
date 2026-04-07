@@ -125,17 +125,32 @@ pub struct ArrayRef<
 > {
     /// Type index of the array
     pub type_index: u32,
-    /// Array elements
+    /// Array elements (serialized via BoundedVec)
     pub elements:   BoundedVec<Value, MAX_ARRAY_ELEMENTS, P>,
+    /// Side storage for GC reference values that lose heap data during
+    /// BoundedVec serialization. Indexed by element position. When a
+    /// Value::ArrayRef or Value::StructRef is stored, the original value
+    /// with its Arc heap data is kept here so `get` can return the live
+    /// reference instead of a deserialized stub.
+    #[cfg(feature = "std")]
+    gc_refs: std::vec::Vec<Option<Value>>,
 }
 
 impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> ArrayRef<P> {
+    /// Check if a Value contains GC heap data that would be lost during
+    /// BoundedVec serialization (ArrayRef, StructRef with Arc internals).
+    fn is_gc_ref(value: &Value) -> bool {
+        matches!(value, Value::ArrayRef(Some(_)) | Value::StructRef(Some(_)))
+    }
+
     /// Create a new array reference
     pub fn new(type_index: u32, provider: P) -> kiln_error::Result<Self> {
         let elements = BoundedVec::new(provider).map_err(Error::from)?;
         Ok(Self {
             type_index,
             elements,
+            #[cfg(feature = "std")]
+            gc_refs: std::vec::Vec::new(),
         })
     }
 
@@ -147,12 +162,24 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Ar
         provider: P,
     ) -> kiln_error::Result<Self> {
         let mut elements = BoundedVec::new(provider).map_err(Error::from)?;
+        #[cfg(feature = "std")]
+        let mut gc_refs = std::vec::Vec::new();
         for _ in 0..size {
+            #[cfg(feature = "std")]
+            {
+                if Self::is_gc_ref(&init_value) {
+                    gc_refs.push(Some(init_value.clone()));
+                } else {
+                    gc_refs.push(None);
+                }
+            }
             elements.push(init_value.clone()).map_err(Error::from)?;
         }
         Ok(Self {
             type_index,
             elements,
+            #[cfg(feature = "std")]
+            gc_refs,
         })
     }
 
@@ -168,12 +195,32 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Ar
 
     /// Get element at index
     pub fn get(&self, index: usize) -> kiln_error::Result<Value> {
+        // Check the GC reference side store first — it preserves the
+        // Arc heap data that BoundedVec serialization loses.
+        #[cfg(feature = "std")]
+        {
+            if let Some(Some(gc_val)) = self.gc_refs.get(index) {
+                return Ok(gc_val.clone());
+            }
+        }
         self.elements.get(index).map_err(Error::from)
     }
 
     /// Set element at index
     pub fn set(&mut self, index: usize, value: Value) -> kiln_error::Result<()> {
         if index < self.elements.len() {
+            #[cfg(feature = "std")]
+            {
+                // Grow gc_refs if needed
+                while self.gc_refs.len() <= index {
+                    self.gc_refs.push(None);
+                }
+                if Self::is_gc_ref(&value) {
+                    self.gc_refs[index] = Some(value.clone());
+                } else {
+                    self.gc_refs[index] = None;
+                }
+            }
             self.elements.set(index, value).map_err(Error::from).map(|_| ())
         } else {
             Err(Error::validation_error("Array index out of bounds"))
@@ -182,6 +229,14 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> Ar
 
     /// Push element to array
     pub fn push(&mut self, value: Value) -> kiln_error::Result<()> {
+        #[cfg(feature = "std")]
+        {
+            if Self::is_gc_ref(&value) {
+                self.gc_refs.push(Some(value.clone()));
+            } else {
+                self.gc_refs.push(None);
+            }
+        }
         self.elements.push(value).map_err(Error::from)
     }
 }
@@ -191,7 +246,12 @@ impl<P: MemoryProvider + Default + Clone + core::fmt::Debug + PartialEq + Eq> De
 {
     fn default() -> Self {
         let provider = P::default();
-        Self::new(0, provider).expect("Default ArrayRef creation failed")
+        Self {
+            type_index: 0,
+            elements: BoundedVec::new(provider).expect("Default ArrayRef creation failed"),
+            #[cfg(feature = "std")]
+            gc_refs: std::vec::Vec::new(),
+        }
     }
 }
 
@@ -298,7 +358,12 @@ impl GcArrayRef {
     /// Matches any non-null array reference.
     pub fn sentinel() -> Self {
         Self::new(ArrayRef::new(u32::MAX, DefaultMemoryProvider::default())
-            .unwrap_or_else(|_| ArrayRef { type_index: u32::MAX, elements: Default::default() }))
+            .unwrap_or_else(|_| ArrayRef {
+                type_index: u32::MAX,
+                elements: Default::default(),
+                #[cfg(feature = "std")]
+                gc_refs: std::vec::Vec::new(),
+            }))
     }
 
     /// Check if this is a sentinel (used for "any non-null" matching).
