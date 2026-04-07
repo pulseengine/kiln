@@ -3785,9 +3785,15 @@ impl WastModuleValidator {
                     match simd_opcode {
                         // v128.load variants (0x00-0x0A): [i32] -> [v128]
                         0x00..=0x0A => {
-                            let (align, o) = Self::parse_varuint32(code, offset)?; // align
+                            let (align_with_flags, o) = Self::parse_varuint32(code, offset)?;
+                            let align = align_with_flags & 0x3F;
                             Self::validate_simd_alignment(simd_opcode, align)?;
-                            let (_, o) = Self::parse_varuint32(code, o)?;      // offset
+                            let mut o = o;
+                            if (align_with_flags & 0x40) != 0 {
+                                let (_, new_o) = Self::parse_varuint32(code, o)?;
+                                o = new_o;
+                            }
+                            let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
                                 return Err(anyhow!("type mismatch"));
@@ -3796,8 +3802,14 @@ impl WastModuleValidator {
                         },
                         // v128.store (0x0B): [i32, v128] -> []
                         0x0B => {
-                            let (align, o) = Self::parse_varuint32(code, offset)?;
+                            let (align_with_flags, o) = Self::parse_varuint32(code, offset)?;
+                            let align = align_with_flags & 0x3F;
                             Self::validate_simd_alignment(simd_opcode, align)?;
+                            let mut o = o;
+                            if (align_with_flags & 0x40) != 0 {
+                                let (_, new_o) = Self::parse_varuint32(code, o)?;
+                                o = new_o;
+                            }
                             let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if !Self::pop_type(&mut stack, StackType::V128, frame_height, unreachable) {
@@ -4036,8 +4048,15 @@ impl WastModuleValidator {
                         },
                         // v128.load*_lane (0x54-0x57): [i32, v128] -> [v128]
                         0x54..=0x57 => {
-                            let (align, o) = Self::parse_varuint32(code, offset)?;
+                            let (align_with_flags, o) = Self::parse_varuint32(code, offset)?;
+                            let align = align_with_flags & 0x3F;
                             Self::validate_simd_alignment(simd_opcode, align)?;
+                            let mut o = o;
+                            // Multi-memory flag (bit 6): memory index follows alignment
+                            if (align_with_flags & 0x40) != 0 {
+                                let (_, new_o) = Self::parse_varuint32(code, o)?;
+                                o = new_o;
+                            }
                             let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
@@ -4055,8 +4074,15 @@ impl WastModuleValidator {
                         },
                         // v128.store*_lane (0x58-0x5B): [i32, v128] -> []
                         0x58..=0x5B => {
-                            let (align, o) = Self::parse_varuint32(code, offset)?;
+                            let (align_with_flags, o) = Self::parse_varuint32(code, offset)?;
+                            let align = align_with_flags & 0x3F;
                             Self::validate_simd_alignment(simd_opcode, align)?;
+                            let mut o = o;
+                            // Multi-memory flag (bit 6): memory index follows alignment
+                            if (align_with_flags & 0x40) != 0 {
+                                let (_, new_o) = Self::parse_varuint32(code, o)?;
+                                o = new_o;
+                            }
                             let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if offset >= code.len() { return Err(anyhow!("unexpected end")); }
@@ -4073,8 +4099,14 @@ impl WastModuleValidator {
                         },
                         // v128.load32_zero, v128.load64_zero (0x5C, 0x5D): [i32] -> [v128]
                         0x5C | 0x5D => {
-                            let (align, o) = Self::parse_varuint32(code, offset)?;
+                            let (align_with_flags, o) = Self::parse_varuint32(code, offset)?;
+                            let align = align_with_flags & 0x3F;
                             Self::validate_simd_alignment(simd_opcode, align)?;
+                            let mut o = o;
+                            if (align_with_flags & 0x40) != 0 {
+                                let (_, new_o) = Self::parse_varuint32(code, o)?;
+                                o = new_o;
+                            }
                             let (_, o) = Self::parse_varuint32(code, o)?;
                             offset = o;
                             if !Self::pop_type(&mut stack, StackType::I32, frame_height, unreachable) {
