@@ -30,6 +30,14 @@ use kiln_debug::runtime_traits::{RuntimeDebugger, RuntimeState, DebugAction};
 // GC heap reference wrapper types for WebAssembly GC proposal
 use kiln_foundation::values::{GcStructRef, GcArrayRef};
 
+// Side table for extern.convert_any / any.convert_extern round-trip.
+// Stores the original anyref value so it can be recovered when externalized
+// and then re-internalized. Uses thread-local storage for safety.
+use std::cell::RefCell;
+thread_local! {
+    static EXTERN_TABLE: RefCell<Vec<Value>> = RefCell::new(Vec::new());
+}
+
 use kiln_error::Result;
 use kiln_foundation::{
     traits::BoundedCapacity,
@@ -83,6 +91,32 @@ fn func_types_match(expected: &kiln_foundation::types::FuncType, actual: &kiln_f
         }
     }
     true
+}
+
+/// Check if a function type matches for call_indirect, using canonical type IDs
+/// when available (for proper GC subtype support), or falling back to structural comparison.
+///
+/// Falls back to structural comparison when canonical type IDs are not available
+/// (e.g., modules without GC types).
+fn call_indirect_type_matches(
+    expected_type_idx: u32,
+    actual_type_idx: u32,
+    module: &crate::module::Module,
+) -> bool {
+    // If canonical type IDs are available, use them for proper GC type matching
+    if !module.type_canonical_ids.is_empty() {
+        return is_runtime_subtype_canonical(
+            actual_type_idx,
+            expected_type_idx,
+            &module.type_supertypes,
+            &module.type_canonical_ids,
+        );
+    }
+    // Fallback for modules without canonical IDs: structural comparison
+    match (module.types.get(expected_type_idx as usize), module.types.get(actual_type_idx as usize)) {
+        (Some(expected), Some(actual)) => func_types_match(expected, actual),
+        _ => false,
+    }
 }
 
 /// Maximum number of concurrent module instances
@@ -244,6 +278,18 @@ pub struct StacklessEngine {
     /// Not used directly as a field - the trampoline in execute() uses a local Vec instead.
     /// Kept for potential future use (e.g., stack inspection).
     call_stack:            Vec<SuspendedFrame>,
+    // ── P3 Async Task Protocol State ──────────────────────────────────
+    // These fields implement the host-provided builtins that Meld-fused
+    // P3 components import from the $root namespace.
+    /// Per-(instance, context_index) context slot for [context-get-N]/[context-set-N].
+    /// Used by wit-bindgen's async support to thread FutureState pointers.
+    p3_context_slots:      HashMap<(usize, u32), i32>,
+    /// Last [task-return] values per instance. The async-lift wrapper's
+    /// implementation calls [task-return]N to signal completion with a result.
+    /// We capture the values here for the caller to retrieve.
+    p3_task_return_values: HashMap<usize, Vec<Value>>,
+    /// Monotonic handle counter for waitable sets.
+    p3_next_waitable_set:  u32,
 }
 
 /// Simple RuntimeState implementation for debugger callbacks
@@ -407,6 +453,10 @@ impl StacklessEngine {
             lowered_functions:   HashMap::new(),
             instance_registry:   HashMap::new(),
             call_stack:          Vec::with_capacity(256),
+            // P3 async protocol state
+            p3_context_slots:      HashMap::new(),
+            p3_task_return_values: HashMap::new(),
+            p3_next_waitable_set:  1, // 0 is reserved
         }
     }
 
@@ -509,6 +559,115 @@ impl StacklessEngine {
 
         // Local tag without export or unregistered instance - no cross-module identity
         None
+    }
+
+    // ── P3 Async Task Built-in Intrinsics ─────────────────────────────
+    //
+    // Meld fuses P3 async components into a single core module that imports
+    // these builtins from the "$root" namespace.  For synchronous interpreter
+    // execution the semantics collapse to simple state-machine operations.
+    //
+    // Returns Some(results) if the import was a P3 builtin, None otherwise.
+    fn try_dispatch_p3_builtin(
+        &mut self,
+        instance_id: usize,
+        module_name: &str,
+        field_name: &str,
+        args: &[Value],
+    ) -> Option<Result<Vec<Value>>> {
+        // Only handle $root and [export]$root namespaces
+        if module_name != "$root" && module_name != "[export]$root" {
+            return None;
+        }
+
+        // Strip optional instance suffix ($2, $3, …) added by Meld for
+        // second/third component instance of the same type.
+        let base_name = if let Some(pos) = field_name.rfind('$') {
+            // Only strip if the suffix is numeric
+            if field_name[pos+1..].chars().all(|c| c.is_ascii_digit()) {
+                &field_name[..pos]
+            } else {
+                field_name
+            }
+        } else {
+            field_name
+        };
+
+        match base_name {
+            // ── [context-get-N] ──────────────────────────────────────
+            // () -> i32 — return the value stored in context slot N
+            name if name.starts_with("[context-get-") => {
+                let slot_str = &name["[context-get-".len()..name.len()-1];
+                let slot: u32 = slot_str.parse().unwrap_or(0);
+                let val = self.p3_context_slots
+                    .get(&(instance_id, slot))
+                    .copied()
+                    .unwrap_or(0);
+                Some(Ok(vec![Value::I32(val)]))
+            }
+
+            // ── [context-set-N] ──────────────────────────────────────
+            // (i32) -> () — store value in context slot N
+            name if name.starts_with("[context-set-") => {
+                let slot_str = &name["[context-set-".len()..name.len()-1];
+                let slot: u32 = slot_str.parse().unwrap_or(0);
+                let val = match args.first() {
+                    Some(Value::I32(v)) => *v,
+                    _ => 0,
+                };
+                self.p3_context_slots.insert((instance_id, slot), val);
+                Some(Ok(vec![]))
+            }
+
+            // ── [task-return]N ───────────────────────────────────────
+            // Variadic signature — captures ALL args as the task result.
+            // The async-lift wrapper calls this to signal completion.
+            name if name.starts_with("[task-return]") => {
+                self.p3_task_return_values
+                    .insert(instance_id, args.to_vec());
+                Some(Ok(vec![]))
+            }
+
+            // ── [waitable-set-new] ───────────────────────────────────
+            // () -> i32 — allocate a new waitable set handle
+            "[waitable-set-new]" => {
+                let handle = self.p3_next_waitable_set;
+                self.p3_next_waitable_set += 1;
+                Some(Ok(vec![Value::I32(handle as i32)]))
+            }
+
+            // ── [waitable-set-poll] ──────────────────────────────────
+            // (i32, i32) -> i32  — poll set; synchronous mode: return 0
+            // (no pending async work in single-threaded interpreter)
+            "[waitable-set-poll]" => {
+                Some(Ok(vec![Value::I32(0)]))
+            }
+
+            // ── [waitable-set-drop] ──────────────────────────────────
+            // (i32) -> () — destroy waitable set (no-op)
+            "[waitable-set-drop]" => {
+                Some(Ok(vec![]))
+            }
+
+            // ── [waitable-join] ──────────────────────────────────────
+            // (i32, i32) -> () — join waitable to set (no-op for sync)
+            "[waitable-join]" => {
+                Some(Ok(vec![]))
+            }
+
+            // ── [task-cancel] ────────────────────────────────────────
+            // () -> () or (i32) -> i32 — cancel task (no-op for sync)
+            "[task-cancel]" => {
+                Some(Ok(vec![]))
+            }
+
+            _ => None, // Not a P3 builtin
+        }
+    }
+
+    /// Retrieve and clear the task-return values captured for an instance.
+    pub fn take_p3_task_return_values(&mut self, instance_id: usize) -> Option<Vec<Value>> {
+        self.p3_task_return_values.remove(&instance_id)
     }
 
     /// Check if a function is a lowered function (from canon.lower)
@@ -1415,6 +1574,29 @@ impl StacklessEngine {
                             },
                         }
                     }
+                    // Try P3 async builtin dispatch before falling through to defaults.
+                    // Fused P3 modules import builtins from "$root" and "[export]$root".
+                    if let Some(result) = self.try_dispatch_p3_builtin(
+                        instance_id, &module_name, &field_name, &args,
+                    ) {
+                        return result.map(ExecutionOutcome::Complete);
+                    }
+
+                    // Try host handler for unlinked WASI imports
+                    #[cfg(feature = "wasi")]
+                    if let Some(ref mut handler) = self.host_handler {
+                        let instance = self.instances.get(&instance_id)
+                            .cloned();
+                        if let Some(inst) = instance {
+                            let mem_wrapper = inst.memory(0).ok();
+                            let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+                                .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
+                            if let Ok(results) = handler.call_import(&module_name, &field_name, &args, memory) {
+                                return Ok(ExecutionOutcome::Complete(results));
+                            }
+                        }
+                    }
+
                     // Import not linked or link unresolvable - return correct number of default results
                     // based on the imported function's type signature
                     // NOTE: Do NOT decrement here - execute() will decrement on Complete
@@ -1925,6 +2107,29 @@ impl StacklessEngine {
                                     // Not linked or link unresolvable - fall through to WASI dispatch
                                 }
 
+                                // Try P3 async builtins first (fused modules import from $root)
+                                {
+                                    let p3_args = Self::collect_function_args(&module, func_idx as usize, &mut operand_stack);
+                                    if let Some(result) = self.try_dispatch_p3_builtin(
+                                        instance_id, &module_name, &field_name, &p3_args,
+                                    ) {
+                                        match result {
+                                            Ok(results) => {
+                                                for r in results {
+                                                    operand_stack.push(r);
+                                                }
+                                                pc += 1;
+                                                continue;
+                                            }
+                                            Err(e) => return Err(e),
+                                        }
+                                    }
+                                    // Not a P3 builtin — push args back for WASI dispatch
+                                    for arg in p3_args.into_iter().rev() {
+                                        operand_stack.push(arg);
+                                    }
+                                }
+
                                 // Dispatch to WASI implementation
                                 #[cfg(feature = "tracing")]
                                 trace!(
@@ -2365,19 +2570,19 @@ impl StacklessEngine {
                         let func_type = module.types.get(func.type_idx as usize)
                             .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
 
-                        // Validate type matches expected type (structural equivalence)
-                        let expected_type = module.types.get(type_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid expected function type"))?;
-
-                        if !func_types_match(expected_type, func_type) {
+                        // Validate type matches expected type using canonical IDs when available
+                        if !call_indirect_type_matches(type_idx, func.type_idx, &module) {
                             #[cfg(feature = "tracing")]
-                            warn!(
-                                expected_params = expected_type.params.len(),
-                                expected_results = expected_type.results.len(),
-                                got_params = func_type.params.len(),
-                                got_results = func_type.results.len(),
-                                "[CALL_INDIRECT] Type mismatch"
-                            );
+                            {
+                                let expected_type = module.types.get(type_idx as usize);
+                                warn!(
+                                    expected_params = expected_type.map(|t| t.params.len()).unwrap_or(0),
+                                    expected_results = expected_type.map(|t| t.results.len()).unwrap_or(0),
+                                    got_params = func_type.params.len(),
+                                    got_results = func_type.results.len(),
+                                    "[CALL_INDIRECT] Type mismatch"
+                                );
+                            }
                             return Err(kiln_error::Error::runtime_trap("indirect call type mismatch"));
                         }
 
@@ -2446,15 +2651,43 @@ impl StacklessEngine {
                                             return_state: Some(saved_state),
                                         });
                                     } else {
-                                        // Not linked - dispatch to WASI if applicable
-                                        #[cfg(feature = "tracing")]
-                                        trace!(
-                                            module_name = %module_name,
-                                            field_name = %field_name,
-                                            "[CALL_INDIRECT] Import not linked, trying WASI dispatch"
-                                        );
+                                        // Not linked — try P3 builtins first, then WASI
+                                        if let Some(result) = self.try_dispatch_p3_builtin(
+                                            instance_id, &module_name, &field_name, &call_args,
+                                        ) {
+                                            match result {
+                                                Ok(results) => {
+                                                    for r in results {
+                                                        operand_stack.push(r);
+                                                    }
+                                                    pc += 1;
+                                                    continue;
+                                                }
+                                                Err(e) => return Err(e),
+                                            }
+                                        }
 
-                                        // Call WASI function (need to push args back for call_wasi_function)
+                                        // Not P3 — try host handler for unlinked imports
+                                        #[cfg(feature = "wasi")]
+                                        {
+                                            let inst = self.instances.get(&instance_id).cloned();
+                                            if let Some(ref mut handler) = self.host_handler {
+                                                if let Some(inst_arc) = inst {
+                                                    let mem_wrapper = inst_arc.memory(0).ok();
+                                                    let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+                                                        .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
+                                                    if let Ok(results) = handler.call_import(&module_name, &field_name, &call_args, memory) {
+                                                        for r in results {
+                                                            operand_stack.push(r);
+                                                        }
+                                                        pc += 1;
+                                                        continue;
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Fall through to legacy WASI dispatch
                                         for arg in call_args.iter().rev() {
                                             operand_stack.push(arg.clone());
                                         }
@@ -2716,15 +2949,12 @@ impl StacklessEngine {
                             return Err(kiln_error::Error::runtime_trap("return_call_indirect: function index out of bounds"));
                         }
 
-                        // Get function type and validate
+                        // Get function type and validate using canonical IDs when available
                         let func = &module.functions[func_idx];
                         let func_type = module.types.get(func.type_idx as usize)
                             .ok_or_else(|| kiln_error::Error::runtime_error("Invalid function type"))?;
 
-                        let expected_type = module.types.get(type_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_error("Invalid expected function type"))?;
-
-                        if !func_types_match(expected_type, func_type) {
+                        if !call_indirect_type_matches(type_idx, func.type_idx, &module) {
                             return Err(kiln_error::Error::runtime_trap("indirect call type mismatch"));
                         }
 
@@ -6290,6 +6520,7 @@ impl StacklessEngine {
                                 Value::StructRef(Some(_)) => 0i32,
                                 Value::ArrayRef(None) => 1i32,
                                 Value::ArrayRef(Some(_)) => 0i32,
+                                Value::Ref(_) => 0i32, // internalized extern is never null
                                 _ => {
                                     #[cfg(feature = "tracing")]
                                     error!("RefIsNull: expected reference type, got {:?}", ref_val);
@@ -6316,7 +6547,8 @@ impl StacklessEngine {
                                 }
                                 Value::FuncRef(Some(_)) | Value::ExternRef(Some(_))
                                 | Value::ExnRef(Some(_)) | Value::I31Ref(Some(_))
-                                | Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) => {
+                                | Value::StructRef(Some(_)) | Value::ArrayRef(Some(_))
+                                | Value::Ref(_) => {
                                     operand_stack.push(ref_val);
                                 }
                                 _ => {
@@ -6495,8 +6727,8 @@ impl StacklessEngine {
                             trace!("BrOnNonNull: label={}, is_null={}", br_label_idx, is_null);
                             if !is_null {
                                 // Not null - push reference and branch
-                                // (matches Br handler structure: set pc so that pc += 1
-                                // at end of iteration lands on the correct instruction)
+                                // br_on_non_null branches with the label's arity values
+                                // The ref is part of the branch values (pushed back on stack)
                                 operand_stack.push(ref_val);
                                 if br_label_idx as usize >= block_stack.len() {
                                     #[cfg(feature = "tracing")]
@@ -6504,14 +6736,36 @@ impl StacklessEngine {
                                     break;
                                 }
                                 let stack_idx = block_stack.len() - 1 - br_label_idx as usize;
-                                if let Some((block_type, start_pc, _block_type_idx, entry_stack_height)) = block_stack.get(stack_idx).copied() {
-                                    // Keep branch value, restore stack below
-                                    let branch_val = operand_stack.pop();
+                                if let Some((block_type, start_pc, block_type_idx, entry_stack_height)) = block_stack.get(stack_idx).copied() {
+                                    // Determine how many values to preserve (same logic as Br)
+                                    let values_to_preserve = if block_type == "loop" {
+                                        match block_type_idx {
+                                            0x40 => 0,
+                                            0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F => 0,
+                                            _ => module.types.get(block_type_idx as usize)
+                                                .map_or(0, |ft| ft.params.len()),
+                                        }
+                                    } else {
+                                        match block_type_idx {
+                                            0x40 => 0,
+                                            0x7F | 0x7E | 0x7D | 0x7C | 0x7B | 0x70 | 0x6F => 1,
+                                            _ => module.types.get(block_type_idx as usize)
+                                                .map_or(1, |ft| ft.results.len()),
+                                        }
+                                    };
+                                    // Save the values to preserve from top of stack
+                                    let mut preserved = Vec::new();
+                                    for _ in 0..values_to_preserve {
+                                        if let Some(v) = operand_stack.pop() {
+                                            preserved.push(v);
+                                        }
+                                    }
                                     while operand_stack.len() > entry_stack_height {
                                         operand_stack.pop();
                                     }
-                                    if let Some(bv) = branch_val {
-                                        operand_stack.push(bv);
+                                    // Restore preserved values in correct order
+                                    for v in preserved.into_iter().rev() {
+                                        operand_stack.push(v);
                                     }
 
                                     if block_type == "loop" {
@@ -10587,6 +10841,9 @@ impl StacklessEngine {
 
                     Instruction::ArrayNewElem(type_idx, elem_idx) => {
                         // array.new_elem: [offset i32, size i32] -> [arrayref]
+                        // Creates an array from elements of a passive element segment.
+                        // Uses resolved_elem_items which contain pre-evaluated values
+                        // (arrays, structs, i31refs, etc. — not just function indices).
                         #[cfg(feature = "tracing")]
                         trace!("ArrayNewElem: type_idx={}, elem_idx={}", type_idx, elem_idx);
                         let size = match operand_stack.pop() {
@@ -10597,9 +10854,22 @@ impl StacklessEngine {
                             Some(Value::I32(n)) => n as u32,
                             _ => return Err(kiln_error::Error::runtime_trap("array.new_elem: expected i32 offset")),
                         };
-                        let elem_segment = module.elements.get(elem_idx as usize)
-                            .ok_or_else(|| kiln_error::Error::runtime_trap("array.new_elem: invalid elem index"))?;
-                        if offset_val as usize + size as usize > elem_segment.items.len() {
+                        // Use resolved_elem_items for pre-evaluated values (GC types),
+                        // fall back to raw items for plain funcref segments.
+                        // Dropped segments have effective length 0.
+                        let resolved = module.resolved_elem_items.get(elem_idx as usize);
+                        let elem_len = if instance.is_element_segment_dropped(elem_idx) {
+                            0
+                        } else if let Some(r) = resolved {
+                            if !r.is_empty() { r.len() } else {
+                                module.elements.get(elem_idx as usize)
+                                    .map_or(0, |e| e.items.len())
+                            }
+                        } else {
+                            module.elements.get(elem_idx as usize)
+                                .map_or(0, |e| e.items.len())
+                        };
+                        if offset_val as u64 + size as u64 > elem_len as u64 {
                             return Err(kiln_error::Error::runtime_trap("out of bounds table access"));
                         }
                         let mut array_ref = kiln_foundation::values::ArrayRef::new(
@@ -10607,9 +10877,23 @@ impl StacklessEngine {
                             kiln_foundation::traits::DefaultMemoryProvider::default()
                         ).map_err(|_| kiln_error::Error::runtime_error("Failed to create array"))?;
                         for i in 0..size as usize {
-                            let item_idx = elem_segment.items.get(offset_val as usize + i)
-                                .map_err(|_| kiln_error::Error::runtime_trap("array.new_elem: element access failed"))?;
-                            let item_val = Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)));
+                            let idx = offset_val as usize + i;
+                            let item_val = if let Some(resolved_items) = resolved {
+                                if !resolved_items.is_empty() && idx < resolved_items.len() {
+                                    resolved_items[idx].clone()
+                                } else {
+                                    // Fallback to raw function index
+                                    let elem_segment = &module.elements[elem_idx as usize];
+                                    let func_idx = elem_segment.items.get(idx)
+                                        .map_err(|_| kiln_error::Error::runtime_trap("array.new_elem: element access failed"))?;
+                                    Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(func_idx)))
+                                }
+                            } else {
+                                let elem_segment = &module.elements[elem_idx as usize];
+                                let func_idx = elem_segment.items.get(idx)
+                                    .map_err(|_| kiln_error::Error::runtime_trap("array.new_elem: element access failed"))?;
+                                Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(func_idx)))
+                            };
                             array_ref.push(item_val).map_err(|_|
                                 kiln_error::Error::runtime_error("Failed to push to array"))?;
                         }
@@ -10762,16 +11046,35 @@ impl StacklessEngine {
                         if let Some(Value::ArrayRef(Some(mut a))) = operand_stack.pop() {
                             let elem_segment = module.elements.get(elem_idx as usize)
                                 .ok_or_else(|| kiln_error::Error::runtime_trap("array.init_elem: invalid elem index"))?;
-                            if src_offset as usize + len as usize > elem_segment.items.len() {
+                            // Check if element segment has been dropped (effective length 0)
+                            let effective_len = if instance.is_element_segment_dropped(elem_idx) {
+                                0
+                            } else {
+                                elem_segment.items.len()
+                            };
+                            if src_offset as u64 + len as u64 > effective_len as u64 {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds table access"));
                             }
-                            if dst_offset + len > a.len() as u32 {
+                            if dst_offset as u64 + len as u64 > a.len() as u64 {
                                 return Err(kiln_error::Error::runtime_trap("out of bounds array access"));
                             }
+                            // Use resolved_elem_items for pre-evaluated values
+                            let resolved = module.resolved_elem_items.get(elem_idx as usize);
                             for i in 0..len as usize {
-                                let item_idx = elem_segment.items.get(src_offset as usize + i)
-                                    .map_err(|_| kiln_error::Error::runtime_trap("array.init_elem: element access failed"))?;
-                                let item_val = Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)));
+                                let idx = src_offset as usize + i;
+                                let item_val = if let Some(resolved_items) = resolved {
+                                    if !resolved_items.is_empty() && idx < resolved_items.len() {
+                                        resolved_items[idx].clone()
+                                    } else {
+                                        let item_idx = elem_segment.items.get(idx)
+                                            .map_err(|_| kiln_error::Error::runtime_trap("array.init_elem: element access failed"))?;
+                                        Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)))
+                                    }
+                                } else {
+                                    let item_idx = elem_segment.items.get(idx)
+                                        .map_err(|_| kiln_error::Error::runtime_trap("array.init_elem: element access failed"))?;
+                                    Value::FuncRef(Some(kiln_foundation::values::FuncRef::from_index(item_idx)))
+                                };
                                 a.set((dst_offset as usize) + i, item_val).map_err(|_|
                                     kiln_error::Error::runtime_trap("array.init_elem: set failed"))?;
                             }
@@ -10998,24 +11301,64 @@ impl StacklessEngine {
                     Instruction::AnyConvertExtern => {
                         // any.convert_extern: [externref] -> [anyref]
                         // Convert an externref to an anyref (internalize)
+                        // Per the spec, null stays null, non-null becomes an opaque anyref
+                        // that is NOT eq/i31/struct/array. We represent this as Value::Ref.
                         #[cfg(feature = "tracing")]
                         trace!("AnyConvertExtern");
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("any.convert_extern: expected reference"))?;
-                        // In our representation, externref and anyref share Value::ExternRef
-                        // The spec says null stays null, non-null wraps
-                        operand_stack.push(val);
+                        let result = match val {
+                            Value::ExternRef(None) => Value::I31Ref(None), // null extern -> null any
+                            Value::ExternRef(Some(er)) => {
+                                // Check if this externref was created by extern.convert_any
+                                // (marked with high bit set in the index)
+                                if er.index & 0x80000000 != 0 {
+                                    let table_idx = (er.index & 0x7FFFFFFF) as usize;
+                                    EXTERN_TABLE.with(|table| {
+                                        let t = table.borrow();
+                                        if let Some(original) = t.get(table_idx) {
+                                            original.clone()
+                                        } else {
+                                            Value::Ref(er.index)
+                                        }
+                                    })
+                                } else {
+                                    Value::Ref(er.index) // opaque any for host-provided externrefs
+                                }
+                            }
+                            other => other, // pass through (shouldn't happen per spec)
+                        };
+                        operand_stack.push(result);
                     }
 
                     Instruction::ExternConvertAny => {
                         // extern.convert_any: [anyref] -> [externref]
                         // Convert an anyref to an externref (externalize)
+                        // Per the spec, null stays null, non-null becomes an externref.
                         #[cfg(feature = "tracing")]
                         trace!("ExternConvertAny");
                         let val = operand_stack.pop().ok_or_else(||
                             kiln_error::Error::runtime_trap("extern.convert_any: expected reference"))?;
-                        // In our representation, just pass through
-                        operand_stack.push(val);
+                        let result = match &val {
+                            Value::StructRef(None) | Value::ArrayRef(None)
+                            | Value::I31Ref(None) | Value::ExternRef(None)
+                            | Value::ExnRef(None) | Value::FuncRef(None) => Value::ExternRef(None),
+                            Value::StructRef(Some(_)) | Value::ArrayRef(Some(_))
+                            | Value::I31Ref(Some(_)) | Value::Ref(_) => {
+                                // Store the original value in the extern table so
+                                // any.convert_extern can recover it for round-trip identity.
+                                // Use high bit (0x80000000) to distinguish from host externrefs.
+                                let idx = EXTERN_TABLE.with(|table| {
+                                    let mut t = table.borrow_mut();
+                                    let idx = t.len() as u32;
+                                    t.push(val.clone());
+                                    idx | 0x80000000
+                                });
+                                Value::ExternRef(Some(kiln_foundation::values::ExternRef { index: idx }))
+                            }
+                            _ => val, // pass through for non-null ExternRef etc.
+                        };
+                        operand_stack.push(result);
                     }
 
                     // ========================================
@@ -11886,6 +12229,7 @@ fn ref_test_value_with_module(
         HeapType::Extern => matches!(val, Value::ExternRef(Some(_))),
         HeapType::Any => matches!(val,
             Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_))
+            | Value::Ref(_) // internalized extern (via any.convert_extern)
         ),
         HeapType::Eq => matches!(val,
             Value::StructRef(Some(_)) | Value::ArrayRef(Some(_)) | Value::I31Ref(Some(_))
@@ -11914,13 +12258,16 @@ fn ref_test_value_with_module(
             };
 
             match val_type_idx {
-                Some(val_idx) if val_idx == *target_idx => true,
                 Some(val_idx) => {
-                    // Walk the supertype chain to check subtyping
                     if let Some(module) = module {
-                        is_runtime_subtype(val_idx, *target_idx, &module.type_supertypes)
+                        is_runtime_subtype_canonical(
+                            val_idx,
+                            *target_idx,
+                            &module.type_supertypes,
+                            &module.type_canonical_ids,
+                        )
                     } else {
-                        false
+                        val_idx == *target_idx
                     }
                 },
                 None => false,
@@ -11929,15 +12276,30 @@ fn ref_test_value_with_module(
     }
 }
 
-/// Check if child_idx is a subtype of parent_idx by walking the declared supertype chain.
-fn is_runtime_subtype(child_idx: u32, parent_idx: u32, supertypes: &[Option<u32>]) -> bool {
-    if child_idx == parent_idx {
+/// Check if child_idx is a subtype of parent_idx using canonical type IDs.
+///
+/// Two types are considered equal if they have the same canonical ID. Subtyping
+/// is checked by walking the declared supertype chain and comparing canonical IDs
+/// at each step. This handles structurally equivalent types (e.g., `$t1` and `$t1'`
+/// both defined as `(sub $t0 (struct (field i32)))`) correctly.
+fn is_runtime_subtype_canonical(
+    child_idx: u32,
+    parent_idx: u32,
+    supertypes: &[Option<u32>],
+    canonical_ids: &[u32],
+) -> bool {
+    // Resolve to canonical IDs
+    let canon_child = canonical_ids.get(child_idx as usize).copied().unwrap_or(child_idx);
+    let canon_parent = canonical_ids.get(parent_idx as usize).copied().unwrap_or(parent_idx);
+
+    if canon_child == canon_parent {
         return true;
     }
     let mut current = child_idx;
     let mut visited = 0u32; // Simple cycle guard
     while let Some(Some(super_idx)) = supertypes.get(current as usize) {
-        if *super_idx == parent_idx {
+        let canon_super = canonical_ids.get(*super_idx as usize).copied().unwrap_or(*super_idx);
+        if canon_super == canon_parent {
             return true;
         }
         current = *super_idx;

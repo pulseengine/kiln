@@ -839,8 +839,9 @@ impl<'a> StreamingDecoder<'a> {
                     // A rec group counts as one entry in the type section count
                     i += 1;
                 },
-                COMPOSITE_TYPE_SUB | COMPOSITE_TYPE_SUB_FINAL => {
+                COMPOSITE_TYPE_SUB | COMPOSITE_TYPE_SUB_FINAL | 0x4D | 0x4C => {
                     // subtype: 0x50/0x4F supertype* comptype
+                    // descriptor/describes: 0x4D/0x4C type_idx comptype (custom-descriptors)
                     // A standalone subtype is an implicit single-element rec group
                     let (new_offset, sub_type) = self.parse_subtype_entry(data, offset, type_index)?;
                     offset = new_offset;
@@ -928,6 +929,41 @@ impl<'a> StreamingDecoder<'a> {
                 SubType {
                     is_final,
                     supertype_indices,
+                    composite_kind,
+                    type_index,
+                }
+            },
+            // Custom descriptors proposal: descriptor (0x4D) and describes (0x4C)
+            // Format: (0x4D idx)? (0x4C idx)? composite_type
+            // Each clause can appear at most once; duplicates are rejected by the test suite.
+            0x4D | 0x4C => {
+                let mut has_descriptor = false;
+                let mut has_describes = false;
+                // Parse up to one descriptor and one describes clause
+                while offset < data.len() && (data[offset] == 0x4D || data[offset] == 0x4C) {
+                    let clause = data[offset];
+                    if clause == 0x4D {
+                        if has_descriptor {
+                            return Err(Error::parse_error("malformed definition type"));
+                        }
+                        has_descriptor = true;
+                    } else {
+                        if has_describes {
+                            return Err(Error::parse_error("malformed definition type"));
+                        }
+                        has_describes = true;
+                    }
+                    offset += 1; // skip marker
+                    let (_ref_type_idx, bytes_read) = read_leb128_u32(data, offset)?;
+                    offset += bytes_read;
+                }
+                // Parse the composite type
+                let (new_offset, composite_kind) = self.parse_composite_type(data, offset)?;
+                offset = new_offset;
+
+                SubType {
+                    is_final: true,
+                    supertype_indices: Vec::new(),
                     composite_kind,
                     type_index,
                 }
@@ -1099,11 +1135,15 @@ impl<'a> StreamingDecoder<'a> {
                 let (storage_type, new_offset) = self.parse_storage_type(data, offset)?;
                 offset = new_offset;
 
-                // Parse mutability flag
+                // Parse mutability flag (must be 0 or 1)
                 if offset >= data.len() {
                     return Err(Error::parse_error("Unexpected end of array type"));
                 }
-                let mutable = data[offset] != 0;
+                let mut_byte = data[offset];
+                if mut_byte > 1 {
+                    return Err(Error::parse_error("malformed mutability"));
+                }
+                let mutable = mut_byte != 0;
                 offset += 1;
 
                 let gc_element = GcFieldType { storage_type, mutable };
@@ -3456,12 +3496,15 @@ impl<'a> StreamingDecoder<'a> {
     /// Process custom section
     /// Returns the number of bytes consumed (entire section for custom sections).
     fn process_custom_section(&mut self, data: &[u8]) -> Result<usize> {
+        // Custom sections must contain at least a name (name-length LEB128 + name bytes).
+        // An empty custom section is malformed per the spec.
+        if data.is_empty() {
+            return Err(Error::parse_error("unexpected end"));
+        }
         // Validate custom section name is valid UTF-8 per WebAssembly spec
-        if !data.is_empty() {
-            let (name_bytes, _name_end) = read_name(data, 0)?;
-            if core::str::from_utf8(name_bytes).is_err() {
-                return Err(Error::parse_error("malformed UTF-8 encoding"));
-            }
+        let (name_bytes, _name_end) = read_name(data, 0)?;
+        if core::str::from_utf8(name_bytes).is_err() {
+            return Err(Error::parse_error("malformed UTF-8 encoding"));
         }
         // Custom sections are otherwise skipped - consume all bytes
         Ok(data.len())
