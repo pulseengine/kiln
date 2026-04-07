@@ -948,7 +948,12 @@ impl<'a> StreamingDecoder<'a> {
                         }
                         has_descriptor = true;
                     } else {
+                        // 0x4C (describes)
                         if has_describes {
+                            return Err(Error::parse_error("malformed definition type"));
+                        }
+                        // describes must come before descriptor
+                        if has_descriptor {
                             return Err(Error::parse_error("malformed definition type"));
                         }
                         has_describes = true;
