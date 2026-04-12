@@ -98,8 +98,7 @@ impl WastEngine {
     pub fn load_module(&mut self, name: Option<&str>, wasm_binary: &[u8]) -> Result<()> {
         // Decode the WASM binary into a KilnModule
         let kiln_module = decode_module(wasm_binary).map_err(|e| {
-            anyhow::anyhow!("XYZZY_DECODE_FAILED({} bytes): {} [code={}, category={:?}]",
-                wasm_binary.len(), e, e.code, e.category)
+            anyhow::anyhow!("{}", e)
         })?;
 
         // Extract precise type info from kiln_module and binary before
@@ -187,23 +186,30 @@ impl WastEngine {
             .initialize_dropped_segments()
             .context("Failed to initialize dropped segments")?;
 
+        // Register the instance in the engine BEFORE element/data segment
+        // initialization. This is critical because element segment init writes
+        // FuncRefs with this instance's ID to shared (imported) tables. If init
+        // subsequently traps (e.g., out-of-bounds), those FuncRefs persist in
+        // the shared table and must remain callable. Without early registration,
+        // cross-instance call_indirect would fail with "target instance not found".
+        let instance_idx = self
+            .engine
+            .set_current_module(Arc::clone(&module_instance))
+            .context("Failed to set current module in engine")?;
+        self.current_instance_id = Some(instance_idx);
+
+        // Initialize element segments BEFORE data segments (per WebAssembly spec).
+        // This ensures that element segments written before an out-of-bounds
+        // data segment access persist in shared tables after instantiation failure.
+        module_instance
+            .initialize_element_segments()
+            .context("Failed to initialize element segments")?;
+
         // Initialize active data segments (writes data to memory)
         #[cfg(feature = "std")]
         module_instance
             .initialize_data_segments()
             .context("Failed to initialize data segments")?;
-
-        // Initialize element segments
-        module_instance
-            .initialize_element_segments()
-            .context("Failed to initialize element segments")?;
-
-        // Set the current module in the engine
-        let instance_idx = self
-            .engine
-            .set_current_module(module_instance)
-            .context("Failed to set current module in engine")?;
-        self.current_instance_id = Some(instance_idx);
 
         // Link function imports from registered modules
         self.link_function_imports(&module, instance_idx)?;

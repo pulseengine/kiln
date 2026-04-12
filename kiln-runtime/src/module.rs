@@ -3780,6 +3780,21 @@ impl Module {
         }
         None
     }
+
+    /// Get the tag index for an exported tag by its export name
+    /// Returns Some(tag_idx) if found, None otherwise
+    pub fn get_tag_index_by_export_name(&self, export_name: &str) -> Option<u32> {
+        for export in self.exports.values() {
+            if export.kind == ExportKind::Tag {
+                if let Ok(name_str) = export.name.as_str() {
+                    if name_str == export_name {
+                        return Some(export.index);
+                    }
+                }
+            }
+        }
+        None
+    }
 }
 
 /// Additional exports that are not part of the standard WebAssembly exports

@@ -539,25 +539,60 @@ impl StacklessEngine {
     /// - For imported tags: returns the import source (module_name, field_name)
     /// - For exported local tags (with registered instance): returns (registered_name, export_name)
     /// - For non-exported local tags: returns None (only matches within same module)
+    /// Resolve a tag to its canonical identity by following import chains.
+    ///
+    /// Two tags are the same if and only if they originate from the same
+    /// (instance_id, local_tag_index) in the defining module. This correctly
+    /// handles the case where the same tag is exported under multiple names
+    /// or imported through different paths.
     fn get_effective_tag_identity(
         &self,
         instance_id: usize,
         module: &crate::module::Module,
         tag_idx: u32,
     ) -> Option<(String, String)> {
-        // First check if the tag is imported
-        if let Some(import_identity) = module.get_tag_import_identity(tag_idx) {
-            return Some(import_identity);
-        }
+        // Follow import chain to find the canonical (defining) instance and tag
+        let mut current_instance_id = instance_id;
+        let mut current_tag_idx = tag_idx;
 
-        // Tag is local - check if it's exported and instance is registered
-        if let Some(export_name) = module.get_tag_export_name(tag_idx) {
-            if let Some(registered_name) = self.get_instance_registered_name(instance_id) {
-                return Some((registered_name.clone(), export_name));
+        // Limit chain depth to prevent infinite loops
+        for _ in 0..16 {
+            let current_module = self.instances.get(&current_instance_id)?.module().clone();
+
+            // Check if the tag is imported in the current module
+            if let Some((source_module_name, source_field_name)) =
+                current_module.get_tag_import_identity(current_tag_idx)
+            {
+                // Resolve the source module name to an instance ID
+                if let Some(&source_instance_id) = self.instance_registry.iter()
+                    .find(|(_, name)| **name == source_module_name)
+                    .map(|(id, _)| id)
+                {
+                    if let Some(source_instance) = self.instances.get(&source_instance_id) {
+                        let source_mod = source_instance.module();
+                        // Find which tag index corresponds to the exported field name
+                        if let Some(source_tag_idx) = source_mod.get_tag_index_by_export_name(&source_field_name) {
+                            // Continue following the chain
+                            current_instance_id = source_instance_id;
+                            current_tag_idx = source_tag_idx;
+                            continue;
+                        }
+                    }
+                }
+                // Can't resolve further - use the import path as identity
+                return Some((source_module_name, source_field_name));
             }
+
+            // Tag is locally defined - this is the canonical identity
+            // Use (instance_registered_name, tag_index) as the identity
+            if let Some(registered_name) = self.get_instance_registered_name(current_instance_id) {
+                return Some((registered_name.clone(), format!("__tag_{}", current_tag_idx)));
+            }
+
+            // Unregistered instance - use instance_id as identity
+            return Some((format!("__instance_{}", current_instance_id), format!("__tag_{}", current_tag_idx)));
         }
 
-        // Local tag without export or unregistered instance - no cross-module identity
         None
     }
 
