@@ -20,37 +20,60 @@ use kiln_foundation::ValueType;
 /// Type of a value on the stack
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StackType {
-    I32,
-    I64,
-    F32,
-    F64,
-    V128,
-    FuncRef,
-    /// Null function reference - the bottom type for funcref hierarchy
-    /// This is ref null nofunc - assignable to any nullable funcref type
-    NullFuncRef,
-    ExternRef,
-    /// Null extern reference - bottom type for extern hierarchy (noextern)
-    NullExternRef,
-    ExnRef,
-    /// Null exception reference - bottom type for exn hierarchy (noexn)
-    NullExnRef,
-    /// Typed function reference (ref null? $t) where t is a type index
-    /// First field is type index, second is whether it's nullable
+    I32, I64, F32, F64, V128,
+    FuncRef, NonNullFuncRef, NullFuncRef,
+    ExternRef, NonNullExternRef, NullExternRef,
+    ExnRef, NonNullExnRef, NullExnRef,
     TypedFuncRef(u32, bool),
-    /// GC type: anyref - top of the internal reference hierarchy
-    AnyRef,
-    /// GC type: eqref - subtypes: i31ref, structref, arrayref
-    EqRef,
-    /// GC type: i31ref - unboxed 31-bit integer reference
-    I31Ref,
-    /// GC type: structref - abstract struct reference
-    StructRef,
-    /// GC type: arrayref - abstract array reference
-    ArrayRef,
-    /// GC type: none - bottom type for the any hierarchy
+    AnyRef, NonNullAnyRef,
+    EqRef, NonNullEqRef,
+    I31Ref, NonNullI31Ref,
+    StructRef, NonNullStructRef,
+    ArrayRef, NonNullArrayRef,
     NoneRef,
     Unknown,
+}
+
+impl StackType {
+    fn to_non_nullable(&self) -> Self {
+        match self {
+            Self::FuncRef => Self::NonNullFuncRef,
+            Self::ExternRef => Self::NonNullExternRef,
+            Self::ExnRef => Self::NonNullExnRef,
+            Self::AnyRef => Self::NonNullAnyRef,
+            Self::EqRef => Self::NonNullEqRef,
+            Self::I31Ref => Self::NonNullI31Ref,
+            Self::StructRef => Self::NonNullStructRef,
+            Self::ArrayRef => Self::NonNullArrayRef,
+            Self::TypedFuncRef(idx, _) => Self::TypedFuncRef(*idx, false),
+            other => other.clone(),
+        }
+    }
+    fn to_nullable(&self) -> Self {
+        match self {
+            Self::NonNullFuncRef => Self::FuncRef,
+            Self::NonNullExternRef => Self::ExternRef,
+            Self::NonNullExnRef => Self::ExnRef,
+            Self::NonNullAnyRef => Self::AnyRef,
+            Self::NonNullEqRef => Self::EqRef,
+            Self::NonNullI31Ref => Self::I31Ref,
+            Self::NonNullStructRef => Self::StructRef,
+            Self::NonNullArrayRef => Self::ArrayRef,
+            Self::TypedFuncRef(idx, _) => Self::TypedFuncRef(*idx, true),
+            other => other.clone(),
+        }
+    }
+    fn is_nullable(&self) -> bool {
+        !matches!(self,
+            Self::NonNullFuncRef | Self::NonNullExternRef | Self::NonNullExnRef |
+            Self::NonNullAnyRef | Self::NonNullEqRef | Self::NonNullI31Ref |
+            Self::NonNullStructRef | Self::NonNullArrayRef | Self::TypedFuncRef(_, false)
+        )
+    }
+    fn from_value_type_with_nullability(vt: kiln_foundation::types::ValueType, nullable: bool) -> Self {
+        let base = Self::from_value_type(vt);
+        if nullable { base } else { base.to_non_nullable() }
+    }
 }
 
 impl StackType {
@@ -120,18 +143,18 @@ impl StackType {
     fn is_reference(&self) -> bool {
         matches!(
             self,
-            StackType::FuncRef
+            StackType::FuncRef | StackType::NonNullFuncRef
                 | StackType::NullFuncRef
-                | StackType::ExternRef
+                | StackType::ExternRef | StackType::NonNullExternRef
                 | StackType::NullExternRef
-                | StackType::ExnRef
+                | StackType::ExnRef | StackType::NonNullExnRef
                 | StackType::NullExnRef
                 | StackType::TypedFuncRef(_, _)
-                | StackType::AnyRef
-                | StackType::EqRef
-                | StackType::I31Ref
-                | StackType::StructRef
-                | StackType::ArrayRef
+                | StackType::AnyRef | StackType::NonNullAnyRef
+                | StackType::EqRef | StackType::NonNullEqRef
+                | StackType::I31Ref | StackType::NonNullI31Ref
+                | StackType::StructRef | StackType::NonNullStructRef
+                | StackType::ArrayRef | StackType::NonNullArrayRef
                 | StackType::NoneRef
         )
     }
@@ -159,6 +182,16 @@ impl StackType {
 
         // Unknown is polymorphic - compatible with anything
         if *self == StackType::Unknown || *other == StackType::Unknown {
+            return true;
+        }
+
+        // Non-nullable <: nullable counterpart (e.g. NonNullAnyRef <: AnyRef)
+        let self_nullable = self.to_nullable();
+        if self_nullable != *self && self_nullable == *other {
+            return true;
+        }
+        // Non-nullable follows same hierarchy (e.g. NonNullStructRef <: EqRef)
+        if self_nullable != *self && self_nullable.is_subtype_of(other) {
             return true;
         }
 
@@ -6702,22 +6735,20 @@ impl WastModuleValidator {
     /// Used by br_on_cast/br_on_cast_fail validation.
     fn heap_type_to_stack_type(ht_raw: i32, nullable: bool) -> StackType {
         if ht_raw >= 0 {
-            // Concrete type index
             StackType::TypedFuncRef(ht_raw as u32, nullable)
         } else {
-            // Abstract heap type (s33 negative values)
             match ht_raw {
-                -16 => StackType::FuncRef,       // func
-                -17 => StackType::ExternRef,     // extern
-                -18 => StackType::AnyRef,        // any
-                -19 => StackType::EqRef,         // eq
-                -20 => StackType::I31Ref,        // i31
-                -21 => StackType::StructRef,     // struct
-                -22 => StackType::ArrayRef,      // array
-                -23 => StackType::ExnRef,        // exn
-                -13 => StackType::NullFuncRef,   // nofunc
-                -14 => StackType::NullExternRef, // noextern
-                -15 => StackType::NoneRef,       // none
+                -16 => StackType::FuncRef,
+                -17 => StackType::ExternRef,
+                -18 => StackType::AnyRef,
+                -19 => StackType::EqRef,
+                -20 => StackType::I31Ref,
+                -21 => StackType::StructRef,
+                -22 => StackType::ArrayRef,
+                -23 => StackType::ExnRef,
+                -13 => StackType::NullFuncRef,
+                -14 => StackType::NullExternRef,
+                -15 => StackType::NoneRef,
                 _ => StackType::Unknown,
             }
         }
