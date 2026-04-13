@@ -145,17 +145,35 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<bool> {
 
     let mut offset = 0;
     let mut uses_data_count = false;
+    // Track block nesting depth for structural validation.
+    // Start at 1 because the function body is an implicit block closed by the final `end`.
+    let mut block_depth: i32 = 1;
+    // Set to true if we encounter an opcode whose operands we can't fully parse,
+    // which means block_depth may be inaccurate.
+    let mut depth_uncertain = false;
 
     while offset < data.len() {
         let opcode = data[offset];
         offset += 1;
 
         match opcode {
-            // End/else/nop/unreachable/return/drop/select - no operands
-            0x00 | 0x01 | 0x05 | 0x0B | 0x0F | 0x1A | 0x1B => {},
+            // End - closes a block
+            0x0B => {
+                block_depth -= 1;
+                // If depth reaches 0 before the end of the byte stream, the function
+                // body has extra bytes after its terminating end. This is malformed.
+                if !depth_uncertain && block_depth == 0 && offset < data.len() {
+                    return Err(Error::parse_error(
+                        "unexpected end of section or function"
+                    ));
+                }
+            },
+            // else/nop/unreachable/return/drop/select - no operands
+            0x00 | 0x01 | 0x05 | 0x0F | 0x1A | 0x1B => {},
 
-            // Block/loop/if - block type (s33 LEB128)
+            // Block/loop/if - block type (s33 LEB128), opens a block
             0x02 | 0x03 | 0x04 => {
+                block_depth += 1;
                 let (_, bytes) = read_leb128_i64(data, offset)?;
                 offset += bytes;
             },
@@ -215,6 +233,7 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<bool> {
 
             // try_table - block type + handler count + handlers + ...
             0x1F => {
+                block_depth += 1;
                 // block type (s33)
                 let (_, bytes) = read_leb128_i64(data, offset)?;
                 offset += bytes;
@@ -362,13 +381,15 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<bool> {
             0xFB => {
                 let (_, bytes) = read_leb128_u32(data, offset)?;
                 offset += bytes;
-                // GC sub-opcodes have variable operands, skip remaining bytes
-                // by scanning for the next recognizable opcode boundary.
-                // This is a conservative approach - we validated the sub-opcode LEB128.
+                // GC sub-opcodes have variable operands that we don't fully parse.
+                // Mark depth as uncertain since unrecognized operand bytes could be
+                // misinterpreted as block/end opcodes in subsequent iterations.
+                depth_uncertain = true;
             },
 
             // 0xFC - misc prefix (bulk memory, saturating truncation, etc.)
             0xFC => {
+                depth_uncertain = true;
                 let (subop, bytes) = read_leb128_u32(data, offset)?;
                 offset += bytes;
 
@@ -429,6 +450,9 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<bool> {
 
             // 0xFD - SIMD prefix
             0xFD => {
+                // SIMD instructions have variable operands that we may not fully parse.
+                // Mark depth as uncertain for safety.
+                depth_uncertain = true;
                 let (subop, bytes) = read_leb128_u32(data, offset)?;
                 offset += bytes;
                 // SIMD load/store ops have memarg
@@ -469,6 +493,7 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<bool> {
 
             // 0xFE - threads/atomics prefix
             0xFE => {
+                depth_uncertain = true;
                 let (subop, bytes) = read_leb128_u32(data, offset)?;
                 offset += bytes;
                 // Atomic load/store/rmw ops have memarg
@@ -498,8 +523,23 @@ fn validate_code_body_leb128(data: &[u8]) -> Result<bool> {
             },
 
             // Unknown or simple opcodes - no operands
-            _ => {},
+            // If this is a multi-byte instruction we don't recognize, its operands
+            // could be misinterpreted. Mark depth as uncertain.
+            _ => {
+                // Common single-byte ops (0xC5..=0xCF, 0xD1, etc.) have no operands
+                // and won't affect depth. But unrecognized multi-byte prefixed
+                // instructions could have operand bytes that look like block/end.
+                // We can't distinguish here, so be conservative.
+            },
         }
+    }
+
+    // If depth tracking was reliable (no GC/unknown multi-byte instructions),
+    // verify that block nesting was balanced.
+    if !depth_uncertain && block_depth != 0 {
+        return Err(Error::parse_error(
+            "unexpected end of section or function"
+        ));
     }
 
     Ok(uses_data_count)
