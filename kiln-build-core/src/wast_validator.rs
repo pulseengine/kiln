@@ -120,6 +120,24 @@ impl StackType {
             ValueType::I31Ref => StackType::I31Ref,
             ValueType::StructRef(_) => StackType::StructRef,
             ValueType::ArrayRef(_) => StackType::ArrayRef,
+            // Non-null abstract refs → NonNull StackType variants. This is the whole
+            // point of the NonNullAbstract variant: preserve non-nullability through
+            // decoder → validator for proper GC cast/branch validation.
+            ValueType::NonNullAbstract(code) => match code {
+                0x70 => StackType::NonNullFuncRef,
+                0x6F => StackType::NonNullExternRef,
+                0x6E => StackType::NonNullAnyRef,
+                0x6D => StackType::NonNullEqRef,
+                0x6C => StackType::NonNullI31Ref,
+                0x6B => StackType::NonNullStructRef,
+                0x6A => StackType::NonNullArrayRef,
+                0x69 => StackType::NonNullExnRef,
+                0x73 => StackType::NullFuncRef,      // nofunc is bottom (always nullable conceptually)
+                0x72 => StackType::NullExternRef,
+                0x71 => StackType::NoneRef,
+                0x74 => StackType::NullExnRef,
+                _ => StackType::Unknown,
+            },
             // GC bottom types
             ValueType::NoneRef => StackType::NoneRef,
             ValueType::NoExternRef => StackType::NullExternRef,
@@ -815,6 +833,8 @@ impl WastModuleValidator {
             ValueType::StructRef(_) | ValueType::ArrayRef(_) => true,
             // TypedFuncRef: defaultable only when nullable
             ValueType::TypedFuncRef(_, nullable) => *nullable,
+            // Non-null abstract refs are NOT defaultable per spec
+            ValueType::NonNullAbstract(_) => false,
         }
     }
 

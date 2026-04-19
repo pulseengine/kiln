@@ -222,6 +222,16 @@ pub enum ValueType {
     /// Typed function reference (WebAssembly 3.0 GC) - (ref null? $t) where $t is a func type
     /// First field is the type index, second is whether it's nullable
     TypedFuncRef(u32, bool),
+    /// Non-nullable abstract reference (e.g. `(ref any)`, `(ref func)`). The u8 is the
+    /// canonical WebAssembly abstract heap-type byte (0x70 func, 0x6F extern, 0x6E any,
+    /// 0x6D eq, 0x6C i31, 0x6B struct, 0x6A array, 0x69 exn, 0x73 nofunc, 0x72 noextern,
+    /// 0x71 none, 0x74 noexn).
+    ///
+    /// Nullable abstract refs continue to use the existing shorthand variants (FuncRef,
+    /// ExternRef, AnyRef, etc.) — those are all nullable. This variant only exists so the
+    /// decoder can preserve non-nullability for abstract heap types in function signatures,
+    /// which is required for proper GC validation (WebAssembly/gc#516).
+    NonNullAbstract(u8),
     /// None reference (bottom type for any hierarchy) - ref null none
     NoneRef,
     /// No-extern reference (bottom type for extern hierarchy) - ref null noextern
@@ -256,6 +266,21 @@ impl core::fmt::Debug for ValueType {
                     write!(f, "(ref ${idx})")
                 }
             }
+            Self::NonNullAbstract(code) => match *code {
+                0x70 => write!(f, "(ref func)"),
+                0x6F => write!(f, "(ref extern)"),
+                0x6E => write!(f, "(ref any)"),
+                0x6D => write!(f, "(ref eq)"),
+                0x6C => write!(f, "(ref i31)"),
+                0x6B => write!(f, "(ref struct)"),
+                0x6A => write!(f, "(ref array)"),
+                0x69 => write!(f, "(ref exn)"),
+                0x73 => write!(f, "(ref nofunc)"),
+                0x72 => write!(f, "(ref noextern)"),
+                0x71 => write!(f, "(ref none)"),
+                0x74 => write!(f, "(ref noexn)"),
+                other => write!(f, "(ref abstract:{other:#x})"),
+            },
             Self::NoneRef => write!(f, "NoneRef"),
             Self::NoExternRef => write!(f, "NoExternRef"),
             Self::NoExnRef => write!(f, "NoExnRef"),
@@ -348,6 +373,7 @@ impl ValueType {
             ValueType::ArrayRef(_) => 0x6A,  // GC: array heap type
             ValueType::ExnRef => 0x69,
             ValueType::TypedFuncRef(_, _) => 0x63, // Function references: typed funcref
+            ValueType::NonNullAbstract(code) => code, // Abstract heap type byte (non-null)
             ValueType::NoneRef => 0x71,       // none - bottom for any hierarchy
             ValueType::NoExternRef => 0x72,   // noextern - bottom for extern hierarchy
             ValueType::NoExnRef => 0x74,      // noexn - bottom for exn hierarchy
@@ -382,7 +408,8 @@ impl ValueType {
             | Self::NoneRef
             | Self::NoExternRef
             | Self::NoExnRef
-            | Self::TypedFuncRef(_, _) => {
+            | Self::TypedFuncRef(_, _)
+            | Self::NonNullAbstract(_) => {
                 // Size of a reference can vary. Using usize for simplicity.
                 // In a real scenario, this might depend on target architecture (32/64 bit).
                 core::mem::size_of::<usize>()

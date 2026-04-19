@@ -1265,6 +1265,9 @@ impl<'a> StreamingDecoder<'a> {
             ValueType::NoExternRef => Ok((GcStorageType::Value(0x72), new_offset)),
             ValueType::ExnRef => Ok((GcStorageType::Value(0x69), new_offset)),
             ValueType::NoExnRef => Ok((GcStorageType::Value(0x74), new_offset)),
+            // Non-null abstract ref stores as the abstract byte (nullability tracked
+            // separately in the validator; for storage purposes the type byte matters).
+            ValueType::NonNullAbstract(code) => Ok((GcStorageType::Value(code), new_offset)),
             _ => Ok((GcStorageType::Value(byte), new_offset)),
         }
     }
