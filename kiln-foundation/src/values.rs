@@ -652,6 +652,15 @@ impl Value {
             ValueType::AnyRef => Value::ExternRef(None), // AnyRef uses externref representation
             ValueType::EqRef => Value::I31Ref(None),     // EqRef defaults to i31ref
             ValueType::TypedFuncRef(_, _) => Value::FuncRef(None), // Typed funcref defaults to null
+            // Non-nullable abstract refs are NOT defaultable per the spec. Callers must
+            // check is_defaultable first. We return a None-ref placeholder in matching
+            // category so const-eval still works for unreachable branches.
+            ValueType::NonNullAbstract(code) => match code {
+                0x70 | 0x73 => Value::FuncRef(None),   // func / nofunc
+                0x6F | 0x72 => Value::ExternRef(None), // extern / noextern
+                0x69 | 0x74 => Value::ExnRef(None),    // exn / noexn
+                _ => Value::StructRef(None),           // any/eq/i31/struct/array/none
+            },
             ValueType::NoneRef => Value::StructRef(None),     // Bottom of any hierarchy
             ValueType::NoExternRef => Value::ExternRef(None), // Bottom of extern hierarchy
             ValueType::NoExnRef => Value::ExnRef(None),       // Bottom of exn hierarchy
@@ -722,6 +731,21 @@ impl Value {
             (Self::StructRef(_), ValueType::EqRef) => true,
             (Self::ArrayRef(_), ValueType::AnyRef) => true,
             (Self::ArrayRef(_), ValueType::EqRef) => true,
+            // Non-null abstract refs: require non-null payload AND kind compatibility.
+            // Abstract byte codes: 0x70=func, 0x6F=extern, 0x6E=any, 0x6D=eq,
+            // 0x6C=i31, 0x6B=struct, 0x6A=array, 0x69=exn.
+            (Self::FuncRef(Some(_)), ValueType::NonNullAbstract(0x70)) => true,
+            (Self::ExternRef(Some(_)), ValueType::NonNullAbstract(0x6F)) => true,
+            (Self::ExnRef(Some(_)), ValueType::NonNullAbstract(0x69)) => true,
+            (Self::I31Ref(Some(_)), ValueType::NonNullAbstract(0x6C)) => true,
+            (Self::I31Ref(Some(_)), ValueType::NonNullAbstract(0x6D)) => true, // i31 <: eq
+            (Self::I31Ref(Some(_)), ValueType::NonNullAbstract(0x6E)) => true, // i31 <: any
+            (Self::StructRef(Some(_)), ValueType::NonNullAbstract(0x6B)) => true,
+            (Self::StructRef(Some(_)), ValueType::NonNullAbstract(0x6D)) => true, // struct <: eq
+            (Self::StructRef(Some(_)), ValueType::NonNullAbstract(0x6E)) => true, // struct <: any
+            (Self::ArrayRef(Some(_)), ValueType::NonNullAbstract(0x6A)) => true,
+            (Self::ArrayRef(Some(_)), ValueType::NonNullAbstract(0x6D)) => true,  // array <: eq
+            (Self::ArrayRef(Some(_)), ValueType::NonNullAbstract(0x6E)) => true,  // array <: any
             _ => false,
         }
     }
@@ -1198,6 +1222,12 @@ impl Value {
             ValueType::TypedFuncRef(_, _) => {
                 // Typed function references not yet supported for byte deserialization
                 Ok(Value::FuncRef(None))
+            },
+            ValueType::NonNullAbstract(code) => match code {
+                0x70 | 0x73 => Ok(Value::FuncRef(None)),
+                0x6F | 0x72 => Ok(Value::ExternRef(None)),
+                0x69 | 0x74 => Ok(Value::ExnRef(None)),
+                _ => Ok(Value::StructRef(None)),
             },
             ValueType::NoneRef => Ok(Value::StructRef(None)),     // Bottom of any hierarchy
             ValueType::NoExternRef => Ok(Value::ExternRef(None)), // Bottom of extern hierarchy

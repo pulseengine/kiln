@@ -20,37 +20,60 @@ use kiln_foundation::ValueType;
 /// Type of a value on the stack
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StackType {
-    I32,
-    I64,
-    F32,
-    F64,
-    V128,
-    FuncRef,
-    /// Null function reference - the bottom type for funcref hierarchy
-    /// This is ref null nofunc - assignable to any nullable funcref type
-    NullFuncRef,
-    ExternRef,
-    /// Null extern reference - bottom type for extern hierarchy (noextern)
-    NullExternRef,
-    ExnRef,
-    /// Null exception reference - bottom type for exn hierarchy (noexn)
-    NullExnRef,
-    /// Typed function reference (ref null? $t) where t is a type index
-    /// First field is type index, second is whether it's nullable
+    I32, I64, F32, F64, V128,
+    FuncRef, NonNullFuncRef, NullFuncRef,
+    ExternRef, NonNullExternRef, NullExternRef,
+    ExnRef, NonNullExnRef, NullExnRef,
     TypedFuncRef(u32, bool),
-    /// GC type: anyref - top of the internal reference hierarchy
-    AnyRef,
-    /// GC type: eqref - subtypes: i31ref, structref, arrayref
-    EqRef,
-    /// GC type: i31ref - unboxed 31-bit integer reference
-    I31Ref,
-    /// GC type: structref - abstract struct reference
-    StructRef,
-    /// GC type: arrayref - abstract array reference
-    ArrayRef,
-    /// GC type: none - bottom type for the any hierarchy
+    AnyRef, NonNullAnyRef,
+    EqRef, NonNullEqRef,
+    I31Ref, NonNullI31Ref,
+    StructRef, NonNullStructRef,
+    ArrayRef, NonNullArrayRef,
     NoneRef,
     Unknown,
+}
+
+impl StackType {
+    fn to_non_nullable(&self) -> Self {
+        match self {
+            Self::FuncRef => Self::NonNullFuncRef,
+            Self::ExternRef => Self::NonNullExternRef,
+            Self::ExnRef => Self::NonNullExnRef,
+            Self::AnyRef => Self::NonNullAnyRef,
+            Self::EqRef => Self::NonNullEqRef,
+            Self::I31Ref => Self::NonNullI31Ref,
+            Self::StructRef => Self::NonNullStructRef,
+            Self::ArrayRef => Self::NonNullArrayRef,
+            Self::TypedFuncRef(idx, _) => Self::TypedFuncRef(*idx, false),
+            other => other.clone(),
+        }
+    }
+    fn to_nullable(&self) -> Self {
+        match self {
+            Self::NonNullFuncRef => Self::FuncRef,
+            Self::NonNullExternRef => Self::ExternRef,
+            Self::NonNullExnRef => Self::ExnRef,
+            Self::NonNullAnyRef => Self::AnyRef,
+            Self::NonNullEqRef => Self::EqRef,
+            Self::NonNullI31Ref => Self::I31Ref,
+            Self::NonNullStructRef => Self::StructRef,
+            Self::NonNullArrayRef => Self::ArrayRef,
+            Self::TypedFuncRef(idx, _) => Self::TypedFuncRef(*idx, true),
+            other => other.clone(),
+        }
+    }
+    fn is_nullable(&self) -> bool {
+        !matches!(self,
+            Self::NonNullFuncRef | Self::NonNullExternRef | Self::NonNullExnRef |
+            Self::NonNullAnyRef | Self::NonNullEqRef | Self::NonNullI31Ref |
+            Self::NonNullStructRef | Self::NonNullArrayRef | Self::TypedFuncRef(_, false)
+        )
+    }
+    fn from_value_type_with_nullability(vt: kiln_foundation::types::ValueType, nullable: bool) -> Self {
+        let base = Self::from_value_type(vt);
+        if nullable { base } else { base.to_non_nullable() }
+    }
 }
 
 impl StackType {
@@ -97,6 +120,24 @@ impl StackType {
             ValueType::I31Ref => StackType::I31Ref,
             ValueType::StructRef(_) => StackType::StructRef,
             ValueType::ArrayRef(_) => StackType::ArrayRef,
+            // Non-null abstract refs → NonNull StackType variants. This is the whole
+            // point of the NonNullAbstract variant: preserve non-nullability through
+            // decoder → validator for proper GC cast/branch validation.
+            ValueType::NonNullAbstract(code) => match code {
+                0x70 => StackType::NonNullFuncRef,
+                0x6F => StackType::NonNullExternRef,
+                0x6E => StackType::NonNullAnyRef,
+                0x6D => StackType::NonNullEqRef,
+                0x6C => StackType::NonNullI31Ref,
+                0x6B => StackType::NonNullStructRef,
+                0x6A => StackType::NonNullArrayRef,
+                0x69 => StackType::NonNullExnRef,
+                0x73 => StackType::NullFuncRef,      // nofunc is bottom (always nullable conceptually)
+                0x72 => StackType::NullExternRef,
+                0x71 => StackType::NoneRef,
+                0x74 => StackType::NullExnRef,
+                _ => StackType::Unknown,
+            },
             // GC bottom types
             ValueType::NoneRef => StackType::NoneRef,
             ValueType::NoExternRef => StackType::NullExternRef,
@@ -120,18 +161,18 @@ impl StackType {
     fn is_reference(&self) -> bool {
         matches!(
             self,
-            StackType::FuncRef
+            StackType::FuncRef | StackType::NonNullFuncRef
                 | StackType::NullFuncRef
-                | StackType::ExternRef
+                | StackType::ExternRef | StackType::NonNullExternRef
                 | StackType::NullExternRef
-                | StackType::ExnRef
+                | StackType::ExnRef | StackType::NonNullExnRef
                 | StackType::NullExnRef
                 | StackType::TypedFuncRef(_, _)
-                | StackType::AnyRef
-                | StackType::EqRef
-                | StackType::I31Ref
-                | StackType::StructRef
-                | StackType::ArrayRef
+                | StackType::AnyRef | StackType::NonNullAnyRef
+                | StackType::EqRef | StackType::NonNullEqRef
+                | StackType::I31Ref | StackType::NonNullI31Ref
+                | StackType::StructRef | StackType::NonNullStructRef
+                | StackType::ArrayRef | StackType::NonNullArrayRef
                 | StackType::NoneRef
         )
     }
@@ -159,6 +200,16 @@ impl StackType {
 
         // Unknown is polymorphic - compatible with anything
         if *self == StackType::Unknown || *other == StackType::Unknown {
+            return true;
+        }
+
+        // Non-nullable <: nullable counterpart (e.g. NonNullAnyRef <: AnyRef)
+        let self_nullable = self.to_nullable();
+        if self_nullable != *self && self_nullable == *other {
+            return true;
+        }
+        // Non-nullable follows same hierarchy (e.g. NonNullStructRef <: EqRef)
+        if self_nullable != *self && self_nullable.is_subtype_of(other) {
             return true;
         }
 
@@ -214,6 +265,17 @@ impl StackType {
             (StackType::StructRef, StackType::AnyRef) => true,
             (StackType::ArrayRef, StackType::AnyRef) => true,
             (StackType::EqRef, StackType::AnyRef) => true,
+
+            // === NonNull abstract hierarchy mirrors nullable ===
+            // NonNull i31/struct/array <: NonNull eq
+            (StackType::NonNullI31Ref, StackType::NonNullEqRef) => true,
+            (StackType::NonNullStructRef, StackType::NonNullEqRef) => true,
+            (StackType::NonNullArrayRef, StackType::NonNullEqRef) => true,
+            // NonNull i31/struct/array/eq <: NonNull any
+            (StackType::NonNullI31Ref, StackType::NonNullAnyRef) => true,
+            (StackType::NonNullStructRef, StackType::NonNullAnyRef) => true,
+            (StackType::NonNullArrayRef, StackType::NonNullAnyRef) => true,
+            (StackType::NonNullEqRef, StackType::NonNullAnyRef) => true,
 
             _ => false,
         }
@@ -782,6 +844,8 @@ impl WastModuleValidator {
             ValueType::StructRef(_) | ValueType::ArrayRef(_) => true,
             // TypedFuncRef: defaultable only when nullable
             ValueType::TypedFuncRef(_, nullable) => *nullable,
+            // Non-null abstract refs are NOT defaultable per spec
+            ValueType::NonNullAbstract(_) => false,
         }
     }
 
@@ -1696,9 +1760,25 @@ impl WastModuleValidator {
                         return Err(anyhow!("unknown table"));
                     }
 
-                    // Validate table element type is funcref (not externref)
+                    // Validate table element type is in the func hierarchy.
+                    // A table of (ref null $t) where $t is a function type is valid
+                    // for call_indirect / return_call_indirect.
                     if let Some(elem_type) = Self::get_table_element_type(module, table_idx) {
-                        if elem_type != kiln_foundation::RefType::Funcref {
+                        let is_func_compat = match &elem_type {
+                            kiln_foundation::RefType::Funcref => true,
+                            kiln_foundation::RefType::Externref => false,
+                            kiln_foundation::RefType::Gc(gc) => {
+                                use kiln_foundation::types::HeapType;
+                                match &gc.heap_type {
+                                    HeapType::Func | HeapType::NoFunc => true,
+                                    HeapType::Concrete(idx) => {
+                                        Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
+                                    },
+                                    _ => false,
+                                }
+                            },
+                        };
+                        if !is_func_compat {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
@@ -1802,9 +1882,25 @@ impl WastModuleValidator {
                         return Err(anyhow!("unknown table"));
                     }
 
-                    // Validate table element type is funcref (not externref)
+                    // Validate table element type is in the func hierarchy.
+                    // A table of (ref null $t) where $t is a function type is valid
+                    // for call_indirect / return_call_indirect.
                     if let Some(elem_type) = Self::get_table_element_type(module, table_idx) {
-                        if elem_type != kiln_foundation::RefType::Funcref {
+                        let is_func_compat = match &elem_type {
+                            kiln_foundation::RefType::Funcref => true,
+                            kiln_foundation::RefType::Externref => false,
+                            kiln_foundation::RefType::Gc(gc) => {
+                                use kiln_foundation::types::HeapType;
+                                match &gc.heap_type {
+                                    HeapType::Func | HeapType::NoFunc => true,
+                                    HeapType::Concrete(idx) => {
+                                        Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
+                                    },
+                                    _ => false,
+                                }
+                            },
+                        };
+                        if !is_func_compat {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
@@ -2058,7 +2154,7 @@ impl WastModuleValidator {
                                 Self::validate_handler_branch(&frames, label, &tag_params)?;
                             },
                             0x01 => {
-                                // catch_ref: pushes tag's param types + exnref
+                                // catch_ref: pushes tag's param types + (ref exn) (non-null)
                                 let (tag_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                                 offset = new_offset;
                                 if tag_idx as usize >= Self::total_tags(module) {
@@ -2067,7 +2163,8 @@ impl WastModuleValidator {
                                 let (label, new_offset) = Self::parse_varuint32(code, offset)?;
                                 offset = new_offset;
                                 let mut handler_types = Self::get_tag_param_types(module, tag_idx)?;
-                                handler_types.push(StackType::ExnRef);
+                                // Per spec: catch_ref pushes a non-null exception reference
+                                handler_types.push(StackType::NonNullExnRef);
                                 // Validate handler branch target BEFORE try_table frame is pushed
                                 Self::validate_handler_branch(&frames, label, &handler_types)?;
                             },
@@ -2079,10 +2176,10 @@ impl WastModuleValidator {
                                 Self::validate_handler_branch(&frames, label, &[])?;
                             },
                             0x03 => {
-                                // catch_all_ref: pushes exnref
+                                // catch_all_ref: pushes (ref exn) (non-null)
                                 let (label, new_offset) = Self::parse_varuint32(code, offset)?;
                                 offset = new_offset;
-                                let handler_types = vec![StackType::ExnRef];
+                                let handler_types = vec![StackType::NonNullExnRef];
                                 // Validate handler branch target BEFORE try_table frame is pushed
                                 Self::validate_handler_branch(&frames, label, &handler_types)?;
                             },
@@ -3351,13 +3448,15 @@ impl WastModuleValidator {
                     }
                 },
 
-                // br_on_null (0xD5): [t* ref] -> [t*]
+                // br_on_null (0xD5): [t* (ref null ht)] -> [t* (ref ht)]
+                // Branch if top is null; fall through with non-null ref.
+                // Per spec (WebAssembly/gc#516), the validator must pop & re-push the
+                // label types to correctly handle subtyping — not just inspect.
                 0xD5 => {
-                    let (_label_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                    let (label_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let unreachable = Self::is_unreachable(&frames);
-                    // Pop a reference value; if null, branch to label
                     if !unreachable {
                         if stack.len() <= frame_height {
                             return Err(anyhow!("type mismatch"));
@@ -3366,18 +3465,47 @@ impl WastModuleValidator {
                         if !ref_type.is_reference() && ref_type != StackType::Unknown {
                             return Err(anyhow!("type mismatch"));
                         }
-                        // On fall-through, the ref is non-null, push it back
-                        stack.push(ref_type);
+
+                        if (label_idx as usize) >= frames.len() {
+                            return Err(anyhow!("br_on_null: label {} out of range", label_idx));
+                        }
+                        let target_frame = &frames[frames.len() - 1 - label_idx as usize];
+                        let label_types = if target_frame.frame_type == FrameType::Loop {
+                            target_frame.input_types.clone()
+                        } else {
+                            target_frame.output_types.clone()
+                        };
+
+                        // Pop label_types from stack (validates current stack is compatible)
+                        for expected in label_types.iter().rev() {
+                            if !Self::pop_type_with_module(
+                                &mut stack,
+                                *expected,
+                                frame_height,
+                                unreachable,
+                                Some(module),
+                            ) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                        }
+                        // Re-push label_types (replaces more-specific types with label types)
+                        for ty in &label_types {
+                            stack.push(*ty);
+                        }
+                        // Push non-null version of the popped ref (fall-through value)
+                        stack.push(ref_type.to_non_nullable());
                     }
                 },
 
-                // br_on_non_null (0xD6): [t* ref] -> [t*]
+                // br_on_non_null (0xD6): [t* (ref null ht)] -> [t*]
+                // Branch if top is non-null (carrying the non-null ref to label);
+                // fall through with stack cleared of the ref.
+                // Per spec (WebAssembly/gc#516), validator must pop & re-push label types.
                 0xD6 => {
-                    let (_label_idx, new_offset) = Self::parse_varuint32(code, offset)?;
+                    let (label_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                     offset = new_offset;
                     let frame_height = Self::current_frame_height(&frames);
                     let unreachable = Self::is_unreachable(&frames);
-                    // Pop a reference value; if non-null, branch to label with the ref
                     if !unreachable {
                         if stack.len() <= frame_height {
                             return Err(anyhow!("type mismatch"));
@@ -3386,7 +3514,45 @@ impl WastModuleValidator {
                         if !ref_type.is_reference() && ref_type != StackType::Unknown {
                             return Err(anyhow!("type mismatch"));
                         }
-                        // On fall-through, the ref was null, so nothing pushed
+
+                        if (label_idx as usize) >= frames.len() {
+                            return Err(anyhow!("br_on_non_null: label {} out of range", label_idx));
+                        }
+                        let target_frame = &frames[frames.len() - 1 - label_idx as usize];
+                        let label_types = if target_frame.frame_type == FrameType::Loop {
+                            target_frame.input_types.clone()
+                        } else {
+                            target_frame.output_types.clone()
+                        };
+                        // Label type is [t* (ref ht)] — last element must accept the non-null ref
+                        if label_types.is_empty() {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        let label_ref = label_types[label_types.len() - 1];
+                        let nonnull_ref = ref_type.to_non_nullable();
+                        if !Self::is_subtype_of_in_module(&nonnull_ref, &label_ref, module)
+                            && ref_type != StackType::Unknown
+                        {
+                            return Err(anyhow!("type mismatch"));
+                        }
+                        // Pop the t* prefix (all but last) and re-push, to normalize stack
+                        // to label's declared types.
+                        let prefix = &label_types[..label_types.len() - 1];
+                        for expected in prefix.iter().rev() {
+                            if !Self::pop_type_with_module(
+                                &mut stack,
+                                *expected,
+                                frame_height,
+                                unreachable,
+                                Some(module),
+                            ) {
+                                return Err(anyhow!("type mismatch"));
+                            }
+                        }
+                        for ty in prefix {
+                            stack.push(*ty);
+                        }
+                        // Fall-through: ref was consumed, nothing added.
                     }
                 },
 
@@ -4427,6 +4593,8 @@ impl WastModuleValidator {
                         },
                         // br_on_cast: flags(1 byte) + label(u32) + ht1(s33) + ht2(s33)
                         // Spec: rt2 <: rt1 required, branch carries rt2, fall-through carries rt1\rt2
+                        // Per WebAssembly/gc#516, validator must pop & re-push label types to
+                        // correctly handle subtyping rather than just inspecting the stack.
                         0x18 => {
                             if offset >= code.len() {
                                 return Err(anyhow!("unexpected end in br_on_cast"));
@@ -4441,30 +4609,74 @@ impl WastModuleValidator {
                             offset = new_off3;
                             let ht1_nullable = (flags & 1) != 0;
                             let ht2_nullable = (flags & 2) != 0;
-                            let ht1_st = Self::heap_type_to_stack_type(ht1_raw, ht1_nullable);
-                            let ht2_st = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
-                            // Validate: rt2 <: rt1 (both heap type and nullability)
-                            // Nullability: nullable is NOT a subtype of non-nullable
-                            if ht2_nullable && !ht1_nullable {
-                                return Err(anyhow!("type mismatch"));
-                            }
-                            // Check heap type subtyping
+                            // Apply explicit nullability to abstract heap types so the
+                            // StackType reflects the flag byte (heap_type_to_stack_type
+                            // returns nullable variants unconditionally for abstracts).
+                            let ht1_st = {
+                                let raw = Self::heap_type_to_stack_type(ht1_raw, ht1_nullable);
+                                if !ht1_nullable { raw.to_non_nullable() } else { raw }
+                            };
+                            let ht2_st = {
+                                let raw = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
+                                if !ht2_nullable { raw.to_non_nullable() } else { raw }
+                            };
                             if ht1_st != StackType::Unknown && ht2_st != StackType::Unknown
                                 && !Self::is_heap_subtype_for_cast(&ht2_st, ht2_raw, &ht1_st, ht1_raw, module)
                             {
                                 return Err(anyhow!("type mismatch"));
                             }
-                            // Validate label type decomposition for br_on_cast:
-                            // The label type must end with unpack(rt2)
+                            // Validate label_last >: rt2 (branch value must fit label's last type)
                             Self::validate_br_on_cast_label(
                                 label, &ht2_st, &frames, unreachable, module,
                             )?;
-                            // Pop rt1 (the source ref type)
-                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
-                            // Push fall-through type: rt1 \ rt2 (diff type)
+
                             let diff_nullable = ht1_nullable && !ht2_nullable;
-                            let diff_st = Self::heap_type_to_stack_type(ht1_raw, diff_nullable);
-                            stack.push(diff_st);
+                            let diff_st = {
+                                let raw = Self::heap_type_to_stack_type(ht1_raw, diff_nullable);
+                                if !diff_nullable { raw.to_non_nullable() } else { raw }
+                            };
+                            if !unreachable {
+                                // Pop rt1 from top (validate current top <: rt1)
+                                if stack.len() <= frame_height {
+                                    return Err(anyhow!("type mismatch"));
+                                }
+                                let _rt1_actual = stack.pop().unwrap();
+
+                                // Get label types [t* rt]
+                                if (label as usize) >= frames.len() {
+                                    return Err(anyhow!("br_on_cast: label {} out of range", label));
+                                }
+                                let target_frame = &frames[frames.len() - 1 - label as usize];
+                                let label_types = if target_frame.frame_type == FrameType::Loop {
+                                    target_frame.input_types.clone()
+                                } else {
+                                    target_frame.output_types.clone()
+                                };
+                                if label_types.is_empty() {
+                                    return Err(anyhow!("type mismatch"));
+                                }
+                                // Pop label prefix [t*] from stack
+                                let prefix = &label_types[..label_types.len() - 1];
+                                for expected in prefix.iter().rev() {
+                                    if !Self::pop_type_with_module(
+                                        &mut stack,
+                                        *expected,
+                                        frame_height,
+                                        unreachable,
+                                        Some(module),
+                                    ) {
+                                        return Err(anyhow!("type mismatch"));
+                                    }
+                                }
+                                // Push label prefix back
+                                for ty in prefix {
+                                    stack.push(*ty);
+                                }
+                                // Push fall-through diff (rt1 \ rt2)
+                                stack.push(diff_st);
+                            } else {
+                                stack.push(diff_st);
+                            }
                         },
                         // br_on_cast_fail: flags(1 byte) + label(u32) + ht1(s33) + ht2(s33)
                         // Spec: rt2 <: rt1 required, branch carries rt1\rt2, fall-through carries rt2
@@ -4482,29 +4694,70 @@ impl WastModuleValidator {
                             offset = new_off3;
                             let ht1_nullable = (flags & 1) != 0;
                             let ht2_nullable = (flags & 2) != 0;
-                            let ht1_st = Self::heap_type_to_stack_type(ht1_raw, ht1_nullable);
-                            let ht2_st = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
-                            // Validate: rt2 <: rt1 (both heap type and nullability)
+                            let ht1_st = {
+                                let raw = Self::heap_type_to_stack_type(ht1_raw, ht1_nullable);
+                                if !ht1_nullable { raw.to_non_nullable() } else { raw }
+                            };
+                            let ht2_st = {
+                                let raw = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
+                                if !ht2_nullable { raw.to_non_nullable() } else { raw }
+                            };
                             if ht2_nullable && !ht1_nullable {
                                 return Err(anyhow!("type mismatch"));
                             }
-                            // Check heap type subtyping
                             if ht1_st != StackType::Unknown && ht2_st != StackType::Unknown
                                 && !Self::is_heap_subtype_for_cast(&ht2_st, ht2_raw, &ht1_st, ht1_raw, module)
                             {
                                 return Err(anyhow!("type mismatch"));
                             }
-                            // Validate label type decomposition for br_on_cast_fail:
-                            // The label type must end with unpack(rt1\rt2)
                             let diff_nullable = ht1_nullable && !ht2_nullable;
-                            let diff_st = Self::heap_type_to_stack_type(ht1_raw, diff_nullable);
+                            let diff_st = {
+                                let raw = Self::heap_type_to_stack_type(ht1_raw, diff_nullable);
+                                if !diff_nullable { raw.to_non_nullable() } else { raw }
+                            };
+                            // Validate label_last >: diff (branch value on cast-fail)
                             Self::validate_br_on_cast_label(
                                 label, &diff_st, &frames, unreachable, module,
                             )?;
-                            // Pop rt1 (the source ref type)
-                            Self::pop_type(&mut stack, StackType::Unknown, frame_height, unreachable);
-                            // Push fall-through type: rt2 (the cast succeeded)
-                            stack.push(ht2_st);
+
+                            if !unreachable {
+                                if stack.len() <= frame_height {
+                                    return Err(anyhow!("type mismatch"));
+                                }
+                                let _rt1_actual = stack.pop().unwrap();
+
+                                if (label as usize) >= frames.len() {
+                                    return Err(anyhow!("br_on_cast_fail: label {} out of range", label));
+                                }
+                                let target_frame = &frames[frames.len() - 1 - label as usize];
+                                let label_types = if target_frame.frame_type == FrameType::Loop {
+                                    target_frame.input_types.clone()
+                                } else {
+                                    target_frame.output_types.clone()
+                                };
+                                if label_types.is_empty() {
+                                    return Err(anyhow!("type mismatch"));
+                                }
+                                let prefix = &label_types[..label_types.len() - 1];
+                                for expected in prefix.iter().rev() {
+                                    if !Self::pop_type_with_module(
+                                        &mut stack,
+                                        *expected,
+                                        frame_height,
+                                        unreachable,
+                                        Some(module),
+                                    ) {
+                                        return Err(anyhow!("type mismatch"));
+                                    }
+                                }
+                                for ty in prefix {
+                                    stack.push(*ty);
+                                }
+                                // Fall-through carries rt2 (cast succeeded)
+                                stack.push(ht2_st);
+                            } else {
+                                stack.push(ht2_st);
+                            }
                         },
                         // any.convert_extern: [(ref extern)] -> [(ref any)]
                         0x1A => {
@@ -5817,20 +6070,32 @@ impl WastModuleValidator {
         // Abstract heap types are encoded as negative values:
         // -16 = func (0x70), -17 = extern (0x6F), -18 = any (0x6E), etc.
         // Positive values are concrete type indices.
+        // Non-nullable abstract refs produce NonNullAbstract(byte) so validation
+        // can enforce non-nullability through the type system (gc#516).
         let value_type = if heap_type_val < 0 {
-            match heap_type_val {
-                -16 => ValueType::FuncRef,      // func (0x70)
-                -17 => ValueType::ExternRef,    // extern (0x6F)
-                -18 => ValueType::AnyRef,       // any (0x6E)
-                -19 => ValueType::EqRef,        // eq (0x6D)
-                -20 => ValueType::I31Ref,       // i31 (0x6C)
-                -21 => ValueType::StructRef(0), // struct (0x6B) - abstract
-                -22 => ValueType::ArrayRef(0),  // array (0x6A) - abstract
-                -23 => ValueType::ExnRef,       // exn (0x69)
-                -13 => ValueType::NullFuncRef,  // nofunc (0x73)
-                -14 => ValueType::ExternRef,    // noextern (0x72)
-                -15 => ValueType::AnyRef,       // none (0x71)
-                _ => ValueType::AnyRef,         // fallback
+            if !nullable {
+                let byte: u8 = match heap_type_val {
+                    -16 => 0x70, -17 => 0x6F, -18 => 0x6E, -19 => 0x6D,
+                    -20 => 0x6C, -21 => 0x6B, -22 => 0x6A, -23 => 0x69,
+                    -13 => 0x73, -14 => 0x72, -15 => 0x71, -12 => 0x74,
+                    _ => 0x6E,
+                };
+                ValueType::NonNullAbstract(byte)
+            } else {
+                match heap_type_val {
+                    -16 => ValueType::FuncRef,
+                    -17 => ValueType::ExternRef,
+                    -18 => ValueType::AnyRef,
+                    -19 => ValueType::EqRef,
+                    -20 => ValueType::I31Ref,
+                    -21 => ValueType::StructRef(0),
+                    -22 => ValueType::ArrayRef(0),
+                    -23 => ValueType::ExnRef,
+                    -13 => ValueType::NullFuncRef,
+                    -14 => ValueType::ExternRef,
+                    -15 => ValueType::AnyRef,
+                    _ => ValueType::AnyRef,
+                }
             }
         } else {
             // Concrete type index - reference to a defined type
@@ -6281,6 +6546,23 @@ impl WastModuleValidator {
             (StackType::NullFuncRef, StackType::TypedFuncRef(idx, true)) => {
                 Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
             },
+            // Non-null concrete ref to abstract non-null: valid only when nullability matches
+            // AND concrete kind matches abstract. A nullable concrete ref is NOT a subtype of
+            // any non-null abstract.
+            (StackType::TypedFuncRef(idx, false), StackType::NonNullFuncRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
+            },
+            (StackType::TypedFuncRef(idx, false), StackType::NonNullStructRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+            },
+            (StackType::TypedFuncRef(idx, false), StackType::NonNullArrayRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
+            },
+            (StackType::TypedFuncRef(idx, false), StackType::NonNullEqRef)
+            | (StackType::TypedFuncRef(idx, false), StackType::NonNullAnyRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+                    || Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
+            },
             _ => false,
         }
     }
@@ -6702,22 +6984,20 @@ impl WastModuleValidator {
     /// Used by br_on_cast/br_on_cast_fail validation.
     fn heap_type_to_stack_type(ht_raw: i32, nullable: bool) -> StackType {
         if ht_raw >= 0 {
-            // Concrete type index
             StackType::TypedFuncRef(ht_raw as u32, nullable)
         } else {
-            // Abstract heap type (s33 negative values)
             match ht_raw {
-                -16 => StackType::FuncRef,       // func
-                -17 => StackType::ExternRef,     // extern
-                -18 => StackType::AnyRef,        // any
-                -19 => StackType::EqRef,         // eq
-                -20 => StackType::I31Ref,        // i31
-                -21 => StackType::StructRef,     // struct
-                -22 => StackType::ArrayRef,      // array
-                -23 => StackType::ExnRef,        // exn
-                -13 => StackType::NullFuncRef,   // nofunc
-                -14 => StackType::NullExternRef, // noextern
-                -15 => StackType::NoneRef,       // none
+                -16 => StackType::FuncRef,
+                -17 => StackType::ExternRef,
+                -18 => StackType::AnyRef,
+                -19 => StackType::EqRef,
+                -20 => StackType::I31Ref,
+                -21 => StackType::StructRef,
+                -22 => StackType::ArrayRef,
+                -23 => StackType::ExnRef,
+                -13 => StackType::NullFuncRef,
+                -14 => StackType::NullExternRef,
+                -15 => StackType::NoneRef,
                 _ => StackType::Unknown,
             }
         }

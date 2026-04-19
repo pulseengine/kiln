@@ -199,6 +199,9 @@ pub fn value_type_to_format_val_type(value_type: &ValueType) -> Result<FormatVal
         ValueType::TypedFuncRef(_, _) => Err(Error::runtime_execution_error(
             "TypedFuncRef not supported in component model",
         )),
+        ValueType::NonNullAbstract(_) => Err(Error::runtime_execution_error(
+            "NonNullAbstract not supported in component model",
+        )),
         ValueType::NoneRef => Err(Error::runtime_execution_error(
             "NoneRef not supported in component model",
         )),
@@ -309,6 +312,7 @@ pub fn value_type_to_types_valtype<P: kiln_foundation::MemoryProvider>(
         ValueType::AnyRef => KilnTypesValType::Ref(0),  // Map to Ref with default index
         ValueType::EqRef => KilnTypesValType::Ref(0),   // Map to Ref with default index
         ValueType::TypedFuncRef(_, _) => KilnTypesValType::Own(0), // Map to resource type
+        ValueType::NonNullAbstract(_) => KilnTypesValType::Ref(0), // Non-null abstract ref as Ref
         ValueType::NoneRef => KilnTypesValType::Ref(0),    // Bottom of any hierarchy
         ValueType::NoExternRef => KilnTypesValType::Ref(0), // Bottom of extern hierarchy
         ValueType::NoExnRef => KilnTypesValType::Ref(0),   // Bottom of exn hierarchy

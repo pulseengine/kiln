@@ -87,6 +87,7 @@ pub fn value_type_to_format_val_type(value_type: &ValueType) -> Result<FormatVal
         ValueType::AnyRef => Ok(FormatValType::Own(0)),  // Map any reference to handle
         ValueType::EqRef => Ok(FormatValType::Own(0)),   // Map eq reference to handle
         ValueType::TypedFuncRef(_, _) => Ok(FormatValType::Own(0)), // Map typed funcref to handle
+        ValueType::NonNullAbstract(_) => Ok(FormatValType::Own(0)),  // Non-null abstract ref as handle
         ValueType::NoneRef => Ok(FormatValType::Own(0)),     // Bottom of any hierarchy
         ValueType::NoExternRef => Ok(FormatValType::Own(0)), // Bottom of extern hierarchy
         ValueType::NoExnRef => Ok(FormatValType::Own(0)),    // Bottom of exn hierarchy
@@ -125,6 +126,7 @@ pub fn map_wasm_type_to_component(ty: ValueType) -> kiln_error::Result<FormatVal
         ValueType::AnyRef => Ok(FormatValType::Own(0)),  // Map any reference to handle
         ValueType::EqRef => Ok(FormatValType::Own(0)),   // Map eq reference to handle
         ValueType::TypedFuncRef(_, _) => Ok(FormatValType::Own(0)), // Map typed funcref to handle
+        ValueType::NonNullAbstract(_) => Ok(FormatValType::Own(0)),  // Non-null abstract ref as handle
         ValueType::NoneRef => Ok(FormatValType::Own(0)),     // Bottom of any hierarchy
         ValueType::NoExternRef => Ok(FormatValType::Own(0)), // Bottom of extern hierarchy
         ValueType::NoExnRef => Ok(FormatValType::Own(0)),    // Bottom of exn hierarchy

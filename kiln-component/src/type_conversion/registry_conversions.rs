@@ -87,7 +87,7 @@ pub fn register_valtype_conversions(registry: &mut TypeConversionRegistry) {
                 }),
                 ValueType::StructRef(_) | ValueType::ArrayRef(_) | ValueType::ExnRef
                 | ValueType::I31Ref | ValueType::AnyRef | ValueType::EqRef
-                | ValueType::TypedFuncRef(_, _)
+                | ValueType::TypedFuncRef(_, _) | ValueType::NonNullAbstract(_)
                 | ValueType::NoneRef | ValueType::NoExternRef | ValueType::NoExnRef => Err(ConversionError {
                     kind:        ConversionErrorKind::InvalidVariant,
                     source_type: "ValueType::StructRef/ArrayRef/ExnRef/GC",
@@ -151,7 +151,7 @@ pub fn register_valtype_conversions(registry: &mut TypeConversionRegistry) {
                 ValueType::ExternRef => Ok(TypesValType::<ComponentProvider>::Ref(0)), // Default to type index 0
                 ValueType::StructRef(_) | ValueType::ArrayRef(_) | ValueType::ExnRef
                 | ValueType::I31Ref | ValueType::AnyRef | ValueType::EqRef
-                | ValueType::TypedFuncRef(_, _)
+                | ValueType::TypedFuncRef(_, _) | ValueType::NonNullAbstract(_)
                 | ValueType::NoneRef | ValueType::NoExternRef | ValueType::NoExnRef => Err(ConversionError {
                     kind:        ConversionErrorKind::InvalidVariant,
                     source_type: "ValueType::StructRef/ArrayRef/ExnRef/GC",
