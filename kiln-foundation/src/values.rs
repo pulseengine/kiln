@@ -731,6 +731,21 @@ impl Value {
             (Self::StructRef(_), ValueType::EqRef) => true,
             (Self::ArrayRef(_), ValueType::AnyRef) => true,
             (Self::ArrayRef(_), ValueType::EqRef) => true,
+            // Non-null abstract refs: require non-null payload AND kind compatibility.
+            // Abstract byte codes: 0x70=func, 0x6F=extern, 0x6E=any, 0x6D=eq,
+            // 0x6C=i31, 0x6B=struct, 0x6A=array, 0x69=exn.
+            (Self::FuncRef(Some(_)), ValueType::NonNullAbstract(0x70)) => true,
+            (Self::ExternRef(Some(_)), ValueType::NonNullAbstract(0x6F)) => true,
+            (Self::ExnRef(Some(_)), ValueType::NonNullAbstract(0x69)) => true,
+            (Self::I31Ref(Some(_)), ValueType::NonNullAbstract(0x6C)) => true,
+            (Self::I31Ref(Some(_)), ValueType::NonNullAbstract(0x6D)) => true, // i31 <: eq
+            (Self::I31Ref(Some(_)), ValueType::NonNullAbstract(0x6E)) => true, // i31 <: any
+            (Self::StructRef(Some(_)), ValueType::NonNullAbstract(0x6B)) => true,
+            (Self::StructRef(Some(_)), ValueType::NonNullAbstract(0x6D)) => true, // struct <: eq
+            (Self::StructRef(Some(_)), ValueType::NonNullAbstract(0x6E)) => true, // struct <: any
+            (Self::ArrayRef(Some(_)), ValueType::NonNullAbstract(0x6A)) => true,
+            (Self::ArrayRef(Some(_)), ValueType::NonNullAbstract(0x6D)) => true,  // array <: eq
+            (Self::ArrayRef(Some(_)), ValueType::NonNullAbstract(0x6E)) => true,  // array <: any
             _ => false,
         }
     }

@@ -266,6 +266,17 @@ impl StackType {
             (StackType::ArrayRef, StackType::AnyRef) => true,
             (StackType::EqRef, StackType::AnyRef) => true,
 
+            // === NonNull abstract hierarchy mirrors nullable ===
+            // NonNull i31/struct/array <: NonNull eq
+            (StackType::NonNullI31Ref, StackType::NonNullEqRef) => true,
+            (StackType::NonNullStructRef, StackType::NonNullEqRef) => true,
+            (StackType::NonNullArrayRef, StackType::NonNullEqRef) => true,
+            // NonNull i31/struct/array/eq <: NonNull any
+            (StackType::NonNullI31Ref, StackType::NonNullAnyRef) => true,
+            (StackType::NonNullStructRef, StackType::NonNullAnyRef) => true,
+            (StackType::NonNullArrayRef, StackType::NonNullAnyRef) => true,
+            (StackType::NonNullEqRef, StackType::NonNullAnyRef) => true,
+
             _ => false,
         }
     }
@@ -2111,7 +2122,7 @@ impl WastModuleValidator {
                                 Self::validate_handler_branch(&frames, label, &tag_params)?;
                             },
                             0x01 => {
-                                // catch_ref: pushes tag's param types + exnref
+                                // catch_ref: pushes tag's param types + (ref exn) (non-null)
                                 let (tag_idx, new_offset) = Self::parse_varuint32(code, offset)?;
                                 offset = new_offset;
                                 if tag_idx as usize >= Self::total_tags(module) {
@@ -2120,7 +2131,8 @@ impl WastModuleValidator {
                                 let (label, new_offset) = Self::parse_varuint32(code, offset)?;
                                 offset = new_offset;
                                 let mut handler_types = Self::get_tag_param_types(module, tag_idx)?;
-                                handler_types.push(StackType::ExnRef);
+                                // Per spec: catch_ref pushes a non-null exception reference
+                                handler_types.push(StackType::NonNullExnRef);
                                 // Validate handler branch target BEFORE try_table frame is pushed
                                 Self::validate_handler_branch(&frames, label, &handler_types)?;
                             },
@@ -2132,10 +2144,10 @@ impl WastModuleValidator {
                                 Self::validate_handler_branch(&frames, label, &[])?;
                             },
                             0x03 => {
-                                // catch_all_ref: pushes exnref
+                                // catch_all_ref: pushes (ref exn) (non-null)
                                 let (label, new_offset) = Self::parse_varuint32(code, offset)?;
                                 offset = new_offset;
-                                let handler_types = vec![StackType::ExnRef];
+                                let handler_types = vec![StackType::NonNullExnRef];
                                 // Validate handler branch target BEFORE try_table frame is pushed
                                 Self::validate_handler_branch(&frames, label, &handler_types)?;
                             },
@@ -4565,8 +4577,17 @@ impl WastModuleValidator {
                             offset = new_off3;
                             let ht1_nullable = (flags & 1) != 0;
                             let ht2_nullable = (flags & 2) != 0;
-                            let ht1_st = Self::heap_type_to_stack_type(ht1_raw, ht1_nullable);
-                            let ht2_st = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
+                            // Apply explicit nullability to abstract heap types so the
+                            // StackType reflects the flag byte (heap_type_to_stack_type
+                            // returns nullable variants unconditionally for abstracts).
+                            let ht1_st = {
+                                let raw = Self::heap_type_to_stack_type(ht1_raw, ht1_nullable);
+                                if !ht1_nullable { raw.to_non_nullable() } else { raw }
+                            };
+                            let ht2_st = {
+                                let raw = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
+                                if !ht2_nullable { raw.to_non_nullable() } else { raw }
+                            };
                             // Validate: rt2 <: rt1 (both heap type and nullability)
                             if ht2_nullable && !ht1_nullable {
                                 return Err(anyhow!("type mismatch"));
@@ -4580,6 +4601,12 @@ impl WastModuleValidator {
                             Self::validate_br_on_cast_label(
                                 label, &ht2_st, &frames, unreachable, module,
                             )?;
+
+                            let diff_nullable = ht1_nullable && !ht2_nullable;
+                            let diff_st = {
+                                let raw = Self::heap_type_to_stack_type(ht1_raw, diff_nullable);
+                                if !diff_nullable { raw.to_non_nullable() } else { raw }
+                            };
 
                             if !unreachable {
                                 // Pop rt1 from top (validate current top <: rt1)
@@ -4619,11 +4646,9 @@ impl WastModuleValidator {
                                     stack.push(*ty);
                                 }
                                 // Push fall-through diff (rt1 \ rt2)
-                                let diff_nullable = ht1_nullable && !ht2_nullable;
-                                stack.push(Self::heap_type_to_stack_type(ht1_raw, diff_nullable));
+                                stack.push(diff_st);
                             } else {
-                                let diff_nullable = ht1_nullable && !ht2_nullable;
-                                stack.push(Self::heap_type_to_stack_type(ht1_raw, diff_nullable));
+                                stack.push(diff_st);
                             }
                         },
                         // br_on_cast_fail: flags(1 byte) + label(u32) + ht1(s33) + ht2(s33)
@@ -4642,8 +4667,14 @@ impl WastModuleValidator {
                             offset = new_off3;
                             let ht1_nullable = (flags & 1) != 0;
                             let ht2_nullable = (flags & 2) != 0;
-                            let ht1_st = Self::heap_type_to_stack_type(ht1_raw, ht1_nullable);
-                            let ht2_st = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
+                            let ht1_st = {
+                                let raw = Self::heap_type_to_stack_type(ht1_raw, ht1_nullable);
+                                if !ht1_nullable { raw.to_non_nullable() } else { raw }
+                            };
+                            let ht2_st = {
+                                let raw = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
+                                if !ht2_nullable { raw.to_non_nullable() } else { raw }
+                            };
                             if ht2_nullable && !ht1_nullable {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -4653,7 +4684,10 @@ impl WastModuleValidator {
                                 return Err(anyhow!("type mismatch"));
                             }
                             let diff_nullable = ht1_nullable && !ht2_nullable;
-                            let diff_st = Self::heap_type_to_stack_type(ht1_raw, diff_nullable);
+                            let diff_st = {
+                                let raw = Self::heap_type_to_stack_type(ht1_raw, diff_nullable);
+                                if !diff_nullable { raw.to_non_nullable() } else { raw }
+                            };
                             // Validate label_last >: diff (branch value on cast-fail)
                             Self::validate_br_on_cast_label(
                                 label, &diff_st, &frames, unreachable, module,
@@ -6009,20 +6043,32 @@ impl WastModuleValidator {
         // Abstract heap types are encoded as negative values:
         // -16 = func (0x70), -17 = extern (0x6F), -18 = any (0x6E), etc.
         // Positive values are concrete type indices.
+        // Non-nullable abstract refs produce NonNullAbstract(byte) so validation
+        // can enforce non-nullability through the type system (gc#516).
         let value_type = if heap_type_val < 0 {
-            match heap_type_val {
-                -16 => ValueType::FuncRef,      // func (0x70)
-                -17 => ValueType::ExternRef,    // extern (0x6F)
-                -18 => ValueType::AnyRef,       // any (0x6E)
-                -19 => ValueType::EqRef,        // eq (0x6D)
-                -20 => ValueType::I31Ref,       // i31 (0x6C)
-                -21 => ValueType::StructRef(0), // struct (0x6B) - abstract
-                -22 => ValueType::ArrayRef(0),  // array (0x6A) - abstract
-                -23 => ValueType::ExnRef,       // exn (0x69)
-                -13 => ValueType::NullFuncRef,  // nofunc (0x73)
-                -14 => ValueType::ExternRef,    // noextern (0x72)
-                -15 => ValueType::AnyRef,       // none (0x71)
-                _ => ValueType::AnyRef,         // fallback
+            if !nullable {
+                let byte: u8 = match heap_type_val {
+                    -16 => 0x70, -17 => 0x6F, -18 => 0x6E, -19 => 0x6D,
+                    -20 => 0x6C, -21 => 0x6B, -22 => 0x6A, -23 => 0x69,
+                    -13 => 0x73, -14 => 0x72, -15 => 0x71, -12 => 0x74,
+                    _ => 0x6E,
+                };
+                ValueType::NonNullAbstract(byte)
+            } else {
+                match heap_type_val {
+                    -16 => ValueType::FuncRef,
+                    -17 => ValueType::ExternRef,
+                    -18 => ValueType::AnyRef,
+                    -19 => ValueType::EqRef,
+                    -20 => ValueType::I31Ref,
+                    -21 => ValueType::StructRef(0),
+                    -22 => ValueType::ArrayRef(0),
+                    -23 => ValueType::ExnRef,
+                    -13 => ValueType::NullFuncRef,
+                    -14 => ValueType::ExternRef,
+                    -15 => ValueType::AnyRef,
+                    _ => ValueType::AnyRef,
+                }
             }
         } else {
             // Concrete type index - reference to a defined type
@@ -6472,6 +6518,23 @@ impl WastModuleValidator {
             // NullFuncRef (nofunc) is bottom of func hierarchy
             (StackType::NullFuncRef, StackType::TypedFuncRef(idx, true)) => {
                 Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
+            },
+            // Non-null concrete ref to abstract non-null: valid only when nullability matches
+            // AND concrete kind matches abstract. A nullable concrete ref is NOT a subtype of
+            // any non-null abstract.
+            (StackType::TypedFuncRef(idx, false), StackType::NonNullFuncRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
+            },
+            (StackType::TypedFuncRef(idx, false), StackType::NonNullStructRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+            },
+            (StackType::TypedFuncRef(idx, false), StackType::NonNullArrayRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
+            },
+            (StackType::TypedFuncRef(idx, false), StackType::NonNullEqRef)
+            | (StackType::TypedFuncRef(idx, false), StackType::NonNullAnyRef) => {
+                Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Struct)
+                    || Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Array)
             },
             _ => false,
         }

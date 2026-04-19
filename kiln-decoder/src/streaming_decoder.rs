@@ -1330,7 +1330,27 @@ impl<'a> StreamingDecoder<'a> {
                 // Concrete type indices are non-negative.
 
                 if heap_type_idx < 0 {
-                    // Abstract heap type
+                    // Abstract heap type. Non-nullable variants produce NonNullAbstract
+                    // so the validator can enforce non-nullability (required for GC cast
+                    // validation per WebAssembly/gc#516).
+                    if !nullable {
+                        let abstract_byte: u8 = match heap_type_idx {
+                            -16 => 0x70, // func
+                            -17 => 0x6F, // extern
+                            -18 => 0x6E, // any
+                            -19 => 0x6D, // eq
+                            -20 => 0x6C, // i31
+                            -21 => 0x6B, // struct
+                            -22 => 0x6A, // array
+                            -23 => 0x69, // exn
+                            -13 => 0x73, // nofunc
+                            -14 => 0x72, // noextern
+                            -15 => 0x71, // none
+                            -12 => 0x74, // noexn
+                            _ => 0x6E,
+                        };
+                        return Ok((ValueType::NonNullAbstract(abstract_byte), new_offset));
+                    }
                     match heap_type_idx {
                         -16 => Ok((ValueType::FuncRef, new_offset)), // func (0x70)
                         -17 => Ok((ValueType::ExternRef, new_offset)), // extern (0x6F)
@@ -1389,20 +1409,8 @@ impl<'a> StreamingDecoder<'a> {
 
         let byte = data[offset];
 
-        // Only the 0x64 (non-nullable ref) path with abstract heap types differs
-        if byte == REF_TYPE_NON_NULLABLE {
-            let off = offset + 1;
-            let (heap_type_idx, new_offset) = self.parse_heap_type(data, off)?;
-            if heap_type_idx < 0 {
-                // Non-nullable abstract heap type: encode as sentinel TypedFuncRef
-                let sentinel = 0x8000_0000u32 | ((-heap_type_idx) as u32 & 0xFF);
-                return Ok((ValueType::TypedFuncRef(sentinel, false), new_offset));
-            }
-            // Concrete type: non-nullable typed ref
-            return Ok((ValueType::TypedFuncRef(heap_type_idx as u32, false), new_offset));
-        }
-
-        // For all other cases, delegate to the standard parser
+        // Now that parse_value_type produces NonNullAbstract for non-nullable abstract
+        // heap types, local parsing can use it directly — the old sentinel path is gone.
         self.parse_value_type(data, offset)
     }
 
