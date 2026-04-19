@@ -1760,9 +1760,25 @@ impl WastModuleValidator {
                         return Err(anyhow!("unknown table"));
                     }
 
-                    // Validate table element type is funcref (not externref)
+                    // Validate table element type is in the func hierarchy.
+                    // A table of (ref null $t) where $t is a function type is valid
+                    // for call_indirect / return_call_indirect.
                     if let Some(elem_type) = Self::get_table_element_type(module, table_idx) {
-                        if elem_type != kiln_foundation::RefType::Funcref {
+                        let is_func_compat = match &elem_type {
+                            kiln_foundation::RefType::Funcref => true,
+                            kiln_foundation::RefType::Externref => false,
+                            kiln_foundation::RefType::Gc(gc) => {
+                                use kiln_foundation::types::HeapType;
+                                match &gc.heap_type {
+                                    HeapType::Func | HeapType::NoFunc => true,
+                                    HeapType::Concrete(idx) => {
+                                        Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
+                                    },
+                                    _ => false,
+                                }
+                            },
+                        };
+                        if !is_func_compat {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
@@ -1866,9 +1882,25 @@ impl WastModuleValidator {
                         return Err(anyhow!("unknown table"));
                     }
 
-                    // Validate table element type is funcref (not externref)
+                    // Validate table element type is in the func hierarchy.
+                    // A table of (ref null $t) where $t is a function type is valid
+                    // for call_indirect / return_call_indirect.
                     if let Some(elem_type) = Self::get_table_element_type(module, table_idx) {
-                        if elem_type != kiln_foundation::RefType::Funcref {
+                        let is_func_compat = match &elem_type {
+                            kiln_foundation::RefType::Funcref => true,
+                            kiln_foundation::RefType::Externref => false,
+                            kiln_foundation::RefType::Gc(gc) => {
+                                use kiln_foundation::types::HeapType;
+                                match &gc.heap_type {
+                                    HeapType::Func | HeapType::NoFunc => true,
+                                    HeapType::Concrete(idx) => {
+                                        Self::concrete_type_is_kind(module, *idx, CompositeKindClass::Func)
+                                    },
+                                    _ => false,
+                                }
+                            },
+                        };
+                        if !is_func_compat {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
@@ -4588,10 +4620,6 @@ impl WastModuleValidator {
                                 let raw = Self::heap_type_to_stack_type(ht2_raw, ht2_nullable);
                                 if !ht2_nullable { raw.to_non_nullable() } else { raw }
                             };
-                            // Validate: rt2 <: rt1 (both heap type and nullability)
-                            if ht2_nullable && !ht1_nullable {
-                                return Err(anyhow!("type mismatch"));
-                            }
                             if ht1_st != StackType::Unknown && ht2_st != StackType::Unknown
                                 && !Self::is_heap_subtype_for_cast(&ht2_st, ht2_raw, &ht1_st, ht1_raw, module)
                             {
@@ -4607,7 +4635,6 @@ impl WastModuleValidator {
                                 let raw = Self::heap_type_to_stack_type(ht1_raw, diff_nullable);
                                 if !diff_nullable { raw.to_non_nullable() } else { raw }
                             };
-
                             if !unreachable {
                                 // Pop rt1 from top (validate current top <: rt1)
                                 if stack.len() <= frame_height {
