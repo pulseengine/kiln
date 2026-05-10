@@ -84,7 +84,7 @@ jobs:
 
   code_quality:
     name: Code Quality Checks
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, rust-cpu]
     steps:
       - uses: actions/checkout@v5
       - uses: actions-rs/toolchain@v1
@@ -135,7 +135,7 @@ jobs:
 
   core_tests_and_analysis:
     name: Core Tests, Analysis & Coverage
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, rust-cpu]
     # This job runs on push, PR, and all manual triggers (regardless of input)
     steps:
       - uses: actions/checkout@v5
@@ -200,7 +200,7 @@ jobs:
 
   safety_verification:
     name: SCORE-Inspired Safety Verification
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, rust-cpu]
     # Run safety verification on all pushes and PRs
     steps:
       - uses: actions/checkout@v5
@@ -322,7 +322,7 @@ jobs:
 # Coverage job is still Linux-only as tarpaulin only supports Linux
   coverage:
     name: Code Coverage
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, rust-cpu]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/cache@v5
