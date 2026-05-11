@@ -25,7 +25,7 @@ log = { version = "0.4", optional = true }
 # WAT parsing (for testing)
 wat = { version = "1.232.0", optional = true }
 # TOML configuration (for tooling)
-toml = { version = "0.8", optional = true }
+toml = { version = "0.9", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]
