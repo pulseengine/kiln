@@ -41,7 +41,7 @@ chrono = { version = "0.4", features = ["serde"] }
 atty = "0.2"
 
 # Configuration and validation
-toml = "0.8"
+toml = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "2.0"
 which = "6.0"
