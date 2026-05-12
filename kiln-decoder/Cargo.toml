@@ -23,7 +23,7 @@ kiln-foundation = { workspace = true, default-features = false }
 # Core dependencies
 log = { version = "0.4", optional = true }
 # WAT parsing (for testing)
-wat = { version = "1.232.0", optional = true }
+wat = { version = "1.244.0", optional = true }
 # TOML configuration (for tooling)
 toml = { version = "0.9", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
@@ -33,7 +33,7 @@ criterion = "0.6"
 tempfile = "3.27"
 proptest = "1.4"
 hex = "0.4"
-wat = "1.232.0"
+wat = "1.244.0"
 
 [features]
 default = []
