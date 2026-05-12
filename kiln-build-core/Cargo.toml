@@ -24,7 +24,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Path dependencies for cross-platform operations
 pathdiff = "0.2"
-colored = "3.0.0"
+colored = "3.1.1"
 regex = "1.10"
 
 # Configuration parsing
