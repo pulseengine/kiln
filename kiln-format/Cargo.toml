@@ -15,7 +15,7 @@ kiln-foundation = { workspace = true, default-features = false }
 
 [dev-dependencies]
 # For property testing
-proptest = "1.0.0"
+proptest = "1.11.0"
 
 # For formal verification (moved to dependencies with optional flag)
 [dependencies.kani-verifier]

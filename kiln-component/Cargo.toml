@@ -29,7 +29,7 @@ kiln-sync = { workspace = true, default-features = false }
 log = { version = "0.4", optional = true }
 
 [dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.6", features = ["html_reports"] }
 
 [features]
 # By default, enable std to match kiln-runtime's default behavior

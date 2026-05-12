@@ -58,7 +58,7 @@ num_cpus = "1.0"
 [dev-dependencies]
 # Testing utilities
 tempfile = "3.27"
-criterion = "0.5"
+criterion = "0.6"
 
 [lints]
 workspace = true
