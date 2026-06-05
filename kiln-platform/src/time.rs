@@ -121,7 +121,7 @@ impl PlatformTime {
     fn windows_monotonic_ns() -> u64 {
         use std::mem;
 
-        extern "system" {
+        unsafe extern "system" {
             fn QueryPerformanceCounter(lpPerformanceCount: *mut i64) -> i32;
             fn QueryPerformanceFrequency(lpFrequency: *mut i64) -> i32;
         }
@@ -131,7 +131,7 @@ impl PlatformTime {
             static INIT: std::sync::Once = std::sync::Once::new();
 
             INIT.call_once(|| {
-                QueryPerformanceFrequency(&mut FREQUENCY);
+                QueryPerformanceFrequency(&raw mut FREQUENCY);
             });
 
             let mut counter = mem::zeroed::<i64>();
@@ -385,7 +385,7 @@ impl PlatformTime {
             high: u32,
         }
 
-        extern "system" {
+        unsafe extern "system" {
             fn GetCurrentProcess() -> isize;
             fn GetProcessTimes(
                 process: isize,
@@ -427,7 +427,7 @@ impl PlatformTime {
             high: u32,
         }
 
-        extern "system" {
+        unsafe extern "system" {
             fn GetCurrentThread() -> isize;
             fn GetThreadTimes(
                 thread: isize,
