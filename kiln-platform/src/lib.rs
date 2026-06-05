@@ -107,6 +107,10 @@ pub mod ipc;
 #[cfg(all(feature = "std", target_os = "linux"))]
 pub mod linux_ipc;
 
+// Windows IPC implementation (requires std)
+#[cfg(all(feature = "std", target_os = "windows"))]
+pub mod windows_ipc;
+
 #[cfg(feature = "std")]
 pub mod high_availability;
 

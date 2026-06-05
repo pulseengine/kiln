@@ -132,7 +132,7 @@ impl PlatformRandom {
         };
 
         #[link(name = "bcrypt")]
-        extern "system" {
+        unsafe extern "system" {
             fn BCryptGenRandom(
                 hAlgorithm: *mut c_void,
                 pbBuffer: *mut u8,
