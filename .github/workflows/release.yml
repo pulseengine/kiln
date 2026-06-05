@@ -1,0 +1,362 @@
+name: Release
+
+# Tag-triggered: builds the kilnd runtime CLI for five targets, then
+# publishes a standardised PulseEngine release. Pattern mirrors
+# pulseengine/relay/.github/workflows/release.yml (itself derived from
+# the synth standard) — cosign-signed SHA256SUMS.txt, CycloneDX SBOM,
+# SLSA build provenance, rivet snapshot, build-env capture.
+#
+# Required release assets, per the standardised pattern:
+#   kiln-vX.Y.Z-<triple>.{tar.gz|zip}          # cross-compiled kilnd binaries
+#   kiln-X.Y.Z.cdx.json                         # CycloneDX SBOM (kilnd toolchain)
+#   rivet-snapshot-vX.Y.Z.json                  # audit-ready rivet artifact graph
+#   SHA256SUMS.txt                              # one checksum file over all assets
+#   SHA256SUMS.txt.sig                          # cosign detached signature
+#   SHA256SUMS.txt.pem                          # Fulcio cert chain
+#   SHA256SUMS.txt.cosign.bundle                # verifier-friendly bundle
+#   build-env.txt                               # toolchain provenance
+#
+# Tag convention: v<semver>, e.g. v0.3.0 (matches the existing v0.1.0 /
+# v0.2.0 tags).
+#
+# Per-tag serial concurrency: never cancel a release mid-publish; a
+# half-published release leaves the GitHub Release inconsistent.
+#
+# Verification one-liner (paste in release notes — see
+# .github/release-notes/<vX.Y.Z>.md):
+#
+#   cosign verify-blob \
+#     --certificate-identity-regexp \
+#       'https://github.com/pulseengine/kiln/.github/workflows/release.yml@.*' \
+#     --certificate-oidc-issuer \
+#       'https://token.actions.githubusercontent.com' \
+#     --bundle SHA256SUMS.txt.cosign.bundle SHA256SUMS.txt
+#   gh attestation verify kiln-vX.Y.Z-<triple>.tar.gz --repo pulseengine/kiln
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Manual re-run for a tag whose initial run failed partway. The tag
+  # must already exist; this does not create tags.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to (re)build (e.g. v0.3.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ── Cross-platform binary builds ──────────────────────────────────────
+  build-binaries:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-14
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+    env:
+      TARGET: ${{ matrix.target }}
+      ARCHIVE_KIND: ${{ matrix.archive }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Install cross (linux aarch64 only)
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross --locked
+
+      - name: Build kilnd (native)
+        if: ${{ !matrix.cross }}
+        shell: bash
+        run: cargo build --release --target "$TARGET" -p kilnd
+
+      - name: Build kilnd (cross)
+        if: matrix.cross
+        shell: bash
+        run: cross build --release --target "$TARGET" -p kilnd
+
+      - name: Strip binary (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          strip "target/${TARGET}/release/kilnd" 2>/dev/null || true
+
+      - name: Package (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        env:
+          # Resolve the version once: tag push -> refs/tags/vX.Y.Z;
+          # workflow_dispatch -> the user-supplied tag input. Bound via
+          # env: and dereferenced as $VERSION below — never expand
+          # ${{ ... }} directly inside run: (command-injection vector).
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
+          ARCHIVE="kiln-${VERSION}-${TARGET}.tar.gz"
+          mkdir -p staging
+          cp "target/${TARGET}/release/kilnd" staging/
+          cp kilnd/README.md staging/README.md 2>/dev/null || true
+          cp CHANGELOG.md staging/ 2>/dev/null || true
+          cp LICENSE staging/ 2>/dev/null || true
+          tar -czf "$ARCHIVE" -C staging .
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - name: Package (zip)
+        if: matrix.archive == 'zip'
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
+          ARCHIVE="kiln-${VERSION}-${TARGET}.zip"
+          mkdir -p staging
+          cp "target/${TARGET}/release/kilnd.exe" staging/
+          cp kilnd/README.md staging/README.md 2>/dev/null || true
+          cp CHANGELOG.md staging/ 2>/dev/null || true
+          cp LICENSE staging/ 2>/dev/null || true
+          cd staging && 7z a "../${ARCHIVE}" . && cd ..
+          echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: ${{ env.ARCHIVE }}
+          retention-days: 7
+
+  # ── Create the GitHub Release: SBOM, sums, SLSA, cosign ───────────────
+  create-release:
+    name: Create GitHub Release
+    needs: [build-binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      # Keyless signing + provenance need an OIDC token; release-asset
+      # upload needs contents: write; build provenance attestation
+      # needs attestations: write. Mirrors pulseengine/relay.
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          submodules: recursive
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) \
+            -exec cp {} release-assets/ \;
+          ls -la release-assets/
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # ── rivet snapshot ───────────────────────────────────────────────
+      # Every release carries an audit-ready snapshot of the rivet
+      # artifact graph at the released commit. Must run BEFORE
+      # SHA256SUMS so the snapshot's digest enters the sums file.
+      - name: Install rivet (skip if cached)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if command -v rivet >/dev/null 2>&1; then
+            echo "rivet already on PATH: $(rivet --version)"
+          else
+            cargo install --locked \
+              --git https://github.com/pulseengine/rivet \
+              --bin rivet \
+              rivet-cli
+          fi
+
+      - name: Capture rivet snapshot
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_TAG:-${GITHUB_REF_NAME}}"
+          rivet snapshot capture \
+            --name "$TAG" \
+            --output "release-assets/rivet-snapshot-${TAG}.json"
+          ls -la "release-assets/rivet-snapshot-${TAG}.json"
+
+      # CycloneDX SBOM for the kilnd toolchain. Generated *before*
+      # SHA256SUMS so its digest is captured in the checksum manifest;
+      # the cosign signature over SHA256SUMS.txt then transitively
+      # covers the SBOM.
+      - name: Install cargo-cyclonedx
+        run: cargo install --locked cargo-cyclonedx
+
+      - name: Generate toolchain SBOM (CycloneDX)
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
+          # kiln tags are `vX.Y.Z`; strip the `v` to get bare semver
+          # `X.Y.Z` for the SBOM filename.
+          BARE="${VERSION#v}"
+          # cargo-cyclonedx doesn't proxy cargo's `-p` package-selection;
+          # use `--manifest-path` to target kilnd's Cargo.toml.
+          cargo cyclonedx \
+            --manifest-path kilnd/Cargo.toml \
+            --format json \
+            --spec-version 1.5
+          SBOM_SRC="kilnd/kilnd.cdx.json"
+          if [ ! -f "$SBOM_SRC" ]; then
+            SBOM_SRC=$(find kilnd -maxdepth 2 -name '*.cdx.json' | head -1)
+          fi
+          test -n "$SBOM_SRC" && test -f "$SBOM_SRC"
+          cp "$SBOM_SRC" "release-assets/kiln-${BARE}.cdx.json"
+          echo "::notice::Toolchain SBOM written to release-assets/kiln-${BARE}.cdx.json"
+          ls -la release-assets/
+
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum ./* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      # ── SLSA build provenance (GitHub-native) ────────────────────────
+      # actions/attest-build-provenance generates an in-toto SLSA v1
+      # provenance statement for every binary archive, signs it keyless
+      # via Sigstore (Fulcio cert bound to this workflow's OIDC
+      # identity), and records it in the Rekor transparency log.
+      # Consumers verify with `gh attestation verify <file> --repo
+      # pulseengine/kiln`.
+      - name: Generate SLSA build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release-assets/*.tar.gz
+            release-assets/*.zip
+
+      # ── Sigstore keyless signing (cosign) ────────────────────────────
+      # Signs SHA256SUMS.txt so a consumer can verify the checksum file
+      # itself was produced by this workflow (closes the gap where an
+      # attacker who can replace a release asset could also replace the
+      # plain checksum file). The .cosign.bundle is the verifier-friendly
+      # artifact; .sig + .pem are the detached signature and Fulcio cert.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Sign SHA256SUMS with cosign (keyless OIDC)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-assets
+          cosign sign-blob \
+            --yes \
+            --bundle SHA256SUMS.txt.cosign.bundle \
+            --output-signature SHA256SUMS.txt.sig \
+            --output-certificate SHA256SUMS.txt.pem \
+            SHA256SUMS.txt
+          echo "::notice::SHA256SUMS signed via Sigstore keyless flow."
+          ls -la ./*
+
+      - name: Capture build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "rustc: $(rustc --version)"
+            echo "cargo: $(cargo --version)"
+            echo "cosign: $(cosign version 2>&1 | head -1)"
+            echo "rivet: $(rivet --version 2>&1 | head -1)"
+            echo "runner: $(uname -srm)"
+          } > release-assets/build-env.txt
+          cat release-assets/build-env.txt
+
+      - name: Pick release notes body
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          NOTES_FILE=".github/release-notes/${TAG}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            echo "Using release notes from $NOTES_FILE"
+            printf 'notes_path=%s\n' "$NOTES_FILE" >>"$GITHUB_OUTPUT"
+          else
+            echo "No release notes file at $NOTES_FILE; using gh autogen"
+            printf 'notes_path=\n' >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_TAG: ${{ inputs.tag }}
+          NOTES_PATH: ${{ steps.notes.outputs.notes_path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_TAG:-${GITHUB_REF_NAME}}"
+          # Idempotent: re-running the workflow for an existing release
+          # uploads/overwrites assets rather than failing. --clobber lets
+          # a re-run replace assets a previous partial run left behind.
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "::notice::Release $VERSION exists; uploading assets"
+            gh release upload "$VERSION" --clobber release-assets/*
+          elif [ -n "${NOTES_PATH}" ]; then
+            echo "::notice::Creating Release $VERSION with notes from ${NOTES_PATH}"
+            gh release create "$VERSION" \
+              --title "$VERSION" \
+              --notes-file "${NOTES_PATH}" \
+              release-assets/*
+          else
+            echo "::notice::Creating Release $VERSION with autogen notes"
+            gh release create "$VERSION" \
+              --title "$VERSION" \
+              --generate-notes \
+              release-assets/*
+          fi

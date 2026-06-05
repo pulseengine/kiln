@@ -28,7 +28,7 @@ edition = "2024"
 rust-version = "1.85.0"
 license = "MIT"
 repository = "https://github.com/pulseengine/kiln"
-version = "0.2.0" # Updated to 0.2.0 for consistency
+version = "0.3.0"
 
 
 [workspace.dependencies]
@@ -36,22 +36,22 @@ anyhow = "1.0"
 wit-bindgen = "0.41.0"
 
 # Internal crate versions
-kiln-error = { path = "kiln-error", version = "0.2.0", default-features = false }
-kiln-sync = { path = "kiln-sync", version = "0.2.0", default-features = false }
-kiln-format = { path = "kiln-format", version = "0.2.0", default-features = false }
-kiln-foundation = { path = "kiln-foundation", version = "0.2.0", default-features = false }
-kiln-decoder = { path = "kiln-decoder", version = "0.2.0", default-features = false, features = ["std"] }
-kiln-debug = { path = "kiln-debug", version = "0.2.0", default-features = false }
-kiln-runtime = { path = "kiln-runtime", version = "0.2.0", default-features = false }
-kiln-logging = { path = "kiln-logging", version = "0.2.0", default-features = false }
-kiln-instructions = { path = "kiln-instructions", version = "0.2.0", default-features = false }
-kiln-component = { path = "kiln-component", version = "0.2.0", default-features = false }
-kiln-host = { path = "kiln-host", version = "0.2.0", default-features = false }
-kiln-intercept = { path = "kiln-intercept", version = "0.2.0", default-features = false }
-kiln-math = { path = "kiln-math", version = "0.2.0", default-features = false }
-kiln-platform = { path = "kiln-platform", version = "0.2.0", default-features = false }
-kiln-panic = { path = "kiln-panic", version = "0.2.0", default-features = false }
-kiln-wasi = { path = "kiln-wasi", version = "0.2.0", default-features = false }
+kiln-error = { path = "kiln-error", version = "0.3.0", default-features = false }
+kiln-sync = { path = "kiln-sync", version = "0.3.0", default-features = false }
+kiln-format = { path = "kiln-format", version = "0.3.0", default-features = false }
+kiln-foundation = { path = "kiln-foundation", version = "0.3.0", default-features = false }
+kiln-decoder = { path = "kiln-decoder", version = "0.3.0", default-features = false, features = ["std"] }
+kiln-debug = { path = "kiln-debug", version = "0.3.0", default-features = false }
+kiln-runtime = { path = "kiln-runtime", version = "0.3.0", default-features = false }
+kiln-logging = { path = "kiln-logging", version = "0.3.0", default-features = false }
+kiln-instructions = { path = "kiln-instructions", version = "0.3.0", default-features = false }
+kiln-component = { path = "kiln-component", version = "0.3.0", default-features = false }
+kiln-host = { path = "kiln-host", version = "0.3.0", default-features = false }
+kiln-intercept = { path = "kiln-intercept", version = "0.3.0", default-features = false }
+kiln-math = { path = "kiln-math", version = "0.3.0", default-features = false }
+kiln-platform = { path = "kiln-platform", version = "0.3.0", default-features = false }
+kiln-panic = { path = "kiln-panic", version = "0.3.0", default-features = false }
+kiln-wasi = { path = "kiln-wasi", version = "0.3.0", default-features = false }
 
 # Note: Safety level presets should be defined in individual crate Cargo.toml files
 # as workspace.features is not supported by Cargo
