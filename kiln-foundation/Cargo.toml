@@ -341,7 +341,7 @@ kani-verifier = { version = "0.62.0", optional = true }
 proptest = { version = "1.4.0", default-features = false, features = ["std"] }
 proptest-derive = "0.5.1"
 criterion = { version = "0.6", features = ["html_reports"] }
-serial_test = "3.2"
+serial_test = "3.4"
 
 [package.metadata.kani]
 default-unwind = 2
