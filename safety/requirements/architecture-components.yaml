@@ -76,6 +76,8 @@ artifacts:
         target: REQ_FUNC_021
       - type: satisfies
         target: REQ_CMP_020
+      - type: satisfies
+        target: REQ_CMP_021
     fields:
       previous-id: ARCH_COMP_003
       implementation: kiln-component/src/

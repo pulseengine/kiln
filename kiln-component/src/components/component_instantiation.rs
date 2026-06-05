@@ -2794,10 +2794,17 @@ impl ComponentInstance {
             // Create an export value based on the sort
             let export_value = match &export.sort {
                 Sort::Function => {
-                    // Create a function export with placeholder signature
+                    // Create a function export with placeholder signature.
+                    // Surface failures as a graceful Result error instead of
+                    // panicking — a malformed/zero-sized component type must not
+                    // crash the runtime (see issue #269).
                     let provider = NoStdProvider::<4096>::default();
-                    let signature = kiln_foundation::ComponentType::unit(provider)
-                        .expect("Failed to create component type");
+                    let signature = kiln_foundation::ComponentType::unit(provider).map_err(|_| {
+                        kiln_error::Error::component_resource_lifecycle_error(
+                            "failed to construct unit component type for function export \
+                             signature during export resolution",
+                        )
+                    })?;
 
                     let func_export = FunctionExport {
                         signature,
