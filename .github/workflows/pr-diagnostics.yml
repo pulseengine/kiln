@@ -356,7 +356,7 @@ jobs:
         retention-days: 30
         
     - name: Comment on PR
-      uses: actions/github-script@v8
+      uses: actions/github-script@v9
       with:
         script: |
           const fs = require('fs');
@@ -393,7 +393,7 @@ jobs:
           }
           
     - name: Set check status
-      uses: actions/github-script@v8
+      uses: actions/github-script@v9
       with:
         script: |
           const errorsChanged = ${{ steps.diff-analysis.outputs.new_errors_changed }};
