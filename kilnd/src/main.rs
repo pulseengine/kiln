@@ -1012,9 +1012,19 @@ impl KilndEngine {
             // Execute as WebAssembly component
             #[cfg(feature = "component-model")]
             {
-                eprintln!("[VXDBG] Calling execute_component");
-                self.execute_component(&module_data)?;
-                eprintln!("[VXDBG] execute_component returned OK");
+                if let Err(e) = self.execute_component(&module_data) {
+                    // Direct Component Model execution is not the supported path
+                    // (RFC #46): components are lowered to core modules by meld at
+                    // build time, and kiln runs the resulting core module. Surface
+                    // actionable guidance, but keep the underlying error.
+                    let _ = self.logger.handle_minimal_log(
+                        LogLevel::Error,
+                        "This file is a WebAssembly Component Model component. kiln \
+                         runs core modules; lower it first with `meld fuse <file> -o \
+                         <file>.core.wasm` and run the resulting core module (RFC #46).",
+                    );
+                    return Err(e);
+                }
             }
             #[cfg(not(feature = "component-model"))]
             {
