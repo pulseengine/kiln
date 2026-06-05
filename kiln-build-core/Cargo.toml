@@ -33,7 +33,7 @@ md5 = "0.7"
 
 # WAST test suite support
 wast = "237.0"
-wat = "1.232.0"
+wat = "1.244.0"
 
 # Internal Kiln crates
 kiln-error = { workspace = true }
