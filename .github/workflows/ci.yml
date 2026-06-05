@@ -184,7 +184,7 @@ jobs:
           cargo test -p kiln-foundation asil_testing -- --nocapture || true
           cargo-kiln verify --asil c || true
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: |
@@ -345,7 +345,7 @@ jobs:
         run: cargo-kiln coverage --html
         continue-on-error: true  # Coverage report generation is best-effort
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: target/llvm-cov/lcov.info
