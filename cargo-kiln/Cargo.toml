@@ -27,7 +27,7 @@ kiln-decoder = { path = "../kiln-decoder" }
 kiln-foundation = { path = "../kiln-foundation" }
 
 # CLI framework
-clap = { version = "4.5.39", features = ["derive", "env"] }
+clap = { version = "4.5.60", features = ["derive", "env"] }
 anyhow = { workspace = true }
 
 # Output formatting
