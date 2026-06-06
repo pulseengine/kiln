@@ -78,7 +78,13 @@
         # `nix build` produces the kilnd runtime CLI. Tests are skipped here —
         # they require the external/testsuite submodule and WAST fixtures that
         # are not part of the pure source closure.
-        packages.default = pkgs.rustPlatform.buildRustPackage {
+        #
+        # Build with the pinned toolchain (not nixpkgs' default rustc, which is
+        # too old for edition 2024) via makeRustPlatform.
+        packages.default = (pkgs.makeRustPlatform {
+          cargo = rustToolchain;
+          rustc = rustToolchain;
+        }).buildRustPackage {
           pname = "kilnd";
           version = "0.3.1";
           src = pkgs.lib.cleanSource ./.;
