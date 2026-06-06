@@ -29,10 +29,16 @@ use kiln_foundation::{
 };
 
 use crate::{
-    async_::async_execution_engine::{AsyncExecutionEngine, ExecutionId},
     threading::task_manager::{TaskId, TaskState},
     types::Value,
 };
+
+/// Identifier for an in-flight subtask execution.
+///
+/// Previously provided by the (now removed) async execution engine; retained
+/// here as a plain newtype since task cancellation tracks subtasks by id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ExecutionId(pub u64);
 
 /// Maximum number of cancellation handlers in no_std
 const MAX_CANCELLATION_HANDLERS: usize = 32;

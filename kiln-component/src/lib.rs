@@ -51,7 +51,6 @@ pub mod bounded_component_infra;
 // Core component modules
 pub mod adapter;
 pub mod agent_registry;
-pub mod async_;
 pub mod blast_zone;
 pub mod builtins;
 pub mod call_context;
@@ -61,7 +60,6 @@ pub mod components;
 pub mod cross_component_calls;
 pub mod cross_component_communication;
 pub mod cross_component_resource_sharing;
-pub mod resource_limits_loader;
 
 // Module aliases for compatibility with existing imports
 pub use components::component_instantiation;

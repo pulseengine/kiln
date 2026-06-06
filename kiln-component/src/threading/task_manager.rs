@@ -17,14 +17,39 @@ use kiln_foundation::{
 };
 
 use crate::{
-    async_::async_types::{
-        AsyncReadResult, ErrorContext, ErrorContextHandle, Future, FutureHandle, Stream,
-        StreamHandle, Waitable, WaitableSet,
-    },
     prelude::*,
     resources::resource_lifecycle::ResourceLifecycleManager,
     types::{ValType, Value},
 };
+
+/// Handle to an error context.
+///
+/// Previously provided by the (now removed) Component Model async surface; the
+/// task manager only needs an opaque handle to record which error context a
+/// failed task is associated with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ErrorContextHandle(pub u32);
+
+/// Set of waitables a task can block on.
+///
+/// The async waitable machinery was removed; the task manager only inspects the
+/// ready-mask to find the first ready waitable, so this retains just that state.
+#[derive(Debug, Clone, Default)]
+pub struct WaitableSet {
+    /// Ready mask (one bit per waitable).
+    pub ready_mask: u64,
+}
+
+impl WaitableSet {
+    /// Return the index of the first ready waitable, if any.
+    pub fn first_ready(&self) -> Option<u32> {
+        if self.ready_mask == 0 {
+            None
+        } else {
+            Some(self.ready_mask.trailing_zeros())
+        }
+    }
+}
 
 /// Maximum number of tasks in no_std environments
 const MAX_TASKS: usize = 256;

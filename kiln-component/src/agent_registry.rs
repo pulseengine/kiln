@@ -13,9 +13,6 @@ use kiln_foundation::{
     budget_aware_provider::CrateId, collections::StaticVec, prelude::*, safe_managed_alloc,
 };
 
-// Re-export async types when available
-#[cfg(feature = "async")]
-use crate::async_::AsyncExecutionEngine;
 use crate::{
     execution_engine::ComponentExecutionEngine,
     types::Value,
@@ -113,8 +110,6 @@ pub enum WarningType {
 #[derive(Debug)]
 pub enum LegacyAgentType {
     Component(ComponentExecutionEngine),
-    #[cfg(feature = "async")]
-    Async(AsyncExecutionEngine),
     // Note: Stackless and CFI engines are not included as they're integrated into unified agent
 }
 
@@ -157,9 +152,6 @@ pub enum PreferredAgentType {
     Unified,
     /// Use legacy component agent (deprecated)
     LegacyComponent,
-    /// Use legacy async agent (deprecated)
-    #[cfg(feature = "async")]
-    LegacyAsync,
     /// Auto-select best available
     Auto,
 }
@@ -231,16 +223,6 @@ impl AgentRegistry {
                     ))
                 }
             },
-            #[cfg(feature = "async")]
-            PreferredAgentType::LegacyAsync => {
-                if options.allow_legacy_fallback {
-                    self.create_legacy_async_agent()
-                } else {
-                    Err(kiln_error::Error::validation_invalid_input(
-                        "Async agent type not allowed",
-                    ))
-                }
-            },
             PreferredAgentType::Auto => {
                 // Always prefer unified agent
                 self.create_unified_agent(options.config)
@@ -263,34 +245,6 @@ impl AgentRegistry {
         {
             self.legacy_agents
                 .push((agent_id, LegacyAgentType::Component(agent)))
-                .map_err(|_| kiln_error::Error::resource_exhausted("Too many legacy agents"))?;
-        }
-
-        self.stats.legacy_agents_created += 1;
-        self.stats.active_agents += 1;
-
-        // Add to pending migrations
-        self.add_pending_migration(agent_id);
-
-        Ok(agent_id)
-    }
-
-    /// Create a legacy async agent (deprecated)
-    #[cfg(feature = "async")]
-    pub fn create_legacy_async_agent(&mut self) -> Result<AgentId> {
-        let agent_id = AgentId(self.next_agent_id);
-        self.next_agent_id += 1;
-
-        let agent = AsyncExecutionEngine::new();
-
-        #[cfg(feature = "std")]
-        {
-            self.legacy_agents.insert(agent_id, Box::new(agent));
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            self.legacy_agents
-                .push((agent_id, LegacyAgentType::Async(agent)))
                 .map_err(|_| kiln_error::Error::resource_exhausted("Too many legacy agents"))?;
         }
 
@@ -342,13 +296,6 @@ impl AgentRegistry {
                         LegacyAgentType::Component(engine) => {
                             engine.call_function(instance_id, function_index, args)
                         },
-                        #[cfg(feature = "async")]
-                        LegacyAgentType::Async(_engine) => {
-                            // Async execution would require different API
-                            Err(kiln_error::Error::runtime_error(
-                                "Async agent requires different API",
-                            ))
-                        },
                     };
                 }
             }
@@ -387,11 +334,6 @@ impl AgentRegistry {
                     config = match agent {
                         LegacyAgentType::Component(_) => AgentConfiguration {
                             execution_mode: ExecutionMode::Synchronous,
-                            ..AgentConfiguration::default()
-                        },
-                        #[cfg(feature = "async")]
-                        LegacyAgentType::Async(_) => AgentConfiguration {
-                            execution_mode: ExecutionMode::Asynchronous,
                             ..AgentConfiguration::default()
                         },
                     };
@@ -666,33 +608,3 @@ impl LegacyExecutionAgent for ComponentExecutionEngine {
     }
 }
 
-// Implement LegacyExecutionAgent for AsyncExecutionEngine
-#[cfg(all(feature = "std", feature = "async"))]
-impl LegacyExecutionAgent for AsyncExecutionEngine {
-    fn call_function(
-        &mut self,
-        _instance_id: u32,
-        _function_index: u32,
-        _args: &[Value],
-    ) -> Result<Value> {
-        // Async engines need different API - this is just a placeholder
-        Err(kiln_error::Error::runtime_error(
-            "Async agent requires different API",
-        ))
-    }
-
-    fn agent_type(&self) -> &'static str {
-        "AsyncExecutionEngine"
-    }
-
-    fn can_migrate(&self) -> bool {
-        true
-    }
-
-    fn migration_config(&self) -> AgentConfiguration {
-        AgentConfiguration {
-            execution_mode: ExecutionMode::Asynchronous,
-            ..AgentConfiguration::default()
-        }
-    }
-}

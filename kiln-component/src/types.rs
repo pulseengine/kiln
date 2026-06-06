@@ -13,20 +13,16 @@ use kiln_foundation::{
 /// Type alias for backward compatibility - BoundedVec is now StaticVec
 type BoundedVec<T, const N: usize> = StaticVec<T, N>;
 
-#[cfg(feature = "component-model-async")]
-use crate::async_::async_types::{FutureHandle, StreamHandle};
 use crate::{
     components::{component::Component, component_instantiation::ComponentMemory},
     instantiation::{ModuleInstance, ResolvedExport, ResolvedImport, ResourceTable},
     prelude::*,
 };
 
-// Fallback types when async features are not enabled
-#[cfg(not(feature = "component-model-async"))]
+// Stream/future handle types (async surface removed; these remain as plain handles)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StreamHandle(pub u32);
 
-#[cfg(not(feature = "component-model-async"))]
 impl StreamHandle {
     /// Create a new stream handle
     pub const fn new(id: u32) -> Self {
@@ -39,11 +35,9 @@ impl StreamHandle {
     }
 }
 
-#[cfg(not(feature = "component-model-async"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FutureHandle(pub u32);
 
-#[cfg(not(feature = "component-model-async"))]
 impl FutureHandle {
     /// Create a new future handle
     pub const fn new(id: u32) -> Self {
