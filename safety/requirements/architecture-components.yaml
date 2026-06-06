@@ -214,13 +214,17 @@ artifacts:
       Async canonical lifting/lowering, async execution engine with
       future-based task management, and context preservation across async
       boundaries. Crate: kiln-runtime.
-    status: implemented
+    status: removed
     tags: [component, async, runtime]
     links:
       - type: satisfies
         target: REQ_FUNC_030
     fields:
-      implementation: kiln-runtime/src/async_runtime.rs
+      note: >
+        Per BA RFC #46, async is not an interpreter feature. The
+        never-integrated async simulation surface (kiln-component/src/async_/,
+        ~31.8k LOC) was removed; component-model async is handled by Meld at
+        build time, not as a runtime feature.
 
   - id: AC-DEBUG
     type: feature
