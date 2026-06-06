@@ -65,6 +65,12 @@ artifacts:
     tags: [runtime, safety]
     fields:
       implementation: kiln-runtime/src/stackless/engine.rs (fuel mechanism)
+      note: >
+        Enforced per-instruction in the StacklessEngine execution loop:
+        one fuel unit is charged per executed instruction and the engine
+        traps when the budget is exhausted. kilnd's `--fuel N` sets the
+        budget (default unbounded). Prior to issue #270 the loop never
+        decremented fuel, so the budget was not actually enforced.
 
   - id: REQ_FUNC_033
     type: requirement

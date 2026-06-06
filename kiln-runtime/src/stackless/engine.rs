@@ -1414,17 +1414,12 @@ impl StacklessEngine {
                     resume_state = None;
                 }
                 Err(e) => {
-                    eprintln!("[DEBUG-TRAMPOLINE-ERR] error={}, has_active_exception={}, pending_frames={}", e, self.active_exception.is_some(), pending_frames.len());
                     // Handle exception unwinding through pending frames
                     if self.active_exception.is_some() {
                         // Current function (which errored) is done
                         self.call_frames_count = self.call_frames_count.saturating_sub(1);
                         let mut found_handler = false;
                         while let Some(mut frame) = pending_frames.pop() {
-                            eprintln!("[DEBUG-TRAMPOLINE-ERR] Checking frame: instance_id={}, func_idx={}, pc={}, block_stack_len={}", frame.instance_id, frame.func_idx, frame.pc, frame.block_stack.len());
-                            for (i, (bt, bpc, bti, _)) in frame.block_stack.iter().enumerate() {
-                                eprintln!("[DEBUG-TRAMPOLINE-ERR]   block_stack[{}] = ({}, pc={}, bti={})", i, bt, bpc, bti);
-                            }
                             if self.find_and_apply_exception_handler(&mut frame) {
                                 // Handler found - resume this frame
                                 current_instance_id = frame.instance_id;
@@ -1840,6 +1835,20 @@ impl StacklessEngine {
             } // end of fresh-call initialization
 
             while pc < instructions.len() {
+                // Fuel metering (REQ_FUNC_003 bounded execution): charge one unit
+                // per instruction and trap when the configured budget is exhausted.
+                // This is the single chokepoint every executed instruction — including
+                // every backward branch / loop iteration — passes through, so it bounds
+                // otherwise-non-terminating modules. Default fuel is u64::MAX (set in
+                // StacklessEngine::new), so runs without an explicit budget are
+                // effectively unbounded and unaffected.
+                if self.fuel.load(Ordering::Relaxed) == 0 {
+                    return Err(kiln_error::Error::runtime_trap(
+                        "fuel exhausted: execution exceeded the configured instruction budget",
+                    ));
+                }
+                self.fuel.fetch_sub(1, Ordering::Relaxed);
+
                 let instruction = instructions.get(pc)
                     .ok_or_else(|| kiln_error::Error::runtime_error("Instruction index out of bounds"))?;
 
@@ -11479,6 +11488,16 @@ impl StacklessEngine {
     /// Get the remaining fuel for execution
     pub fn remaining_fuel(&self) -> Option<u64> {
         Some(self.fuel.load(Ordering::Relaxed))
+    }
+
+    /// Set the remaining execution fuel (instruction budget).
+    ///
+    /// One unit is charged per executed instruction; when the budget reaches
+    /// zero the engine traps with a "fuel exhausted" error. Defaults to
+    /// `u64::MAX` (effectively unbounded) until set. This is the mechanism that
+    /// enforces bounded execution (REQ_FUNC_003).
+    pub fn set_fuel(&self, fuel: u64) {
+        self.fuel.store(fuel, Ordering::Relaxed);
     }
 
     /// Get the current instruction pointer
