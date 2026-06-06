@@ -156,3 +156,35 @@ artifacts:
     tags: [performance, simd, host, roadmap]
     fields:
       upstream-ref: "https://github.com/pulseengine/kiln/issues/224"
+
+  # =========================================================================
+  # Async runtime — clean-room no_std/no_alloc cooperative scheduler
+  # =========================================================================
+  - id: REQ_ASYNC_SCHED
+    type: requirement
+    title: Verified no_std/no_alloc cooperative async scheduler (kiln-async)
+    description: >
+      The embedded base shall provide a cooperative async scheduler backing the
+      WASM Component Model P3 async ABI (task/stream/future/waitable-set,
+      credit-based backpressure) for synth-compiled targets on gale/Zephyr/
+      Cortex-M. It shall be no_std with NO alloc (fixed-capacity bounded
+      structures only), fuel-bounded (poll slice = a fuel budget, integrating
+      kiln's per-instruction fuel metering), and formally verified: Verus for
+      queue/table/FSM invariants on the real Rust, and Lean+Aeneas refinement
+      reusing spar's complete EDF/RM/RTA proofs for termination, bounded latency
+      (WCRT), and schedulability. Replaces the deleted ~32k-LOC simulation
+      module (kiln-component/src/async_/) which contradicted RFC #46 and was
+      never integrated. Design: docs/architecture/async-scheduler-plan.md.
+    status: planned
+    tags: [async, scheduler, no-std, no-alloc, embedded, formal-verification, roadmap]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_003
+    fields:
+      design-doc: docs/architecture/async-scheduler-plan.md
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/230"
+      note: >
+        Supersedes issues #225 (scheduler strategies), #230 (P3 async intrinsics),
+        #233 (P3 async primitives), #239 (loom concurrency harnesses) — closed
+        into this single scoped requirement. Verification follows the gale
+        Verus+Lean template; reuses spar/proofs/Proofs/Scheduling/{EDF,RMBound,RTA}.lean.
