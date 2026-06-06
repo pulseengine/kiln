@@ -22,7 +22,6 @@ use kiln_foundation::{
 use kiln_foundation::collections::StaticVec as BoundedVec;
 
 use crate::{
-    async_::async_types::{ErrorContextHandle, FutureHandle, StreamHandle},
     bounded_component_infra::ComponentProvider,
     canonical_abi::canonical_realloc::ReallocManager,
     handle_representation::HandleRepresentationManager,
@@ -31,21 +30,13 @@ use crate::{
 
 // Import threading types with feature gate
 #[cfg(feature = "component-model-threading")]
-use crate::threading::task_cancellation::{
-    CancellationToken, SubtaskManager, SubtaskResult, SubtaskState,
-};
+use crate::threading::task_cancellation::{CancellationToken, SubtaskManager, SubtaskState};
 
 // Import resource lifecycle types
 use crate::resources::resource_lifecycle::ResourceLifecycleManager;
 
 // ComponentId is the same as ComponentInstanceId in this codebase
 pub type ComponentId = ComponentInstanceId;
-
-// Import async types - they exist in the async_ module
-use crate::async_::{
-    async_canonical::AsyncCanonicalAbi,
-    async_execution_engine::{AsyncExecutionEngine, ExecutionId},
-};
 
 // Import ComponentValue from foundation
 use kiln_foundation::component_value::ComponentValue;
@@ -67,14 +58,6 @@ impl CancellationToken {
 #[cfg(not(feature = "component-model-threading"))]
 #[derive(Debug)]
 pub struct SubtaskManager;
-
-#[cfg(not(feature = "component-model-threading"))]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub enum SubtaskResult {
-    #[default]
-    Success,
-    Failure,
-}
 
 #[cfg(not(feature = "component-model-threading"))]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -153,9 +136,6 @@ pub struct PostReturnRegistry {
         ),
         MAX_CLEANUP_TASKS_NO_STD,
     >,
-
-    /// Async execution engine for async cleanup
-    async_engine: Option<Arc<AsyncExecutionEngine>>,
 
     /// Task cancellation manager
     cancellation_manager: Option<Arc<SubtaskManager>>,
@@ -336,18 +316,12 @@ pub enum CleanupTaskType {
     /// Custom cleanup
     #[default]
     Custom,
-    /// Async cleanup (for streams/futures)
-    AsyncCleanup,
-    /// Cancel async execution
-    CancelAsyncExecution,
     /// Drop borrowed handles
     DropBorrowedHandles,
     /// End lifetime scope
     EndLifetimeScope,
     /// Release resource representation
     ReleaseResourceRepresentation,
-    /// Finalize subtask
-    FinalizeSubtask,
 }
 
 impl kiln_foundation::traits::Checksummable for CleanupTaskType {
@@ -357,12 +331,9 @@ impl kiln_foundation::traits::Checksummable for CleanupTaskType {
             Self::CloseResource => 1u8.update_checksum(checksum),
             Self::ReleaseReference => 2u8.update_checksum(checksum),
             Self::Custom => 3u8.update_checksum(checksum),
-            Self::AsyncCleanup => 4u8.update_checksum(checksum),
-            Self::CancelAsyncExecution => 5u8.update_checksum(checksum),
             Self::DropBorrowedHandles => 6u8.update_checksum(checksum),
             Self::EndLifetimeScope => 7u8.update_checksum(checksum),
             Self::ReleaseResourceRepresentation => 8u8.update_checksum(checksum),
-            Self::FinalizeSubtask => 9u8.update_checksum(checksum),
         }
     }
 }
@@ -378,12 +349,9 @@ impl kiln_runtime::ToBytes for CleanupTaskType {
             Self::CloseResource => 1u8.to_bytes_with_provider(writer, provider),
             Self::ReleaseReference => 2u8.to_bytes_with_provider(writer, provider),
             Self::Custom => 3u8.to_bytes_with_provider(writer, provider),
-            Self::AsyncCleanup => 4u8.to_bytes_with_provider(writer, provider),
-            Self::CancelAsyncExecution => 5u8.to_bytes_with_provider(writer, provider),
             Self::DropBorrowedHandles => 6u8.to_bytes_with_provider(writer, provider),
             Self::EndLifetimeScope => 7u8.to_bytes_with_provider(writer, provider),
             Self::ReleaseResourceRepresentation => 8u8.to_bytes_with_provider(writer, provider),
-            Self::FinalizeSubtask => 9u8.to_bytes_with_provider(writer, provider),
         }
     }
 }
@@ -399,12 +367,9 @@ impl kiln_foundation::traits::FromBytes for CleanupTaskType {
             1 => Self::CloseResource,
             2 => Self::ReleaseReference,
             3 => Self::Custom,
-            4 => Self::AsyncCleanup,
-            5 => Self::CancelAsyncExecution,
             6 => Self::DropBorrowedHandles,
             7 => Self::EndLifetimeScope,
             8 => Self::ReleaseResourceRepresentation,
-            9 => Self::FinalizeSubtask,
             _ => Self::Custom,
         })
     }
@@ -429,20 +394,6 @@ pub enum CleanupData {
         cleanup_id: BoundedString<64>,
         parameters: BoundedVec<ComponentValue<NoStdProvider<2048>>, 16>,
     },
-    /// Async cleanup data
-    Async {
-        stream_handle: Option<StreamHandle>,
-        future_handle: Option<FutureHandle>,
-        error_context_handle: Option<ErrorContextHandle>,
-        task_id: Option<TaskId>,
-        execution_id: Option<ExecutionId>,
-        cancellation_token: Option<CancellationToken>,
-    },
-    /// Async execution cancellation
-    AsyncExecution {
-        execution_id: ExecutionId,
-        force_cancel: bool,
-    },
     /// Borrowed handle cleanup
     BorrowedHandle {
         borrow_handle: u32,
@@ -460,13 +411,6 @@ pub enum CleanupData {
         handle: u32,
         resource_id: ResourceId,
         component: ComponentId,
-    },
-    /// Subtask finalization
-    Subtask {
-        execution_id: ExecutionId,
-        task_id: TaskId,
-        result: Option<SubtaskResult>,
-        force_cleanup: bool,
     },
 }
 
@@ -519,29 +463,6 @@ impl kiln_foundation::traits::Checksummable for CleanupData {
                     cleanup_id.len().update_checksum(checksum);
                 }
             },
-            Self::Async {
-                stream_handle,
-                future_handle,
-                error_context_handle,
-                task_id,
-                execution_id,
-                cancellation_token: _,
-            } => {
-                4u8.update_checksum(checksum);
-                stream_handle.map(|h| h.0).unwrap_or(0).update_checksum(checksum);
-                future_handle.map(|h| h.0).unwrap_or(0).update_checksum(checksum);
-                error_context_handle.map(|h| h.0).unwrap_or(0).update_checksum(checksum);
-                task_id.map(|t| t.0).unwrap_or(0).update_checksum(checksum);
-                execution_id.map(|e| e.0).unwrap_or(0).update_checksum(checksum);
-            },
-            Self::AsyncExecution {
-                execution_id,
-                force_cancel,
-            } => {
-                5u8.update_checksum(checksum);
-                execution_id.0.update_checksum(checksum);
-                force_cancel.update_checksum(checksum);
-            },
             Self::BorrowedHandle {
                 borrow_handle,
                 lifetime_scope,
@@ -571,17 +492,6 @@ impl kiln_foundation::traits::Checksummable for CleanupData {
                 handle.update_checksum(checksum);
                 resource_id.0.update_checksum(checksum);
                 component.0.update_checksum(checksum);
-            },
-            Self::Subtask {
-                execution_id,
-                task_id,
-                result: _,
-                force_cleanup,
-            } => {
-                9u8.update_checksum(checksum);
-                execution_id.0.update_checksum(checksum);
-                task_id.0.update_checksum(checksum);
-                force_cleanup.update_checksum(checksum);
             },
         }
     }
@@ -690,8 +600,6 @@ pub struct PostReturnContext {
         ),
         MAX_CLEANUP_HANDLERS,
     >,
-    /// Async canonical ABI for async cleanup
-    pub async_abi: Option<Arc<AsyncCanonicalAbi>>,
     /// Component ID for this context
     pub component_id: ComponentId,
     /// Current task ID
@@ -723,7 +631,6 @@ impl PostReturnRegistry {
                     )
                 })?
             },
-            async_engine: None,
             cancellation_manager: None,
             handle_tracker: None,
             resource_manager: None,
@@ -769,7 +676,6 @@ impl PostReturnRegistry {
     /// Create new registry with async support
     pub fn new_with_async(
         max_cleanup_tasks: usize,
-        async_engine: Option<Arc<AsyncExecutionEngine>>,
         cancellation_manager: Option<Arc<SubtaskManager>>,
         handle_tracker: Option<Arc<HandleLifetimeTracker>>,
         resource_manager: Option<Arc<ResourceLifecycleManager>>,
@@ -798,7 +704,6 @@ impl PostReturnRegistry {
                     )
                 })?
             },
-            async_engine,
             cancellation_manager,
             handle_tracker,
             resource_manager,
@@ -1042,7 +947,6 @@ impl PostReturnRegistry {
             tasks: Vec::new(),
             realloc_manager: context.realloc_manager,
             custom_handlers: context.custom_handlers,
-            async_abi: context.async_abi,
             component_id: context.component_id,
             task_id: context.task_id,
         };
@@ -1055,7 +959,6 @@ impl PostReturnRegistry {
             },
             realloc_manager: context.realloc_manager,
             custom_handlers: context.custom_handlers,
-            async_abi: context.async_abi,
             component_id: context.component_id,
             task_id: context.task_id,
         };
@@ -1080,10 +983,6 @@ impl PostReturnRegistry {
             CleanupTaskType::CloseResource => self.cleanup_resource(task, context),
             CleanupTaskType::ReleaseReference => self.cleanup_reference(task, context),
             CleanupTaskType::Custom => self.cleanup_custom(task, context),
-            CleanupTaskType::AsyncCleanup => self.cleanup_async(task, context),
-            CleanupTaskType::CancelAsyncExecution => {
-                self.cleanup_cancel_async_execution(task, context)
-            },
             CleanupTaskType::DropBorrowedHandles => {
                 self.cleanup_drop_borrowed_handles(task, context)
             },
@@ -1091,7 +990,6 @@ impl PostReturnRegistry {
             CleanupTaskType::ReleaseResourceRepresentation => {
                 self.cleanup_release_resource_representation(task, context)
             },
-            CleanupTaskType::FinalizeSubtask => self.cleanup_finalize_subtask(task, context),
         }
     }
 
@@ -1212,73 +1110,6 @@ impl PostReturnRegistry {
         Ok(())
     }
 
-    /// Clean up async resources (streams, futures, etc.)
-    fn cleanup_async(&mut self, task: &CleanupTask, context: &mut PostReturnContext) -> Result<()> {
-        if let CleanupData::Async {
-            stream_handle,
-            future_handle,
-            error_context_handle,
-            task_id: _,
-            execution_id: _,
-            cancellation_token,
-        } = &task.data
-        {
-            self.metrics.async_cleanups += 1;
-
-            // Cancel operations if cancellation token is available
-            if let Some(token) = cancellation_token {
-                let _ = token.cancel();
-            }
-
-            // Clean up async ABI resources
-            // TODO: These methods require &mut self but async_abi is Arc<AsyncCanonicalAbi>
-            // Either the methods need to use interior mutability (&self with Mutex/RefCell)
-            // or the architecture needs to be redesigned to allow mutable access
-            if let Some(_async_abi) = &context.async_abi {
-                if let Some(_stream) = stream_handle {
-                    // FIXME: Cannot call &mut methods on Arc-wrapped async_abi
-                    // let _ = async_abi.stream_close_readable(*stream);
-                    // let _ = async_abi.stream_close_writable(*stream);
-                }
-
-                if let Some(_future) = future_handle {
-                    // Future cleanup would be handled by the async ABI
-                }
-
-                if let Some(_error_ctx) = error_context_handle {
-                    // FIXME: Cannot call &mut methods on Arc-wrapped async_abi
-                    // let _ = async_abi.error_context_drop(*error_ctx);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Cancel async execution
-    fn cleanup_cancel_async_execution(
-        &mut self,
-        task: &CleanupTask,
-        _context: &mut PostReturnContext,
-    ) -> Result<()> {
-        if let CleanupData::AsyncExecution {
-            execution_id,
-            force_cancel,
-        } = &task.data
-        {
-            self.metrics.cancellation_cleanups += 1;
-
-            if let Some(async_engine) = &self.async_engine {
-                // In a real implementation, this would cancel the execution
-                if *force_cancel {
-                    // Force cancel the execution
-                } else {
-                    // Graceful cancellation
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Drop borrowed handles
     fn cleanup_drop_borrowed_handles(
         &mut self,
@@ -1338,30 +1169,6 @@ impl PostReturnRegistry {
             if let Some(repr_manager) = &self.representation_manager {
                 // In a real implementation, this would drop the resource representation
                 // let _ = canon_resource_drop(repr_manager, *handle);
-            }
-        }
-        Ok(())
-    }
-
-    /// Finalize subtask
-    fn cleanup_finalize_subtask(
-        &mut self,
-        task: &CleanupTask,
-        _context: &mut PostReturnContext,
-    ) -> Result<()> {
-        if let CleanupData::Subtask {
-            execution_id,
-            task_id: _,
-            result: _,
-            force_cleanup,
-        } = &task.data
-        {
-            if let Some(cancellation_manager) = &self.cancellation_manager {
-                if *force_cleanup {
-                    // Force cleanup the subtask
-                } else {
-                    // Graceful finalization
-                }
             }
         }
         Ok(())
@@ -1450,50 +1257,6 @@ pub mod helpers {
         }
     }
 
-    /// Create an async cleanup task for streams, futures, and async operations
-    pub fn async_cleanup_task(
-        instance_id: ComponentInstanceId,
-        stream_handle: Option<StreamHandle>,
-        future_handle: Option<FutureHandle>,
-        error_context_handle: Option<ErrorContextHandle>,
-        task_id: Option<TaskId>,
-        execution_id: Option<ExecutionId>,
-        cancellation_token: Option<CancellationToken>,
-        priority: u8,
-    ) -> CleanupTask {
-        CleanupTask {
-            task_type: CleanupTaskType::AsyncCleanup,
-            source_instance: instance_id,
-            priority,
-            data: CleanupData::Async {
-                stream_handle,
-                future_handle,
-                error_context_handle,
-                task_id,
-                execution_id,
-                cancellation_token,
-            },
-        }
-    }
-
-    /// Create an async execution cancellation task
-    pub fn async_execution_cleanup_task(
-        instance_id: ComponentInstanceId,
-        execution_id: ExecutionId,
-        force_cancel: bool,
-        priority: u8,
-    ) -> CleanupTask {
-        CleanupTask {
-            task_type: CleanupTaskType::CancelAsyncExecution,
-            source_instance: instance_id,
-            priority,
-            data: CleanupData::AsyncExecution {
-                execution_id,
-                force_cancel,
-            },
-        }
-    }
-
     /// Create a borrowed handle cleanup task
     pub fn borrowed_handle_cleanup_task(
         instance_id: ComponentInstanceId,
@@ -1550,28 +1313,6 @@ pub mod helpers {
                 handle,
                 resource_id,
                 component,
-            },
-        }
-    }
-
-    /// Create a subtask finalization cleanup task
-    pub fn subtask_cleanup_task(
-        instance_id: ComponentInstanceId,
-        execution_id: ExecutionId,
-        task_id: TaskId,
-        result: Option<SubtaskResult>,
-        force_cleanup: bool,
-        priority: u8,
-    ) -> CleanupTask {
-        CleanupTask {
-            task_type: CleanupTaskType::FinalizeSubtask,
-            source_instance: instance_id,
-            priority,
-            data: CleanupData::Subtask {
-                execution_id,
-                task_id,
-                result,
-                force_cleanup,
             },
         }
     }

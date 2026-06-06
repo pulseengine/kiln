@@ -327,3 +327,32 @@ artifacts:
         unique to PulseEngine and directly addresses STPA loss scenarios
         LS-W-1 (unauthorized resource access) and LS-W-2 (clock manipulation).
       implementation: kiln-wasi/src/dispatcher.rs, kiln-foundation/src/traits.rs
+
+  # =========================================================================
+  # Architecture Boundary Decisions
+  # =========================================================================
+  - id: SM-ASYNC-001
+    type: design-decision
+    title: Component Model async is not an interpreter runtime feature
+    description: >
+      Per BA RFC #46, the WebAssembly Component Model async surface is NOT
+      implemented as a Kiln interpreter feature. The previously present, never
+      integrated async simulation surface in kiln-component
+      (kiln-component/src/async_/, ~31.8k LOC: async execution engine, fuel
+      scheduler, canonical async lifting/lowering, stream/future/waitable
+      machinery) has been removed. Component-model async is lowered by Meld at
+      build time; the interpreter executes only core modules plus host
+      intrinsics. Keeping the dead simulation surface created false coverage
+      and maintenance burden and masked the real architecture boundary.
+    status: implemented
+    tags: [component, async, rfc46, architecture-boundary]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_030
+    fields:
+      rationale: >
+        Removing the unused async surface enforces the RFC #46 toolchain
+        boundary (Meld lowers components; the std-only interpreter runs core
+        modules) and prevents dead code from skewing coverage and obscuring
+        real implementation gaps. AC-ASYNC is marked removed accordingly.
+      implementation: kiln-component/src/post_return.rs (async cleanup paths removed)
