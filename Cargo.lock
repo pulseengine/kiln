@@ -1146,6 +1146,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "kiln-async"
+version = "0.3.1"
+dependencies = [
+ "kiln-error",
+]
+
+[[package]]
 name = "kiln-build-core"
 version = "0.3.1"
 dependencies = [

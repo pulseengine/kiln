@@ -327,3 +327,39 @@ artifacts:
         unique to PulseEngine and directly addresses STPA loss scenarios
         LS-W-1 (unauthorized resource access) and LS-W-2 (clock manipulation).
       implementation: kiln-wasi/src/dispatcher.rs, kiln-foundation/src/traits.rs
+
+  - id: SM-ASYNC-001
+    type: design-decision
+    title: kiln-async — minimal-TCB no_std/no_alloc cooperative scheduler crate
+    description: >
+      The async scheduler for the embedded base is a dedicated crate
+      (kiln-async), no_std with no alloc, forbidding unsafe code (except a
+      single isolated waker), using fixed-capacity arrays parameterized by a
+      compile-time SchedConfig rather than heap or provider-backed collections.
+      All P3 async intrinsics return an explicit NOT_IMPLEMENTED error until
+      implemented — never a silent Ok. Scheduling is fuel-bounded (a poll slice
+      is a fuel budget) for deterministic, replayable execution.
+    status: partial
+    tags: [async, scheduler, no-std, no-alloc, embedded, mechanism]
+    links:
+      - type: satisfies
+        target: REQ_ASYNC_SCHED
+    fields:
+      rationale: >
+        A separate minimal-dependency crate (mirroring kiln-builtins) keeps the
+        trusted computing base small and auditable, lets Charon/Aeneas translate
+        the scheduler in isolation for Lean verification, and keeps the std
+        interpreter from ever linking it (RFC #46: async is not an interpreter
+        feature). Plain const-generic arrays — not provider-backed BoundedVec —
+        guarantee no heap on Cortex-M and are the easiest surface to prove with
+        Verus and refine against spar's Lean RTA/RM/EDF theory. Explicit
+        NOT_IMPLEMENTED (not silent Ok) keeps the scaffold honest per the
+        project's fail-loud rule.
+      alternatives: >
+        (a) A module inside kiln-builtins — rejected: larger TCB, couples the
+        scheduler's translation unit to builtins. (b) Reuse kiln-foundation's
+        provider-backed BoundedVec — deferred to a Phase-1 evaluation. (c)
+        Resurrect the deleted kiln-component/src/async_ simulation — rejected:
+        contradicts RFC #46 and was never functional.
+      design-doc: docs/architecture/async-scheduler-plan.md
+      implementation: kiln-async/ (Phase 0 scaffold)

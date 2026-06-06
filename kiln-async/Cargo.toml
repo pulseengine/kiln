@@ -1,0 +1,21 @@
+[package]
+name = "kiln-async"
+version.workspace = true
+edition = "2024"
+description = "no_std/no_alloc cooperative async scheduler for Kiln's embedded base — backs the WASM Component Model P3 async ABI (REQ_ASYNC_SCHED / SM-ASYNC-001)"
+license = "MIT"
+repository.workspace = true
+
+# rlib for workspace builds/tests. Build as a staticlib for ARM/embedded targets:
+#   cargo rustc -p kiln-async --target thumbv7em-none-eabi --release -- --crate-type staticlib
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# Unified error type only — no_std, no alloc (default-features = false in the
+# workspace). No kiln-foundation/provider dependency: the scheduler uses plain
+# const-generic arrays to keep the embedded TCB minimal (see SM-ASYNC-001).
+kiln-error = { workspace = true }
+
+[features]
+default = []
