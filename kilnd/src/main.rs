@@ -204,7 +204,9 @@ pub struct KilndConfig {
 impl Default for KilndConfig {
     fn default() -> Self {
         Self {
-            max_fuel: 100_000_000, // 100M fuel for large components (yolo, etc.)
+            // Unbounded by default; an explicit `--fuel N` sets a finite
+            // instruction budget that the engine now enforces (issue #270).
+            max_fuel: u64::MAX,
             max_memory: 64 * 1024 * 1024, // 64MB default
             function_name: None,
             module_data: None,
@@ -736,6 +738,11 @@ impl KilndEngine {
             let mut engine = CapabilityAwareEngine::with_preset(preset)
                 .map_err(|_| Error::runtime_error("Failed to create engine"))?;
 
+            // Enforce the configured fuel budget (instruction count). Without
+            // this the engine runs with effectively unbounded fuel and a
+            // non-terminating module hangs regardless of --fuel (issue #270).
+            engine.set_fuel(self.config.max_fuel);
+
             // Wire up WASI dispatcher as the host import handler
             // This is the SINGLE dispatch path for ALL host function calls
             #[cfg(feature = "wasi")]
@@ -805,11 +812,10 @@ impl KilndEngine {
             let has_main = engine.has_function(instance, function_name).unwrap_or(false);
 
             if has_main {
-                let results = engine
-                    .execute(instance, function_name, &[])
-                    .map_err(|e| {
-                        Error::runtime_execution_error("Function execution failed")
-                    })?;
+                // Propagate the engine's error verbatim so the actual cause
+                // (e.g. "fuel exhausted", a trap message) reaches the user
+                // instead of a generic "Function execution failed".
+                let results = engine.execute(instance, function_name, &[])?;
 
                 if !results.is_empty() {
                     println!("\n✓ Function '{}' returned {} value(s):", function_name, results.len());

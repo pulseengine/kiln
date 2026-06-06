@@ -425,6 +425,14 @@ impl CapabilityAwareEngine {
         }
     }
 
+    /// Set the execution fuel budget (instruction count) for subsequent runs.
+    ///
+    /// Delegates to the inner [`StacklessEngine`]. When the budget is exhausted
+    /// the engine traps, enforcing bounded execution (REQ_FUNC_003).
+    pub fn set_fuel(&self, fuel: u64) {
+        self.inner.set_fuel(fuel);
+    }
+
     /// Enable WASI support with the current capability constraints
     pub fn enable_wasi(&mut self) -> Result<()> {
         match self.preset {
