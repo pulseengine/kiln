@@ -1,20 +1,11 @@
 name: Formal Verification with KANI
 
 on:
-  push:
-    branches: [ main, develop ]
-    paths:
-      - '**.rs'
-      - '**/Cargo.toml'
-      - '**/Kani.toml'
-      - '.github/workflows/kani-verification.yml'
-  pull_request:
-    branches: [ main, develop ]
-    paths:
-      - '**.rs'
-      - '**/Cargo.toml'
-      - '**/Kani.toml'
-      - '.github/workflows/kani-verification.yml'
+  # Re-enabled (#237) as scheduled + manual ONLY — not push/PR-gating. The Kani
+  # suite was disabled for CI stability (commit ce4e585b); running it weekly
+  # restores visibility on kiln's 22 Kani harnesses without blocking PRs.
+  # Promote back to push/pull_request gating once it is proven consistently
+  # green (the "full circle" — see #280).
   schedule:
     # Run weekly verification on Sunday at 2 AM UTC
     - cron: '0 2 * * 0'
