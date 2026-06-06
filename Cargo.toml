@@ -18,6 +18,7 @@ members = [
     "kiln-panic",
     "kiln-build-core",
     "kiln-builtins",
+    "kiln-async",
     "cargo-kiln"]
 exclude = ["examples/wasi-nn/inference_module"]
 resolver = "2"  # Use edition 2021 resolver

@@ -175,7 +175,9 @@ artifacts:
       (WCRT), and schedulability. Replaces the deleted ~32k-LOC simulation
       module (kiln-component/src/async_/) which contradicted RFC #46 and was
       never integrated. Design: docs/architecture/async-scheduler-plan.md.
-    status: planned
+      Phase 0 scaffold landed (kiln-async crate: types, FSM, bounded ready
+      queue; intrinsics stubbed; builds no_std/no_alloc for thumbv7em).
+    status: partial
     tags: [async, scheduler, no-std, no-alloc, embedded, formal-verification, roadmap]
     links:
       - type: derives-from
