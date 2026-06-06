@@ -1,0 +1,190 @@
+# Roadmap / Not-Yet-Implemented Requirements
+#
+# System: Kiln — WebAssembly runtime for safety-critical systems
+#
+# These are captured from GitHub issues that describe capabilities Kiln does
+# NOT directly have today. Rather than leave them as open issues (noise) or
+# lose them (forgotten intent), they are recorded here as `planned`
+# requirements so they remain traceable and can be scheduled when a concrete
+# driver (a real target, a customer, a mission) appears.
+#
+# status: planned — design/intent exists, no implementation. Promote to
+#         `partial`/`implemented` (in functional-requirements.yaml) when built.
+#
+# Format: rivet generic-yaml
+
+artifacts:
+  # =========================================================================
+  # P3 Component Model — async & instantiation (not yet implemented)
+  # =========================================================================
+  - id: REQ_P3_LIBCOMP
+    type: requirement
+    title: P3 library component instantiation (InlineExports)
+    description: >
+      The runtime shall instantiate P3 async *library* components whose
+      exports reference not-yet-instantiated source instances (InlineExports).
+      Today these fail with "InlineExports source instance not instantiated".
+    status: planned
+    tags: [component-model, p3, instantiation, roadmap]
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/211"
+
+  - id: REQ_P3_CALLBACK
+    type: requirement
+    title: P3 callback lifting mode for single-stack embedded execution
+    description: >
+      The runtime shall support the P3 callback async-lifting mode (host calls
+      an exported callback per event, no persistent per-call stack) so async
+      components can run single-stack on Gale/embedded targets, in addition to
+      the stackful mode.
+    status: planned
+    tags: [component-model, p3, async, embedded, roadmap]
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/232"
+
+  # =========================================================================
+  # WebAssembly GC / typed-reference validation (ahead of demand)
+  # =========================================================================
+  - id: REQ_GC_NULLABILITY
+    type: requirement
+    title: GC / typed-reference nullability validation
+    description: >
+      The validator shall track non-null vs nullable reference types across the
+      full GC lattice (funcref/externref/exnref/anyref/eqref/i31/struct/array
+      and typed function references) with correct subtyping. Deferred: no
+      current target emits WASM GC — falcon (relay) and wohl use only numeric +
+      linear-memory core wasm with MVP funcref tables. Required only when a
+      WASM-GC-emitting toolchain (Kotlin/Scala/Java/OCaml→wasm-GC) becomes a
+      target. See PR #234 research for evidence.
+    status: planned
+    tags: [validator, wasm-gc, reference-types, deferred, roadmap]
+    links:
+      - type: derives-from
+        target: REQ_LFUNC_018
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/pull/234"
+
+  # =========================================================================
+  # cFS (NASA Core Flight System) host extensions — flight-software patterns
+  # =========================================================================
+  - id: REQ_CFS_SB
+    type: requirement
+    title: cFS Software Bus as host routing layer
+    description: >
+      Kiln shall provide a publish/subscribe message-routing host layer modeled
+      on NASA cFS Software Bus (route by MsgId to subscriber pipes) for inter-
+      component dispatch of WASM components.
+    status: planned
+    tags: [cfs, host-extension, messaging, roadmap]
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/226"
+
+  - id: REQ_CFS_ES
+    type: requirement
+    title: cFS Executive Services subset as host extensions
+    description: >
+      Kiln shall provide a host-native subset of NASA cFS Executive Services —
+      application lifecycle, Critical Data Store (persistent across resets),
+      startup scripts, performance logging — building on ComponentLinker.
+    status: planned
+    tags: [cfs, host-extension, lifecycle, roadmap]
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/227"
+
+  - id: REQ_CFS_EVS
+    type: requirement
+    title: cFS Event Services as host extension
+    description: >
+      Kiln shall provide host-native structured event emission with severity
+      levels, per-event filtering masks, and distribution via the Software Bus,
+      modeled on NASA cFS Event Services.
+    status: planned
+    tags: [cfs, host-extension, events, roadmap]
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/228"
+
+  - id: REQ_CFS_TIME
+    type: requirement
+    title: cFS Time Services as host extension
+    description: >
+      Kiln shall provide host-native spacecraft time correlation (UTC, TAI,
+      Mission Elapsed Time, Spacecraft Time Correlation Factor) for WASM
+      components, modeled on NASA cFS Time Services.
+    status: planned
+    tags: [cfs, host-extension, time, roadmap]
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/229"
+
+  - id: REQ_CFS_ARCH
+    type: requirement
+    title: cFS-on-WASM reference architecture
+    description: >
+      Kiln shall provide a reference architecture mapping NASA cFS flight-
+      software patterns (PSP -> OSAL -> cFE -> Apps) onto the PulseEngine stack
+      (kiln-platform -> WASI/Gale -> Kiln host services -> WASM components) as
+      P3 async components.
+    status: planned
+    tags: [cfs, architecture, reference, roadmap]
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/231"
+
+  # =========================================================================
+  # Host-side performance infrastructure
+  # =========================================================================
+  - id: REQ_PERF_LOCKFREE
+    type: requirement
+    title: Lock-free zero-copy pipeline buffers
+    description: >
+      Inter-phase/inter-component data flow shall offer lock-free, zero-copy
+      ring buffers (LMAX Disruptor / GNU Radio 4.0 pattern) with pre-allocated
+      storage and sequence barriers, avoiding dynamic allocation and lock
+      contention on hot paths.
+    status: planned
+    tags: [performance, lock-free, zero-copy, roadmap]
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/223"
+
+  - id: REQ_PERF_SIMD
+    type: requirement
+    title: SIMD capability cascade for host-side paths
+    description: >
+      Performance-critical host-side paths (e.g. sigil crypto, pattern
+      matching) shall use a runtime SIMD capability cascade
+      (NEON/AVX512/AVX2/AVX/SSE/portable) selected by detected CPU features,
+      following the liquid-dsp pattern.
+    status: planned
+    tags: [performance, simd, host, roadmap]
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/224"
+
+  # =========================================================================
+  # Async runtime — clean-room no_std/no_alloc cooperative scheduler
+  # =========================================================================
+  - id: REQ_ASYNC_SCHED
+    type: requirement
+    title: Verified no_std/no_alloc cooperative async scheduler (kiln-async)
+    description: >
+      The embedded base shall provide a cooperative async scheduler backing the
+      WASM Component Model P3 async ABI (task/stream/future/waitable-set,
+      credit-based backpressure) for synth-compiled targets on gale/Zephyr/
+      Cortex-M. It shall be no_std with NO alloc (fixed-capacity bounded
+      structures only), fuel-bounded (poll slice = a fuel budget, integrating
+      kiln's per-instruction fuel metering), and formally verified: Verus for
+      queue/table/FSM invariants on the real Rust, and Lean+Aeneas refinement
+      reusing spar's complete EDF/RM/RTA proofs for termination, bounded latency
+      (WCRT), and schedulability. Replaces the deleted ~32k-LOC simulation
+      module (kiln-component/src/async_/) which contradicted RFC #46 and was
+      never integrated. Design: docs/architecture/async-scheduler-plan.md.
+    status: planned
+    tags: [async, scheduler, no-std, no-alloc, embedded, formal-verification, roadmap]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_003
+    fields:
+      design-doc: docs/architecture/async-scheduler-plan.md
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/230"
+      note: >
+        Supersedes issues #225 (scheduler strategies), #230 (P3 async intrinsics),
+        #233 (P3 async primitives), #239 (loom concurrency harnesses) — closed
+        into this single scoped requirement. Verification follows the gale
+        Verus+Lean template; reuses spar/proofs/Proofs/Scheduling/{EDF,RMBound,RTA}.lean.
