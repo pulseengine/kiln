@@ -253,7 +253,7 @@ checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 
 [[package]]
 name = "cargo-kiln"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1184,7 +1184,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-build-core"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1214,7 +1214,7 @@ version = "0.1.0"
 
 [[package]]
 name = "kiln-component"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "criterion 0.5.1",
  "kiln-decoder",
@@ -1231,7 +1231,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-debug"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kiln-error",
  "kiln-format",
@@ -1240,7 +1240,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-decoder"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "criterion 0.6.0",
  "hex",
@@ -1257,11 +1257,11 @@ dependencies = [
 
 [[package]]
 name = "kiln-error"
-version = "0.3.0"
+version = "0.3.1"
 
 [[package]]
 name = "kiln-format"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kani-verifier",
  "kiln-error",
@@ -1271,7 +1271,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-foundation"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "criterion 0.6.0",
  "hashbrown 0.15.4",
@@ -1289,7 +1289,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-host"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kiln-error",
  "kiln-foundation",
@@ -1300,7 +1300,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-instructions"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kiln-error",
  "kiln-foundation",
@@ -1312,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-intercept"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "kani-verifier",
@@ -1325,7 +1325,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-logging"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kiln-error",
  "kiln-foundation",
@@ -1335,7 +1335,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-math"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kiln-error",
  "kiln-platform",
@@ -1344,11 +1344,11 @@ dependencies = [
 
 [[package]]
 name = "kiln-panic"
-version = "0.3.0"
+version = "0.3.1"
 
 [[package]]
 name = "kiln-platform"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "criterion 0.6.0",
  "kiln-error",
@@ -1358,7 +1358,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-runtime"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kiln-debug",
  "kiln-decoder",
@@ -1376,7 +1376,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sync"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kani-verifier",
  "kiln-error",
@@ -1385,7 +1385,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-wasi"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kiln-error",
  "kiln-format",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "kilnd"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "kiln-component",
  "kiln-debug",
