@@ -273,7 +273,7 @@ jobs:
       # Consumers verify with `gh attestation verify <file> --repo
       # pulseengine/kiln`.
       - name: Generate SLSA build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             release-assets/*.tar.gz
