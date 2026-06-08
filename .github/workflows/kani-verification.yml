@@ -251,7 +251,7 @@ jobs:
           echo "✅ All verification jobs completed successfully"
       
       - name: Download All Reports
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: kani-report-*
           merge-multiple: true
