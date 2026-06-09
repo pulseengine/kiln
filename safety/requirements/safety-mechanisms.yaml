@@ -392,3 +392,31 @@ artifacts:
         modules) and prevents dead code from skewing coverage and obscuring
         real implementation gaps. AC-ASYNC is marked removed accordingly.
       implementation: kiln-component/src/post_return.rs (async cleanup paths removed)
+
+  - id: SM-PERF-001
+    type: design-decision
+    title: Interpreter is a reference-grade validation runtime, not a real-time engine
+    description: >
+      The std interpreter (interpreter-qm variant) is a correctness reference /
+      proof vehicle: it executes the work body — including meld-fused core
+      modules — and is numerically faithful to the spec (validated differentially
+      against wasmtime). Its tree-walker throughput is reference-grade, NOT
+      real-time: high-step-count control loops are finite but slow (e.g. falcon
+      run-position-hold at ~30k steps is >1B instructions). This is acceptable
+      because execution is fuel-bounded (REQ_FUNC_003 / SM-RES-002), so a slow
+      run is a bounded run, never an unbounded hang. Real-time embedded
+      execution is the synth native-compilation path, not the interpreter.
+    status: implemented
+    tags: [performance, interpreter, reference, architecture-boundary]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_003
+    fields:
+      rationale: >
+        Issue #270 (falcon run-position-hold "never terminates") was reduced to
+        a 200-step repro: kiln = 3.131192207, wasmtime = 3.1311922 (match <1e-4),
+        terminating. The original 30k-step case was finite-but-slow, not an
+        infinite loop or f32 divergence — refuting the suspected correctness bug.
+        Throughput optimization of the tree-walker is out of scope; the
+        architecture answers real-time via synth (synth#275). The fuel metering
+        landed in 0.3.1 guarantees boundedness regardless of throughput.
