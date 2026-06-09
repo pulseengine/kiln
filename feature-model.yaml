@@ -1,0 +1,69 @@
+# feature-model.yaml — Kiln product-line / certification-variant model.
+#
+# Purpose: bind the safety case to the *shipped variant*, not the
+# std × no_std × alloc × integrity-level combinatorial product. This is the
+# variant-pruning that collapses MC/DC and verification scope onto a single
+# certified artifact (per the PulseEngine variant-pruning method).
+#
+# Cert-scope split (RFC #46 architecture):
+#   - The std INTERPRETER is the QM reference / proof vehicle: it demonstrates
+#     the whole work body — INCLUDING the meld-fused embedded core — executes
+#     correctly in a normal environment (differential oracle vs wasmtime;
+#     behavioral reference for the fused core). It is OUT of certification scope.
+#   - The no_std / no-alloc EMBEDDED core is the certified target: what runs
+#     after `meld fuse` on the synth/gale native path. Certified ASIL-D / SIL-3
+#     / DAL, kept APART from the interpreter.
+#
+# Full reference: docs/feature-model-schema.md
+kind: feature-model
+
+root: kiln
+
+features:
+  kiln:
+    group: mandatory
+    children: [environment, allocation, scope]
+
+  # ---- Runtime environment (exactly one) ----
+  environment:
+    group: alternative
+    children: [std, no_std]
+  std:
+    group: leaf
+  no_std:
+    group: leaf
+
+  # ---- Allocation strategy (exactly one) ----
+  allocation:
+    group: alternative
+    children: [heap-alloc, no-alloc]
+  heap-alloc:
+    group: leaf
+  no-alloc:
+    group: leaf
+
+  # ---- Certification scope of this build (exactly one) ----
+  scope:
+    group: alternative
+    children: [interpreter-qm, embedded-asil-d, embedded-sil-3, embedded-dal-b]
+  # std reference / proof vehicle — Quality-Managed, out of cert scope
+  interpreter-qm:
+    group: leaf
+  # ISO 26262 ASIL-D embedded core
+  embedded-asil-d:
+    group: leaf
+  # IEC 61508 SIL-3 embedded core
+  embedded-sil-3:
+    group: leaf
+  # DO-178C DAL-B embedded core (flight / cFS direction)
+  embedded-dal-b:
+    group: leaf
+
+# Cross-tree constraints (s-expression syntax).
+constraints:
+  # The interpreter is the std, heap-allocating, QM reference/proof.
+  - (implies interpreter-qm (and std heap-alloc))
+  # Every embedded certification scope is no_std with NO heap allocation.
+  - (implies embedded-asil-d (and no_std no-alloc))
+  - (implies embedded-sil-3 (and no_std no-alloc))
+  - (implies embedded-dal-b (and no_std no-alloc))

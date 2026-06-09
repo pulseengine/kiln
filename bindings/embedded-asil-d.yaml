@@ -1,0 +1,16 @@
+# bindings/embedded-asil-d.yaml
+# The certified target: the no_std / no-alloc embedded core that runs after
+# `meld fuse` on the synth/gale native path. ISO 26262 ASIL-D. Kept APART from
+# the std interpreter. The safety case binds here.
+name: embedded-asil-d
+selects: [embedded-asil-d, no_std, no-alloc]
+bindings:
+  no_std:
+    artifacts: []
+    source: ["kiln-builtins/**", "kiln-async/**"]
+  no-alloc:
+    artifacts: [REQ_ASYNC_SCHED]
+    source: ["kiln-async/**"]
+  embedded-asil-d:
+    artifacts: [REQ_ASYNC_SCHED, SM-ASYNC-001, SM-ASYNC-002]
+    source: ["kiln-builtins/**", "kiln-async/**"]
