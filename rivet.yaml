@@ -1,6 +1,6 @@
 project:
   name: kiln
-  version: "0.1.0"
+  version: "0.3.1"
   description: >
     WebAssembly runtime for safety-critical systems. Implements the
     WebAssembly Core Spec 3.0, Component Model, and WASI Preview 2
@@ -12,6 +12,8 @@ project:
 
 sources:
   - path: safety/stpa
+    format: stpa-yaml
+  - path: safety/stpa-sec
     format: stpa-yaml
   - path: safety/requirements
     format: generic-yaml
@@ -59,3 +61,15 @@ externals:
     path: /Volumes/Home/git/pulseengine/synth
     ref: main
     prefix: synth
+
+  gale:
+    git: https://github.com/pulseengine/gale.git
+    path: /Volumes/Home/git/pulseengine/gale
+    ref: main
+    prefix: gale
+
+  sigil:
+    git: https://github.com/pulseengine/sigil.git
+    path: /Volumes/Home/git/pulseengine/sigil
+    ref: main
+    prefix: sigil
