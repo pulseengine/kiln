@@ -1,0 +1,10 @@
+# bindings/interpreter-std-qm.yaml
+# The std interpreter: Quality-Managed reference / proof vehicle. Demonstrates
+# the work body (including the meld-fused embedded core) executes correctly in a
+# normal environment. OUT of certification scope — no ASIL/SIL/DAL obligations.
+name: interpreter-std-qm
+selects: [interpreter-qm, std, heap-alloc]
+bindings:
+  interpreter-qm:
+    artifacts: []
+    source: ["kiln-runtime/**", "kilnd/**", "kiln-component/**", "kiln-decoder/**"]
