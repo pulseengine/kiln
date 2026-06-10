@@ -351,6 +351,37 @@ controllers:
       - from: PROC-GALE
         info: Target architecture constraints, memory layout
 
+  - id: CTRL-BUILTINS
+    name: kiln-builtins Host Intrinsics (Embedded/Fused Path)
+    type: automated
+    description: >
+      no_std host-intrinsic layer that synth-compiled (Meld-fused) native code
+      calls for operations the embedded core cannot perform inline: linear-memory
+      stream read/write, resource-handle lifecycle, threading/waitable stubs,
+      canonical return-value delivery, and async task-return/cancellation. This
+      is the no_std/no-alloc analogue of CTRL-WASI on the std interpreter path,
+      and is the host trust boundary for the certified embedded variant. The
+      unsafe control actions of this controller are analysed in UCA-BI-1..6.
+    source-crate: kiln-builtins
+    control-actions:
+      - ca: CA-BI-1
+        target: PROC-INSTANCE
+        action: Return canonical-ABI value to synth-compiled caller per the declared signature
+      - ca: CA-BI-2
+        target: PROC-MEMORY
+        action: Read/write guest linear memory for stream and buffer intrinsics (bounds-checked)
+      - ca: CA-BI-3
+        target: PROC-RESOURCE
+        action: Allocate/drop resource handles via resource-table intrinsics
+      - ca: CA-BI-4
+        target: PROC-INSTANCE
+        action: Threading/waitable and async task-return/cancellation intrinsics
+    feedback:
+      - from: PROC-MEMORY
+        info: Bounds-check result, access fault
+      - from: PROC-RESOURCE
+        info: Handle validity, free-list state
+
 controlled-processes:
   - id: PROC-INSTRUCTION
     name: Instruction Stream
