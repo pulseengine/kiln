@@ -43,6 +43,7 @@ commits:
     - kiln-error/
     - kiln-instructions/
     - kiln-sync/
+    - kiln-async/
     - kiln-host/
     - kiln-intercept/
     - kiln-wasi/
