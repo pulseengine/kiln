@@ -176,9 +176,37 @@ impl<const N: usize> TaskTable<N> {
     /// **Phase 1** — not yet implemented (the slot's poll thunk and waker wiring
     /// land with the executor). Returns an explicit error, not a silent `Ok`.
     pub fn spawn(&mut self) -> Result<TaskId> {
-        Err(Error::not_implemented_error(
-            "kiln-async: TaskTable::spawn is implemented in Phase 1",
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if slot.state.is_none() {
+                slot.state = Some(TaskState::Spawned);
+                self.live += 1;
+                return Ok(TaskId {
+                    // `index < N <= u16::MAX` by construction; u16::MAX is the
+                    // NONE sentinel, so a table that large is unsupported.
+                    index: index as u16,
+                    generation: slot.generation,
+                });
+            }
+        }
+        Err(Error::foundation_bounded_capacity_exceeded(
+            "kiln-async: task table at capacity",
         ))
+    }
+
+    /// Free a task slot, validating the handle, and bump its generation so any
+    /// stale [`TaskId`] referring to the old occupant is detectably invalid.
+    pub fn remove(&mut self, id: TaskId) -> Result<()> {
+        let slot = self
+            .slots
+            .get_mut(id.index as usize)
+            .filter(|s| s.state.is_some() && s.generation == id.generation)
+            .ok_or_else(|| {
+                Error::validation_error("kiln-async: remove of a stale or unknown task handle")
+            })?;
+        slot.state = None;
+        slot.generation = slot.generation.wrapping_add(1);
+        self.live -= 1;
+        Ok(())
     }
 }
 
@@ -236,12 +264,67 @@ mod tests {
     }
 
     #[test]
-    fn table_starts_empty_and_spawn_is_phase1() {
+    fn table_starts_empty() {
         let t: TaskTable<8> = TaskTable::new();
         assert_eq!(t.capacity(), 8);
         assert!(t.is_empty());
         assert!(t.state_of(TaskId::NONE).is_none());
-        let mut t = t;
-        assert!(t.spawn().is_err()); // explicit not-implemented, never silent Ok
+    }
+
+    #[test]
+    fn spawn_allocates_a_spawned_slot() {
+        let mut t: TaskTable<4> = TaskTable::new();
+        let id = t.spawn().unwrap();
+        assert_eq!(t.len(), 1);
+        assert_eq!(t.state_of(id), Some(TaskState::Spawned));
+        assert!(!id.is_none());
+    }
+
+    #[test]
+    fn spawn_uses_distinct_slots() {
+        let mut t: TaskTable<4> = TaskTable::new();
+        let a = t.spawn().unwrap();
+        let b = t.spawn().unwrap();
+        assert_ne!(a.index, b.index);
+        assert_eq!(t.len(), 2);
+    }
+
+    #[test]
+    fn spawn_errors_when_full_rather_than_overwriting() {
+        let mut t: TaskTable<2> = TaskTable::new();
+        t.spawn().unwrap();
+        t.spawn().unwrap();
+        assert!(t.spawn().is_err()); // explicit capacity error, never silent reuse
+    }
+
+    #[test]
+    fn remove_frees_the_slot() {
+        let mut t: TaskTable<2> = TaskTable::new();
+        let id = t.spawn().unwrap();
+        t.remove(id).unwrap();
+        assert!(t.is_empty());
+        assert!(t.state_of(id).is_none());
+    }
+
+    #[test]
+    fn remove_bumps_generation_so_stale_handles_are_invalid() {
+        let mut t: TaskTable<1> = TaskTable::new();
+        let old = t.spawn().unwrap();
+        t.remove(old).unwrap();
+        // Slot reused: the new handle is valid, the stale one is not (ABA-safe).
+        let new = t.spawn().unwrap();
+        assert_eq!(new.index, old.index);
+        assert_ne!(new.generation, old.generation);
+        assert_eq!(t.state_of(new), Some(TaskState::Spawned));
+        assert!(t.state_of(old).is_none());
+    }
+
+    #[test]
+    fn remove_rejects_stale_or_unknown_handle() {
+        let mut t: TaskTable<1> = TaskTable::new();
+        assert!(t.remove(TaskId::NONE).is_err());
+        let id = t.spawn().unwrap();
+        t.remove(id).unwrap();
+        assert!(t.remove(id).is_err()); // already freed
     }
 }
