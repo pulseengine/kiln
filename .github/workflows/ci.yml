@@ -270,11 +270,12 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.93.0"
-      - name: Run Verus verification (StaticVec + StaticQueue)
+      - name: Run Verus verification (StaticVec + StaticQueue + StaticString)
         run: |
           bazel test \
             //kiln-foundation/src/verus_proofs:static_vec_verify \
-            //kiln-foundation/src/verus_proofs:static_queue_verify
+            //kiln-foundation/src/verus_proofs:static_queue_verify \
+            //kiln-foundation/src/verus_proofs:static_string_verify
 
   extended_static_analysis:
     name: Extended Static Analysis (Miri, Kani)
