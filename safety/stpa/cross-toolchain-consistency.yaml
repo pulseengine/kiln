@@ -192,15 +192,11 @@ cross-toolchain-hazards:
 fixture-coverage:
   meld-core:
     status: "All 14 passing"
-    fixtures: [numbers, strings, lists, records, variants, options,
-               many-arguments, flavorful, resources, results,
-               lists-alias, strings-alias, strings-simple, fixed-length-lists]
+    fixtures: [numbers, strings, lists, records, variants, options, many-arguments, flavorful, resources, results, lists-alias, strings-alias, strings-simple, fixed-length-lists]
 
   meld-component:
     status: "13 passing, 1 graceful degradation"
-    fixtures: [numbers, strings, lists, records, variants, options,
-               many-arguments, flavorful, results,
-               lists-alias, strings-alias, strings-simple]
+    fixtures: [numbers, strings, lists, records, variants, options, many-arguments, flavorful, results, lists-alias, strings-alias, strings-simple]
     degraded: [fixed-length-lists]
 
   kiln-runtime:

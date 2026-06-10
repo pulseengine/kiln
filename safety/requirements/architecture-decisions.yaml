@@ -127,13 +127,49 @@ artifacts:
         target: REQ_FUNC_002
       - type: satisfies
         target: REQ_LFUNC_006
+      - type: satisfies
+        target: REQ_MEM_SAFETY_005
     fields:
       rationale: >
         Trait-based abstractions with conditional compilation enable the same
         API surface across std, no_std+alloc, and no_std+no_alloc environments
-        without runtime overhead.
+        without runtime overhead. The MemoryProvider abstraction backs the
+        capability-based safe_managed_alloc! allocator, whose RAII guards give
+        deterministic, explicit memory lifetime (no use-after-free / double-free)
+        across all three tiers.
       previous-id: ARCH_DEC_PATTERNS_001
       implementation: kiln-foundation/src/safe_memory.rs, kiln-foundation/src/bounded.rs
+
+  - id: AD-EXEC-001
+    type: design-decision
+    title: Stackless, resumable interpreter execution model
+    description: >
+      The interpreter executes WebAssembly with an explicit operand/control
+      stack held in a data structure rather than recursing on the host call
+      stack. Execution is driven by a step loop over a program counter, so it
+      can be suspended and resumed at instruction boundaries. This is what makes
+      fuel-based bounded execution possible: the engine decrements fuel per step
+      and yields when exhausted, without unwinding native frames.
+    status: implemented
+    tags: [architecture, runtime, execution-model, bounded-execution]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_001
+      - type: satisfies
+        target: REQ_LFUNC_005
+    fields:
+      rationale: >
+        A stackless design bounds host stack usage (no recursion on guest call
+        depth), enables deterministic suspend/resume for fuel metering and
+        cooperative scheduling, and keeps worst-case host stack depth
+        independent of the guest program — all prerequisites for the
+        embedded / no_std execution path.
+      alternatives-considered: >
+        (1) Recursive tree-walking on the host stack — rejected: guest call
+        depth would drive host stack usage (unbounded, overflow risk) and could
+        not be suspended for fuel/scheduling. (2) Native-thread-per-task with
+        stack switching — rejected for no_std / no-alloc targets.
+      implementation: kiln-runtime/src/stackless/engine.rs
 
   # =========================================================================
   # Tooling & Verification Decisions
@@ -186,6 +222,66 @@ artifacts:
       previous-id: SPEC_VERIFY_001, IMPL_VERIFICATION_001
       implementation: kiln-foundation/src/verification.rs
 
+  - id: AD-QUALITY-001
+    type: design-decision
+    title: Defense-in-depth verification strategy (formal + dynamic)
+    description: >
+      Correctness is established by combining independent verification
+      techniques rather than relying on any single one: formal proof of
+      bounded-collection invariants (Verus, CI-gating), bounded model checking
+      of critical paths (Kani), fuzzing of parsers and bounded structures,
+      WAST conformance against the official WebAssembly test suite, and Miri
+      for UB detection. Each technique has different blind spots; combining
+      them shrinks the residual faster than deepening any one.
+    status: implemented
+    tags: [verification, defense-in-depth, formal-methods, fuzzing, testing]
+    links:
+      - type: satisfies
+        target: REQ_VERIFY_010
+      - type: satisfies
+        target: REQ_QA_010
+    fields:
+      rationale: >
+        Per the PulseEngine defense-in-depth methodology, in safety-relevant
+        domains a portfolio of techniques (proofs + model checkers + fuzzing +
+        conformance + sanitizers) covers more failure modes than tightening a
+        single technique. Verus is the only CI-gating formal method today;
+        Kani is weekly/manual (#237); fuzzing and WAST run in CI.
+      alternatives-considered: >
+        (1) Single formal method end-to-end — rejected: no tractable proof of
+        the whole interpreter exists, and a single technique leaves correlated
+        blind spots. (2) Tests-only — rejected: gives no invariant guarantees
+        for the embedded cert scope.
+      implementation: "Verus: kiln-foundation/src/verus_proofs/; Kani harnesses; fuzz/; kiln-build-core/src/wast_execution.rs"
+
+  - id: AD-DEBUG-001
+    type: design-decision
+    title: Source-level, WIT-aware debugging via DWARF mapping
+    description: >
+      Debugging maps running core-WebAssembly execution back to original source
+      through DWARF debug information, and is WIT-aware so component-model
+      execution can be inspected at the interface-type level rather than only as
+      raw core values. Breakpoints and stack traces operate over the stackless
+      engine's explicit frames. This is a QM reference-interpreter capability
+      (developer-facing), not part of the certified embedded scope.
+    status: implemented
+    tags: [tooling, debugging, dwarf, wit]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_032
+    fields:
+      rationale: >
+        Source-level and WIT-aware debugging is what makes the interpreter
+        usable as a behavioral reference and oracle for the fused embedded core:
+        a developer can observe component-level semantics, not just core opcodes.
+        DWARF reuse avoids a bespoke debug-info format.
+      alternatives-considered: >
+        (1) printf/trace-only debugging — rejected: cannot inspect interface
+        types or set breakpoints. (2) Core-wasm-only debugging without WIT
+        mapping — rejected: component execution would be opaque at the ABI
+        boundary, defeating the reference-oracle purpose.
+      implementation: kiln-runtime/src/debug/
+
   # =========================================================================
   # WASI Architecture
   # =========================================================================
@@ -209,6 +305,12 @@ artifacts:
     links:
       - type: satisfies
         target: REQ_FUNC_034
+      - type: satisfies
+        target: REQ_FUNC_015
+      - type: satisfies
+        target: REQ_FUNC_035
+      - type: satisfies
+        target: REQ_FUNC_036
     fields:
       rationale: >
         Trait-based dispatch decouples the engine from any specific host

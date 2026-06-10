@@ -35,6 +35,10 @@ artifacts:
         target: REQ_LFUNC_005
       - type: satisfies
         target: REQ_LFUNC_018
+      - type: satisfies
+        target: REQ_TEMPORAL_001
+      - type: satisfies
+        target: REQ_FUNC_003
     fields:
       previous-id: ARCH_COMP_001
       implementation: kiln-runtime/src/stackless/engine.rs
@@ -55,6 +59,10 @@ artifacts:
         target: REQ_MEM_SAFETY_005
       - type: satisfies
         target: REQ_MEM_SAFETY_002
+      - type: satisfies
+        target: REQ_MEM_SAFETY_004
+      - type: satisfies
+        target: REQ_VERIFY_002
     fields:
       previous-id: ARCH_COMP_002
       implementation: kiln-foundation/src/safe_memory.rs, kiln-foundation/src/capabilities/
@@ -94,6 +102,8 @@ artifacts:
     links:
       - type: satisfies
         target: REQ_LFUNC_018
+      - type: satisfies
+        target: REQ_DATAFLOW_003
     fields:
       previous-id: ARCH_COMP_004
       implementation: kiln-decoder/src/streaming_decoder.rs
@@ -110,6 +120,8 @@ artifacts:
     links:
       - type: satisfies
         target: REQ_PLATFORM_001
+      - type: satisfies
+        target: REQ_TEMPORAL_004
     fields:
       previous-id: ARCH_COMP_005
       implementation: kiln-platform/src/
@@ -129,6 +141,12 @@ artifacts:
     links:
       - type: satisfies
         target: REQ_ERROR_001
+      - type: satisfies
+        target: REQ_ERROR_002
+      - type: satisfies
+        target: REQ_ERROR_003
+      - type: satisfies
+        target: REQ_SAFETY_003
     fields:
       previous-id: ARCH_COMP_010
       implementation: kiln-error/src/
@@ -282,6 +300,8 @@ artifacts:
     links:
       - type: satisfies
         target: REQ_VERIFY_010
+      - type: satisfies
+        target: REQ_SAFETY_004
     fields:
       implementation: "Kani proofs in kiln-foundation, kiln-runtime"
 
@@ -297,6 +317,10 @@ artifacts:
     links:
       - type: satisfies
         target: REQ_FUNC_033
+      - type: satisfies
+        target: REQ_CONFIG_001
+      - type: satisfies
+        target: REQ_CONFIG_003
     fields:
       implementation: kilnd/src/
 
@@ -317,6 +341,12 @@ artifacts:
     links:
       - type: satisfies
         target: REQ_RESOURCE_004
+      - type: satisfies
+        target: REQ_RESOURCE_003
+      - type: satisfies
+        target: REQ_VERIFY_004
+      - type: satisfies
+        target: REQ_SAFETY_001
     fields:
       previous-id: IMPL_RESOURCE_SAFETY_001
       implementation: kiln-foundation/src/monitoring.rs, kiln-foundation/src/safety_monitor.rs
