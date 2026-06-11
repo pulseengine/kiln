@@ -6,12 +6,24 @@
 //!
 //! These functions enumerate the canonical-ABI intrinsics the scheduler backs
 //! on the embedded path (per RFC #46, Meld lowers the component-level async
-//! constructs to these core import calls). Every one is a **Phase 1** stub that
-//! returns an explicit `NOT_IMPLEMENTED` error — never a silent `Ok` — so the
-//! scaffold cannot be mistaken for a working implementation.
+//! constructs to these core import calls).
 //!
-//! Phase 1 wires each of these to [`crate::Scheduler`] over the bounded
-//! task/ready/waitable structures.
+//! ## Implemented — engine-bridge mapping (no stub here)
+//!
+//! The task-control intrinsics are scheduler capabilities; the engine bridge
+//! dispatches them directly:
+//!
+//! - `task.yield` → end the slice with [`crate::TaskOutcome::Yielded`].
+//! - `task.cancel(subtask)` → [`crate::Scheduler::cancel`]; a task cancelling
+//!   *itself* ends its slice with [`crate::TaskOutcome::Cancelled`].
+//! - `task.backpressure` → [`crate::Scheduler::set_backpressure`].
+//!
+//! ## Stubbed — waitable layer (next increment)
+//!
+//! The remaining intrinsics need the bounded waitable table (futures, streams,
+//! waitable-sets). Each returns an explicit `NOT_IMPLEMENTED` error — never a
+//! silent `Ok` — so the scaffold cannot be mistaken for a working
+//! implementation.
 
 use kiln_error::{Error, Result};
 
@@ -27,11 +39,6 @@ macro_rules! phase1_stub {
     };
 }
 
-/// `task.yield` — cooperatively re-enqueue the current task at its priority tail.
-pub fn task_yield() -> Result<()> {
-    phase1_stub!("task.yield")
-}
-
 /// `task.wait` — block the current task until any member of a waitable set fires.
 pub fn task_wait() -> Result<TaskId> {
     phase1_stub!("task.wait")
@@ -40,16 +47,6 @@ pub fn task_wait() -> Result<TaskId> {
 /// `task.poll` — non-blocking check of a waitable set.
 pub fn task_poll() -> Result<Option<TaskId>> {
     phase1_stub!("task.poll")
-}
-
-/// `task.cancel` — transition a subtask to `Cancelled` and free its slot.
-pub fn task_cancel(_subtask: TaskId) -> Result<()> {
-    phase1_stub!("task.cancel")
-}
-
-/// `task.backpressure` — gate admission of new subtasks.
-pub fn task_backpressure(_enable: bool) -> Result<()> {
-    phase1_stub!("task.backpressure")
 }
 
 /// `stream.new` — create a bounded SPSC stream with credit-based flow control.

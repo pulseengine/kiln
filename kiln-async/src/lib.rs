@@ -59,6 +59,9 @@ pub enum TaskOutcome {
     Waited,
     /// Finished; its slot is freed.
     Completed,
+    /// Cancelled itself (or honored a cancel request) during the slice;
+    /// terminal, its slot is freed.
+    Cancelled,
 }
 
 /// Result of one [`Scheduler::poll_round`].
@@ -79,6 +82,8 @@ pub struct Scheduler<const NTASK: usize, const NREADY: usize> {
     tasks: TaskTable<NTASK>,
     ready: ReadyQueue<NREADY>,
     config: SchedConfig,
+    /// When set, new-task admission is refused (`task.backpressure`).
+    backpressure: bool,
 }
 
 impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
@@ -89,6 +94,7 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
             tasks: TaskTable::new(),
             ready: ReadyQueue::new(),
             config,
+            backpressure: false,
         }
     }
 
@@ -123,6 +129,11 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
     /// the ready queue is sized `== NTASK` so its push cannot be the limiting
     /// factor. Returns the new task's handle.
     pub fn spawn(&mut self) -> Result<TaskId> {
+        if self.backpressure {
+            return Err(Error::async_task_spawn_failed(
+                "kiln-async: admission refused, backpressure is enabled",
+            ));
+        }
         let id = self.tasks.spawn()?;
         // Admit the freshly spawned task: Spawned -> Ready, then enqueue. On the
         // (invariant-unreachable) ready-queue overflow, roll back the slot so the
@@ -183,17 +194,41 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
 
     /// Dispatch the oldest ready task: dequeue it and drive `Ready -> Running`.
     ///
-    /// Returns `Ok(None)` when the ready set is empty. A stale queue entry is
-    /// an invariant violation today (nothing removes a queued task yet) and
-    /// fails loud rather than being skipped.
+    /// Returns `Ok(None)` when the ready set is empty. Stale queue entries —
+    /// tombstones left by [`Scheduler::cancel`] of a queued task — are
+    /// *specified* and skipped; a live entry in any state other than `Ready`
+    /// is an invariant violation and fails loud via the FSM transition.
     pub fn dispatch_next(&mut self) -> Result<Option<TaskId>> {
-        let Some(id) = self.ready.pop() else {
-            return Ok(None);
-        };
-        // A queued task must be Ready; anything else is an invariant violation
-        // and the transition's own validation propagates it loudly.
-        self.tasks.transition(id, TaskEvent::Dispatch)?;
-        Ok(Some(id))
+        while let Some(id) = self.ready.pop() {
+            if self.tasks.state_of(id).is_none() {
+                continue; // cancelled while queued: tombstone, skip
+            }
+            self.tasks.transition(id, TaskEvent::Dispatch)?;
+            return Ok(Some(id));
+        }
+        Ok(None)
+    }
+
+    /// Cancel a task: drive it to `Cancelled` and free its slot.
+    ///
+    /// Valid for `Spawned`, `Ready`, and `Blocked` tasks; a `Ready` task's
+    /// queue entry is left as a tombstone that dispatch skips. Cancelling the
+    /// `Running` task is a loud error — the in-flight slice must end itself by
+    /// returning [`TaskOutcome::Cancelled`] instead. A stale handle is a loud
+    /// error too: cancel is a directed request, not a best-effort wake.
+    pub fn cancel(&mut self, id: TaskId) -> Result<()> {
+        if self.tasks.state_of(id) == Some(TaskState::Running) {
+            return Err(Error::invalid_state_error(
+                "kiln-async: cancel of the running task must end its slice as TaskOutcome::Cancelled",
+            ));
+        }
+        self.tasks.transition(id, TaskEvent::Cancel)?;
+        self.tasks.remove(id)
+    }
+
+    /// Gate admission of new tasks (the `task.backpressure` intrinsic).
+    pub fn set_backpressure(&mut self, enable: bool) {
+        self.backpressure = enable;
     }
 
     /// Run one cooperative poll round: dispatch the oldest ready task, run it
@@ -237,6 +272,10 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
             }
             TaskOutcome::Completed => {
                 self.tasks.transition(id, TaskEvent::Complete)?;
+                self.tasks.remove(id)?;
+            }
+            TaskOutcome::Cancelled => {
+                self.tasks.transition(id, TaskEvent::Cancel)?;
                 self.tasks.remove(id)?;
             }
         }
@@ -451,6 +490,71 @@ mod tests {
 
         assert_eq!(s.task_state(b), Some(TaskState::Ready));
         assert_eq!(s.ready_len(), 2); // a re-enqueued + b woken
+    }
+
+    #[test]
+    fn cancel_of_a_queued_task_leaves_a_tombstone_dispatch_skips() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let a = s.spawn().unwrap();
+        let b = s.spawn().unwrap();
+
+        s.cancel(a).unwrap();
+        assert!(s.task_state(a).is_none()); // slot freed
+
+        // Dispatch must skip a's tombstone and run b.
+        assert_eq!(s.dispatch_next().unwrap(), Some(b));
+        assert_eq!(s.task_state(b), Some(TaskState::Running));
+    }
+
+    #[test]
+    fn cancel_of_a_blocked_task_frees_it() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let id = s.spawn().unwrap();
+        s.poll_round(|_, _, _| Ok(TaskOutcome::Waited)).unwrap();
+        assert_eq!(s.task_state(id), Some(TaskState::Blocked));
+
+        s.cancel(id).unwrap();
+
+        assert!(s.task_state(id).is_none());
+        assert!(!s.mark_ready(id).unwrap()); // late wake: benign spurious
+    }
+
+    #[test]
+    fn cancel_of_the_running_task_fails_loud() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let id = s.spawn().unwrap();
+        s.dispatch_next().unwrap();
+        // The in-flight slice must end itself as TaskOutcome::Cancelled.
+        assert!(s.cancel(id).is_err());
+        assert_eq!(s.task_state(id), Some(TaskState::Running)); // untouched
+    }
+
+    #[test]
+    fn cancel_of_a_stale_handle_fails_loud() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let id = s.spawn().unwrap();
+        s.cancel(id).unwrap();
+        assert!(s.cancel(id).is_err()); // already gone: directed op, not a wake
+    }
+
+    #[test]
+    fn poll_outcome_cancelled_frees_the_slot() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let id = s.spawn().unwrap();
+        s.poll_round(|_, _, _| Ok(TaskOutcome::Cancelled)).unwrap();
+        assert!(s.task_state(id).is_none());
+        assert_eq!(s.task_count(), 0);
+    }
+
+    #[test]
+    fn backpressure_gates_admission_and_releases() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        s.set_backpressure(true);
+        assert!(s.spawn().is_err()); // refused, explicit error
+        assert_eq!(s.task_count(), 0);
+
+        s.set_backpressure(false);
+        assert!(s.spawn().is_ok()); // admission restored
     }
 
     #[test]
