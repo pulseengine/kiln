@@ -338,12 +338,16 @@ artifacts:
       compile-time SchedConfig rather than heap or provider-backed collections.
       All P3 async intrinsics return an explicit NOT_IMPLEMENTED error until
       implemented — never a silent Ok. Scheduling is fuel-bounded (a poll slice
-      is a fuel budget) for deterministic, replayable execution.
+      is a fuel budget) for deterministic, replayable execution. Performance
+      claims are measured, not asserted: a criterion host-bench baseline covers
+      every scheduler primitive from the first commit (REQ_ASYNC_BENCH).
     status: partial
     tags: [async, scheduler, no-std, no-alloc, embedded, mechanism]
     links:
       - type: satisfies
         target: REQ_ASYNC_SCHED
+      - type: satisfies
+        target: REQ_ASYNC_BENCH
     fields:
       rationale: >
         A separate minimal-dependency crate (mirroring kiln-builtins) keeps the

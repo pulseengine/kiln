@@ -1149,6 +1149,7 @@ dependencies = [
 name = "kiln-async"
 version = "0.3.1"
 dependencies = [
+ "criterion",
  "kiln-error",
 ]
 
