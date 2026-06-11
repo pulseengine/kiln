@@ -80,6 +80,37 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
         self.tasks.len()
     }
 
+    /// Number of tasks currently in the ready set.
+    #[must_use]
+    pub const fn ready_len(&self) -> usize {
+        self.ready.len()
+    }
+
+    /// The lifecycle state of a task, or `None` for a stale/unknown handle.
+    #[must_use]
+    pub fn task_state(&self, id: TaskId) -> Option<TaskState> {
+        self.tasks.state_of(id)
+    }
+
+    /// Spawn a task and admit it to the ready set.
+    ///
+    /// Allocates a free table slot (`Spawned`), drives it `Spawned -> Ready`
+    /// through the FSM, and enqueues it. Fails loud if the task table is full;
+    /// the ready queue is sized `== NTASK` so its push cannot be the limiting
+    /// factor. Returns the new task's handle.
+    pub fn spawn(&mut self) -> Result<TaskId> {
+        let id = self.tasks.spawn()?;
+        // Admit the freshly spawned task: Spawned -> Ready, then enqueue. On the
+        // (invariant-unreachable) ready-queue overflow, roll back the slot so the
+        // table and ready set stay consistent rather than leaking a live task.
+        self.tasks.transition(id, TaskEvent::Admit)?;
+        if let Err(e) = self.ready.push(id) {
+            self.tasks.remove(id)?;
+            return Err(e);
+        }
+        Ok(id)
+    }
+
     /// Run one cooperative poll round: select a ready task, poll it for one fuel
     /// slice, and re-dispatch per the result.
     ///
@@ -90,5 +121,42 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
         Err(Error::not_implemented_error(
             "kiln-async: cooperative poll loop is implemented in Phase 1",
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    type Sched = Scheduler<4, 4>;
+
+    #[test]
+    fn spawn_admits_a_task_to_the_ready_set() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        assert_eq!(s.task_count(), 0);
+        assert_eq!(s.ready_len(), 0);
+
+        let id = s.spawn().unwrap();
+
+        assert_eq!(s.task_count(), 1);
+        assert_eq!(s.ready_len(), 1);
+        assert_eq!(s.task_state(id), Some(TaskState::Ready));
+    }
+
+    #[test]
+    fn spawn_uses_distinct_handles_per_task() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let a = s.spawn().unwrap();
+        let b = s.spawn().unwrap();
+        assert_ne!(a, b);
+        assert_eq!(s.ready_len(), 2);
+    }
+
+    #[test]
+    fn spawn_errors_when_the_task_table_is_full() {
+        let mut s: Scheduler<2, 2> = Scheduler::new(SchedConfig::DEFAULT);
+        s.spawn().unwrap();
+        s.spawn().unwrap();
+        assert!(s.spawn().is_err()); // explicit capacity error, never silent drop
     }
 }
