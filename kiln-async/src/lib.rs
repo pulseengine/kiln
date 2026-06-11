@@ -46,6 +46,30 @@ pub use task::{TaskEvent, TaskId, TaskState, TaskTable};
 
 use kiln_error::{Error, Result};
 
+/// How a polled task left its fuel slice. Returned by the poll callback —
+/// the bridge to the engine running the task's synth-lowered code.
+///
+/// Fuel exhaustion is reported as [`TaskOutcome::Yielded`]: preemption at the
+/// quantum boundary is a forced cooperative yield.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskOutcome {
+    /// Yielded cooperatively (or exhausted its fuel slice) — still runnable.
+    Yielded,
+    /// Parked on a waitable; re-admitted via [`Scheduler::mark_ready`].
+    Waited,
+    /// Finished; its slot is freed.
+    Completed,
+}
+
+/// Result of one [`Scheduler::poll_round`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PollRound {
+    /// The ready set was empty — nothing was polled.
+    Idle,
+    /// This task was polled for one fuel slice.
+    Polled(TaskId),
+}
+
 /// Cooperative, fuel-bounded async scheduler over fixed-capacity storage.
 ///
 /// `NTASK` is the maximum number of concurrent tasks; `NREADY` is the ready-queue
@@ -125,10 +149,11 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
     /// - Stale/unknown handle, free slot, or terminal state → `Ok(false)`.
     ///   A waker outliving its task is normal asynchrony per the contract —
     ///   this is *specified* spurious-wake behavior, not a masked error.
-    /// - `Spawned` or `Running` → loud error. Waking an unadmitted task is an
-    ///   FSM violation; waking a `Running` task needs the wake-pending flag
-    ///   (deferred with the poll loop) — erroring here means a lost wakeup is
-    ///   impossible to introduce silently.
+    /// - `Running` → records the wake-pending flag and returns `Ok(true)`
+    ///   (`Ok(false)` for a coalesced duplicate); the poll round consumes the
+    ///   flag so a wake during the task's own poll slice is never lost.
+    /// - `Spawned` → loud error: waking a never-admitted task is an FSM
+    ///   violation.
     pub fn mark_ready(&mut self, id: TaskId) -> Result<bool> {
         match self.tasks.state_of(id) {
             // Spurious wake (stale handle / freed slot) or duplicate wake of a
@@ -149,9 +174,10 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
             Some(TaskState::Spawned) => Err(Error::invalid_state_error(
                 "kiln-async: wake of a task that was never admitted",
             )),
-            Some(TaskState::Running) => Err(Error::not_implemented_error(
-                "kiln-async: wake during poll needs the wake-pending flag (poll-loop increment)",
-            )),
+            // Wake during the task's own poll slice: record it so the poll
+            // round re-admits the task instead of parking it — a wakeup is
+            // never lost. Duplicates coalesce (Ok(false)).
+            Some(TaskState::Running) => self.tasks.flag_wake_pending(id),
         }
     }
 
@@ -170,16 +196,51 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
         Ok(Some(id))
     }
 
-    /// Run one cooperative poll round: select a ready task, poll it for one fuel
-    /// slice, and re-dispatch per the result.
+    /// Run one cooperative poll round: dispatch the oldest ready task, run it
+    /// for one fuel slice via `poll`, and re-dispatch per the outcome.
     ///
-    /// **Phase 1** — not yet implemented. Returns an explicit error rather than a
-    /// silent `Ok`, so callers cannot mistake the scaffold for a working loop.
-    pub fn poll_round(&mut self) -> Result<()> {
-        let _ = &mut self.ready;
-        Err(Error::not_implemented_error(
-            "kiln-async: cooperative poll loop is implemented in Phase 1",
-        ))
+    /// `poll` is the engine bridge: it receives the scheduler itself (so the
+    /// task's intrinsics can wake other tasks — or itself — mid-poll), the
+    /// dispatched task, and the fuel budget for the slice. Outcomes:
+    ///
+    /// - [`TaskOutcome::Yielded`] → back to `Ready`, re-enqueued at the tail
+    ///   (round-robin FIFO).
+    /// - [`TaskOutcome::Waited`] → `Blocked` — unless a wake arrived during
+    ///   the poll (the wake-pending flag), in which case it is re-admitted
+    ///   immediately: **a wakeup is never lost**.
+    /// - [`TaskOutcome::Completed`] → terminal; the slot is freed.
+    ///
+    /// A `poll` error propagates and leaves the task `Running` — fail loud;
+    /// crash-recovery policy is the embedding's decision, not a silent retry.
+    pub fn poll_round<F>(&mut self, poll: F) -> Result<PollRound>
+    where
+        F: FnOnce(&mut Self, TaskId, u64) -> Result<TaskOutcome>,
+    {
+        let Some(id) = self.dispatch_next()? else {
+            return Ok(PollRound::Idle);
+        };
+        let outcome = poll(self, id, self.config.fuel_slice)?;
+        // Consume the wake-pending flag for every outcome so it can't go
+        // stale; it only changes the disposition of `Waited`.
+        let woke_mid_poll = self.tasks.take_wake_pending(id)?;
+        match outcome {
+            TaskOutcome::Yielded => {
+                self.ready.push(id)?;
+                self.tasks.transition(id, TaskEvent::Yield)?;
+            }
+            TaskOutcome::Waited => {
+                self.tasks.transition(id, TaskEvent::Wait)?;
+                if woke_mid_poll {
+                    // The wakeup raced the park: re-admit immediately.
+                    self.mark_ready(id)?;
+                }
+            }
+            TaskOutcome::Completed => {
+                self.tasks.transition(id, TaskEvent::Complete)?;
+                self.tasks.remove(id)?;
+            }
+        }
+        Ok(PollRound::Polled(id))
     }
 }
 
@@ -276,12 +337,139 @@ mod tests {
     }
 
     #[test]
-    fn mark_ready_during_running_fails_loud() {
+    fn mark_ready_during_running_records_a_pending_wake() {
         let mut s = Sched::new(SchedConfig::DEFAULT);
         let id = s.spawn().unwrap();
         s.dispatch_next().unwrap();
-        // Wake-during-poll needs the wake-pending flag (deferred); silently
-        // ignoring it would lose the wakeup, so it must error.
-        assert!(s.mark_ready(id).is_err());
+        assert!(s.mark_ready(id).unwrap()); // recorded
+        assert!(!s.mark_ready(id).unwrap()); // duplicate coalesced
+        assert_eq!(s.ready_len(), 0); // not enqueued while Running
+    }
+
+    #[test]
+    fn poll_round_on_an_empty_ready_set_is_idle() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let round = s
+            .poll_round(|_, _, _| unreachable!("nothing to poll"))
+            .unwrap();
+        assert_eq!(round, PollRound::Idle);
+    }
+
+    #[test]
+    fn poll_round_reenqueues_a_yielding_task_round_robin() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let a = s.spawn().unwrap();
+        let b = s.spawn().unwrap();
+
+        let round = s
+            .poll_round(|sched, id, fuel| {
+                assert_eq!(id, a); // FIFO: oldest first
+                assert_eq!(fuel, SchedConfig::DEFAULT.fuel_slice);
+                assert_eq!(sched.task_state(id), Some(TaskState::Running));
+                Ok(TaskOutcome::Yielded)
+            })
+            .unwrap();
+
+        assert_eq!(round, PollRound::Polled(a));
+        assert_eq!(s.task_state(a), Some(TaskState::Ready));
+        assert_eq!(s.ready_len(), 2);
+        // Round-robin: a went to the tail, so b runs next.
+        let next = s.poll_round(|_, id, _| {
+            assert_eq!(id, b);
+            Ok(TaskOutcome::Yielded)
+        });
+        assert_eq!(next.unwrap(), PollRound::Polled(b));
+    }
+
+    #[test]
+    fn poll_round_parks_a_waiting_task() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let id = s.spawn().unwrap();
+
+        s.poll_round(|_, _, _| Ok(TaskOutcome::Waited)).unwrap();
+
+        assert_eq!(s.task_state(id), Some(TaskState::Blocked));
+        assert_eq!(s.ready_len(), 0);
+        // ...and the normal wake path re-admits it.
+        assert!(s.mark_ready(id).unwrap());
+        assert_eq!(s.task_state(id), Some(TaskState::Ready));
+    }
+
+    #[test]
+    fn poll_round_frees_a_completed_task() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let id = s.spawn().unwrap();
+
+        s.poll_round(|_, _, _| Ok(TaskOutcome::Completed)).unwrap();
+
+        assert_eq!(s.task_count(), 0);
+        assert!(s.task_state(id).is_none()); // slot freed, handle stale
+    }
+
+    #[test]
+    fn a_wake_during_the_tasks_own_poll_is_never_lost() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let id = s.spawn().unwrap();
+
+        // The task wakes itself mid-poll (e.g. an already-ready future), then
+        // reports Waited. Without the wake-pending flag this would deadlock.
+        s.poll_round(|sched, tid, _| {
+            assert!(sched.mark_ready(tid).unwrap());
+            Ok(TaskOutcome::Waited)
+        })
+        .unwrap();
+
+        assert_eq!(s.task_state(id), Some(TaskState::Ready));
+        assert_eq!(s.ready_len(), 1);
+    }
+
+    #[test]
+    fn a_cross_task_wake_during_a_poll_takes_effect() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let a = s.spawn().unwrap();
+        let b = s.spawn().unwrap();
+        // Park b first.
+        s.poll_round(|_, id, _| {
+            assert_eq!(id, a);
+            Ok(TaskOutcome::Yielded)
+        })
+        .unwrap();
+        s.poll_round(|_, id, _| {
+            assert_eq!(id, b);
+            Ok(TaskOutcome::Waited)
+        })
+        .unwrap();
+        assert_eq!(s.task_state(b), Some(TaskState::Blocked));
+
+        // a's intrinsic (e.g. future.write) wakes b mid-poll.
+        s.poll_round(|sched, id, _| {
+            assert_eq!(id, a);
+            assert!(sched.mark_ready(b).unwrap());
+            Ok(TaskOutcome::Yielded)
+        })
+        .unwrap();
+
+        assert_eq!(s.task_state(b), Some(TaskState::Ready));
+        assert_eq!(s.ready_len(), 2); // a re-enqueued + b woken
+    }
+
+    #[test]
+    fn wake_pending_does_not_leak_across_slot_reuse() {
+        let mut s: Scheduler<1, 1> = Scheduler::new(SchedConfig::DEFAULT);
+        let old = s.spawn().unwrap();
+        // Wake itself mid-poll, then complete: the pending flag must die with
+        // the slot, not leak into the next occupant.
+        s.poll_round(|sched, tid, _| {
+            assert!(sched.mark_ready(tid).unwrap());
+            Ok(TaskOutcome::Completed)
+        })
+        .unwrap();
+        assert!(s.task_state(old).is_none());
+
+        let new = s.spawn().unwrap();
+        assert_eq!(new.index, old.index); // same slot reused
+        s.poll_round(|_, _, _| Ok(TaskOutcome::Waited)).unwrap();
+        // A leaked flag would have spuriously re-readied it.
+        assert_eq!(s.task_state(new), Some(TaskState::Blocked));
     }
 }
