@@ -15,7 +15,9 @@
 use std::hint::black_box;
 
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
-use kiln_async::{ReadyQueue, SchedConfig, Scheduler, TaskEvent, TaskId, TaskTable};
+use kiln_async::{
+    ReadyQueue, SchedConfig, Scheduler, TaskEvent, TaskId, TaskOutcome, TaskTable,
+};
 
 /// Capacity used throughout — the documented Cortex-M default profile.
 const N: usize = 16;
@@ -118,11 +120,27 @@ fn scheduler_spawn(c: &mut Criterion) {
     });
 }
 
+fn scheduler_poll_round(c: &mut Criterion) {
+    // The full cycle: dispatch → poll (trivial yielding body) → re-enqueue.
+    // This is the per-task scheduling overhead a fuel slice pays.
+    c.bench_function("scheduler/poll_round_yield_cycle", |b| {
+        let mut s = Scheduler::<N, N>::new(SchedConfig::DEFAULT);
+        s.spawn().unwrap();
+        b.iter(|| {
+            black_box(
+                s.poll_round(|_, _, _| Ok(TaskOutcome::Yielded))
+                    .unwrap(),
+            );
+        });
+    });
+}
+
 criterion_group!(
     benches,
     task_table_spawn_remove,
     task_table_transition,
     ready_queue_push_pop,
-    scheduler_spawn
+    scheduler_spawn,
+    scheduler_poll_round
 );
 criterion_main!(benches);

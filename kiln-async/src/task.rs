@@ -110,12 +110,16 @@ struct TaskSlot {
     state: Option<TaskState>,
     /// Generation, bumped each time the slot is reused.
     generation: u32,
+    /// A wake arrived while the task was `Running` (the wake-pending flag).
+    /// Consumed by the poll round so the wakeup is never lost.
+    wake_pending: bool,
 }
 
 impl TaskSlot {
     const FREE: Self = Self {
         state: None,
         generation: 0,
+        wake_pending: false,
     };
 }
 
@@ -193,6 +197,33 @@ impl<const N: usize> TaskTable<N> {
         ))
     }
 
+    /// Record that a wake arrived for a live task (used while it is `Running`).
+    /// Returns whether the flag was newly set (`false` = duplicate, coalesced).
+    pub(crate) fn flag_wake_pending(&mut self, id: TaskId) -> Result<bool> {
+        let slot = self.live_slot_mut(id)?;
+        let newly_set = !slot.wake_pending;
+        slot.wake_pending = true;
+        Ok(newly_set)
+    }
+
+    /// Consume a task's wake-pending flag, returning whether it was set.
+    pub(crate) fn take_wake_pending(&mut self, id: TaskId) -> Result<bool> {
+        let slot = self.live_slot_mut(id)?;
+        let was_set = slot.wake_pending;
+        slot.wake_pending = false;
+        Ok(was_set)
+    }
+
+    /// Generation-validated mutable access to a live (occupied) slot.
+    fn live_slot_mut(&mut self, id: TaskId) -> Result<&mut TaskSlot> {
+        self.slots
+            .get_mut(id.index as usize)
+            .filter(|s| s.state.is_some() && s.generation == id.generation)
+            .ok_or_else(|| {
+                Error::validation_error("kiln-async: stale or unknown task handle")
+            })
+    }
+
     /// Drive a task slot through one FSM transition, validating the handle.
     ///
     /// The table owns slot state, so all state changes go through the
@@ -229,6 +260,7 @@ impl<const N: usize> TaskTable<N> {
             })?;
         slot.state = None;
         slot.generation = slot.generation.wrapping_add(1);
+        slot.wake_pending = false; // the flag dies with the slot, never leaks
         self.live -= 1;
         Ok(())
     }
