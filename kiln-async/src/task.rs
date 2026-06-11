@@ -193,6 +193,30 @@ impl<const N: usize> TaskTable<N> {
         ))
     }
 
+    /// Drive a task slot through one FSM transition, validating the handle.
+    ///
+    /// The table owns slot state, so all state changes go through the
+    /// [`TaskState::step`] FSM here — a slot can never hold an FSM-invalid
+    /// state, and an illegal event fails loud rather than mutating the slot.
+    /// Returns the new state on success.
+    pub fn transition(&mut self, id: TaskId, event: TaskEvent) -> Result<TaskState> {
+        let slot = self
+            .slots
+            .get_mut(id.index as usize)
+            .filter(|s| s.generation == id.generation)
+            .ok_or_else(|| {
+                Error::validation_error("kiln-async: transition on a stale or unknown task handle")
+            })?;
+        let current = slot.state.ok_or_else(|| {
+            Error::validation_error("kiln-async: transition on a free task slot")
+        })?;
+        // `step` validates the event; an illegal transition errors here and the
+        // slot is left untouched (no partial write).
+        let next = current.step(event)?;
+        slot.state = Some(next);
+        Ok(next)
+    }
+
     /// Free a task slot, validating the handle, and bump its generation so any
     /// stale [`TaskId`] referring to the old occupant is detectably invalid.
     pub fn remove(&mut self, id: TaskId) -> Result<()> {
@@ -317,6 +341,35 @@ mod tests {
         assert_ne!(new.generation, old.generation);
         assert_eq!(t.state_of(new), Some(TaskState::Spawned));
         assert!(t.state_of(old).is_none());
+    }
+
+    #[test]
+    fn transition_drives_a_slot_through_a_valid_event() {
+        let mut t: TaskTable<2> = TaskTable::new();
+        let id = t.spawn().unwrap();
+        assert_eq!(t.state_of(id), Some(TaskState::Spawned));
+        let next = t.transition(id, TaskEvent::Admit).unwrap();
+        assert_eq!(next, TaskState::Ready);
+        assert_eq!(t.state_of(id), Some(TaskState::Ready));
+    }
+
+    #[test]
+    fn transition_rejects_an_illegal_event_without_mutating() {
+        let mut t: TaskTable<2> = TaskTable::new();
+        let id = t.spawn().unwrap();
+        // Spawned --Complete--> is illegal (must be Admit'd then run first).
+        assert!(t.transition(id, TaskEvent::Complete).is_err());
+        // Slot state is unchanged — fail-loud, never a silent half-transition.
+        assert_eq!(t.state_of(id), Some(TaskState::Spawned));
+    }
+
+    #[test]
+    fn transition_rejects_a_stale_or_unknown_handle() {
+        let mut t: TaskTable<1> = TaskTable::new();
+        assert!(t.transition(TaskId::NONE, TaskEvent::Admit).is_err());
+        let id = t.spawn().unwrap();
+        t.remove(id).unwrap();
+        assert!(t.transition(id, TaskEvent::Admit).is_err()); // freed slot
     }
 
     #[test]
