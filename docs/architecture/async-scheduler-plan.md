@@ -93,12 +93,16 @@ its proof.
    **Includes deleting the old `kiln-component/src/async_/` and untangling its references** (threading/,
    post_return, types.rs) — that surface is removed per RFC #46.
 1. **MVP scheduler (FIFO)** — TaskTable, single-ring ReadyQueue, index waker, fuel-sliced poll loop,
-   `task.yield/wait/poll`, `future.*`. Exit: runs a real synth-lowered async core module on host sim / QEMU.
+   `task.yield/wait/poll`, `future.*`. Carries the criterion host-bench baseline for every primitive
+   (REQ_ASYNC_BENCH): the O(1) claims are measured, not asserted, from the first commit.
+   Exit: runs a real synth-lowered async core module on host sim / QEMU.
 2. **Streams + backpressure** — `Stream<T>` ring + credits, `error-context`.
 3. **Verus invariant proofs (CI gate)** — first ASIL-gating proofs.
 4. **Fixed-priority + EDF modes.**
 5. **Lean+Aeneas refinement (full circle)** — after Charon is wired in `rules_lean` (R3); reuse spar proofs.
-6. **Hardening** — fuzz, Kani on array helpers, WCET on hardware, ASIL-D verify-matrix.
+6. **Hardening** — fuzz, Kani on array helpers, property tests over FSM/queue invariants, mutation
+   testing of the scheduler core, WCET on hardware + measured fuel→cycles constant (R4), ASIL-D
+   verify-matrix. (Dynamic-verification stack: REQ_ASYNC_BENCH.)
 
 ## 8. Risks / open questions
 

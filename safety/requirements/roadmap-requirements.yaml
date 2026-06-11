@@ -190,3 +190,31 @@ artifacts:
         #233 (P3 async primitives), #239 (loom concurrency harnesses) — closed
         into this single scoped requirement. Verification follows the gale
         Verus+Lean template; reuses spar/proofs/Proofs/Scheduling/{EDF,RMBound,RTA}.lean.
+
+  - id: REQ_ASYNC_BENCH
+    type: requirement
+    title: Performance benchmarks and dynamic-verification stack for kiln-async
+    description: >
+      The kiln-async scheduler shall carry a measurable performance baseline
+      and a dynamic-verification stack alongside its formal proofs. (1) Host
+      criterion micro-benchmarks shall cover every scheduler primitive
+      (spawn/remove/transition, ready-queue push/pop, and the poll round once
+      Phase 1 lands) so the documented O(1) bounds are measured, not asserted,
+      and regressions are visible per-commit. (2) The fuel→cycles constant
+      needed for WCRT claims (plan risk R4) shall be measured on target
+      hardware, not estimated. (3) Dynamic verification shall complement the
+      Verus/Lean proofs per the defense-in-depth strategy: property-based
+      tests over the FSM and queue invariants, fuzzing of the intrinsic
+      surface, Kani on array-index helpers, and mutation testing of the
+      scheduler core.
+    status: partial
+    tags: [async, scheduler, performance, benchmarks, no-std, embedded, roadmap]
+    links:
+      - type: derives-from
+        target: REQ_ASYNC_SCHED
+    fields:
+      design-doc: docs/architecture/async-scheduler-plan.md
+      note: >
+        Phase 1 of the plan carries the criterion baseline (host, std bench
+        units over the no_std lib); on-target fuel→cycles measurement and the
+        fuzz/Kani/mutation layers land with plan Phase 6 (hardening).

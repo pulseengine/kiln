@@ -17,5 +17,14 @@ crate-type = ["rlib"]
 # const-generic arrays to keep the embedded TCB minimal (see SM-ASYNC-001).
 kiln-error = { workspace = true }
 
+[dev-dependencies]
+# Host-side micro-benchmarks (REQ_ASYNC_BENCH). Bench units compile with std
+# on the host; the library itself stays no_std/no_alloc.
+criterion = { version = "0.6", features = ["html_reports"] }
+
 [features]
 default = []
+
+[[bench]]
+name = "scheduler_baseline"
+harness = false
