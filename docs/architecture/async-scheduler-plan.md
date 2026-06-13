@@ -107,6 +107,31 @@ its proof.
    testing of the scheduler core, WCET on hardware + measured fuel→cycles constant (R4), ASIL-D
    verify-matrix. (Dynamic-verification stack: REQ_ASYNC_BENCH.)
 
+## 7a. Incremental release plan
+
+The dev phases above are *milestones*, not release units. Ship the scheduler in small,
+user-usable increments (kiln workspace versions) rather than holding one release for the
+full Phase-1 exit. Each release: `rivet validate` green, no_std `thumbv7em` builds, criterion
+baseline updated, no `unsafe` except the isolated R1 waker (which arrives in v0.4.0).
+
+- **v0.3.2 — scheduler core (library).** A usable `no_std`/`no_alloc` cooperative scheduler API:
+  task-lifecycle FSM, bounded `TaskTable`/`ReadyQueue`, fuel-sliced `poll_round`, `mark_ready` +
+  wake-pending, `cancel`, backpressure, single-shot `FutureTable` + `future.*`, `WaitableSet` +
+  `task.wait`/`task.poll`. Phase-1 minus the host-future bridge. (PRs #293–#306.)
+  *Exit criterion for the tag: the scheduler-level `task.wait`/`task.poll` wiring is in (one
+  increment after #305), so the public API is coherent.*
+- **v0.4.0 — embedded P3 integration (the original Phase-1 exit).** Host-future `RawWaker`
+  bridge (R1 — the one ASIL-D `unsafe`) + end-to-end run of a real synth-lowered async core
+  module on host sim / QEMU.
+- **v0.5.0 — streams + backpressure** (Phase 2).
+- **v0.6.0+ — Verus invariant gating** (Phase 3), then fixed-priority/EDF (4),
+  Lean+Aeneas refinement (5), hardening (6).
+
+Rationale: the scheduler core is independently useful (and independently verifiable) without
+the synth integration; releasing it now closes the long-held v0.3.2 with real capability and
+shrinks the blast radius of each release. The synth-lowered end-to-end run — which depends on
+Meld/synth output — moves to v0.4.0 where its cross-tool dependency lives.
+
 ## 8. Risks / open questions
 
 - **R1** Waker `RawWakerVTable` is the only `unsafe` + pointer code — isolate behind safe `mark_ready(TaskId)`,
