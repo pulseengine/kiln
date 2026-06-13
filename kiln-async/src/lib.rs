@@ -75,26 +75,42 @@ pub enum PollRound {
     Polled(TaskId),
 }
 
+/// Outcome of a task waiting on a future ([`Scheduler::wait_on_future`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaitResult {
+    /// The future was already ready — the caller should *not* park; it can read
+    /// immediately and keep running.
+    AlreadyReady,
+    /// The task is now registered as the future's reader — the caller should
+    /// end its slice with [`TaskOutcome::Waited`].
+    Parked,
+}
+
 /// Cooperative, fuel-bounded async scheduler over fixed-capacity storage.
 ///
 /// `NTASK` is the maximum number of concurrent tasks; `NREADY` is the ready-queue
 /// capacity (size it `== NTASK`: the per-slot "in ready set at most once"
-/// invariant means it can never overflow).
-pub struct Scheduler<const NTASK: usize, const NREADY: usize> {
+/// invariant means it can never overflow); `NFUT` is the single-shot future
+/// table capacity (the waitable backing for `future.*` / `task.wait`).
+pub struct Scheduler<const NTASK: usize, const NREADY: usize, const NFUT: usize> {
     tasks: TaskTable<NTASK>,
     ready: ReadyQueue<NREADY>,
+    futures: FutureTable<NFUT>,
     config: SchedConfig,
     /// When set, new-task admission is refused (`task.backpressure`).
     backpressure: bool,
 }
 
-impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
+impl<const NTASK: usize, const NREADY: usize, const NFUT: usize>
+    Scheduler<NTASK, NREADY, NFUT>
+{
     /// Create an empty scheduler: all task slots free, ready queue empty.
     #[must_use]
     pub const fn new(config: SchedConfig) -> Self {
         Self {
             tasks: TaskTable::new(),
             ready: ReadyQueue::new(),
+            futures: FutureTable::new(),
             config,
             backpressure: false,
         }
@@ -233,6 +249,45 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
         self.backpressure = enable;
     }
 
+    /// `future.new` — allocate a fresh single-shot future.
+    pub fn future_new(&mut self) -> Result<FutureId> {
+        self.futures.create()
+    }
+
+    /// `future.write` — complete a future and wake its parked reader, if any.
+    ///
+    /// The payload itself crosses through guest memory via the engine; this
+    /// records readiness and re-admits the blocked reader so it is polled again.
+    pub fn future_write(&mut self, future: FutureId) -> Result<()> {
+        if let Some(reader) = self.futures.complete(future)? {
+            self.mark_ready(reader)?;
+        }
+        Ok(())
+    }
+
+    /// `future.read` (non-blocking half) — if the future is ready, consume it
+    /// and return `true`; otherwise return `false` and the caller should
+    /// [`wait_on_future`](Self::wait_on_future).
+    pub fn future_read(&mut self, future: FutureId) -> Result<bool> {
+        if self.futures.state_of(future) == Some(FutureState::Ready) {
+            self.futures.consume(future)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// `task.wait` on a future — park `task` as the future's reader unless it is
+    /// already ready. Returns whether the caller should block (see
+    /// [`WaitResult`]). Errors on a stale future handle or a second reader.
+    pub fn wait_on_future(&mut self, task: TaskId, future: FutureId) -> Result<WaitResult> {
+        if self.futures.state_of(future) == Some(FutureState::Ready) {
+            return Ok(WaitResult::AlreadyReady);
+        }
+        self.futures.register_waiter(future, task)?;
+        Ok(WaitResult::Parked)
+    }
+
     /// Run one cooperative poll round: dispatch the oldest ready task, run it
     /// for one fuel slice via `poll`, and re-dispatch per the outcome.
     ///
@@ -289,7 +344,7 @@ impl<const NTASK: usize, const NREADY: usize> Scheduler<NTASK, NREADY> {
 mod tests {
     use super::*;
 
-    type Sched = Scheduler<4, 4>;
+    type Sched = Scheduler<4, 4, 4>;
 
     #[test]
     fn spawn_admits_a_task_to_the_ready_set() {
@@ -315,7 +370,7 @@ mod tests {
 
     #[test]
     fn spawn_errors_when_the_task_table_is_full() {
-        let mut s: Scheduler<2, 2> = Scheduler::new(SchedConfig::DEFAULT);
+        let mut s: Scheduler<2, 2, 2> = Scheduler::new(SchedConfig::DEFAULT);
         s.spawn().unwrap();
         s.spawn().unwrap();
         assert!(s.spawn().is_err()); // explicit capacity error, never silent drop
@@ -495,6 +550,74 @@ mod tests {
     }
 
     #[test]
+    fn future_write_wakes_a_task_waiting_on_it_end_to_end() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let reader = s.spawn().unwrap();
+        let writer = s.spawn().unwrap();
+        let f = s.future_new().unwrap();
+
+        // Reader runs first: reads (not ready), parks on the future, waits.
+        let r1 = s
+            .poll_round(|sched, tid, _| {
+                assert_eq!(tid, reader);
+                assert!(!sched.future_read(f).unwrap()); // not ready yet
+                assert_eq!(sched.wait_on_future(tid, f).unwrap(), WaitResult::Parked);
+                Ok(TaskOutcome::Waited)
+            })
+            .unwrap();
+        assert_eq!(r1, PollRound::Polled(reader));
+        assert_eq!(s.task_state(reader), Some(TaskState::Blocked));
+
+        // Writer runs next: completes the future, which wakes the reader.
+        s.poll_round(|sched, tid, _| {
+            assert_eq!(tid, writer);
+            sched.future_write(f).unwrap();
+            Ok(TaskOutcome::Completed)
+        })
+        .unwrap();
+
+        // The reader is ready again and the future is now readable.
+        assert_eq!(s.task_state(reader), Some(TaskState::Ready));
+        let r3 = s
+            .poll_round(|sched, tid, _| {
+                assert_eq!(tid, reader);
+                assert!(sched.future_read(f).unwrap()); // ready now — consumed
+                Ok(TaskOutcome::Completed)
+            })
+            .unwrap();
+        assert_eq!(r3, PollRound::Polled(reader));
+        assert!(s.task_count() == 0); // both tasks done
+    }
+
+    #[test]
+    fn wait_on_an_already_ready_future_does_not_park() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let t = s.spawn().unwrap();
+        let f = s.future_new().unwrap();
+        s.future_write(f).unwrap(); // ready before anyone reads
+
+        // The waiter must not block on an already-ready future.
+        assert_eq!(s.wait_on_future(t, f).unwrap(), WaitResult::AlreadyReady);
+        assert!(s.future_read(f).unwrap()); // and it reads immediately
+    }
+
+    #[test]
+    fn future_write_with_no_waiter_just_readies() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let f = s.future_new().unwrap();
+        s.future_write(f).unwrap(); // write-before-read: nobody to wake
+        assert_eq!(s.ready_len(), 0);
+        assert!(s.future_read(f).unwrap());
+    }
+
+    #[test]
+    fn future_new_errors_when_the_table_is_full() {
+        let mut s: Scheduler<2, 2, 1> = Scheduler::new(SchedConfig::DEFAULT);
+        s.future_new().unwrap();
+        assert!(s.future_new().is_err()); // capacity 1: explicit error
+    }
+
+    #[test]
     fn cancel_of_a_queued_task_leaves_a_tombstone_dispatch_skips() {
         let mut s = Sched::new(SchedConfig::DEFAULT);
         let a = s.spawn().unwrap();
@@ -561,7 +684,7 @@ mod tests {
 
     #[test]
     fn wake_pending_does_not_leak_across_slot_reuse() {
-        let mut s: Scheduler<1, 1> = Scheduler::new(SchedConfig::DEFAULT);
+        let mut s: Scheduler<1, 1, 1> = Scheduler::new(SchedConfig::DEFAULT);
         let old = s.spawn().unwrap();
         // Wake itself mid-poll, then complete: the pending flag must die with
         // the slot, not leak into the next occupant.
