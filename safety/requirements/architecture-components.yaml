@@ -42,7 +42,7 @@ artifacts:
     fields:
       previous-id: ARCH_COMP_001
       implementation: kiln-runtime/src/stackless/engine.rs
-      note: "Infrastructure implemented; ~1,500 WAST assertion failures remain (Issue 149)"
+      note: "Infrastructure implemented; 332 WAST assertion failures remain across 74/280 files (verified 2026-06-13, testsuite @7e0b83a), down from ~1,500. Dominated by GC subtyping (type-subtyping, br_on_cast×4, i31, struct/array, ref_*), linking/imports (instance, imports*), tables/elem. Issue 149; unreached-invalid excess-value cases are Issue 146."
 
   - id: AC-MEMORY
     type: feature
