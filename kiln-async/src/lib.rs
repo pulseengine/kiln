@@ -44,7 +44,7 @@ pub mod waitable;
 pub use config::SchedConfig;
 pub use ready::ReadyQueue;
 pub use task::{TaskEvent, TaskId, TaskState, TaskTable};
-pub use waitable::{FutureId, FutureState, FutureTable, WaitableSet};
+pub use waitable::{FutureId, FutureState, FutureTable, WaitResult, WaitableSet};
 
 use kiln_error::{Error, Result};
 
@@ -73,17 +73,6 @@ pub enum PollRound {
     Idle,
     /// This task was polled for one fuel slice.
     Polled(TaskId),
-}
-
-/// Outcome of a task waiting on a future ([`Scheduler::wait_on_future`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WaitResult {
-    /// The future was already ready — the caller should *not* park; it can read
-    /// immediately and keep running.
-    AlreadyReady,
-    /// The task is now registered as the future's reader — the caller should
-    /// end its slice with [`TaskOutcome::Waited`].
-    Parked,
 }
 
 /// Cooperative, fuel-bounded async scheduler over fixed-capacity storage.

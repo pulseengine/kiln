@@ -251,6 +251,17 @@ impl<const N: usize> Default for FutureTable<N> {
     }
 }
 
+/// Outcome of a task waiting on a future or waitable-set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaitResult {
+    /// Already ready — the caller should *not* park; it can read/poll
+    /// immediately and keep running.
+    AlreadyReady,
+    /// The task is now parked as the waiter — the caller should end its slice
+    /// with `TaskOutcome::Waited`.
+    Parked,
+}
+
 /// A bounded set of futures a task can wait on as a unit (`waitable-set`).
 ///
 /// Backs `waitable-set.{new,join,drop}` and the `task.{wait,poll}` query: a
@@ -258,12 +269,15 @@ impl<const N: usize> Default for FutureTable<N> {
 /// Fixed capacity `N`, no heap; membership is a plain `[FutureId; N]` prefix.
 ///
 /// Phase 1 members are single-shot futures; streams join the same structure in
-/// Phase 2. This type owns only the membership + the `poll` query; the blocking
-/// `task.wait` wiring (parking the task, waking on member completion) layers on
-/// top in the scheduler.
+/// Phase 2. This type owns the membership, the `poll` query, **and** the single
+/// task parked on the set (`arm`/`take_ready_waiter`); the scheduler-level
+/// `task.wait`/`task.poll` wiring layers on top.
 pub struct WaitableSet<const N: usize> {
     members: [FutureId; N],
     len: usize,
+    /// The task parked on this set (woken when any member becomes ready), or
+    /// [`TaskId::NONE`].
+    waiter: TaskId,
 }
 
 impl<const N: usize> WaitableSet<N> {
@@ -273,6 +287,7 @@ impl<const N: usize> WaitableSet<N> {
         Self {
             members: [FutureId::NONE; N],
             len: usize::MIN,
+            waiter: TaskId::NONE,
         }
     }
 
@@ -341,6 +356,56 @@ impl<const N: usize> WaitableSet<N> {
             .iter()
             .copied()
             .find(|&m| futures.state_of(m) == Some(FutureState::Ready))
+    }
+
+    /// `task.wait` on the set: if a member is already ready, return
+    /// [`WaitResult::AlreadyReady`] (don't park); otherwise park `task` as the
+    /// set's waiter and return [`WaitResult::Parked`].
+    ///
+    /// Errors if the set already has a different parked waiter (a waitable-set
+    /// is waited on by one task at a time in this MVP).
+    pub fn arm<const NF: usize>(
+        &mut self,
+        futures: &FutureTable<NF>,
+        task: TaskId,
+    ) -> Result<WaitResult> {
+        if self.poll_ready(futures).is_some() {
+            return Ok(WaitResult::AlreadyReady);
+        }
+        if !self.waiter.is_none() && self.waiter != task {
+            return Err(Error::validation_error(
+                "kiln-async: waitable-set already has a different waiter",
+            ));
+        }
+        self.waiter = task;
+        Ok(WaitResult::Parked)
+    }
+
+    /// The task parked on this set, or [`TaskId::NONE`].
+    #[must_use]
+    pub const fn waiter(&self) -> TaskId {
+        self.waiter
+    }
+
+    /// If a member is ready and a waiter is parked, take the waiter (clearing
+    /// it) so the scheduler can wake it. Idempotent: a second call after the
+    /// waiter was taken returns `None`. Returns `None` when nothing is ready or
+    /// no task is parked.
+    pub fn take_ready_waiter<const NF: usize>(
+        &mut self,
+        futures: &FutureTable<NF>,
+    ) -> Option<TaskId> {
+        if self.waiter.is_none() || self.poll_ready(futures).is_none() {
+            return None;
+        }
+        let w = self.waiter;
+        self.waiter = TaskId::NONE;
+        Some(w)
+    }
+
+    /// Clear any parked waiter without waking it (e.g. the task was cancelled).
+    pub fn disarm(&mut self) {
+        self.waiter = TaskId::NONE;
     }
 }
 
@@ -537,5 +602,62 @@ mod tests {
         assert!(!set.contains(a));
         assert!(set.is_empty());
         assert!(!set.remove(a)); // already gone
+    }
+
+    #[test]
+    fn arm_parks_when_no_member_ready_then_take_wakes_on_readiness() {
+        let mut t: FutureTable<4> = FutureTable::new();
+        let a = t.create().unwrap();
+        let b = t.create().unwrap();
+        let mut set: WaitableSet<4> = WaitableSet::new();
+        set.join(a).unwrap();
+        set.join(b).unwrap();
+
+        // Nothing ready → park.
+        assert_eq!(set.arm(&t, task(9)).unwrap(), WaitResult::Parked);
+        assert_eq!(set.waiter(), task(9));
+        // Still nothing ready → no waiter to take.
+        assert_eq!(set.take_ready_waiter(&t), None);
+        // A member completes → the parked waiter is taken exactly once.
+        t.complete(b).unwrap();
+        assert_eq!(set.take_ready_waiter(&t), Some(task(9)));
+        assert!(set.waiter().is_none());
+        assert_eq!(set.take_ready_waiter(&t), None); // idempotent
+    }
+
+    #[test]
+    fn arm_returns_already_ready_without_parking() {
+        let mut t: FutureTable<4> = FutureTable::new();
+        let a = t.create().unwrap();
+        let mut set: WaitableSet<4> = WaitableSet::new();
+        set.join(a).unwrap();
+        t.complete(a).unwrap(); // ready before the wait
+
+        assert_eq!(set.arm(&t, task(3)).unwrap(), WaitResult::AlreadyReady);
+        assert!(set.waiter().is_none()); // did not park
+    }
+
+    #[test]
+    fn arm_rejects_a_second_distinct_waiter_but_is_idempotent_for_the_same() {
+        let mut t: FutureTable<2> = FutureTable::new();
+        let a = t.create().unwrap();
+        let mut set: WaitableSet<2> = WaitableSet::new();
+        set.join(a).unwrap();
+        assert_eq!(set.arm(&t, task(1)).unwrap(), WaitResult::Parked);
+        assert!(set.arm(&t, task(2)).is_err()); // different waiter rejected
+        assert_eq!(set.arm(&t, task(1)).unwrap(), WaitResult::Parked); // same is fine
+    }
+
+    #[test]
+    fn disarm_clears_the_waiter_without_waking() {
+        let mut t: FutureTable<2> = FutureTable::new();
+        let a = t.create().unwrap();
+        let mut set: WaitableSet<2> = WaitableSet::new();
+        set.join(a).unwrap();
+        set.arm(&t, task(5)).unwrap();
+        set.disarm();
+        assert!(set.waiter().is_none());
+        t.complete(a).unwrap();
+        assert_eq!(set.take_ready_waiter(&t), None); // nothing parked to wake
     }
 }
