@@ -16,7 +16,7 @@ use std::hint::black_box;
 
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use kiln_async::{
-    ReadyQueue, SchedConfig, Scheduler, TaskEvent, TaskId, TaskOutcome, TaskTable,
+    FutureTable, ReadyQueue, SchedConfig, Scheduler, TaskEvent, TaskId, TaskOutcome, TaskTable,
 };
 
 /// Capacity used throughout — the documented Cortex-M default profile.
@@ -135,12 +135,25 @@ fn scheduler_poll_round(c: &mut Criterion) {
     });
 }
 
+fn future_table_lifecycle(c: &mut Criterion) {
+    // The write-before-read path: create → complete → consume, one slot reused.
+    c.bench_function("future_table/create_complete_consume", |b| {
+        let mut t: FutureTable<N> = FutureTable::new();
+        b.iter(|| {
+            let f = t.create().unwrap();
+            black_box(t.complete(f).unwrap());
+            t.consume(black_box(f)).unwrap();
+        });
+    });
+}
+
 criterion_group!(
     benches,
     task_table_spawn_remove,
     task_table_transition,
     ready_queue_push_pop,
     scheduler_spawn,
-    scheduler_poll_round
+    scheduler_poll_round,
+    future_table_lifecycle
 );
 criterion_main!(benches);
