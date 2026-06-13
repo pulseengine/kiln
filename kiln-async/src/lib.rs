@@ -44,7 +44,7 @@ pub mod waitable;
 pub use config::SchedConfig;
 pub use ready::ReadyQueue;
 pub use task::{TaskEvent, TaskId, TaskState, TaskTable};
-pub use waitable::{FutureId, FutureState, FutureTable};
+pub use waitable::{FutureId, FutureState, FutureTable, WaitableSet};
 
 use kiln_error::{Error, Result};
 

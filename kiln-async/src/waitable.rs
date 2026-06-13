@@ -251,6 +251,105 @@ impl<const N: usize> Default for FutureTable<N> {
     }
 }
 
+/// A bounded set of futures a task can wait on as a unit (`waitable-set`).
+///
+/// Backs `waitable-set.{new,join,drop}` and the `task.{wait,poll}` query: a
+/// task blocked on the set is runnable as soon as **any** member is ready.
+/// Fixed capacity `N`, no heap; membership is a plain `[FutureId; N]` prefix.
+///
+/// Phase 1 members are single-shot futures; streams join the same structure in
+/// Phase 2. This type owns only the membership + the `poll` query; the blocking
+/// `task.wait` wiring (parking the task, waking on member completion) layers on
+/// top in the scheduler.
+pub struct WaitableSet<const N: usize> {
+    members: [FutureId; N],
+    len: usize,
+}
+
+impl<const N: usize> WaitableSet<N> {
+    /// Create an empty set.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            members: [FutureId::NONE; N],
+            len: usize::MIN,
+        }
+    }
+
+    /// Capacity (`N`).
+    #[must_use]
+    pub const fn capacity(&self) -> usize {
+        N
+    }
+
+    /// Number of joined members.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Whether the set has no members.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Whether `future` is a member of this set.
+    #[must_use]
+    pub fn contains(&self, future: FutureId) -> bool {
+        self.members[..self.len].contains(&future)
+    }
+
+    /// `waitable-set.join` — add a future to the set.
+    ///
+    /// Fails loud at capacity, and rejects a duplicate join (a waitable belongs
+    /// to one set at most once — a double join is a usage error, not a no-op).
+    pub fn join(&mut self, future: FutureId) -> Result<()> {
+        if self.contains(future) {
+            return Err(Error::validation_error(
+                "kiln-async: future already joined to this waitable-set",
+            ));
+        }
+        if self.len == N {
+            return Err(Error::foundation_bounded_capacity_exceeded(
+                "kiln-async: waitable-set at capacity",
+            ));
+        }
+        self.members[self.len] = future;
+        self.len += 1;
+        Ok(())
+    }
+
+    /// `waitable-set` membership removal (used by `drop`/completion cleanup).
+    /// Returns whether `future` was present.
+    pub fn remove(&mut self, future: FutureId) -> bool {
+        let Some(pos) = self.members[..self.len].iter().position(|&m| m == future) else {
+            return false;
+        };
+        // swap-remove: order in a wait set is not significant.
+        self.len -= 1;
+        self.members[pos] = self.members[self.len];
+        self.members[self.len] = FutureId::NONE;
+        true
+    }
+
+    /// `task.poll` — non-blocking: return the first member that is ready in
+    /// `futures`, or `None` if none are ready yet. Pure query, no state change.
+    #[must_use]
+    pub fn poll_ready<const NF: usize>(&self, futures: &FutureTable<NF>) -> Option<FutureId> {
+        self.members[..self.len]
+            .iter()
+            .copied()
+            .find(|&m| futures.state_of(m) == Some(FutureState::Ready))
+    }
+}
+
+impl<const N: usize> Default for WaitableSet<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -370,5 +469,73 @@ mod tests {
         t.complete(g).unwrap();
         assert_eq!(t.drop_future(g).unwrap(), None);
         assert!(t.is_empty());
+    }
+
+    #[test]
+    fn set_starts_empty_and_joins_members() {
+        let mut t: FutureTable<4> = FutureTable::new();
+        let a = t.create().unwrap();
+        let b = t.create().unwrap();
+        let mut set: WaitableSet<4> = WaitableSet::new();
+        assert!(set.is_empty());
+        set.join(a).unwrap();
+        set.join(b).unwrap();
+        assert_eq!(set.len(), 2);
+        assert!(set.contains(a));
+        assert!(set.contains(b));
+    }
+
+    #[test]
+    fn set_join_rejects_duplicates_and_overflow() {
+        let mut t: FutureTable<4> = FutureTable::new();
+        let a = t.create().unwrap();
+        let b = t.create().unwrap();
+        let mut set: WaitableSet<1> = WaitableSet::new();
+        set.join(a).unwrap();
+        assert!(set.join(a).is_err()); // duplicate join is a usage error
+        assert!(set.join(b).is_err()); // capacity 1: overflow fails loud
+        assert_eq!(set.len(), 1);
+    }
+
+    #[test]
+    fn set_poll_returns_a_ready_member_else_none() {
+        let mut t: FutureTable<4> = FutureTable::new();
+        let a = t.create().unwrap();
+        let b = t.create().unwrap();
+        let mut set: WaitableSet<4> = WaitableSet::new();
+        set.join(a).unwrap();
+        set.join(b).unwrap();
+
+        // Nothing ready yet.
+        assert_eq!(set.poll_ready(&t), None);
+        // Complete b → poll surfaces b.
+        t.complete(b).unwrap();
+        assert_eq!(set.poll_ready(&t), Some(b));
+    }
+
+    #[test]
+    fn set_poll_ignores_ready_futures_that_are_not_members() {
+        let mut t: FutureTable<4> = FutureTable::new();
+        let member = t.create().unwrap();
+        let outsider = t.create().unwrap();
+        let mut set: WaitableSet<4> = WaitableSet::new();
+        set.join(member).unwrap();
+
+        t.complete(outsider).unwrap(); // ready, but not in the set
+        assert_eq!(set.poll_ready(&t), None);
+        t.complete(member).unwrap();
+        assert_eq!(set.poll_ready(&t), Some(member));
+    }
+
+    #[test]
+    fn set_remove_drops_membership() {
+        let mut t: FutureTable<4> = FutureTable::new();
+        let a = t.create().unwrap();
+        let mut set: WaitableSet<4> = WaitableSet::new();
+        set.join(a).unwrap();
+        assert!(set.remove(a));
+        assert!(!set.contains(a));
+        assert!(set.is_empty());
+        assert!(!set.remove(a)); // already gone
     }
 }
