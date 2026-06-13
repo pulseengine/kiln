@@ -272,6 +272,10 @@ pub enum WaitResult {
 /// Phase 2. This type owns the membership, the `poll` query, **and** the single
 /// task parked on the set (`arm`/`take_ready_waiter`); the scheduler-level
 /// `task.wait`/`task.poll` wiring layers on top.
+///
+/// `Copy` (all-`Copy` fields) so a [`WaitableSetTable`] can store sets inline in
+/// a plain array with no heap.
+#[derive(Clone, Copy)]
 pub struct WaitableSet<const N: usize> {
     members: [FutureId; N],
     len: usize,
@@ -410,6 +414,139 @@ impl<const N: usize> WaitableSet<N> {
 }
 
 impl<const N: usize> Default for WaitableSet<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// ABA-safe waitable-set handle (mirrors [`FutureId`] / [`crate::TaskId`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetId {
+    /// Index into the set table.
+    pub index: u16,
+    /// Generation at the time this handle was issued.
+    pub generation: u32,
+}
+
+impl SetId {
+    /// Sentinel "no set" handle.
+    pub const NONE: Self = Self {
+        index: u16::MAX,
+        generation: 0,
+    };
+
+    /// Whether this is the [`SetId::NONE`] sentinel.
+    #[must_use]
+    pub const fn is_none(self) -> bool {
+        self.index == u16::MAX
+    }
+}
+
+/// One set-table slot: an occupied [`WaitableSet`] or a free hole, plus a
+/// generation bumped on reuse.
+#[derive(Clone, Copy)]
+struct SetSlot<const NMEM: usize> {
+    set: Option<WaitableSet<NMEM>>,
+    generation: u32,
+}
+
+/// Fixed-capacity table of [`WaitableSet`]s, indexed by [`SetId`].
+///
+/// `NSET` sets, each holding up to `NMEM` member futures. No heap: a plain
+/// `[SetSlot; NSET]`. Backs `waitable-set.{new,join,drop}`; the scheduler looks
+/// a set up by handle to `arm`/`poll`/`join` it.
+pub struct WaitableSetTable<const NSET: usize, const NMEM: usize> {
+    slots: [SetSlot<NMEM>; NSET],
+    live: usize,
+}
+
+impl<const NSET: usize, const NMEM: usize> WaitableSetTable<NSET, NMEM> {
+    /// Create an empty table — all `NSET` slots free.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            slots: [SetSlot {
+                set: None,
+                generation: 0,
+            }; NSET],
+            live: usize::MIN,
+        }
+    }
+
+    /// Capacity (`NSET`).
+    #[must_use]
+    pub const fn capacity(&self) -> usize {
+        NSET
+    }
+
+    /// Number of live (allocated) sets.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.live
+    }
+
+    /// Whether no sets are allocated.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.live == 0
+    }
+
+    /// `waitable-set.new` — allocate a fresh empty set. Fails loud at capacity.
+    pub fn create(&mut self) -> Result<SetId> {
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if slot.set.is_none() {
+                slot.set = Some(WaitableSet::new());
+                self.live += 1;
+                return Ok(SetId {
+                    index: index as u16,
+                    generation: slot.generation,
+                });
+            }
+        }
+        Err(Error::foundation_bounded_capacity_exceeded(
+            "kiln-async: waitable-set table at capacity",
+        ))
+    }
+
+    /// Generation-validated shared access to a live set.
+    #[must_use]
+    pub fn get(&self, id: SetId) -> Option<&WaitableSet<NMEM>> {
+        let slot = self.slots.get(id.index as usize)?;
+        if slot.generation == id.generation {
+            slot.set.as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// Generation-validated mutable access to a live set.
+    pub fn get_mut(&mut self, id: SetId) -> Option<&mut WaitableSet<NMEM>> {
+        let slot = self.slots.get_mut(id.index as usize)?;
+        if slot.generation == id.generation {
+            slot.set.as_mut()
+        } else {
+            None
+        }
+    }
+
+    /// `waitable-set.drop` — free a set, bumping its generation so stale handles
+    /// are detectable. Errors on a stale/unknown handle.
+    pub fn drop_set(&mut self, id: SetId) -> Result<()> {
+        let slot = self
+            .slots
+            .get_mut(id.index as usize)
+            .filter(|s| s.set.is_some() && s.generation == id.generation)
+            .ok_or_else(|| {
+                Error::validation_error("kiln-async: drop of a stale or unknown waitable-set handle")
+            })?;
+        slot.set = None;
+        slot.generation = slot.generation.wrapping_add(1);
+        self.live -= 1;
+        Ok(())
+    }
+}
+
+impl<const NSET: usize, const NMEM: usize> Default for WaitableSetTable<NSET, NMEM> {
     fn default() -> Self {
         Self::new()
     }
@@ -659,5 +796,59 @@ mod tests {
         assert!(set.waiter().is_none());
         t.complete(a).unwrap();
         assert_eq!(set.take_ready_waiter(&t), None); // nothing parked to wake
+    }
+
+    #[test]
+    fn set_table_starts_empty_and_creates_sets() {
+        let mut tbl: WaitableSetTable<4, 8> = WaitableSetTable::new();
+        assert_eq!(tbl.capacity(), 4);
+        assert!(tbl.is_empty());
+        let s = tbl.create().unwrap();
+        assert_eq!(tbl.len(), 1);
+        assert!(!s.is_none());
+        assert!(tbl.get(s).is_some());
+        assert!(tbl.get(s).unwrap().is_empty()); // fresh set has no members
+    }
+
+    #[test]
+    fn set_table_create_errors_at_capacity() {
+        let mut tbl: WaitableSetTable<1, 4> = WaitableSetTable::new();
+        tbl.create().unwrap();
+        assert!(tbl.create().is_err()); // explicit capacity error
+    }
+
+    #[test]
+    fn set_table_get_mut_allows_join_through_the_handle() {
+        let mut futs: FutureTable<4> = FutureTable::new();
+        let f = futs.create().unwrap();
+        let mut tbl: WaitableSetTable<2, 4> = WaitableSetTable::new();
+        let s = tbl.create().unwrap();
+        tbl.get_mut(s).unwrap().join(f).unwrap();
+        assert_eq!(tbl.get(s).unwrap().len(), 1);
+        assert!(tbl.get(s).unwrap().contains(f));
+    }
+
+    #[test]
+    fn set_table_drop_frees_and_invalidates_handle_aba_safe() {
+        let mut tbl: WaitableSetTable<1, 4> = WaitableSetTable::new();
+        let old = tbl.create().unwrap();
+        tbl.drop_set(old).unwrap();
+        assert!(tbl.is_empty());
+        assert!(tbl.get(old).is_none()); // freed
+        // Reuse bumps generation: stale handle stays invalid.
+        let new = tbl.create().unwrap();
+        assert_eq!(new.index, old.index);
+        assert_ne!(new.generation, old.generation);
+        assert!(tbl.get(old).is_none());
+        assert!(tbl.get(new).is_some());
+    }
+
+    #[test]
+    fn set_table_drop_rejects_stale_or_unknown_handle() {
+        let mut tbl: WaitableSetTable<1, 4> = WaitableSetTable::new();
+        assert!(tbl.drop_set(SetId::NONE).is_err());
+        let s = tbl.create().unwrap();
+        tbl.drop_set(s).unwrap();
+        assert!(tbl.drop_set(s).is_err()); // already gone
     }
 }
