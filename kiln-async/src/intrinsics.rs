@@ -17,13 +17,17 @@
 //! - `task.cancel(subtask)` → [`crate::Scheduler::cancel`]; a task cancelling
 //!   *itself* ends its slice with [`crate::TaskOutcome::Cancelled`].
 //! - `task.backpressure` → [`crate::Scheduler::set_backpressure`].
+//! - `future.new` → [`crate::Scheduler::future_new`].
+//! - `future.write` → [`crate::Scheduler::future_write`] (wakes the reader).
+//! - `future.read` → [`crate::Scheduler::future_read`] +
+//!   [`crate::Scheduler::wait_on_future`] (read-or-park).
 //!
-//! ## Stubbed — waitable layer (next increment)
+//! ## Stubbed — remaining waitable surface (next increments)
 //!
-//! The remaining intrinsics need the bounded waitable table (futures, streams,
-//! waitable-sets). Each returns an explicit `NOT_IMPLEMENTED` error — never a
-//! silent `Ok` — so the scaffold cannot be mistaken for a working
-//! implementation.
+//! `task.wait`/`task.poll` over a multi-member waitable-set, streams (Phase 2),
+//! and error-context still need their bounded backing. Each returns an explicit
+//! `NOT_IMPLEMENTED` error — never a silent `Ok` — so the scaffold cannot be
+//! mistaken for a working implementation.
 
 use kiln_error::{Error, Result};
 
@@ -62,11 +66,6 @@ pub fn stream_read() -> Result<()> {
 /// `stream.write` — write to a stream; blocks the writer when credits hit zero.
 pub fn stream_write() -> Result<()> {
     phase1_stub!("stream.write")
-}
-
-/// `future.new` — create a single-shot future.
-pub fn future_new() -> Result<TaskId> {
-    phase1_stub!("future.new")
 }
 
 /// `waitable-set.new` — create a set tracking future/stream readiness.
