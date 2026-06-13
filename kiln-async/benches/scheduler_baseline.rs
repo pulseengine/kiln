@@ -17,6 +17,7 @@ use std::hint::black_box;
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use kiln_async::{
     FutureTable, ReadyQueue, SchedConfig, Scheduler, TaskEvent, TaskId, TaskOutcome, TaskTable,
+    WaitableSetTable,
 };
 
 /// Capacity used throughout — the documented Cortex-M default profile.
@@ -147,6 +148,17 @@ fn future_table_lifecycle(c: &mut Criterion) {
     });
 }
 
+fn set_table_lifecycle(c: &mut Criterion) {
+    // create → drop one set, slot reused each iteration.
+    c.bench_function("set_table/create_drop", |b| {
+        let mut tbl: WaitableSetTable<N, 8> = WaitableSetTable::new();
+        b.iter(|| {
+            let s = tbl.create().unwrap();
+            tbl.drop_set(black_box(s)).unwrap();
+        });
+    });
+}
+
 criterion_group!(
     benches,
     task_table_spawn_remove,
@@ -154,6 +166,7 @@ criterion_group!(
     ready_queue_push_pop,
     scheduler_spawn,
     scheduler_poll_round,
-    future_table_lifecycle
+    future_table_lifecycle,
+    set_table_lifecycle
 );
 criterion_main!(benches);
