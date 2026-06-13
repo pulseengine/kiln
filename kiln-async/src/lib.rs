@@ -39,10 +39,12 @@ pub mod config;
 pub mod intrinsics;
 pub mod ready;
 pub mod task;
+pub mod waitable;
 
 pub use config::SchedConfig;
 pub use ready::ReadyQueue;
 pub use task::{TaskEvent, TaskId, TaskState, TaskTable};
+pub use waitable::{FutureId, FutureState, FutureTable};
 
 use kiln_error::{Error, Result};
 
