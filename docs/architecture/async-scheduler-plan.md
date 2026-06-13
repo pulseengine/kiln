@@ -23,8 +23,10 @@ Builds on verified-in-repo facts:
   `remaining_fuel`, per-instruction decrement + "fuel exhausted" trap. A task's poll slice = a fuel budget.
 - **spar Lean proofs** (`spar/proofs/Proofs/Scheduling/{EDF,RMBound,RTA}.lean`, 0 `sorry`): DBF/EDF
   feasibility, Liu&Layland RM bound, Joseph&Pandya RTA with `rta_terminates` / `iterN_le_fixed_point`.
-- **Aeneas** wired in `rules_lean/aeneas/` (LLBC→Lean; `aeneas_verified_library`). **Gap:** the Charon
-  (`rustc→.llbc`) front-end is not yet wired (Risk R3).
+- **Aeneas + Charon** both wired in `rules_lean/aeneas/`: `charon_llbc` (Rust→`.llbc`,
+  `aeneas/private/charon.bzl`) → `aeneas_translate` (`.llbc`→Lean), end-to-end tested in
+  `tests/charon_llbc` (real Rust `src/lib.rs` → Lean). Landed via rules_lean#1 (2026-06-06);
+  **R3 is closed** — the Rust→Lean toolchain is no longer the blocker (see §8).
 - **gale** (`gale/src/sched.rs`): the template for Verus-on-Rust invariants + Lean theory.
 
 ## 2. Architecture
@@ -99,7 +101,8 @@ its proof.
 2. **Streams + backpressure** — `Stream<T>` ring + credits, `error-context`.
 3. **Verus invariant proofs (CI gate)** — first ASIL-gating proofs.
 4. **Fixed-priority + EDF modes.**
-5. **Lean+Aeneas refinement (full circle)** — after Charon is wired in `rules_lean` (R3); reuse spar proofs.
+5. **Lean+Aeneas refinement (full circle)** — Charon→Aeneas now wired (R3 resolved); write kiln-async
+   refinement statements reusing spar proofs.
 6. **Hardening** — fuzz, Kani on array helpers, property tests over FSM/queue invariants, mutation
    testing of the scheduler core, WCET on hardware + measured fuel→cycles constant (R4), ASIL-D
    verify-matrix. (Dynamic-verification stack: REQ_ASYNC_BENCH.)
@@ -110,8 +113,11 @@ its proof.
   `external_body` for Verus, exclude from Aeneas (axiomatize wake).
 - **R2** `Future`/`Poll` translatability — prove scheduler properties, treat `poll_fn` as opaque; user-future
   correctness is the synthesized code's concern.
-- **R3** Charon (`rustc→.llbc`) not yet in `rules_lean` — Phase 5 blocks on landing a `charon_compile` rule;
-  until then Verus carries CI gating and Lean reuse is manual refinement statements.
+- **R3** ~~Charon (`rustc→.llbc`) not yet in `rules_lean`~~ **RESOLVED 2026-06-06** (rules_lean#1): the
+  hermetic `charon_llbc` rule + `aeneas_translate` give a tested Rust→`.llbc`→Lean pipeline
+  (`tests/charon_llbc`). Phase 5 is no longer toolchain-blocked; remaining work is writing the
+  kiln-async refinement statements against spar's theorems (spar#272 tracks packaging them for reuse).
+  Verus still carries CI gating (Phase 3) as the first line.
 - **R4** Fuel→wall-clock for WCRT needs a measured fuel→cycles constant — owner TBD (synth vs kiln-async).
 - **R5** Single-core cooperative only; ISR-driven waking would break the no-atomics assumption — decision needed.
 - **R6** Priority inheritance / resource locks — include only if the embedded base needs them (reuse gale
@@ -121,5 +127,5 @@ its proof.
 
 spar `RTA.lean` (`rta_terminates`, `bounded_mono_nat_seq`, `iterN_le_fixed_point`), `RMBound.lean`, `EDF.lean`
 → termination + WCRT + schedulability proofs. gale `src/sched.rs` → Verus-on-Rust invariant template.
-`rules_lean/aeneas` → Rust→Lean refinement (pending Charon). Embassy/RTIC → intrusive index arenas + bitmap
+`rules_lean/aeneas` → Rust→Lean refinement (Charon+Aeneas wired, rules_lean#1). Embassy/RTIC → intrusive index arenas + bitmap
 priority, minus pointers/atomics.
