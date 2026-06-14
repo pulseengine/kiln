@@ -544,6 +544,24 @@ impl<const NSET: usize, const NMEM: usize> WaitableSetTable<NSET, NMEM> {
         self.live -= 1;
         Ok(())
     }
+
+    /// For every live set with a parked waiter that now has a ready member,
+    /// take the waiter (clearing it) and hand it to `sink`. The scheduler calls
+    /// this after a future completes to wake set-level waiters. At most one
+    /// waiter per set, so `sink` fires at most `NSET` times.
+    pub fn take_ready_waiters<const NF: usize>(
+        &mut self,
+        futures: &FutureTable<NF>,
+        mut sink: impl FnMut(crate::TaskId),
+    ) {
+        for slot in self.slots.iter_mut() {
+            if let Some(set) = slot.set.as_mut() {
+                if let Some(waiter) = set.take_ready_waiter(futures) {
+                    sink(waiter);
+                }
+            }
+        }
+    }
 }
 
 impl<const NSET: usize, const NMEM: usize> Default for WaitableSetTable<NSET, NMEM> {

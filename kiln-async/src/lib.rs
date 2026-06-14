@@ -82,18 +82,25 @@ pub enum PollRound {
 /// `NTASK` is the maximum number of concurrent tasks; `NREADY` is the ready-queue
 /// capacity (size it `== NTASK`: the per-slot "in ready set at most once"
 /// invariant means it can never overflow); `NFUT` is the single-shot future
-/// table capacity (the waitable backing for `future.*` / `task.wait`).
-pub struct Scheduler<const NTASK: usize, const NREADY: usize, const NFUT: usize> {
+/// table capacity (also the per-set member capacity); `NSET` is the
+/// waitable-set table capacity (the backing for `task.wait`/`task.poll`).
+pub struct Scheduler<
+    const NTASK: usize,
+    const NREADY: usize,
+    const NFUT: usize,
+    const NSET: usize,
+> {
     tasks: TaskTable<NTASK>,
     ready: ReadyQueue<NREADY>,
     futures: FutureTable<NFUT>,
+    sets: WaitableSetTable<NSET, NFUT>,
     config: SchedConfig,
     /// When set, new-task admission is refused (`task.backpressure`).
     backpressure: bool,
 }
 
-impl<const NTASK: usize, const NREADY: usize, const NFUT: usize>
-    Scheduler<NTASK, NREADY, NFUT>
+impl<const NTASK: usize, const NREADY: usize, const NFUT: usize, const NSET: usize>
+    Scheduler<NTASK, NREADY, NFUT, NSET>
 {
     /// Create an empty scheduler: all task slots free, ready queue empty.
     #[must_use]
@@ -102,6 +109,7 @@ impl<const NTASK: usize, const NREADY: usize, const NFUT: usize>
             tasks: TaskTable::new(),
             ready: ReadyQueue::new(),
             futures: FutureTable::new(),
+            sets: WaitableSetTable::new(),
             config,
             backpressure: false,
         }
@@ -253,7 +261,57 @@ impl<const NTASK: usize, const NREADY: usize, const NFUT: usize>
         if let Some(reader) = self.futures.complete(future)? {
             self.mark_ready(reader)?;
         }
+        // Wake any waitable-set waiter whose set now has a ready member. Collect
+        // first (bounded by NSET) so the sets borrow ends before mark_ready.
+        let mut woken: [TaskId; NSET] = [TaskId::NONE; NSET];
+        let mut n = 0usize;
+        self.sets.take_ready_waiters(&self.futures, |w| {
+            woken[n] = w;
+            n += 1;
+        });
+        for &w in &woken[..n] {
+            self.mark_ready(w)?;
+        }
         Ok(())
+    }
+
+    /// `waitable-set.new` — allocate an empty waitable-set.
+    pub fn waitable_set_new(&mut self) -> Result<SetId> {
+        self.sets.create()
+    }
+
+    /// `waitable-set.join` — add a future to a set (by handle).
+    pub fn waitable_set_join(&mut self, set: SetId, future: FutureId) -> Result<()> {
+        self.sets
+            .get_mut(set)
+            .ok_or_else(|| Error::validation_error("kiln-async: join into a stale/unknown set"))?
+            .join(future)
+    }
+
+    /// `waitable-set.drop` — free a set.
+    pub fn waitable_set_drop(&mut self, set: SetId) -> Result<()> {
+        self.sets.drop_set(set)
+    }
+
+    /// `task.wait` on a set: park `task` unless a member is already ready (see
+    /// [`WaitResult`]). The caller ends its slice with [`TaskOutcome::Waited`]
+    /// when [`WaitResult::Parked`] is returned.
+    pub fn task_wait(&mut self, task: TaskId, set: SetId) -> Result<WaitResult> {
+        let futures = &self.futures;
+        let s = self
+            .sets
+            .get_mut(set)
+            .ok_or_else(|| Error::validation_error("kiln-async: wait on a stale/unknown set"))?;
+        s.arm(futures, task)
+    }
+
+    /// `task.poll` — non-blocking: the first ready member of `set`, or `None`.
+    pub fn task_poll(&self, set: SetId) -> Result<Option<FutureId>> {
+        let s = self
+            .sets
+            .get(set)
+            .ok_or_else(|| Error::validation_error("kiln-async: poll of a stale/unknown set"))?;
+        Ok(s.poll_ready(&self.futures))
     }
 
     /// `future.read` (non-blocking half) — if the future is ready, consume it
@@ -335,7 +393,7 @@ impl<const NTASK: usize, const NREADY: usize, const NFUT: usize>
 mod tests {
     use super::*;
 
-    type Sched = Scheduler<4, 4, 4>;
+    type Sched = Scheduler<4, 4, 4, 4>;
 
     #[test]
     fn spawn_admits_a_task_to_the_ready_set() {
@@ -361,7 +419,7 @@ mod tests {
 
     #[test]
     fn spawn_errors_when_the_task_table_is_full() {
-        let mut s: Scheduler<2, 2, 2> = Scheduler::new(SchedConfig::DEFAULT);
+        let mut s: Scheduler<2, 2, 2, 2> = Scheduler::new(SchedConfig::DEFAULT);
         s.spawn().unwrap();
         s.spawn().unwrap();
         assert!(s.spawn().is_err()); // explicit capacity error, never silent drop
@@ -603,9 +661,71 @@ mod tests {
 
     #[test]
     fn future_new_errors_when_the_table_is_full() {
-        let mut s: Scheduler<2, 2, 1> = Scheduler::new(SchedConfig::DEFAULT);
+        let mut s: Scheduler<2, 2, 1, 1> = Scheduler::new(SchedConfig::DEFAULT);
         s.future_new().unwrap();
         assert!(s.future_new().is_err()); // capacity 1: explicit error
+    }
+
+    #[test]
+    fn task_waiting_on_a_set_is_woken_when_a_member_future_is_written() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let waiter = s.spawn().unwrap();
+        let writer = s.spawn().unwrap();
+        let set = s.waitable_set_new().unwrap();
+        let f = s.future_new().unwrap();
+        s.waitable_set_join(set, f).unwrap();
+
+        // Waiter runs: nothing ready in the set → parks on it.
+        s.poll_round(|sched, tid, _| {
+            assert_eq!(tid, waiter);
+            assert_eq!(sched.task_poll(set).unwrap(), None); // non-blocking: not ready
+            assert_eq!(sched.task_wait(tid, set).unwrap(), WaitResult::Parked);
+            Ok(TaskOutcome::Waited)
+        })
+        .unwrap();
+        assert_eq!(s.task_state(waiter), Some(TaskState::Blocked));
+
+        // Writer runs: completes the set's member → wakes the set's waiter.
+        s.poll_round(|sched, tid, _| {
+            assert_eq!(tid, writer);
+            sched.future_write(f).unwrap();
+            Ok(TaskOutcome::Completed)
+        })
+        .unwrap();
+        assert_eq!(s.task_state(waiter), Some(TaskState::Ready)); // woken via the set
+
+        // Waiter re-runs: task.poll now surfaces the ready member.
+        s.poll_round(|sched, tid, _| {
+            assert_eq!(tid, waiter);
+            assert_eq!(sched.task_poll(set).unwrap(), Some(f));
+            Ok(TaskOutcome::Completed)
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn task_wait_on_an_already_ready_set_does_not_park() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let t = s.spawn().unwrap();
+        let set = s.waitable_set_new().unwrap();
+        let f = s.future_new().unwrap();
+        s.waitable_set_join(set, f).unwrap();
+        s.future_write(f).unwrap(); // ready before the wait
+
+        assert_eq!(s.task_wait(t, set).unwrap(), WaitResult::AlreadyReady);
+        assert_eq!(s.task_poll(set).unwrap(), Some(f));
+    }
+
+    #[test]
+    fn waitable_set_ops_reject_stale_handles() {
+        let mut s: Scheduler<2, 2, 2, 1> = Scheduler::new(SchedConfig::DEFAULT);
+        let set = s.waitable_set_new().unwrap();
+        let f = s.future_new().unwrap();
+        s.waitable_set_drop(set).unwrap();
+        assert!(s.waitable_set_join(set, f).is_err()); // dropped
+        assert!(s.task_poll(set).is_err());
+        assert!(s.task_wait(TaskId::NONE, set).is_err());
+        assert!(s.waitable_set_new().is_ok()); // slot reusable after drop
     }
 
     #[test]
@@ -675,7 +795,7 @@ mod tests {
 
     #[test]
     fn wake_pending_does_not_leak_across_slot_reuse() {
-        let mut s: Scheduler<1, 1, 1> = Scheduler::new(SchedConfig::DEFAULT);
+        let mut s: Scheduler<1, 1, 1, 1> = Scheduler::new(SchedConfig::DEFAULT);
         let old = s.spawn().unwrap();
         // Wake itself mid-poll, then complete: the pending flag must die with
         // the slot, not leak into the next occupant.
