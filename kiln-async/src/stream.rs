@@ -155,6 +155,137 @@ fn take_waiter(slot: &mut TaskId) -> Option<TaskId> {
     }
 }
 
+/// ABA-safe stream handle (mirrors [`crate::FutureId`] / [`crate::SetId`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamId {
+    /// Index into the stream table.
+    pub index: u16,
+    /// Generation at the time this handle was issued.
+    pub generation: u32,
+}
+
+impl StreamId {
+    /// Sentinel "no stream" handle.
+    pub const NONE: Self = Self {
+        index: u16::MAX,
+        generation: 0,
+    };
+
+    /// Whether this is the [`StreamId::NONE`] sentinel.
+    #[must_use]
+    pub const fn is_none(self) -> bool {
+        self.index == u16::MAX
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StreamSlot {
+    stream: Option<Stream>,
+    generation: u32,
+}
+
+/// Fixed-capacity table of [`Stream`]s, indexed by [`StreamId`].
+///
+/// `N` streams, no heap (`[StreamSlot; N]`). Backs `stream.{new,drop}`; the
+/// scheduler looks a stream up by handle to `read`/`write`/`close` it.
+pub struct StreamTable<const N: usize> {
+    slots: [StreamSlot; N],
+    live: usize,
+}
+
+impl<const N: usize> StreamTable<N> {
+    /// Create an empty table — all `N` slots free.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            slots: [StreamSlot {
+                stream: None,
+                generation: 0,
+            }; N],
+            live: usize::MIN,
+        }
+    }
+
+    /// Capacity (`N`).
+    #[must_use]
+    pub const fn capacity(&self) -> usize {
+        N
+    }
+
+    /// Number of live (allocated) streams.
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.live
+    }
+
+    /// Whether no streams are allocated.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.live == 0
+    }
+
+    /// `stream.new` — allocate a fresh stream buffering up to `item_capacity`
+    /// items. Fails loud when the table is at capacity.
+    pub fn create(&mut self, item_capacity: u32) -> Result<StreamId> {
+        for (index, slot) in self.slots.iter_mut().enumerate() {
+            if slot.stream.is_none() {
+                slot.stream = Some(Stream::new(item_capacity));
+                self.live += 1;
+                return Ok(StreamId {
+                    index: index as u16,
+                    generation: slot.generation,
+                });
+            }
+        }
+        Err(Error::foundation_bounded_capacity_exceeded(
+            "kiln-async: stream table at capacity",
+        ))
+    }
+
+    /// Generation-validated shared access to a live stream.
+    #[must_use]
+    pub fn get(&self, id: StreamId) -> Option<&Stream> {
+        let slot = self.slots.get(id.index as usize)?;
+        if slot.generation == id.generation {
+            slot.stream.as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// Generation-validated mutable access to a live stream.
+    pub fn get_mut(&mut self, id: StreamId) -> Option<&mut Stream> {
+        let slot = self.slots.get_mut(id.index as usize)?;
+        if slot.generation == id.generation {
+            slot.stream.as_mut()
+        } else {
+            None
+        }
+    }
+
+    /// `stream.drop` — free a stream, bumping its generation so stale handles
+    /// are detectable. Errors on a stale/unknown handle.
+    pub fn drop_stream(&mut self, id: StreamId) -> Result<()> {
+        let slot = self
+            .slots
+            .get_mut(id.index as usize)
+            .filter(|s| s.stream.is_some() && s.generation == id.generation)
+            .ok_or_else(|| {
+                Error::validation_error("kiln-async: drop of a stale or unknown stream handle")
+            })?;
+        slot.stream = None;
+        slot.generation = slot.generation.wrapping_add(1);
+        self.live -= 1;
+        Ok(())
+    }
+}
+
+impl<const N: usize> Default for StreamTable<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,6 +353,42 @@ mod tests {
         let mut s = Stream::new(2);
         s.close();
         assert_eq!(s.read(task(3)).unwrap(), StreamRead::Ended);
+    }
+
+    #[test]
+    fn stream_table_create_get_drop() {
+        let mut t: StreamTable<2> = StreamTable::new();
+        assert_eq!(t.capacity(), 2);
+        assert!(t.is_empty());
+        let s = t.create(4).unwrap();
+        assert_eq!(t.len(), 1);
+        assert_eq!(t.get(s).unwrap().capacity(), 4);
+        // operate through the handle
+        t.get_mut(s).unwrap().write(task(1)).unwrap();
+        assert_eq!(t.get(s).unwrap().len(), 1);
+        t.drop_stream(s).unwrap();
+        assert!(t.is_empty());
+        assert!(t.get(s).is_none());
+    }
+
+    #[test]
+    fn stream_table_create_errors_at_capacity() {
+        let mut t: StreamTable<1> = StreamTable::new();
+        t.create(2).unwrap();
+        assert!(t.create(2).is_err());
+    }
+
+    #[test]
+    fn stream_table_drop_is_aba_safe_and_rejects_stale() {
+        let mut t: StreamTable<1> = StreamTable::new();
+        let old = t.create(2).unwrap();
+        t.drop_stream(old).unwrap();
+        assert!(t.drop_stream(old).is_err()); // already gone
+        let new = t.create(2).unwrap();
+        assert_eq!(new.index, old.index);
+        assert_ne!(new.generation, old.generation); // reuse bumped generation
+        assert!(t.get(old).is_none()); // stale handle invalid
+        assert!(t.get(new).is_some());
     }
 
     #[test]
