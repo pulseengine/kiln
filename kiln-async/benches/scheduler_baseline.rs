@@ -111,7 +111,7 @@ fn scheduler_spawn(c: &mut Criterion) {
     // The composed admission path: slot allocation + FSM Admit + ready enqueue.
     c.bench_function("scheduler/spawn_admit", |b| {
         b.iter_batched(
-            || Scheduler::<N, N, N>::new(SchedConfig::DEFAULT),
+            || Scheduler::<N, N, N, N>::new(SchedConfig::DEFAULT),
             |mut s| {
                 black_box(s.spawn().unwrap());
                 s
@@ -125,7 +125,7 @@ fn scheduler_poll_round(c: &mut Criterion) {
     // The full cycle: dispatch → poll (trivial yielding body) → re-enqueue.
     // This is the per-task scheduling overhead a fuel slice pays.
     c.bench_function("scheduler/poll_round_yield_cycle", |b| {
-        let mut s = Scheduler::<N, N, N>::new(SchedConfig::DEFAULT);
+        let mut s = Scheduler::<N, N, N, N>::new(SchedConfig::DEFAULT);
         s.spawn().unwrap();
         b.iter(|| {
             black_box(

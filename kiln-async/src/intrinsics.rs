@@ -21,13 +21,16 @@
 //! - `future.write` → [`crate::Scheduler::future_write`] (wakes the reader).
 //! - `future.read` → [`crate::Scheduler::future_read`] +
 //!   [`crate::Scheduler::wait_on_future`] (read-or-park).
+//! - `waitable-set.new/join/drop` → [`crate::Scheduler::waitable_set_new`] /
+//!   [`crate::Scheduler::waitable_set_join`] / [`crate::Scheduler::waitable_set_drop`].
+//! - `task.wait` → [`crate::Scheduler::task_wait`] (arm-or-already-ready).
+//! - `task.poll` → [`crate::Scheduler::task_poll`] (non-blocking).
 //!
-//! ## Stubbed — remaining waitable surface (next increments)
+//! ## Stubbed — Phase 2+ surface
 //!
-//! `task.wait`/`task.poll` over a multi-member waitable-set, streams (Phase 2),
-//! and error-context still need their bounded backing. Each returns an explicit
-//! `NOT_IMPLEMENTED` error — never a silent `Ok` — so the scaffold cannot be
-//! mistaken for a working implementation.
+//! Streams (Phase 2) and error-context still need their bounded backing. Each
+//! returns an explicit `NOT_IMPLEMENTED` error — never a silent `Ok` — so the
+//! scaffold cannot be mistaken for a working implementation.
 
 use kiln_error::{Error, Result};
 
@@ -38,19 +41,9 @@ macro_rules! phase1_stub {
         Err(Error::not_implemented_error(concat!(
             "kiln-async: P3 intrinsic `",
             $name,
-            "` is implemented in Phase 1"
+            "` is implemented in Phase 2"
         )))
     };
-}
-
-/// `task.wait` — block the current task until any member of a waitable set fires.
-pub fn task_wait() -> Result<TaskId> {
-    phase1_stub!("task.wait")
-}
-
-/// `task.poll` — non-blocking check of a waitable set.
-pub fn task_poll() -> Result<Option<TaskId>> {
-    phase1_stub!("task.poll")
 }
 
 /// `stream.new` — create a bounded SPSC stream with credit-based flow control.
@@ -66,11 +59,6 @@ pub fn stream_read() -> Result<()> {
 /// `stream.write` — write to a stream; blocks the writer when credits hit zero.
 pub fn stream_write() -> Result<()> {
     phase1_stub!("stream.write")
-}
-
-/// `waitable-set.new` — create a set tracking future/stream readiness.
-pub fn waitable_set_new() -> Result<TaskId> {
-    phase1_stub!("waitable-set.new")
 }
 
 /// `error-context.new` — create an error-context handle for async propagation.
