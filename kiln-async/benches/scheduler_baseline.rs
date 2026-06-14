@@ -16,8 +16,8 @@ use std::hint::black_box;
 
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use kiln_async::{
-    FutureTable, ReadyQueue, SchedConfig, Scheduler, TaskEvent, TaskId, TaskOutcome, TaskTable,
-    WaitableSetTable,
+    FutureTable, ReadyQueue, SchedConfig, Scheduler, Stream, TaskEvent, TaskId, TaskOutcome,
+    TaskTable, WaitableSetTable,
 };
 
 /// Capacity used throughout — the documented Cortex-M default profile.
@@ -159,6 +159,19 @@ fn set_table_lifecycle(c: &mut Criterion) {
     });
 }
 
+fn stream_write_read(c: &mut Criterion) {
+    // The credit-cycle: write one item then read it back, capacity 4.
+    c.bench_function("stream/write_read_cycle", |b| {
+        let mut s = Stream::new(4);
+        let w = TaskId { index: 0, generation: 0 };
+        let r = TaskId { index: 1, generation: 0 };
+        b.iter(|| {
+            black_box(s.write(black_box(w)).unwrap());
+            black_box(s.read(black_box(r)).unwrap());
+        });
+    });
+}
+
 criterion_group!(
     benches,
     task_table_spawn_remove,
@@ -167,6 +180,7 @@ criterion_group!(
     scheduler_spawn,
     scheduler_poll_round,
     future_table_lifecycle,
-    set_table_lifecycle
+    set_table_lifecycle,
+    stream_write_read
 );
 criterion_main!(benches);

@@ -38,11 +38,13 @@
 pub mod config;
 pub mod intrinsics;
 pub mod ready;
+pub mod stream;
 pub mod task;
 pub mod waitable;
 
 pub use config::SchedConfig;
 pub use ready::ReadyQueue;
+pub use stream::{Stream, StreamRead, StreamWrite};
 pub use task::{TaskEvent, TaskId, TaskState, TaskTable};
 pub use waitable::{
     FutureId, FutureState, FutureTable, SetId, WaitResult, WaitableSet, WaitableSetTable,
