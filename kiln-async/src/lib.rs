@@ -44,7 +44,7 @@ pub mod waitable;
 
 pub use config::SchedConfig;
 pub use ready::ReadyQueue;
-pub use stream::{Stream, StreamRead, StreamWrite};
+pub use stream::{Stream, StreamId, StreamRead, StreamTable, StreamWrite};
 pub use task::{TaskEvent, TaskId, TaskState, TaskTable};
 pub use waitable::{
     FutureId, FutureState, FutureTable, SetId, WaitResult, WaitableSet, WaitableSetTable,
