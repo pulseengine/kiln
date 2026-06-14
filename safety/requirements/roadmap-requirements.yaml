@@ -8,6 +8,23 @@
 # requirements so they remain traceable and can be scheduled when a concrete
 # driver (a real target, a customer, a mission) appears.
 #
+# ── Release roadmap (next 5; mirrored to GitHub milestones) ────────────────
+# Source of truth for scope: `release-vX.Y` tags (query: rivet list --filter
+# '(has-tag "release-v0.4.0")'). v0.3.2 SHIPPED (kiln-async scheduler core).
+#   v0.3.3  Interpreter GC-subtyping conformance — fix the ref-type subtyping
+#           relation; drive down the 332 WAST failures (issues #149, #146).
+#   v0.4.0  kiln-async embedded P3 integration — host-future RawWaker bridge
+#           (R1, the one ASIL-D unsafe) + synth-lowered async module end-to-end
+#           (REQ_ASYNC_SCHED Phase-1 exit).
+#   v0.5.0  crates.io publishing — kilnvm-* rename + synth-modeled pipeline
+#           (REQ_CRATES_PUBLISH / AD-PUBLISH-001 / #310).
+#   v0.6.0  kiln-async streams + backpressure (Phase 2) — Stream<T> + credits,
+#           error-context (remaining stubbed intrinsics).
+#   v0.7.0  Verification + CI hardening — Verus invariant gating + refinement
+#           link (#280), re-enable disabled workflows (#237), pre-commit (#238),
+#           dynamic-verification stack (REQ_ASYNC_BENCH).
+# WAST conformance (v0.3.3) is tracked via AC-WAST + the FUNC WAST requirement.
+#
 # status: planned — design/intent exists, no implementation. Promote to
 #         `partial`/`implemented` (in functional-requirements.yaml) when built.
 #
@@ -178,7 +195,7 @@ artifacts:
       Phase 0 scaffold landed (kiln-async crate: types, FSM, bounded ready
       queue; intrinsics stubbed; builds no_std/no_alloc for thumbv7em).
     status: partial
-    tags: [async, scheduler, no-std, no-alloc, embedded, formal-verification, roadmap]
+    tags: [async, scheduler, no-std, no-alloc, embedded, formal-verification, roadmap, release-v0.4.0]
     links:
       - type: derives-from
         target: REQ_FUNC_003
@@ -216,7 +233,7 @@ artifacts:
       surface, Kani on array-index helpers, and mutation testing of the
       scheduler core.
     status: partial
-    tags: [async, scheduler, performance, benchmarks, no-std, embedded, roadmap]
+    tags: [async, scheduler, performance, benchmarks, no-std, embedded, roadmap, release-v0.7.0]
     links:
       - type: derives-from
         target: REQ_ASYNC_SCHED
@@ -239,7 +256,7 @@ artifacts:
       trigger parallel to release.yml, org CRATES_IO_TOKEN, dependency-order walker
       with index-propagation retry, tag-matches-version preflight).
     status: planned
-    tags: [release, distribution, crates-io, roadmap]
+    tags: [release, distribution, crates-io, roadmap, release-v0.5.0]
     links:
       - type: derives-from
         target: REQ_FUNC_003
