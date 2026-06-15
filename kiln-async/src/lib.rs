@@ -27,8 +27,12 @@
 //!
 //! - Fixed-capacity arrays parameterized by compile-time const generics — no
 //!   heap, no provider machinery (minimal trusted computing base).
-//! - `#![forbid(unsafe_code)]` — the only planned `unsafe` (the waker vtable) is
-//!   isolated and arrives in Phase 1.
+//! - `#![forbid(unsafe_code)]` — **permanent**. The scheduler drives tasks via
+//!   an opaque poll-outcome callback ([`Scheduler::poll_round`]) and wakes via
+//!   safe [`Scheduler::mark_ready`]; it never polls a Rust `Future`, so it never
+//!   needs a `RawWaker` vtable. The `unsafe` waker once planned (design R1) was
+//!   only for *host* Rust-future interop — a std-only convenience outside this
+//!   cert-scope crate, not the embedded synth-lowered path.
 //! - Scheduling is fuel-bounded: a task's poll slice is a fuel budget, so
 //!   execution is deterministic and replayable.
 

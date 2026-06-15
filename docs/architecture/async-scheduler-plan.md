@@ -112,7 +112,7 @@ its proof.
 The dev phases above are *milestones*, not release units. Ship the scheduler in small,
 user-usable increments (kiln workspace versions) rather than holding one release for the
 full Phase-1 exit. Each release: `rivet validate` green, no_std `thumbv7em` builds, criterion
-baseline updated, no `unsafe` except the isolated R1 waker (which arrives in v0.4.0).
+baseline updated, **zero `unsafe`** (R1 resolved — `#![forbid(unsafe_code)]` is permanent; see §8).
 
 - **v0.3.2 — scheduler core (library).** A usable `no_std`/`no_alloc` cooperative scheduler API:
   task-lifecycle FSM, bounded `TaskTable`/`ReadyQueue`, fuel-sliced `poll_round`, `mark_ready` +
@@ -120,9 +120,13 @@ baseline updated, no `unsafe` except the isolated R1 waker (which arrives in v0.
   `task.wait`/`task.poll`. Phase-1 minus the host-future bridge. (PRs #293–#306.)
   *Exit criterion for the tag: the scheduler-level `task.wait`/`task.poll` wiring is in (one
   increment after #305), so the public API is coherent.*
-- **v0.4.0 — embedded P3 integration (the original Phase-1 exit).** Host-future `RawWaker`
-  bridge (R1 — the one ASIL-D `unsafe`) + end-to-end run of a real synth-lowered async core
-  module on host sim / QEMU.
+- **v0.4.0 — embedded P3 integration (the original Phase-1 exit).** End-to-end run of a real
+  synth-lowered async core module — **no unsafe** (R1 resolved): synth lowers a P3 async module to
+  native code that calls kiln-async's intrinsic surface (like kiln-builtins), and kiln-async schedules it.
+  Harness via the established jess pipeline (`adopt → meld_fuse → wasm_optimize → synth_compile → renode`,
+  rules_wasm_component) — gated on synth's P3-async→ARM lowering + Renode test (synth#275). The Wasmtime
+  `wasm_run` path tests the *component*, not kiln-async, so the kiln-async exit specifically needs the
+  synth→Renode leg.
 - **v0.5.0 — streams + backpressure** (Phase 2).
 - **v0.6.0+ — Verus invariant gating** (Phase 3), then fixed-priority/EDF (4),
   Lean+Aeneas refinement (5), hardening (6).
@@ -134,8 +138,14 @@ Meld/synth output — moves to v0.4.0 where its cross-tool dependency lives.
 
 ## 8. Risks / open questions
 
-- **R1** Waker `RawWakerVTable` is the only `unsafe` + pointer code — isolate behind safe `mark_ready(TaskId)`,
-  `external_body` for Verus, exclude from Aeneas (axiomatize wake).
+- **R1** ~~Waker `RawWakerVTable` is the only `unsafe`~~ **RESOLVED — no unsafe needed.** The implemented
+  architecture (R2: opaque poll-outcome callback + safe `mark_ready(TaskId)`) never polls a Rust `Future`,
+  so it never constructs a `Context`/`Waker`, so there is no `RawWakerVTable` and `#![forbid(unsafe_code)]`
+  is **permanent**. A waker would only be needed to drive *host* Rust `async fn`s on the scheduler — a
+  std-only convenience that, if ever wanted, lives in a separate `kiln-async-std` feature/crate outside the
+  cert-scope crate, NOT here. Consequence: the Kani/Verus/Rocq/Lean firepower targets the **safe scheduler
+  invariants** (FSM soundness, queue no-overflow, backpressure correctness, lost-wakeup-freedom), not an
+  unsafe block — a stronger claim (zero unsafe + proven invariants).
 - **R2** `Future`/`Poll` translatability — prove scheduler properties, treat `poll_fn` as opaque; user-future
   correctness is the synthesized code's concern.
 - **R3** ~~Charon (`rustc→.llbc`) not yet in `rules_lean`~~ **RESOLVED 2026-06-06** (rules_lean#1): the
