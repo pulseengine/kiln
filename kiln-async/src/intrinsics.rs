@@ -32,20 +32,10 @@
 //! - `stream.read` → [`crate::Scheduler::stream_read`] (consumes + wakes a
 //!   backpressured writer, or parks the reader / reports end).
 //! - `stream.close-writable` → [`crate::Scheduler::stream_close`].
+//! - `error-context.new/drop` → [`crate::ErrorContextTable::create`] /
+//!   [`crate::ErrorContextTable::drop_context`]. (An `error-context` carries no
+//!   scheduling state — no waiters/wakes — so it is a standalone backing the
+//!   embedding owns directly, not a `Scheduler` field.)
 //!
-//! ## Stubbed — remaining surface
-//!
-//! `error-context.*` still needs its bounded backing. It returns an explicit
-//! `NOT_IMPLEMENTED` error — never a silent `Ok` — so the scaffold cannot be
-//! mistaken for a working implementation.
-
-use kiln_error::{Error, Result};
-
-use crate::task::TaskId;
-
-/// `error-context.new` — create an error-context handle for async propagation.
-pub fn error_context_new() -> Result<TaskId> {
-    Err(Error::not_implemented_error(
-        "kiln-async: P3 intrinsic `error-context.new` is not yet implemented",
-    ))
-}
+//! Every P3 intrinsic now has a real backing — no stub returns a silent `Ok`,
+//! and none returns `NOT_IMPLEMENTED` for the embedded path.
