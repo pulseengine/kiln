@@ -319,3 +319,13 @@ harnesses = [
     "verify_synchronization_primitives",
     "verify_thread_safety"
 ]
+
+# Async scheduler invariants (safe code — kiln-async forbids unsafe)
+[[workspace.metadata.kani.package]]
+name = "kiln-async"
+verification-enabled = true
+harnesses = [
+    "verify_fsm_step_total_and_terminal_absorbing",
+    "verify_ready_queue_never_overflows",
+    "verify_task_table_generation_aba_safe"
+]

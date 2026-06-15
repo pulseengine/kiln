@@ -24,6 +24,13 @@ criterion = { version = "0.6", features = ["html_reports"] }
 
 [features]
 default = []
+# No-op feature so the repo's `cargo kani -p <pkg> --features kani` CI invocation
+# accepts kiln-async; the harnesses gate on `cfg(kani)` (set by `cargo kani`),
+# in src/kani_proofs.rs.
+kani = []
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(kani)'] }
 
 [[bench]]
 name = "scheduler_baseline"
