@@ -47,7 +47,7 @@ thiserror = "2.0"
 which = "6.0"
 
 # GitHub integration
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.13", features = ["json"] }
 
 # Async trait support
 async-trait = "0.1"
