@@ -40,6 +40,7 @@
 #![forbid(unsafe_code)]
 
 pub mod config;
+pub mod error_context;
 pub mod intrinsics;
 pub mod ready;
 pub mod stream;
@@ -47,6 +48,7 @@ pub mod task;
 pub mod waitable;
 
 pub use config::SchedConfig;
+pub use error_context::{ErrorContextId, ErrorContextTable};
 pub use ready::ReadyQueue;
 pub use stream::{Stream, StreamId, StreamRead, StreamTable, StreamWrite};
 pub use task::{TaskEvent, TaskId, TaskState, TaskTable};
