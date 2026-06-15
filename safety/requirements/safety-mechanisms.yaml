@@ -333,14 +333,23 @@ artifacts:
     title: kiln-async — minimal-TCB no_std/no_alloc cooperative scheduler crate
     description: >
       The async scheduler for the embedded base is a dedicated crate
-      (kiln-async), no_std with no alloc, forbidding unsafe code (except a
-      single isolated waker), using fixed-capacity arrays parameterized by a
-      compile-time SchedConfig rather than heap or provider-backed collections.
-      All P3 async intrinsics return an explicit NOT_IMPLEMENTED error until
-      implemented — never a silent Ok. Scheduling is fuel-bounded (a poll slice
-      is a fuel budget) for deterministic, replayable execution. Performance
-      claims are measured, not asserted: a criterion host-bench baseline covers
-      every scheduler primitive from the first commit (REQ_ASYNC_BENCH).
+      (kiln-async), no_std with no alloc, **forbidding unsafe code with no
+      exception** (#![forbid(unsafe_code)] is permanent), using fixed-capacity
+      arrays parameterized by a compile-time SchedConfig rather than heap or
+      provider-backed collections. The once-planned single unsafe waker (design
+      R1) proved unnecessary: the scheduler drives tasks via an opaque
+      poll-outcome callback and wakes via safe mark_ready(TaskId), never polling
+      a Rust Future, so no RawWaker vtable is needed. Host Rust-future interop
+      (the only thing that would need a waker) is a std-only convenience outside
+      this cert-scope crate. All P3 async intrinsics return an explicit
+      NOT_IMPLEMENTED error until implemented — never a silent Ok. Scheduling is
+      fuel-bounded (a poll slice is a fuel budget) for deterministic, replayable
+      execution. Performance claims are measured, not asserted: a criterion
+      host-bench baseline covers every scheduler primitive (REQ_ASYNC_BENCH).
+      Because there is no unsafe, the Kani/Verus/Rocq/Lean verification effort
+      targets the safe scheduler invariants (FSM soundness, queue no-overflow,
+      backpressure correctness, lost-wakeup-freedom) rather than backing an
+      unsafe block — a stronger story: zero unsafe + proven invariants.
     status: partial
     tags: [async, scheduler, no-std, no-alloc, embedded, mechanism]
     links:
