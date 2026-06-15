@@ -156,7 +156,7 @@ jobs:
           cd staging && 7z a "../${ARCHIVE}" . && cd ..
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: binary-${{ matrix.target }}
           path: ${{ env.ARCHIVE }}
