@@ -39,6 +39,16 @@
 #![no_std]
 #![forbid(unsafe_code)]
 
+// Kani (CBMC) needs an explicit import in a `#![no_std]` crate to discover its
+// harness machinery. Gated on `cfg(kani)` — only present under `cargo kani`,
+// never in normal/embedded builds. Safe (no `unsafe`); does not affect the crate.
+#[cfg(kani)]
+extern crate kani;
+
+/// Formal-verification harnesses (CBMC via Kani), present only under `cargo kani`.
+#[cfg(kani)]
+mod kani_proofs;
+
 pub mod config;
 pub mod error_context;
 pub mod intrinsics;
