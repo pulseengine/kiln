@@ -85,24 +85,32 @@ pub enum PollRound {
 /// capacity (size it `== NTASK`: the per-slot "in ready set at most once"
 /// invariant means it can never overflow); `NFUT` is the single-shot future
 /// table capacity (also the per-set member capacity); `NSET` is the
-/// waitable-set table capacity (the backing for `task.wait`/`task.poll`).
+/// waitable-set table capacity (the backing for `task.wait`/`task.poll`);
+/// `NSTREAM` is the stream table capacity (the backing for `stream.*`).
 pub struct Scheduler<
     const NTASK: usize,
     const NREADY: usize,
     const NFUT: usize,
     const NSET: usize,
+    const NSTREAM: usize,
 > {
     tasks: TaskTable<NTASK>,
     ready: ReadyQueue<NREADY>,
     futures: FutureTable<NFUT>,
     sets: WaitableSetTable<NSET, NFUT>,
+    streams: StreamTable<NSTREAM>,
     config: SchedConfig,
     /// When set, new-task admission is refused (`task.backpressure`).
     backpressure: bool,
 }
 
-impl<const NTASK: usize, const NREADY: usize, const NFUT: usize, const NSET: usize>
-    Scheduler<NTASK, NREADY, NFUT, NSET>
+impl<
+    const NTASK: usize,
+    const NREADY: usize,
+    const NFUT: usize,
+    const NSET: usize,
+    const NSTREAM: usize,
+> Scheduler<NTASK, NREADY, NFUT, NSET, NSTREAM>
 {
     /// Create an empty scheduler: all task slots free, ready queue empty.
     #[must_use]
@@ -112,6 +120,7 @@ impl<const NTASK: usize, const NREADY: usize, const NFUT: usize, const NSET: usi
             ready: ReadyQueue::new(),
             futures: FutureTable::new(),
             sets: WaitableSetTable::new(),
+            streams: StreamTable::new(),
             config,
             backpressure: false,
         }
@@ -316,6 +325,66 @@ impl<const NTASK: usize, const NREADY: usize, const NFUT: usize, const NSET: usi
         Ok(s.poll_ready(&self.futures))
     }
 
+    /// `stream.new` — allocate a stream buffering up to `item_capacity` items.
+    pub fn stream_new(&mut self, item_capacity: u32) -> Result<StreamId> {
+        self.streams.create(item_capacity)
+    }
+
+    /// `stream.drop` — free a stream.
+    pub fn stream_drop(&mut self, stream: StreamId) -> Result<()> {
+        self.streams.drop_stream(stream)
+    }
+
+    /// `stream.write` one item by `writer`. Buffers if there is credit (and
+    /// wakes a parked reader); otherwise parks `writer` and reports
+    /// backpressure (caller ends its slice with `TaskOutcome::Waited`).
+    pub fn stream_write(&mut self, stream: StreamId, writer: TaskId) -> Result<StreamWrite> {
+        let res = self
+            .streams
+            .get_mut(stream)
+            .ok_or_else(|| Error::validation_error("kiln-async: write to a stale/unknown stream"))?
+            .write(writer)?;
+        if let StreamWrite::Buffered {
+            wake_reader: Some(reader),
+        } = res
+        {
+            self.mark_ready(reader)?;
+        }
+        Ok(res)
+    }
+
+    /// `stream.read` one item by `reader`. Consumes a buffered item (and wakes a
+    /// parked, backpressured writer); parks `reader` if empty+open; reports
+    /// `Ended` if empty+closed.
+    pub fn stream_read(&mut self, stream: StreamId, reader: TaskId) -> Result<StreamRead> {
+        let res = self
+            .streams
+            .get_mut(stream)
+            .ok_or_else(|| Error::validation_error("kiln-async: read from a stale/unknown stream"))?
+            .read(reader)?;
+        if let StreamRead::Consumed {
+            wake_writer: Some(writer),
+        } = res
+        {
+            self.mark_ready(writer)?;
+        }
+        Ok(res)
+    }
+
+    /// `stream.close-writable` — close the producer end and wake the parked
+    /// reader (if any) so it observes the end.
+    pub fn stream_close(&mut self, stream: StreamId) -> Result<()> {
+        let woken = self
+            .streams
+            .get_mut(stream)
+            .ok_or_else(|| Error::validation_error("kiln-async: close of a stale/unknown stream"))?
+            .close();
+        if let Some(reader) = woken {
+            self.mark_ready(reader)?;
+        }
+        Ok(())
+    }
+
     /// `future.read` (non-blocking half) — if the future is ready, consume it
     /// and return `true`; otherwise return `false` and the caller should
     /// [`wait_on_future`](Self::wait_on_future).
@@ -395,7 +464,7 @@ impl<const NTASK: usize, const NREADY: usize, const NFUT: usize, const NSET: usi
 mod tests {
     use super::*;
 
-    type Sched = Scheduler<4, 4, 4, 4>;
+    type Sched = Scheduler<4, 4, 4, 4, 4>;
 
     #[test]
     fn spawn_admits_a_task_to_the_ready_set() {
@@ -421,7 +490,7 @@ mod tests {
 
     #[test]
     fn spawn_errors_when_the_task_table_is_full() {
-        let mut s: Scheduler<2, 2, 2, 2> = Scheduler::new(SchedConfig::DEFAULT);
+        let mut s: Scheduler<2, 2, 2, 2, 2> = Scheduler::new(SchedConfig::DEFAULT);
         s.spawn().unwrap();
         s.spawn().unwrap();
         assert!(s.spawn().is_err()); // explicit capacity error, never silent drop
@@ -663,7 +732,7 @@ mod tests {
 
     #[test]
     fn future_new_errors_when_the_table_is_full() {
-        let mut s: Scheduler<2, 2, 1, 1> = Scheduler::new(SchedConfig::DEFAULT);
+        let mut s: Scheduler<2, 2, 1, 1, 1> = Scheduler::new(SchedConfig::DEFAULT);
         s.future_new().unwrap();
         assert!(s.future_new().is_err()); // capacity 1: explicit error
     }
@@ -720,7 +789,7 @@ mod tests {
 
     #[test]
     fn waitable_set_ops_reject_stale_handles() {
-        let mut s: Scheduler<2, 2, 2, 1> = Scheduler::new(SchedConfig::DEFAULT);
+        let mut s: Scheduler<2, 2, 2, 1, 1> = Scheduler::new(SchedConfig::DEFAULT);
         let set = s.waitable_set_new().unwrap();
         let f = s.future_new().unwrap();
         s.waitable_set_drop(set).unwrap();
@@ -728,6 +797,105 @@ mod tests {
         assert!(s.task_poll(set).is_err());
         assert!(s.task_wait(TaskId::NONE, set).is_err());
         assert!(s.waitable_set_new().is_ok()); // slot reusable after drop
+    }
+
+    #[test]
+    fn stream_reader_blocked_on_empty_is_woken_by_a_writer_end_to_end() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let reader = s.spawn().unwrap();
+        let writer = s.spawn().unwrap();
+        let st = s.stream_new(2).unwrap();
+
+        // Reader runs: stream empty → parks on it, ends slice Waited → Blocked.
+        s.poll_round(|sched, tid, _| {
+            assert_eq!(tid, reader);
+            assert_eq!(sched.stream_read(st, tid).unwrap(), StreamRead::Empty);
+            Ok(TaskOutcome::Waited)
+        })
+        .unwrap();
+        assert_eq!(s.task_state(reader), Some(TaskState::Blocked));
+
+        // Writer runs: writes an item → wakes the parked reader.
+        s.poll_round(|sched, tid, _| {
+            assert_eq!(tid, writer);
+            assert_eq!(
+                sched.stream_write(st, tid).unwrap(),
+                StreamWrite::Buffered { wake_reader: Some(reader) }
+            );
+            Ok(TaskOutcome::Completed)
+        })
+        .unwrap();
+        assert_eq!(s.task_state(reader), Some(TaskState::Ready)); // woken
+
+        // Reader re-runs: now consumes the buffered item.
+        s.poll_round(|sched, tid, _| {
+            assert_eq!(tid, reader);
+            assert_eq!(
+                sched.stream_read(st, tid).unwrap(),
+                StreamRead::Consumed { wake_writer: None }
+            );
+            Ok(TaskOutcome::Completed)
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn stream_backpressured_writer_is_woken_when_a_reader_frees_a_slot() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let writer = s.spawn().unwrap();
+        let reader = s.spawn().unwrap();
+        let st = s.stream_new(1).unwrap(); // capacity 1
+
+        // Writer fills the slot, then a second write backpressures → parks.
+        s.poll_round(|sched, tid, _| {
+            assert_eq!(tid, writer);
+            sched.stream_write(st, tid).unwrap(); // buffers (count 1)
+            assert_eq!(sched.stream_write(st, tid).unwrap(), StreamWrite::Backpressured);
+            Ok(TaskOutcome::Waited)
+        })
+        .unwrap();
+        assert_eq!(s.task_state(writer), Some(TaskState::Blocked));
+
+        // Reader frees the slot → wakes the backpressured writer.
+        s.poll_round(|sched, tid, _| {
+            assert_eq!(tid, reader);
+            assert_eq!(
+                sched.stream_read(st, tid).unwrap(),
+                StreamRead::Consumed { wake_writer: Some(writer) }
+            );
+            Ok(TaskOutcome::Completed)
+        })
+        .unwrap();
+        assert_eq!(s.task_state(writer), Some(TaskState::Ready)); // woken
+    }
+
+    #[test]
+    fn stream_close_wakes_a_parked_reader_to_observe_end() {
+        let mut s = Sched::new(SchedConfig::DEFAULT);
+        let reader = s.spawn().unwrap();
+        let st = s.stream_new(2).unwrap();
+        s.poll_round(|sched, tid, _| {
+            assert_eq!(sched.stream_read(st, tid).unwrap(), StreamRead::Empty);
+            Ok(TaskOutcome::Waited)
+        })
+        .unwrap();
+        assert_eq!(s.task_state(reader), Some(TaskState::Blocked));
+
+        s.stream_close(st).unwrap(); // wakes the parked reader
+        assert_eq!(s.task_state(reader), Some(TaskState::Ready));
+        // and a now-closed empty stream reads Ended.
+        assert_eq!(s.stream_read(st, reader).unwrap(), StreamRead::Ended);
+    }
+
+    #[test]
+    fn stream_ops_reject_stale_handles() {
+        let mut s: Scheduler<2, 2, 2, 1, 1> = Scheduler::new(SchedConfig::DEFAULT);
+        let st = s.stream_new(2).unwrap();
+        s.stream_drop(st).unwrap();
+        assert!(s.stream_write(st, TaskId::NONE).is_err());
+        assert!(s.stream_read(st, TaskId::NONE).is_err());
+        assert!(s.stream_close(st).is_err());
+        assert!(s.stream_new(2).is_ok()); // slot reusable
     }
 
     #[test]
@@ -797,7 +965,7 @@ mod tests {
 
     #[test]
     fn wake_pending_does_not_leak_across_slot_reuse() {
-        let mut s: Scheduler<1, 1, 1, 1> = Scheduler::new(SchedConfig::DEFAULT);
+        let mut s: Scheduler<1, 1, 1, 1, 1> = Scheduler::new(SchedConfig::DEFAULT);
         let old = s.spawn().unwrap();
         // Wake itself mid-poll, then complete: the pending flag must die with
         // the slot, not leak into the next occupant.
