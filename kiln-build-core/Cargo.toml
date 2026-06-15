@@ -32,7 +32,7 @@ toml = "0.9"
 md5 = "0.8"
 
 # WAST test suite support
-wast = "237.0"
+wast = "244.0"
 wat = "1.244.0"
 
 # Internal Kiln crates
