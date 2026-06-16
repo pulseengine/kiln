@@ -164,6 +164,9 @@ pub fn convert_wast_ret_core_to_value(ret: &WastRetCore) -> Result<Value> {
                     // Concrete type reference - use FuncRef for function types
                     Ok(Value::FuncRef(None))
                 },
+                // `(ref null (exact $t))` — exact (non-subtyping) reference to a
+                // concrete type; a null of it is represented like Concrete.
+                Some(wast::core::HeapType::Exact(_)) => Ok(Value::FuncRef(None)),
                 None => Ok(Value::FuncRef(None)), // Default for unspecified heap type
             }
         },
