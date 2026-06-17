@@ -33,7 +33,7 @@ kiln-panic = { workspace = true, optional = true } # Dedicated panic handler
 # libc dependency removed - using direct syscalls instead
 
 [dev-dependencies]
-criterion = { version = "0.6", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 
 [features]
 default = [] # No panic handler by default - libraries should provide their own

@@ -20,7 +20,7 @@ kiln-error = { workspace = true }
 [dev-dependencies]
 # Host-side micro-benchmarks (REQ_ASYNC_BENCH). Bench units compile with std
 # on the host; the library itself stays no_std/no_alloc.
-criterion = { version = "0.6", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 
 [features]
 default = []
