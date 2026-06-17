@@ -25,7 +25,7 @@ parking_lot = { version = "0.12", optional = true }
 
 # No external dependencies needed
 # Only used for formal verification when 'kani' feature is enabled
-kani-verifier = { version = "0.62.0", optional = true }
+kani-verifier = { version = "0.67.0", optional = true }
 
 [features]
 default = []
