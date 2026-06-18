@@ -320,7 +320,7 @@ kiln-sync = { workspace = true, default-features = false } # Make alloc conditio
 kiln-platform = { workspace = true, optional = true }
 
 # Only include hashbrown when explicitly requested with alloc feature
-hashbrown = { version = "0.15", optional = true } # For no_std with alloc
+hashbrown = { version = "0.17", optional = true } # For no_std with alloc
 
 # Optional dependencies
 # Logging facade - not enabled by default
