@@ -135,8 +135,10 @@ jobs:
       - uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
-          # Allow common open source licenses
-          allow-licenses: MIT, Apache-2.0, BSD-3-Clause, ISC, MPL-2.0, Unlicense
+          # Allow common open source licenses. Zlib added 2026-06-18: hashbrown
+          # 0.16+ pulls foldhash (Zlib) as its default hasher (accepted via #325);
+          # Zlib is permissive/OSI-approved/SPDX-listed/GPL-compatible.
+          allow-licenses: MIT, Apache-2.0, BSD-3-Clause, ISC, MPL-2.0, Unlicense, Zlib
           # Exclude packages with undetected licenses that we've manually verified
           # Using PURL format: pkg:cargo/package@version
           allow-dependencies-licenses: |
