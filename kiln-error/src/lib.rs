@@ -83,7 +83,12 @@
 #[cfg(feature = "std")]
 extern crate std;
 
-#[cfg(not(feature = "std"))]
+// `alloc` is only required by the `recovery` module's heap-backed diagnostics
+// (String/Vec/BTreeMap). Gating it on the `alloc` feature keeps the core error
+// type — and every consumer that only needs `Error`/`Result` — strictly
+// no-`alloc`, so no_std/no-heap embedded targets (e.g. gale-nano: Cortex-M3,
+// 8 KB SRAM) link without a global allocator. See issue #338.
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
 extern crate alloc;
 
 /// Error codes for kiln
@@ -97,6 +102,12 @@ pub mod kinds;
 pub mod context;
 pub mod helpers;
 pub mod prelude;
+/// Heap-backed error recovery and diagnostics (requires `alloc`).
+///
+/// Gated on the `alloc` feature: its `ErrorContext`/history types use
+/// `String`/`Vec`/`BTreeMap`, so it is excluded from no-`alloc` builds to keep
+/// the core error type heap-free for embedded targets (issue #338).
+#[cfg(feature = "alloc")]
 pub mod recovery;
 
 // ASIL safety support (enabled for ASIL-B and above)

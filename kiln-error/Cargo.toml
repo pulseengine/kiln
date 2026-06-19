@@ -20,7 +20,10 @@ path = "src/lib.rs"
 default = []
 
 # Core allocation strategies (aligned with kiln-foundation)
-dynamic-allocation = []
+# dynamic-allocation implies `alloc`: the heap-backed `recovery` diagnostics are
+# only available where a global allocator exists. Static-allocation / no_alloc
+# builds (ASIL-C/D, gale-nano embedded) deliberately exclude it — see #338.
+dynamic-allocation = ["alloc"]
 static-allocation = []
 verified-static-allocation = ["static-allocation"]
 
