@@ -377,6 +377,50 @@ artifacts:
       design-doc: docs/architecture/async-scheduler-plan.md
       implementation: kiln-async/ (Phase 0 scaffold)
 
+  - id: SM-ASYNC-003
+    type: design-decision
+    title: kiln-async dependencies must not transitively require a global allocator
+    description: >
+      kiln-async's no-alloc guarantee (SM-ASYNC-001, REQ_ASYNC_SCHED) is only
+      real if NONE of its dependencies transitively force a global allocator.
+      kiln-error — pulled in for the unified Error/Result type — violated this:
+      its src/recovery.rs unconditionally did `extern crate alloc` and put
+      String/Vec/BTreeMap into ErrorContext, so linking kiln-async to a
+      bare-metal staticlib failed with "no global memory allocator found"
+      (issue #338, surfaced by jess's gale-nano profile: Pixhawk 6X-RT STM32F100,
+      Cortex-M3, 8 KB SRAM — a mandatory heap is a hard blocker there). Fix:
+      kiln-error's heap-backed `recovery` module is now gated behind its `alloc`
+      Cargo feature (implied by `dynamic-allocation`/`std`); the core Error type
+      uses only &'static-str messages and is alloc-free. kiln-async depends on
+      kiln-error with default-features=false, so the no-alloc property holds
+      end-to-end. ASIL-C/D (static-allocation) and no_alloc embedded builds
+      correctly shed `recovery`; QM/std builds keep it. The discipline is
+      general: every kiln-async dependency edge must be no-alloc-clean, verified
+      by building the kiln-async staticlib for thumbv7m-none-eabi and asserting
+      the allocator error is absent (only the embedding-supplied #[panic_handler]
+      remains).
+    status: implemented
+    tags: [async, scheduler, no-alloc, embedded, dependency-discipline, kiln-error]
+    links:
+      - type: satisfies
+        target: REQ_ASYNC_SCHED
+    fields:
+      rationale: >
+        A no-alloc claim that any transitive dependency can silently break is
+        not a guarantee. Gating heap-backed error diagnostics behind the `alloc`
+        feature keeps the trusted error type usable on 8 KB-SRAM targets while
+        preserving rich recovery diagnostics for std/QM hosts — the same
+        minimal-TCB discipline SM-ASYNC-001 applies to kiln-async itself.
+      alternatives: >
+        (a) A heap-free fixed-capacity ErrorContext for all builds — rejected:
+        unnecessary churn for std/QM consumers that want rich diagnostics, and
+        the recovery module has no embedded consumers. (b) Forking the error
+        type per-target — rejected: splits the unified Error contract. (c)
+        Leaving it and requiring embedders to supply a global allocator —
+        rejected: contradicts REQ_ASYNC_SCHED's NO-alloc mandate.
+      implementation: kiln-error/src/lib.rs (recovery + extern crate alloc gated on feature "alloc"); kiln-error/Cargo.toml (dynamic-allocation = ["alloc"])
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/338"
+
   # =========================================================================
   # Architecture Boundary Decisions
   # =========================================================================
