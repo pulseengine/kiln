@@ -367,3 +367,45 @@ artifacts:
         (filesystem/cli/clocks/io/random implemented today; unsatisfied imports
         currently fail-loud at instantiate); witness-harness-v2 per-row MC/DC
         (deferred by witness). Dual-runtime cross-check (witness#110) can begin.
+
+  - id: REQ_COMPONENT_HOST
+    type: requirement
+    title: Host external composed Component-Model components in kilnd + invoke an export
+    description: >
+      The std reference host (kilnd, interpreter-QM variant) shall load an
+      external wac-composed Component-Model component, instantiate it, and invoke
+      a named export with scalar args, lifting the scalar result through the
+      canonical ABI. Concretely: a `--component <file>` + `--invoke '<export>'`
+      entry that runs e.g. gale's kiln-component-host demo (gale#63: a gale app
+      composed with the gale-kiln host via wac, `run-demo() -> u32 = 53`) directly
+      on kiln — the safety-critical target host — not only on wasmtime. This is
+      the DIRECT-HOSTING half of the dual capability (the meld-fuse-to-core half
+      already works: components lowered by Meld at build time run as core modules,
+      the embedded-cert path). Both paths are supported per AD-COMPONENT-HOST-001;
+      this requirement covers the direct-hosting (QM) half. Kill-criterion: kilnd
+      cannot instantiate + invoke an export of a wac-composed component.
+    status: proposed
+    tags: [component-model, host, kilnd, canonical-abi, qm, cross-tool, roadmap, release-v0.4.0]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_002
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/344"
+      cross-ref: "gale#63 (gale kiln-component-host path; composed demo fixture)"
+      decision: AD-COMPONENT-HOST-001
+      current-state: >
+        Grounded 2026-06-20: the machinery is present and compiled into the
+        DEFAULT kilnd (component-model is a default feature pulling kiln-component
+        + kiln-decoder; ~31k LOC; only the async surface src/async_ was removed per
+        SM-ASYNC-002). kilnd's run dispatch (main.rs:996) already ATTEMPTS
+        execute_component; the RFC #46 "meld fuse first" message (main.rs:1000-1011)
+        is a fallback-on-failure, not an unconditional block. kiln-component
+        decode/instantiate/call_function are real (returns Vec<ComponentValue>).
+        TWO real gaps for run-demo()->u32=53: (1) no --invoke flag (entry hard-coded
+        to wasi:cli/run@*), (2) canon.lift is NOT_IMPLEMENTED
+        (kiln-component/src/canonical_executor.rs:108-125) — a core scalar result
+        is not lifted to a ComponentValue.
+      scope-note: >
+        DIRECT hosting is QM/reference scope (kilnd, SM-PERF-001 reference runtime).
+        The embedded-cert path stays meld-fuse-only (RFC #46 / SM-ASYNC-002 apply
+        there). See AD-COMPONENT-HOST-001 for the both-paths reconciliation.
