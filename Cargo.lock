@@ -1540,6 +1540,7 @@ dependencies = [
  "linked_list_allocator",
  "tracing",
  "tracing-subscriber",
+ "wat",
 ]
 
 [[package]]

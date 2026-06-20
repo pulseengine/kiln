@@ -68,6 +68,9 @@ use kiln_logging::{
 #[cfg(feature = "std")]
 pub mod bounded_kilnd_infra;
 
+// witness MC/DC coverage harness mode (#340)
+pub mod witness_harness;
+
 // Safety-critical memory limits
 #[cfg(feature = "safety-critical")]
 pub mod memory_limits;
@@ -1287,6 +1290,16 @@ fn main_with_stack() -> Result<()> {
             .init();
 
         eprintln!("[TRACING] Tracing initialized - use RUST_LOG env var to control output");
+    }
+
+    // witness MC/DC coverage harness mode (#340 — REQ_WITNESS_COV / AD-MCDC-001):
+    // when witness invokes us with WITNESS_MODULE + WITNESS_OUTPUT set, run the
+    // instrumented core and write the witness-harness-v1 counter snapshot instead
+    // of the normal CLI flow. A non-zero exit (propagated here) is how witness
+    // detects harness failure.
+    #[cfg(all(feature = "std", feature = "kiln-execution"))]
+    if witness_harness::harness_requested() {
+        return witness_harness::run_from_env();
     }
 
     // Parse arguments first to check for --help
