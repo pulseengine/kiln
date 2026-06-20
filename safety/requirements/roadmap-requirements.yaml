@@ -345,13 +345,25 @@ artifacts:
         then snapshots counters at the end. Non-zero exit or a missing
         WITNESS_OUTPUT file = harness failure.
       progress: >
-        Phase 1 DONE (this requirement's first code): host-reachable post-run
-        snapshot accessor ModuleInstance::export_global_snapshot(prefix) ->
-        BTreeMap<name,i64>, prefix-filtered, integer-typed, fail-loud on a
-        non-integer matching global. Kept keyed by FULL export name (general
-        accessor); the witness-v1 prefix-strip + JSON envelope is a Phase-2
-        (kilnd --harness) serialization concern. TDD: 2 tests
-        (kiln-runtime/tests/witness_snapshot_test.rs) — prefix-filter+value reads,
-        and post-run-mutation reflected; mutation-proven. Phase 2 (kilnd --harness
-        env-var driver emitting witness-harness-v1) is fully unblocked by
-        harness-contract above.
+        Phase 1 DONE: host-reachable post-run snapshot accessor
+        ModuleInstance::export_global_snapshot(prefix) -> BTreeMap<name,i64>,
+        prefix-filtered, integer-typed, fail-loud on a non-integer matching
+        global. Kept keyed by FULL export name (general accessor); the witness-v1
+        prefix-strip + JSON envelope is the Phase-2 serialization concern. TDD:
+        2 tests (kiln-runtime/tests/witness_snapshot_test.rs), mutation-proven.
+        Phase 2 DONE: kilnd witness-harness mode (kilnd/src/witness_harness.rs).
+        When witness invokes kilnd with WITNESS_MODULE + WITNESS_OUTPUT set,
+        harness_requested() routes main to run_from_env() -> run(): load the
+        meld-fused core (fail-loud if a Component), instantiate, invoke the first
+        existing entry of [_start, run, 0, 1, main], snapshot __witness_counter_*,
+        and write {"schema":"witness-harness-v1","counters":{"<id>":N}} (prefix
+        stripped to the bare numeric id witness parses; numeric-ordered) to
+        WITNESS_OUTPUT; non-zero exit on failure per the contract. TDD: 4 tests
+        (3 unit on build_counters_json incl. numeric-order + fail-loud non-numeric;
+        1 integration over run(), mutation-proven by skipping execute). Verified
+        end-to-end against the real binary: wasm-tools-built instrumented core
+        run via the env contract emitted {"0":3,"1":0}, exit 0. REMAINING (Phase
+        3, follow-up): wasi:0.2 no-op stub inventory for syscall-heavy fused cores
+        (filesystem/cli/clocks/io/random implemented today; unsatisfied imports
+        currently fail-loud at instantiate); witness-harness-v2 per-row MC/DC
+        (deferred by witness). Dual-runtime cross-check (witness#110) can begin.

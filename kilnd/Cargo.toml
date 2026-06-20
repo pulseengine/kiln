@@ -42,6 +42,10 @@ tracing-subscriber = { version = "0.3", optional = true, default-features = fals
 
 # No external dependencies - use internal capabilities only
 
+[dev-dependencies]
+# WAT fixtures for the witness harness integration test (#340)
+wat = "1.244"
+
 [features]
 default = ["std", "kiln-execution", "component-model", "wasi", "wasi-cli", "wasi-io", "wasi-clocks", "wasi-random", "wasi-filesystem"]
 
