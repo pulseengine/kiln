@@ -316,6 +316,47 @@ impl ModuleInstance {
         Err(Error::resource_not_found("Global export not found"))
     }
 
+    /// Post-run snapshot of exported integer globals whose name starts with
+    /// `prefix`, as `export-name -> i64`.
+    ///
+    /// This is the host-reachable coverage accessor for the witness MC/DC tool
+    /// (issue #340): witness instruments core modules with exported globals
+    /// named `__witness_counter_<id>` and reconstructs MC/DC truth tables from
+    /// their values after a run, so a driver calls this with the
+    /// `"__witness_counter_"` prefix once execution finishes. Globals whose name
+    /// does not match `prefix` are excluded. A matching global that is not an
+    /// integer (i32/i64) is a contract violation and returns an error rather
+    /// than being silently dropped.
+    pub fn export_global_snapshot(
+        &self,
+        prefix: &str,
+    ) -> Result<std::collections::BTreeMap<String, i64>> {
+        use crate::module::ExportKind;
+        use kiln_foundation::values::Value;
+
+        let mut snapshot = std::collections::BTreeMap::new();
+        for (_key, export) in self.module.exports.iter() {
+            if export.kind != ExportKind::Global {
+                continue;
+            }
+            let export_name = export.name.as_str().unwrap_or("");
+            if !export_name.starts_with(prefix) {
+                continue;
+            }
+            let counter = match self.global(export.index)?.get()? {
+                Value::I32(v) => i64::from(v),
+                Value::I64(v) => v,
+                _ => {
+                    return Err(Error::runtime_error(
+                        "exported counter global is not an integer (i32/i64)",
+                    ));
+                }
+            };
+            snapshot.insert(export_name.to_string(), counter);
+        }
+        Ok(snapshot)
+    }
+
     /// Get the function type for a function
     pub fn function_type(&self, idx: u32) -> Result<crate::prelude::CoreFuncType> {
         let function = self
