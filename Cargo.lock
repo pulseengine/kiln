@@ -1497,6 +1497,7 @@ dependencies = [
  "kiln-sync",
  "kiln-wasi",
  "serial_test",
+ "wat",
 ]
 
 [[package]]
