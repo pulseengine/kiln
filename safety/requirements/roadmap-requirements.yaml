@@ -267,3 +267,61 @@ artifacts:
         Naming + workflow decision captured in AD-PUBLISH-001. Verified 2026-06-14:
         20/21 kiln-* names free but kiln-runtime taken (zenvanexus); all kilnvm-*
         target names available.
+
+  - id: REQ_WITNESS_COV
+    type: requirement
+    title: Witness MC/DC coverage backend — post-run global snapshot + harness mode
+    description: >
+      Kiln shall act as a coverage backend for the witness MC/DC tool so that
+      instrumented WebAssembly artifacts can be measured under a certifiable,
+      deterministic runtime (and differentially cross-checked against wasmtime
+      as oracle). witness instruments core modules by adding exported mutable
+      globals (__witness_counter_<id>) and reconstructs MC/DC truth tables from
+      their post-run values; wasmtime's component API exposes no way to read an
+      inner core's globals, so kiln — which already decodes/instantiates core
+      modules + Component-Model + WASI 0.2 and reads globals internally — is the
+      enabling runtime. Three concrete capabilities: (1) a post-run
+      exported-global SNAPSHOT API keyed by export name (or by the
+      __witness_counter_* prefix) returning name->integer, reachable from a host
+      driver; (2) a kilnd HARNESS mode (CLI flag and/or WITNESS_MODULE /
+      WITNESS_MANIFEST / WITNESS_OUTPUT env vars) that instantiates + runs the
+      module, invokes the specified export(s), then writes the counter snapshot
+      in witness's counter-snapshot JSON shape; (3) a documented inventory of
+      which wasi:0.2 interfaces are real vs. need no-op stubbing, since coverage
+      runs only require imports satisfied enough that branches execute (correct
+      WASI behaviour is NOT required). Near-term scope is SYNCHRONOUS
+      Component-Model coverage; p3 async-lift/streams are explicitly out of scope
+      (gated on p3 execution maturity; tracked as witness REQ-057 / witness#107B).
+    status: proposed
+    tags: [verification, mcdc, witness, coverage, cross-tool, roadmap, release-v0.4.0]
+    links:
+      - type: derives-from
+        target: REQ_VERIFY_010
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/340"
+      cross-ref: "pulseengine/witness#110 (strategy + dual-runtime cross-check); witness DEC-003 (counter mechanism); witness REQ-054/FEAT-034 (meld composition)"
+      feasibility: >
+        Grounded against the code (2026-06-20): the hard part already exists.
+        ModuleInstance::global_by_name (kiln-runtime/src/module_instance.rs:306)
+        + GlobalWrapper::get (module.rs:4291) already read exported globals by
+        name on a live core instance; Export metadata (name/kind/index,
+        ExportKind::Global) is a DirectMap lookup (module.rs:2823). witness's
+        own pipeline runs `meld fuse component.wasm -o core.wasm` first, so the
+        instrumented artifact is a CORE module — the global_by_name path applies
+        directly, no live-component global traversal needed for the primary
+        path. NEW work is mostly wiring + serialization: a prefix-keyed snapshot
+        accessor, a kilnd --harness / env-var mode emitting witness's JSON shape,
+        and the wasi:0.2 stub inventory (filesystem/cli/clocks/io/random are
+        implemented; coverage cores want no-op stubs). Component-with-live-core
+        global traversal is a later phase (nested-instance lookup) only if a
+        non-fused component path is needed.
+      regime-note: >
+        Keystone for AD-MCDC-001: once kiln is a witness coverage backend it can
+        run its OWN meld-fused components through itself + witness for MC/DC,
+        closing the witness step of the pulseengine-feature-loop for kiln itself
+        (dogfooding the same regime spar/synth/witness already follow).
+      release-note: >
+        Tagged release-v0.4.0 but INDEPENDENT of the kiln-async P3 track; mostly
+        additive wiring, so a candidate to pull forward as a focused sub-release
+        if witness's MC/DC-on-kiln work is gated on it. Release assignment is a
+        planning call (see release-planning).

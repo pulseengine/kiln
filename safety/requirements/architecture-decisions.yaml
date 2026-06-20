@@ -254,6 +254,53 @@ artifacts:
         for the embedded cert scope.
       implementation: "Verus: kiln-foundation/src/verus_proofs/; Kani harnesses; fuzz/; kiln-build-core/src/wast_execution.rs"
 
+  - id: AD-MCDC-001
+    type: design-decision
+    title: Kiln dogfoods the full PulseEngine formal validation regime (incl. witness MC/DC)
+    description: >
+      Kiln's own work shall be held to the SAME strong formal validation regime
+      the sibling tools follow (spar's Lean proofs, synth's eval-gated benches,
+      witness's MC/DC) — not a weaker one because kiln is the runtime. The
+      defense-in-depth strategy (AD-QUALITY-001) already lists Verus, Kani,
+      fuzzing, WAST conformance and Miri, but it OMITS structural-coverage
+      adequacy: MC/DC (modified condition/decision coverage) on kiln's own
+      WebAssembly artifacts via witness. This decision adds that missing
+      dimension and makes the pulseengine-feature-loop's witness step
+      (truth-table MC/DC with zero unresolved gap rows) a standing gate for
+      kiln's safety-relevant components, alongside the Kani/Verus proofs and
+      rivet traceability already in place. The enabler is REQ_WITNESS_COV (#340):
+      exposing kiln's post-run exported-global snapshot makes kiln a witness
+      coverage backend — and therefore lets kiln run its OWN meld-fused
+      components through itself + witness, so kiln is both the coverage runtime
+      and its first consumer. Sequencing: land REQ_WITNESS_COV, then bring
+      kiln's cert-scope components under MC/DC and read gap rows (not coverage
+      percentages); Verus CI-gating (REQ_ASYNC_SCHED Phase 6 / #237) and sigil
+      attestation complete the regime parity.
+    status: approved
+    tags: [verification, mcdc, witness, defense-in-depth, formal-methods, dogfooding, feature-loop]
+    links:
+      - type: satisfies
+        target: REQ_WITNESS_COV
+      - type: satisfies
+        target: REQ_VERIFY_010
+    fields:
+      rationale: >
+        A runtime that measures others' coverage but is not itself held to
+        structural-coverage adequacy is an inconsistent regime. MC/DC is the
+        coverage criterion the safety standards (DO-178C Level A, ISO 26262
+        ASIL-D) expect for decision logic; the other PulseEngine tools already
+        run it, and #340 removes the only technical blocker to running it on
+        kiln (no host-reachable post-run global read). Dogfooding also hardens
+        the coverage backend: kiln's own components are the first real workload.
+      alternatives-considered: >
+        (1) Keep coverage external (line/branch via tarpaulin) — rejected: not
+        MC/DC, gives no decision-adequacy evidence for cert scope. (2) Defer
+        until the embedded ASIL-D core stabilises — rejected: the regime should
+        lead the code, not trail it (feature-loop: traceability/oracles first).
+      relates-to: "AD-QUALITY-001 (this adds the MC/DC dimension that decision omits)"
+      implementation: "Enabler: REQ_WITNESS_COV / issue #340 (post-run global snapshot + kilnd --harness). Consumer: witness MC/DC over kiln's meld-fused cert-scope components, gap-row gated in the feature-loop."
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/340"
+
   - id: AD-DEBUG-001
     type: design-decision
     title: Source-level, WIT-aware debugging via DWARF mapping
