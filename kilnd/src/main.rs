@@ -71,6 +71,9 @@ pub mod bounded_kilnd_infra;
 // witness MC/DC coverage harness mode (#340)
 pub mod witness_harness;
 
+// Direct Component-Model hosting (#344)
+pub mod component_host;
+
 // Safety-critical memory limits
 #[cfg(feature = "safety-critical")]
 pub mod memory_limits;
