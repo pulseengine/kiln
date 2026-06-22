@@ -28,7 +28,7 @@ colored = "3.1.1"
 regex = "1.10"
 
 # Configuration parsing
-toml = "0.9"
+toml = "1.1"
 md5 = "0.8"
 
 # WAST test suite support
