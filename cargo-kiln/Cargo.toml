@@ -44,7 +44,7 @@ atty = "0.2"
 toml = "0.9"
 serde = { version = "1.0", features = ["derive"] }
 thiserror = "2.0"
-which = "6.0"
+which = "8.0"
 
 # GitHub integration
 reqwest = { version = "0.13", features = ["json"] }
