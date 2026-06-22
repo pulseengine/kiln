@@ -85,7 +85,7 @@ jobs:
       TARGET: ${{ matrix.target }}
       ARCHIVE_KIND: ${{ matrix.archive }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           submodules: recursive
@@ -175,7 +175,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag || github.ref }}
           submodules: recursive
