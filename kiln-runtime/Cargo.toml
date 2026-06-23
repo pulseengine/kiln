@@ -239,3 +239,11 @@ kani-verifier = []
 [dev-dependencies]
 serial_test = "3.4"
 wat = "1.244"
+criterion = { version = "0.8", features = ["html_reports"] }
+
+# Interpreter instruction-throughput baseline (compute loop + memory loop).
+# The memory loop exercises the per-access lock path so optimizations there
+# (e.g. the double-mutex memory access) show a measurable delta. See #358.
+[[bench]]
+name = "interpreter_throughput"
+harness = false
