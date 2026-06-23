@@ -10,6 +10,7 @@ use kiln_runtime::engine::{CapabilityAwareEngine, CapabilityEngine, EnginePreset
 
 /// The snapshot returns only exported globals whose name matches the prefix,
 /// with their (post-instantiation) integer values, excluding non-matching ones.
+// rivet: verifies REQ_WITNESS_COV
 #[test]
 fn snapshot_filters_by_prefix_and_reads_integer_values() {
     let wasm = wat::parse_str(
@@ -36,6 +37,7 @@ fn snapshot_filters_by_prefix_and_reads_integer_values() {
 /// The decisive coverage case: a counter incremented during the run is
 /// reflected in the post-run snapshot (i.e. `execute` mutates the same global
 /// state the snapshot reads).
+// rivet: verifies REQ_WITNESS_COV
 #[test]
 fn snapshot_reflects_counters_mutated_during_the_run() {
     let wasm = wat::parse_str(

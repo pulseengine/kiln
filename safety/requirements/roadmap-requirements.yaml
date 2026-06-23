@@ -292,7 +292,7 @@ artifacts:
       WASI behaviour is NOT required). Near-term scope is SYNCHRONOUS
       Component-Model coverage; p3 async-lift/streams are explicitly out of scope
       (gated on p3 execution maturity; tracked as witness REQ-057 / witness#107B).
-    status: proposed
+    status: implemented
     tags: [verification, mcdc, witness, coverage, cross-tool, roadmap, release-v0.4.0]
     links:
       - type: derives-from
