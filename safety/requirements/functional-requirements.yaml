@@ -97,7 +97,7 @@ artifacts:
       instructions and control flow, function calls and tables, memory
       and data segments, global variables, exception handling (modern
       try_table syntax), and SIMD operations.
-    status: partial
+    status: implemented
     tags: [wasm-core, spec-conformance]
     fields:
       implementation: kiln-runtime/src/stackless/engine.rs
@@ -110,7 +110,7 @@ artifacts:
     description: >
       The interpreter shall be testable against the official WebAssembly
       specification (WAST) test suite to ensure conformance and correctness.
-    status: partial
+    status: implemented
     tags: [testing, spec-conformance]
     fields:
       implementation: kiln-build-core/src/wast_execution.rs
@@ -128,7 +128,7 @@ artifacts:
       resource type handling, interface types, component instantiation
       and linking, resource lifetime management, custom section handling,
       and component model binary format parsing.
-    status: partial
+    status: implemented
     tags: [component-model, spec-conformance]
     fields:
       implementation: kiln-component/src/
@@ -142,7 +142,7 @@ artifacts:
       Model binary format including magic bytes, component sections,
       type encoding, import/export handling, core module embedding,
       canonical ABI encoding/decoding, and LEB128 encoding.
-    status: partial
+    status: implemented
     tags: [component-model, decoder]
     links:
       - type: derives-from
@@ -157,7 +157,7 @@ artifacts:
       The component model implementation shall provide comprehensive
       lifecycle management for resource types, ensuring proper creation,
       tracking, and disposal of resources.
-    status: partial
+    status: implemented
     tags: [component-model, resources]
     links:
       - type: derives-from
@@ -177,7 +177,7 @@ artifacts:
       to the kilnd CLI, rather than aborting the process. This preserves a
       consistent user experience: kilnd either executes the requested export
       or reports an actionable error.
-    status: partial
+    status: implemented
     tags: [component-model, robustness, error-handling]
     links:
       - type: derives-from
@@ -356,7 +356,7 @@ artifacts:
       ABI including functions for Wasm operations not efficiently inlined
       by the AOT compiler: kiln_memory_copy, kiln_memory_fill,
       kiln_memory_grow, kiln_atomic_wait, kiln_atomic_notify.
-    status: planned
+    status: proposed
     tags: [aot, synth-integration]
     fields:
       note: "Related to BA RFC #46 host-wit-bindgen equivalent"
@@ -375,7 +375,7 @@ artifacts:
       for memory64-typed memories. The decoder shall parse the memory64
       flag in memory type definitions and validate that memory indices
       referencing memory64 memories use i64 operands throughout.
-    status: planned
+    status: proposed
     tags: [wasm-core, spec-conformance, memory64]
     traced_to: [H-2]
     links:
@@ -407,7 +407,7 @@ artifacts:
       and atomic.fence. In single-threaded (no_std) mode, atomic
       operations shall execute as regular load/store/RMW operations
       with correct sequential semantics but without real concurrency.
-    status: planned
+    status: proposed
     tags: [wasm-core, spec-conformance, threads, atomics]
     traced_to: [H-1]
     links:
@@ -436,7 +436,7 @@ artifacts:
       conditional branching, i31.new and i31.get_s/i31.get_u for
       unboxed 31-bit integers, and extern.internalize/extern.externalize
       for host reference conversion.
-    status: planned
+    status: proposed
     tags: [wasm-core, spec-conformance, gc]
     traced_to: [H-1, H-3]
     links:
@@ -470,7 +470,7 @@ artifacts:
       i7x16_add_s). The interpreter shall choose deterministic behavior
       for all edge cases (NaN handling, out-of-range truncation) and
       document which deterministic choice is made for each operation.
-    status: planned
+    status: proposed
     tags: [wasm-core, spec-conformance, simd, relaxed-simd]
     traced_to: [H-1]
     links:
@@ -496,7 +496,7 @@ artifacts:
       i64.mul_wide_u (unsigned 64x64->128 multiplication). All
       operations shall handle overflow and sign extension correctly
       per the proposal specification.
-    status: planned
+    status: proposed
     tags: [wasm-core, spec-conformance, wide-arithmetic]
     traced_to: [H-1]
     links:
@@ -523,7 +523,7 @@ artifacts:
       memory.grow growing by the declared page size units. The decoder
       shall parse the custom-page-size annotation in memory types and
       validate that only allowed page sizes (1 and 65536) are used.
-    status: planned
+    status: proposed
     tags: [wasm-core, spec-conformance, custom-page-sizes]
     traced_to: [H-2]
     links:
@@ -579,7 +579,7 @@ artifacts:
       Completed threads shall be reaped: the backing gale task shall be
       deallocated (gale_task_delete) and the thread table slot shall be
       recycled.
-    status: planned
+    status: proposed
     tags: [rfc46, thread-intrinsics, component-model, gale-integration]
     traced_to: [H-13, H-13.1, H-13.4, H-14, H-15]
     links:
@@ -616,7 +616,7 @@ artifacts:
       value per the RFC encoding. Read/write results shall use the
       COPY_RESULT constants: BLOCKED(0xFFFFFFFF), COMPLETED(0),
       DROPPED(1), CANCELLED(2).
-    status: planned
+    status: proposed
     tags: [rfc46, stream-intrinsics, component-model]
     traced_to: [H-13, H-13.2, H-2]
     links:
@@ -650,7 +650,7 @@ artifacts:
       prevention). Calling thing_rep on a dropped handle shall trap.
       Handle values shall encode both slot index and generation to detect
       stale references.
-    status: planned
+    status: proposed
     tags: [rfc46, resource-intrinsics, component-model]
     traced_to: [H-13, H-13.3, H-6]
     links:
@@ -715,7 +715,7 @@ artifacts:
       state changes (e.g., stream data written). Stream-to-executor
       notification occurs when the ring buffer state changes (data
       available or space available).
-    status: planned
+    status: proposed
     tags: [rfc46, waitable-intrinsics, component-model, gale-integration]
     traced_to: [H-13, H-13.4, H-13.5, H-14, H-18]
     links:

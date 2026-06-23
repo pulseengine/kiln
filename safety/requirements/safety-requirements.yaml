@@ -51,7 +51,7 @@ artifacts:
       metering is enabled. This includes loop back-edges, not just block
       and function entry. The fuel counter shall be atomic in multi-threaded
       configurations.
-    status: partial
+    status: implemented
     tags: [execution, resource-containment, asil-c, stpa-derived]
     links:
       - type: derives-from
@@ -76,7 +76,7 @@ artifacts:
       access, not a cached value. If caching is used for performance, the
       cache shall be invalidated on every memory.grow, memory.copy, and
       memory.fill that changes memory size.
-    status: partial
+    status: implemented
     tags: [execution, memory-safety, asil-d, stpa-derived]
     links:
       - type: derives-from
@@ -101,7 +101,7 @@ artifacts:
       Any opcode or opcode prefix+suffix combination not defined in the
       WebAssembly spec shall cause an immediate trap. The default match arm
       in opcode dispatch shall return Err, not Ok.
-    status: delegated
+    status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [execution, correctness, stpa-derived]
     links:
@@ -123,7 +123,7 @@ artifacts:
       Maximum call depth shall be checked before call, call_indirect,
       call_ref, and return_call instructions. The check shall measure
       actual call depth (not frame count) to correctly handle tail calls.
-    status: delegated
+    status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [execution, stack-safety, asil-d, stpa-derived]
     links:
@@ -147,7 +147,7 @@ artifacts:
       In multi-memory modules, every memory instruction's memory index
       operand shall be validated against the module's declared memory count.
       Invalid indices shall trap. The engine shall not default to memory 0.
-    status: delegated
+    status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [execution, memory-safety, stpa-derived]
     links:
@@ -170,7 +170,7 @@ artifacts:
       The decoder shall reject modules with duplicate sections, out-of-order
       sections, invalid LEB128 encodings, and all other malformation checks
       defined in the WebAssembly spec.
-    status: delegated
+    status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [decoder, validation, asil-d, stpa-derived]
     links:
@@ -195,7 +195,7 @@ artifacts:
       Decoder shall check configured resource limits before allocating
       structures for types, functions, memories, tables, globals, and
       elements. The limit check shall occur before the allocation, not after.
-    status: delegated
+    status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [decoder, resource-containment, asil-d, stpa-derived]
     links:
@@ -224,7 +224,7 @@ artifacts:
       sequences), UTF-16 (including surrogate pairs), and Latin-1. Multi-byte
       characters shall not be split across buffer boundaries. Code unit counts
       shall match the encoding.
-    status: delegated
+    status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [component-model, canonical-abi, strings, stpa-derived]
     links:
@@ -247,7 +247,7 @@ artifacts:
       Record field offsets shall be computed using align_up(current_offset,
       field_alignment) as defined in the canonical ABI spec. The align_up
       function shall be: align_up(x, a) = (x + a - 1) & !(a - 1).
-    status: delegated
+    status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [component-model, canonical-abi, alignment, stpa-derived]
     links:
@@ -269,7 +269,7 @@ artifacts:
       List element size shall be computed as align_up(sum_of_field_sizes,
       max_alignment). This shall match Meld's canonical_abi_element_size()
       for all type families. Disagreement is a blocking defect.
-    status: delegated
+    status: proposed
     delegation-note: "Canonical ABI delegated to Meld per BA RFC #46"
     tags: [component-model, canonical-abi, cross-toolchain, stpa-derived]
     links:
@@ -344,7 +344,7 @@ artifacts:
   - id: SR-15
     type: requirement
     title: Type compatibility verified at link time
-    status: partial
+    status: implemented
     tags: [linker, type-safety, stpa-derived]
     links:
       - type: derives-from
@@ -460,7 +460,7 @@ artifacts:
   - id: SR-22
     type: requirement
     title: ASIL-D mode rejects dynamic allocation
-    status: partial
+    status: implemented
     tags: [allocation, asil-d, stpa-derived]
     links:
       - type: derives-from
@@ -611,7 +611,7 @@ artifacts:
     description: >
       Resource usage shall be continuously monitored and reported. High
       watermarks shall be tracked for capacity planning.
-    status: partial
+    status: implemented
     tags: [resource-management, asil-b, migrated-from-sphinx]
     fields:
       iso-26262: "ISO 26262-6:8.4.8"
@@ -708,7 +708,7 @@ artifacts:
     description: >
       Time-critical operations shall be monitored for deadline compliance.
       Deadline misses shall be reported to the system scheduler.
-    status: partial
+    status: implemented
     tags: [temporal, asil-c, migrated-from-sphinx]
     fields:
       iso-26262: "ISO 26262-6:7.4.5"
@@ -736,7 +736,7 @@ artifacts:
       Information flow between different criticality levels shall be
       controlled and validated. High-criticality data shall not flow
       to low-criticality domains without explicit authorization.
-    status: partial
+    status: implemented
     tags: [data-flow, asil-c, migrated-from-sphinx]
     fields:
       iso-26262: "ISO 26262-6:7.4.13"
@@ -808,7 +808,7 @@ artifacts:
       code, not the interpreter. Memory64 safety constraints apply to the
       kiln-builtins host intrinsics that manage linear memory on behalf of
       synth-compiled modules.
-    status: planned
+    status: proposed
     tags: [no-std, memory-safety, memory64, asil-d, stpa-derived]
     traced_to: [H-2, H-3, H-7]
     links:
@@ -844,7 +844,7 @@ artifacts:
       code, not the interpreter. GC reference safety constraints apply to
       kiln-builtins allocations backing GC heap objects in synth-compiled
       modules.
-    status: planned
+    status: proposed
     tags: [no-std, memory-safety, gc, asil-c, stpa-derived]
     traced_to: [H-1, H-3, H-7]
     links:
@@ -877,7 +877,7 @@ artifacts:
       mode. The no_std atomic implementation shall produce identical
       results to the std implementation for all single-threaded execution
       sequences.
-    status: planned
+    status: proposed
     tags: [no-std, threads, atomics, asil-b, stpa-derived]
     traced_to: [H-1, H-3, H-7]
     links:
@@ -910,7 +910,7 @@ artifacts:
       integrated with the existing fuel metering system so that a
       single resource limit configuration covers both execution time
       and space budgets.
-    status: planned
+    status: proposed
     tags: [no-std, resource-containment, asil-d, stpa-derived]
     traced_to: [H-3, H-7]
     links:

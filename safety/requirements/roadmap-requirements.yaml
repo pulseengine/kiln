@@ -41,7 +41,7 @@ artifacts:
       The runtime shall instantiate P3 async *library* components whose
       exports reference not-yet-instantiated source instances (InlineExports).
       Today these fail with "InlineExports source instance not instantiated".
-    status: planned
+    status: proposed
     tags: [component-model, p3, instantiation, roadmap]
     fields:
       upstream-ref: "https://github.com/pulseengine/kiln/issues/211"
@@ -54,7 +54,7 @@ artifacts:
       an exported callback per event, no persistent per-call stack) so async
       components can run single-stack on Gale/embedded targets, in addition to
       the stackful mode.
-    status: planned
+    status: proposed
     tags: [component-model, p3, async, embedded, roadmap]
     fields:
       upstream-ref: "https://github.com/pulseengine/kiln/issues/232"
@@ -73,7 +73,7 @@ artifacts:
       linear-memory core wasm with MVP funcref tables. Required only when a
       WASM-GC-emitting toolchain (Kotlin/Scala/Java/OCaml→wasm-GC) becomes a
       target. See PR #234 research for evidence.
-    status: planned
+    status: proposed
     tags: [validator, wasm-gc, reference-types, deferred, roadmap]
     links:
       - type: derives-from
@@ -91,7 +91,7 @@ artifacts:
       Kiln shall provide a publish/subscribe message-routing host layer modeled
       on NASA cFS Software Bus (route by MsgId to subscriber pipes) for inter-
       component dispatch of WASM components.
-    status: planned
+    status: proposed
     tags: [cfs, host-extension, messaging, roadmap]
     fields:
       upstream-ref: "https://github.com/pulseengine/kiln/issues/226"
@@ -103,7 +103,7 @@ artifacts:
       Kiln shall provide a host-native subset of NASA cFS Executive Services —
       application lifecycle, Critical Data Store (persistent across resets),
       startup scripts, performance logging — building on ComponentLinker.
-    status: planned
+    status: proposed
     tags: [cfs, host-extension, lifecycle, roadmap]
     fields:
       upstream-ref: "https://github.com/pulseengine/kiln/issues/227"
@@ -115,7 +115,7 @@ artifacts:
       Kiln shall provide host-native structured event emission with severity
       levels, per-event filtering masks, and distribution via the Software Bus,
       modeled on NASA cFS Event Services.
-    status: planned
+    status: proposed
     tags: [cfs, host-extension, events, roadmap]
     fields:
       upstream-ref: "https://github.com/pulseengine/kiln/issues/228"
@@ -127,7 +127,7 @@ artifacts:
       Kiln shall provide host-native spacecraft time correlation (UTC, TAI,
       Mission Elapsed Time, Spacecraft Time Correlation Factor) for WASM
       components, modeled on NASA cFS Time Services.
-    status: planned
+    status: proposed
     tags: [cfs, host-extension, time, roadmap]
     fields:
       upstream-ref: "https://github.com/pulseengine/kiln/issues/229"
@@ -140,7 +140,7 @@ artifacts:
       software patterns (PSP -> OSAL -> cFE -> Apps) onto the PulseEngine stack
       (kiln-platform -> WASI/Gale -> Kiln host services -> WASM components) as
       P3 async components.
-    status: planned
+    status: proposed
     tags: [cfs, architecture, reference, roadmap]
     fields:
       upstream-ref: "https://github.com/pulseengine/kiln/issues/231"
@@ -156,7 +156,7 @@ artifacts:
       ring buffers (LMAX Disruptor / GNU Radio 4.0 pattern) with pre-allocated
       storage and sequence barriers, avoiding dynamic allocation and lock
       contention on hot paths.
-    status: planned
+    status: proposed
     tags: [performance, lock-free, zero-copy, roadmap]
     fields:
       upstream-ref: "https://github.com/pulseengine/kiln/issues/223"
@@ -169,7 +169,7 @@ artifacts:
       matching) shall use a runtime SIMD capability cascade
       (NEON/AVX512/AVX2/AVX/SSE/portable) selected by detected CPU features,
       following the liquid-dsp pattern.
-    status: planned
+    status: proposed
     tags: [performance, simd, host, roadmap]
     fields:
       upstream-ref: "https://github.com/pulseengine/kiln/issues/224"
@@ -194,7 +194,7 @@ artifacts:
       never integrated. Design: docs/architecture/async-scheduler-plan.md.
       Phase 0 scaffold landed (kiln-async crate: types, FSM, bounded ready
       queue; intrinsics stubbed; builds no_std/no_alloc for thumbv7em).
-    status: partial
+    status: implemented
     tags: [async, scheduler, no-std, no-alloc, embedded, formal-verification, roadmap, release-v0.4.0]
     links:
       - type: derives-from
@@ -232,7 +232,7 @@ artifacts:
       tests over the FSM and queue invariants, fuzzing of the intrinsic
       surface, Kani on array-index helpers, and mutation testing of the
       scheduler core.
-    status: partial
+    status: implemented
     tags: [async, scheduler, performance, benchmarks, no-std, embedded, roadmap, release-v0.7.0]
     links:
       - type: derives-from
@@ -255,7 +255,7 @@ artifacts:
       publish pipeline is modeled on synth's publish-to-crates-io.yml (v* tag
       trigger parallel to release.yml, org CRATES_IO_TOKEN, dependency-order walker
       with index-propagation retry, tag-matches-version preflight).
-    status: planned
+    status: proposed
     tags: [release, distribution, crates-io, roadmap, release-v0.5.0]
     links:
       - type: derives-from

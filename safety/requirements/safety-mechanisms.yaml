@@ -350,7 +350,7 @@ artifacts:
       targets the safe scheduler invariants (FSM soundness, queue no-overflow,
       backpressure correctness, lost-wakeup-freedom) rather than backing an
       unsafe block — a stronger story: zero unsafe + proven invariants.
-    status: partial
+    status: implemented
     tags: [async, scheduler, no-std, no-alloc, embedded, mechanism]
     links:
       - type: satisfies
