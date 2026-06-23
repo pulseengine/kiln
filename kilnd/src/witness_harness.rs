@@ -160,6 +160,7 @@ pub fn run(module_path: &std::path::Path, output_path: &std::path::Path) -> Resu
 mod tests {
     use super::*;
 
+    // rivet: verifies REQ_WITNESS_COV
     #[test]
     fn build_counters_json_strips_prefix_to_bare_id_in_v1_envelope() {
         let mut snapshot = BTreeMap::new();
@@ -174,6 +175,7 @@ mod tests {
         );
     }
 
+    // rivet: verifies REQ_WITNESS_COV
     #[test]
     fn build_counters_json_orders_ids_numerically_not_lexically() {
         let mut snapshot = BTreeMap::new();
@@ -189,6 +191,7 @@ mod tests {
         );
     }
 
+    // rivet: verifies REQ_WITNESS_COV
     #[test]
     fn build_counters_json_rejects_non_numeric_id() {
         let mut snapshot = BTreeMap::new();
@@ -199,6 +202,7 @@ mod tests {
 
     /// End-to-end: `run` loads a core, invokes `_start` (which hits a counter
     /// twice), and writes the v1 snapshot reflecting the post-run value.
+    // rivet: verifies REQ_WITNESS_COV
     #[cfg(all(feature = "std", feature = "kiln-execution"))]
     #[test]
     fn run_executes_entry_and_writes_v1_snapshot() {

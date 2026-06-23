@@ -51,7 +51,7 @@ artifacts:
       Zephyr RTOS, bare-metal) are supported through the platform abstraction
       layer with environment-specific memory models, security features, and
       resource constraints.
-    status: partial
+    status: implemented
     tags: [architecture, platform, deployment]
     links:
       - type: satisfies
@@ -438,7 +438,7 @@ artifacts:
       a v* tag triggers it in parallel with release.yml, auth via the org-wide
       CRATES_IO_TOKEN, a dependency-order publish walker with index-propagation retry,
       and a tag-matches-workspace-version preflight.
-    status: planned
+    status: proposed
     tags: [release, distribution, crates-io, naming, tooling]
     links:
       - type: satisfies

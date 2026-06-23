@@ -26,7 +26,7 @@ artifacts:
       Stackless WebAssembly instruction execution engine with resumable
       operation, fuel-based bounded execution, and multi-instance support.
       Crate: kiln-runtime.
-    status: partial
+    status: implemented
     tags: [component, runtime, core]
     links:
       - type: satisfies
@@ -75,7 +75,7 @@ artifacts:
       component instantiation, canonical ABI lifting/lowering, resource
       lifecycle management, and interface types.
       Crate: kiln-component.
-    status: partial
+    status: implemented
     tags: [component, component-model]
     links:
       - type: satisfies
@@ -232,7 +232,7 @@ artifacts:
       Async canonical lifting/lowering, async execution engine with
       future-based task management, and context preservation across async
       boundaries. Crate: kiln-runtime.
-    status: removed
+    status: deprecated
     tags: [component, async, runtime]
     links:
       - type: satisfies
@@ -266,7 +266,7 @@ artifacts:
       Integration with the official WebAssembly specification (WAST) test
       suite for conformance and correctness testing. Test runner with
       result tracking and memory statistics.
-    status: partial
+    status: implemented
     tags: [testing, conformance]
     links:
       - type: satisfies
@@ -336,7 +336,7 @@ artifacts:
       AllocationMonitor, CapabilityMonitor, ErrorMonitor, PerformanceMonitor
       subsystems. Returns SafetyReport with health_score (0-100).
       High watermark tracking for capacity planning.
-    status: partial
+    status: implemented
     tags: [monitoring, resource-management, tooling]
     links:
       - type: satisfies

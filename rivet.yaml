@@ -9,6 +9,11 @@ project:
     - common
     - stpa
     - dev
+    # ASPICE 4.0 V-model verification types (SWE.5/SWE.6 unit/integration test) —
+    # adopted 2026-06 to model the right side of the V (tests verifying
+    # requirements). Closes the gap where dev modelled requirement→decision→feature
+    # only and nothing could reach `verified` status. See pulseengine.eu#88.
+    - aspice
 
 sources:
   - path: safety/stpa
