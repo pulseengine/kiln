@@ -1,0 +1,80 @@
+name: Testsuite Re-pin & Conformance Baseline
+
+# Regularly re-pins external/testsuite (WebAssembly/testsuite) to latest upstream
+# and re-measures WAST conformance, opening a PR for review.
+#
+# Why: the submodule must stay PINNED (committed gitlink == checked-out commit)
+# so every checkout / CI run / git worktree exercises the SAME suite — otherwise
+# conformance numbers silently diverge between environments (this confound was
+# kiln#360: main had 7e0b83a checked out while the gitlink recorded a different
+# commit, so a fresh worktree tested a different suite). A fixed old pin goes
+# stale against the evolving spec, so this job moves the pin forward on a cadence
+# and surfaces the new conformance baseline for human review (spec evolution can
+# add failing files, so the new baseline must be reviewed, not auto-merged).
+
+on:
+  schedule:
+    - cron: '0 4 1 * *'   # monthly, 1st @ 04:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  repin:
+    name: Re-pin testsuite + re-measure conformance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Bump testsuite to latest upstream
+        id: bump
+        run: |
+          cd external/testsuite
+          git fetch origin
+          git checkout origin/main
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Run WAST conformance (legacy excluded by the runner)
+        id: conf
+        continue-on-error: true
+        run: |
+          cargo run --release -p cargo-kiln -- testsuite --run-wast \
+            --wast-dir external/testsuite | tee conformance.txt
+          {
+            echo "summary<<EOF"
+            grep -E 'Files:|Assertions:' conformance.txt
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Open re-pin PR
+        uses: peter-evans/create-pull-request@v7
+        with:
+          add-paths: external/testsuite
+          branch: chore/testsuite-repin
+          delete-branch: true
+          title: "chore(testsuite): re-pin to ${{ steps.bump.outputs.short }} + conformance re-baseline"
+          commit-message: |
+            chore(testsuite): re-pin external/testsuite to ${{ steps.bump.outputs.short }}
+
+            Automated re-pin to latest WebAssembly/testsuite + conformance
+            re-measure. Review the new baseline before merging. See kiln#360.
+          body: |
+            Automated re-pin of `external/testsuite` to latest upstream
+            (`${{ steps.bump.outputs.commit }}`), keeping the submodule pinned so
+            CI / worktrees run a reproducible suite (kiln#360).
+
+            **WAST conformance against the new suite:**
+            ```
+            ${{ steps.conf.outputs.summary }}
+            ```
+
+            Review the delta vs the previous baseline before merging, and update
+            the conformance note in `safety/requirements/architecture-components.yaml`.

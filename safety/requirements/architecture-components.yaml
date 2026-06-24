@@ -42,7 +42,7 @@ artifacts:
     fields:
       previous-id: ARCH_COMP_001
       implementation: kiln-runtime/src/stackless/engine.rs
-      note: "Infrastructure implemented; 332 WAST assertion failures remain across 74/280 files (verified 2026-06-13, testsuite @7e0b83a), down from ~1,500. Dominated by GC subtyping (type-subtyping, br_on_cast×4, i31, struct/array, ref_*), linking/imports (instance, imports*), tables/elem. Issue 149; unreached-invalid excess-value cases are Issue 146."
+      note: "Infrastructure implemented. Conformance baseline (measured from source; testsuite re-pinned to WebAssembly/testsuite @193e551, 2026-06-17): 263/281 files pass; 65980 assertions pass / 529 fail. Remaining failures concentrated in 17 files, dominated by the GC custom-descriptors proposal (proposals/custom-descriptors/*) + br_on_cast/br_on_null/return_call_ref (Issue 149). type-subtyping.wast now passes (PR #359). The submodule is PINNED (gitlink == checkout) and moved forward on a cadence by .github/workflows/testsuite-repin.yml so the number is reproducible across CI/worktrees (kiln#360). The earlier '332 across 74 files @7e0b83a' figure was stale and measured against a divergent submodule checkout."
 
   - id: AC-MEMORY
     type: feature
