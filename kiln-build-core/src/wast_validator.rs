@@ -291,12 +291,6 @@ const WASM_MAX_MEMORY_PAGES: u32 = 65536;
 impl WastModuleValidator {
     /// Validate a module
     pub fn validate(module: &Module) -> Result<()> {
-        {
-            use std::io::Write;
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/kiln_debug.log") {
-                writeln!(f, "[VALIDATE] called with {} functions, {} types", module.functions.len(), module.types.len()).ok();
-            }
-        }
         // Validate memory, table, and tag limits
         Self::validate_memory_limits(module)?;
         Self::validate_table_limits(module)?;
@@ -1451,14 +1445,6 @@ impl WastModuleValidator {
                             return Err(anyhow!("type mismatch"));
                         }
                         for &expected in frame.output_types.iter().rev() {
-                            {
-                                use std::io::Write;
-                                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/tmp/kiln_block_end_debug.log") {
-                                    let actual_top = stack.last();
-                                    writeln!(f, "[BLOCK_END] reachable: expected={:?}, actual_top={:?}, stack_len={}, frame_height={}",
-                                        expected, actual_top, stack.len(), frame_height).ok();
-                                }
-                            }
                             if !Self::pop_type_with_module(&mut stack, expected, frame_height, false, Some(module)) {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -1696,9 +1682,13 @@ impl WastModuleValidator {
                         return Err(anyhow!("unknown table"));
                     }
 
-                    // Validate table element type is funcref (not externref)
+                    // The table's element type must be a subtype of `funcref`
+                    // (i.e. `ref null func`). A plain `funcref` table qualifies, but
+                    // so does any typed function-reference table such as
+                    // `(ref null $t)` where `$t` is a function type. Only non-func
+                    // reference tables (externref, anyref hierarchy, …) are rejected.
                     if let Some(elem_type) = Self::get_table_element_type(module, table_idx) {
-                        if elem_type != kiln_foundation::RefType::Funcref {
+                        if !Self::is_ref_type_subtype(&elem_type, &kiln_foundation::RefType::Funcref, module) {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
@@ -1802,9 +1792,12 @@ impl WastModuleValidator {
                         return Err(anyhow!("unknown table"));
                     }
 
-                    // Validate table element type is funcref (not externref)
+                    // The table's element type must be a subtype of `funcref`.
+                    // (See call_indirect above — typed function-reference tables
+                    // such as `(ref null $t)` are valid; only non-func reference
+                    // tables are rejected.)
                     if let Some(elem_type) = Self::get_table_element_type(module, table_idx) {
-                        if elem_type != kiln_foundation::RefType::Funcref {
+                        if !Self::is_ref_type_subtype(&elem_type, &kiln_foundation::RefType::Funcref, module) {
                             return Err(anyhow!("type mismatch"));
                         }
                     }
