@@ -1333,17 +1333,52 @@ mod std_parsing {
                     params.push((name, val_type));
                 }
 
-                // Read result vector
-                let (result_count, bytes_read) = binary::read_leb128_u32(bytes, offset)?;
-                offset += bytes_read;
+                // Read the result list.
+                //
+                // Per the Component Model binary format, a functype's results are
+                // NOT a plain vector. They are encoded as:
+                //   0x00 t:valtype                 => (result t)        ; one unnamed result
+                //   0x01 lt*:vec(<labelvaltype>)   => (result lt)*      ; named results
+                // (see WebAssembly/component-model binary.md, `functype`).
+                if offset >= bytes.len() {
+                    return Err(Error::parse_error(
+                        "Unexpected end of input while parsing function result list",
+                    ));
+                }
+                let result_kind = bytes[offset];
+                offset += 1;
 
-                let mut results = Vec::with_capacity(result_count as usize);
-                for _ in 0..result_count {
-                    // Read result type
-                    let (val_type, bytes_read) = parse_val_type(&bytes[offset..])?;
-                    offset += bytes_read;
+                let mut results = Vec::new();
+                match result_kind {
+                    0x00 => {
+                        // Single unnamed result.
+                        let (val_type, bytes_read) = parse_val_type(&bytes[offset..])?;
+                        offset += bytes_read;
+                        results.push(val_type);
+                    },
+                    0x01 => {
+                        // Vector of named results.
+                        let (result_count, bytes_read) = binary::read_leb128_u32(bytes, offset)?;
+                        offset += bytes_read;
 
-                    results.push(val_type);
+                        results.reserve(result_count as usize);
+                        for _ in 0..result_count {
+                            // Each named result is label':<string> t:<valtype>.
+                            let (_name, bytes_read) =
+                                kiln_format::binary::read_string(bytes, offset)?;
+                            offset += bytes_read;
+
+                            let (val_type, bytes_read) = parse_val_type(&bytes[offset..])?;
+                            offset += bytes_read;
+
+                            results.push(val_type);
+                        }
+                    },
+                    _ => {
+                        return Err(Error::parse_error(
+                            "Invalid function result-list tag (expected 0x00 or 0x01)",
+                        ));
+                    },
                 }
 
                 Ok((
