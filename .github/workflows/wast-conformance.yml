@@ -1,0 +1,52 @@
+name: WAST Conformance Gate
+
+# Regression gate on WebAssembly spec conformance. Conformance is reproducible
+# because external/testsuite is pinned (gitlink == checkout; see kiln#360 and the
+# monthly testsuite-repin workflow). This job runs the full WAST suite, then
+# scripts/wast-conformance-gate.sh fails the build if any file fails that is NOT
+# in safety/wast-conformance-baseline.txt — i.e. a NEW conformance regression.
+# Files that newly pass are surfaced as a notice (tighten the baseline).
+#
+# Runs on PRs that touch the runtime/decoder/validator (or the suite/baseline),
+# plus weekly and on demand. The full suite is ~15-20 min, so it is path-scoped
+# rather than on every PR.
+
+on:
+  pull_request:
+    paths:
+      - 'kiln-runtime/**'
+      - 'kiln-decoder/**'
+      - 'kiln-instructions/**'
+      - 'kiln-build-core/**'
+      - 'kiln-foundation/**'
+      - 'external/testsuite'
+      - 'safety/wast-conformance-baseline.txt'
+      - 'scripts/wast-conformance-gate.sh'
+      - '.github/workflows/wast-conformance.yml'
+  schedule:
+    - cron: '0 5 * * 1'   # weekly, Monday 05:00 UTC
+  workflow_dispatch:
+
+jobs:
+  conformance:
+    name: WAST conformance regression gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run WAST suite
+        # The suite exits non-zero whenever any assertion fails (there are known,
+        # baselined failures), so its exit code is not the gate — the per-file
+        # baseline diff below is. Capture the report regardless.
+        run: |
+          cargo run --release -p cargo-kiln -- testsuite --run-wast \
+            --wast-dir external/testsuite --wast-report wast-report.md || true
+          test -f wast-report.md || { echo "::error::no wast-report.md produced"; exit 2; }
+
+      - name: Gate on the failing-file baseline
+        run: bash scripts/wast-conformance-gate.sh wast-report.md safety/wast-conformance-baseline.txt
