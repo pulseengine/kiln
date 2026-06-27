@@ -800,6 +800,8 @@ impl ComponentInstance {
             runtime_engine: None,
             #[cfg(feature = "kiln-execution")]
             main_instance_handle: None,
+            #[cfg(feature = "std")]
+            direct_export_targets: std::collections::HashMap::new(),
         })
     }
 
@@ -2127,7 +2129,7 @@ impl ComponentInstance {
         // Resolve exports and add to instance
         #[cfg(feature = "std")]
         {
-            Self::resolve_exports(&mut instance, &exports_to_resolve)?;
+            Self::resolve_exports(&mut instance, &exports_to_resolve, parsed)?;
         }
 
         // Store resolved imports in instance
@@ -2336,6 +2338,46 @@ impl ComponentInstance {
                         } else {
                             return Err(Error::runtime_execution_error(
                                 "No core instance exports _start - module exports not properly loaded",
+                            ));
+                        }
+                    } else if !instance.direct_export_targets.is_empty() {
+                        // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
+                        // the component has no `_start` but exports directly
+                        // `canon lift`-ed functions. Pick the core instance whose
+                        // module backs one of those exports as the main handle, so
+                        // the lifted core export can be invoked. No fallback/guess:
+                        // the backing core export name must actually be present.
+                        //
+                        // The live engine is the local `engine` here (it is not
+                        // moved into `instance.runtime_engine` until after this
+                        // main-handle selection).
+                        let backing_core_exports: Vec<String> = instance
+                            .direct_export_targets
+                            .values()
+                            .map(|t| t.core_export_name.clone())
+                            .collect();
+                        let mut found_handle = None;
+                        'outer: for core_export in &backing_core_exports {
+                            for (&_idx, &handle) in &core_instances_map {
+                                if engine.has_function(handle, core_export).unwrap_or(false) {
+                                    found_handle = Some(handle);
+                                    break 'outer;
+                                }
+                            }
+                        }
+
+                        if let Some(handle) = found_handle {
+                            #[cfg(feature = "tracing")]
+                            tracing::info!(
+                                ?handle,
+                                "Direct-hosting component - main instance backs a lifted export"
+                            );
+                            instance.main_instance_handle = Some(handle);
+                            handle
+                        } else {
+                            return Err(Error::runtime_execution_error(
+                                "Direct-hosting component: no core instance exports the \
+                                 lifted function's backing core export",
                             ));
                         }
                     } else {
@@ -2776,11 +2818,10 @@ impl ComponentInstance {
     fn resolve_exports(
         instance: &mut Self,
         parsed_exports: &[kiln_format::component::Export],
+        parsed: &kiln_format::component::Component,
     ) -> Result<()> {
-        use crate::bounded_component_infra::ComponentProvider;
         use crate::instantiation::{ExportValue, FunctionExport, ResolvedExport};
         use kiln_format::component::Sort;
-        use kiln_foundation::safe_memory::NoStdProvider;
 
 
         for (idx, export) in parsed_exports.iter().enumerate() {
@@ -2790,21 +2831,54 @@ impl ComponentInstance {
                 format!("{}:{}", export.name.nested.join(":"), export.name.name)
             };
 
+            // For function exports, resolve the REAL signature (result types and
+            // the backing core export name) from the canon lift the export points
+            // at. This replaces the previous placeholder that built an empty,
+            // sometimes-failing unit signature (#344, AD-COMPONENT-HOST-001).
+            //
+            // `direct_target` is `Some` only when the export is a directly
+            // `canon lift`-ed core function — the direct-hosting path. Exports
+            // that resolve to other constructs (e.g. command-style runs) leave it
+            // `None` and fall through to the existing invocation path.
+            let direct_target: Option<crate::types::DirectExportTarget> = match &export.sort {
+                Sort::Function => Self::resolve_direct_export_target(parsed, export.idx)?,
+                _ => None,
+            };
+
+            // Convert the resolved component-level result types into the canonical
+            // ABI `ComponentType` used by the callable function signature.
+            let resolved_returns: Vec<ComponentType> = match &direct_target {
+                Some(t) => t
+                    .returns
+                    .iter()
+                    .map(Self::format_val_type_to_scalar_component_type)
+                    .collect::<Result<Vec<_>>>()?,
+                None => Vec::new(),
+            };
+
+            if let Some(target) = direct_target {
+                instance
+                    .direct_export_targets
+                    .insert(export_name.clone(), target);
+            }
+
 
             // Create an export value based on the sort
             let export_value = match &export.sort {
                 Sort::Function => {
-                    // Create a function export with placeholder signature.
-                    // Surface failures as a graceful Result error instead of
-                    // panicking — a malformed/zero-sized component type must not
-                    // crash the runtime (see issue #269).
-                    let provider = NoStdProvider::<4096>::default();
-                    let signature = kiln_foundation::ComponentType::unit(provider).map_err(|_| {
-                        kiln_error::Error::component_resource_lifecycle_error(
-                            "failed to construct unit component type for function export \
-                             signature during export resolution",
-                        )
-                    })?;
+                    // Build a non-failing FunctionExport signature.
+                    //
+                    // The previous placeholder built `ComponentType::unit(...)`,
+                    // whose inner `BoundedVec::new` rejects items whose serialized
+                    // size is zero — surfacing as the hard "failed to construct unit
+                    // component type" error this path is meant to remove (#269,
+                    // #344). The signature here carries no information used by the
+                    // direct-hosting invocation (the real result types live in
+                    // `direct_export_targets` and the callable function signature),
+                    // so use the `Default` value, which constructs an empty
+                    // component type without that zero-size rejection.
+                    let signature =
+                        kiln_foundation::ComponentType::<crate::bounded_component_infra::ComponentProvider>::default();
 
                     let func_export = FunctionExport {
                         signature,
@@ -2854,12 +2928,20 @@ impl ComponentInstance {
                                 use kiln_foundation::bounded::BoundedVec;
                                 BoundedVec::new()
                             },
+                            // Real resolved result types so invocation knows how to
+                            // lift the core result (#344).
                             #[cfg(feature = "std")]
-                            returns: Vec::new(),
+                            returns: resolved_returns.clone(),
                             #[cfg(not(feature = "std"))]
                             returns: {
                                 use kiln_foundation::bounded::BoundedVec;
-                                BoundedVec::new()
+                                let mut rv = BoundedVec::new();
+                                for ret in &resolved_returns {
+                                    rv.push(ret.clone()).map_err(|_| {
+                                        Error::validation_error("Too many function returns")
+                                    })?;
+                                }
+                                rv
                             },
                         },
                         implementation: FunctionImplementation::Native {
@@ -2927,6 +3009,162 @@ impl ComponentInstance {
         }
 
         Ok(())
+    }
+
+    /// Resolve the direct-hosting invocation target for an exported component
+    /// function index (#344, AD-COMPONENT-HOST-001).
+    ///
+    /// Returns `Some(target)` when the exported function is a directly
+    /// `canon lift`-ed core function: the lift's core function index is resolved
+    /// (through a `core func` alias of a core-instance export) to the backing
+    /// core export name, and the lift's component function type provides the
+    /// result types. Returns `None` when the export does not resolve to a direct
+    /// lift (e.g. a function import or a function alias), leaving the existing
+    /// invocation path untouched.
+    #[cfg(feature = "std")]
+    fn resolve_direct_export_target(
+        parsed: &kiln_format::component::Component,
+        export_func_idx: u32,
+    ) -> Result<Option<crate::types::DirectExportTarget>> {
+        use kiln_format::component::{
+            AliasTarget, CanonOperation, CoreSort, ComponentTypeDefinition, ExternType, Sort,
+        };
+
+        // Component function index space is populated in order:
+        //   1. function imports, 2. function aliases, 3. canon lift operations.
+        // (Mirrors the convention used when building component_import_func_map.)
+        // Only canon lifts create directly-invocable core-backed functions.
+        let mut component_func_idx = 0u32;
+
+        // 1. Function imports occupy the lowest indices.
+        for import in &parsed.imports {
+            if matches!(import.ty, ExternType::Function { .. }) {
+                if component_func_idx == export_func_idx {
+                    // An imported function, not a locally-lifted one.
+                    return Ok(None);
+                }
+                component_func_idx += 1;
+            }
+        }
+
+        // 2. Function aliases (component instance-export / outer of a function).
+        for alias in &parsed.aliases {
+            let is_func_alias = match &alias.target {
+                AliasTarget::InstanceExport { kind, .. } => matches!(kind, Sort::Function),
+                AliasTarget::Outer { kind, .. } => matches!(kind, Sort::Function),
+                AliasTarget::CoreInstanceExport { .. } => false,
+            };
+            if is_func_alias {
+                if component_func_idx == export_func_idx {
+                    // A function alias, not a locally-lifted one.
+                    return Ok(None);
+                }
+                component_func_idx += 1;
+            }
+        }
+
+        // 3. Canon lift operations.
+        for canon in &parsed.canonicals {
+            if let CanonOperation::Lift {
+                func_idx: core_func_idx,
+                type_idx,
+                ..
+            } = &canon.operation
+            {
+                if component_func_idx == export_func_idx {
+                    // Found the lift backing this export. Resolve its core export
+                    // name via the `core func` alias for `core_func_idx`, and its
+                    // result types via the component function type at `type_idx`.
+                    let core_export_name =
+                        Self::resolve_core_func_export_name(parsed, *core_func_idx)?;
+
+                    let returns = match parsed.types.get(*type_idx as usize) {
+                        Some(ty) => match &ty.definition {
+                            ComponentTypeDefinition::Function { results, .. } => results.clone(),
+                            _ => {
+                                return Err(Error::component_resource_lifecycle_error(
+                                    "canon lift type index does not refer to a function type",
+                                ));
+                            },
+                        },
+                        None => {
+                            return Err(Error::component_resource_lifecycle_error(
+                                "canon lift references an out-of-bounds component type index",
+                            ));
+                        },
+                    };
+
+                    return Ok(Some(crate::types::DirectExportTarget {
+                        core_export_name,
+                        returns,
+                    }));
+                }
+                component_func_idx += 1;
+            }
+        }
+
+        // No direct lift backs this export index.
+        let _ = CoreSort::Function;
+        Ok(None)
+    }
+
+    /// Resolve a core function index to the export name it is reached through.
+    ///
+    /// A `canon lift`'s core function index is produced by a `core func` alias of
+    /// a core-instance export (`AliasTarget::CoreInstanceExport`). The alias's
+    /// `dest_idx` is the core function index it occupies; its `name` is the core
+    /// export name the engine can invoke. FAIL LOUD if no such alias exists.
+    #[cfg(feature = "std")]
+    fn resolve_core_func_export_name(
+        parsed: &kiln_format::component::Component,
+        core_func_idx: u32,
+    ) -> Result<String> {
+        use kiln_format::component::{AliasTarget, CoreSort};
+
+        for alias in &parsed.aliases {
+            if let AliasTarget::CoreInstanceExport { name, kind, .. } = &alias.target {
+                if matches!(kind, CoreSort::Function) && alias.dest_idx == Some(core_func_idx) {
+                    return Ok(name.clone());
+                }
+            }
+        }
+
+        Err(Error::component_resource_lifecycle_error(
+            "canon lift core function index does not resolve to a core-instance \
+             export alias — direct hosting requires a lifted core export",
+        ))
+    }
+
+    /// Convert a component-model scalar [`FormatValType`] to the canonical ABI
+    /// [`ComponentType`]. FAIL LOUD on non-scalar types — the direct-hosting
+    /// path only lifts scalar results (#344); aggregates are not yet supported.
+    #[cfg(feature = "std")]
+    fn format_val_type_to_scalar_component_type(
+        vt: &kiln_format::component::FormatValType,
+    ) -> Result<ComponentType> {
+        use kiln_format::component::FormatValType as F;
+
+        let mapped = match vt {
+            F::Bool => ComponentType::Bool,
+            F::S8 => ComponentType::S8,
+            F::U8 => ComponentType::U8,
+            F::S16 => ComponentType::S16,
+            F::U16 => ComponentType::U16,
+            F::S32 => ComponentType::S32,
+            F::U32 => ComponentType::U32,
+            F::S64 => ComponentType::S64,
+            F::U64 => ComponentType::U64,
+            F::F32 => ComponentType::F32,
+            F::F64 => ComponentType::F64,
+            F::Char => ComponentType::Char,
+            _ => {
+                return Err(Error::component_resource_lifecycle_error(
+                    "direct-hosting result lift supports only scalar component types; \
+                     non-scalar result type is not supported",
+                ));
+            },
+        };
+        Ok(mapped)
     }
 
     /// Analyze and instantiate core modules (Step 7 & 8)
@@ -3700,6 +3938,14 @@ impl ComponentInstance {
             } => {
                 #[cfg(feature = "std")]
                 {
+                    // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
+                    // if the named export was resolved to a directly `canon
+                    // lift`-ed core function, invoke that specific core export and
+                    // lift its scalar result, instead of the `wasi:cli/run`
+                    // command-runner path.
+                    if self.direct_export_targets.contains_key(function_name) {
+                        return self.call_direct_export(function_name, args);
+                    }
                     self.call_native_function(*func_index, *module_index, args)
                 }
                 #[cfg(not(feature = "std"))]
@@ -3783,6 +4029,14 @@ impl ComponentInstance {
             } => {
                 #[cfg(feature = "std")]
                 {
+                    // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
+                    // if the named export was resolved to a directly `canon
+                    // lift`-ed core function, invoke that specific core export and
+                    // lift its scalar result, instead of the `wasi:cli/run`
+                    // command-runner path.
+                    if self.direct_export_targets.contains_key(function_name) {
+                        return self.call_direct_export(function_name, args);
+                    }
                     self.call_native_function(*func_index, *module_index, args)
                 }
                 #[cfg(not(feature = "std"))]
@@ -3952,6 +4206,165 @@ impl ComponentInstance {
 
         // Type checking would go here in a full implementation
         Ok(())
+    }
+
+    /// Invoke a directly-hosted, `canon lift`-ed export and lift its scalar
+    /// result (#344, AD-COMPONENT-HOST-001).
+    ///
+    /// Looks up the resolved [`DirectExportTarget`](crate::types::DirectExportTarget)
+    /// for `function_name`, lowers scalar arguments to core values, executes the
+    /// backing core export on the stored engine/instance, and lifts the scalar
+    /// core result back to a [`ComponentValue`] per the resolved result type.
+    ///
+    /// FAIL LOUD when the engine/instance is unavailable, when an argument or
+    /// result is non-scalar, or when the core result arity does not match.
+    #[cfg(all(feature = "std", feature = "kiln-execution"))]
+    fn call_direct_export(
+        &mut self,
+        function_name: &str,
+        args: &[ComponentValue],
+    ) -> Result<Vec<ComponentValue>> {
+        use kiln_foundation::values::Value;
+        use kiln_runtime::engine::CapabilityEngine;
+
+        let target = self
+            .direct_export_targets
+            .get(function_name)
+            .ok_or_else(|| {
+                Error::component_resource_lifecycle_error(
+                    "no direct-hosting target resolved for the requested export",
+                )
+            })?
+            .clone();
+
+        // Lower scalar component arguments to core WASM values. FAIL LOUD on
+        // non-scalar arguments — only scalars are supported on this path.
+        let wasm_args: Vec<Value> = args
+            .iter()
+            .map(Self::lower_scalar_component_value)
+            .collect::<Result<Vec<_>>>()?;
+
+        let (engine_box, instance_handle) =
+            match (&mut self.runtime_engine, self.main_instance_handle) {
+                (Some(engine_box), Some(handle)) => (engine_box, handle),
+                _ => {
+                    return Err(Error::runtime_execution_error(
+                        "direct-hosting invocation requires an instantiated engine and \
+                         main instance handle",
+                    ));
+                },
+            };
+        let engine = engine_box.as_mut();
+
+        // Invoke the specific core export backing the lift.
+        let core_results = engine.execute(instance_handle, &target.core_export_name, &wasm_args)?;
+
+        // Lift the core results back to component values per the resolved result
+        // types. FAIL LOUD on arity or type mismatch.
+        if core_results.len() != target.returns.len() {
+            return Err(Error::runtime_execution_error(
+                "direct-hosting core result arity does not match the lifted \
+                 component function result count",
+            ));
+        }
+
+        let mut lifted = Vec::with_capacity(core_results.len());
+        for (core_value, result_ty) in core_results.iter().zip(target.returns.iter()) {
+            lifted.push(Self::lift_scalar_core_value(core_value, result_ty)?);
+        }
+
+        Ok(lifted)
+    }
+
+    /// Lower a scalar [`ComponentValue`] to a core [`Value`]. FAIL LOUD on
+    /// non-scalar values (#344).
+    #[cfg(all(feature = "std", feature = "kiln-execution"))]
+    fn lower_scalar_component_value(
+        value: &ComponentValue,
+    ) -> Result<kiln_foundation::values::Value> {
+        use kiln_foundation::values::Value;
+
+        let lowered = match value {
+            ComponentValue::Bool(b) => Value::I32(if *b { 1 } else { 0 }),
+            ComponentValue::S8(v) => Value::I32(*v as i32),
+            ComponentValue::U8(v) => Value::I32(*v as i32),
+            ComponentValue::S16(v) => Value::I32(*v as i32),
+            ComponentValue::U16(v) => Value::I32(*v as i32),
+            ComponentValue::S32(v) => Value::I32(*v),
+            ComponentValue::U32(v) => Value::I32(*v as i32),
+            ComponentValue::S64(v) => Value::I64(*v),
+            ComponentValue::U64(v) => Value::I64(*v as i64),
+            ComponentValue::F32(v) => {
+                Value::F32(kiln_foundation::float_repr::FloatBits32::from_f32(*v))
+            },
+            ComponentValue::F64(v) => {
+                Value::F64(kiln_foundation::float_repr::FloatBits64::from_f64(*v))
+            },
+            ComponentValue::Char(c) => Value::I32(*c as i32),
+            _ => {
+                return Err(Error::component_resource_lifecycle_error(
+                    "direct-hosting argument lowering supports only scalar component \
+                     values; non-scalar argument is not supported",
+                ));
+            },
+        };
+        Ok(lowered)
+    }
+
+    /// Lift a scalar core [`Value`] to a [`ComponentValue`] per the resolved
+    /// result type. FAIL LOUD on non-scalar result types or core/expected type
+    /// mismatch (#344).
+    #[cfg(all(feature = "std", feature = "kiln-execution"))]
+    fn lift_scalar_core_value(
+        core_value: &kiln_foundation::values::Value,
+        result_ty: &kiln_format::component::FormatValType,
+    ) -> Result<ComponentValue> {
+        use kiln_format::component::FormatValType as F;
+        use kiln_foundation::values::Value;
+
+        let mismatch = || {
+            Error::runtime_execution_error(
+                "direct-hosting core result type does not match the lifted \
+                 component result type",
+            )
+        };
+
+        let lifted = match (result_ty, core_value) {
+            (F::Bool, Value::I32(v)) => ComponentValue::Bool(*v != 0),
+            (F::S8, Value::I32(v)) => ComponentValue::S8(*v as i8),
+            (F::U8, Value::I32(v)) => ComponentValue::U8(*v as u8),
+            (F::S16, Value::I32(v)) => ComponentValue::S16(*v as i16),
+            (F::U16, Value::I32(v)) => ComponentValue::U16(*v as u16),
+            (F::S32, Value::I32(v)) => ComponentValue::S32(*v),
+            (F::U32, Value::I32(v)) => ComponentValue::U32(*v as u32),
+            (F::S64, Value::I64(v)) => ComponentValue::S64(*v),
+            (F::U64, Value::I64(v)) => ComponentValue::U64(*v as u64),
+            (F::F32, Value::F32(v)) => ComponentValue::F32(v.to_f32()),
+            (F::F64, Value::F64(v)) => ComponentValue::F64(v.to_f64()),
+            (F::Char, Value::I32(v)) => {
+                let c = u32::try_from(*v)
+                    .ok()
+                    .and_then(char::from_u32)
+                    .ok_or_else(|| {
+                        Error::runtime_execution_error(
+                            "direct-hosting char result is not a valid Unicode scalar value",
+                        )
+                    })?;
+                ComponentValue::Char(c)
+            },
+            (
+                F::Bool | F::S8 | F::U8 | F::S16 | F::U16 | F::S32 | F::U32 | F::S64 | F::U64
+                | F::F32 | F::F64 | F::Char,
+                _,
+            ) => return Err(mismatch()),
+            _ => {
+                return Err(Error::component_resource_lifecycle_error(
+                    "direct-hosting result lift supports only scalar component types; \
+                     non-scalar result type is not supported",
+                ));
+            },
+        };
+        Ok(lifted)
     }
 
     #[cfg(feature = "std")]

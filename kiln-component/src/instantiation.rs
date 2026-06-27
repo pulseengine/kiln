@@ -535,6 +535,8 @@ impl Component {
             runtime_engine: None,
             #[cfg(feature = "kiln-execution")]
             main_instance_handle: None,
+            #[cfg(feature = "std")]
+            direct_export_targets: std::collections::HashMap::new(),
             id: instance_id,
             component: component_ref,
             state: crate::types::ComponentInstanceState::Initialized,
