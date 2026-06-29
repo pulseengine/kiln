@@ -32,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Cargo Cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
@@ -42,7 +42,7 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Dagger Engine Cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/dagger
           key: ${{ runner.os }}-dagger-engine
@@ -140,7 +140,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Cargo Cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
@@ -150,7 +150,7 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - name: Dagger Engine Cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/dagger
           key: ${{ runner.os }}-dagger-engine
@@ -205,7 +205,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Cargo Cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
@@ -286,7 +286,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Cargo Cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
@@ -296,7 +296,7 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-extended-${{ hashFiles('**/Cargo.lock') }}
       - name: Dagger Engine Cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/dagger
           key: ${{ runner.os }}-dagger-engine-extended
@@ -326,7 +326,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, rust-cpu]
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/cache@v5
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/bin/
@@ -378,7 +378,7 @@ jobs:
       - uses: actions/checkout@v5
       - name: Cache VxWorks SDK
         id: cache-vxworks-sdk
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: /opt/wrsdk
           key: vxworks-sdk-qemu-1.16.1
