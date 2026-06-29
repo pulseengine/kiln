@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     # This job runs on push, PR, and all manual triggers (regardless of input)
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Cargo Cache
         uses: actions/cache@v6
         with:
@@ -86,7 +86,7 @@ jobs:
     name: Code Quality Checks
     runs-on: [self-hosted, linux, x64, rust-cpu]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -138,7 +138,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, rust-cpu]
     # This job runs on push, PR, and all manual triggers (regardless of input)
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Cargo Cache
         uses: actions/cache@v6
         with:
@@ -203,7 +203,7 @@ jobs:
     runs-on: [self-hosted, linux, x64, rust-cpu]
     # Run safety verification on all pushes and PRs
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Cargo Cache
         uses: actions/cache@v6
         with:
@@ -259,7 +259,7 @@ jobs:
     # Run on pushes to main and manual triggers
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Setup Bazel
         uses: bazel-contrib/setup-bazel@0.19.0
         with:
@@ -284,7 +284,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_extended_analysis == true # Compare to boolean true
     needs: [ci_checks_and_docs, core_tests_and_analysis, safety_verification] # Optional: wait for other jobs
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Cargo Cache
         uses: actions/cache@v6
         with:
@@ -325,7 +325,7 @@ jobs:
     name: Code Coverage
     runs-on: [self-hosted, linux, x64, rust-cpu]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/cache@v6
         with:
           path: |
@@ -364,7 +364,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ matrix.continue-on-error || false }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions-rs/audit-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -375,7 +375,7 @@ jobs:
     # Real cross-compilation with VxWorks SDK — runs on push to main and manual triggers
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Cache VxWorks SDK
         id: cache-vxworks-sdk
         uses: actions/cache@v6

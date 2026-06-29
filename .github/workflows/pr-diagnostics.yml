@@ -17,7 +17,7 @@ jobs:
     
     steps:
     - name: Checkout PR
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
         # Fetch full history for diff analysis
         fetch-depth: 0
