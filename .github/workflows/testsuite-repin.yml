@@ -55,7 +55,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Open re-pin PR
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           add-paths: external/testsuite
           branch: chore/testsuite-repin
