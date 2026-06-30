@@ -158,6 +158,29 @@ pub struct ComponentInstance {
     /// Main module instance handle for execution
     #[cfg(feature = "kiln-execution")]
     pub main_instance_handle: Option<kiln_runtime::engine::InstanceHandle>,
+    /// Direct-hosting invocation targets, keyed by exported function name.
+    ///
+    /// Populated during export resolution for the direct Component-Model hosting
+    /// path (#344, AD-COMPONENT-HOST-001): maps an exported function name to the
+    /// backing core export name and the component-level result types needed to
+    /// lift the core result. Empty for components driven only via the
+    /// `wasi:cli/run` command path.
+    #[cfg(feature = "std")]
+    pub direct_export_targets: std::collections::HashMap<String, DirectExportTarget>,
+}
+
+/// Resolved direct-hosting invocation target for an exported function (#344).
+///
+/// Describes how to invoke an exported, `canon lift`-ed function: which core
+/// export backs it and what component-level result types its core result must
+/// be lifted to.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct DirectExportTarget {
+    /// Export name of the backing core function (callable on the engine).
+    pub core_export_name: String,
+    /// Component-level result types to lift the core result into.
+    pub returns: Vec<kiln_format::component::FormatValType>,
 }
 
 impl fmt::Debug for ComponentInstance {

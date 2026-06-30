@@ -1485,6 +1485,7 @@ dependencies = [
 name = "kiln-runtime"
 version = "0.3.4"
 dependencies = [
+ "criterion",
  "kiln-debug",
  "kiln-decoder",
  "kiln-error",

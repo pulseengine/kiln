@@ -71,6 +71,34 @@ pub mod bounded_kilnd_infra;
 // witness MC/DC coverage harness mode (#340)
 pub mod witness_harness;
 
+// Direct Component-Model hosting: instantiate an external component and invoke
+// a named export, lifting its scalar result (#344, AD-COMPONENT-HOST-001).
+#[cfg(feature = "component-model")]
+pub mod component_host;
+
+/// Render a scalar [`ComponentValue`] for user-facing `--invoke` output (#344).
+#[cfg(all(feature = "std", feature = "component-model"))]
+fn format_component_value(value: &kiln_component::canonical_abi::ComponentValue) -> String {
+    use kiln_component::canonical_abi::ComponentValue as V;
+
+    match value {
+        V::Bool(v) => v.to_string(),
+        V::S8(v) => v.to_string(),
+        V::U8(v) => v.to_string(),
+        V::S16(v) => v.to_string(),
+        V::U16(v) => v.to_string(),
+        V::S32(v) => v.to_string(),
+        V::U32(v) => v.to_string(),
+        V::S64(v) => v.to_string(),
+        V::U64(v) => v.to_string(),
+        V::F32(v) => v.to_string(),
+        V::F64(v) => v.to_string(),
+        V::Char(v) => v.to_string(),
+        V::String(v) => v.clone(),
+        other => format!("{:?}", other),
+    }
+}
+
 // Safety-critical memory limits
 #[cfg(feature = "safety-critical")]
 pub mod memory_limits;
@@ -195,6 +223,11 @@ pub struct KilndConfig {
     /// Component interfaces to enable
     #[cfg(feature = "component-model")]
     pub component_interfaces: Vec<String>,
+    /// Named component export to invoke directly (#344). When set, the component
+    /// is instantiated and this export is invoked instead of the `wasi:cli/run`
+    /// command entry point, and its scalar result is printed.
+    #[cfg(feature = "component-model")]
+    pub invoke_export: Option<String>,
     /// Memory profiling enabled
     pub enable_memory_profiling: bool,
     /// Platform-specific optimizations
@@ -231,6 +264,8 @@ impl Default for KilndConfig {
             enable_component_model: true,
             #[cfg(feature = "component-model")]
             component_interfaces: Vec::new(),
+            #[cfg(feature = "component-model")]
+            invoke_export: None,
             enable_memory_profiling: false,
             enable_platform_optimizations: true,
         }
@@ -531,6 +566,7 @@ impl KilndEngine {
     /// For WAC-composed P3 components with nested library components,
     /// inter-component calls are routed through the nested component engines.
     #[cfg(feature = "component-model")]
+    #[allow(clippy::too_many_lines)]
     fn execute_component(&mut self, data: &[u8]) -> Result<()> {
         #[cfg(feature = "component-model")]
         {
@@ -635,6 +671,39 @@ impl KilndEngine {
             if self.config.enable_wasi {
                 if let Err(e) = instance.pre_allocate_wasi_args() {
                     eprintln!("[WASI-PREALLOC] Failed: {}", e);
+                }
+            }
+
+            // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
+            // if a specific export was requested with `--invoke`, invoke it and
+            // print its scalar result instead of running the `wasi:cli/run`
+            // command entry point.
+            if let Some(export_name) = self.config.invoke_export.clone() {
+                let _ = self.logger.handle_minimal_log(
+                    LogLevel::Info,
+                    "Invoking requested component export",
+                );
+
+                #[cfg(feature = "kiln-execution")]
+                let result = instance.call_function(&export_name, &[], Some(&self.host_registry));
+                #[cfg(not(feature = "kiln-execution"))]
+                let result = instance.call_function(&export_name, &[]);
+
+                match result {
+                    Ok(values) => {
+                        // User-facing result output on stdout.
+                        for value in &values {
+                            println!("{}", format_component_value(value));
+                        }
+                        return Ok(());
+                    },
+                    Err(e) => {
+                        #[cfg(feature = "std")]
+                        {
+                            eprintln!("Component export invocation error: {}", e);
+                        }
+                        return Err(e);
+                    },
                 }
             }
 
@@ -1080,6 +1149,11 @@ pub struct SimpleArgs {
     /// Component interfaces to register
     #[cfg(feature = "component-model")]
     pub component_interfaces: Vec<String>,
+    /// Named component export to invoke directly (direct Component-Model hosting,
+    /// #344). When set, kilnd instantiates the component and invokes this export
+    /// instead of the `wasi:cli/run` command entry point.
+    #[cfg(feature = "component-model")]
+    pub invoke_export: Option<String>,
     /// Enable memory profiling
     pub enable_memory_profiling: bool,
     /// Enable platform optimizations
@@ -1111,6 +1185,8 @@ impl SimpleArgs {
             enable_component_model: true,
             #[cfg(feature = "component-model")]
             component_interfaces: Vec::new(),
+            #[cfg(feature = "component-model")]
+            invoke_export: None,
             enable_memory_profiling: false,
             enable_platform_optimizations: true,
         };
@@ -1139,7 +1215,8 @@ impl SimpleArgs {
                     }
                     #[cfg(feature = "component-model")]
                     {
-                        println!("  --component          Enable component model support");
+                        println!("  --component [<path>]  Enable component model support");
+                        println!("  --invoke <export>     Invoke a named component export and print its result");
                         println!("  --interface <name>   Register component interface");
                     }
                     println!("  --help               Show this help message");
@@ -1210,6 +1287,22 @@ impl SimpleArgs {
                 #[cfg(feature = "component-model")]
                 "--component" => {
                     result.enable_component_model = true;
+                    // Optionally accept the component path as a value:
+                    //   --component <path>
+                    // (the path may also be given positionally).
+                    if i + 1 < args.len() && !args[i + 1].starts_with("--") {
+                        i += 1;
+                        if result.module_path.is_none() {
+                            result.module_path = Some(args[i].clone());
+                        }
+                    }
+                },
+                #[cfg(feature = "component-model")]
+                "--invoke" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.invoke_export = Some(args[i].clone());
+                    }
                 },
                 #[cfg(feature = "component-model")]
                 "--interface" => {
@@ -1377,6 +1470,7 @@ fn main_with_stack() -> Result<()> {
     {
         config.enable_component_model = args.enable_component_model;
         config.component_interfaces = args.component_interfaces.clone();
+        config.invoke_export = args.invoke_export.clone();
 
         if config.enable_component_model {
             println!(
