@@ -195,6 +195,7 @@ artifacts:
       Phase 0 scaffold landed (kiln-async crate: types, FSM, bounded ready
       queue; intrinsics stubbed; builds no_std/no_alloc for thumbv7em).
     status: implemented
+    release: v0.5.0
     tags: [async, scheduler, no-std, no-alloc, embedded, formal-verification, roadmap, release-v0.4.0]
     links:
       - type: derives-from
@@ -233,6 +234,7 @@ artifacts:
       surface, Kani on array-index helpers, and mutation testing of the
       scheduler core.
     status: implemented
+    release: v0.7.0
     tags: [async, scheduler, performance, benchmarks, no-std, embedded, roadmap, release-v0.7.0]
     links:
       - type: derives-from
@@ -256,6 +258,7 @@ artifacts:
       trigger parallel to release.yml, org CRATES_IO_TOKEN, dependency-order walker
       with index-propagation retry, tag-matches-version preflight).
     status: proposed
+    release: v0.5.0
     tags: [release, distribution, crates-io, roadmap, release-v0.5.0]
     links:
       - type: derives-from
@@ -292,7 +295,8 @@ artifacts:
       WASI behaviour is NOT required). Near-term scope is SYNCHRONOUS
       Component-Model coverage; p3 async-lift/streams are explicitly out of scope
       (gated on p3 execution maturity; tracked as witness REQ-057 / witness#107B).
-    status: implemented
+    status: verified
+    release: v0.3.4
     tags: [verification, mcdc, witness, coverage, cross-tool, roadmap, release-v0.4.0]
     links:
       - type: derives-from
@@ -384,7 +388,8 @@ artifacts:
       the embedded-cert path). Both paths are supported per AD-COMPONENT-HOST-001;
       this requirement covers the direct-hosting (QM) half. Kill-criterion: kilnd
       cannot instantiate + invoke an export of a wac-composed component.
-    status: proposed
+    status: implemented
+    release: v0.3.5
     tags: [component-model, host, kilnd, canonical-abi, qm, cross-tool, roadmap, release-v0.4.0]
     links:
       - type: derives-from
@@ -428,7 +433,8 @@ artifacts:
       pipeline). Kill-criterion: kilnd fails to run a validly-composed
       `wasi:cli/run` command component solely because no core module exports
       `_start`.
-    status: proposed
+    status: implemented
+    release: v0.3.5
     tags: [component-model, host, kilnd, wasi-cli-run, canonical-abi, qm, cross-tool, roadmap, release-v0.4.0]
     links:
       - type: derives-from
