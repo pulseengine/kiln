@@ -49,6 +49,7 @@ mod tests {
         .expect("fixture must build + validate as a component")
     }
 
+    // rivet: verifies REQ_COMPONENT_HOST
     #[test]
     fn invoke_named_export_lifts_scalar() {
         let wasm = fixture();
@@ -97,6 +98,7 @@ mod tests {
     /// GREEN: the component runs via its `wasi:cli/run` canonical entry — the
     /// entry resolves to the backing core `run` (in whichever core module the
     /// canon-lift wraps) and executes, regardless of core-module decomposition.
+    // rivet: verifies REQ_COMPONENT_RUN
     #[test]
     fn runs_multicore_command_component_via_wasi_cli_run() {
         let wasm = multicore_command_fixture();
