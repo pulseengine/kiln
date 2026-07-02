@@ -21,6 +21,8 @@ kiln-error = { workspace = true }
 # Host-side micro-benchmarks (REQ_ASYNC_BENCH). Bench units compile with std
 # on the host; the library itself stays no_std/no_alloc.
 criterion = { version = "0.8", features = ["html_reports"] }
+embassy-executor = { version = "0.10", default-features = false }
+embassy-futures = "0.1"
 
 [features]
 default = []
@@ -34,4 +36,8 @@ unexpected_cfgs = { level = "allow", check-cfg = ['cfg(kani)'] }
 
 [[bench]]
 name = "scheduler_baseline"
+harness = false
+
+[[bench]]
+name = "executor_comparison"
 harness = false
