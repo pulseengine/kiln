@@ -61,7 +61,11 @@ jobs:
         
     - name: Return to PR branch
       run: |
-        git checkout ${{ github.event.pull_request.head.sha }}
+        # Force-checkout: the base build above regenerates/touches Cargo.lock
+        # (and other build artifacts), which would otherwise abort the checkout
+        # with "local changes would be overwritten". These are throwaway baseline
+        # artifacts, so discarding them is safe. (kiln#373)
+        git checkout -f ${{ github.event.pull_request.head.sha }}
         
     - name: Analyze PR diagnostics
       id: pr-diagnostics  
