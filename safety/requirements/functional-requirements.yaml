@@ -874,7 +874,7 @@ artifacts:
     type: requirement
     title: kilnd integration tests compile + run under std,component-model
     status: proposed
-    description: "The kilnd integration test targets (integrated_features_tests.rs, kilnd_integration_tests) shall compile and run under --features std,component-model. They bit-rotted against the WasiCapabilities constructor becoming Result-returning and silently stopped building, giving zero coverage. Fix the API usage and add the feature combo to the CI test matrix so it can't rot dark again. Issue #377."
+    description: "kilnd exposes a library target so its config/engine types are importable, and the integration tests (integrated_features_tests.rs, kilnd_integration_tests.rs) compile+run again. Measured root cause: kilnd is bin-only (main.rs 1618 LOC, types inline), so tests/ files can't import it — the failures are feature-independent (dark since the WRT→Kiln rename), not just std,component-model. Fix = lib-extraction refactor (repoint super::super::→kilnd::, WasiCapabilities::minimal()?), OR delete-as-dead per CLAUDE.md. Fork needs a call; not an unattended change. Issue #377."
     tags: [ci, testing, kilnd]
     fields:
       upstream-ref: https://github.com/pulseengine/kiln/issues/377
@@ -910,4 +910,18 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-07-02T07:40:03Z
+    release: v0.4.0
+
+  - id: SR-30
+    type: requirement
+    title: wasi:cli/run export resolution honors the instance-import offset in the component-instance index space
+    status: proposed
+    description: "resolve_command_entry shall resolve a wasi:cli/run instance export's backing instance by walking the component-instance index space (0..K-1 imported instances, K.. defined instances), offsetting export.idx by the instance-import count K before indexing parsed.instances — and return None (legacy path) if the run instance is an imported instance (export.idx < K). Today it uses export.idx directly, so a meld-fused component with instance-import stubs (K>0) fails with E5DC2 out-of-bounds. Differential oracle: wasmtime 41.0.0 runs the same fused.wasm. Must keep #364's K=0 fixture green. Issue #382 (split from #375)."
+    tags: [component-model, instantiation, wasi-cli-run, index-space, bug]
+    fields:
+      upstream-ref: https://github.com/pulseengine/kiln/issues/382
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-02T10:51:36Z
     release: v0.4.0
