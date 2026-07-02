@@ -128,6 +128,7 @@ artifacts:
       relation must be accepted. The relation is currently wrong in BOTH
       directions (too permissive AND too strict). Issue #149.
     status: proposed
+    release: v0.4.0
     tags: [wasm-gc, reference-types, subtyping, spec-conformance, release-v0.3.5]
     links:
       - type: derives-from
@@ -168,7 +169,8 @@ artifacts:
       tightened. The gate is on the failing-FILE set (reproducible) rather than
       the assertion count, and is only meaningful because external/testsuite is
       pinned (gitlink == checkout; kiln#360) so the same suite runs everywhere.
-    status: implemented
+    status: verified
+    release: v0.3.5
     tags: [spec-conformance, ci, regression-gate, verification, release-v0.3.5]
     links:
       - type: derives-from
