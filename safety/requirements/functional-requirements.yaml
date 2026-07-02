@@ -855,3 +855,62 @@ artifacts:
   # REQ_LFUNC_019 (Component Model Implementation) — duplicates
   #   REQ_FUNC_014 at a lower level.
   # =========================================================================
+<<<<<<< Updated upstream
+=======
+
+  - id: SR-25
+    type: requirement
+    title: pr-diagnostics baseline checkout must not abort on a dirtied Cargo.lock
+    status: implemented
+    description: "The pr-diagnostics workflow's baseline step checks out the PR base, builds it (which regenerates Cargo.lock and other artifacts), then checks out the PR head. The head checkout shall not abort on the dirtied baseline artifacts — they are throwaway. Regression: failed on #363 (base build touched Cargo.lock); passed on #362/#361/#359 (clean base). Workflow-mechanics bug, not a code signal; the real gates were green. Fix: force-checkout the head sha. Issue #373."
+    tags: [ci, tooling, pr-diagnostics]
+    fields:
+      upstream-ref: https://github.com/pulseengine/kiln/issues/373
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-02T06:50:20Z
+    release: v0.3.6
+
+  - id: SR-26
+    type: requirement
+    title: kilnd integration tests compile + run under std,component-model
+    status: proposed
+    description: "The kilnd integration test targets (integrated_features_tests.rs, kilnd_integration_tests) shall compile and run under --features std,component-model. They bit-rotted against the WasiCapabilities constructor becoming Result-returning and silently stopped building, giving zero coverage. Fix the API usage and add the feature combo to the CI test matrix so it can't rot dark again. Issue #377."
+    tags: [ci, testing, kilnd]
+    fields:
+      upstream-ref: https://github.com/pulseengine/kiln/issues/377
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-02T06:51:11Z
+    release: v0.3.6
+
+  - id: SR-27
+    type: requirement
+    title: main branch enforces the CI gate as required status checks
+    status: proposed
+    description: "The main branch shall enforce required status checks (via ruleset or branch protection) so a PR cannot merge while checks are red, queued, or cancelled. Today required_status_checks.contexts is empty and no ruleset requires any context — CI is advisory only, and verified-release relies on a human confirming green before merge. Add the gate contexts (build, Core Tests/Analysis/Coverage, CI Checks & Docs, Safety Analysis with Clippy, SCORE-Inspired Safety Verification, Security Audit matrix). Issue #378."
+    tags: [ci, release, branch-protection]
+    fields:
+      upstream-ref: https://github.com/pulseengine/kiln/issues/378
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-02T06:51:11Z
+    release: v0.3.6
+
+  - id: SR-28
+    type: requirement
+    title: Component multi-core instantiation links cross-core user imports (sibling-module function/memory)
+    status: proposed
+    description: "When a Component-Model artifact decomposes into multiple core modules, an import in one core module that is satisfied by an export of a sibling core module (cross-core function/memory) shall be linked during instantiation. Today only host imports and same-module refs resolve; cross-core sibling imports are not wired, so meld-fused multi-core components fail to link. Extends the multi-core work from #364/#374. Issue #375."
+    tags: [component-model, instantiation, multicore, linking]
+    fields:
+      upstream-ref: https://github.com/pulseengine/kiln/issues/375
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-02T06:51:24Z
+    release: v0.4.0
+>>>>>>> Stashed changes
