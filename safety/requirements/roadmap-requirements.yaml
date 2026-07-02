@@ -388,7 +388,7 @@ artifacts:
       the embedded-cert path). Both paths are supported per AD-COMPONENT-HOST-001;
       this requirement covers the direct-hosting (QM) half. Kill-criterion: kilnd
       cannot instantiate + invoke an export of a wac-composed component.
-    status: implemented
+    status: verified
     release: v0.3.5
     tags: [component-model, host, kilnd, canonical-abi, qm, cross-tool, roadmap, release-v0.4.0]
     links:
@@ -433,7 +433,7 @@ artifacts:
       pipeline). Kill-criterion: kilnd fails to run a validly-composed
       `wasi:cli/run` command component solely because no core module exports
       `_start`.
-    status: implemented
+    status: verified
     release: v0.3.5
     tags: [component-model, host, kilnd, wasi-cli-run, canonical-abi, qm, cross-tool, roadmap, release-v0.4.0]
     links:
