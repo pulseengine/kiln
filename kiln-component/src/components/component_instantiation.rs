@@ -802,6 +802,8 @@ impl ComponentInstance {
             main_instance_handle: None,
             #[cfg(feature = "std")]
             direct_export_targets: std::collections::HashMap::new(),
+            #[cfg(feature = "std")]
+            command_entry: None,
         })
     }
 
@@ -2268,10 +2270,54 @@ impl ComponentInstance {
                 },
                 None => {
                     if is_interface_style {
-                        // Interface-style component (exports wasi:cli/run at component level)
-                        // The CORE module still exports _start - search for it.
-                        // NOTE: wasi:cli/run@*#run are COMPONENT-level export names, not core module
-                        // exports! Always search for _start in core modules.
+                        let mut return_main_handle: Option<kiln_runtime::engine::InstanceHandle> =
+                            None;
+                        // Command component (exports `wasi:cli/run@*`). Drive the
+                        // CANONICAL command entry (#364, REQ_COMPONENT_RUN): resolve
+                        // the `wasi:cli/run@*` interface export's `run` function to
+                        // its backing core export + core instance and use THAT as the
+                        // main handle, regardless of how the core modules are
+                        // decomposed. A meld-fused multi-core command component has
+                        // no single core module exporting `_start` (the start is
+                        // deferred to a caller/fixup module), so searching core
+                        // instances for `_start` is not a Component-Model guarantee.
+                        // Only fall through to the legacy `_start` search for command
+                        // shapes this resolver does not (yet) cover.
+                        #[cfg(feature = "std")]
+                        if let Some((export_name, core_export_name, core_instance_idx)) =
+                            Self::resolve_command_entry(parsed)?
+                        {
+                            match core_instances_map.get(&core_instance_idx) {
+                                Some(&handle) => {
+                                    #[cfg(feature = "tracing")]
+                                    tracing::info!(
+                                        ?handle,
+                                        %core_export_name,
+                                        core_instance_idx,
+                                        "Command component - driving wasi:cli/run canonical entry"
+                                    );
+                                    instance.main_instance_handle = Some(handle);
+                                    instance.command_entry = Some(crate::types::CommandEntry {
+                                        export_name,
+                                        core_export_name,
+                                    });
+                                    return_main_handle = Some(handle);
+                                },
+                                None => {
+                                    return Err(Error::runtime_execution_error(
+                                        "wasi:cli/run backing core export resolved to a core \
+                                         instance that is not present in the instance map",
+                                    ));
+                                },
+                            }
+                        }
+
+                        if let Some(handle) = return_main_handle {
+                            handle
+                        } else {
+                        // Legacy fallback: the CORE module still exports _start -
+                        // search for it. NOTE: wasi:cli/run@*#run are COMPONENT-level
+                        // export names, not core module exports.
                         let mut found_handle = None;
                         // For Rust component model, entry point is often wasi:cli/run@VERSION#run
                         // For C/TinyGo, entry point is _start
@@ -2339,6 +2385,7 @@ impl ComponentInstance {
                             return Err(Error::runtime_execution_error(
                                 "No core instance exports _start - module exports not properly loaded",
                             ));
+                        }
                         }
                     } else if !instance.direct_export_targets.is_empty() {
                         // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
@@ -3132,6 +3179,163 @@ impl ComponentInstance {
         Err(Error::component_resource_lifecycle_error(
             "canon lift core function index does not resolve to a core-instance \
              export alias — direct hosting requires a lifted core export",
+        ))
+    }
+
+    /// Resolve the `wasi:cli/run` canonical command entry (#364,
+    /// REQ_COMPONENT_RUN).
+    ///
+    /// Returns `Some((component_export_name, core_export_name, core_instance_idx))`
+    /// when the component exports a `wasi:cli/run@*` interface instance whose
+    /// inner `run` function is a `canon lift` of a core function reached through a
+    /// `core func` alias of a core-instance export — the Component-Model command
+    /// entry, resolvable regardless of how the core modules are decomposed.
+    ///
+    /// Returns `None` when there is no such export, or when the run entry has a
+    /// shape this resolver does not cover (a non-instance export, a
+    /// component-reference instance, or a `run` that is an import/alias rather
+    /// than a local lift) — leaving the legacy `_start` search in place. FAIL
+    /// LOUD when the exported instance is malformed (missing `run`) or when a
+    /// resolvable lift's core function does not map to a core-instance export.
+    #[cfg(feature = "std")]
+    fn resolve_command_entry(
+        parsed: &kiln_format::component::Component,
+    ) -> Result<Option<(String, String, usize)>> {
+        use kiln_format::component::{InstanceExpr, Sort};
+
+        // 1. Locate the component-level `wasi:cli/run@*` export. The `run`
+        //    function lives inside this interface instance.
+        for export in &parsed.exports {
+            let export_name = if export.name.nested.is_empty() {
+                export.name.name.clone()
+            } else {
+                format!("{}:{}", export.name.nested.join(":"), export.name.name)
+            };
+            if !export_name.starts_with("wasi:cli/run@") {
+                continue;
+            }
+            if !matches!(export.sort, Sort::Instance) {
+                // Not the interface-instance form this resolver handles.
+                return Ok(None);
+            }
+
+            // 2. Resolve the exported instance's `run` function to a component
+            //    function index.
+            let instance_idx = export.idx as usize;
+            let inst = parsed.instances.get(instance_idx).ok_or_else(|| {
+                Error::component_resource_lifecycle_error(
+                    "wasi:cli/run export references an out-of-bounds component instance index",
+                )
+            })?;
+            let run_func_idx = match &inst.instance_expr {
+                InstanceExpr::InlineExports(exports) => {
+                    let mut found = None;
+                    for ie in exports {
+                        if ie.name == "run" && matches!(ie.sort, Sort::Function) {
+                            found = Some(ie.idx);
+                            break;
+                        }
+                    }
+                    found.ok_or_else(|| {
+                        Error::component_resource_lifecycle_error(
+                            "wasi:cli/run interface instance does not export a `run` function",
+                        )
+                    })?
+                },
+                // Component-reference (nested) instances are not covered here;
+                // leave the legacy path to handle them.
+                InstanceExpr::ComponentReference { .. } => return Ok(None),
+            };
+
+            // 3. Resolve the `run` component function to the core function backing
+            //    its `canon lift`, then to the core export name + core instance.
+            let core_func_idx = match Self::resolve_lift_core_func_idx(parsed, run_func_idx)? {
+                Some(idx) => idx,
+                // `run` is an import/alias, not a locally-lifted core function.
+                None => return Ok(None),
+            };
+            let (core_export_name, core_instance_idx) =
+                Self::resolve_core_func_location(parsed, core_func_idx)?;
+
+            return Ok(Some((export_name, core_export_name, core_instance_idx)));
+        }
+
+        Ok(None)
+    }
+
+    /// Return the core function index backing the `canon lift` for a component
+    /// function index, or `None` when that component function is an import or a
+    /// function alias rather than a local lift (#364, REQ_COMPONENT_RUN).
+    ///
+    /// The component function index space is populated in order: function
+    /// imports, function aliases, then `canon lift` operations (the same
+    /// convention `resolve_direct_export_target` uses).
+    #[cfg(feature = "std")]
+    fn resolve_lift_core_func_idx(
+        parsed: &kiln_format::component::Component,
+        component_func_idx: u32,
+    ) -> Result<Option<u32>> {
+        use kiln_format::component::{AliasTarget, CanonOperation, ExternType, Sort};
+
+        let mut idx = 0u32;
+        for import in &parsed.imports {
+            if matches!(import.ty, ExternType::Function { .. }) {
+                if idx == component_func_idx {
+                    return Ok(None);
+                }
+                idx += 1;
+            }
+        }
+        for alias in &parsed.aliases {
+            let is_func_alias = match &alias.target {
+                AliasTarget::InstanceExport { kind, .. } => matches!(kind, Sort::Function),
+                AliasTarget::Outer { kind, .. } => matches!(kind, Sort::Function),
+                AliasTarget::CoreInstanceExport { .. } => false,
+            };
+            if is_func_alias {
+                if idx == component_func_idx {
+                    return Ok(None);
+                }
+                idx += 1;
+            }
+        }
+        for canon in &parsed.canonicals {
+            if let CanonOperation::Lift { func_idx, .. } = &canon.operation {
+                if idx == component_func_idx {
+                    return Ok(Some(*func_idx));
+                }
+                idx += 1;
+            }
+        }
+        Ok(None)
+    }
+
+    /// Resolve a core function index to `(core_export_name, core_instance_idx)`
+    /// via the `core func` alias (`CoreInstanceExport`) that produced it. FAIL
+    /// LOUD if no such alias exists (#364, REQ_COMPONENT_RUN).
+    #[cfg(feature = "std")]
+    fn resolve_core_func_location(
+        parsed: &kiln_format::component::Component,
+        core_func_idx: u32,
+    ) -> Result<(String, usize)> {
+        use kiln_format::component::{AliasTarget, CoreSort};
+
+        for alias in &parsed.aliases {
+            if let AliasTarget::CoreInstanceExport {
+                name,
+                kind,
+                instance_idx,
+            } = &alias.target
+            {
+                if matches!(kind, CoreSort::Function) && alias.dest_idx == Some(core_func_idx) {
+                    return Ok((name.clone(), *instance_idx as usize));
+                }
+            }
+        }
+
+        Err(Error::component_resource_lifecycle_error(
+            "wasi:cli/run `run` lift's core function index does not resolve to a \
+             core-instance export alias",
         ))
     }
 
@@ -3938,6 +4142,15 @@ impl ComponentInstance {
             } => {
                 #[cfg(feature = "std")]
                 {
+                    // Command component (#364, REQ_COMPONENT_RUN): if the named
+                    // export is the resolved `wasi:cli/run` canonical entry, drive
+                    // its backing core `run` export directly (works for meld-fused
+                    // multi-core components with no single core `_start`).
+                    if let Some(cmd) = self.command_entry.clone() {
+                        if cmd.export_name == function_name {
+                            return self.call_command_entry(&cmd.core_export_name);
+                        }
+                    }
                     // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
                     // if the named export was resolved to a directly `canon
                     // lift`-ed core function, invoke that specific core export and
@@ -4029,6 +4242,15 @@ impl ComponentInstance {
             } => {
                 #[cfg(feature = "std")]
                 {
+                    // Command component (#364, REQ_COMPONENT_RUN): if the named
+                    // export is the resolved `wasi:cli/run` canonical entry, drive
+                    // its backing core `run` export directly (works for meld-fused
+                    // multi-core components with no single core `_start`).
+                    if let Some(cmd) = self.command_entry.clone() {
+                        if cmd.export_name == function_name {
+                            return self.call_command_entry(&cmd.core_export_name);
+                        }
+                    }
                     // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
                     // if the named export was resolved to a directly `canon
                     // lift`-ed core function, invoke that specific core export and
@@ -4218,6 +4440,32 @@ impl ComponentInstance {
     ///
     /// FAIL LOUD when the engine/instance is unavailable, when an argument or
     /// result is non-scalar, or when the core result arity does not match.
+    /// Invoke the resolved `wasi:cli/run` canonical command entry (#364,
+    /// REQ_COMPONENT_RUN): execute the backing core `run` export on the main
+    /// instance handle. `run` takes no arguments; its result is the command's
+    /// exit status and is not lifted here — the command runs for effect, matching
+    /// the `wasi:cli/run` command-runner contract (and mirroring how the legacy
+    /// entry-point path returned no value on success). FAIL LOUD when the engine
+    /// or main instance handle is unavailable.
+    #[cfg(all(feature = "std", feature = "kiln-execution"))]
+    fn call_command_entry(&mut self, core_export_name: &str) -> Result<Vec<ComponentValue>> {
+        use kiln_runtime::engine::CapabilityEngine;
+
+        let (engine_box, handle) = match (&mut self.runtime_engine, self.main_instance_handle) {
+            (Some(engine_box), Some(handle)) => (engine_box, handle),
+            _ => {
+                return Err(Error::runtime_execution_error(
+                    "command-entry invocation requires an instantiated engine and main \
+                     instance handle",
+                ));
+            },
+        };
+        let engine = engine_box.as_mut();
+
+        let _ = engine.execute(handle, core_export_name, &[])?;
+        Ok(Vec::new())
+    }
+
     #[cfg(all(feature = "std", feature = "kiln-execution"))]
     fn call_direct_export(
         &mut self,

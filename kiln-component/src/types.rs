@@ -167,6 +167,33 @@ pub struct ComponentInstance {
     /// `wasi:cli/run` command path.
     #[cfg(feature = "std")]
     pub direct_export_targets: std::collections::HashMap<String, DirectExportTarget>,
+    /// Resolved `wasi:cli/run` canonical command entry, if this component is run
+    /// as a command (#364, REQ_COMPONENT_RUN).
+    ///
+    /// Populated during main-handle selection when the component exports
+    /// `wasi:cli/run@*` and no core module exports `_start` (the meld-fused
+    /// multi-core case): the interface export's `run` function is resolved to its
+    /// backing core export, and `main_instance_handle` is set to the core
+    /// instance that backs it. Invoking the component-level run export then drives
+    /// that core export directly, per the Component Model, rather than searching
+    /// core instances for a `_start`.
+    #[cfg(feature = "std")]
+    pub command_entry: Option<CommandEntry>,
+}
+
+/// Resolved `wasi:cli/run` canonical command entry (#364, REQ_COMPONENT_RUN).
+///
+/// Describes how to run a command component through its component-level
+/// `wasi:cli/run@*` export: the component export name that selects it, and the
+/// backing core export (the `run` function's `canon lift` target) to invoke on
+/// the main instance handle.
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommandEntry {
+    /// Component-level export name of the `wasi:cli/run@*` interface instance.
+    pub export_name: String,
+    /// Core export name of the backing `run` function (callable on the engine).
+    pub core_export_name: String,
 }
 
 /// Resolved direct-hosting invocation target for an exported function (#344).
