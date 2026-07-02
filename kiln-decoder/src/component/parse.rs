@@ -742,7 +742,17 @@ mod std_parsing {
 
                 let mut exports = Vec::with_capacity(exports_count as usize);
                 for _ in 0..exports_count {
-                    // Read name
+                    // Read the export name. Per the Component Model, an inline
+                    // export name uses the same two-string `exportname'` encoding
+                    // as the export section (a leading namespace string — usually
+                    // empty — followed by the plain name). Mirror
+                    // `parse_export_section` here: reading a single string would
+                    // consume the empty-namespace `0x00` as a zero-length name and
+                    // misalign the rest of the export (#364).
+                    let (_namespace_bytes, bytes_read) =
+                        kiln_format::binary::read_string(bytes, offset)?;
+                    offset += bytes_read;
+
                     let (name_bytes, bytes_read) = kiln_format::binary::read_string(bytes, offset)?;
                     offset += bytes_read;
                     let name = bytes_to_string(name_bytes);

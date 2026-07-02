@@ -649,6 +649,8 @@ impl ComponentLinker {
             main_instance_handle: None,
             #[cfg(feature = "std")]
             direct_export_targets: std::collections::HashMap::new(),
+            #[cfg(feature = "std")]
+            command_entry: None,
             id: instance_id,
             component: comp,
             state: crate::types::ComponentInstanceState::Initialized,

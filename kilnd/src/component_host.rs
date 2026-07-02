@@ -64,4 +64,51 @@ mod tests {
     fn write_fixture_to_tmp() {
         std::fs::write("/tmp/fixture.wasm", fixture()).expect("write fixture");
     }
+
+    /// The #364 acceptance fixture (REQ_COMPONENT_RUN): a **multi-core** command
+    /// component that exports the standard `wasi:cli/run@0.2.x` but has **no core
+    /// module exporting `_start`** — the meld-fused multi-core shape. The backing
+    /// `run` core function lives in the SECOND core module (core instance index
+    /// 1), not the first. A single core `_start` is not a Component-Model
+    /// guarantee, so before the fix this failed at instantiation with
+    /// `[Runtime] No core instance exports _start`.
+    fn multicore_command_fixture() -> Vec<u8> {
+        wat::parse_str(
+            r#"
+            (component
+              ;; A second (non-first) core module is present, so no single core
+              ;; module is "the" entry; and neither core module exports `_start`.
+              (core module $other (func (export "compute") (result i32) (i32.const 7)))
+              ;; The `wasi:cli/run` `run` is backed by THIS module (core instance 1).
+              (core module $runner (func (export "run") (result i32) (i32.const 42)))
+              (core instance $io (instantiate $other))
+              (core instance $ir (instantiate $runner))
+              (func $run (result u32) (canon lift (core func $ir "run")))
+              (instance $run_iface (export "run" (func $run)))
+              (export "wasi:cli/run@0.2.6" (instance $run_iface)))
+            "#,
+        )
+        .expect("multi-core command fixture must build + validate as a component")
+    }
+
+    /// RED before #364: `ComponentInstance::from_parsed_*` errored
+    /// `[Runtime] No core instance exports _start` for this fixture, because the
+    /// interface-style path searched core instances for a `_start` name.
+    /// GREEN: the component runs via its `wasi:cli/run` canonical entry — the
+    /// entry resolves to the backing core `run` (in whichever core module the
+    /// canon-lift wraps) and executes, regardless of core-module decomposition.
+    #[test]
+    fn runs_multicore_command_component_via_wasi_cli_run() {
+        let wasm = multicore_command_fixture();
+        let result = invoke_component_export(&wasm, "wasi:cli/run@0.2.6").expect(
+            "multi-core command component must run via its wasi:cli/run canonical \
+             entry, not fail with the `_start` error",
+        );
+        // `wasi:cli/run` runs for effect (its result is the command exit status);
+        // the command entry lifts no values back.
+        assert!(
+            result.is_empty(),
+            "wasi:cli/run command entry returns no lifted values, got {result:?}",
+        );
+    }
 }

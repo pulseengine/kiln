@@ -409,3 +409,47 @@ artifacts:
         DIRECT hosting is QM/reference scope (kilnd, SM-PERF-001 reference runtime).
         The embedded-cert path stays meld-fuse-only (RFC #46 / SM-ASYNC-002 apply
         there). See AD-COMPONENT-HOST-001 for the both-paths reconciliation.
+
+  - id: REQ_COMPONENT_RUN
+    type: requirement
+    title: Run a command component via its wasi:cli/run canonical entry (multi-core)
+    description: >
+      The std reference host (kilnd, interpreter-QM variant) shall execute a
+      `--component` command component through its component-level
+      `wasi:cli/run@0.2.x` canonical entry — resolving that interface export's
+      `run` function to its backing core function (in whichever core module the
+      canon-lift wraps) and invoking it — regardless of how the component's core
+      modules are decomposed. In particular a meld-fused multi-core command
+      component, where no single core module exports `_start` and the start is
+      deferred to a caller/fixup core module, shall run the way wasmtime runs it,
+      rather than failing when kilnd searches core instances for a `_start`
+      export. This drives the Component-Model export (not a core `_start`
+      assumption) and unblocks the meld -> kiln seam (meld#297, the jess/gale
+      pipeline). Kill-criterion: kilnd fails to run a validly-composed
+      `wasi:cli/run` command component solely because no core module exports
+      `_start`.
+    status: proposed
+    tags: [component-model, host, kilnd, wasi-cli-run, canonical-abi, qm, cross-tool, roadmap, release-v0.4.0]
+    links:
+      - type: derives-from
+        target: REQ_COMPONENT_HOST
+    fields:
+      upstream-ref: "https://github.com/pulseengine/kiln/issues/364"
+      cross-ref: "meld#297 (meld -> kiln seam; the jess/gale pipeline)"
+      decision: AD-COMPONENT-HOST-001
+      current-state: >
+        Grounded 2026-07-02 (issue #364): kilnd's interface-style main-handle
+        selection (kiln-component/src/components/component_instantiation.rs)
+        searched core instances for a `_start`/`run` NAME and errored
+        `[Runtime][E03ED] No core instance exports _start` when no single core
+        module exposed one — which is the meld-fused multi-core case. hello_c_cli
+        happened to work only because a core module exports `_start`. The fix
+        resolves the `wasi:cli/run@*` interface-instance export down through its
+        inner `run` canon-lift to the backing core export + core instance and
+        drives THAT, reusing the #344 canon-lift resolution. FAIL LOUD (no
+        `_start` fallback/guessing) when the run entry cannot be resolved.
+      scope-note: >
+        DIRECT hosting / reference scope (kilnd, SM-PERF-001). WASI imports of a
+        run must be satisfied by the WasiDispatcher set (filesystem/cli/clocks/io/
+        random); syscall-heavy fused cores needing interfaces outside that set are
+        the #340-item-3 stub gap and fail loud at instantiate, not faked here.
