@@ -20,7 +20,7 @@ members = [
     "kiln-builtins",
     "kiln-async",
     "cargo-kiln"]
-exclude = ["examples/wasi-nn/inference_module"]
+exclude = ["examples/wasi-nn/inference_module", "benchmarks/executor-comparison"]
 resolver = "2"  # Use edition 2021 resolver
 
 [workspace.package]

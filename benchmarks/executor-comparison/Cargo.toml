@@ -1,0 +1,26 @@
+# Cross-executor comparison bench (kiln#368), DELIBERATELY workspace-excluded.
+#
+# embassy pulls a large transitive closure (cordyceps, darling, cfg-gated
+# loom/tracing, …). Keeping this crate out of the main workspace (`exclude` in
+# the root Cargo.toml, its own Cargo.lock) means none of that enters the
+# safety-critical runtime's audited dependency graph. Run it explicitly:
+#   cd benchmarks/executor-comparison && cargo bench
+[package]
+name = "executor-comparison-bench"
+version = "0.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+kiln-async = { path = "../../kiln-async" }
+criterion = { version = "0.8", features = ["html_reports"] }
+embassy-executor = { version = "0.10", default-features = false }
+embassy-futures = "0.1"
+
+[[bench]]
+name = "comparison"
+harness = false
