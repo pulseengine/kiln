@@ -1,0 +1,6 @@
+# This crate is workspace-excluded and carries embassy's heavy transitive
+# closure. Keep its lockfile OUT of the repo so embassy never enters GitHub's
+# dependency graph / Dependency Review for the safety-critical runtime. The
+# bench is auxiliary; a fresh lock is generated on demand (`cargo bench`).
+/Cargo.lock
+/target

@@ -1,10 +1,14 @@
-// Kiln - kiln-async :: executor_comparison bench
+// Kiln - executor-comparison-bench :: comparison
 // SW-REQ-ID: REQ_ASYNC_BENCH
 // SPDX-License-Identifier: MIT
 
 //! Head-to-head microbench: kiln-async vs. embassy-executor on the *same*
 //! workload — N cooperative tasks, each yielding K times, driven to completion
 //! (issue #368).
+//!
+//! This crate is workspace-excluded so embassy's transitive dependency closure
+//! stays out of the safety-critical runtime's lockfile. Run it with:
+//!   `cd benchmarks/executor-comparison && cargo bench`
 //!
 //! The comparison is **per-poll scheduling overhead**: cost to pick a ready
 //! task, advance it one step (a trivial yield), and re-park it. Both runtimes
