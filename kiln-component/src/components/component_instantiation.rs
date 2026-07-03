@@ -3220,8 +3220,37 @@ impl ComponentInstance {
             }
 
             // 2. Resolve the exported instance's `run` function to a component
-            //    function index.
-            let instance_idx = export.idx as usize;
+            //    function index. `export.idx` is a component-instance
+            //    *index-space* value: 0..K-1 are imported instances, K.. are the
+            //    defined instances (`parsed.instances[i]` = space index `K + i`).
+            //    Offset by the instance-import count K before indexing the
+            //    defined-only vector — mirroring the `instance_interface_map`
+            //    walk in `from_parsed_with_handler`. (#382 / E5DC2: a meld-fused
+            //    component imports K=13 WASI instances, so the raw space index
+            //    overran `parsed.instances`; #364's self-contained fixture had
+            //    K=0, so the raw index happened to be correct.)
+            let num_instance_imports = parsed
+                .imports
+                .iter()
+                .filter(|import| {
+                    use kiln_format::component::ExternType;
+                    matches!(
+                        import.ty,
+                        ExternType::Instance { .. }
+                            | ExternType::Type(_)
+                            | ExternType::Component { .. }
+                            | ExternType::Module { .. }
+                    )
+                })
+                .count();
+            let export_space_idx = export.idx as usize;
+            if export_space_idx < num_instance_imports {
+                // The run instance resolves to an *imported* instance, not the
+                // locally-defined shape this resolver handles — leave the legacy
+                // path to deal with it.
+                return Ok(None);
+            }
+            let instance_idx = export_space_idx - num_instance_imports;
             let inst = parsed.instances.get(instance_idx).ok_or_else(|| {
                 Error::component_resource_lifecycle_error(
                     "wasi:cli/run export references an out-of-bounds component instance index",
@@ -5481,5 +5510,49 @@ pub fn create_component_import(
         name,
         module,
         import_type,
+    }
+}
+
+#[cfg(all(test, feature = "std"))]
+mod e5dc2_tests {
+    use super::*;
+
+    /// #382 (E5DC2): a command component with an **instance import** declared
+    /// before the defined `wasi:cli/run` instance. The import occupies
+    /// component-instance index 0, so the run instance sits at space index 1
+    /// while it is `parsed.instances[0]`. `resolve_command_entry` must offset by
+    /// the instance-import count K before indexing `parsed.instances`; before the
+    /// fix it used the raw space index (1) and returned the out-of-bounds error.
+    ///
+    /// meld corroborated K=13 for the real `hello_c_cli --component --memory
+    /// multi` fusion; K=1 here is the minimal overrun of a K=0-assuming index.
+    // rivet: verifies SR-30
+    #[test]
+    fn resolve_command_entry_offsets_by_instance_import_count() {
+        let wasm = wat::parse_str(
+            r#"
+            (component
+              ;; One instance import — occupies component-instance index 0,
+              ;; pushing the defined run instance to component-instance index 1.
+              (import "test:pkg/thing" (instance $stub))
+              (core module $runner (func (export "run") (result i32) (i32.const 42)))
+              (core instance $ir (instantiate $runner))
+              (func $run (result u32) (canon lift (core func $ir "run")))
+              (instance $run_iface (export "run" (func $run)))
+              (export "wasi:cli/run@0.2.6" (instance $run_iface)))
+            "#,
+        )
+        .expect("instance-import command fixture must build as a component");
+        let parsed =
+            kiln_decoder::component::decode_component(&wasm).expect("fixture must decode");
+
+        let resolved = ComponentInstance::resolve_command_entry(&parsed).expect(
+            "resolve_command_entry must offset by the instance-import count, not fail \
+             with the E5DC2 out-of-bounds error",
+        );
+        assert!(
+            resolved.is_some(),
+            "the wasi:cli/run command entry must resolve to its backing core function",
+        );
     }
 }

@@ -1311,6 +1311,7 @@ dependencies = [
  "kiln-runtime",
  "kiln-sync",
  "log",
+ "wat",
 ]
 
 [[package]]
