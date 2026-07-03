@@ -873,7 +873,7 @@ artifacts:
   - id: SR-27
     type: requirement
     title: kilnd integration tests compile + run under std,component-model
-    status: proposed
+    status: implemented
     description: "kilnd exposes a library target so its config/engine types are importable, and the integration tests (integrated_features_tests.rs, kilnd_integration_tests.rs) compile+run again. Measured root cause: kilnd is bin-only (main.rs 1618 LOC, types inline), so tests/ files can't import it — the failures are feature-independent (dark since the WRT→Kiln rename), not just std,component-model. Fix = lib-extraction refactor (repoint super::super::→kilnd::, WasiCapabilities::minimal()?), OR delete-as-dead per CLAUDE.md. Fork needs a call; not an unattended change. Issue #377."
     tags: [ci, testing, kilnd]
     fields:
