@@ -1498,6 +1498,7 @@ dependencies = [
  "kiln-runtime",
  "kiln-wasi",
  "linked_list_allocator",
+ "serial_test",
  "tracing",
  "tracing-subscriber",
  "wat",

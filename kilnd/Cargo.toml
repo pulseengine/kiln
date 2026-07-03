@@ -9,6 +9,14 @@ readme = "README.md"
 keywords = ["wasm", "webassembly", "daemon", "runtime", "host"]
 categories = ["wasm", "command-line-utilities", "network-programming"]
 
+# Library target — exposes the daemon's types + `run()` so integration tests
+# can exercise them (issue #377). The heavy logic lives here; `main.rs` is a
+# thin binary owning only the process-level items (allocator, panic handler,
+# `fn main`).
+[lib]
+name = "kilnd"
+path = "src/lib.rs"
+
 # Single binary with runtime mode detection
 [[bin]]
 name = "kilnd"
@@ -45,6 +53,10 @@ tracing-subscriber = { version = "0.3", optional = true, default-features = fals
 [dev-dependencies]
 # WAT fixtures for the witness harness integration test (#340)
 wat = "1.244"
+# Integration tests construct KilndEngine, which draws on the global
+# capability-based memory budget; they must run serially to avoid contending
+# on it (see CLAUDE.md — CFI/engine tests use serial_test).
+serial_test = "3.4"
 
 [features]
 default = ["std", "kiln-execution", "component-model", "wasi", "wasi-cli", "wasi-io", "wasi-clocks", "wasi-random", "wasi-filesystem"]

@@ -1,0 +1,1536 @@
+//! # WebAssembly Runtime Daemon (kilnd)
+//!
+//! A minimal daemon process for WebAssembly module execution with support for
+//! both std and no_std environments. Uses only internal Kiln capabilities to
+//! minimize dependencies.
+//!
+//! ## Features
+//!
+//! - **Minimal Dependencies**: Uses only internal Kiln crates
+//! - **Binary std/no_std**: Single binary that detects runtime capabilities
+//! - **Internal Logging**: Uses kiln-logging for structured output
+//! - **Runtime Detection**: Automatically selects appropriate execution mode
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Standard mode (with filesystem access)
+//! kilnd --std module.wasm --function start
+//!
+//! # No-std mode (embedded/bare metal)
+//! kilnd --no-std --data <hex-bytes> --function start
+//! ```
+
+#![deny(unsafe_code)]
+#![warn(missing_docs)]
+
+// NOTE: This is the `kilnd` LIBRARY crate. The binary entry point (`fn main`),
+// the no_std global allocator, and the panic handler live in `src/main.rs`
+// (the thin bin), because a `#[global_allocator]`/`#[panic_handler]` must be
+// defined by the final binary, not a library. The library exposes the daemon's
+// types and `run()` so integration tests can exercise them (issue #377).
+
+// Conditional imports based on std feature
+// Core imports available in both modes
+use core::str;
+#[cfg(feature = "std")]
+use std::{env, fs, process};
+
+// Internal Kiln dependencies (always available)
+use kiln_error::{Error, ErrorCategory, Result, codes};
+// Conditional imports for Kiln allocator
+#[cfg(all(feature = "std", feature = "safety-critical"))]
+use kiln_foundation::allocator::{CrateId, KilnVec};
+use kiln_logging::{LogLevel, MinimalLogHandler};
+
+// Bounded infrastructure for static memory allocation
+#[cfg(feature = "std")]
+pub mod bounded_kilnd_infra;
+
+// witness MC/DC coverage harness mode (#340)
+pub mod witness_harness;
+
+// Direct Component-Model hosting: instantiate an external component and invoke
+// a named export, lifting its scalar result (#344, AD-COMPONENT-HOST-001).
+#[cfg(feature = "component-model")]
+pub mod component_host;
+
+/// Render a scalar [`ComponentValue`] for user-facing `--invoke` output (#344).
+#[cfg(all(feature = "std", feature = "component-model"))]
+fn format_component_value(value: &kiln_component::canonical_abi::ComponentValue) -> String {
+    use kiln_component::canonical_abi::ComponentValue as V;
+
+    match value {
+        V::Bool(v) => v.to_string(),
+        V::S8(v) => v.to_string(),
+        V::U8(v) => v.to_string(),
+        V::S16(v) => v.to_string(),
+        V::U16(v) => v.to_string(),
+        V::S32(v) => v.to_string(),
+        V::U32(v) => v.to_string(),
+        V::S64(v) => v.to_string(),
+        V::U64(v) => v.to_string(),
+        V::F32(v) => v.to_string(),
+        V::F64(v) => v.to_string(),
+        V::Char(v) => v.to_string(),
+        V::String(v) => v.clone(),
+        other => format!("{:?}", other),
+    }
+}
+
+// Safety-critical memory limits
+#[cfg(feature = "safety-critical")]
+pub mod memory_limits;
+
+// Optional Kiln execution capabilities (only in std mode with kiln-execution
+// feature) Engine type moved to kiln::engine module
+// Module type is available through kiln prelude
+
+// WASI host function support
+// Component model support - temporarily disabled
+// #[cfg(feature = "component-model")]
+#[cfg(feature = "component-model")]
+use kiln_decoder::component::decode_component;
+// Enhanced host function registry
+#[cfg(feature = "kiln-execution")]
+use kiln_host::CallbackRegistry;
+#[cfg(feature = "wasi")]
+use kiln_wasi::{
+    ComponentModelProvider, WasiCapabilities, WasiDispatcher, WasiHostProvider,
+    set_global_wasi_args,
+};
+
+/// Chained host import handler for WAC-composed P3 components.
+/// Routes WASI calls to WasiDispatcher and inter-component calls
+/// to nested component engines.
+#[cfg(all(feature = "wasi", feature = "kiln-execution"))]
+struct InterComponentHandler {
+    wasi: WasiDispatcher,
+    engines: std::collections::HashMap<
+        usize,
+        std::sync::Arc<std::sync::Mutex<kiln_runtime::engine::CapabilityAwareEngine>>,
+    >,
+    /// Maps interface name → nested component index
+    routes: std::collections::HashMap<String, usize>,
+}
+
+#[cfg(all(feature = "wasi", feature = "kiln-execution"))]
+impl kiln_foundation::traits::HostImportHandler for InterComponentHandler {
+    fn call_import(
+        &mut self,
+        module: &str,
+        function: &str,
+        args: &[kiln_foundation::Value],
+        memory: Option<&dyn kiln_foundation::traits::MemoryAccessor>,
+    ) -> kiln_error::Result<Vec<kiln_foundation::Value>> {
+        // Try WASI first
+        if module.starts_with("wasi:") {
+            return self.wasi.call_import(module, function, args, memory);
+        }
+
+        // Try inter-component routing
+        if let Some(&comp_idx) = self.routes.get(module) {
+            if let Some(engine_arc) = self.engines.get(&comp_idx) {
+                if let Ok(mut engine) = engine_arc.lock() {
+                    // Find the function in the nested engine's instances
+                    use kiln_runtime::engine::{CapabilityEngine, InstanceHandle};
+                    // Try multiple name formats for the function:
+                    // 1. Plain name: "fibonacci"
+                    // 2. Interface-qualified: "compute:concurrent/tasks@1.0.0#fibonacci"
+                    // 3. Async-lift: "[async-lift]compute:concurrent/tasks@1.0.0#fibonacci"
+                    let candidates = [
+                        function.to_string(),
+                        format!("{}#{}", module, function),
+                        format!("[async-lift]{}#{}", module, function),
+                    ];
+                    for idx in 0..16u32 {
+                        let handle = InstanceHandle::from_index(idx as usize);
+                        for candidate in &candidates {
+                            if engine.has_function(handle, candidate).unwrap_or(false) {
+                                return engine.execute(handle, candidate, args);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback: try WASI dispatcher for any unrecognized calls
+        self.wasi.call_import(module, function, args, memory)
+    }
+
+    fn set_args_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
+        self.wasi.set_args_allocation(list_ptr, string_ptrs);
+    }
+}
+
+/// Configuration for the runtime daemon
+#[derive(Debug, Clone)]
+pub struct KilndConfig {
+    /// Maximum fuel (execution steps) allowed
+    pub max_fuel: u64,
+    /// Maximum memory usage in bytes
+    pub max_memory: usize,
+    /// Function to execute
+    pub function_name: Option<String>,
+    /// Module data (for no_std mode)
+    pub module_data: Option<&'static [u8]>,
+    /// Module path (for std mode)
+    #[cfg(feature = "std")]
+    pub module_path: Option<String>,
+    /// Enable WASI support
+    #[cfg(feature = "wasi")]
+    pub enable_wasi: bool,
+    /// WASI version to use
+    #[cfg(feature = "wasi")]
+    pub wasi_version: WasiVersion,
+    /// Environment variables to expose to WASI
+    #[cfg(feature = "wasi")]
+    pub wasi_env_vars: Vec<String>,
+    /// Arguments to pass to WASI program
+    #[cfg(feature = "wasi")]
+    pub wasi_args: Vec<String>,
+    /// Filesystem paths to preopen for WASI access
+    #[cfg(feature = "wasi")]
+    pub wasi_fs_paths: Vec<String>,
+    /// Enable component model support
+    #[cfg(feature = "component-model")]
+    pub enable_component_model: bool,
+    /// Component interfaces to enable
+    #[cfg(feature = "component-model")]
+    pub component_interfaces: Vec<String>,
+    /// Named component export to invoke directly (#344). When set, the component
+    /// is instantiated and this export is invoked instead of the `wasi:cli/run`
+    /// command entry point, and its scalar result is printed.
+    #[cfg(feature = "component-model")]
+    pub invoke_export: Option<String>,
+    /// Memory profiling enabled
+    pub enable_memory_profiling: bool,
+    /// Platform-specific optimizations
+    pub enable_platform_optimizations: bool,
+    /// WASI capabilities
+    #[cfg(feature = "wasi")]
+    pub wasi_capabilities: Option<WasiCapabilities>,
+}
+
+impl Default for KilndConfig {
+    fn default() -> Self {
+        Self {
+            // Unbounded by default; an explicit `--fuel N` sets a finite
+            // instruction budget that the engine now enforces (issue #270).
+            max_fuel: u64::MAX,
+            max_memory: 64 * 1024 * 1024, // 64MB default
+            function_name: None,
+            module_data: None,
+            #[cfg(feature = "std")]
+            module_path: None,
+            #[cfg(feature = "wasi")]
+            enable_wasi: false,
+            #[cfg(feature = "wasi")]
+            wasi_version: WasiVersion::Preview2,
+            #[cfg(feature = "wasi")]
+            wasi_capabilities: None,
+            #[cfg(feature = "wasi")]
+            wasi_env_vars: Vec::new(),
+            #[cfg(feature = "wasi")]
+            wasi_args: Vec::new(),
+            #[cfg(feature = "wasi")]
+            wasi_fs_paths: Vec::new(),
+            #[cfg(feature = "component-model")]
+            enable_component_model: true,
+            #[cfg(feature = "component-model")]
+            component_interfaces: Vec::new(),
+            #[cfg(feature = "component-model")]
+            invoke_export: None,
+            enable_memory_profiling: false,
+            enable_platform_optimizations: true,
+        }
+    }
+}
+
+/// WASI version selection
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WasiVersion {
+    /// WASI Preview 2 (component model)
+    Preview2,
+}
+
+/// Memory profiler for tracking resource usage
+#[derive(Debug)]
+pub struct MemoryProfiler {
+    enabled: bool,
+    peak_usage: usize,
+    current_usage: usize,
+}
+
+impl MemoryProfiler {
+    /// Creates a new memory profiler instance
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            enabled: true,
+            peak_usage: 0,
+            current_usage: 0,
+        })
+    }
+
+    /// Records a memory allocation of the given size
+    pub fn record_allocation(&mut self, size: usize) {
+        if self.enabled {
+            self.current_usage += size;
+            if self.current_usage > self.peak_usage {
+                self.peak_usage = self.current_usage;
+            }
+        }
+    }
+
+    /// Records a memory deallocation of the given size
+    pub fn record_deallocation(&mut self, size: usize) {
+        if self.enabled && self.current_usage >= size {
+            self.current_usage -= size;
+        }
+    }
+
+    /// Returns the peak memory usage recorded
+    pub fn peak_usage(&self) -> usize {
+        self.peak_usage
+    }
+
+    /// Returns the current memory usage
+    pub fn current_usage(&self) -> usize {
+        self.current_usage
+    }
+}
+
+/// Runtime statistics
+#[derive(Debug, Clone, Default)]
+pub struct RuntimeStats {
+    /// Modules executed
+    pub modules_executed: u32,
+    /// Components executed
+    pub components_executed: u32,
+    /// Total fuel consumed
+    pub fuel_consumed: u64,
+    /// Peak memory usage
+    pub peak_memory: usize,
+    /// WASI functions called
+    pub wasi_functions_called: u64,
+    /// Host functions registered
+    pub host_functions_registered: usize,
+    /// Cross-component calls
+    pub cross_component_calls: u32,
+}
+
+/// Simple log handler that uses minimal output
+pub struct KilndLogHandler;
+
+impl MinimalLogHandler for KilndLogHandler {
+    fn handle_minimal_log(&self, level: LogLevel, message: &'static str) -> Result<()> {
+        // In std mode, use println!; in no_std mode, this would need platform-specific
+        // output
+        #[cfg(feature = "std")]
+        {
+            let prefix = match level {
+                LogLevel::Trace => "TRACE",
+                LogLevel::Debug => "DEBUG",
+                LogLevel::Info => "INFO",
+                LogLevel::Warn => "WARN",
+                LogLevel::Error => "ERROR",
+                LogLevel::Critical => "CRITICAL",
+            };
+            println!("[{}] {}", prefix, message);
+        }
+
+        #[cfg(not(feature = "std"))]
+        {
+            // In no_std mode, we can't easily print to console
+            // This would typically write to a hardware register, LED, or serial port
+            let _ = (level, message); // Suppress unused warnings
+        }
+
+        Ok(())
+    }
+}
+
+/// WASM execution engine abstraction
+pub struct KilndEngine {
+    config: KilndConfig,
+    stats: RuntimeStats,
+    logger: KilndLogHandler,
+    /// Host function registry for all host functions
+    #[cfg(feature = "kiln-execution")]
+    #[allow(dead_code)]
+    host_registry: CallbackRegistry,
+    /// WASI provider for WASI functions
+    #[cfg(feature = "wasi")]
+    wasi_provider: Option<Box<dyn WasiHostProvider>>,
+    /// Component registry for component model
+    #[cfg(feature = "component-model")]
+    // component_registry:     Option<ComponentRegistry>, // Disabled
+    /// Memory profiler
+    memory_profiler: Option<MemoryProfiler>,
+    /// Platform optimizations enabled
+    platform_optimizations: bool,
+}
+
+impl KilndEngine {
+    /// Create a new engine with the given configuration
+    pub fn new(config: KilndConfig) -> Result<Self> {
+        let mut engine = Self {
+            config,
+            stats: RuntimeStats::default(),
+            logger: KilndLogHandler,
+            #[cfg(feature = "kiln-execution")]
+            host_registry: CallbackRegistry::new(),
+            #[cfg(feature = "wasi")]
+            wasi_provider: None,
+            #[cfg(feature = "component-model")]
+            // component_registry: None, // Disabled
+            memory_profiler: None,
+            platform_optimizations: false,
+        };
+
+        // Initialize platform optimizations
+        engine.init_platform_optimizations()?;
+
+        // Initialize memory system (required for WASI and other subsystems)
+        kiln_foundation::memory_init::init_kiln_memory()?;
+
+        // Initialize memory profiling if enabled
+        if engine.config.enable_memory_profiling {
+            engine.init_memory_profiling()?;
+        }
+
+        // Initialize WASI if enabled
+        #[cfg(feature = "wasi")]
+        if engine.config.enable_wasi {
+            engine.init_wasi()?;
+        }
+
+        // Initialize component model if enabled
+        #[cfg(feature = "component-model")]
+        if engine.config.enable_component_model {
+            engine.init_component_model()?;
+        }
+
+        Ok(engine)
+    }
+
+    /// Initialize platform optimizations
+    fn init_platform_optimizations(&mut self) -> Result<()> {
+        if self.config.enable_platform_optimizations {
+            let _ = self
+                .logger
+                .handle_minimal_log(LogLevel::Info, "Enabling platform optimizations");
+
+            // Initialize platform-specific features
+            #[cfg(feature = "kiln-execution")]
+            // PlatformMemory::init_optimizations().map_err(|_| { // Disabled
+            Ok(()).map_err(|_: ()| {
+                Error::runtime_error("Failed to initialize platform memory optimizations")
+            })?;
+
+            self.platform_optimizations = true;
+            let _ =
+                self.logger.handle_minimal_log(LogLevel::Info, "Platform optimizations enabled");
+        }
+        Ok(())
+    }
+
+    /// Initialize memory profiling
+    fn init_memory_profiling(&mut self) -> Result<()> {
+        let _ = self.logger.handle_minimal_log(LogLevel::Info, "Initializing memory profiling");
+
+        self.memory_profiler = Some(
+            MemoryProfiler::new()
+                .map_err(|_| Error::runtime_error("Failed to initialize memory profiler"))?,
+        );
+
+        let _ = self.logger.handle_minimal_log(LogLevel::Info, "Memory profiling initialized");
+        Ok(())
+    }
+
+    /// Initialize WASI host functions
+    #[cfg(feature = "wasi")]
+    fn init_wasi(&mut self) -> Result<()> {
+        let _ = self
+            .logger
+            .handle_minimal_log(LogLevel::Info, "Initializing WASI host functions");
+
+        // Get WASI capabilities or create minimal set
+        let mut capabilities = if let Some(caps) = self.config.wasi_capabilities.clone() {
+            caps
+        } else {
+            WasiCapabilities::minimal()
+                .map_err(|_| Error::runtime_error("Failed to create minimal WASI capabilities"))?
+        };
+
+        // Configure environment variables
+        for env_var in &self.config.wasi_env_vars {
+            let _ = capabilities.environment.add_allowed_var(env_var);
+        }
+
+        // Enable args access if args are provided
+        if !self.config.wasi_args.is_empty() {
+            capabilities.environment.args_access = true;
+        }
+
+        // Enable random access for components that need it
+        capabilities.random.secure_random = true;
+        capabilities.random.pseudo_random = true;
+
+        // Enable stdout/stderr for component output
+        capabilities.io.stdout_access = true;
+        capabilities.io.stderr_access = true;
+
+        // Create WASI Preview2 provider
+        let mut provider = match self.config.wasi_version {
+            WasiVersion::Preview2 => ComponentModelProvider::new(capabilities)
+                .map_err(|_| Error::runtime_error("Failed to create WASI Preview 2 provider"))?,
+        };
+
+        // Register WASI functions with host registry
+        provider
+            .register_with_registry(&mut self.host_registry)
+            .map_err(|_| Error::runtime_error("Failed to register WASI functions"))?;
+
+        // Update stats
+        let function_count = provider.function_count();
+        self.stats.host_functions_registered += function_count;
+
+        self.wasi_provider = Some(Box::new(provider));
+
+        let _ = self.logger.handle_minimal_log(LogLevel::Info, "WASI host functions registered");
+        Ok(())
+    }
+
+    /// Initialize component model support
+    #[cfg(feature = "component-model")]
+    fn init_component_model(&mut self) -> Result<()> {
+        let _ = self.logger.handle_minimal_log(LogLevel::Info, "Initializing component model");
+
+        // Component model initialization
+        // Component registry and linker will be created on-demand during execution
+        let _ = self.logger.handle_minimal_log(LogLevel::Info, "Component model initialized");
+        Ok(())
+    }
+
+    /// Detect if the binary is a WebAssembly component or module.
+    pub fn detect_component_format(&self, data: &[u8]) -> Result<bool> {
+        if data.len() < 8 {
+            return Ok(false);
+        }
+
+        // Check for WASM magic number (0x00 0x61 0x73 0x6D)
+        if &data[0..4] == [0x00, 0x61, 0x73, 0x6D] {
+            // Check version to distinguish component vs module
+            let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+
+            // Version 1 = traditional module
+            // Component model uses different version encoding
+            Ok(version != 1)
+        } else {
+            // Not a WASM binary at all
+            Err(Error::parse_error("Invalid WebAssembly binary format"))
+        }
+    }
+
+    /// Execute a component using the component model
+    ///
+    /// For WAC-composed P3 components with nested library components,
+    /// inter-component calls are routed through the nested component engines.
+    #[cfg(feature = "component-model")]
+    #[allow(clippy::too_many_lines)]
+    fn execute_component(&mut self, data: &[u8]) -> Result<()> {
+        #[cfg(feature = "component-model")]
+        {
+            use kiln_foundation::memory_init::MemoryInitializer;
+            MemoryInitializer::initialize()
+                .map_err(|_| Error::runtime_error("Failed to initialize memory system"))?;
+
+            let mut parsed_component = Box::new(
+                decode_component(data)
+                    .map_err(|_| Error::parse_error("Failed to parse component binary"))?,
+            );
+
+            // Create and initialize component instance (passes by reference to avoid stack overflow)
+            // This includes executing start functions and transitioning to Running state
+            // Note: WASI functions are already registered in host_registry from init_wasi()
+            use kiln_component::components::component_instantiation::ComponentInstance;
+            // Wrap host_registry in Arc for passing to component
+            use std::sync::Arc;
+            let registry_arc = Arc::new(self.host_registry.clone());
+
+            // Create WASI dispatcher BEFORE component instantiation so start functions
+            // can call WASI functions (e.g., C/C++ components call WASI during _initialize)
+            let wasi_handler: Option<Box<dyn kiln_foundation::traits::HostImportHandler>> = {
+                #[cfg(feature = "wasi")]
+                {
+                    if self.config.enable_wasi {
+                        match kiln_wasi::WasiDispatcher::with_defaults() {
+                            Ok(mut dispatcher) => {
+                                // Add filesystem preopens from CLI args
+                                for path in &self.config.wasi_fs_paths {
+                                    let _ = dispatcher.add_preopen(path);
+                                }
+                                let _ = self.logger.handle_minimal_log(
+                                    LogLevel::Info,
+                                    "WASI dispatcher connected to component instance",
+                                );
+                                Some(Box::new(dispatcher))
+                            },
+                            Err(_e) => {
+                                let _ = self.logger.handle_minimal_log(
+                                    LogLevel::Warn,
+                                    "Failed to create WASI dispatcher for component",
+                                );
+                                None
+                            },
+                        }
+                    } else {
+                        None
+                    }
+                }
+                #[cfg(not(feature = "wasi"))]
+                {
+                    None
+                }
+            };
+
+            let mut instance = ComponentInstance::from_parsed_with_handler(
+                0,
+                &mut *parsed_component,
+                Some(registry_arc),
+                wasi_handler,
+            )?;
+
+            let _ = self.logger.handle_minimal_log(
+                LogLevel::Info,
+                "Component initialized and running successfully",
+            );
+
+            // For P3-style components where the engine was swapped to a nested component's
+            // engine, set up a chained handler that routes:
+            // 1. WASI calls → WasiDispatcher
+            // 2. Inter-component calls → nested component engines
+            #[cfg(all(feature = "kiln-execution", feature = "wasi"))]
+            if self.config.enable_wasi && !instance.nested_component_instances.is_empty() {
+                if let Ok(wasi_dispatcher) = kiln_wasi::WasiDispatcher::with_defaults() {
+                    // Build inter-component route map and extract nested engines
+                    let mut routes: std::collections::HashMap<String, usize> =
+                        std::collections::HashMap::new();
+                    let mut engines: std::collections::HashMap<
+                        usize,
+                        std::sync::Arc<
+                            std::sync::Mutex<kiln_runtime::engine::CapabilityAwareEngine>,
+                        >,
+                    > = std::collections::HashMap::new();
+
+                    for nested in instance.nested_component_instances.iter_mut() {
+                        for (export_name, _) in &nested.exports {
+                            routes.insert(export_name.clone(), nested.instance_index as usize);
+                        }
+                        // Take the engine from the nested instance and wrap in Arc<Mutex>
+                        if let Some(engine) = nested.instance.runtime_engine.take() {
+                            engines.insert(
+                                nested.instance_index as usize,
+                                std::sync::Arc::new(std::sync::Mutex::new(*engine)),
+                            );
+                        }
+                    }
+
+                    let handler = InterComponentHandler {
+                        wasi: wasi_dispatcher,
+                        engines,
+                        routes,
+                    };
+                    instance.set_host_handler(Box::new(handler));
+                }
+            }
+
+            // Pre-allocate WASI args memory via cabi_realloc before calling entry point.
+            // This is needed for components that call get-arguments (e.g., calculator).
+            #[cfg(all(feature = "kiln-execution", feature = "wasi"))]
+            if self.config.enable_wasi {
+                if let Err(e) = instance.pre_allocate_wasi_args() {
+                    eprintln!("[WASI-PREALLOC] Failed: {}", e);
+                }
+            }
+
+            // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):
+            // if a specific export was requested with `--invoke`, invoke it and
+            // print its scalar result instead of running the `wasi:cli/run`
+            // command entry point.
+            if let Some(export_name) = self.config.invoke_export.clone() {
+                let _ = self
+                    .logger
+                    .handle_minimal_log(LogLevel::Info, "Invoking requested component export");
+
+                #[cfg(feature = "kiln-execution")]
+                let result = instance.call_function(&export_name, &[], Some(&self.host_registry));
+                #[cfg(not(feature = "kiln-execution"))]
+                let result = instance.call_function(&export_name, &[]);
+
+                match result {
+                    Ok(values) => {
+                        // User-facing result output on stdout.
+                        for value in &values {
+                            println!("{}", format_component_value(value));
+                        }
+                        return Ok(());
+                    },
+                    Err(e) => {
+                        #[cfg(feature = "std")]
+                        {
+                            eprintln!("Component export invocation error: {}", e);
+                        }
+                        return Err(e);
+                    },
+                }
+            }
+
+            // Check for WASI CLI entry point and invoke it
+            // Find wasi:cli/run export with any version
+            let run_export = instance
+                .exports
+                .iter()
+                .find(|e| e.name.starts_with("wasi:cli/run@"))
+                .map(|e| e.name.clone());
+
+            if let Some(export_name) = run_export {
+                let _ = self
+                    .logger
+                    .handle_minimal_log(LogLevel::Info, "Calling wasi:cli/run entry point");
+
+                // TODO: Pass actual command-line arguments from config
+                // For now, pass empty args (WASI components can get args from WASI functions)
+                let args = vec![];
+
+                // Pass the host_registry so component can call WASI functions
+                #[cfg(feature = "kiln-execution")]
+                let result = instance.call_function(&export_name, &args, Some(&self.host_registry));
+                #[cfg(not(feature = "kiln-execution"))]
+                let result = instance.call_function(&export_name, &args);
+
+                match result {
+                    Ok(_results) => {
+                        let _ = self
+                            .logger
+                            .handle_minimal_log(LogLevel::Info, "Component executed successfully");
+                    },
+                    Err(e) => {
+                        #[cfg(feature = "std")]
+                        {
+                            eprintln!("Component execution error: {}", e);
+                        }
+                        let _ = self
+                            .logger
+                            .handle_minimal_log(LogLevel::Error, "Component execution failed");
+                        // Propagate the error - don't swallow it!
+                        // Following the project's "fail loud and early" principle.
+                        return Err(e);
+                    },
+                }
+            } else {
+                let _ = self.logger.handle_minimal_log(
+                    LogLevel::Info,
+                    "No wasi:cli/run entry point found - component initialized only",
+                );
+            }
+
+            return Ok(());
+        }
+
+        #[cfg(not(feature = "component-model"))]
+        {
+            return Err(Error::runtime_error("Component model support not enabled"));
+        }
+
+        #[allow(unreachable_code)]
+        if false {
+
+            // Note: WASI functions are already registered with host_registry via init_wasi()
+            // Component can look them up when resolving imports
+        } else {
+            return Err(Error::runtime_error("Component model not initialized"));
+        }
+
+        Ok(())
+    }
+
+    /// Execute a traditional WebAssembly module
+    fn execute_traditional_module(&mut self, data: &[u8]) -> Result<()> {
+        // Execute with actual Kiln engine if available
+        #[cfg(all(feature = "std", feature = "kiln-execution"))]
+        {
+            use kiln_foundation::memory_init::MemoryInitializer;
+            MemoryInitializer::initialize()
+                .map_err(|_| Error::runtime_error("Failed to initialize memory system"))?;
+
+            use kiln_runtime::engine::{CapabilityAwareEngine, CapabilityEngine, EnginePreset};
+
+            let preset = if cfg!(feature = "asil-d") {
+                EnginePreset::AsilD
+            } else if cfg!(feature = "asil-c") {
+                EnginePreset::AsilC
+            } else if cfg!(feature = "asil-b") {
+                EnginePreset::AsilB
+            } else if cfg!(feature = "asil-a") {
+                EnginePreset::AsilA
+            } else if cfg!(feature = "qm") {
+                EnginePreset::QM
+            } else {
+                EnginePreset::QM // Default to QM
+            };
+
+            // Create engine with appropriate capabilities
+            let mut engine = CapabilityAwareEngine::with_preset(preset)
+                .map_err(|_| Error::runtime_error("Failed to create engine"))?;
+
+            // Enforce the configured fuel budget (instruction count). Without
+            // this the engine runs with effectively unbounded fuel and a
+            // non-terminating module hangs regardless of --fuel (issue #270).
+            engine.set_fuel(self.config.max_fuel);
+
+            // Wire up WASI dispatcher as the host import handler
+            // This is the SINGLE dispatch path for ALL host function calls
+            #[cfg(feature = "wasi")]
+            if self.config.enable_wasi {
+                match WasiDispatcher::with_defaults() {
+                    Ok(mut dispatcher) => {
+                        // Add filesystem preopens from CLI args
+                        for path in &self.config.wasi_fs_paths {
+                            let _ = dispatcher.add_preopen(path);
+                        }
+                        engine.set_host_handler(Box::new(dispatcher));
+                        let _ = self
+                            .logger
+                            .handle_minimal_log(LogLevel::Info, "WASI dispatcher connected");
+                    },
+                    Err(_e) => {
+                        let _ = self
+                            .logger
+                            .handle_minimal_log(LogLevel::Warn, "Failed to create WASI dispatcher");
+                        return Err(Error::runtime_error("WASI dispatcher creation failed"));
+                    },
+                }
+            }
+
+            // Legacy WASI registration (to be removed once dispatcher is verified working)
+            #[cfg(feature = "wasi")]
+            if self.config.enable_wasi {
+                if let Err(_e) = engine.enable_wasi() {
+                    let _ = self.logger.handle_minimal_log(
+                        LogLevel::Warn,
+                        "WASI not available for this ASIL level",
+                    );
+                } else {
+                    let _ = self.logger.handle_minimal_log(LogLevel::Info, "WASI support enabled");
+                }
+            }
+
+            // Register example host functions for demonstration
+            if matches!(preset, EnginePreset::QM | EnginePreset::AsilA) {
+                // Only in less restrictive modes
+                let _ = engine.register_host_function("env", "host_print", |args: &[kiln_foundation::values::Value]| -> Result<Vec<kiln_foundation::values::Value>> {
+                    // Simple host function that "prints" a value (in practice would log it)
+                    if let Some(kiln_foundation::values::Value::I32(_val)) = args.get(0) {
+                        // In a real implementation, this would print to stdout or log
+                        // For now, just return success
+                    }
+                    Ok(vec![])
+                }).unwrap_or(());
+
+                let _ = self
+                    .logger
+                    .handle_minimal_log(LogLevel::Info, "Example host functions registered");
+            }
+
+            // Load module
+            let module_handle = engine
+                .load_module(data)
+                .map_err(|_| Error::runtime_execution_error("Failed to load module"))?;
+
+            // Instantiate
+            let instance = engine
+                .instantiate(module_handle)
+                .map_err(|_| Error::runtime_execution_error("Failed to instantiate module"))?;
+
+            // Execute function - try common entry points
+            let function_name = self.config.function_name.as_deref().unwrap_or("_start");
+            let _ = self.logger.handle_minimal_log(LogLevel::Info, "Executing function");
+
+            // Check if function exists — if not, try Meld-fused P3 module entry points
+            let has_main = engine.has_function(instance, function_name).unwrap_or(false);
+
+            if has_main {
+                // Propagate the engine's error verbatim so the actual cause
+                // (e.g. "fuel exhausted", a trap message) reaches the user
+                // instead of a generic "Function execution failed".
+                let results = engine.execute(instance, function_name, &[])?;
+
+                if !results.is_empty() {
+                    println!(
+                        "\n✓ Function '{}' returned {} value(s):",
+                        function_name,
+                        results.len()
+                    );
+                    for (i, value) in results.iter().enumerate() {
+                        println!("  [{}] {:?}", i, value);
+                    }
+                } else {
+                    println!(
+                        "\n✓ Function '{}' completed (no return values)",
+                        function_name
+                    );
+                }
+            } else {
+                // No _start — check for Meld-fused P3 module.
+                // These export [async-lift] functions and import P3 builtins from $root.
+                // The numbered exports (0, 1, 2, ...) are the wasi:cli/run entry points.
+                // Try calling export "0" which is typically the first component's entry.
+                let mut executed = false;
+
+                // Look for wasi:cli/run entry via numbered exports
+                for entry in &["0", "1", "_start", "main"] {
+                    if engine.has_function(instance, entry).unwrap_or(false) {
+                        let _ = self.logger.handle_minimal_log(
+                            LogLevel::Info,
+                            "Executing Meld-fused P3 module entry point",
+                        );
+                        match engine.execute(instance, entry, &[]) {
+                            Ok(results) => {
+                                if !results.is_empty() {
+                                    println!("\n✓ Entry '{}' returned: {:?}", entry, results);
+                                }
+                                executed = true;
+                                break;
+                            },
+                            Err(_) => continue,
+                        }
+                    }
+                }
+
+                if !executed {
+                    let _ = self.logger.handle_minimal_log(
+                        LogLevel::Error,
+                        "No entry point found (_start or P3 fused entries)",
+                    );
+                    return Err(Error::runtime_function_not_found("Function not found"));
+                }
+            }
+
+            self.stats.modules_executed += 1;
+        }
+
+        // Fallback simulation for demo/no-std modes
+        #[cfg(not(all(feature = "std", feature = "kiln-execution")))]
+        {
+            let _ = self
+                .logger
+                .handle_minimal_log(LogLevel::Info, "Simulating execution of function");
+
+            // Validate module structure
+            if data.len() < 8 {
+                return Err(Error::parse_error("Module too small to be valid WASM"));
+            }
+
+            // Check for WASM magic number (0x00 0x61 0x73 0x6D)
+            if &data[0..4] != [0x00, 0x61, 0x73, 0x6D] {
+                return Err(Error::parse_error("Invalid WASM magic number"));
+            }
+
+            // Simulate successful execution
+            let _ = self.logger.handle_minimal_log(LogLevel::Info, "Module validation successful");
+        }
+
+        Ok(())
+    }
+
+    /// Load module data with bounded allocations
+    #[cfg(feature = "std")]
+    fn load_module_bounded(&self) -> Result<Vec<u8>> {
+        const MAX_MODULE_SIZE: usize = 8 * 1024 * 1024; // 8 MiB limit
+
+        if let Some(ref path) = self.config.module_path {
+            // Check file size first
+            let metadata = fs::metadata(path)
+                .map_err(|_| Error::system_io_error("Failed to read module metadata"))?;
+
+            let file_size = metadata.len() as usize;
+            if file_size > MAX_MODULE_SIZE {
+                return Err(Error::runtime_execution_error("Module file too large"));
+            }
+
+            // For safety-critical mode, use bounded allocation
+            #[cfg(feature = "safety-critical")]
+            {
+                let mut module_data: KilnVec<u8, { CrateId::Kilnd as u8 }, MAX_MODULE_SIZE> =
+                    KilnVec::new();
+
+                // Read file in chunks to stay within bounds
+                let mut file = fs::File::open(path)
+                    .map_err(|_| Error::system_io_error("Failed to open module file"))?;
+
+                use std::io::Read;
+                let mut buffer = [0u8; 4096];
+                loop {
+                    let bytes_read = file
+                        .read(&mut buffer)
+                        .map_err(|_| Error::system_io_error("Failed to read module data"))?;
+
+                    if bytes_read == 0 {
+                        break;
+                    }
+
+                    for &byte in &buffer[..bytes_read] {
+                        module_data.push(byte).map_err(|_| {
+                            Error::runtime_execution_error("Module data capacity exceeded")
+                        })?;
+                    }
+                }
+
+                Ok(module_data.into_vec())
+            }
+
+            // For non-safety-critical mode, use standard loading but with size check
+            #[cfg(not(feature = "safety-critical"))]
+            {
+                let data =
+                    fs::read(path).map_err(|_| Error::system_io_error("Failed to read module"))?;
+                Ok(data)
+            }
+        } else if let Some(data) = &self.config.module_data {
+            if data.len() > MAX_MODULE_SIZE {
+                return Err(Error::runtime_execution_error("Module data too large"));
+            }
+            Ok(data.to_vec())
+        } else {
+            Err(Error::parse_error("No module path or data provided"))
+        }
+    }
+
+    /// Execute a WebAssembly module or component
+    pub fn execute_module(&mut self) -> Result<()> {
+        let _ = self.logger.handle_minimal_log(LogLevel::Info, "Starting module execution");
+
+        // Determine execution mode and module source with bounded allocations
+        #[cfg(feature = "std")]
+        let module_data = self.load_module_bounded()?;
+
+        #[cfg(not(feature = "std"))]
+        let module_data = self
+            .config
+            .module_data
+            .ok_or_else(|| Error::parse_error("No module data provided for no_std execution"))?;
+
+        // Check if this is a component or module
+        let is_component = self.detect_component_format(&module_data)?;
+
+        // Get module size for resource estimation
+        #[cfg(feature = "std")]
+        let module_size = module_data.len();
+        #[cfg(not(feature = "std"))]
+        let module_size = module_data.len();
+
+        // Estimate resource usage
+        let estimated_fuel = (module_size as u64) / 10; // Conservative estimate
+        let estimated_memory = module_size * 2; // Memory overhead estimate
+
+        // Check limits
+        if estimated_fuel > self.config.max_fuel {
+            return Err(Error::runtime_execution_error(
+                "Estimated fuel exceeds maximum limit",
+            ));
+        }
+
+        if estimated_memory > self.config.max_memory {
+            return Err(Error::new(
+                ErrorCategory::Resource,
+                codes::CAPACITY_EXCEEDED,
+                "Estimated memory exceeds maximum limit",
+            ));
+        }
+
+        // Route execution based on binary type
+        if is_component {
+            // Execute as WebAssembly component
+            #[cfg(feature = "component-model")]
+            {
+                if let Err(e) = self.execute_component(&module_data) {
+                    // Direct Component Model execution is not the supported path
+                    // (RFC #46): components are lowered to core modules by meld at
+                    // build time, and kiln runs the resulting core module. Surface
+                    // actionable guidance, but keep the underlying error.
+                    let _ = self.logger.handle_minimal_log(
+                        LogLevel::Error,
+                        "This file is a WebAssembly Component Model component. kiln \
+                         runs core modules; lower it first with `meld fuse <file> -o \
+                         <file>.core.wasm` and run the resulting core module (RFC #46).",
+                    );
+                    return Err(e);
+                }
+            }
+            #[cfg(not(feature = "component-model"))]
+            {
+                return Err(Error::runtime_error("Component model support not enabled"));
+            }
+        } else {
+            // Execute as traditional WebAssembly module
+            self.execute_traditional_module(&module_data)?;
+        }
+
+        // Update statistics
+        if is_component {
+            self.stats.components_executed += 1;
+        } else {
+            self.stats.modules_executed += 1;
+        }
+        self.stats.fuel_consumed += estimated_fuel;
+        self.stats.peak_memory = self.stats.peak_memory.max(estimated_memory);
+
+        let _ = self
+            .logger
+            .handle_minimal_log(LogLevel::Info, "Module execution completed successfully");
+        Ok(())
+    }
+
+    /// Get current statistics
+    pub const fn stats(&self) -> &RuntimeStats {
+        &self.stats
+    }
+
+    /// Get memory profiler if enabled
+    pub fn memory_profiler(&self) -> Option<&MemoryProfiler> {
+        self.memory_profiler.as_ref()
+    }
+}
+
+/// Simple argument parser for minimal dependencies
+#[cfg(feature = "std")]
+pub struct SimpleArgs {
+    /// Module path for std mode
+    pub module_path: Option<String>,
+    /// Function name to execute
+    pub function_name: Option<String>,
+    /// Maximum fuel
+    pub max_fuel: Option<u64>,
+    /// Maximum memory
+    pub max_memory: Option<usize>,
+    /// Force no-std mode
+    pub force_nostd: bool,
+    /// Enable WASI support
+    #[cfg(feature = "wasi")]
+    pub enable_wasi: bool,
+    /// WASI version
+    #[cfg(feature = "wasi")]
+    pub wasi_version: Option<WasiVersion>,
+    /// WASI filesystem paths
+    #[cfg(feature = "wasi")]
+    pub wasi_fs_paths: Vec<String>,
+    /// WASI environment variables to expose
+    #[cfg(feature = "wasi")]
+    pub wasi_env_vars: Vec<String>,
+    /// WASI program arguments
+    #[cfg(feature = "wasi")]
+    pub wasi_args: Vec<String>,
+    /// Enable component model
+    #[cfg(feature = "component-model")]
+    pub enable_component_model: bool,
+    /// Component interfaces to register
+    #[cfg(feature = "component-model")]
+    pub component_interfaces: Vec<String>,
+    /// Named component export to invoke directly (direct Component-Model hosting,
+    /// #344). When set, kilnd instantiates the component and invokes this export
+    /// instead of the `wasi:cli/run` command entry point.
+    #[cfg(feature = "component-model")]
+    pub invoke_export: Option<String>,
+    /// Enable memory profiling
+    pub enable_memory_profiling: bool,
+    /// Enable platform optimizations
+    pub enable_platform_optimizations: bool,
+}
+
+#[cfg(feature = "std")]
+impl SimpleArgs {
+    /// Parse command line arguments without external dependencies
+    pub fn parse() -> Result<Self> {
+        let args: Vec<String> = env::args().collect();
+        let mut result = Self {
+            module_path: None,
+            function_name: None,
+            max_fuel: None,
+            max_memory: None,
+            force_nostd: false,
+            #[cfg(feature = "wasi")]
+            enable_wasi: true,
+            #[cfg(feature = "wasi")]
+            wasi_version: None,
+            #[cfg(feature = "wasi")]
+            wasi_fs_paths: Vec::new(),
+            #[cfg(feature = "wasi")]
+            wasi_env_vars: Vec::new(),
+            #[cfg(feature = "wasi")]
+            wasi_args: Vec::new(),
+            #[cfg(feature = "component-model")]
+            enable_component_model: true,
+            #[cfg(feature = "component-model")]
+            component_interfaces: Vec::new(),
+            #[cfg(feature = "component-model")]
+            invoke_export: None,
+            enable_memory_profiling: false,
+            enable_platform_optimizations: true,
+        };
+
+        let mut i = 1; // Skip program name
+        while i < args.len() {
+            match args[i].as_str() {
+                "--help" | "-h" => {
+                    println!("WebAssembly Runtime Daemon (kilnd)");
+                    println!("Usage: kilnd [OPTIONS] <module.wasm>");
+                    println!();
+                    println!("Options:");
+                    println!("  --function <name>     Function to execute (default: start)");
+                    println!("  --fuel <amount>       Maximum fuel limit");
+                    println!("  --memory <bytes>      Maximum memory limit");
+                    println!("  --no-std             Force no-std execution mode");
+                    println!("  --memory-profile     Enable memory profiling");
+                    println!("  --no-platform-opt    Disable platform optimizations");
+                    #[cfg(feature = "wasi")]
+                    {
+                        println!("  --wasi               Enable WASI support");
+                        println!("  --wasi-version <v>   WASI version (preview2)");
+                        println!(
+                            "  --wasi-fs <path>     Allow filesystem access to path (alias: --dir)"
+                        );
+                        println!("  --wasi-env <var>     Expose environment variable to WASI");
+                        println!("  --wasi-arg <arg>     Pass argument to WASI program");
+                    }
+                    #[cfg(feature = "component-model")]
+                    {
+                        println!("  --component [<path>]  Enable component model support");
+                        println!(
+                            "  --invoke <export>     Invoke a named component export and print its result"
+                        );
+                        println!("  --interface <name>   Register component interface");
+                    }
+                    println!("  --help               Show this help message");
+                    process::exit(0);
+                },
+                "--function" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.function_name = Some(args[i].clone());
+                    }
+                },
+                "--fuel" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.max_fuel = args[i].parse().ok();
+                    }
+                },
+                "--memory" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.max_memory = args[i].parse().ok();
+                    }
+                },
+                "--no-std" => {
+                    result.force_nostd = true;
+                },
+                "--memory-profile" => {
+                    result.enable_memory_profiling = true;
+                },
+                "--no-platform-opt" => {
+                    result.enable_platform_optimizations = false;
+                },
+                #[cfg(feature = "wasi")]
+                "--wasi" => {
+                    result.enable_wasi = true;
+                },
+                #[cfg(feature = "wasi")]
+                "--wasi-version" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.wasi_version = match args[i].as_str() {
+                            "preview2" => Some(WasiVersion::Preview2),
+                            _ => None,
+                        };
+                    }
+                },
+                #[cfg(feature = "wasi")]
+                "--wasi-fs" | "--dir" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.wasi_fs_paths.push(args[i].clone());
+                    }
+                },
+                #[cfg(feature = "wasi")]
+                "--wasi-env" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.wasi_env_vars.push(args[i].clone());
+                    }
+                },
+                #[cfg(feature = "wasi")]
+                "--wasi-arg" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.wasi_args.push(args[i].clone());
+                    }
+                },
+                #[cfg(feature = "component-model")]
+                "--component" => {
+                    result.enable_component_model = true;
+                    // Optionally accept the component path as a value:
+                    //   --component <path>
+                    // (the path may also be given positionally).
+                    if i + 1 < args.len() && !args[i + 1].starts_with("--") {
+                        i += 1;
+                        if result.module_path.is_none() {
+                            result.module_path = Some(args[i].clone());
+                        }
+                    }
+                },
+                #[cfg(feature = "component-model")]
+                "--invoke" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.invoke_export = Some(args[i].clone());
+                    }
+                },
+                #[cfg(feature = "component-model")]
+                "--interface" => {
+                    i += 1;
+                    if i < args.len() {
+                        result.component_interfaces.push(args[i].clone());
+                    }
+                },
+                // Everything after "--" goes to wasi_args
+                "--" => {
+                    #[cfg(feature = "wasi")]
+                    {
+                        i += 1;
+                        while i < args.len() {
+                            result.wasi_args.push(args[i].clone());
+                            i += 1;
+                        }
+                    }
+                    break;
+                },
+                arg if !arg.starts_with("--") => {
+                    // First non-flag argument is the module path
+                    if result.module_path.is_none() {
+                        result.module_path = Some(arg.to_string());
+                    } else {
+                        // Additional positional arguments go to wasi_args
+                        #[cfg(feature = "wasi")]
+                        result.wasi_args.push(arg.to_string());
+                    }
+                },
+                _ => {}, // Ignore unknown flags
+            }
+            i += 1;
+        }
+
+        Ok(result)
+    }
+}
+
+/// Main entry point
+/// Run the kilnd daemon: parse CLI arguments, build the [`KilndConfig`], and
+/// execute the requested module (or the witness-harness flow). This is the
+/// std entry point the binary calls from `fn main` (on a large-stack thread).
+///
+/// # Errors
+///
+/// Returns an error if argument parsing, module loading, or execution fails.
+#[cfg(feature = "std")]
+pub fn run() -> Result<()> {
+    // Initialize tracing subscriber if tracing feature is enabled
+    #[cfg(feature = "tracing")]
+    {
+        use tracing_subscriber::{EnvFilter, fmt};
+
+        // Set up tracing with environment-based filtering
+        // Use RUST_LOG environment variable to control verbosity
+        // e.g., RUST_LOG=debug,kiln_runtime=trace
+        let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+        fmt()
+            .with_env_filter(filter)
+            .with_target(true)
+            .with_thread_ids(false)
+            .with_file(true)
+            .with_line_number(true)
+            .init();
+
+        eprintln!("[TRACING] Tracing initialized - use RUST_LOG env var to control output");
+    }
+
+    // witness MC/DC coverage harness mode (#340 — REQ_WITNESS_COV / AD-MCDC-001):
+    // when witness invokes us with WITNESS_MODULE + WITNESS_OUTPUT set, run the
+    // instrumented core and write the witness-harness-v1 counter snapshot instead
+    // of the normal CLI flow. A non-zero exit (propagated here) is how witness
+    // detects harness failure.
+    #[cfg(all(feature = "std", feature = "kiln-execution"))]
+    if witness_harness::harness_requested() {
+        return witness_harness::run_from_env();
+    }
+
+    // Parse arguments first to check for --help
+    let args = SimpleArgs::parse()?;
+
+    println!("WebAssembly Runtime Daemon (kilnd)");
+    println!("===================================");
+
+    // Create configuration from arguments
+    let mut config = KilndConfig::default();
+    config.module_path = args.module_path;
+    config.function_name = args.function_name;
+
+    if let Some(fuel) = args.max_fuel {
+        config.max_fuel = fuel;
+    }
+
+    if let Some(memory) = args.max_memory {
+        config.max_memory = memory;
+    }
+
+    // Apply general configuration options
+    config.enable_memory_profiling = args.enable_memory_profiling;
+    config.enable_platform_optimizations = args.enable_platform_optimizations;
+
+    // Configure WASI if enabled
+    #[cfg(feature = "wasi")]
+    {
+        config.enable_wasi = args.enable_wasi;
+        if let Some(version) = args.wasi_version {
+            config.wasi_version = version;
+        }
+
+        if config.enable_wasi {
+            let mut capabilities = WasiCapabilities::minimal().map_err(|e| {
+                eprintln!("Failed to create WASI capabilities: {}", e);
+                e
+            })?;
+
+            // Add filesystem access paths
+            for path in &args.wasi_fs_paths {
+                let _ = capabilities.filesystem.add_allowed_path(path);
+            }
+
+            // Configure environment variables
+            for env_var in &args.wasi_env_vars {
+                let _ = capabilities.environment.add_allowed_var(env_var);
+            }
+
+            // Enable args access if args are provided
+            if !args.wasi_args.is_empty() {
+                capabilities.environment.args_access = true;
+            }
+
+            // Enable environ access if env vars are specified
+            if !args.wasi_env_vars.is_empty() {
+                capabilities.environment.environ_access = true;
+            }
+
+            config.wasi_capabilities = Some(capabilities);
+            config.wasi_env_vars = args.wasi_env_vars.clone();
+            config.wasi_args = args.wasi_args.clone();
+            config.wasi_fs_paths = args.wasi_fs_paths.clone();
+
+            println!("✓ WASI enabled:");
+            println!("  - Version: {:?}", config.wasi_version);
+            println!("  - Filesystem paths: {}", args.wasi_fs_paths.len());
+            println!("  - Environment variables: {}", args.wasi_env_vars.len());
+            println!("  - Program arguments: {}", args.wasi_args.len());
+        }
+    }
+
+    // Configure component model if enabled
+    #[cfg(feature = "component-model")]
+    {
+        config.enable_component_model = args.enable_component_model;
+        config.component_interfaces = args.component_interfaces.clone();
+        config.invoke_export = args.invoke_export.clone();
+
+        if config.enable_component_model {
+            println!(
+                "✓ Component model enabled with {} interfaces",
+                args.component_interfaces.len()
+            );
+        }
+    }
+
+    if config.enable_memory_profiling {
+        println!("✓ Memory profiling enabled");
+    }
+
+    if !config.enable_platform_optimizations {
+        println!("! Platform optimizations disabled");
+    }
+
+    // Check if we have a module to execute
+    if config.module_path.is_none() {
+        println!("Error: No module specified");
+        println!("Use --help for usage information");
+        process::exit(1);
+    }
+
+    // Create and run engine
+    let mut engine = KilndEngine::new(config.clone())?;
+
+    // Set global WASI args for the dispatcher to use
+    // The first arg should be the program name (like argv[0] in C)
+    #[cfg(feature = "wasi")]
+    {
+        let module_name = config.module_path.clone().unwrap_or_else(|| "module.wasm".to_string());
+        let mut full_args = vec![module_name];
+        full_args.extend(config.wasi_args.clone());
+        set_global_wasi_args(full_args.clone());
+        println!(
+            "  - Set {} global WASI args: {:?}",
+            full_args.len(),
+            full_args
+        );
+    }
+
+    match engine.execute_module() {
+        Ok(()) => {
+            let stats = engine.stats();
+            println!("✓ Execution completed successfully");
+            println!("  Modules executed: {}", stats.modules_executed);
+            println!("  Components executed: {}", stats.components_executed);
+            println!("  Fuel consumed: {}", stats.fuel_consumed);
+            println!("  Peak memory: {} bytes", stats.peak_memory);
+            println!(
+                "  Host functions registered: {}",
+                stats.host_functions_registered
+            );
+            println!("  WASI functions called: {}", stats.wasi_functions_called);
+            println!("  Cross-component calls: {}", stats.cross_component_calls);
+
+            // Display memory profiling if enabled
+            if let Some(profiler) = engine.memory_profiler() {
+                println!("Memory Profiling:");
+                println!("  Peak usage: {} bytes", profiler.peak_usage);
+                println!("  Current usage: {} bytes", profiler.current_usage);
+            }
+        },
+        Err(e) => {
+            eprintln!("✗ Execution failed: {}", e);
+            process::exit(1);
+        },
+    }
+
+    // Complete memory system initialization
+    #[cfg(feature = "std")]
+    if let Err(e) = kiln_foundation::memory_init::init_kiln_memory() {
+        eprintln!("Warning: Failed to complete memory system: {}", e);
+    }
+
+    Ok(())
+}
+
+// The no_std `fn main`, the `#[global_allocator]`, and the `#[panic_handler]`
+// live in `src/main.rs` (the binary). See the note at the top of this file.
