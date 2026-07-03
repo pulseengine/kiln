@@ -30,6 +30,9 @@ log = { version = "0.4", optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["html_reports"] }
+# Build + decode synthetic components in unit tests (E5DC2 / #382).
+wat = "1.244"
+kiln-decoder = { workspace = true, features = ["std"] }
 
 [features]
 # By default, enable std to match kiln-runtime's default behavior
