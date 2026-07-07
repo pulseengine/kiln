@@ -8,6 +8,7 @@ license = "MIT"
 # rlib for workspace builds/tests; use --crate-type staticlib for ARM targets:
 # cargo rustc -p kiln-builtins --target thumbv7em-none-eabi --release -- --crate-type staticlib
 [lib]
+name = "kiln_builtins"
 crate-type = ["rlib"]
 
 [dependencies]

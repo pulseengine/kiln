@@ -117,4 +117,5 @@ kani = ["formal-verification-required"]
 
 
 [lib]
+name = "kiln_platform"
 crate-type = ["rlib"] # staticlib removed - was causing test linking issues. Re-add via separate target if C ABI needed

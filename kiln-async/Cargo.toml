@@ -9,6 +9,7 @@ repository.workspace = true
 # rlib for workspace builds/tests. Build as a staticlib for ARM/embedded targets:
 #   cargo rustc -p kiln-async --target thumbv7em-none-eabi --release -- --crate-type staticlib
 [lib]
+name = "kiln_async"
 crate-type = ["rlib"]
 
 [dependencies]
