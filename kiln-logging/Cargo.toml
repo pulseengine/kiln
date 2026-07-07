@@ -1,5 +1,5 @@
 [package]
-name = "kiln-logging"
+name = "kiln-wasm-logging"
 version.workspace = true
 edition.workspace = true
 description = "Logging infrastructure for the WebAssembly Runtime (Kiln)"
@@ -11,6 +11,9 @@ categories = ["wasm", "no-std", "development-tools::debugging"]
 
 [lints]
 workspace = true
+
+[lib]
+name = "kiln_logging"
 
 [dependencies]
 kiln-error = { workspace = true, default-features = false }

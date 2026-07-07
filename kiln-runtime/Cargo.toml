@@ -1,5 +1,5 @@
 [package]
-name = "kiln-runtime"
+name = "kiln-wasm-runtime"
 version.workspace = true
 edition.workspace = true
 description = "WebAssembly Component Model Runtime for Kiln"
@@ -99,6 +99,9 @@ std_instead_of_alloc = "allow"
 manual_range_patterns = "allow"
 unnecessary_map_or = "allow"
 manual_unwrap_or_default = "allow"
+
+[lib]
+name = "kiln_runtime"
 
 [dependencies]
 kiln-error = { workspace = true, default-features = false }

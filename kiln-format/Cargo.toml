@@ -1,5 +1,5 @@
 [package]
-name = "kiln-format"
+name = "kiln-wasm-format"
 version.workspace = true
 edition.workspace = true
 description = "WebAssembly format handling for Kiln"
@@ -8,6 +8,9 @@ repository.workspace = true
 readme = "README.md"
 keywords = ["wasm", "webassembly", "format", "binary", "no-std"]
 categories = ["wasm", "parsing", "data-structures", "no-std", "embedded"]
+
+[lib]
+name = "kiln_format"
 
 [dependencies]
 kiln-error = { workspace = true, default-features = false }

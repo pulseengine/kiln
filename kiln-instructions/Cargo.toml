@@ -1,5 +1,5 @@
 [package]
-name = "kiln-instructions"
+name = "kiln-wasm-instructions"
 version.workspace = true
 edition.workspace = true
 description = "WebAssembly instruction implementations for the Kiln runtime"
@@ -39,6 +39,9 @@ safety-asil-d = ["asil-d"]
 
 kani = []
 
+
+[lib]
+name = "kiln_instructions"
 
 [dependencies]
 kiln-error = { workspace = true, default-features = false }

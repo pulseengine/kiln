@@ -37,22 +37,22 @@ anyhow = "1.0"
 wit-bindgen = "0.41.0"
 
 # Internal crate versions
-kiln-error = { path = "kiln-error", version = "0.3.5", default-features = false }
-kiln-sync = { path = "kiln-sync", version = "0.3.5", default-features = false }
-kiln-format = { path = "kiln-format", version = "0.3.5", default-features = false }
-kiln-foundation = { path = "kiln-foundation", version = "0.3.5", default-features = false }
-kiln-decoder = { path = "kiln-decoder", version = "0.3.5", default-features = false, features = ["std"] }
-kiln-debug = { path = "kiln-debug", version = "0.3.5", default-features = false }
-kiln-runtime = { path = "kiln-runtime", version = "0.3.5", default-features = false }
-kiln-logging = { path = "kiln-logging", version = "0.3.5", default-features = false }
-kiln-instructions = { path = "kiln-instructions", version = "0.3.5", default-features = false }
-kiln-component = { path = "kiln-component", version = "0.3.5", default-features = false }
-kiln-host = { path = "kiln-host", version = "0.3.5", default-features = false }
-kiln-intercept = { path = "kiln-intercept", version = "0.3.5", default-features = false }
-kiln-math = { path = "kiln-math", version = "0.3.5", default-features = false }
-kiln-platform = { path = "kiln-platform", version = "0.3.5", default-features = false }
-kiln-panic = { path = "kiln-panic", version = "0.3.5", default-features = false }
-kiln-wasi = { path = "kiln-wasi", version = "0.3.5", default-features = false }
+kiln-error = { path = "kiln-error", version = "0.3.5", default-features = false, package = "kiln-wasm-error" }
+kiln-sync = { path = "kiln-sync", version = "0.3.5", default-features = false, package = "kiln-wasm-sync" }
+kiln-format = { path = "kiln-format", version = "0.3.5", default-features = false, package = "kiln-wasm-format" }
+kiln-foundation = { path = "kiln-foundation", version = "0.3.5", default-features = false, package = "kiln-wasm-foundation" }
+kiln-decoder = { path = "kiln-decoder", version = "0.3.5", default-features = false, features = ["std"], package = "kiln-wasm-decoder" }
+kiln-debug = { path = "kiln-debug", version = "0.3.5", default-features = false, package = "kiln-wasm-debug" }
+kiln-runtime = { path = "kiln-runtime", version = "0.3.5", default-features = false, package = "kiln-wasm-runtime" }
+kiln-logging = { path = "kiln-logging", version = "0.3.5", default-features = false, package = "kiln-wasm-logging" }
+kiln-instructions = { path = "kiln-instructions", version = "0.3.5", default-features = false, package = "kiln-wasm-instructions" }
+kiln-component = { path = "kiln-component", version = "0.3.5", default-features = false, package = "kiln-wasm-component" }
+kiln-host = { path = "kiln-host", version = "0.3.5", default-features = false, package = "kiln-wasm-host" }
+kiln-intercept = { path = "kiln-intercept", version = "0.3.5", default-features = false, package = "kiln-wasm-intercept" }
+kiln-math = { path = "kiln-math", version = "0.3.5", default-features = false, package = "kiln-wasm-math" }
+kiln-platform = { path = "kiln-platform", version = "0.3.5", default-features = false, package = "kiln-wasm-platform" }
+kiln-panic = { path = "kiln-panic", version = "0.3.5", default-features = false, package = "kiln-wasm-panic" }
+kiln-wasi = { path = "kiln-wasi", version = "0.3.5", default-features = false, package = "kiln-wasm-wasi" }
 
 # Note: Safety level presets should be defined in individual crate Cargo.toml files
 # as workspace.features is not supported by Cargo

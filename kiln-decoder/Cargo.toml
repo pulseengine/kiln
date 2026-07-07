@@ -1,5 +1,5 @@
 [package]
-name = "kiln-decoder"
+name = "kiln-wasm-decoder"
 version.workspace = true
 edition.workspace = true
 description = "WebAssembly module decoder for Kiln runtime"
@@ -11,6 +11,9 @@ categories = ["wasm", "parsing", "no-std", "embedded"]
 
 [lints]
 workspace = true
+
+[lib]
+name = "kiln_decoder"
 
 [dependencies]
 # Error handling

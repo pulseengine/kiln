@@ -7,7 +7,7 @@
 # SPDX-License-Identifier: MIT
 
 [package]
-name = "kiln-platform"
+name = "kiln-wasm-platform"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

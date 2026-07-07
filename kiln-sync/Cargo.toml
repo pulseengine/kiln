@@ -1,5 +1,5 @@
 [package]
-name = "kiln-sync"
+name = "kiln-wasm-sync"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -264,9 +264,9 @@ dependencies = [
  "colored",
  "criterion",
  "glob",
- "kiln-build-core",
- "kiln-decoder",
- "kiln-foundation",
+ "kiln-wasm-build-core",
+ "kiln-wasm-decoder",
+ "kiln-wasm-foundation",
  "num_cpus",
  "reqwest",
  "serde",
@@ -1259,15 +1259,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-async"
+name = "kiln-wasm-async"
 version = "0.3.5"
 dependencies = [
  "criterion",
- "kiln-error",
+ "kiln-wasm-error",
 ]
 
 [[package]]
-name = "kiln-build-core"
+name = "kiln-wasm-build-core"
 version = "0.3.5"
 dependencies = [
  "anyhow",
@@ -1275,11 +1275,11 @@ dependencies = [
  "clap",
  "colored",
  "fs_extra",
- "kiln-decoder",
- "kiln-error",
- "kiln-format",
- "kiln-foundation",
- "kiln-runtime",
+ "kiln-wasm-decoder",
+ "kiln-wasm-error",
+ "kiln-wasm-format",
+ "kiln-wasm-foundation",
+ "kiln-wasm-runtime",
  "md5",
  "pathdiff",
  "regex",
@@ -1293,45 +1293,45 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-builtins"
+name = "kiln-wasm-builtins"
 version = "0.1.0"
 
 [[package]]
-name = "kiln-component"
+name = "kiln-wasm-component"
 version = "0.3.5"
 dependencies = [
  "criterion",
- "kiln-decoder",
- "kiln-error",
- "kiln-format",
- "kiln-foundation",
- "kiln-host",
- "kiln-intercept",
- "kiln-platform",
- "kiln-runtime",
- "kiln-sync",
+ "kiln-wasm-decoder",
+ "kiln-wasm-error",
+ "kiln-wasm-format",
+ "kiln-wasm-foundation",
+ "kiln-wasm-host",
+ "kiln-wasm-intercept",
+ "kiln-wasm-platform",
+ "kiln-wasm-runtime",
+ "kiln-wasm-sync",
  "log",
  "wat",
 ]
 
 [[package]]
-name = "kiln-debug"
+name = "kiln-wasm-debug"
 version = "0.3.5"
 dependencies = [
- "kiln-error",
- "kiln-format",
- "kiln-foundation",
+ "kiln-wasm-error",
+ "kiln-wasm-format",
+ "kiln-wasm-foundation",
 ]
 
 [[package]]
-name = "kiln-decoder"
+name = "kiln-wasm-decoder"
 version = "0.3.5"
 dependencies = [
  "criterion",
  "hex",
- "kiln-error",
- "kiln-format",
- "kiln-foundation",
+ "kiln-wasm-error",
+ "kiln-wasm-format",
+ "kiln-wasm-foundation",
  "log",
  "proptest",
  "serde",
@@ -1341,29 +1341,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-error"
+name = "kiln-wasm-error"
 version = "0.3.5"
 
 [[package]]
-name = "kiln-format"
+name = "kiln-wasm-format"
 version = "0.3.5"
 dependencies = [
  "kani-verifier",
- "kiln-error",
- "kiln-foundation",
+ "kiln-wasm-error",
+ "kiln-wasm-foundation",
  "proptest",
 ]
 
 [[package]]
-name = "kiln-foundation"
+name = "kiln-wasm-foundation"
 version = "0.3.5"
 dependencies = [
  "criterion",
  "hashbrown 0.17.1",
  "kani-verifier",
- "kiln-error",
- "kiln-platform",
- "kiln-sync",
+ "kiln-wasm-error",
+ "kiln-wasm-platform",
+ "kiln-wasm-sync",
  "log",
  "proptest",
  "proptest-derive",
@@ -1373,112 +1373,112 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-host"
+name = "kiln-wasm-host"
 version = "0.3.5"
 dependencies = [
- "kiln-error",
- "kiln-foundation",
- "kiln-intercept",
- "kiln-sync",
+ "kiln-wasm-error",
+ "kiln-wasm-foundation",
+ "kiln-wasm-intercept",
+ "kiln-wasm-sync",
  "log",
 ]
 
 [[package]]
-name = "kiln-instructions"
+name = "kiln-wasm-instructions"
 version = "0.3.5"
 dependencies = [
- "kiln-error",
- "kiln-foundation",
- "kiln-math",
- "kiln-sync",
+ "kiln-wasm-error",
+ "kiln-wasm-foundation",
+ "kiln-wasm-math",
+ "kiln-wasm-sync",
  "log",
  "proptest",
 ]
 
 [[package]]
-name = "kiln-intercept"
+name = "kiln-wasm-intercept"
 version = "0.3.5"
 dependencies = [
  "chrono",
  "kani-verifier",
- "kiln-error",
- "kiln-foundation",
- "kiln-sync",
+ "kiln-wasm-error",
+ "kiln-wasm-foundation",
+ "kiln-wasm-sync",
  "log",
  "pretty_assertions",
 ]
 
 [[package]]
-name = "kiln-logging"
+name = "kiln-wasm-logging"
 version = "0.3.5"
 dependencies = [
- "kiln-error",
- "kiln-foundation",
- "kiln-host",
+ "kiln-wasm-error",
+ "kiln-wasm-foundation",
+ "kiln-wasm-host",
  "log",
 ]
 
 [[package]]
-name = "kiln-math"
+name = "kiln-wasm-math"
 version = "0.3.5"
 dependencies = [
- "kiln-error",
- "kiln-platform",
+ "kiln-wasm-error",
+ "kiln-wasm-platform",
  "libm",
 ]
 
 [[package]]
-name = "kiln-panic"
+name = "kiln-wasm-panic"
 version = "0.3.5"
 
 [[package]]
-name = "kiln-platform"
+name = "kiln-wasm-platform"
 version = "0.3.5"
 dependencies = [
  "criterion",
- "kiln-error",
- "kiln-panic",
- "kiln-sync",
+ "kiln-wasm-error",
+ "kiln-wasm-panic",
+ "kiln-wasm-sync",
 ]
 
 [[package]]
-name = "kiln-runtime"
+name = "kiln-wasm-runtime"
 version = "0.3.5"
 dependencies = [
  "criterion",
- "kiln-debug",
- "kiln-decoder",
- "kiln-error",
- "kiln-format",
- "kiln-foundation",
- "kiln-host",
- "kiln-instructions",
- "kiln-intercept",
- "kiln-platform",
- "kiln-sync",
- "kiln-wasi",
+ "kiln-wasm-debug",
+ "kiln-wasm-decoder",
+ "kiln-wasm-error",
+ "kiln-wasm-format",
+ "kiln-wasm-foundation",
+ "kiln-wasm-host",
+ "kiln-wasm-instructions",
+ "kiln-wasm-intercept",
+ "kiln-wasm-platform",
+ "kiln-wasm-sync",
+ "kiln-wasm-wasi",
  "serial_test",
  "wat",
 ]
 
 [[package]]
-name = "kiln-sync"
+name = "kiln-wasm-sync"
 version = "0.3.5"
 dependencies = [
  "kani-verifier",
- "kiln-error",
+ "kiln-wasm-error",
  "parking_lot",
 ]
 
 [[package]]
-name = "kiln-wasi"
+name = "kiln-wasm-wasi"
 version = "0.3.5"
 dependencies = [
- "kiln-error",
- "kiln-format",
- "kiln-foundation",
- "kiln-host",
- "kiln-platform",
+ "kiln-wasm-error",
+ "kiln-wasm-format",
+ "kiln-wasm-foundation",
+ "kiln-wasm-host",
+ "kiln-wasm-platform",
  "once_cell",
  "tract-onnx",
 ]
@@ -1487,17 +1487,17 @@ dependencies = [
 name = "kilnd"
 version = "0.3.5"
 dependencies = [
- "kiln-component",
- "kiln-debug",
- "kiln-decoder",
- "kiln-error",
- "kiln-foundation",
- "kiln-host",
- "kiln-logging",
- "kiln-panic",
- "kiln-platform",
- "kiln-runtime",
- "kiln-wasi",
+ "kiln-wasm-component",
+ "kiln-wasm-debug",
+ "kiln-wasm-decoder",
+ "kiln-wasm-error",
+ "kiln-wasm-foundation",
+ "kiln-wasm-host",
+ "kiln-wasm-logging",
+ "kiln-wasm-panic",
+ "kiln-wasm-platform",
+ "kiln-wasm-runtime",
+ "kiln-wasm-wasi",
  "linked_list_allocator",
  "serial_test",
  "tracing",

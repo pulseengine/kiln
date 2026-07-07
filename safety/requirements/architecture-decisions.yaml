@@ -458,6 +458,7 @@ artifacts:
         registration overhead); revisit later.
       source-ref: "https://github.com/pulseengine/kiln/issues/310"
 
+      chosen-prefix: kiln-wasm-*
   - id: SM-MEM-003
     type: design-decision
     title: Cross-repo witness --harness JSON contract is a traced artifact, not prose

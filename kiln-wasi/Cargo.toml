@@ -1,5 +1,5 @@
 [package]
-name = "kiln-wasi"
+name = "kiln-wasm-wasi"
 version.workspace = true
 edition.workspace = true
 license = { workspace = true }
@@ -8,6 +8,9 @@ repository = "https://github.com/pulseengine/kiln"
 readme = "README.md"
 keywords = ["wasm", "webassembly", "wasi", "preview2", "component-model"]
 categories = ["wasm", "api-bindings", "os"]
+
+[lib]
+name = "kiln_wasi"
 
 [dependencies]
 # Core Kiln dependencies - reuse existing patterns

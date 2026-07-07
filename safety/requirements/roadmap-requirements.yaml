@@ -257,7 +257,7 @@ artifacts:
       publish pipeline is modeled on synth's publish-to-crates-io.yml (v* tag
       trigger parallel to release.yml, org CRATES_IO_TOKEN, dependency-order walker
       with index-propagation retry, tag-matches-version preflight).
-    status: proposed
+    status: implemented
     release: v0.5.0
     tags: [release, distribution, crates-io, roadmap, release-v0.5.0]
     links:

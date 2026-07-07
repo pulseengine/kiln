@@ -1,5 +1,5 @@
 [package]
-name = "kiln-panic"
+name = "kiln-wasm-panic"
 version.workspace = true
 edition.workspace = true
 description = "Panic handler for Kiln - provides ASIL-B/D compliant panic handling"

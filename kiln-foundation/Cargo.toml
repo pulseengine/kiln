@@ -1,5 +1,5 @@
 [package]
-name = "kiln-foundation"
+name = "kiln-wasm-foundation"
 version.workspace = true
 edition.workspace = true
 description = "Foundation library providing core types and memory safety primitives for the Kiln WebAssembly Runtime."
@@ -313,6 +313,9 @@ async-api = []
 
 # Disable panic handler for library builds to avoid conflicts
 disable-panic-handler = []
+
+[lib]
+name = "kiln_foundation"
 
 [dependencies]
 kiln-error = { workspace = true, default-features = false }

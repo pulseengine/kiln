@@ -1,5 +1,5 @@
 [package]
-name = "kiln-component"
+name = "kiln-wasm-component"
 version.workspace = true
 edition.workspace = true
 description = "WebAssembly Component Model support for Kiln"
@@ -11,6 +11,9 @@ categories = ["wasm", "no-std"]
 
 [lints]
 workspace = true
+
+[lib]
+name = "kiln_component"
 
 [dependencies]
 kiln-error = { workspace = true, default-features = false }

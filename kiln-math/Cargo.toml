@@ -1,5 +1,5 @@
 [package]
-name = "kiln-math"
+name = "kiln-wasm-math"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -56,6 +56,9 @@ safety-asil-b = ["asil-b"]
 safety-asil-c = ["asil-c"]
 safety-asil-d = ["asil-d"]
 
+
+[lib]
+name = "kiln_math"
 
 [dependencies]
 kiln-error = { workspace = true, default-features = false }

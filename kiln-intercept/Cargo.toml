@@ -1,5 +1,5 @@
 [package]
-name = "kiln-intercept"
+name = "kiln-wasm-intercept"
 version.workspace = true
 edition.workspace = true
 description = "Host interception for WebAssembly Runtime (Kiln)"
@@ -8,6 +8,9 @@ repository.workspace = true
 documentation = "https://docs.rs/kiln-intercept"
 keywords = ["wasm", "webassembly", "runtime", "interception"]
 categories = ["wasm", "no-std"]
+
+[lib]
+name = "kiln_intercept"
 
 [dependencies]
 kiln-error = { workspace = true, default-features = false }

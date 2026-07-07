@@ -1,5 +1,5 @@
 [package]
-name = "kiln-async"
+name = "kiln-wasm-async"
 version.workspace = true
 edition = "2024"
 description = "no_std/no_alloc cooperative async scheduler for Kiln's embedded base — backs the WASM Component Model P3 async ABI (REQ_ASYNC_SCHED / SM-ASYNC-001)"

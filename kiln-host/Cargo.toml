@@ -1,5 +1,5 @@
 [package]
-name = "kiln-host"
+name = "kiln-wasm-host"
 version.workspace = true
 edition.workspace = true
 description = "Host function infrastructure for the WebAssembly Runtime (Kiln)"
@@ -11,6 +11,9 @@ categories = ["wasm", "no-std"]
 
 [lints]
 workspace = true
+
+[lib]
+name = "kiln_host"
 
 [dependencies]
 kiln-error = { workspace = true, default-features = false }

@@ -22,9 +22,9 @@ std = ["kiln-build-core/std"]
 
 [dependencies]
 # Core build system
-kiln-build-core = { path = "../kiln-build-core" }
-kiln-decoder = { path = "../kiln-decoder" }
-kiln-foundation = { path = "../kiln-foundation" }
+kiln-build-core = { path = "../kiln-build-core", package = "kiln-wasm-build-core" }
+kiln-decoder = { path = "../kiln-decoder", package = "kiln-wasm-decoder" }
+kiln-foundation = { path = "../kiln-foundation", package = "kiln-wasm-foundation" }
 
 # CLI framework
 clap = { version = "4.5.60", features = ["derive", "env"] }
