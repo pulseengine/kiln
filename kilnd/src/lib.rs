@@ -1414,6 +1414,16 @@ pub fn run() -> Result<()> {
                 e
             })?;
 
+            // Granting a preopen must also enable the filesystem capability —
+            // otherwise the preopen is registered but the capability gate rejects
+            // every operation, so the guest gets ENOENT on all paths (a silent
+            // no-op; #392). Match wasmtime's `--dir`: read + write on the mapping.
+            if !args.wasi_fs_paths.is_empty() {
+                capabilities.filesystem.read_access = true;
+                capabilities.filesystem.write_access = true;
+                capabilities.filesystem.directory_access = true;
+                capabilities.filesystem.metadata_access = true;
+            }
             // Add filesystem access paths
             for path in &args.wasi_fs_paths {
                 let _ = capabilities.filesystem.add_allowed_path(path);

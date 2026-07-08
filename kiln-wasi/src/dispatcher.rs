@@ -712,17 +712,11 @@ impl WasiDispatcher {
                 // Construct full path
                 let full_path = base_path.join(&path);
 
-                // Check path is within sandbox (no escape via ..)
-                let canonical = match full_path.canonicalize() {
-                    Ok(p) => p,
-                    Err(_) => {
-                        // File might not exist yet for write operations
-                        full_path.clone()
-                    }
-                };
-
-                // Basic safety check - path should start with base
-                if !canonical.starts_with(&base_path) && full_path.canonicalize().is_ok() {
+                // Reject any path that escapes the preopen — checked lexically so
+                // it holds for not-yet-created files too. `canonicalize` fails on a
+                // missing target, so an existence-gated check would let a write to
+                // `../evil.txt` escape the sandbox (#392 latent hazard).
+                if !is_within_sandbox(&base_path, &full_path) {
                     return Err(Error::wasi_permission_denied("Path escapes sandbox"));
                 }
 
@@ -928,7 +922,7 @@ impl WasiDispatcher {
                 let full_path = base_path.join(&path);
 
                 // Sandbox check
-                if full_path.canonicalize().is_ok() && !full_path.starts_with(&base_path) {
+                if !is_within_sandbox(&base_path, &full_path) {
                     return Err(Error::wasi_permission_denied("Path escapes sandbox"));
                 }
 
@@ -966,11 +960,9 @@ impl WasiDispatcher {
 
                 let full_path = base_path.join(&path);
 
-                // Sandbox check
-                if let Ok(canonical) = full_path.canonicalize() {
-                    if !canonical.starts_with(&base_path) {
-                        return Err(Error::wasi_permission_denied("Path escapes sandbox"));
-                    }
+                // Sandbox check (lexical — existence-independent)
+                if !is_within_sandbox(&base_path, &full_path) {
+                    return Err(Error::wasi_permission_denied("Path escapes sandbox"));
                 }
 
                 match std::fs::remove_file(&full_path) {
@@ -2656,10 +2648,42 @@ impl kiln_foundation::HostImportHandler for WasiDispatcher {
     }
 }
 
+/// True iff `full` (a guest path already joined onto the preopen `base`) stays
+/// inside the sandbox — a **lexical** check that does not touch the filesystem,
+/// so it is correct for not-yet-created files. Rejects any `..` traversal and
+/// any absolute path that `Path::join` let replace the base. A
+/// `canonicalize`-based check silently admits a write to a non-existent
+/// `../target` because `canonicalize` fails on the missing file (#392).
+fn is_within_sandbox(base: &std::path::Path, full: &std::path::Path) -> bool {
+    use std::path::Component;
+    !full
+        .components()
+        .any(|c| matches!(c, Component::ParentDir))
+        && full.starts_with(base)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use kiln_foundation::memory_init::MemoryInitializer;
+
+    /// The #392 sandbox-escape hazard: a write to a not-yet-existing `../target`
+    /// must be rejected. An existence-gated (canonicalize) check would admit it
+    /// because canonicalize fails on the missing file.
+    // rivet: verifies SR-33
+    #[test]
+    fn sandbox_rejects_parent_dir_escape_even_when_target_missing() {
+        use std::path::Path;
+        let base = Path::new("/preopen/sandbox");
+        // within the preopen — accepted
+        assert!(is_within_sandbox(base, &base.join("inside.txt")));
+        assert!(is_within_sandbox(base, &base.join("sub/inside.txt")));
+        // `..` escape to a NON-EXISTENT target — must be rejected
+        assert!(!is_within_sandbox(base, &base.join("../evil.txt")));
+        assert!(!is_within_sandbox(base, &base.join("sub/../../evil.txt")));
+        // absolute path that `join` lets replace the base — rejected
+        assert!(!is_within_sandbox(base, &base.join("/etc/passwd")));
+    }
 
     #[test]
     fn test_dispatcher_creation() -> Result<()> {
