@@ -1,0 +1,48 @@
+name: CodeQL
+
+# Static security analysis (code scanning). Closes the "no code scanning" gap:
+# the repo runs cargo-audit for dependency CVEs, but had no source-level analysis.
+# CodeQL supports Rust; results appear under Security → Code scanning alerts.
+#
+# Note: the repo must have Code scanning enabled (Settings → Code security) for
+# alerts to surface; this workflow uploads results regardless.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, off-peak, off the :00 mark.
+    - cron: "27 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (rust)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: rust
+
+      - name: Build (workspace libs + bins)
+        run: cargo build --workspace
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:rust"
