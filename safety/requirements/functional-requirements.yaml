@@ -859,7 +859,7 @@ artifacts:
   - id: SR-25
     type: requirement
     title: pr-diagnostics baseline checkout must not abort on a dirtied Cargo.lock
-    status: implemented
+    status: verified
     description: "The pr-diagnostics workflow's baseline step checks out the PR base, builds it (which regenerates Cargo.lock and other artifacts), then checks out the PR head. The head checkout shall not abort on the dirtied baseline artifacts — they are throwaway. Regression: failed on #363 (base build touched Cargo.lock); passed on #362/#361/#359 (clean base). Workflow-mechanics bug, not a code signal; the real gates were green. Fix: force-checkout the head sha. Issue #373."
     tags: [ci, tooling, pr-diagnostics]
     fields:
@@ -887,7 +887,7 @@ artifacts:
   - id: SR-28
     type: requirement
     title: main branch enforces the CI gate as required status checks
-    status: proposed
+    status: verified
     description: "The main branch shall enforce required status checks (via ruleset or branch protection) so a PR cannot merge while checks are red, queued, or cancelled. Today required_status_checks.contexts is empty and no ruleset requires any context — CI is advisory only. Add the gate contexts (build, Core Tests/Analysis/Coverage, CI Checks & Docs, Safety Analysis with Clippy, SCORE-Inspired Safety Verification, Security Audit matrix). Issue #378."
     tags: [ci, release, branch-protection]
     fields:
@@ -953,7 +953,7 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-07-07T19:24:29Z
-    release: v0.3.6
+    release: v0.7.0
 
   - id: SR-33
     type: requirement
