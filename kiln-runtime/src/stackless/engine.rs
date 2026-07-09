@@ -11981,6 +11981,99 @@ impl StacklessEngine {
         }
     }
 
+    /// Pre-allocate cabi_realloc'd memory backing `wasi:filesystem/preopens::get-directories`.
+    ///
+    /// The canonical-ABI return area for `func() -> list<tuple<descriptor,string>>` is
+    /// only 8 bytes (ptr+len), so the entry array (N*12 bytes) and each path string must
+    /// live in guest-owned memory. Mirrors [`pre_allocate_wasi_args`]. The preopens are
+    /// read back from the host handler (they were registered via `add_preopen`).
+    #[cfg(feature = "wasi")]
+    pub fn pre_allocate_wasi_preopens(&mut self, instance_id: usize) -> Result<()> {
+        // Read the registered preopens from the host handler.
+        let preopens: Vec<(u32, String)> = match self.host_handler {
+            Some(ref handler) => handler.get_preopens(),
+            None => return Ok(()),
+        };
+        if preopens.is_empty() {
+            #[cfg(feature = "tracing")]
+            trace!("[WASI-PREALLOC] No preopens to pre-allocate");
+            return Ok(());
+        }
+
+        let paths: Vec<String> = preopens.into_iter().map(|(_fd, path)| path).collect();
+        match self.allocate_wasi_preopens_memory(instance_id, &paths)? {
+            Some((list_ptr, string_ptrs)) => {
+                if let Some(ref mut handler) = self.host_handler {
+                    handler.set_preopens_allocation(list_ptr, string_ptrs);
+                }
+                Ok(())
+            }
+            None => {
+                #[cfg(feature = "tracing")]
+                trace!("[WASI-PREALLOC] preopens: cabi_realloc not available");
+                Ok(())
+            }
+        }
+    }
+
+    /// Allocate guest memory for the get-directories list return via cabi_realloc.
+    ///
+    /// Returns (list_ptr, string_ptrs) where list_ptr is the N*12-byte entry array
+    /// (descriptor, path_ptr, path_len per entry) and string_ptrs holds each path
+    /// string's (ptr, len), allocated separately for proper allocator metadata.
+    #[cfg(feature = "wasi")]
+    fn allocate_wasi_preopens_memory(
+        &mut self,
+        instance_id: usize,
+        paths: &[String],
+    ) -> Result<Option<(u32, Vec<(u32, u32)>)>> {
+        let instance = self.instances.get(&instance_id)
+            .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?
+            .clone();
+        let module = instance.module();
+
+        let cabi_realloc_idx = match self.find_export_index(&module, "cabi_realloc") {
+            Ok(idx) => idx,
+            Err(_) => {
+                #[cfg(feature = "tracing")]
+                trace!("[WASI-ALLOC] cabi_realloc not found for preopens");
+                return Ok(None);
+            }
+        };
+
+        if paths.is_empty() {
+            return Ok(None);
+        }
+
+        // Entry array: 12 bytes per preopen (descriptor u32, path_ptr u32, path_len u32).
+        let list_size = (paths.len() * 12) as u32;
+        let list_ptr = self.call_cabi_realloc(
+            instance_id,
+            cabi_realloc_idx,
+            0, // old_ptr
+            0, // old_size
+            4, // align (4-byte for the u32 fields)
+            list_size,
+        )?;
+
+        // Allocate each path string separately (align 1 for byte data).
+        let mut string_ptrs: Vec<(u32, u32)> = Vec::with_capacity(paths.len());
+        for path in paths {
+            let path_len = path.len() as u32;
+            let string_ptr = self.call_cabi_realloc(
+                instance_id,
+                cabi_realloc_idx,
+                0,
+                0,
+                1,
+                path_len.max(1), // never request 0 bytes
+            )?;
+            string_ptrs.push((string_ptr, path_len));
+        }
+
+        Ok(Some((list_ptr, string_ptrs)))
+    }
+
     /// Write data to WASM instance memory
     fn write_to_instance(&self, instance_id: usize, addr: u32, data: &[u8]) -> Result<()> {
         let instance = self.instances.get(&instance_id)

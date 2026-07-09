@@ -994,3 +994,37 @@ artifacts:
       model: claude-opus-4-8
       timestamp: 2026-07-09T02:17:21Z
     release: v0.3.6
+
+  - id: SR-37
+    type: requirement
+    title: Component wasi:filesystem/preopens::get-directories returns a guest-usable preopen list (cabi_realloc-backed)
+    status: verified
+    description: "A WASI Preview2 component run via kilnd --wasi --component --wasi-fs <dir> must be able to read/list/open files under the preopen, matching wasmtime --dir. Measured (v0.4.0, single wasm32-wasip2 component, nested_component_instances.len()=0 so the InterComponentHandler override does NOT fire; the queried dispatcher's self.preopens.len()=1 — the preopen IS present): the guest receives get-directories but rejects the preopen BEFORE ever calling open-at (trace: get-directories → straight to stderr write, no open-at/stat-at) → every op returns noent (os error 44). Root cause: dispatch_core get-directories (dispatcher.rs:2337-2358) writes the list<tuple<descriptor,string>> elements into retptr+8 and path strings into retptr+20 — but the canonical-ABI return area for `func() -> list<..>` is only 8 bytes (ptr,len). It scribbles into guest memory the guest never allocated and hands back a list backed by unowned memory, so preview2 libc registers no usable preopen. The working get-arguments path (dispatcher.rs:1209+) proves the correct pattern: back the list return with cabi_realloc'd guest memory (args_alloc, pre-allocated via pre_allocate_wasi_args). Fix: mirror it — pre_allocate_wasi_preopens allocates a N*12 list buffer (align 4) + N separate path-string buffers via cabi_realloc, stored as preopens_alloc; get-directories writes (fd, str_ptr, str_len) entries there. Differential oracle: wasmtime run --dir .::. reads the same dir (READ:CANARY, DIR:[inside.txt]). Still-open remainder of SR-33/#392. Issue #405."
+    tags: [kilnd, wasi, filesystem, component, canonical-abi, bug]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_035
+    fields:
+      upstream-ref: https://github.com/pulseengine/kiln/issues/405
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-09T07:00:00Z
+    release: v0.4.1
+
+  - id: SR-38
+    type: requirement
+    title: Component file-read data return (blocking-read / read-via-stream) uses cabi_realloc'd guest memory
+    status: proposed
+    description: "The remaining end-to-end blocker for #405, uncovered by measuring the SR-37 fix: with get-directories fixed, a preview2 component now registers the '.' preopen, calls open-at(inside.txt)→descriptor, stat, read-via-stream, then wasi:io/streams input-stream.blocking-read — which FAILS. Root cause (dispatcher.rs ~2298-2313): blocking-read writes the returned list<u8> to a FIXED raw guest address (0x100000 + stream_handle*0x10000) that the guest never allocated, corrupting guest memory; the guest then makes a bad indirect call and the runtime tries to resolve a non-existent export → [Runtime][E07DA] Function not found in exports. Same unowned-memory class as SR-37, but HARDER: the read size is dynamic (not pre-allocatable like args/preopens), so the fix needs on-demand cabi_realloc during dispatch — dispatch_core currently only has a MemoryAccessor, no engine hook to call cabi_realloc mid-call. Requires an allocation callback into the engine (or routing stream reads through a return-lowering path that reallocs). Measured trace: get-directories → open-at → metadata-hash → stat → read-via-stream → blocking-read → E07DA. Differential oracle: wasmtime run --dir .::. prints READ:CANARY. Blocks #405 end-to-end; SR-37 (get-directories) is the prerequisite and is done."
+    tags: [kilnd, wasi, filesystem, component, canonical-abi, io-streams, bug]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_035
+    fields:
+      upstream-ref: https://github.com/pulseengine/kiln/issues/405
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-09T07:10:00Z
+    release: v0.4.1

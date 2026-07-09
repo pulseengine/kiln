@@ -498,6 +498,17 @@ impl CapabilityAwareEngine {
         self.inner.pre_allocate_wasi_args(*instance_idx)
     }
 
+    /// Pre-allocate cabi_realloc'd memory backing `get-directories` (filesystem preopens).
+    ///
+    /// Mirrors [`pre_allocate_wasi_args`] for `wasi:filesystem/preopens::get-directories`.
+    #[cfg(feature = "wasi")]
+    pub fn pre_allocate_wasi_preopens(&mut self, instance_handle: InstanceHandle) -> Result<()> {
+        let instance_idx = self.handle_to_idx.get(&instance_handle)
+            .ok_or_else(|| Error::resource_not_found("Instance not found"))?;
+
+        self.inner.pre_allocate_wasi_preopens(*instance_idx)
+    }
+
     /// Register a lowered function from a canon.lower operation
     ///
     /// When a module calls a function at this (instance_id, func_idx), the engine
