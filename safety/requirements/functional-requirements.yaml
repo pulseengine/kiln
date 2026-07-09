@@ -128,7 +128,7 @@ artifacts:
       relation must be accepted. The relation is currently wrong in BOTH
       directions (too permissive AND too strict). Issue #149.
     status: proposed
-    release: v0.4.0
+    release: v0.5.0
     tags: [wasm-gc, reference-types, subtyping, spec-conformance, release-v0.3.5]
     links:
       - type: derives-from
@@ -910,12 +910,12 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-07-02T07:40:03Z
-    release: v0.4.0
+    release: v0.5.0
 
   - id: SR-30
     type: requirement
     title: wasi:cli/run export resolution honors the instance-import offset in the component-instance index space
-    status: implemented
+    status: verified
     description: "resolve_command_entry shall resolve a wasi:cli/run instance export's backing instance by walking the component-instance index space (0..K-1 imported instances, K.. defined instances), offsetting export.idx by the instance-import count K before indexing parsed.instances — and return None (legacy path) if the run instance is an imported instance (export.idx < K). Today it uses export.idx directly, so a meld-fused component with instance-import stubs (K>0) fails with E5DC2 out-of-bounds. Differential oracle: wasmtime 41.0.0 runs the same fused.wasm. Must keep #364's K=0 fixture green. Issue #382 (split from #375)."
     tags: [component-model, instantiation, wasi-cli-run, index-space, bug]
     fields:
@@ -958,7 +958,7 @@ artifacts:
   - id: SR-33
     type: requirement
     title: kilnd --wasi-fs/--dir actually grants filesystem access (no silent no-op)
-    status: implemented
+    status: verified
     description: "When kilnd is given --wasi-fs/--dir <path>, the WASI filesystem capability (read_access, directory_access, and write_access for writable mappings) must actually be enabled so a Preview2 guest can read/list/open files under the preopen — matching wasmtime's --dir. Today kilnd builds WasiCapabilities::minimal() and enables env/random/io but never filesystem access, so --wasi-fs registers an unusable preopen and every op returns noent (silent no-op, violates FAIL-LOUD). Root cause: kilnd/src/lib.rs capability build + dispatcher.rs:663 directory_access gate. Differential oracle: wasmtime 42 reads the same dir. Issue #392."
     tags: [kilnd, wasi, filesystem, bug]
     fields:
@@ -981,7 +981,7 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-07-08T06:48:52Z
-    release: v0.4.0
+    release: v0.5.0
 
   - id: SR-36
     type: requirement

@@ -459,3 +459,17 @@ artifacts:
         run must be satisfied by the WasiDispatcher set (filesystem/cli/clocks/io/
         random); syscall-heavy fused cores needing interfaces outside that set are
         the #340-item-3 stub gap and fail loud at instantiate, not faked here.
+
+  - id: SR-35
+    type: requirement
+    title: kiln is a verified reference oracle, validated by differential testing against an external verified interpreter
+    status: proposed
+    description: "Invest kiln from 'an interpreter that works' into a reference executable oracle: (1) 'runs identically on kiln and on the shipped/dissolved path' becomes a standard differential gate for the dissolve pipeline (kiln is the wasm-side reference; gale already differentials dissolved-native vs wasmtime); (2) validate kiln's own correctness independently by differential-testing against an EXTERNAL, independently-verified Wasm reference interpreter (e.g. WasmRef-Isabelle, PLDI 2023) — an interpreter you also wrote is not its own oracle. Spec-as-machine-oracle pattern; verification-approach direction, not a defect. Relates to #283 (positioning vs Wasmtime TCB) and #280 (Verus). Issue #401."
+    tags: [verification, oracle, differential-testing, research, direction]
+    fields:
+      upstream-ref: https://github.com/pulseengine/kiln/issues/401
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-08T22:48:04Z
+    release: v0.7.0
