@@ -219,6 +219,12 @@ pub struct WasiDispatcher {
     /// Pre-opened directories (list of (handle, path) pairs)
     #[cfg(feature = "std")]
     preopens: Vec<(u32, PathBuf)>,
+    /// Pre-allocated memory for the get-directories list return (`list_ptr`, `string_ptrs`).
+    /// Set by the engine after calling `cabi_realloc`; mirrors `args_alloc`. The
+    /// canonical-ABI return area for `list<tuple<descriptor,string>>` is only 8 bytes,
+    /// so the entry array and path strings must live in this guest-owned memory.
+    #[cfg(feature = "std")]
+    preopens_alloc: Option<(u32, Vec<(u32, u32)>)>,
 }
 
 impl WasiDispatcher {
@@ -261,6 +267,8 @@ impl WasiDispatcher {
             fd_table,
             #[cfg(feature = "std")]
             preopens: Vec::new(),
+            #[cfg(feature = "std")]
+            preopens_alloc: None,
         })
     }
 
@@ -2324,7 +2332,15 @@ impl WasiDispatcher {
             // wasi:filesystem/preopens - core dispatch
             #[cfg(feature = "wasi-filesystem")]
             ("wasi:filesystem/preopens", "get-directories") => {
-                // Return list of (descriptor, path) tuples at retptr
+                // Return list<tuple<descriptor, string>> at retptr.
+                //
+                // The canonical-ABI return area at retptr is only 8 bytes (the list
+                // header: ptr + len). The list entries and path strings MUST live in
+                // guest-owned memory allocated via cabi_realloc — writing them into
+                // memory adjacent to retptr (as an earlier version did) hands the guest
+                // a list backed by memory it never allocated, so preview2 libc registers
+                // no usable preopen and every file op returns noent. This mirrors the
+                // get-arguments path exactly (see preopens_alloc / pre_allocate_wasi_preopens).
                 if let Some(mem) = memory {
                     let retptr = match args.first() {
                         Some(CoreValue::I32(v)) => *v as u32,
@@ -2334,29 +2350,44 @@ impl WasiDispatcher {
                         // No preopens: empty list (ptr=0, len=0)
                         mem.write_bytes(retptr, &0u32.to_le_bytes())?;
                         mem.write_bytes(retptr + 4, &0u32.to_le_bytes())?;
-                    } else {
-                        // Each entry is (descriptor: u32, path_ptr: u32, path_len: u32) = 12 bytes
-                        let entry_size = 12u32;
-                        let list_size = self.preopens.len() as u32 * entry_size;
-                        // Write entries starting after retptr+8 (the list header)
-                        let data_start = retptr + 8;
-                        for (i, (fd, path)) in self.preopens.iter().enumerate() {
-                            let entry_offset = data_start + (i as u32 * entry_size);
-                            let path_bytes = path.to_string_lossy();
-                            let path_bytes = path_bytes.as_bytes();
-                            // Write path string after all entries
-                            let path_offset = data_start + list_size + (i as u32 * 256);
-                            let path_len = core::cmp::min(path_bytes.len(), 255) as u32;
-                            mem.write_bytes(path_offset, &path_bytes[..path_len as usize])?;
-                            // Write entry: (fd, path_ptr, path_len)
-                            mem.write_bytes(entry_offset, &(*fd).to_le_bytes())?;
-                            mem.write_bytes(entry_offset + 4, &path_offset.to_le_bytes())?;
-                            mem.write_bytes(entry_offset + 8, &path_len.to_le_bytes())?;
-                        }
-                        // Write list header: (ptr, len)
-                        mem.write_bytes(retptr, &data_start.to_le_bytes())?;
-                        mem.write_bytes(retptr + 4, &(self.preopens.len() as u32).to_le_bytes())?;
+                        return Ok(vec![]);
                     }
+
+                    // Use pre-allocated cabi_realloc memory. NO FALLBACK — per FAIL-LOUD,
+                    // if the engine did not pre-allocate (no cabi_realloc export) we error
+                    // rather than scribble into unowned guest memory.
+                    let (list_ptr, string_ptrs) = match &self.preopens_alloc {
+                        Some((lp, sp)) => (*lp, sp.clone()),
+                        None => {
+                            return Err(Error::runtime_error(
+                                "get-directories requires cabi_realloc pre-allocation (preopens_alloc not set)",
+                            ));
+                        },
+                    };
+                    if string_ptrs.len() != self.preopens.len() {
+                        return Err(Error::runtime_error(
+                            "get-directories: preopen string allocation count mismatch",
+                        ));
+                    }
+
+                    // Each entry is (descriptor: u32, path_ptr: u32, path_len: u32) = 12 bytes.
+                    let entry_size = 12u32;
+                    for (i, (fd, path)) in self.preopens.iter().enumerate() {
+                        let (string_ptr, alloc_len) = string_ptrs[i];
+                        let path_str = path.to_string_lossy();
+                        let path_bytes = path_str.as_bytes();
+                        let path_len = core::cmp::min(path_bytes.len() as u32, alloc_len);
+                        // Write the path string into its own cabi_realloc'd buffer.
+                        mem.write_bytes(string_ptr, &path_bytes[..path_len as usize])?;
+                        // Write the entry (descriptor, path_ptr, path_len) into the list buffer.
+                        let entry_offset = list_ptr + (i as u32 * entry_size);
+                        mem.write_bytes(entry_offset, &(*fd).to_le_bytes())?;
+                        mem.write_bytes(entry_offset + 4, &string_ptr.to_le_bytes())?;
+                        mem.write_bytes(entry_offset + 8, &path_len.to_le_bytes())?;
+                    }
+                    // Write list header (ptr, len) into the return area.
+                    mem.write_bytes(retptr, &list_ptr.to_le_bytes())?;
+                    mem.write_bytes(retptr + 4, &(self.preopens.len() as u32).to_le_bytes())?;
                 }
                 Ok(vec![])
             }
@@ -2646,6 +2677,17 @@ impl kiln_foundation::HostImportHandler for WasiDispatcher {
     fn set_args_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
         self.set_args_alloc(list_ptr, string_ptrs);
     }
+
+    fn get_preopens(&self) -> Vec<(u32, String)> {
+        self.preopens
+            .iter()
+            .map(|(fd, path)| (*fd, path.to_string_lossy().into_owned()))
+            .collect()
+    }
+
+    fn set_preopens_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
+        self.preopens_alloc = Some((list_ptr, string_ptrs));
+    }
 }
 
 /// True iff `full` (a guest path already joined onto the preopen `base`) stays
@@ -2683,6 +2725,90 @@ mod tests {
         assert!(!is_within_sandbox(base, &base.join("sub/../../evil.txt")));
         // absolute path that `join` lets replace the base — rejected
         assert!(!is_within_sandbox(base, &base.join("/etc/passwd")));
+    }
+
+    /// SR-37 / #405: get-directories must back its `list<tuple<descriptor,string>>`
+    /// return with cabi_realloc'd guest memory, NOT memory adjacent to the 8-byte
+    /// return area. The list header at retptr must point at the pre-allocated
+    /// `list_ptr` (not retptr+8), and each entry (descriptor, path_ptr, path_len)
+    /// must reference the pre-allocated string buffer — so a preview2 guest gets a
+    /// usable preopen instead of a list backed by memory it never allocated.
+    // rivet: verifies SR-37
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[test]
+    fn get_directories_uses_cabi_realloc_allocation_not_retptr_scribble() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::HostImportHandler;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+
+        // Register a preopen "." (as `--wasi-fs .` would).
+        let fd = dispatcher.add_preopen(".")?;
+
+        // Simulate the engine's cabi_realloc pre-allocation: a 12-byte entry buffer
+        // at 0x2000 and a 1-byte path-string buffer at 0x3000 — both well away from
+        // the 8-byte return area at retptr.
+        let retptr = 0x1000u32;
+        let list_ptr = 0x2000u32;
+        let str_ptr = 0x3000u32;
+        dispatcher.set_preopens_allocation(list_ptr, vec![(str_ptr, 1)]);
+
+        let mem = SliceMemory::with_size(0x10000);
+        let res = dispatcher.dispatch_core(
+            "wasi:filesystem/preopens",
+            "get-directories",
+            &[kiln_foundation::values::Value::I32(retptr as i32)],
+            Some(&mem),
+        )?;
+        assert!(res.is_empty(), "get-directories returns void (writes via retptr)");
+
+        // Return area: (list_ptr, len) — MUST point at the allocation, not retptr+8.
+        let mut hdr = [0u8; 8];
+        mem.read_bytes(retptr, &mut hdr)?;
+        let got_ptr = u32::from_le_bytes([hdr[0], hdr[1], hdr[2], hdr[3]]);
+        let got_len = u32::from_le_bytes([hdr[4], hdr[5], hdr[6], hdr[7]]);
+        assert_eq!(got_ptr, list_ptr, "list header must point at cabi_realloc'd list_ptr");
+        assert_ne!(got_ptr, retptr + 8, "must NOT scribble into memory adjacent to the return area");
+        assert_eq!(got_len, 1, "exactly one preopen");
+
+        // Entry at list_ptr: (descriptor, path_ptr, path_len).
+        let mut entry = [0u8; 12];
+        mem.read_bytes(list_ptr, &mut entry)?;
+        let e_fd = u32::from_le_bytes([entry[0], entry[1], entry[2], entry[3]]);
+        let e_pptr = u32::from_le_bytes([entry[4], entry[5], entry[6], entry[7]]);
+        let e_plen = u32::from_le_bytes([entry[8], entry[9], entry[10], entry[11]]);
+        assert_eq!(e_fd, fd, "entry descriptor is the preopen handle");
+        assert_eq!(e_pptr, str_ptr, "entry path_ptr references the allocated string buffer");
+        assert_eq!(e_plen, 1, "path \".\" is 1 byte");
+
+        // The path string "." lives in the allocated buffer.
+        let mut pbuf = [0u8; 1];
+        mem.read_bytes(str_ptr, &mut pbuf)?;
+        assert_eq!(&pbuf, b".", "path bytes written into the cabi_realloc'd buffer");
+        Ok(())
+    }
+
+    /// SR-37 / #405: FAIL-LOUD — with preopens present but no cabi_realloc
+    /// allocation set, get-directories must error rather than scribble into
+    /// unowned guest memory (the pre-fix behavior that produced ENOENT).
+    // rivet: verifies SR-37
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[test]
+    fn get_directories_fails_loud_without_allocation() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        dispatcher.add_preopen(".")?;
+        // NOTE: no set_preopens_allocation call.
+        let mem = SliceMemory::with_size(0x10000);
+        let res = dispatcher.dispatch_core(
+            "wasi:filesystem/preopens",
+            "get-directories",
+            &[kiln_foundation::values::Value::I32(0x1000)],
+            Some(&mem),
+        );
+        assert!(res.is_err(), "must fail loud when cabi_realloc pre-allocation is missing");
+        Ok(())
     }
 
     #[test]

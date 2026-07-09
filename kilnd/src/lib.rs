@@ -654,6 +654,11 @@ impl KilndEngine {
                 if let Err(e) = instance.pre_allocate_wasi_args() {
                     eprintln!("[WASI-PREALLOC] Failed: {}", e);
                 }
+                // Pre-allocate cabi_realloc'd memory for get-directories so a component
+                // can actually use --wasi-fs preopens (SR-37 / #405).
+                if let Err(e) = instance.pre_allocate_wasi_preopens() {
+                    eprintln!("[WASI-PREALLOC] preopens failed: {}", e);
+                }
             }
 
             // Direct Component-Model hosting (#344, AD-COMPONENT-HOST-001):

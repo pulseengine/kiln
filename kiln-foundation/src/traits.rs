@@ -1648,4 +1648,26 @@ pub trait HostImportHandler: Send + Sync {
     fn set_args_allocation(&mut self, _list_ptr: u32, _string_ptrs: Vec<(u32, u32)>) {
         // Default no-op for handlers that don't need this
     }
+
+    /// Report the registered filesystem preopens as (descriptor-handle, path) pairs.
+    ///
+    /// The engine reads this before entry to size the cabi_realloc'd return buffer
+    /// for `wasi:filesystem/preopens::get-directories`. Default empty for handlers
+    /// with no filesystem preopens.
+    fn get_preopens(&self) -> Vec<(u32, alloc::string::String)> {
+        Vec::new()
+    }
+
+    /// Record the cabi_realloc'd memory backing the `get-directories` list return.
+    ///
+    /// Mirrors [`set_args_allocation`]: the canonical-ABI return area for
+    /// `func() -> list<tuple<descriptor,string>>` is only 8 bytes (ptr,len), so the
+    /// list entries and path strings must live in guest-owned memory allocated via
+    /// `cabi_realloc`. `list_ptr` points to the N*12-byte entry array; `string_ptrs`
+    /// holds the (ptr, len) of each separately-allocated path string, in preopen order.
+    ///
+    /// Default no-op for handlers that don't serve filesystem preopens.
+    fn set_preopens_allocation(&mut self, _list_ptr: u32, _string_ptrs: Vec<(u32, u32)>) {
+        // Default no-op for handlers that don't need this
+    }
 }
