@@ -982,3 +982,15 @@ artifacts:
       model: claude-opus-4-8
       timestamp: 2026-07-08T06:48:52Z
     release: v0.4.0
+
+  - id: SR-36
+    type: requirement
+    title: Workspace Cargo.lock is internally consistent (no re-resolution conflicts)
+    status: implemented
+    description: "The committed Cargo.lock must re-resolve without conflict. Dependabot #394 (tract-nnef 0.21.10→0.21.17) pulled tract-linalg 0.21.17 which requires time <0.3.42, but the lock pinned time 0.3.53 (via kani-verifier→os_info→plist ^0.3.30) — an internally inconsistent lock that builds --locked in some feature sets but fails any re-resolution (e.g. a version bump). Fix: pin time to 0.3.41 (satisfies both <0.3.42 and ^0.3.30). Root: dependabot dep-bump created a latent conflict CI didn't catch. Regression fix."
+    tags: [deps, cargo-lock, regression, ci]
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-09T02:17:21Z
+    release: v0.3.6
