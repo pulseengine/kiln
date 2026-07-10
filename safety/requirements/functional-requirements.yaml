@@ -1015,8 +1015,8 @@ artifacts:
   - id: SR-38
     type: requirement
     title: Component file-read data return (blocking-read / read-via-stream) uses cabi_realloc'd guest memory
-    status: proposed
-    description: "The remaining end-to-end blocker for #405, uncovered by measuring the SR-37 fix: with get-directories fixed, a preview2 component now registers the '.' preopen, calls open-at(inside.txt)→descriptor, stat, read-via-stream, then wasi:io/streams input-stream.blocking-read — which FAILS. Root cause (dispatcher.rs ~2298-2313): blocking-read writes the returned list<u8> to a FIXED raw guest address (0x100000 + stream_handle*0x10000) that the guest never allocated, corrupting guest memory; the guest then makes a bad indirect call and the runtime tries to resolve a non-existent export → [Runtime][E07DA] Function not found in exports. Same unowned-memory class as SR-37, but HARDER: the read size is dynamic (not pre-allocatable like args/preopens), so the fix needs on-demand cabi_realloc during dispatch — dispatch_core currently only has a MemoryAccessor, no engine hook to call cabi_realloc mid-call. Requires an allocation callback into the engine (or routing stream reads through a return-lowering path that reallocs). Measured trace: get-directories → open-at → metadata-hash → stat → read-via-stream → blocking-read → E07DA. Differential oracle: wasmtime run --dir .::. prints READ:CANARY. Blocks #405 end-to-end; SR-37 (get-directories) is the prerequisite and is done."
+    status: verified
+    description: "The remaining end-to-end blocker for #405, uncovered by measuring the SR-37 fix: with get-directories fixed, a preview2 component registers the '.' preopen, calls open-at(inside.txt)→descriptor, stat, read-via-stream, then wasi:io/streams input-stream.blocking-read — which FAILED with [Runtime][E07DA] Function not found in exports. Two real defects in the stream-read path (dispatcher.rs input-stream.read/blocking-read): (1) UNOWNED BUFFER — the list<u8> bytes were written to a FIXED raw address (0x100000+handle*0x10000) the guest never allocated. The guest FREES the returned list (wasi-libc copies then frees), so freeing an unallocated pointer corrupted the guest allocator → bad indirect call → E07DA. A fresh cabi_realloc'd buffer is needed PER read (not a reused scratch). (2) NO OFFSET/EOF — blocking-read did std::fs::read (whole file) from offset 0 every call with no position tracking → the guest read loop never terminated. Implementation: the component WASI path is dispatch_canon_lowered (engine.rs), which auto-lowers a handler's returned CORE VALUES to the retptr via lower_results_to_retptr using the signature Result(ListU8, stream-error) — so blocking-read RETURNS core values [I32(0),I32(buf_ptr),I32(n)] for ok and [I32(1),I32(1)] for closed (NOT a manual retptr write). On-demand buffer allocation (sized to requested len, capped 1MiB) is added in dispatch_canon_lowered before call_import (has &mut self; reentrant cabi_realloc is safe there), set via new HostImportHandler::set_read_buffer_allocation; a sibling branch also added to call_wasi_function for the core-module path. Per-stream read offset (HashMap on the dispatcher) advances by bytes returned; offset>=len yields err(closed) as the guest's EOF signal. Verified: 2 unit oracles (blocking_read_returns_bytes_in_owned_buffer_and_eofs, blocking_read_fails_loud_without_buffer) + read-only reproducer matches wasmtime (READ:CANARY, clean completion). SR-37 (get-directories) is the done prerequisite; SR-39 (directory enumeration) remains for full #405 closure."
     tags: [kilnd, wasi, filesystem, component, canonical-abi, io-streams, bug]
     links:
       - type: derives-from
@@ -1027,4 +1027,21 @@ artifacts:
       created-by: ai
       model: claude-opus-4-8
       timestamp: 2026-07-09T07:10:00Z
+    release: v0.4.1
+
+  - id: SR-39
+    type: requirement
+    title: Component directory enumeration (read-directory / read-directory-entry) works under --wasi-fs
+    status: proposed
+    description: "The last #405 blocker after SR-37 (get-directories) and SR-38 (file read) landed: with both fixed, a preview2 component reads a file end-to-end (READ:CANARY matches wasmtime), but std::fs::read_dir('.') still fails. Measured trace: open-at(dir, O_DIRECTORY)→descriptor 5 → wasi:filesystem/types::[method]descriptor.read-directory(5, retptr) → [Runtime][E07DA] Function not found in exports. Root cause: read-directory and directory-entry-stream.read-directory-entry are UNIMPLEMENTED — dispatch_core has only a stale 'readdir' arm (different name) + resource-drop, and wasip2_host.rs has NO get_wasi_function_signature entry for either, so the calls fall through. Needed: (a) descriptor.read-directory(self) -> result<directory-entry-stream, error-code> — create a stream resource, snapshot std::fs::read_dir entries + a cursor keyed by the new handle; (b) directory-entry-stream.read-directory-entry(self) -> result<option<directory-entry>, error-code> where directory-entry = record { type: descriptor-type (enum), name: string } — return the next entry (name string in a cabi_realloc'd guest buffer, reusing the SR-38 on-demand read-buffer mechanism / a new one) or none at end; (c) signatures in wasip2_host.rs; (d) verify lower_type_to_memory handles Record + Enum + Option<Record> (add if missing). Differential oracle: wasmtime run --dir .::. prints DIR:[inside.txt]. Closes #405 end-to-end; cut v0.4.1 when done."
+    tags: [kilnd, wasi, filesystem, component, canonical-abi, directory, bug]
+    links:
+      - type: derives-from
+        target: REQ_FUNC_035
+    fields:
+      upstream-ref: https://github.com/pulseengine/kiln/issues/405
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-10T00:00:00Z
     release: v0.4.1

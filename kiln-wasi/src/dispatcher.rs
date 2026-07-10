@@ -225,6 +225,15 @@ pub struct WasiDispatcher {
     /// so the entry array and path strings must live in this guest-owned memory.
     #[cfg(feature = "std")]
     preopens_alloc: Option<(u32, Vec<(u32, u32)>)>,
+    /// Fresh cabi_realloc'd guest buffer for the NEXT input-stream read (`ptr`, `size`).
+    /// Set by the engine per-read (the guest owns and frees the returned list<u8>, so a
+    /// reused buffer would be use-after-free). Consumed by blocking-read/read. SR-38.
+    #[cfg(feature = "std")]
+    read_buf_alloc: Option<(u32, u32)>,
+    /// Per input-stream read position, so sequential blocking-read calls advance and
+    /// terminate at EOF (return stream-error::closed) instead of re-reading from 0. SR-38.
+    #[cfg(feature = "std")]
+    stream_offsets: HashMap<u32, usize>,
 }
 
 impl WasiDispatcher {
@@ -269,6 +278,10 @@ impl WasiDispatcher {
             preopens: Vec::new(),
             #[cfg(feature = "std")]
             preopens_alloc: None,
+            #[cfg(feature = "std")]
+            read_buf_alloc: None,
+            #[cfg(feature = "std")]
+            stream_offsets: HashMap::new(),
         })
     }
 
@@ -2278,6 +2291,15 @@ impl WasiDispatcher {
             ("wasi:io/streams", "[method]input-stream.read" | "input-stream.read") |
             ("wasi:io/streams", "[method]input-stream.blocking-read" | "input-stream.blocking-read") => {
                 // read(self: borrow<input-stream>, len: u64) -> result<list<u8>, stream-error>
+                //
+                // Returns CORE VALUES; the caller (dispatch_canon_lowered) lowers them to the
+                // retptr per the signature Result(ListU8, stream-error):
+                //   ok(list<u8>):      [I32(0), I32(ptr), I32(len)]
+                //   err(closed):       [I32(1), I32(1)]   (stream-error::closed)
+                // The list<u8> bytes live in a fresh cabi_realloc'd buffer (read_buf_alloc)
+                // supplied by the engine per call — the guest owns and frees it, so it must
+                // NOT be reused. A per-stream offset advances each read and yields closed
+                // (the guest's EOF signal) once the file is exhausted.
                 let stream_handle = match args.first() {
                     Some(CoreValue::I32(v)) => *v as u32,
                     _ => return Err(Error::wasi_invalid_argument("read: missing stream handle")),
@@ -2287,40 +2309,44 @@ impl WasiDispatcher {
                     Some(CoreValue::I32(v)) => *v as usize,
                     _ => 4096,
                 };
+                // stream-error::closed (result::err discriminant 1, variant 1).
+                let closed = || vec![CoreValue::I32(1), CoreValue::I32(1)];
 
-                // Find the file path for this stream handle
-                let file_path = self.fd_table.get(&stream_handle).and_then(|e| match &e.fd_type {
+                // Consume the per-call read buffer (fresh each read).
+                let read_buf = self.read_buf_alloc.take();
+
+                let path = match self.fd_table.get(&stream_handle).and_then(|e| match &e.fd_type {
                     FileDescriptorType::RegularFile(p) => Some(p.clone()),
                     _ => None,
-                });
+                }) {
+                    Some(p) => p,
+                    None => return Ok(closed()),
+                };
+                let data = match std::fs::read(&path) {
+                    Ok(d) => d,
+                    Err(_) => return Ok(closed()),
+                };
 
-                if let Some(path) = file_path {
-                    match std::fs::read(&path) {
-                        Ok(data) => {
-                            let read_len = core::cmp::min(data.len(), max_len);
-                            let chunk = &data[..read_len];
-                            // Write data to memory and return (ptr, len) via retptr
-                            // For now, return the data as a list via memory write
-                            if let Some(mem) = memory {
-                                // Allocate space in memory for the data
-                                // Use a fixed high address to avoid conflicts
-                                let data_addr = 0x100000u32 + (stream_handle * 0x10000);
-                                mem.write_bytes(data_addr, chunk)?;
-                                // result<ok=list<u8>>: discriminant=0, ptr, len
-                                Ok(vec![CoreValue::I32(0), CoreValue::I32(data_addr as i32), CoreValue::I32(read_len as i32)])
-                            } else {
-                                Ok(vec![CoreValue::I32(1), CoreValue::I32(0), CoreValue::I32(0)])
-                            }
-                        }
-                        Err(_) => {
-                            // stream-error::closed
-                            Ok(vec![CoreValue::I32(1), CoreValue::I32(1)])
-                        }
-                    }
-                } else {
-                    // stream-error::closed
-                    Ok(vec![CoreValue::I32(1), CoreValue::I32(1)])
+                let offset = *self.stream_offsets.get(&stream_handle).unwrap_or(&0);
+                if offset >= data.len() {
+                    return Ok(closed()); // EOF
                 }
+
+                let (buf_ptr, buf_size) = match read_buf {
+                    Some((p, s)) => (p, s as usize),
+                    // FAIL LOUD: data to return but the engine allocated no guest buffer.
+                    None => return Err(Error::runtime_error(
+                        "input-stream read requires a cabi_realloc'd buffer (read_buf_alloc not set)",
+                    )),
+                };
+                let mem = memory.ok_or_else(|| Error::wasi_invalid_argument("read: no memory"))?;
+                let avail = data.len() - offset;
+                let n = core::cmp::min(core::cmp::min(avail, max_len), buf_size);
+                mem.write_bytes(buf_ptr, &data[offset..offset + n])?;
+                self.stream_offsets.insert(stream_handle, offset + n);
+
+                // result::ok(list<u8> { ptr, len }) as core values.
+                Ok(vec![CoreValue::I32(0), CoreValue::I32(buf_ptr as i32), CoreValue::I32(n as i32)])
             }
 
             ("wasi:io/streams", "[method]input-stream.subscribe" | "input-stream.subscribe") => {
@@ -2688,6 +2714,10 @@ impl kiln_foundation::HostImportHandler for WasiDispatcher {
     fn set_preopens_allocation(&mut self, list_ptr: u32, string_ptrs: Vec<(u32, u32)>) {
         self.preopens_alloc = Some((list_ptr, string_ptrs));
     }
+
+    fn set_read_buffer_allocation(&mut self, ptr: u32, size: u32) {
+        self.read_buf_alloc = Some((ptr, size));
+    }
 }
 
 /// True iff `full` (a guest path already joined onto the preopen `base`) stays
@@ -2808,6 +2838,110 @@ mod tests {
             Some(&mem),
         );
         assert!(res.is_err(), "must fail loud when cabi_realloc pre-allocation is missing");
+        Ok(())
+    }
+
+    /// SR-38 / #405: input-stream blocking-read returns the file bytes in the
+    /// engine-supplied cabi_realloc'd buffer (as core values [ok, ptr, len]),
+    /// advances a per-stream offset, and signals stream-error::closed at EOF —
+    /// so the guest's read loop terminates instead of re-reading from 0 or being
+    /// handed a fixed unowned buffer (the pre-fix bug that corrupted the guest).
+    // rivet: verifies SR-38
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[test]
+    fn blocking_read_returns_bytes_in_owned_buffer_and_eofs() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::HostImportHandler;
+        use std::io::Write as _;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+
+        // Backing file with known contents.
+        let path = std::env::temp_dir().join("kiln_sr38_blocking_read.txt");
+        std::fs::File::create(&path).unwrap().write_all(b"CANARY").unwrap();
+
+        // Register a stream handle backed by that file (as read-via-stream would).
+        let stream_handle = 7u32;
+        dispatcher.fd_table.insert(stream_handle, FileDescriptorEntry {
+            fd_type: FileDescriptorType::RegularFile(path.clone()),
+            read: true,
+            write: false,
+        });
+
+        let mem = SliceMemory::with_size(0x10000);
+        let buf_ptr = 0x4000u32;
+
+        // First read: engine supplies a fresh buffer; expect ok(list) = [0, buf_ptr, 6].
+        dispatcher.set_read_buffer_allocation(buf_ptr, 64);
+        let r1 = dispatcher.dispatch_core(
+            "wasi:io/streams",
+            "[method]input-stream.blocking-read",
+            &[
+                kiln_foundation::values::Value::I32(stream_handle as i32),
+                kiln_foundation::values::Value::I64(32),
+            ],
+            Some(&mem),
+        )?;
+        assert_eq!(r1.len(), 3, "ok(list<u8>) lowers to [disc, ptr, len]");
+        assert!(matches!(r1[0], kiln_foundation::values::Value::I32(0)), "result::ok");
+        assert!(matches!(r1[1], kiln_foundation::values::Value::I32(p) if p as u32 == buf_ptr),
+            "list ptr is the engine-supplied buffer");
+        assert!(matches!(r1[2], kiln_foundation::values::Value::I32(6)), "6 bytes of CANARY");
+        let mut got = [0u8; 6];
+        mem.read_bytes(buf_ptr, &mut got)?;
+        assert_eq!(&got, b"CANARY", "file bytes written into the owned buffer");
+
+        // Second read: offset now at EOF → stream-error::closed = [1, 1].
+        dispatcher.set_read_buffer_allocation(0x5000, 64);
+        let r2 = dispatcher.dispatch_core(
+            "wasi:io/streams",
+            "[method]input-stream.blocking-read",
+            &[
+                kiln_foundation::values::Value::I32(stream_handle as i32),
+                kiln_foundation::values::Value::I64(32),
+            ],
+            Some(&mem),
+        )?;
+        assert_eq!(r2.len(), 2, "err(stream-error) lowers to [disc, variant]");
+        assert!(matches!(r2[0], kiln_foundation::values::Value::I32(1)), "result::err");
+        assert!(matches!(r2[1], kiln_foundation::values::Value::I32(1)), "stream-error::closed");
+
+        let _ = std::fs::remove_file(&path);
+        Ok(())
+    }
+
+    /// SR-38 / #405: FAIL-LOUD — with data to return but no engine-supplied buffer,
+    /// blocking-read errors rather than writing bytes to a fixed unowned address
+    /// (the pre-fix behavior that corrupted the guest allocator → E07DA).
+    // rivet: verifies SR-38
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[test]
+    fn blocking_read_fails_loud_without_buffer() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use std::io::Write as _;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let path = std::env::temp_dir().join("kiln_sr38_failloud.txt");
+        std::fs::File::create(&path).unwrap().write_all(b"X").unwrap();
+        let stream_handle = 8u32;
+        dispatcher.fd_table.insert(stream_handle, FileDescriptorEntry {
+            fd_type: FileDescriptorType::RegularFile(path.clone()),
+            read: true,
+            write: false,
+        });
+        let mem = SliceMemory::with_size(0x1000);
+        // NOTE: no set_read_buffer_allocation.
+        let res = dispatcher.dispatch_core(
+            "wasi:io/streams",
+            "[method]input-stream.blocking-read",
+            &[
+                kiln_foundation::values::Value::I32(stream_handle as i32),
+                kiln_foundation::values::Value::I64(32),
+            ],
+            Some(&mem),
+        );
+        assert!(res.is_err(), "must fail loud when the engine supplied no read buffer");
+        let _ = std::fs::remove_file(&path);
         Ok(())
     }
 
