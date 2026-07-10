@@ -79,6 +79,12 @@ safety-critical = ["asil-b"]  # Maximum safety level for WASI
 # Development and testing features
 # (Add more features as needed)
 
+[dev-dependencies]
+# Dispatcher tests build a WasiDispatcher, which draws on the global capability
+# memory budget; run them serially to avoid cross-test budget contention
+# (see CLAUDE.md — CFI/engine tests use serial_test).
+serial_test = "3.4"
+
 [lints.rust]
 unexpected_cfgs = { level = "allow", check-cfg = ['cfg(test)'] }
 missing_docs = "deny"

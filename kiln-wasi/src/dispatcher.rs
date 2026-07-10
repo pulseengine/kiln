@@ -234,6 +234,11 @@ pub struct WasiDispatcher {
     /// terminate at EOF (return stream-error::closed) instead of re-reading from 0. SR-38.
     #[cfg(feature = "std")]
     stream_offsets: HashMap<u32, usize>,
+    /// Open directory-entry-streams: a snapshot of (descriptor-type, name) entries plus a
+    /// cursor, keyed by the stream handle from read-directory. read-directory-entry walks
+    /// the cursor and returns none at the end. SR-39.
+    #[cfg(feature = "std")]
+    dir_streams: HashMap<u32, (Vec<(u8, String)>, usize)>,
 }
 
 impl WasiDispatcher {
@@ -282,6 +287,8 @@ impl WasiDispatcher {
             read_buf_alloc: None,
             #[cfg(feature = "std")]
             stream_offsets: HashMap::new(),
+            #[cfg(feature = "std")]
+            dir_streams: HashMap::new(),
         })
     }
 
@@ -2274,6 +2281,89 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/types", "[method]descriptor.read-directory") => {
+                // read-directory(self) -> result<directory-entry-stream, error-code>
+                // Snapshot the directory's entries now; the guest walks them via
+                // read-directory-entry. `.`/`..` are excluded (std::fs::read_dir omits them),
+                // matching preview2 semantics. SR-39.
+                let fd = match args.first() {
+                    Some(CoreValue::I32(v)) => *v as u32,
+                    _ => return Err(Error::wasi_invalid_argument("read-directory: missing descriptor")),
+                };
+                let dir_path = self.fd_table.get(&fd).and_then(|e| match &e.fd_type {
+                    FileDescriptorType::PreopenDirectory(p) | FileDescriptorType::RegularFile(p) => Some(p.clone()),
+                    _ => None,
+                });
+                let dir_path = match dir_path {
+                    Some(p) => p,
+                    None => return Ok(vec![CoreValue::I32(1), CoreValue::I32(8)]), // err::bad-descriptor
+                };
+                let mut entries: Vec<(u8, String)> = Vec::new();
+                match std::fs::read_dir(&dir_path) {
+                    Ok(rd) => {
+                        for ent in rd.flatten() {
+                            // descriptor-type enum: unknown=0, block-device=1, character-device=2,
+                            // directory=3, fifo=4, symbolic-link=5, regular-file=6, socket=7.
+                            let ty = ent.file_type().ok();
+                            let tycode: u8 = match ty {
+                                Some(t) if t.is_dir() => 3,
+                                Some(t) if t.is_symlink() => 5,
+                                Some(t) if t.is_file() => 6,
+                                _ => 0,
+                            };
+                            entries.push((tycode, ent.file_name().to_string_lossy().into_owned()));
+                        }
+                    }
+                    Err(_) => return Ok(vec![CoreValue::I32(1), CoreValue::I32(8)]),
+                }
+                let handle = self.resource_manager.create_input_stream(&format!("dir:{}", fd))?;
+                self.dir_streams.insert(handle, (entries, 0));
+                Ok(vec![CoreValue::I32(0), CoreValue::I32(handle as i32)])
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+            ("wasi:filesystem/types", "[method]directory-entry-stream.read-directory-entry") => {
+                // read-directory-entry(self) -> result<option<directory-entry>, error-code>
+                // directory-entry = record { type: descriptor-type, name: string }. Core values:
+                //   ok(some): [I32(0), I32(1), I32(type), I32(name_ptr), I32(name_len)]
+                //   ok(none): [I32(0), I32(0)]
+                // The name string goes in a fresh cabi_realloc'd buffer (read_buf_alloc). SR-39.
+                let stream_handle = match args.first() {
+                    Some(CoreValue::I32(v)) => *v as u32,
+                    _ => return Err(Error::wasi_invalid_argument("read-directory-entry: missing stream")),
+                };
+                let read_buf = self.read_buf_alloc.take();
+                let next = self.dir_streams.get(&stream_handle).and_then(|(entries, cursor)| {
+                    entries.get(*cursor).cloned()
+                });
+                match next {
+                    None => Ok(vec![CoreValue::I32(0), CoreValue::I32(0)]), // ok(none)
+                    Some((tycode, name)) => {
+                        let (buf_ptr, buf_size) = match read_buf {
+                            Some((p, s)) => (p, s as usize),
+                            None => return Err(Error::runtime_error(
+                                "read-directory-entry requires a cabi_realloc'd buffer (read_buf_alloc not set)",
+                            )),
+                        };
+                        let mem = memory.ok_or_else(|| Error::wasi_invalid_argument("read-directory-entry: no memory"))?;
+                        let name_bytes = name.as_bytes();
+                        let n = core::cmp::min(name_bytes.len(), buf_size);
+                        mem.write_bytes(buf_ptr, &name_bytes[..n])?;
+                        if let Some((_, cursor)) = self.dir_streams.get_mut(&stream_handle) {
+                            *cursor += 1;
+                        }
+                        Ok(vec![
+                            CoreValue::I32(0),              // result::ok
+                            CoreValue::I32(1),              // option::some
+                            CoreValue::I32(tycode as i32),  // descriptor-type
+                            CoreValue::I32(buf_ptr as i32), // name ptr
+                            CoreValue::I32(n as i32),       // name len
+                        ])
+                    }
+                }
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
             ("wasi:filesystem/types", "[method]descriptor.metadata-hash") |
             ("wasi:filesystem/types", "[method]descriptor.metadata-hash-at") => {
                 // Return a simple hash based on file path
@@ -2765,6 +2855,7 @@ mod tests {
     /// usable preopen instead of a list backed by memory it never allocated.
     // rivet: verifies SR-37
     #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
     #[test]
     fn get_directories_uses_cabi_realloc_allocation_not_retptr_scribble() -> Result<()> {
         use kiln_foundation::traits::SliceMemory;
@@ -2823,6 +2914,7 @@ mod tests {
     /// unowned guest memory (the pre-fix behavior that produced ENOENT).
     // rivet: verifies SR-37
     #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
     #[test]
     fn get_directories_fails_loud_without_allocation() -> Result<()> {
         use kiln_foundation::traits::SliceMemory;
@@ -2848,6 +2940,7 @@ mod tests {
     /// handed a fixed unowned buffer (the pre-fix bug that corrupted the guest).
     // rivet: verifies SR-38
     #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
     #[test]
     fn blocking_read_returns_bytes_in_owned_buffer_and_eofs() -> Result<()> {
         use kiln_foundation::traits::SliceMemory;
@@ -2915,6 +3008,7 @@ mod tests {
     /// (the pre-fix behavior that corrupted the guest allocator → E07DA).
     // rivet: verifies SR-38
     #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
     #[test]
     fn blocking_read_fails_loud_without_buffer() -> Result<()> {
         use kiln_foundation::traits::SliceMemory;
@@ -2942,6 +3036,85 @@ mod tests {
         );
         assert!(res.is_err(), "must fail loud when the engine supplied no read buffer");
         let _ = std::fs::remove_file(&path);
+        Ok(())
+    }
+
+    /// SR-39 / #405: read-directory snapshots a directory's entries and
+    /// read-directory-entry walks them, returning each name in a cabi_realloc'd
+    /// buffer and ok(none) at the end — so a component's std::fs::read_dir works.
+    // rivet: verifies SR-39
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn read_directory_enumerates_entries_then_none() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::HostImportHandler;
+        use std::io::Write as _;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+
+        // Temp directory with two known files.
+        let dir = std::env::temp_dir().join("kiln_sr39_dir");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::File::create(dir.join("a.txt")).unwrap().write_all(b"a").unwrap();
+        std::fs::File::create(dir.join("b.txt")).unwrap().write_all(b"b").unwrap();
+
+        // Register the directory as an open descriptor.
+        let dir_fd = 9u32;
+        dispatcher.fd_table.insert(dir_fd, FileDescriptorEntry {
+            fd_type: FileDescriptorType::PreopenDirectory(dir.clone()),
+            read: true,
+            write: false,
+        });
+
+        let mem = SliceMemory::with_size(0x10000);
+
+        // read-directory → ok(stream handle).
+        let rd = dispatcher.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.read-directory",
+            &[kiln_foundation::values::Value::I32(dir_fd as i32)],
+            Some(&mem),
+        )?;
+        assert!(matches!(rd[0], kiln_foundation::values::Value::I32(0)), "read-directory ok");
+        let stream = match rd[1] { kiln_foundation::values::Value::I32(h) => h as u32, _ => panic!("no handle") };
+
+        // Walk entries; each name lands in a fresh buffer.
+        let mut names = Vec::new();
+        let name_ptr = 0x6000u32;
+        for _ in 0..2 {
+            dispatcher.set_read_buffer_allocation(name_ptr, 256);
+            let e = dispatcher.dispatch_core(
+                "wasi:filesystem/types",
+                "[method]directory-entry-stream.read-directory-entry",
+                &[kiln_foundation::values::Value::I32(stream as i32)],
+                Some(&mem),
+            )?;
+            assert_eq!(e.len(), 5, "ok(some(record)) lowers to [ok, some, type, ptr, len]");
+            assert!(matches!(e[0], kiln_foundation::values::Value::I32(0)));
+            assert!(matches!(e[1], kiln_foundation::values::Value::I32(1)));
+            assert!(matches!(e[2], kiln_foundation::values::Value::I32(6)), "regular-file = 6");
+            let len = match e[4] { kiln_foundation::values::Value::I32(l) => l as usize, _ => 0 };
+            let mut buf = vec![0u8; len];
+            mem.read_bytes(name_ptr, &mut buf)?;
+            names.push(String::from_utf8(buf).unwrap());
+        }
+        names.sort();
+        assert_eq!(names, vec!["a.txt".to_string(), "b.txt".to_string()]);
+
+        // Next call → ok(none).
+        let end = dispatcher.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]directory-entry-stream.read-directory-entry",
+            &[kiln_foundation::values::Value::I32(stream as i32)],
+            Some(&mem),
+        )?;
+        assert_eq!(end.len(), 2, "ok(none) lowers to [ok, none]");
+        assert!(matches!(end[0], kiln_foundation::values::Value::I32(0)));
+        assert!(matches!(end[1], kiln_foundation::values::Value::I32(0)), "none");
+
+        let _ = std::fs::remove_dir_all(&dir);
         Ok(())
     }
 

@@ -729,26 +729,35 @@ impl StacklessEngine {
         let sig = get_wasi_function_signature(interface, function);
         let needs_retptr = sig.as_ref().map_or(false, |s| s.result_needs_retptr());
 
-        // ON-DEMAND ALLOCATION for input-stream reads (SR-38): the returned list<u8> is
-        // owned and freed by the guest, so a fresh cabi_realloc'd buffer is allocated per
-        // read (a reused/fixed buffer would be freed by the guest → allocator corruption).
-        // Done before borrowing the handler so the &mut self call has no conflicting borrow.
-        let read_alloc: Option<(u32, u32)> = if interface.contains("wasi:io/streams")
-            && (function.contains("input-stream.read")
-                || function.contains("input-stream.blocking-read"))
-        {
-            let len = args.get(1).and_then(|v| match v {
-                Value::I64(n) => Some(*n as u32),
-                Value::I32(n) => Some(*n as u32),
-                _ => None,
-            }).unwrap_or(0);
-            if len > 0 {
-                self.allocate_wasi_read_buffer(instance_id, len).ok().flatten()
+        // ON-DEMAND ALLOCATION for guest-owned list/string returns (SR-38, SR-39): the
+        // returned list<u8>/string is owned and freed by the guest, so a fresh cabi_realloc'd
+        // buffer is allocated per call (a reused/fixed buffer would be freed by the guest →
+        // allocator corruption). Done before borrowing the handler so the &mut self call has
+        // no conflicting borrow.
+        let read_alloc: Option<(u32, u32)> = {
+            let want = if interface.contains("wasi:io/streams")
+                && (function.contains("input-stream.read")
+                    || function.contains("input-stream.blocking-read"))
+            {
+                // input-stream read: size to the requested len (args = [self, len, ...]).
+                args.get(1).and_then(|v| match v {
+                    Value::I64(n) => Some(*n as u32),
+                    Value::I32(n) => Some(*n as u32),
+                    _ => None,
+                }).unwrap_or(0)
+            } else if interface.contains("wasi:filesystem/types")
+                && function.contains("read-directory-entry")
+            {
+                // directory-entry name string: no len arg, use a filename-sized buffer.
+                512
+            } else {
+                0
+            };
+            if want > 0 {
+                self.allocate_wasi_read_buffer(instance_id, want).ok().flatten()
             } else {
                 None
             }
-        } else {
-            None
         };
 
         let instance = self.instances.get(&instance_id)

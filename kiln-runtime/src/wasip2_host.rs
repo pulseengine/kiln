@@ -434,6 +434,26 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
                 Some(Box::new(WasiComponentType::U8)),
             )],
         )),
+        // SR-39: directory enumeration.
+        ("wasi:filesystem/types", "[method]descriptor.read-directory") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle],
+            vec![WasiComponentType::Result(
+                Some(Box::new(WasiComponentType::Handle)), // directory-entry-stream
+                Some(Box::new(WasiComponentType::U8)),     // error-code
+            )],
+        )),
+        ("wasi:filesystem/types", "[method]directory-entry-stream.read-directory-entry") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle],
+            vec![WasiComponentType::Result(
+                // option<directory-entry> where directory-entry = record { type: descriptor-type, name: string }.
+                // The enum descriptor-type lowers as a u8 (padded to 4) — modelled as U8; the record as a Tuple.
+                Some(Box::new(WasiComponentType::Option(Box::new(WasiComponentType::Tuple(vec![
+                    WasiComponentType::U8,
+                    WasiComponentType::String,
+                ]))))),
+                Some(Box::new(WasiComponentType::U8)), // error-code
+            )],
+        )),
         ("wasi:filesystem/types", "[resource-drop]descriptor") |
         ("wasi:filesystem/types", "[resource-drop]directory-entry-stream") => Some(WasiFunctionSignature::new(
             vec![WasiComponentType::Handle],
