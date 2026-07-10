@@ -1670,4 +1670,14 @@ pub trait HostImportHandler: Send + Sync {
     fn set_preopens_allocation(&mut self, _list_ptr: u32, _string_ptrs: Vec<(u32, u32)>) {
         // Default no-op for handlers that don't need this
     }
+
+    /// Record a fresh cabi_realloc'd guest buffer for the next input-stream read.
+    ///
+    /// A `list<u8>` returned from `blocking-read`/`read` is owned by the guest, which
+    /// copies then frees it — so the buffer must be freshly allocated per read (a reused
+    /// buffer would be use-after-free). The engine allocates it on-demand and records
+    /// (ptr, size) here just before dispatching the read. Default no-op. SR-38.
+    fn set_read_buffer_allocation(&mut self, _ptr: u32, _size: u32) {
+        // Default no-op for handlers that don't need this
+    }
 }

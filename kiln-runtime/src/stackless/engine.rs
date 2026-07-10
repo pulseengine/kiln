@@ -725,24 +725,48 @@ impl StacklessEngine {
     ) -> Result<Vec<Value>> {
         use crate::wasip2_host::get_wasi_function_signature;
 
+        // Look up function signature to determine if results use retptr
+        let sig = get_wasi_function_signature(interface, function);
+        let needs_retptr = sig.as_ref().map_or(false, |s| s.result_needs_retptr());
+
+        // ON-DEMAND ALLOCATION for input-stream reads (SR-38): the returned list<u8> is
+        // owned and freed by the guest, so a fresh cabi_realloc'd buffer is allocated per
+        // read (a reused/fixed buffer would be freed by the guest → allocator corruption).
+        // Done before borrowing the handler so the &mut self call has no conflicting borrow.
+        let read_alloc: Option<(u32, u32)> = if interface.contains("wasi:io/streams")
+            && (function.contains("input-stream.read")
+                || function.contains("input-stream.blocking-read"))
+        {
+            let len = args.get(1).and_then(|v| match v {
+                Value::I64(n) => Some(*n as u32),
+                Value::I32(n) => Some(*n as u32),
+                _ => None,
+            }).unwrap_or(0);
+            if len > 0 {
+                self.allocate_wasi_read_buffer(instance_id, len).ok().flatten()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let instance = self.instances.get(&instance_id)
+            .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found for canon-lowered dispatch"))?
+            .clone();
+        let mem_wrapper = instance.memory(0).ok();
+        let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
+            .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
+
         let handler = self.host_handler.as_mut().ok_or_else(|| {
             kiln_error::Error::runtime_error(
                 "Canon-lowered function called but no host_handler configured. \
                  Use engine.set_host_handler() with a WasiDispatcher to enable WASI support."
             )
         })?;
-
-        let instance = self.instances.get(&instance_id)
-            .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found for canon-lowered dispatch"))?
-            .clone();
-
-        let mem_wrapper = instance.memory(0).ok();
-        let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
-            .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
-
-        // Look up function signature to determine if results use retptr
-        let sig = get_wasi_function_signature(interface, function);
-        let needs_retptr = sig.as_ref().map_or(false, |s| s.result_needs_retptr());
+        if let Some((ptr, size)) = read_alloc {
+            handler.set_read_buffer_allocation(ptr, size);
+        }
 
         // Always pass all args to handler (including retptr if present).
         // Handlers that already handle memory writes (e.g., get-arguments)
@@ -12074,6 +12098,29 @@ impl StacklessEngine {
         Ok(Some((list_ptr, string_ptrs)))
     }
 
+    /// Allocate a fresh guest buffer for one input-stream read via cabi_realloc.
+    ///
+    /// The `list<u8>` returned by blocking-read/read is owned and freed by the guest, so
+    /// each read needs its own allocation (a reused buffer would be use-after-free). Sized
+    /// to the guest's requested `len`, capped to a sane maximum. Returns None if the
+    /// component has no cabi_realloc export. SR-38.
+    #[cfg(feature = "wasi")]
+    fn allocate_wasi_read_buffer(&mut self, instance_id: usize, len: u32) -> Result<Option<(u32, u32)>> {
+        const MAX_READ_BUF: u32 = 1 << 20; // 1 MiB cap; reads clamp to this, guest loops for more
+        let size = len.min(MAX_READ_BUF).max(1);
+
+        let instance = self.instances.get(&instance_id)
+            .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?
+            .clone();
+        let module = instance.module();
+        let cabi_realloc_idx = match self.find_export_index(&module, "cabi_realloc") {
+            Ok(idx) => idx,
+            Err(_) => return Ok(None),
+        };
+        let ptr = self.call_cabi_realloc(instance_id, cabi_realloc_idx, 0, 0, 1, size)?;
+        Ok(Some((ptr, size)))
+    }
+
     /// Write data to WASM instance memory
     fn write_to_instance(&self, instance_id: usize, addr: u32, data: &[u8]) -> Result<()> {
         let instance = self.instances.get(&instance_id)
@@ -12234,22 +12281,17 @@ impl StacklessEngine {
             // This MUST happen AFTER _start has initialized the component's allocator.
             // Pre-allocating before _start causes memory collisions where the allocator
             // reuses our memory for other purposes.
+            // Collect the import's args once, up front. collect_import_args_by_name pops the
+            // stack so it must run exactly once; the read-buffer sizing below needs the len.
+            let args = Self::collect_import_args_by_name(&module, module_name, field_name, stack);
+
             #[cfg(feature = "wasi")]
             let args_alloc = if module_name.contains("wasi:cli/environment") && field_name == "get-arguments" {
                 let wasi_args = kiln_wasi::get_global_wasi_args();
                 if !wasi_args.is_empty() {
-                    #[cfg(feature = "tracing")]
-                    trace!(
-                        args = ?wasi_args,
-                        "[ON-DEMAND-ALLOC] Allocating memory for get-arguments"
-                    );
                     match self.allocate_wasi_args_memory(instance_id, &wasi_args) {
                         Ok(alloc) => alloc,
-                        Err(e) => {
-                            #[cfg(feature = "tracing")]
-                            warn!(error = %e, "[ON-DEMAND-ALLOC] Failed to allocate args memory");
-                            None
-                        }
+                        Err(_e) => None,
                     }
                 } else {
                     None
@@ -12261,25 +12303,41 @@ impl StacklessEngine {
             #[cfg(not(feature = "wasi"))]
             let args_alloc: Option<(u32, Vec<(u32, u32)>)> = None;
 
+            // ON-DEMAND ALLOCATION for input-stream reads (SR-38): the returned list<u8> is
+            // owned and freed by the guest, so allocate a fresh guest buffer per read, sized
+            // to the requested len (args[1]). Mirrors the get-arguments on-demand pattern.
+            #[cfg(feature = "wasi")]
+            let read_alloc: Option<(u32, u32)> = if module_name.contains("wasi:io/streams")
+                && (field_name.contains("input-stream.read")
+                    || field_name.contains("input-stream.blocking-read"))
+            {
+                let len = args.get(1).and_then(|v| match v {
+                    Value::I64(n) => Some(*n as u32),
+                    Value::I32(n) => Some(*n as u32),
+                    _ => None,
+                }).unwrap_or(0);
+                if len > 0 {
+                    match self.allocate_wasi_read_buffer(instance_id, len) {
+                        Ok(a) => a,
+                        Err(_e) => None,
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            #[cfg(not(feature = "wasi"))]
+            let read_alloc: Option<(u32, u32)> = None;
+
             if let Some(ref mut handler) = self.host_handler {
-                // Set the allocation if we have one (for get-arguments)
-                // Each string is allocated SEPARATELY to ensure proper allocator metadata
                 if let Some((list_ptr, string_ptrs)) = args_alloc {
-                    #[cfg(feature = "tracing")]
-                    trace!(
-                        list_ptr = format_args!("0x{:x}", list_ptr),
-                        num_strings = string_ptrs.len(),
-                        "[ON-DEMAND-ALLOC] Setting args allocation on handler with SEPARATE strings"
-                    );
                     handler.set_args_allocation(list_ptr, string_ptrs);
                 }
-
-                #[cfg(feature = "tracing")]
-                debug!(
-                    module_name = %module_name,
-                    field_name = %field_name,
-                    "[HOST_HANDLER] Dispatching via HostImportHandler"
-                );
+                if let Some((ptr, size)) = read_alloc {
+                    handler.set_read_buffer_allocation(ptr, size);
+                }
 
                 // Get instance and memory
                 let instance = self.instances.get(&instance_id)
@@ -12290,9 +12348,6 @@ impl StacklessEngine {
                 let mem_wrapper = instance.memory(0).ok();
                 let memory: Option<&dyn kiln_foundation::MemoryAccessor> = mem_wrapper.as_ref()
                     .map(|m| m.0.as_ref() as &dyn kiln_foundation::MemoryAccessor);
-
-                // Collect args from stack based on function signature
-                let args = Self::collect_import_args_by_name(&module, module_name, field_name, stack);
 
                 #[cfg(feature = "tracing")]
                 trace!(
