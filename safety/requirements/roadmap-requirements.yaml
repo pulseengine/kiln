@@ -246,6 +246,76 @@ artifacts:
         units over the no_std lib); on-target fuel→cycles measurement and the
         fuzz/Kani/mutation layers land with plan Phase 6 (hardening).
 
+  - id: REQ_ASYNC_EXTWAKE
+    type: requirement
+    title: External wake-up path for parked tasks (event source → mark_ready)
+    description: >
+      kiln-async must let a task wait on a REAL external event and be resumed
+      later. Today `Scheduler::mark_ready(TaskId)` exists and is public, and a
+      task ends its slice with `TaskOutcome::Waited` to park (Blocked), but
+      mark_ready is only ever driven by INTERNAL scheduler events — channel/
+      stream readiness resolved within `poll_round` (kiln-async/src/lib.rs
+      mark_ready call sites are all intra-poll). There is no sanctioned path for
+      an OUT-OF-LOOP event source (timer ISR, hardware IRQ, host callback, gale
+      event-group signal) to wake a parked task, so "wait on a real event, be
+      woken later" is not achievable today (benchmark Finding 8; the
+      TaskOutcome::Waited doc). Deliver a sound external-wake API that preserves
+      the crate invariants (no_std, NO alloc, #![forbid(unsafe_code)], fuel-
+      bounded, O(1)): an out-of-loop producer records a pending wake for a TaskId
+      that the next poll_round drains, with an explicitly documented concurrency
+      model (single-threaded cooperative baseline; the ISR/multi-core story and
+      any required synchronization stated, not assumed). This is the runtime-side
+      counterpart the host Waker bridge (REQ_ASYNC_WAKERBRIDGE) calls into.
+    status: proposed
+    release: v0.5.0
+    tags: [async, scheduler, no-std, no-alloc, embedded, wake, roadmap]
+    links:
+      - type: derives-from
+        target: REQ_ASYNC_SCHED
+    fields:
+      design-doc: docs/architecture/async-scheduler-plan.md
+      note: >
+        Gap surfaced by the kiln-async vs embassy benchmark (REQ_ASYNC_BENCH):
+        the bench's futures only self-wake synchronously inline because no real
+        external-wake path exists. mark_ready is already the safe primitive; this
+        requirement is the plumbing + concurrency model that feeds it from
+        outside poll_round.
+
+  - id: REQ_ASYNC_WAKERBRIDGE
+    type: requirement
+    title: Official host-side core::task::Future/Waker bridge (std-only, outside the cert crate)
+    description: >
+      Provide an OFFICIAL, production-sound bridge that drives general Rust
+      `core::task::Future`s (that store/clone their `Waker` for a real later
+      event) on the kiln-async scheduler — for host/std use only. kiln-async
+      itself is `#![forbid(unsafe_code)]` PERMANENTLY and deliberately never
+      polls a Rust Future nor builds a `RawWaker` vtable (lib.rs design invariant;
+      the R1 unsafe waker is explicitly descoped from the cert crate as a
+      std-only convenience). The bridge built for the executor-comparison
+      benchmark is explicitly UNOFFICIAL / non-production: it is sound ONLY for
+      futures that self-wake synchronously inline (e.g. CooperativeYield), NOT
+      for general futures that store/clone the Waker to signal readiness later
+      (benchmark Finding 1 + the bench bridge doc comment). Deliver this as a
+      SEPARATE std-only companion crate (e.g. kiln-async-host) that MAY use
+      `unsafe` for the RawWaker vtable and whose `Waker::wake()` routes to the
+      external-wake path (REQ_ASYNC_EXTWAKE). It must live OUTSIDE kiln-async so
+      the embedded/synth-lowered cert scope keeps forbid(unsafe_code) and its
+      minimal TCB.
+    status: proposed
+    release: v0.6.0
+    tags: [async, scheduler, host, std, future, waker, unsafe, roadmap]
+    links:
+      - type: derives-from
+        target: REQ_ASYNC_SCHED
+      - type: depends-on
+        target: REQ_ASYNC_EXTWAKE
+    fields:
+      note: >
+        Not a defect in kiln-async — a deliberately-excluded feature. The R1
+        "unsafe waker" mentioned in REQ_ASYNC_SCHED's release-plan belongs here,
+        in a std-only companion, NOT in the forbid(unsafe) cert crate. Gap
+        surfaced by REQ_ASYNC_BENCH's throwaway bridge.
+
   - id: REQ_CRATES_PUBLISH
     type: requirement
     title: Publish the workspace to crates.io (kilnvm-* namespace)
