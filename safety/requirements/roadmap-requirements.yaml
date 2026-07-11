@@ -548,28 +548,36 @@ artifacts:
     type: requirement
     title: Kiln interpreter runs no_std for on-board embedded execution (hybrid with synth-AOT)
     description: >
-      Kiln's core-module interpreter shall build and run in a no_std environment
-      (no_std + alloc, then no_std + bounded-alloc) on embedded targets
-      (thumbv7em / gale / gust), so kiln can interpret WebAssembly ON-BOARD
-      alongside the synth-AOT native path — matching the deployment model of the
-      safety-critical interpreter field (NASA spacewasm, DLR-FT/wasm-interpreter,
-      #413) while carrying kiln's verification evidence (Verus / Lean / witness
-      MC/DC / sigil). meld (build-time component lowering) and synth (AOT→native
-      ELF for the certified hot path) are RETAINED; this adds an interpreter
-      deployment target for code that cannot or should not be AOT-compiled
-      (late-loaded modules, migrated instances, and cert contexts that prefer an
-      interpreter's smaller TCB over a compiler's). Phased: (1) feasibility spike
-      — a minimal core module interprets under no_std+alloc on thumbv7em with
-      fuel + bounded memory intact and binary size measured (go/no-go gate);
-      (2) port sync primitives (~90 Mutex/RwLock/thread hits → kiln-sync) and
-      collections (std → alloc) behind the std-feature boundary; (3) host/WASI
-      imports via the kiln-builtins platform-callback surface; (4) live-instance
-      migration (execution-state serialize/restore — DLR-FT parity, gale/gust
-      checkpoint-restart/failover; may be its own track); (5) cert-evidence parity
-      with the std interpreter. Corrects the record: REQ_FUNC_002 (baremetal) and
-      REQ_FUNC_033 (kilnd-nostd) are marked implemented, but RFC #46 routes
-      embedded through synth-AOT only and kiln-runtime is std-bound today — this
-      delivers the actual no_std interpreter. Amends RFC #46 (doc + BA sign-off).
+      Kiln's interpreter shall build and run in a no_std/no_alloc environment on
+      embedded targets (thumbv7em / gale / gust), so kiln can interpret
+      WebAssembly ON-BOARD alongside the synth-AOT native path — the alternative
+      for payloads where AOT is not wanted (dynamic/late-loaded, migrated,
+      untrusted, or smaller-TCB cert contexts) — matching the deployment model of
+      the safety-critical interpreter field (NASA spacewasm, DLR-FT, #413) while
+      carrying kiln's verification evidence (Verus / Lean / witness MC/DC / scry /
+      sigil). DEPLOYMENT: kiln (no_std/no_alloc) is compiled TO a wasm module that
+      synth AOT-compiles to native for the target — the same pipeline as user
+      code (wasm = universal IR, synth = single compiler, kiln-as-wasm itself
+      attestable). UNIQUE SCOPE: the on-board interpreter runs the FULL Component
+      Model (direct hosting, AD-COMPONENT-HOST-001) or plain core wasm — peers are
+      core-only; this extends AD-COMPONENT-HOST-001's direct-hosting from
+      QM/std-only to embedded. meld + synth (AOT hot path) are RETAINED. Phased:
+      (1) feasibility spike — compile a minimal kiln interpreter to wasm, synth-AOT
+      it to native, interpret a core module under no_std+alloc on thumbv7em with
+      fuel + bounded memory intact; measure size + perf vs a direct no_std-Rust
+      build and vs the peers (go/no-go gate, incl. does synth accept a module this
+      large); (2) port sync primitives (~90 Mutex/RwLock/thread → kiln-sync) and
+      collections (std → alloc/bounded) behind the std-feature boundary; (3) host/
+      WASI imports via the kiln-builtins platform-callback surface + a GALE OS
+      requirement for runtime wasm loading (dynamic module/component load) and for
+      running the synth-compiled kiln image; (4) Component-Model-on-embedded (bring
+      the direct-hosting path no_std); (5) live-instance migration (state serialize/
+      restore — DLR-FT parity, gale/gust checkpoint-restart/failover; own track);
+      (6) cert-evidence parity with the std interpreter. Corrects the record:
+      REQ_FUNC_002 (baremetal) and REQ_FUNC_033 (kilnd-nostd) are marked
+      implemented, but RFC #46 routes embedded through synth-AOT only and
+      kiln-runtime is std-bound today — this delivers the actual no_std interpreter.
+      Amends RFC #46 (doc + BA sign-off).
     status: proposed
     release: v0.6.0
     tags: [interpreter, no-std, embedded, migration, rfc46-amendment, roadmap, direction]
