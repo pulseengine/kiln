@@ -872,6 +872,20 @@ impl KilndEngine {
                 if cap_pages > 0 {
                     if let Ok(inst) = engine.get_instance(instance) {
                         if let Ok(mem) = inst.memory(0) {
+                            // SR-43: reject-at-load when the module's DECLARED memory min
+                            // exceeds the cap — refuse to run rather than trap mid-execution
+                            // (moves a fixed-RAM overrun from mid-mission to load time).
+                            // NOTE: this runs post-instantiate, so the declared `min` was
+                            // already allocated by Memory::new; rejecting before eager `min`
+                            // allocation needs a pre-instantiate engine API (follow-up).
+                            let declared_min = mem.0.ty.limits.min;
+                            if declared_min > cap_pages {
+                                return Err(Error::new(
+                                    ErrorCategory::Resource,
+                                    codes::CAPACITY_EXCEEDED,
+                                    "Module declared memory min exceeds --memory cap (rejected at load)",
+                                ));
+                            }
                             mem.0.set_runtime_max_pages(cap_pages);
                         }
                     }
