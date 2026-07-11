@@ -476,3 +476,72 @@ artifacts:
         target: REQ_WITNESS_COV
       - type: derives-from
         target: REQ_WITNESS_COV
+
+  - id: AD-WCMC-001
+    type: design-decision
+    title: Bounding arbitrary-wasm memory (WCMC) — scry proves the hard half; kiln plumbs it; NO new companion
+    status: proposed
+    description: >
+      How much memory an arbitrary wasm module can consume (the crux for fixed
+      embedded RAM on gale/gust) is answered by COMPOSING existing PulseEngine
+      tools, NOT by building a new one. Decomposition (measured against
+      kiln-runtime): (a) DECLARED-LIMITS half — guest linear-memory min/max,
+      table min/max, global count, data/element bytes, per-function locals and
+      the static max operand-stack height — all exactly computable from the
+      module bytes in one decode pass (trivial, kiln already decodes it);
+      (b) STACK / longest-path half — worst-case call depth and shadow-stack
+      usage — the analytically hard, partly-undecidable part (recursion), which
+      is exactly what scry already does: "sound abstract interpretation for
+      WebAssembly (the DO-333 leg)", providing shadow-stack bounds + longest-path
+      attribution + budget_from_bound. So scry ALREADY answers the hard half; the
+      memory analog of WCET is scry(space) alongside spar's RTA(time).
+    tags: [memory, wcmc, bounding, embedded, scry, verification, direction]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_003
+    fields:
+      rationale: >
+        Two fable subagents (2026-07-11) analyzed this. The memory-bounding agent
+        recommended a companion analyzer; the maintainer's pointer that "scry
+        already answers a lot of the memory story" resolves it — scry IS that
+        analyzer for the stack half (the part the agent itself flagged as "where
+        a real tool adds value"; the declared-limits half is trivial). spar
+        already has the CONSUMER (a memory-budget pass, memory_budget.rs: Σ(code+
+        data) ≤ memory_size) but lacks a source of truth for wasm component
+        sizes (hand-entered AADL today) — scry-derived bounds make that property
+        DERIVED + attested, exactly as WCET feeds RTA. Pipeline: meld → scry
+        (sound bounds) + kiln (declared-limits extraction) → the EXISTING
+        kiln.resource_limits custom section (kiln-decoder/src/
+        resource_limits_section.rs; carries max_memory_usage, max_call_depth,
+        qualification_hash, ASIL) → {kilnd reject-at-load | synth sizes .bss/
+        stack} → sigil co-signs module+manifest → spar closes the space leg,
+        RTA the time leg → rivet traces the fits verdict. Reject-at-load moves a
+        fixed-RAM overrun from "mid-mission trap in the field" to "integration
+        failure on the bench" — the whole reason WCET analysis exists, applied to
+        space.
+      implementation-plan: >
+        Kiln-side plumbing (concrete, near-term — the soundness gaps the analysis
+        found, all in the SR-41 family): (1) reject-at-load when a module's
+        declared memory `min` exceeds the --memory cap (today Memory::new
+        eagerly allocates `min` BEFORE the SR-41 grow cap applies — the cap is
+        set post-instantiate); (2) add a runtime element cap to Table mirroring
+        Memory::runtime_max_pages (table.grow is UNCAPPED today — same class of
+        bug SR-41 fixed for memory); (3) WIRE the dead kiln.resource_limits
+        section — capability_engine.rs:561 extracts it into _resource_config with
+        a literal `// TODO: Apply resource limits`, so the whole manifest pipe
+        exists but is disconnected; (4) restructure the 8 MiB HeapProvider that is
+        CLONED per-function/per-instruction (bounded_runtime_infra.rs:37 +
+        module.rs) so decoded-module RSS is O(|wasm|) not ~8 MiB × n_functions —
+        until then any interpreter WCMC is dominated by an artifact. These become
+        SR-43/44/45 + a perf fix once SR-41/42 (#417) land.
+      cross-repo: >
+        scry (producer of stack/longest-path bounds), spar (consumer:
+        memory-budget pass), synth (per-function native frame sizes for the
+        embedded WCSU), sigil (attests the manifest). Registered scry in rivet
+        externals for cross-linking.
+      upstream-ref: https://github.com/pulseengine/kiln/issues/415
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-11T09:00:00Z
+    release: v0.6.0
