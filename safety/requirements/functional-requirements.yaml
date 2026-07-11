@@ -1061,7 +1061,7 @@ artifacts:
   - id: SR-41
     type: requirement
     title: kilnd --memory <bytes> enforces a real runtime linear-memory cap (memory.grow is bounded)
-    status: proposed
+    status: verified
     description: "kilnd --memory <bytes> must actually bound a guest's runtime linear memory so a guest cannot memory.grow past the configured cap — symmetric with --fuel (which IS enforced via engine.set_fuel at kilnd/src/lib.rs:797). Today --memory only gates a static admission estimate (module_size*2) at load (lib.rs:1042/1051) and is never wired to the engine, so memory.grow escapes the cap and the run exits 0. Measured on v0.4.1 (7a039320), differential vs wasmtime 42. Root cause (measured): the ONLY runtime bound on grow is the module's OWN declared (memory min max) max — kiln-runtime Memory::grow_shared (memory.rs:752) rejects growth past self.ty.limits.max (set from CoreMemoryType at memory.rs:445); there is NO per-instance/per-store/engine limiter and no hook for --memory (grep for limiter APIs is empty; commented-out MAX_MEMORY_BYTES at memory.rs:165). Guest linear memory is a plain StdProvider Vec (memory.rs:473), NOT under the safe_managed_alloc!/CrateId budget, so that budget cannot be the enforcement point. Fix: inject a byte cap (bytes->pages, /65536) at instantiation that clamps the effective max used by grow/grow_shared to min(module-declared-max, --memory-cap) and rejects growth past it (fail-loud trap, matching wasmtime). Differential oracle: sz.wat grows 2000 pages; wasmtime with a limit traps, kiln must too. Issue #411."
     tags: [kilnd, memory, resource-limit, sandbox, bug]
     fields:
@@ -1075,7 +1075,7 @@ artifacts:
   - id: SR-42
     type: requirement
     title: kilnd reports REAL runtime resource usage (fuel consumed, peak/current memory, --memory-profile)
-    status: proposed
+    status: verified
     description: "kilnd's resource reporting must reflect real execution, not static admission estimates (violates CLAUDE.md FAIL-LOUD / no-fabrication). Today: 'Fuel consumed' = module_size/10 (lib.rs:1041), 'Peak memory' = module_size*2 (lib.rs:1042/1094), and --memory-profile always prints 0 (the MemoryProfiler.record_allocation/deallocation at lib.rs:277/287 are NEVER called on the exec path — only in a test). Off by orders of magnitude; a leak/blow-up is invisible. Measured on v0.4.1. Reporting sibling of SR-41 (shared root: kilnd never samples real runtime state). Real data already exists (measured): (a) StacklessEngine::remaining_fuel() (engine.rs:11522) gives real fuel; consumed = max_fuel - remaining; MISSING only a pass-through on CapabilityAwareEngine (exposes set_fuel at capability_engine.rs:432 but not remaining_fuel). (b) Memory::peak_memory() (memory.rs:590) + size_in_bytes() (memory.rs:551) track REAL bytes, kept live by update_peak_memory() on every grow (memory.rs:609); reachable via CapabilityAwareEngine::get_instance (capability_engine.rs:1043) -> ModuleInstance::memory (module_instance.rs:133). Fix: add remaining_fuel()/fuel_consumed pass-through on CapabilityAwareEngine; in kilnd replace estimated_fuel/estimated_memory (lib.rs:1041-1042,1097-1098) with real reads after execution; drive --memory-profile from the real Memory metrics (or drop the dead MemoryProfiler and print peak_memory()/size_in_bytes() directly). Issue #412."
     tags: [kilnd, observability, fuel, memory, fail-loud, bug]
     fields:

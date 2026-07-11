@@ -433,6 +433,15 @@ impl CapabilityAwareEngine {
         self.inner.set_fuel(fuel);
     }
 
+    /// Remaining execution fuel (instructions) after (or before) a run.
+    ///
+    /// Delegates to the inner [`StacklessEngine`]. Consumed fuel for a run is
+    /// `budget_before - remaining_fuel()`. Enables REAL fuel reporting (SR-42)
+    /// instead of a static estimate. `None` if the inner engine tracks no fuel.
+    pub fn remaining_fuel(&self) -> Option<u64> {
+        self.inner.remaining_fuel()
+    }
+
     /// Enable WASI support with the current capability constraints
     pub fn enable_wasi(&mut self) -> Result<()> {
         match self.preset {
