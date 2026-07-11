@@ -93,3 +93,11 @@ externals:
     path: /Volumes/Home/git/pulseengine/sigil
     ref: main
     prefix: sigil
+
+  scry:
+    # Sound abstract interpretation for WebAssembly (DO-333 leg). Provides the
+    # worst-case shadow-stack / longest-path bounds that answer the hard half of
+    # "how much memory an arbitrary wasm can consume" (AD-WCMC-001).
+    git: https://github.com/pulseengine/scry.git
+    ref: main
+    prefix: scry
