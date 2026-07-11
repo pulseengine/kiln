@@ -556,6 +556,19 @@ artifacts:
         keyless needs network), so air-gapped embedded uses embedded public keys.
         The size/WCMC manifest must be a SIGNED field of the attestation, not an
         unsigned custom section. Tracked as a sigil coordination issue.
+      loader-integration: >
+        CRITICAL shape: the no_std sigil verifier is a LIBRARY compiled INTO
+        kiln's embedded LOADER — NOT a separate verifier component/tool that sits
+        next to the loader and is invoked by it. verify-signature +
+        check-signed-size-fits-budget + reject-at-load are ONE inseparable
+        admission step inside kiln's module-load path (the on-board interpreter's
+        load_module). Rationale: (a) verification is then NON-BYPASSABLE — you
+        physically cannot admit a module without verifying it, no code path loads
+        unverified bytes; (b) the TCB stays a SINGLE fused loader instead of
+        loader + separate verifier + IPC between them, which matters for the
+        minimal-TCB argument (gust: TCB = ~4-fn shim). So the sigil ask is a
+        no_std verify LIBRARY designed to be embedded into a host loader, and
+        kiln's embedded load path calls it inline before instantiation.
       upstream-ref: https://github.com/pulseengine/kiln/issues/415
     provenance:
       created-by: ai
