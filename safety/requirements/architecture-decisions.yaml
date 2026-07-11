@@ -92,6 +92,14 @@ artifacts:
       from QM/std-reference-only to the embedded target, so embedded gets a
       runtime-Component-Model option alongside meld-dissolve-to-core. meld
       (build-time lowering) and synth (AOT hot path) are retained.
+      TIERED TCB (resolves the interpreter-vs-compiler-TCB tension): ship two
+      tiers, not one monolith — (i) a CORE-ONLY minimal interpreter with a small
+      auditable TCB that competes with spacewasm/DLR-FT on their own terms (and
+      beats them on verification evidence), and (ii) an OPT-IN Component-Model
+      layer (the differentiator, ~31k LOC) enabled only where the TCB budget and
+      cert context allow. This keeps the "smaller TCB than a compiler" claim and
+      the "Component Model on-board" claim from fighting each other — chosen per
+      deployment.
     status: proposed
     tags: [architecture, embedded, no-std, interpreter, deployment, rfc46-amendment]
     links:
@@ -126,16 +134,26 @@ artifacts:
         (dynamic module/component load, since on-board interpretation means
         loading payloads at runtime, not just at build). File a gale-side
         requirement + confirm the loader/OS-service surface before Phase 3.
+      precedent: >
+        The no_std/no_alloc embedded deployment is NOT speculative — kiln-async
+        (REQ_ASYNC_SCHED) already proves it: it is no_std/no_alloc, forbid(unsafe),
+        and ships as a thumbv7em-none-eabi staticlib linked into gale (v0.3.2). So
+        the interpreter's no_std port follows an ESTABLISHED pattern, and a direct
+        no_std-Rust→native staticlib for gale is the PROVEN baseline deployment
+        (what kiln-async does today) — making this direction low-regret. synth-AOT
+        of wasm modules is separately proven via the jess pipeline (adopt →
+        meld_fuse → synth_compile → renode/QEMU, async-scheduler-plan.md).
       open-questions: >
-        The kiln-as-wasm→synth deployment is elegant but unproven — the Phase-1
-        feasibility spike must answer: (1) does synth accept and correctly AOT a
-        module as large/complex as the kiln interpreter; (2) interpreter-in-wasm
-        AOT'd-to-native performance vs a direct no_std-Rust→native build of kiln,
-        and vs the peers; (3) bootstrapping/toolchain-trust of compiling the
-        interpreter through the same pipeline it will later run. If wasm→synth
-        proves impractical, the fallback is a direct no_std-Rust build of
-        kiln-runtime for the target (the port work in REQ_NOSTD_INTERP is the same
-        either way; only the final codegen path differs).
+        Only the ELEGANT variant (kiln-as-wasm→synth, vs the proven direct
+        no_std-Rust build) is unproven — the Phase-1 spike must answer: (1) does
+        synth accept + correctly AOT a module as large/complex as the kiln
+        interpreter; (2) interpreter-in-wasm-AOT'd-to-native perf vs the direct
+        no_std-Rust build and vs the peers; (3) bootstrapping/toolchain-trust of
+        compiling the interpreter through the same pipeline it runs. Fallback if
+        wasm→synth is impractical: the direct no_std-Rust build (kiln-async's
+        proven path) — the port work in REQ_NOSTD_INTERP is identical either way;
+        only the final codegen differs. So the port is committed; only the codegen
+        path is spike-gated.
       upstream-ref: https://github.com/pulseengine/kiln/issues/415
 
   - id: AD-CRATE-001

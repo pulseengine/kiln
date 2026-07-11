@@ -584,8 +584,25 @@ artifacts:
     links:
       - type: derives-from
         target: REQ_FUNC_002
+      - type: depends-on
+        target: gust:SYSREQ-KILN-002
     fields:
       upstream-ref: https://github.com/pulseengine/kiln/issues/415
+      cross-repo: >
+        Aligns with existing sibling work (rivet externals synced): gust's whole
+        thesis is "kernel = verified wasm dissolved to native, TCB = ~4-fn shim",
+        and gust already tracks the wasm->native-toolchain-in-TCB trust argument
+        (my open-question #3 is gust's existing concern) and a phase-2 kiln
+        integration (gust:STKH-002 eliminate-C-FFI, gust:SYSREQ-KILN-002
+        end-to-end verified compilation pipeline, gust:SWREQ-KILN-003 synth ARM
+        codegen). gale's north-star is "the dissolved CM composition runs on the
+        kiln/gust stack, kiln-async drives it bare metal" — confirming the
+        no_std/no_alloc embedded precedent. The kiln-as-wasm->synth idea is
+        PHILOSOPHICALLY IDENTICAL to gust's kernel-as-dissolved-wasm, so it fits
+        the existing architecture rather than fighting it. The genuinely-NEW ask
+        for gust is narrowly RUNTIME wasm loading (load a module/component
+        on-target at runtime for the interpreter path) — distinct from gust's
+        build-time dissolve — tracked as a gust gh issue for coordination.
     provenance:
       created-by: ai
       model: claude-opus-4-8

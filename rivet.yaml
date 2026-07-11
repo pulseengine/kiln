@@ -74,6 +74,18 @@ externals:
     ref: main
     prefix: gale
 
+  gust:
+    git: https://github.com/pulseengine/gale-gust.git
+    path: /Volumes/Home/git/pulseengine/gale-gust
+    ref: main
+    prefix: gust
+
+  loom:
+    git: https://github.com/pulseengine/loom.git
+    path: /Volumes/Home/git/pulseengine/loom
+    ref: main
+    prefix: loom
+
   sigil:
     git: https://github.com/pulseengine/sigil.git
     path: /Volumes/Home/git/pulseengine/sigil
