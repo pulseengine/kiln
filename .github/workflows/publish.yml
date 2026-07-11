@@ -26,10 +26,16 @@ permissions:
   pages: write
   id-token: write
 
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+# Serialize PRODUCTION deploys to Pages, but NOT the per-PR build checks.
+# The `build` job here is a REQUIRED status check (branch protection); a single
+# global "pages" group made every PR's build queue/skip against every other PR's
+# and against main, so the required `build` context frequently ended up
+# cancelled/skipped and blocked otherwise-green PRs. Scope the group per-ref so
+# each PR (refs/pull/N/merge) builds independently while all main deploys still
+# share one group (refs/heads/main). cancel-in-progress stays false so deploys
+# complete.
 concurrency:
-  group: "pages"
+  group: "pages-${{ github.ref }}"
   cancel-in-progress: false
 
 jobs:
