@@ -1,0 +1,83 @@
+name: Verification honesty gate
+
+# Keeps kiln's public verification CLAIMS bound to live evidence (claim-verification
+# skill): the README cannot say more than the code proves. Also runs the WebAssembly
+# spec suite so the conformance number is continuously re-derived, not typed once, and
+# publishes it as a shields.io endpoint the README badge reads (no hand-typed rate).
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  claim-check:
+    name: Claim check (README ↔ evidence)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A claim asserts the spec suite is actually vendored
+          # (file-exists external/testsuite/i32.wast), so the gate needs it.
+          submodules: recursive
+      - name: Gate load-bearing doc claims against source
+        run: python3 tools/claim-check.py claims.yaml
+
+  spec-suite:
+    name: WebAssembly spec suite (conformance number)
+    runs-on: ubuntu-latest
+    # Needed only by the badge-publish step (push to a badges branch via GITHUB_TOKEN).
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive        # external/testsuite is a submodule
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run the official .wast spec suite
+        # Informational until the 15 known gaps (GC-proposal validation strictness +
+        # custom-descriptors parsing) are closed; then drop continue-on-error to gate.
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          cargo run -p cargo-kiln -- testsuite --run-wast \
+            --wast-dir external/testsuite --wast-report wast-report.txt \
+            2>&1 | tee wast-stdout.txt
+      - name: Publish the pass rate to the job log
+        if: always()
+        run: |
+          grep -E 'Files:|Assertions:|Modules loaded' wast-stdout.txt || true
+      - name: Re-derive the badge JSON from the live result
+        if: always()
+        run: |
+          python3 tools/spec-badge.py wast-stdout.txt | tee spec-suite.json
+      # Publish only from a real main push — fork PRs cannot push and must not
+      # overwrite the badge; the endpoint the README points at lives on `badges`.
+      - name: Publish badge to the badges branch
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          # Kept out of the inline command line (masked in logs; trusted values,
+          # but env is the recommended pattern) — see workflow-injection guidance.
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          cp spec-suite.json "$RUNNER_TEMP/spec-suite.json"
+          cd "$RUNNER_TEMP"
+          AUTH="https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+          if git clone --depth 1 --branch badges "$AUTH" badge-repo 2>/dev/null; then
+            cd badge-repo
+          else
+            git clone --depth 1 "$AUTH" badge-repo
+            cd badge-repo
+            git checkout --orphan badges
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+          cp "$RUNNER_TEMP/spec-suite.json" spec-suite.json
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add spec-suite.json
+          if git diff --cached --quiet; then
+            echo "badge unchanged — nothing to publish"
+            exit 0
+          fi
+          git commit -m "chore(badge): spec-suite pass rate [skip ci]"
+          git push origin HEAD:badges

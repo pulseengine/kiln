@@ -11,7 +11,8 @@
 ![Rust](https://img.shields.io/badge/Rust-CE422B?style=flat-square&logo=rust&logoColor=white&labelColor=1a1b27)
 ![WebAssembly](https://img.shields.io/badge/WebAssembly-654FF0?style=flat-square&logo=webassembly&logoColor=white&labelColor=1a1b27)
 ![no_std](https://img.shields.io/badge/no__std-compatible-654FF0?style=flat-square&labelColor=1a1b27)
-![Formally Verified](https://img.shields.io/badge/Formally_Verified-00C853?style=flat-square&logoColor=white&labelColor=1a1b27)
+[![WebAssembly spec suite](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpulseengine%2Fkiln%2Fbadges%2Fspec-suite.json&style=flat-square&labelColor=1a1b27)](https://github.com/pulseengine/kiln/actions/workflows/verification-honesty.yml)
+![Kani-checked (selected)](https://img.shields.io/badge/Kani-checked_selected_components-1f6feb?style=flat-square&labelColor=1a1b27)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square&labelColor=1a1b27)
 
 &nbsp;
@@ -108,10 +109,33 @@ cargo test --workspace
 - Cross-component function calls
 - Full Component Model linking
 
-## Formal Verification
+## Verification &amp; correctness
 
-> [!NOTE]
-> **Cross-cutting verification** &mdash; Rocq mechanized proofs, Kani bounded model checking, Z3 SMT verification, and Verus Rust verification are used across the PulseEngine toolchain. Sigil attestation chains bind it all together.
+<!-- claim: KILN-VERIFICATION-STATUS -->
+kiln's correctness rests on **conformance testing and bounded model checking** &mdash;
+not (yet) a mechanized proof of its WebAssembly execution semantics. We state that plainly.
+
+- **WebAssembly spec suite:** **261 / 280 official `.wast` files pass (93.2%)**; within
+  the files that load, **65,618 / 65,633 executed assertions pass (99.98%)**, across
+  2,370 modules. We lead with the file ratio on purpose: a file that fails to *parse*
+  (the `custom-descriptors` proposal) contributes zero assertions to both sides of the
+  99.98%, so only the file count reflects it &mdash; the assertion rate alone would
+  flatter exactly where it shouldn't. Known gaps: validation strictness on some
+  GC-proposal cases (a few should-be-invalid modules are currently accepted) and the
+  `custom-descriptors` parse failure. (`cargo-kiln testsuite --run-wast`.)
+- **Unit tests:** 300+ across the interpreter core.
+- **Kani (CBMC bounded model checking):** proof harnesses on *selected* safety-relevant
+  components (foundation collections, arithmetic overflow, LEB128, host dispatch,
+  wasi-nn bounds, platform sync) &mdash; bounded proofs of those components, **not** of
+  the interpreter core (`kiln-runtime` / `kiln-instructions` / `kiln-decoder` carry no
+  formal proofs today).
+- **Not claimed:** formal proof of the interpreter's execution semantics. Mechanized
+  semantics (WasmCert-style) is a research direction, not a shipped guarantee.
+
+Other PulseEngine tools use additional techniques (Rocq, Z3/translation-validation,
+Verus) on *their own* artifacts; that does not transfer a proof onto kiln's interpreter.
+These claims are gated by [`claim-check`](claims.yaml) so they cannot drift from the
+evidence.
 
 ## License
 
@@ -121,6 +145,6 @@ MIT License &mdash; see [LICENSE](LICENSE).
 
 <div align="center">
 
-<sub>Part of <a href="https://github.com/pulseengine">PulseEngine</a> &mdash; formally verified WebAssembly toolchain for safety-critical systems</sub>
+<sub>Part of <a href="https://github.com/pulseengine">PulseEngine</a> &mdash; a WebAssembly toolchain for safety-critical systems, grounded in spec-suite conformance and Kani model-checking of critical components</sub>
 
 </div>

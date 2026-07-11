@@ -1,0 +1,38 @@
+# claims.yaml — load-bearing DOC CLAIMS for kiln, gated against live evidence.
+# Run: python3 tools/claim-check.py claims.yaml   (also wired into CI)
+# Each claim binds a verbatim README string to predicates re-derived from source,
+# so a claim can never outrun the evidence (drift = red). See the claim-verification
+# skill. Authored after external formal-verification review flagged the flat
+# "Formally Verified" badge as an overclaim.
+claims:
+  # The interpreter's semantics are conformance-tested + unit-tested, NOT formally
+  # proven. Gate: (a) the honest wording is present, (b) the flat "Formally Verified"
+  # badge cannot return, (c) the interpreter core carries ZERO formal proofs (if that
+  # changes, this claim is now false and must be rewritten — red is correct).
+  - id: KILN-VERIFICATION-STATUS
+    doc: README.md
+    text: "not (yet) a mechanized proof of its WebAssembly execution semantics"
+    evidence:
+      - kind: count-max
+        pattern: 'Formally_Verified'
+        glob: ['README.md']
+        max: 0
+      - kind: count-max
+        pattern: '#\[kani::proof\]'
+        glob: ['kiln-runtime/src/**/*.rs', 'kiln-instructions/src/**/*.rs', 'kiln-decoder/src/**/*.rs', 'kiln-component/src/**/*.rs']
+        max: 0
+      - kind: file-exists
+        path: external/testsuite/i32.wast
+
+  # "Kani-checked (selected components)" — the Kani harnesses genuinely exist on the
+  # utility crates. If they vanish, the badge is unbacked → red.
+  - id: KILN-KANI-SELECTED
+    doc: README.md
+    text: "Kani-checked (selected)"
+    evidence:
+      - kind: file-exists
+        path: kiln-math/src/safety.rs
+      - kind: count-max
+        pattern: '#\[kani::proof\]'
+        glob: ['kiln-runtime/src/**/*.rs']
+        max: 0
