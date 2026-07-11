@@ -75,7 +75,9 @@ externals:
     prefix: gale
 
   gust:
-    git: https://github.com/pulseengine/gale-gust.git
+    # gust artifacts live in the gale repo (gale-gust is a gale checkout); distinct
+    # prefix for the OS/gust artifact set.
+    git: https://github.com/pulseengine/gale.git
     path: /Volumes/Home/git/pulseengine/gale-gust
     ref: main
     prefix: gust
