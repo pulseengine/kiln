@@ -68,6 +68,47 @@ artifacts:
       previous-id: ARCH_DEC_DEPLOY_001
       implementation: kiln-platform/src/
 
+  - id: AD-NOSTD-INTERP-001
+    type: design-decision
+    title: Hybrid embedded execution — a no_std interpreter mode alongside synth-AOT (amends RFC #46)
+    description: >
+      Kiln shall provide a no_std deployment of its WebAssembly interpreter for
+      on-board embedded execution (gale/gust), IN ADDITION TO the synth-AOT
+      native path — not instead of it. meld (build-time component lowering) and
+      synth (AOT→native ELF for the perf-critical certified hot path) are retained;
+      this adds an interpreter deployment target for code that cannot or should
+      not be AOT-compiled (late-loaded modules, migrated instances, and cert
+      contexts that prefer an interpreter's smaller TCB over a compiler's).
+    status: proposed
+    tags: [architecture, embedded, no-std, interpreter, deployment, rfc46-amendment]
+    links:
+      - type: satisfies
+        target: REQ_NOSTD_INTERP
+      - type: satisfies
+        target: REQ_FUNC_002
+    fields:
+      rationale: >
+        Peer comparison (#413): NASA spacewasm and DLR-FT interpret ON-BOARD with
+        no AOT; DLR states they chose an interpreter because a compiler defies
+        DO-178C/DO-332 design principles. Putting synth (a compiler) in the
+        embedded cert TCB is a materially harder cert story than an interpreter —
+        the incumbents avoided it deliberately. Kiln already has the ingredients
+        (capability-bounded memory + per-instruction fuel; kiln-runtime is
+        categorized no-std with a std feature and a no-op no_std stub); the no_std
+        gate is a choice. Measured std-dependence is localized and portable:
+        ~90 Mutex/RwLock/thread hits (→ kiln-sync), ~55 std:: hits (→ alloc
+        collections), only ~5 std::fs/io (→ platform callbacks). A focused port,
+        not a rewrite; target shape is DLR-FT's "in-place, almost no deps".
+        Amends RFC #46 ("there is no no_std interpreter"; embedded = synth-AOT
+        only) — requires an RFC #46 doc update + BA sign-off, and touches
+        meld/synth positioning and gale/gust (new on-board target + live
+        migration). Also reconciles the record: REQ_FUNC_002 (baremetal) and
+        REQ_FUNC_033 (kilnd-nostd) are marked implemented but the no_std
+        interpreter is not actually delivered today; this decision is the path to
+        making those claims true. Direction chosen by the maintainer 2026-07-11
+        (hybrid over stay-course / migration-only).
+      upstream-ref: https://github.com/pulseengine/kiln/issues/415
+
   - id: AD-CRATE-001
     type: design-decision
     title: Fine-grained crate organization
