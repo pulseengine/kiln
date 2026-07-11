@@ -663,3 +663,54 @@ artifacts:
       model: claude-opus-4-8
       timestamp: 2026-07-11T09:00:00Z
     release: v0.6.0
+  - id: AD-LOADER-VERIFY-001
+    type: design-decision
+    title: On-target admission — kiln's loader verifies a sigil signature before trusting kiln.resource_limits (fail-closed)
+    status: proposed
+    description: >
+      The kiln embedded loader shall VERIFY a module's sigil signature (via sigil's
+      no_std verify-core, compiled INTO the loader) BEFORE trusting the signed
+      kiln.resource_limits bounds it uses for reject-at-load — because scry's bounds
+      are computed host-side and the fixed-RAM target cannot recompute them, so it
+      must trust a signed, on-target-verified bound, never a forgeable raw claim.
+      FAIL-CLOSED contract (agreed with sigil, kiln#421 / sigil#187): the loader
+      REJECTS the module if (a) the signature is invalid, OR (b) the
+      kiln.resource_limits section is absent, OR (c) a signed bound
+      (max_memory_usage / max_call_depth / …) exceeds the provisioned RAM/stack
+      budget. This is the boot-admission gate; it composes with SR-43 (reject-at-load
+      on declared min) and SR-41/SR-44 (runtime caps). Implements the AD-WCMC-001
+      embedded trust chain.
+    tags: [security, loader, embedded, sigil, attestation, reject-at-load, cross-repo, direction]
+    links:
+      - type: satisfies
+        target: REQ_FUNC_003
+    fields:
+      rationale: >
+        Confirmed cross-repo (kiln#421): (1) the loader hook already exists —
+        extract_resource_limits_from_binary (kiln-foundation/src/execution.rs:144,
+        called at capability_engine.rs:559); wiring it to call sigil-verify-first IS
+        SR-45's kiln-side work, extended. (2) cargo-kiln embed-limits already exists
+        (cargo-kiln/src/commands/embed_limits.rs) and runs as a PRE-SIGN step so the
+        bounds land inside sigil's signed hash. (3) the existing ResourceLimitsSection
+        (v1, no_std/BoundedMap) is reused verbatim — sigil's whole-module signature
+        already covers it, no new manifest. sigil↔kiln boundary is a Rust staticlib
+        for thumbv7em (mirroring kiln-async), no C ABI. Verification is fused into
+        load_module (non-bypassable) — see AD-WCMC-001 loader-integration.
+      pipeline: >
+        meld -> cargo-kiln embed-limits (writes kiln.resource_limits) -> sigil sign
+        (embeds Ed25519 signature) -> [target] kiln loader { sigil no_std verify ->
+        trust bounds -> fit-check -> admit | reject } -> run.
+      cross-repo: >
+        sigil delivers: sigil:REQ-15 (no_std verify-core staticlib for thumbv7em,
+        v0.10.0), sigil:REQ-16 (signed reject-at-load of kiln.resource_limits,
+        v0.11.0), sigil:DD-8 (secure-boot verify profile: key-based Ed25519,
+        HW-preferred/SW-fallback), under sigil:FEAT-12. no_std crypto spike cleared
+        (ed25519-compact + ct-codecs build no_std for thumbv7em with pubkey verify).
+        Key-based only (keyless/Sigstore offline impossible). gale#164 covers HW
+        Ed25519 + trust-anchor provisioning. kiln#421 / sigil#187.
+      upstream-ref: https://github.com/pulseengine/kiln/issues/421
+    provenance:
+      created-by: ai
+      model: claude-opus-4-8
+      timestamp: 2026-07-11T11:00:00Z
+    release: v0.6.0
