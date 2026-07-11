@@ -308,10 +308,12 @@ pub struct RuntimeStats {
     pub modules_executed: u32,
     /// Components executed
     pub components_executed: u32,
-    /// Total fuel consumed
+    /// Total fuel consumed (REAL — engine budget minus remaining, SR-42)
     pub fuel_consumed: u64,
-    /// Peak memory usage
+    /// Peak guest linear-memory usage in bytes (REAL — Memory::peak_memory, SR-42)
     pub peak_memory: usize,
+    /// Current guest linear-memory usage in bytes at end of run (REAL, SR-42)
+    pub current_memory: usize,
     /// WASI functions called
     pub wasi_functions_called: u64,
     /// Host functions registered
@@ -860,6 +862,22 @@ impl KilndEngine {
                 .instantiate(module_handle)
                 .map_err(|_| Error::runtime_execution_error("Failed to instantiate module"))?;
 
+            // SR-41: enforce the configured memory cap (--memory <bytes>, default 64MB)
+            // as a REAL runtime bound on the guest's linear memory — a memory.grow past
+            // it now traps (matching wasmtime with a memory limit), instead of the old
+            // load-time module_size*2 admission estimate that let grow escape.
+            {
+                let cap_pages =
+                    (self.config.max_memory / (64 * 1024)).min(u32::MAX as usize) as u32;
+                if cap_pages > 0 {
+                    if let Ok(inst) = engine.get_instance(instance) {
+                        if let Ok(mem) = inst.memory(0) {
+                            mem.0.set_runtime_max_pages(cap_pages);
+                        }
+                    }
+                }
+            }
+
             // Execute function - try common entry points
             let function_name = self.config.function_name.as_deref().unwrap_or("_start");
             let _ = self.logger.handle_minimal_log(LogLevel::Info, "Executing function");
@@ -923,6 +941,26 @@ impl KilndEngine {
                     return Err(Error::runtime_function_not_found("Function not found"));
                 }
             }
+
+            // SR-42: record REAL runtime resource usage (not a module_size estimate),
+            // while the engine + instance are still live. Consumed fuel is the budget
+            // minus what remains; peak memory is the guest linear memory's tracked peak.
+            let fuel_remaining = engine.remaining_fuel().unwrap_or(self.config.max_fuel);
+            let fuel_used = self.config.max_fuel.saturating_sub(fuel_remaining);
+            self.stats.fuel_consumed = self.stats.fuel_consumed.saturating_add(fuel_used);
+            let peak_mem = engine
+                .get_instance(instance)
+                .ok()
+                .and_then(|inst| inst.memory(0).ok())
+                .map(|m| m.0.peak_memory())
+                .unwrap_or(0);
+            self.stats.peak_memory = self.stats.peak_memory.max(peak_mem);
+            self.stats.current_memory = engine
+                .get_instance(instance)
+                .ok()
+                .and_then(|inst| inst.memory(0).ok())
+                .map(|m| m.0.size_in_bytes())
+                .unwrap_or(0);
 
             self.stats.modules_executed += 1;
         }
@@ -1031,30 +1069,10 @@ impl KilndEngine {
         // Check if this is a component or module
         let is_component = self.detect_component_format(&module_data)?;
 
-        // Get module size for resource estimation
-        #[cfg(feature = "std")]
-        let module_size = module_data.len();
-        #[cfg(not(feature = "std"))]
-        let module_size = module_data.len();
-
-        // Estimate resource usage
-        let estimated_fuel = (module_size as u64) / 10; // Conservative estimate
-        let estimated_memory = module_size * 2; // Memory overhead estimate
-
-        // Check limits
-        if estimated_fuel > self.config.max_fuel {
-            return Err(Error::runtime_execution_error(
-                "Estimated fuel exceeds maximum limit",
-            ));
-        }
-
-        if estimated_memory > self.config.max_memory {
-            return Err(Error::new(
-                ErrorCategory::Resource,
-                codes::CAPACITY_EXCEEDED,
-                "Estimated memory exceeds maximum limit",
-            ));
-        }
+        // Resource limits are enforced for REAL, not from module_size estimates:
+        //   - fuel: engine.set_fuel(max_fuel) traps at exhaustion (execute_traditional_module).
+        //   - memory: --memory is wired to a runtime linear-memory cap enforced in
+        //     memory.grow (SR-41). Usage is measured after the run, not estimated (SR-42).
 
         // Route execution based on binary type
         if is_component {
@@ -1084,14 +1102,12 @@ impl KilndEngine {
             self.execute_traditional_module(&module_data)?;
         }
 
-        // Update statistics
+        // Update statistics. Real fuel_consumed / peak_memory / current_memory are
+        // recorded inside execute_traditional_module while the engine is live (SR-42);
+        // here we only bump the execution counters.
         if is_component {
             self.stats.components_executed += 1;
-        } else {
-            self.stats.modules_executed += 1;
         }
-        self.stats.fuel_consumed += estimated_fuel;
-        self.stats.peak_memory = self.stats.peak_memory.max(estimated_memory);
 
         let _ = self
             .logger
@@ -1525,11 +1541,13 @@ pub fn run() -> Result<()> {
             println!("  WASI functions called: {}", stats.wasi_functions_called);
             println!("  Cross-component calls: {}", stats.cross_component_calls);
 
-            // Display memory profiling if enabled
-            if let Some(profiler) = engine.memory_profiler() {
+            // Display memory profiling if enabled — REAL guest linear-memory usage
+            // sampled from the instance after the run (SR-42), not the dead profiler
+            // counters (which were never driven on the exec path and always read 0).
+            if engine.memory_profiler().is_some() {
                 println!("Memory Profiling:");
-                println!("  Peak usage: {} bytes", profiler.peak_usage);
-                println!("  Current usage: {} bytes", profiler.current_usage);
+                println!("  Peak usage: {} bytes", stats.peak_memory);
+                println!("  Current usage: {} bytes", stats.current_memory);
             }
         },
         Err(e) => {
