@@ -269,6 +269,11 @@ pub struct Memory {
     pub data:               Box<std::sync::Mutex<SafeMemoryHandler<LargeMemoryProvider>>>,
     /// Current number of pages
     pub current_pages:      core::sync::atomic::AtomicU32,
+    /// Runtime linear-memory cap in pages (0 = unlimited). Enforced in `grow`/
+    /// `grow_shared` IN ADDITION TO the module-declared `ty.limits.max`, so a host
+    /// (e.g. kilnd `--memory <bytes>`) can bound a guest below its declared max.
+    /// SR-41. Set before execution; read on every grow.
+    pub runtime_max_pages:  core::sync::atomic::AtomicU32,
     /// Optional name for debugging
     pub debug_name: Option<kiln_foundation::bounded::BoundedString<128>>,
     /// Memory metrics for tracking access
@@ -312,6 +317,7 @@ impl Clone for Memory {
             ty:                 self.ty,
             data:               new_data,
             current_pages:      AtomicU32::new(self.current_pages.load(Ordering::Relaxed)),
+            runtime_max_pages:  AtomicU32::new(self.runtime_max_pages.load(Ordering::Relaxed)),
             debug_name:         self.debug_name.clone(),
             metrics:            cloned_metrics,
             verification_level: self.verification_level,
@@ -485,6 +491,7 @@ impl Memory {
             ty,
             data: Box::new(std::sync::Mutex::new(handler)),
             current_pages: core::sync::atomic::AtomicU32::new(initial_pages),
+            runtime_max_pages: core::sync::atomic::AtomicU32::new(0),
             debug_name: None,
             metrics: MemoryMetrics::new(current_size_bytes),
             verification_level,
@@ -551,6 +558,14 @@ impl Memory {
     pub fn size_in_bytes(&self) -> usize {
         let pages = self.current_pages.load(Ordering::Relaxed);
         wasm_offset_to_usize(pages).unwrap_or(0) * self.page_size_bytes()
+    }
+
+    /// Set a runtime linear-memory cap in PAGES (0 = unlimited). Enforced in
+    /// `grow`/`grow_shared` in addition to the module-declared `ty.limits.max`,
+    /// so a host can bound a guest below its declared maximum (kilnd `--memory`,
+    /// SR-41). Set before execution.
+    pub fn set_runtime_max_pages(&self, pages: u32) {
+        self.runtime_max_pages.store(pages, Ordering::Relaxed);
     }
 
     /// A reference to the memory data as a `Vec<u8>`
@@ -675,6 +690,15 @@ impl Memory {
             }
         }
 
+        // Check against the runtime host cap (kilnd --memory, SR-41) — in addition
+        // to the module-declared max; 0 means unlimited.
+        let rt_cap = self.runtime_max_pages.load(Ordering::Relaxed);
+        if rt_cap != 0 && new_page_count > rt_cap {
+            return Err(Error::resource_limit_exceeded(
+                "Memory limit exceeded (--memory runtime cap)",
+            ));
+        }
+
         // Check against the absolute maximum for this page size (4GB total)
         if (new_page_count as u64) > self.max_pages_for_page_size() {
             return Err(Error::resource_limit_exceeded("Runtime operation error"));
@@ -729,6 +753,15 @@ impl Memory {
             if new_page_count > max {
                 return Err(Error::resource_limit_exceeded("Memory limit exceeded"));
             }
+        }
+
+        // Check against the runtime host cap (kilnd --memory, SR-41) — in addition
+        // to the module-declared max; 0 means unlimited.
+        let rt_cap = self.runtime_max_pages.load(Ordering::Relaxed);
+        if rt_cap != 0 && new_page_count > rt_cap {
+            return Err(Error::resource_limit_exceeded(
+                "Memory limit exceeded (--memory runtime cap)",
+            ));
         }
 
         // Check against the absolute maximum for this page size (4GB total)
@@ -2282,3 +2315,66 @@ impl AtomicOperations for Memory {
     }
 }
 
+
+#[cfg(all(test, feature = "std"))]
+mod sr41_cap_tests {
+    use super::*;
+    use kiln_foundation::clean_core_types::CoreMemoryType;
+    use kiln_foundation::types::Limits;
+
+    fn mem(min: u32, max: Option<u32>) -> Box<Memory> {
+        Memory::new(CoreMemoryType {
+            limits: Limits { min, max },
+            shared: false,
+            memory64: false,
+            page_size: None,
+        })
+        .unwrap()
+    }
+
+    /// SR-41 / #411: a runtime cap bounds memory.grow BELOW the module-declared
+    /// max, so kilnd --memory can sandbox a guest. 0 means unlimited.
+    // rivet: verifies SR-41
+    #[test]
+    fn runtime_max_pages_caps_grow_below_declared_max() {
+        // Declared max 10 pages; host caps at 3.
+        let m = mem(1, Some(10));
+        m.set_runtime_max_pages(3);
+        // 1 -> 3 is at the cap: allowed.
+        assert!(m.grow_shared(2).is_ok(), "grow to the cap must succeed");
+        assert_eq!(m.size(), 3);
+        // 3 -> 4 exceeds the cap: rejected, even though the declared max (10) allows it.
+        assert!(
+            m.grow_shared(1).is_err(),
+            "grow past the runtime cap must be rejected"
+        );
+        assert_eq!(m.size(), 3, "a rejected grow must not change the size");
+    }
+
+    /// SR-41: cap of 0 = unlimited (only the module-declared max applies).
+    // rivet: verifies SR-41
+    #[test]
+    fn runtime_cap_zero_is_unlimited() {
+        let m = mem(1, Some(5));
+        // no set_runtime_max_pages (stays 0) → declared max (5) is the only bound.
+        assert!(m.grow_shared(4).is_ok(), "grow to declared max must succeed with no cap");
+        assert_eq!(m.size(), 5);
+        assert!(m.grow_shared(1).is_err(), "declared max still enforced");
+    }
+
+    /// SR-42 / #412: peak_memory()/size_in_bytes() track REAL bytes across grow —
+    /// the honest data source kilnd reports (vs the old module_size*2 estimate and
+    /// the always-0 profiler).
+    // rivet: verifies SR-42
+    #[test]
+    fn peak_and_current_memory_track_real_bytes() {
+        let m = mem(1, Some(10));
+        let page = 64 * 1024;
+        assert_eq!(m.size_in_bytes(), page, "starts at 1 page");
+        assert_eq!(m.peak_memory(), page);
+        m.grow_shared(4).unwrap(); // 1 -> 5 pages
+        assert_eq!(m.size_in_bytes(), 5 * page, "current is real (5 pages)");
+        assert_eq!(m.peak_memory(), 5 * page, "peak is real (5 pages)");
+        assert!(m.peak_memory() >= m.size_in_bytes(), "peak is a high-water mark");
+    }
+}
