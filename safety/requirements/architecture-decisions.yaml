@@ -539,6 +539,23 @@ artifacts:
         memory-budget pass), synth (per-function native frame sizes for the
         embedded WCSU), sigil (attests the manifest). Registered scry in rivet
         externals for cross-linking.
+      embedded-trust-chain: >
+        scry runs HOST-side (build time) — it is NOT on the embedded path, so the
+        target cannot recompute the bounds; it must instead TRUST them, which
+        means they travel SIGNED and are VERIFIED ON-TARGET. Chain: scry computes
+        the bounds -> written into the kiln.resource_limits custom section ->
+        sigil signs the module INCLUDING that section (sigil embeds signatures in
+        the wasm and already has "verify image size before signing" precedent) ->
+        the embedded target verifies the signature OFFLINE, ON-TARGET, KEY-BASED,
+        then reject-at-loads off the SIGNATURE-VERIFIED size info (never the raw
+        unsigned claim). Two sigil ADJUSTMENTS are required and are the gap: (1) a
+        no_std sigil VERIFIER library (sigil is std-only today — grep finds no
+        no_std/#![no_std]; the verifier must compile for thumbv7em to run on
+        gale/gust), and (2) KEY-BASED offline verification only — sigil's own
+        recorded residual is "offline keyless verification impossible" (Sigstore/
+        keyless needs network), so air-gapped embedded uses embedded public keys.
+        The size/WCMC manifest must be a SIGNED field of the attestation, not an
+        unsigned custom section. Tracked as a sigil coordination issue.
       upstream-ref: https://github.com/pulseengine/kiln/issues/415
     provenance:
       created-by: ai
