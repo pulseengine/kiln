@@ -115,14 +115,15 @@ cargo test --workspace
 kiln's correctness rests on **conformance testing and bounded model checking** &mdash;
 not (yet) a mechanized proof of its WebAssembly execution semantics. We state that plainly.
 
-- **WebAssembly spec suite:** **261 / 280 official `.wast` files pass (93.2%)**; within
-  the files that load, **65,618 / 65,633 executed assertions pass (99.98%)**, across
-  2,370 modules. We lead with the file ratio on purpose: a file that fails to *parse*
-  (the `custom-descriptors` proposal) contributes zero assertions to both sides of the
-  99.98%, so only the file count reflects it &mdash; the assertion rate alone would
-  flatter exactly where it shouldn't. Known gaps: validation strictness on some
-  GC-proposal cases (a few should-be-invalid modules are currently accepted) and the
-  `custom-descriptors` parse failure. (`cargo-kiln testsuite --run-wast`.)
+- **WebAssembly spec suite:** the current pass rate is **re-derived by CI on every
+  run and shown in the badge above** (files passed / total · executed-assertion rate),
+  so the number here can't drift from the evidence. We report the **file ratio** as the
+  headline on purpose: a file that fails to *parse* (e.g. the `custom-descriptors`
+  proposal) contributes zero assertions to both sides of the assertion rate, so only
+  the file count reflects it &mdash; the assertion rate alone would flatter exactly
+  where it shouldn't. Known gaps: validation strictness on some GC-proposal cases (a few
+  should-be-invalid modules are currently accepted) and the `custom-descriptors` parse
+  failure. Reproduce locally with `cargo-kiln testsuite --run-wast`.
 - **Unit tests:** 300+ across the interpreter core.
 - **Kani (CBMC bounded model checking):** proof harnesses on *selected* safety-relevant
   components (foundation collections, arithmetic overflow, LEB128, host dispatch,
