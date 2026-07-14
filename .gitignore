@@ -61,3 +61,6 @@ MODULE.bazel.lock
 /simple.wat
 /minimal.wat
 /file_ops_component.wat
+
+# Rivet external project cache
+.rivet/repos/
