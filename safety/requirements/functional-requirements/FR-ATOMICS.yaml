@@ -1,0 +1,23 @@
+artifacts:
+- id: FR-ATOMICS
+  type: requirement
+  title: Threads proposal compliance
+  description: |
+    The interpreter shall implement the Threads proposal, including: shared memory support (shared flag in memory type), all atomic load/store operations (i32.atomic.load, i32.atomic.load8_u, i32.atomic.load16_u, i64.atomic.load, i64.atomic.load8_u, i64.atomic.load16_u, i64.atomic.load32_u, and corresponding stores), all atomic read-modify-write operations (add, sub, and, or, xor, xchg for i32 and i64 at all widths), atomic compare- exchange operations (i32.atomic.rmw.cmpxchg and variants), memory.atomic.wait32, memory.atomic.wait64, memory.atomic.notify, and atomic.fence. In single-threaded (no_std) mode, atomic operations shall execute as regular load/store/RMW operations with correct sequential semantics but without real concurrency.
+  status: proposed
+  tags:
+  - wasm-core
+  - spec-conformance
+  - threads
+  - atomics
+  traced_to:
+  - H-1
+  links:
+  - type: derives-from
+    target: REQ_LFUNC_018
+  fields:
+    implementation: kiln-runtime/src/stackless/engine.rs
+    spec-reference: WebAssembly Threads Proposal
+    verification-method: test
+    verification-description: |
+      atomic.wast passes (249 assertions); shared memory creation and validation verified; all atomic RMW operations produce correct results in single-threaded mode; memory.atomic.wait returns immediately in single-threaded mode

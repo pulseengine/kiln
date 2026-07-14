@@ -1,0 +1,18 @@
+artifacts:
+- id: REQ_GC_NULLABILITY
+  type: requirement
+  title: GC / typed-reference nullability validation
+  description: |
+    The validator shall track non-null vs nullable reference types across the full GC lattice (funcref/externref/exnref/anyref/eqref/i31/struct/array and typed function references) with correct subtyping. Deferred: no current target emits WASM GC — falcon (relay) and wohl use only numeric + linear-memory core wasm with MVP funcref tables. Required only when a WASM-GC-emitting toolchain (Kotlin/Scala/Java/OCaml→wasm-GC) becomes a target. See PR #234 research for evidence.
+  status: proposed
+  tags:
+  - validator
+  - wasm-gc
+  - reference-types
+  - deferred
+  - roadmap
+  links:
+  - type: derives-from
+    target: REQ_LFUNC_018
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/pull/234

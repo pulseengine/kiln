@@ -1,0 +1,16 @@
+artifacts:
+- id: REQ_CMP_020
+  type: requirement
+  title: Component resource lifecycle management
+  description: |
+    The component model implementation shall provide comprehensive lifecycle management for resource types, ensuring proper creation, tracking, and disposal of resources.
+  status: implemented
+  tags:
+  - component-model
+  - resources
+  links:
+  - type: derives-from
+    target: REQ_FUNC_014
+  fields:
+    implementation: kiln-component/src/components/resource_management.rs
+    note: Subsumed by STPA requirements SR-12 (no-aliasing) and SR-13 (double-drop)

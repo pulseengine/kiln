@@ -1,0 +1,12 @@
+artifacts:
+- id: REQ_FUNC_032
+  type: requirement
+  title: Debug infrastructure
+  description: |
+    The interpreter shall provide debugging capabilities including DWARF debug information parsing, WIT-aware debugging with source mapping, runtime breakpoint management, and stack trace generation.
+  status: implemented
+  tags:
+  - debugging
+  - tooling
+  fields:
+    implementation: kiln-runtime/src/debug/

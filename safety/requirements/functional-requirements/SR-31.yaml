@@ -1,0 +1,21 @@
+artifacts:
+- id: SR-31
+  type: requirement
+  title: 'Cross-executor microbench: kiln-async vs embassy on an identical yield workload'
+  status: implemented
+  description: 'kiln-async ships a criterion bench comparing its scheduler against other embedded async executors (embassy first, #368) on the same N-tasks x K-yields-to-completion workload, reporting per-poll-cycle cost. Also fixes the bit-rotted scheduler_baseline bench (Scheduler gained a 5th const generic NSTREAM). Measured 2026-07-02 (host, release): kiln-async 1.60 ns/cycle (623 Melem/s) vs embassy 4.35 ns/cycle (230 Melem/s) — ~2.7x, reflecting embassy''s waker/vtable/future-state-machine generality vs kiln-async''s fixed-shape no-alloc O(1) scheduler. Issue #368.'
+  tags:
+  - kiln-async
+  - benchmark
+  - embassy
+  - performance
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/368
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-02T17:56:22Z
+  release: v0.7.0
+  links:
+  - type: derives-from
+    target: REQ_ASYNC_BENCH

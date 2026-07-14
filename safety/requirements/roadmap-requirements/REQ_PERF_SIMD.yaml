@@ -1,0 +1,14 @@
+artifacts:
+- id: REQ_PERF_SIMD
+  type: requirement
+  title: SIMD capability cascade for host-side paths
+  description: |
+    Performance-critical host-side paths (e.g. sigil crypto, pattern matching) shall use a runtime SIMD capability cascade (NEON/AVX512/AVX2/AVX/SSE/portable) selected by detected CPU features, following the liquid-dsp pattern.
+  status: proposed
+  tags:
+  - performance
+  - simd
+  - host
+  - roadmap
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/224

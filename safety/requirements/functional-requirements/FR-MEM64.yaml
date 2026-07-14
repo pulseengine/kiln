@@ -1,0 +1,22 @@
+artifacts:
+- id: FR-MEM64
+  type: requirement
+  title: Memory64 proposal compliance
+  description: |
+    The interpreter shall implement the Memory64 proposal, including: i64 addressing for all load/store and bulk memory operations (memory.copy, memory.fill, memory.init, data.drop), u64 offsets in memarg encoding, and memory.size/memory.grow returning i64 for memory64-typed memories. The decoder shall parse the memory64 flag in memory type definitions and validate that memory indices referencing memory64 memories use i64 operands throughout.
+  status: proposed
+  tags:
+  - wasm-core
+  - spec-conformance
+  - memory64
+  traced_to:
+  - H-2
+  links:
+  - type: derives-from
+    target: REQ_LFUNC_018
+  fields:
+    implementation: kiln-runtime/src/stackless/engine.rs, kiln-decoder/src/streaming_decoder.rs
+    spec-reference: WebAssembly Memory64 Proposal
+    verification-method: test
+    verification-description: |
+      All memory64 WAST test files pass (13 files, 5902 assertions); memory64 load/store with i64 addresses verified; memory.size and memory.grow return i64 for memory64 memories; u64 memarg offsets decoded correctly

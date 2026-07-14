@@ -1,0 +1,14 @@
+artifacts:
+- id: REQ_CFS_SB
+  type: requirement
+  title: cFS Software Bus as host routing layer
+  description: |
+    Kiln shall provide a publish/subscribe message-routing host layer modeled on NASA cFS Software Bus (route by MsgId to subscriber pipes) for inter- component dispatch of WASM components.
+  status: proposed
+  tags:
+  - cfs
+  - host-extension
+  - messaging
+  - roadmap
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/226

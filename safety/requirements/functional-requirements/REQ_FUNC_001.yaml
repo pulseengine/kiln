@@ -1,0 +1,12 @@
+artifacts:
+- id: REQ_FUNC_001
+  type: requirement
+  title: Resumable interpreter
+  description: |
+    The interpreter shall be resumable, allowing operation with fuel or other bounded run-time mechanisms that require the interpreter to be halted and later resumed as if it was not halted.
+  status: implemented
+  tags:
+  - runtime
+  - core
+  fields:
+    implementation: kiln-runtime/src/stackless/engine.rs

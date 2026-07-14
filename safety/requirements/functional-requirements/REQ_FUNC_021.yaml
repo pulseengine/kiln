@@ -1,0 +1,15 @@
+artifacts:
+- id: REQ_FUNC_021
+  type: requirement
+  title: Component Model binary format
+  description: |
+    The interpreter shall strictly implement the WebAssembly Component Model binary format including magic bytes, component sections, type encoding, import/export handling, core module embedding, canonical ABI encoding/decoding, and LEB128 encoding.
+  status: implemented
+  tags:
+  - component-model
+  - decoder
+  links:
+  - type: derives-from
+    target: REQ_FUNC_014
+  fields:
+    implementation: kiln-decoder/src/streaming_decoder.rs, kiln-component/src/

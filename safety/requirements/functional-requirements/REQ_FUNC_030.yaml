@@ -1,0 +1,12 @@
+artifacts:
+- id: REQ_FUNC_030
+  type: requirement
+  title: Async/await runtime support
+  description: |
+    The interpreter shall provide async/await runtime support for the Component Model, including async canonical lifting/lowering, async execution engine with future-based task management, and context preservation across async boundaries.
+  status: implemented
+  tags:
+  - runtime
+  - async
+  fields:
+    implementation: kiln-runtime/src/async_runtime.rs

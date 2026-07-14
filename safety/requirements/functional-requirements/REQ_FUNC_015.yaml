@@ -1,0 +1,12 @@
+artifacts:
+- id: REQ_FUNC_015
+  type: requirement
+  title: WASI logging support
+  description: |
+    The interpreter shall implement WASI logging with support for all defined log levels (Error, Warn, Info, Debug, Trace), context-based logging, stderr integration, and thread-safe logging operations.
+  status: implemented
+  tags:
+  - wasi
+  - logging
+  fields:
+    implementation: kiln-wasi/src/dispatcher.rs

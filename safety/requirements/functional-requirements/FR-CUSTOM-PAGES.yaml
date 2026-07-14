@@ -1,0 +1,22 @@
+artifacts:
+- id: FR-CUSTOM-PAGES
+  type: requirement
+  title: Custom page sizes compliance
+  description: |
+    The interpreter shall implement the Custom Page Sizes proposal, including: page sizes of 1 byte and 65536 bytes (the standard Wasm page size), the page size encoded in memory type definitions, limits validation respecting the declared page size, memory.size returning the size in units of the declared page size, and memory.grow growing by the declared page size units. The decoder shall parse the custom-page-size annotation in memory types and validate that only allowed page sizes (1 and 65536) are used.
+  status: proposed
+  tags:
+  - wasm-core
+  - spec-conformance
+  - custom-page-sizes
+  traced_to:
+  - H-2
+  links:
+  - type: derives-from
+    target: REQ_LFUNC_018
+  fields:
+    implementation: kiln-runtime/src/stackless/engine.rs, kiln-decoder/src/streaming_decoder.rs
+    spec-reference: WebAssembly Custom Page Sizes Proposal
+    verification-method: test
+    verification-description: |
+      custom-page-sizes.wast passes; page size 1 and 65536 both validated; memory.size and memory.grow use correct page size units; invalid page sizes rejected by decoder

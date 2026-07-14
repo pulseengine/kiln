@@ -1,0 +1,18 @@
+artifacts:
+- id: AD-CRATE-001
+  type: design-decision
+  title: Fine-grained crate organization
+  description: |
+    Implementation organized into fine-grained crates (kiln-error, kiln-foundation, kiln-format, kiln-decoder, kiln-runtime, kiln-instructions, kiln-component, kiln-platform, etc.) to enable selective feature inclusion and minimize dependency footprint.
+  status: implemented
+  tags:
+  - architecture
+  - organization
+  links:
+  - type: satisfies
+    target: REQ_LFUNC_006
+  fields:
+    rationale: |
+      Fine-grained crates enable selective feature compilation (e.g., exclude Component Model for embedded), clear dependency boundaries for safety analysis, and independent testing/verification.
+    previous-id: ARCH_DEC_CRATE_001
+    implementation: Cargo.toml workspace members

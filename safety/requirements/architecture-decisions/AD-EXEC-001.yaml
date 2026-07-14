@@ -1,0 +1,23 @@
+artifacts:
+- id: AD-EXEC-001
+  type: design-decision
+  title: Stackless, resumable interpreter execution model
+  description: |
+    The interpreter executes WebAssembly with an explicit operand/control stack held in a data structure rather than recursing on the host call stack. Execution is driven by a step loop over a program counter, so it can be suspended and resumed at instruction boundaries. This is what makes fuel-based bounded execution possible: the engine decrements fuel per step and yields when exhausted, without unwinding native frames.
+  status: implemented
+  tags:
+  - architecture
+  - runtime
+  - execution-model
+  - bounded-execution
+  links:
+  - type: satisfies
+    target: REQ_FUNC_001
+  - type: satisfies
+    target: REQ_LFUNC_005
+  fields:
+    rationale: |
+      A stackless design bounds host stack usage (no recursion on guest call depth), enables deterministic suspend/resume for fuel metering and cooperative scheduling, and keeps worst-case host stack depth independent of the guest program — all prerequisites for the embedded / no_std execution path.
+    alternatives-considered: |
+      (1) Recursive tree-walking on the host stack — rejected: guest call depth would drive host stack usage (unbounded, overflow risk) and could not be suspended for fuel/scheduling. (2) Native-thread-per-task with stack switching — rejected for no_std / no-alloc targets.
+    implementation: kiln-runtime/src/stackless/engine.rs

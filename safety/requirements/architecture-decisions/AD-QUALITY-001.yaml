@@ -1,0 +1,24 @@
+artifacts:
+- id: AD-QUALITY-001
+  type: design-decision
+  title: Defense-in-depth verification strategy (formal + dynamic)
+  description: |
+    Correctness is established by combining independent verification techniques rather than relying on any single one: formal proof of bounded-collection invariants (Verus, CI-gating), bounded model checking of critical paths (Kani), fuzzing of parsers and bounded structures, WAST conformance against the official WebAssembly test suite, and Miri for UB detection. Each technique has different blind spots; combining them shrinks the residual faster than deepening any one.
+  status: implemented
+  tags:
+  - verification
+  - defense-in-depth
+  - formal-methods
+  - fuzzing
+  - testing
+  links:
+  - type: satisfies
+    target: REQ_VERIFY_010
+  - type: satisfies
+    target: REQ_QA_010
+  fields:
+    rationale: |
+      Per the PulseEngine defense-in-depth methodology, in safety-relevant domains a portfolio of techniques (proofs + model checkers + fuzzing + conformance + sanitizers) covers more failure modes than tightening a single technique. Verus is the only CI-gating formal method today; Kani is weekly/manual (#237); fuzzing and WAST run in CI.
+    alternatives-considered: |
+      (1) Single formal method end-to-end — rejected: no tractable proof of the whole interpreter exists, and a single technique leaves correlated blind spots. (2) Tests-only — rejected: gives no invariant guarantees for the embedded cert scope.
+    implementation: 'Verus: kiln-foundation/src/verus_proofs/; Kani harnesses; fuzz/; kiln-build-core/src/wast_execution.rs'

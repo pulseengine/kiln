@@ -1,0 +1,24 @@
+artifacts:
+- id: FR-RFC46-STREAM
+  type: requirement
+  title: RFC
+  description: |
+    The runtime shall implement the RFC #46 stream and future intrinsics (stream_<type>_new, stream_<type>_read, stream_<type>_write, and corresponding future variants) with bounds-checked buffer access. For every stream_read(stream, memory, buffer, length) and stream_write(stream, memory, buffer, length) call, the runtime shall validate that the range [buffer, buffer + length) falls entirely within the bounds of the specified linear memory using checked arithmetic (detecting u32/u64 overflow). If the range is invalid, the intrinsic shall trap before any data is transferred. stream_new shall return a (writer, reader) pair as a packed i64 value per the RFC encoding. Read/write results shall use the COPY_RESULT constants: BLOCKED(0xFFFFFFFF), COMPLETED(0), DROPPED(1), CANCELLED(2).
+  status: proposed
+  tags:
+  - rfc46
+  - stream-intrinsics
+  - component-model
+  traced_to:
+  - H-13
+  - H-13.2
+  - H-2
+  links:
+  - type: derives-from
+    target: REQ_FUNC_014
+  fields:
+    implementation: kiln-builtins/src/intrinsics/
+    spec-reference: 'BA RFC #46 — Stream/Future Construction intrinsics'
+    verification-method: test
+    verification-description: |
+      stream_new returns valid writer/reader pair; stream_read with valid buffer succeeds; stream_read with out-of-bounds buffer traps; stream_write with valid buffer succeeds; buffer + length overflow detected and trapped; COPY_RESULT constants correctly returned

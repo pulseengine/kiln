@@ -1,0 +1,15 @@
+artifacts:
+- id: REQ_P3_CALLBACK
+  type: requirement
+  title: P3 callback lifting mode for single-stack embedded execution
+  description: |
+    The runtime shall support the P3 callback async-lifting mode (host calls an exported callback per event, no persistent per-call stack) so async components can run single-stack on Gale/embedded targets, in addition to the stackful mode.
+  status: proposed
+  tags:
+  - component-model
+  - p3
+  - async
+  - embedded
+  - roadmap
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/232

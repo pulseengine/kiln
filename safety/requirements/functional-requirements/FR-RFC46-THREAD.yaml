@@ -1,0 +1,32 @@
+artifacts:
+- id: FR-RFC46-THREAD
+  type: requirement
+  title: RFC
+  description: |
+    The runtime shall implement the RFC #46 thread management intrinsics (thread_new, thread_switch_to, thread_index, context0_get, context0_set) with full multi-threaded support backed by gale RTOS tasks (on gale targets) or std async tasks (on std targets).
+    thread_new(context, table, func) shall create a new logical thread backed by a gale RTOS task (via gale_task_create) or a std async task. The context value shall be stored in the new thread's task-local storage (accessible via context0_get). The table and func arguments shall be validated against the module's table and function sections before task creation. thread_new shall return a unique thread_id scoped to the calling component instance. Thread creation shall be bounded by a per-component thread budget; when the budget is exhausted, thread_new shall trap with a resource exhaustion error. On gale, the RTOS task stack shall be allocated from the component's pre-assigned memory pool.
+    thread_switch_to(thread_id) shall save the current thread's full wasm execution state (program counter, value stack, call stack, fuel counter) and yield to gale (via gale_task_yield_to) or to the std async runtime to schedule the target thread. thread_switch_to shall validate that the target thread_id belongs to the same component instance as the caller; cross-component switching shall trap immediately (sandbox enforcement). Switching to a completed or cancelled thread shall trap.
+    thread_index() shall return the current logical thread's ID, read from gale task-local storage or std thread_local.
+    context0_get/context0_set shall operate on per-thread, per-component state stored in gale TLS or std thread_local. One component's context shall not be visible to another component.
+    Completed threads shall be reaped: the backing gale task shall be deallocated (gale_task_delete) and the thread table slot shall be recycled.
+  status: proposed
+  tags:
+  - rfc46
+  - thread-intrinsics
+  - component-model
+  - gale-integration
+  traced_to:
+  - H-13
+  - H-13.1
+  - H-13.4
+  - H-14
+  - H-15
+  links:
+  - type: derives-from
+    target: REQ_FUNC_014
+  fields:
+    implementation: kiln-runtime/src/async_runtime.rs, kiln-builtins/src/intrinsics/
+    spec-reference: 'BA RFC #46 — Thread Management intrinsics'
+    verification-method: test
+    verification-description: |
+      thread_new creates gale task and returns valid thread_id; thread_new traps when thread budget exhausted; thread_switch_to saves and restores wasm state correctly; thread_switch_to to cross-component thread traps; thread_switch_to to completed thread traps; thread_index returns correct ID per thread; context0_get/set round-trip values correctly per thread; completed threads are reaped and task slots recycled; gale_task_create failure handled gracefully

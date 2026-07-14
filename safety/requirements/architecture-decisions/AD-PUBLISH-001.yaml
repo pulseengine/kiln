@@ -1,0 +1,22 @@
+artifacts:
+- id: AD-PUBLISH-001
+  type: design-decision
+  title: Publish to crates.io under the kilnvm-* namespace, synth-modeled workflow
+  description: |
+    The workspace publishes to crates.io under the kilnvm-* prefix (kilnvm-runtime, kilnvm-foundation, …; daemon kilnvmd; cargo-kiln CLI unchanged). The bare kiln-* namespace is contested by unrelated owners (kiln-runtime by zenvanexus, plus kiln-core/cli/cache/exec and the kiln-sv family), so a dedicated, fully-available prefix is used for published package names only — git repo, tags, directory names, and the CLI stay "kiln". Publishing follows synth's publish-to-crates-io.yml: a v* tag triggers it in parallel with release.yml, auth via the org-wide CRATES_IO_TOKEN, a dependency-order publish walker with index-propagation retry, and a tag-matches-workspace-version preflight.
+  status: proposed
+  tags:
+  - release
+  - distribution
+  - crates-io
+  - naming
+  - tooling
+  links:
+  - type: satisfies
+    target: REQ_CRATES_PUBLISH
+  fields:
+    rationale: |
+      Consistency over a one-off rename: prefixing every published crate (not just the conflicting kiln-runtime) keeps the namespace coherent and squatter-proof. kilnvm ("kiln VM") is compact, brandable, avoids the kiln-wasm-wasi double-noun, and kilnvm itself is free as an umbrella crate. Token auth (not OIDC trusted publishing) mirrors synth/sigil and reuses the existing org secret.
+    alternatives: |
+      (1) kiln-wasm-* — descriptive but yields the awkward kiln-wasm-wasi; runner-up. (2) Rename only kiln-runtime — rejected, leaves the namespace inconsistent and still exposed to the other squatters. (3) Contact owners to transfer kiln-* names — rejected as slow/uncertain. (4) OIDC trusted publishing — deferred (per-crate registration overhead); revisit later.
+    source-ref: https://github.com/pulseengine/kiln/issues/310

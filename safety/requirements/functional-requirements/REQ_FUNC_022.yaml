@@ -1,0 +1,13 @@
+artifacts:
+- id: REQ_FUNC_022
+  type: requirement
+  title: WAST test suite compatibility
+  description: |
+    The interpreter shall be testable against the official WebAssembly specification (WAST) test suite to ensure conformance and correctness.
+  status: implemented
+  tags:
+  - testing
+  - spec-conformance
+  fields:
+    implementation: kiln-build-core/src/wast_execution.rs
+    note: Test runner exists; ~1,600 assertion failures across Issues 146-149

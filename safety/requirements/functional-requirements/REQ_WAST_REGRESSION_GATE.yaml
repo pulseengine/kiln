@@ -1,0 +1,23 @@
+artifacts:
+- id: REQ_WAST_REGRESSION_GATE
+  type: requirement
+  title: WAST conformance is gated against regression in CI
+  description: |
+    A WAST conformance regression (any spec test file that previously passed beginning to fail) shall be caught mechanically in CI. The gate compares the runner's per-file failing set against a checked-in baseline (safety/wast-conformance-baseline.txt) and fails the build on any NEW failing file; a file that newly passes is surfaced for the baseline to be tightened. The gate is on the failing-FILE set (reproducible) rather than the assertion count, and is only meaningful because external/testsuite is pinned (gitlink == checkout; kiln#360) so the same suite runs everywhere.
+  status: verified
+  release: v0.3.5
+  tags:
+  - spec-conformance
+  - ci
+  - regression-gate
+  - verification
+  - release-v0.3.5
+  links:
+  - type: derives-from
+    target: REQ_FUNC_022
+  fields:
+    implementation: .github/workflows/wast-conformance.yml + scripts/wast-conformance-gate.sh + safety/wast-conformance-baseline.txt
+    verification: |
+      The gate script (scripts/wast-conformance-gate.sh) is self-checking: `comm`-diffs the report's `❌ Failed` rows against the baseline, exits 1 on a file failing-not-in-baseline. Validated by construction against the @193e551 baseline (no regressions) and a synthetic injected failure (exits 1). Path-scoped to PRs touching runtime/decoder/validator + weekly + workflow_dispatch.
+    note: |
+      Unblocked by kiln#360 (pinned, reproducible suite). Gates on the file set because the assertion count, while deterministic same-commit, is brittle to express as a threshold; the file set is the stable signal.

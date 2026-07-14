@@ -1,0 +1,23 @@
+artifacts:
+- id: SM-MEM-003
+  type: design-decision
+  title: Cross-repo witness --harness JSON contract is a traced artifact, not prose
+  status: proposed
+  description: 'The witness-harness-v1 JSON contract shared between kiln (producer) and witness (consumer) shall be a traced rivet artifact (schema + version) linked from both sides, not coordinated as prose in issue comments. Issue #347.'
+  tags:
+  - witness
+  - contract
+  - traceability
+  - cross-repo
+  fields:
+    rationale: 'A prose contract has no mechanical trace: a schema change on either side silently fails to re-verify the other. A traced schema artifact linked from both repos makes a contract change re-open the dependent verification.'
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-02T07:40:14Z
+  release: v0.5.0
+  links:
+  - type: satisfies
+    target: REQ_WITNESS_COV
+  - type: derives-from
+    target: REQ_WITNESS_COV

@@ -1,0 +1,28 @@
+artifacts:
+- id: AD-COMPONENT-HOST-001
+  type: design-decision
+  title: Two component paths — direct hosting (std/QM) AND meld-fuse-to-core (embedded/cert)
+  description: |
+    Kiln supports BOTH ways of running a Component-Model component, scoped by product-line variant (interpreter-QM vs embedded-cert): (1) DIRECT HOSTING in the std reference host (kilnd): load an external wac-composed component, instantiate, invoke a named export, and lift scalar results through a runtime canonical ABI. This is the QM/reference scope (SM-PERF-001 — kilnd is the correctness-reference runtime) and is what gale's kiln-component-host path needs (gale#63 / REQ_COMPONENT_HOST). (2) MELD-FUSE-TO-CORE: Meld lowers components to core modules at build time and kiln runs the resulting core (the embedded-cert path; the jess pipeline; the witness coverage path REQ_WITNESS_COV). This refines RFC #46: its "Component Model is not a runtime feature / no runtime canonical ABI" stance is scoped to the EMBEDDED-CERT path, NOT a global ban — the std QM host may host components directly. The two coexist: kilnd already attempts execute_component (main.rs:996) and the RFC #46 "meld fuse first" message becomes a hint/fallback rather than a wall. The synchronous component machinery is retained (kiln-component, ~31k LOC); only the async simulation surface was removed (SM-ASYNC-002, unchanged — async component lift is a separate concern, still out of runtime scope).
+  status: approved
+  tags:
+  - component-model
+  - rfc46
+  - architecture-boundary
+  - variant
+  - qm
+  - embedded-cert
+  - host
+  links:
+  - type: satisfies
+    target: REQ_COMPONENT_HOST
+  - type: satisfies
+    target: REQ_FUNC_002
+  fields:
+    rationale: |
+      User decision (2026-06-20): "I want both component and meld use case." A single path is too narrow — the embedded-cert target needs the verifiable meld-fuse-to-core path (no runtime component model), while the std reference host genuinely benefits from hosting composed components directly (gale#63 runs the same artifact on kiln that runs on wasmtime, for differential validation). Scoping by variant keeps the cert path unchanged (RFC #46 holds for embedded-cert) while unlocking the QM host. The code already supports it ~80%; the only real gap is runtime canon.lift.
+    alternatives-considered: |
+      (1) Meld-fuse-only (RFC #46 verbatim) — rejected: forces every std consumer through a build step to run a component kiln can already instantiate, and blocks gale#63's direct-on-kiln validation. (2) Direct-hosting-only — rejected: the embedded-cert path cannot carry a runtime canonical ABI / dynamic linking; meld-fuse stays mandatory there.
+    relates-to: 'RFC #46 (docs/architecture/rfc46-toolchain-architecture.md — scoped, not contradicted); SM-ASYNC-002 (async component surface stays removed); SM-PERF-001 (kilnd = QM reference runtime); AD-COMP-001.'
+    implementation: 'Direct half: REQ_COMPONENT_HOST / #344 (--invoke flag + canon.lift in kiln-component/src/canonical_executor.rs). Meld half: existing (Meld lowers; kiln runs cores).'
+    upstream-ref: https://github.com/pulseengine/kiln/issues/344

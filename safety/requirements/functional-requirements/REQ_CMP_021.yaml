@@ -1,0 +1,19 @@
+artifacts:
+- id: REQ_CMP_021
+  type: requirement
+  title: Graceful failure on component type construction
+  description: |
+    Component instantiation and export resolution shall never panic on a malformed, empty, or zero-sized component type. When a component type cannot be constructed (e.g. a unit type whose item serialized size is zero), the runtime shall return a graceful Result error that propagates to the kilnd CLI, rather than aborting the process. This preserves a consistent user experience: kilnd either executes the requested export or reports an actionable error.
+  status: implemented
+  tags:
+  - component-model
+  - robustness
+  - error-handling
+  links:
+  - type: derives-from
+    target: REQ_FUNC_014
+  fields:
+    implementation: kiln-component/src/components/component_instantiation.rs
+    issue: https://github.com/pulseengine/kiln/issues/269
+    note: |
+      Panic site (.expect on ComponentType::unit) replaced with map_err/? propagation. Root cause (zero serialized size for a component type) and whether direct component instantiation should be supported vs. redirected to meld per RFC #46 are tracked in issue #269.

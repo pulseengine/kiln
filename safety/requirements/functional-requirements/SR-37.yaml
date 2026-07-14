@@ -1,0 +1,23 @@
+artifacts:
+- id: SR-37
+  type: requirement
+  title: Component wasi:filesystem/preopens::get-directories returns a guest-usable preopen list (cabi_realloc-backed)
+  status: verified
+  description: 'A WASI Preview2 component run via kilnd --wasi --component --wasi-fs <dir> must be able to read/list/open files under the preopen, matching wasmtime --dir. Measured (v0.4.0, single wasm32-wasip2 component, nested_component_instances.len()=0 so the InterComponentHandler override does NOT fire; the queried dispatcher''s self.preopens.len()=1 — the preopen IS present): the guest receives get-directories but rejects the preopen BEFORE ever calling open-at (trace: get-directories → straight to stderr write, no open-at/stat-at) → every op returns noent (os error 44). Root cause: dispatch_core get-directories (dispatcher.rs:2337-2358) writes the list<tuple<descriptor,string>> elements into retptr+8 and path strings into retptr+20 — but the canonical-ABI return area for `func() -> list<..>` is only 8 bytes (ptr,len). It scribbles into guest memory the guest never allocated and hands back a list backed by unowned memory, so preview2 libc registers no usable preopen. The working get-arguments path (dispatcher.rs:1209+) proves the correct pattern: back the list return with cabi_realloc''d guest memory (args_alloc, pre-allocated via pre_allocate_wasi_args). Fix: mirror it — pre_allocate_wasi_preopens allocates a N*12 list buffer (align 4) + N separate path-string buffers via cabi_realloc, stored as preopens_alloc; get-directories writes (fd, str_ptr, str_len) entries there. Differential oracle: wasmtime run --dir .::. reads the same dir (READ:CANARY, DIR:[inside.txt]). Still-open remainder of SR-33/#392. Issue #405.'
+  tags:
+  - kilnd
+  - wasi
+  - filesystem
+  - component
+  - canonical-abi
+  - bug
+  links:
+  - type: derives-from
+    target: REQ_FUNC_035
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/405
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-09T07:00:00Z
+  release: v0.4.1

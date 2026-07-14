@@ -1,0 +1,18 @@
+artifacts:
+- id: SR-29
+  type: requirement
+  title: Component multi-core instantiation links cross-core user imports (sibling-module function/memory)
+  status: proposed
+  description: 'When a Component-Model artifact decomposes into multiple core modules, an import in one core module satisfied by an export of a sibling core module (cross-core function/memory) shall be linked during instantiation. Today only host imports and same-module refs resolve, so meld-fused multi-core components fail to link. Extends #364/#374. Issue #375.'
+  tags:
+  - component-model
+  - instantiation
+  - multicore
+  - linking
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/375
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-02T07:40:03Z
+  release: v0.5.0

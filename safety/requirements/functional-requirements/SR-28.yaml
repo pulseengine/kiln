@@ -1,0 +1,17 @@
+artifacts:
+- id: SR-28
+  type: requirement
+  title: main branch enforces the CI gate as required status checks
+  status: verified
+  description: 'The main branch shall enforce required status checks (via ruleset or branch protection) so a PR cannot merge while checks are red, queued, or cancelled. Today required_status_checks.contexts is empty and no ruleset requires any context — CI is advisory only. Add the gate contexts (build, Core Tests/Analysis/Coverage, CI Checks & Docs, Safety Analysis with Clippy, SCORE-Inspired Safety Verification, Security Audit matrix). Issue #378.'
+  tags:
+  - ci
+  - release
+  - branch-protection
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/378
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-02T07:40:02Z
+  release: v0.3.6

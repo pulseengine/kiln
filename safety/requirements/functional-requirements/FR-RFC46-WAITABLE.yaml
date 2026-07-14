@@ -1,0 +1,33 @@
+artifacts:
+- id: FR-RFC46-WAITABLE
+  type: requirement
+  title: RFC
+  description: |
+    The runtime shall implement the RFC #46 waitable set intrinsics (waitable_set_new, waitable_join, waitable_set_wait, waitable_set_poll) with full gale event group integration (on gale targets) or std async polling (on std targets).
+    waitable_set_new() shall allocate a new empty waitable set backed by a gale event group (gale_event_group_create) or a std futures aggregator. The set shall have a configurable maximum capacity for joined waitables. Waitable set allocation shall be bounded by the component's waitable set budget.
+    waitable_join(waitable, set) shall register a waitable (stream reader, future reader, or subtask handle) with the set and return a unique join_id. The join_id is used to correlate events from waitable_set_wait/poll. A waitable can only be joined to one set at a time; joining to a second set shall trap. The waitable handle shall be validated for ownership (must belong to the same component instance).
+    waitable_set_wait(set) shall yield the current thread to gale (via gale_event_group_wait) or to the std async runtime, suspending execution until any waitable in the set is ready. When woken, the executor inspects readiness and returns (event_type, join_id). waitable_set_wait on an empty set (no joined waitables) shall trap immediately in all modes. On gale, the event group wait has a configurable timeout integrated with the RTOS watchdog.
+    waitable_set_poll(set) shall perform a non-blocking check of all waitables and return (EVENT_NONE, 0) if none are ready. Polling an empty set shall return (EVENT_NONE, 0) (not trap). Poll must complete in bounded time O(n) where n is the number of joined waitables.
+    Event codes shall use the defined constants: EVENT_NONE(0), EVENT_SUBTASK(1), EVENT_STREAM_READ(2), EVENT_STREAM_WRITE(3), EVENT_FUTURE_READ(4), EVENT_FUTURE_WRITE(5), EVENT_CANCELLED(6).
+    Feedback loops: gale signals the executor (via event group bits) when a waitable becomes ready. The executor signals gale (via gale_task_yield_to or gale_event_group_set) when a waitable's state changes (e.g., stream data written). Stream-to-executor notification occurs when the ring buffer state changes (data available or space available).
+  status: proposed
+  tags:
+  - rfc46
+  - waitable-intrinsics
+  - component-model
+  - gale-integration
+  traced_to:
+  - H-13
+  - H-13.4
+  - H-13.5
+  - H-14
+  - H-18
+  links:
+  - type: derives-from
+    target: REQ_FUNC_014
+  fields:
+    implementation: kiln-runtime/src/async_runtime.rs, kiln-builtins/src/intrinsics/
+    spec-reference: 'BA RFC #46 — Waitable Set Operations intrinsics'
+    verification-method: test
+    verification-description: |
+      waitable_set_new returns valid set id backed by gale event group; waitable_join adds waitable to set and returns unique join_id; waitable_join to second set traps; waitable_set_poll returns EVENT_NONE when no events ready; waitable_set_poll on empty set returns EVENT_NONE; waitable_set_wait on empty set traps; waitable_set_wait suspends thread and resumes on event; waitable_set_wait returns correct (event_type, join_id) pair; event codes match defined constants; gale event group correctly aggregates readiness from streams, futures, and subtasks; watchdog timeout prevents permanent blocking on gale

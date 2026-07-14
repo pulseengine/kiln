@@ -1,0 +1,12 @@
+artifacts:
+- id: REQ_VERIFY_010
+  type: requirement
+  title: Formal verification support
+  description: |
+    The interpreter shall include support for formal verification through Kani proof harness integration, model checking annotations, invariant specifications, and bounded verification for critical paths.
+  status: implemented
+  tags:
+  - verification
+  - formal-methods
+  fields:
+    implementation: Kani proofs in kiln-foundation, kiln-runtime

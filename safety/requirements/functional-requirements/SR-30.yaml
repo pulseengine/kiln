@@ -1,0 +1,19 @@
+artifacts:
+- id: SR-30
+  type: requirement
+  title: wasi:cli/run export resolution honors the instance-import offset in the component-instance index space
+  status: verified
+  description: 'resolve_command_entry shall resolve a wasi:cli/run instance export''s backing instance by walking the component-instance index space (0..K-1 imported instances, K.. defined instances), offsetting export.idx by the instance-import count K before indexing parsed.instances — and return None (legacy path) if the run instance is an imported instance (export.idx < K). Today it uses export.idx directly, so a meld-fused component with instance-import stubs (K>0) fails with E5DC2 out-of-bounds. Differential oracle: wasmtime 41.0.0 runs the same fused.wasm. Must keep #364''s K=0 fixture green. Issue #382 (split from #375).'
+  tags:
+  - component-model
+  - instantiation
+  - wasi-cli-run
+  - index-space
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/382
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-02T10:51:36Z
+  release: v0.4.0

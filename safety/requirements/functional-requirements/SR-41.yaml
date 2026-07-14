@@ -1,0 +1,19 @@
+artifacts:
+- id: SR-41
+  type: requirement
+  title: kilnd --memory <bytes> enforces a real runtime linear-memory cap (memory.grow is bounded)
+  status: verified
+  description: 'kilnd --memory <bytes> must actually bound a guest''s runtime linear memory so a guest cannot memory.grow past the configured cap — symmetric with --fuel (which IS enforced via engine.set_fuel at kilnd/src/lib.rs:797). Today --memory only gates a static admission estimate (module_size*2) at load (lib.rs:1042/1051) and is never wired to the engine, so memory.grow escapes the cap and the run exits 0. Measured on v0.4.1 (7a039320), differential vs wasmtime 42. Root cause (measured): the ONLY runtime bound on grow is the module''s OWN declared (memory min max) max — kiln-runtime Memory::grow_shared (memory.rs:752) rejects growth past self.ty.limits.max (set from CoreMemoryType at memory.rs:445); there is NO per-instance/per-store/engine limiter and no hook for --memory (grep for limiter APIs is empty; commented-out MAX_MEMORY_BYTES at memory.rs:165). Guest linear memory is a plain StdProvider Vec (memory.rs:473), NOT under the safe_managed_alloc!/CrateId budget, so that budget cannot be the enforcement point. Fix: inject a byte cap (bytes->pages, /65536) at instantiation that clamps the effective max used by grow/grow_shared to min(module-declared-max, --memory-cap) and rejects growth past it (fail-loud trap, matching wasmtime). Differential oracle: sz.wat grows 2000 pages; wasmtime with a limit traps, kiln must too. Issue #411.'
+  tags:
+  - kilnd
+  - memory
+  - resource-limit
+  - sandbox
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/411
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-11T00:00:00Z
+  release: v0.4.2

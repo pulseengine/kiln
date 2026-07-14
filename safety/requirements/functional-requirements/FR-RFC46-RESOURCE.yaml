@@ -1,0 +1,26 @@
+artifacts:
+- id: FR-RFC46-RESOURCE
+  type: requirement
+  title: RFC
+  description: |
+    The runtime shall implement the RFC #46 resource management intrinsics (__wasm_import_<iface>_thing_new, thing_rep, thing_drop) with handle validation and double-free prevention. thing_new shall allocate a handle from the resource table with a generation counter and return a unique handle value. thing_rep shall validate that the handle is live (not dropped) and that the generation matches before returning the representation value. thing_drop shall validate the handle, deallocate the resource, increment the slot's generation counter, and mark the slot as free. Calling thing_drop on an already-dropped handle shall trap immediately (double-free prevention). Calling thing_rep on a dropped handle shall trap. Handle values shall encode both slot index and generation to detect stale references.
+  status: proposed
+  tags:
+  - rfc46
+  - resource-intrinsics
+  - component-model
+  traced_to:
+  - H-13
+  - H-13.3
+  - H-6
+  links:
+  - type: derives-from
+    target: REQ_FUNC_014
+  - type: derives-from
+    target: REQ_CMP_020
+  fields:
+    implementation: kiln-builtins/src/intrinsics/, kiln-component/src/components/resource_management.rs
+    spec-reference: 'BA RFC #46 — Resource Management intrinsics'
+    verification-method: test
+    verification-description: |
+      thing_new returns unique handle; thing_rep returns correct representation; thing_drop frees resource; double thing_drop traps; thing_rep on dropped handle traps; generation counter prevents use-after-free

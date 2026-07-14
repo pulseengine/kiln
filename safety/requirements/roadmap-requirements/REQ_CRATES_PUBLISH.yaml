@@ -1,0 +1,21 @@
+artifacts:
+- id: REQ_CRATES_PUBLISH
+  type: requirement
+  title: Publish the workspace to crates.io (kilnvm-* namespace)
+  description: |
+    The kiln workspace shall be publishable to crates.io so downstream users can depend on the runtime/scheduler libraries by version, not just consume the signed GitHub release artifacts. Published package names use the kilnvm-* prefix (the bare kiln-* namespace is contested by unrelated owners); the publish pipeline is modeled on synth's publish-to-crates-io.yml (v* tag trigger parallel to release.yml, org CRATES_IO_TOKEN, dependency-order walker with index-propagation retry, tag-matches-version preflight).
+  status: proposed
+  release: v0.5.0
+  tags:
+  - release
+  - distribution
+  - crates-io
+  - roadmap
+  - release-v0.5.0
+  links:
+  - type: derives-from
+    target: REQ_FUNC_003
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/310
+    note: |
+      Next-release item — NOT v0.3.2 (which ships as a GitHub signed release only). Naming + workflow decision captured in AD-PUBLISH-001. Verified 2026-06-14: 20/21 kiln-* names free but kiln-runtime taken (zenvanexus); all kilnvm-* target names available.

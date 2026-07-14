@@ -1,0 +1,24 @@
+artifacts:
+- id: SR-39
+  type: requirement
+  title: Component directory enumeration (read-directory / read-directory-entry) works under --wasi-fs
+  status: verified
+  description: 'The last #405 blocker after SR-37 (get-directories) and SR-38 (file read) landed: with both fixed, a preview2 component reads a file end-to-end (READ:CANARY matches wasmtime), but std::fs::read_dir(''.'') still fails. Measured trace: open-at(dir, O_DIRECTORY)→descriptor 5 → wasi:filesystem/types::[method]descriptor.read-directory(5, retptr) → [Runtime][E07DA] Function not found in exports. Root cause: read-directory and directory-entry-stream.read-directory-entry are UNIMPLEMENTED — dispatch_core has only a stale ''readdir'' arm (different name) + resource-drop, and wasip2_host.rs has NO get_wasi_function_signature entry for either, so the calls fall through. Needed: (a) descriptor.read-directory(self) -> result<directory-entry-stream, error-code> — create a stream resource, snapshot std::fs::read_dir entries + a cursor keyed by the new handle; (b) directory-entry-stream.read-directory-entry(self) -> result<option<directory-entry>, error-code> where directory-entry = record { type: descriptor-type (enum), name: string } — return the next entry (name string in a cabi_realloc''d guest buffer, reusing the SR-38 on-demand read-buffer mechanism / a new one) or none at end; (c) signatures in wasip2_host.rs; (d) verify lower_type_to_memory handles Record + Enum + Option<Record> (add if missing). Differential oracle: wasmtime run --dir .::. prints DIR:[inside.txt]. Closes #405 end-to-end; cut v0.4.1 when done.'
+  tags:
+  - kilnd
+  - wasi
+  - filesystem
+  - component
+  - canonical-abi
+  - directory
+  - bug
+  links:
+  - type: derives-from
+    target: REQ_FUNC_035
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/405
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-10T00:00:00Z
+  release: v0.4.1

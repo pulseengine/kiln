@@ -1,0 +1,25 @@
+artifacts:
+- id: REQ_ASYNC_WAKERBRIDGE
+  type: requirement
+  title: Official host-side core::task::Future/Waker bridge (std-only, outside the cert crate)
+  description: |
+    Provide an OFFICIAL, production-sound bridge that drives general Rust `core::task::Future`s (that store/clone their `Waker` for a real later event) on the kiln-async scheduler — for host/std use only. kiln-async itself is `#![forbid(unsafe_code)]` PERMANENTLY and deliberately never polls a Rust Future nor builds a `RawWaker` vtable (lib.rs design invariant; the R1 unsafe waker is explicitly descoped from the cert crate as a std-only convenience). The bridge built for the executor-comparison benchmark is explicitly UNOFFICIAL / non-production: it is sound ONLY for futures that self-wake synchronously inline (e.g. CooperativeYield), NOT for general futures that store/clone the Waker to signal readiness later (benchmark Finding 1 + the bench bridge doc comment). Deliver this as a SEPARATE std-only companion crate (e.g. kiln-async-host) that MAY use `unsafe` for the RawWaker vtable and whose `Waker::wake()` routes to the external-wake path (REQ_ASYNC_EXTWAKE). It must live OUTSIDE kiln-async so the embedded/synth-lowered cert scope keeps forbid(unsafe_code) and its minimal TCB.
+  status: proposed
+  release: v0.6.0
+  tags:
+  - async
+  - scheduler
+  - host
+  - std
+  - future
+  - waker
+  - unsafe
+  - roadmap
+  links:
+  - type: derives-from
+    target: REQ_ASYNC_SCHED
+  - type: depends-on
+    target: REQ_ASYNC_EXTWAKE
+  fields:
+    note: |
+      Not a defect in kiln-async — a deliberately-excluded feature. The R1 "unsafe waker" mentioned in REQ_ASYNC_SCHED's release-plan belongs here, in a std-only companion, NOT in the forbid(unsafe) cert crate. Gap surfaced by REQ_ASYNC_BENCH's throwaway bridge.

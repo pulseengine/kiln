@@ -1,0 +1,21 @@
+artifacts:
+- id: AD-DEBUG-001
+  type: design-decision
+  title: Source-level, WIT-aware debugging via DWARF mapping
+  description: |
+    Debugging maps running core-WebAssembly execution back to original source through DWARF debug information, and is WIT-aware so component-model execution can be inspected at the interface-type level rather than only as raw core values. Breakpoints and stack traces operate over the stackless engine's explicit frames. This is a QM reference-interpreter capability (developer-facing), not part of the certified embedded scope.
+  status: implemented
+  tags:
+  - tooling
+  - debugging
+  - dwarf
+  - wit
+  links:
+  - type: satisfies
+    target: REQ_FUNC_032
+  fields:
+    rationale: |
+      Source-level and WIT-aware debugging is what makes the interpreter usable as a behavioral reference and oracle for the fused embedded core: a developer can observe component-level semantics, not just core opcodes. DWARF reuse avoids a bespoke debug-info format.
+    alternatives-considered: |
+      (1) printf/trace-only debugging — rejected: cannot inspect interface types or set breakpoints. (2) Core-wasm-only debugging without WIT mapping — rejected: component execution would be opaque at the ABI boundary, defeating the reference-oracle purpose.
+    implementation: kiln-runtime/src/debug/

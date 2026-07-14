@@ -1,0 +1,18 @@
+artifacts:
+- id: SR-44
+  type: requirement
+  title: Table growth honours a runtime element cap (mirror SR-41 for tables)
+  status: verified
+  description: 'The WCMC analysis (AD-WCMC-001) found table.grow was UNCAPPED — Table::grow/grow_shared checked only the module-declared ty.limits.max; a table without a declared max could grow to multi-GiB, the class of bug SR-41 fixed for linear memory. Fix: added runtime_max_elements to Table (AtomicU32, 0=unlimited) enforced in BOTH grow paths (a clean-room review caught the first pass only covered grow_shared; the &mut self grow was fixed + regression-tested). 3 unit oracles. Relates to SR-41. AD-WCMC-001. Issue #411.'
+  tags:
+  - kiln-runtime
+  - table
+  - resource-limit
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/411
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-11T10:00:00Z
+  release: v0.4.3

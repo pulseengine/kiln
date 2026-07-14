@@ -1,0 +1,14 @@
+artifacts:
+- id: REQ_CFS_ES
+  type: requirement
+  title: cFS Executive Services subset as host extensions
+  description: |
+    Kiln shall provide a host-native subset of NASA cFS Executive Services — application lifecycle, Critical Data Store (persistent across resets), startup scripts, performance logging — building on ComponentLinker.
+  status: proposed
+  tags:
+  - cfs
+  - host-extension
+  - lifecycle
+  - roadmap
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/227

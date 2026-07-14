@@ -1,0 +1,17 @@
+artifacts:
+- id: REQ_FUNC_035
+  type: requirement
+  title: WASI filesystem access with preopens
+  description: |
+    The runtime shall implement wasi:filesystem/types and wasi:filesystem/preopens interfaces including stat-at, open-at, read-via-stream, write-via-stream, get-type, get-directories, and resource descriptor lifecycle. Filesystem access shall be restricted to pre-opened directories passed via CLI (--wasi-fs).
+  status: implemented
+  tags:
+  - wasi
+  - filesystem
+  - capability-isolation
+  links:
+  - type: derives-from
+    target: REQ_FUNC_014
+  fields:
+    implementation: kiln-wasi/src/dispatcher.rs
+    note: 428+ lines of canonical ABI lowered filesystem handlers added 2026-03

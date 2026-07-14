@@ -1,0 +1,17 @@
+artifacts:
+- id: SR-40
+  type: requirement
+  title: kiln-wasi test suite is deterministic under parallel execution (global capability-budget contention)
+  status: proposed
+  description: 'Bit-rot: the kiln-wasi test suite is intermittently RED under parallel `cargo test` — a different subset of capability/allocation tests fails each run (observed: test_environment_var_management, test_capability_presets, test_minimal_capabilities, test_capability_defaults_by_safety_level, test_safety_level_override, test_safety_aware_allocation_enforcement). Confirmed PRE-EXISTING on clean main (fails ~1/3 runs with zero local changes), so CI is currently green only by luck/retry. Root cause: these tests each draw from the shared global capability memory budget (via MemoryInitializer + WasiCapabilities/WasiDispatcher construction) without serial marks, so concurrent execution exhausts the budget and allocations fail. ~19 budget-drawing call sites across kiln-wasi/src/{capabilities.rs,dispatcher.rs,lib.rs,host_provider/*} + tests/. Fix options: mark all budget-drawing tests #[serial_test::serial] (they share one lock → never concurrent), or raise/scope the test-time budget, or run the crate''s tests single-threaded. SR-37/38/39 already added serial_test as a kiln-wasi dev-dep and marked the 5 new dispatcher tests; this requirement is to finish the job for the pre-existing tests. Oracle: `cargo test -p kiln-wasi --features wasi-filesystem` green 10/10 consecutive runs.'
+  tags:
+  - kiln-wasi
+  - tests
+  - flaky
+  - bit-rot
+  - ci
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-10T00:10:00Z
+  release: v0.5.0

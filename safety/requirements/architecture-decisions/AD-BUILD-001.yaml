@@ -1,0 +1,21 @@
+artifacts:
+- id: AD-BUILD-001
+  type: design-decision
+  title: Unified build and verification tooling (cargo-kiln)
+  description: |
+    Single CLI entry point (cargo-kiln) for all build, test, verification, and ASIL compliance operations. Includes: ASIL-level verification (verify --asil d), build matrix verification (verify-matrix --report), no-std validation, requirements traceability (requirements verify), safety feature testing, and diagnostic system with LSP-compatible JSON output.
+  status: implemented
+  tags:
+  - tooling
+  - build-system
+  - verification
+  links:
+  - type: satisfies
+    target: REQ_CONFIG_001
+  - type: satisfies
+    target: REQ_CONFIG_003
+  fields:
+    rationale: |
+      Single entry point ensures consistent configuration validation and safe defaults across all development activities. Build matrix verification detects ASIL compliance issues before merge. Replaces fragmented shell scripts and justfile recipes.
+    previous-id: IMPL_CONFIG_001
+    implementation: cargo-kiln/src/, kiln-build-core/src/
