@@ -104,6 +104,12 @@ pub struct Table {
     pub debug_name:         Option<RuntimeString>,
     /// Verification level for table operations
     pub verification_level: VerificationLevel,
+    /// Runtime element cap (0 = unlimited). Enforced in `grow`/`grow_shared` in
+    /// ADDITION to the module-declared `ty.limits.max`, so a host can bound a
+    /// table below its declared max — the table analog of `Memory::
+    /// runtime_max_pages` (SR-44; closes the uncapped-table.grow gap AD-WCMC-001
+    /// found). 0 = unlimited; set before execution.
+    pub runtime_max_elements: core::sync::atomic::AtomicU32,
 }
 
 impl Debug for Table {
@@ -128,6 +134,9 @@ impl Clone for Table {
             elements:           Mutex::new(source_elements.clone()),
             debug_name:         self.debug_name.clone(),
             verification_level: self.verification_level,
+            runtime_max_elements: core::sync::atomic::AtomicU32::new(
+                self.runtime_max_elements.load(core::sync::atomic::Ordering::Relaxed),
+            ),
         }
     }
 }
@@ -269,7 +278,16 @@ impl Table {
             elements: Mutex::new(elements),
             verification_level: VerificationLevel::default(),
             debug_name: None,
+            runtime_max_elements: core::sync::atomic::AtomicU32::new(0),
         })
+    }
+
+    /// Set a runtime element cap (0 = unlimited). Enforced in `grow`/`grow_shared`
+    /// in addition to the module-declared `ty.limits.max` (SR-44). Set before
+    /// execution.
+    pub fn set_runtime_max_elements(&self, n: u32) {
+        self.runtime_max_elements
+            .store(n, core::sync::atomic::Ordering::Relaxed);
     }
 
     /// Creates a new table with the specified capacity and element type
@@ -448,6 +466,18 @@ impl Table {
             }
         }
 
+        // Runtime host cap (SR-44), in addition to the module-declared max; 0 = unlimited.
+        let rt_cap = self
+            .runtime_max_elements
+            .load(core::sync::atomic::Ordering::Relaxed);
+        if rt_cap != 0 && new_size > rt_cap {
+            return Err(Error::new(
+                ErrorCategory::Runtime,
+                kiln_error::codes::CAPACITY_EXCEEDED,
+                "Table size exceeds runtime cap",
+            ));
+        }
+
         // Lock elements and push new values
         let mut elements = self.elements.lock()
             .map_err(|_| Error::runtime_error("Failed to lock table elements"))?;
@@ -593,6 +623,19 @@ impl Table {
                     "Table size exceeds maximum limit",
                 ));
             }
+        }
+
+        // Runtime host cap (SR-44), in addition to the module-declared max; 0 = unlimited.
+        // Kept in sync with grow_shared so neither path can bypass the cap.
+        let rt_cap = self
+            .runtime_max_elements
+            .load(core::sync::atomic::Ordering::Relaxed);
+        if rt_cap != 0 && new_size > rt_cap {
+            return Err(Error::new(
+                ErrorCategory::Runtime,
+                kiln_error::codes::CAPACITY_EXCEEDED,
+                "Table size exceeds runtime cap",
+            ));
         }
 
         // Lock elements and push new values
@@ -910,4 +953,64 @@ impl Clone for TableManager {
 // TableOperations trait implementation is temporarily disabled due to complex
 // type conversions This will be re-enabled once the Value types are properly
 // unified across crates
+
+#[cfg(test)]
+mod sr44_cap_tests {
+    use super::*;
+
+    fn table(min: u32, max: Option<u32>) -> Table {
+        Table::new(KilnTableType {
+            element_type: KilnRefType::Funcref,
+            limits: KilnLimits { min, max },
+            table64: false,
+        })
+        .unwrap()
+    }
+
+    /// SR-44 / AD-WCMC-001: a runtime element cap bounds table.grow BELOW the
+    /// module-declared max — the table analog of Memory::runtime_max_pages.
+    /// 0 = unlimited.
+    // rivet: verifies SR-44
+    #[test]
+    fn runtime_cap_bounds_table_grow_below_declared_max() {
+        let t = table(0, Some(10)); // declared max 10
+        t.set_runtime_max_elements(3); // host caps at 3
+        let nullref = KilnValue::FuncRef(None);
+        assert!(t.grow_shared(3, nullref.clone()).is_ok(), "grow to the cap succeeds");
+        assert_eq!(t.size(), 3);
+        assert!(
+            t.grow_shared(1, nullref).is_err(),
+            "grow past the runtime cap is rejected even though declared max (10) allows it"
+        );
+        assert_eq!(t.size(), 3, "a rejected grow does not change the size");
+    }
+
+    /// SR-44: cap 0 = unlimited (only the declared max applies).
+    // rivet: verifies SR-44
+    #[test]
+    fn runtime_cap_zero_is_unlimited_for_tables() {
+        let t = table(0, Some(5));
+        let nullref = KilnValue::FuncRef(None);
+        assert!(t.grow_shared(5, nullref.clone()).is_ok(), "grow to declared max with no cap");
+        assert_eq!(t.size(), 5);
+        assert!(t.grow_shared(1, nullref).is_err(), "declared max still enforced");
+    }
+
+    /// SR-44: the &mut self `grow` path must ALSO honour the runtime cap (a
+    /// clean-room review found it initially did not — neither path may bypass it).
+    // rivet: verifies SR-44
+    #[test]
+    fn runtime_cap_bounds_mut_grow_path_too() {
+        let mut t = table(0, Some(10));
+        t.set_runtime_max_elements(3);
+        let nullref = KilnValue::FuncRef(None);
+        assert!(t.grow(3, nullref.clone()).is_ok(), "&mut grow to the cap succeeds");
+        assert_eq!(t.size(), 3);
+        assert!(
+            t.grow(1, nullref).is_err(),
+            "&mut grow past the runtime cap must be rejected (not just grow_shared)"
+        );
+        assert_eq!(t.size(), 3);
+    }
+}
 
