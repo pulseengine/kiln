@@ -1,0 +1,20 @@
+artifacts:
+- id: SR-49
+  type: requirement
+  title: kilnd's live WASI FS path (dispatch_core) enforces preopen containment
+  status: proposed
+  description: 'CRITICAL sandbox bypass. kilnd delegates guest WASI imports to WasiDispatcher::dispatch_core, whose descriptor.open-at/stat-at handlers build base.join(guest_path) and hit the host FS with only an exists() check — NO containment. A guest escapes the --wasi-fs preopen with a plain lexical ../ path (NO symlink needed). The is_within_sandbox guard exists but is wired only into fn dispatch (the component canonical-executor path at :747/:953/:992), never into dispatch_core (the path kilnd actually uses). Distinct from #419 (symlink-through-the-guard). Reproduced against the real dispatch_core: open-at("../SECRET.txt") returned Ok(descriptor) and exfiltrated a file outside the preopen. Fix: call is_within_sandbox (and SR-50 is_path_allowed) in every FS handler of dispatch_core (open/stat/create/remove/unlink); better — route all FS handlers through one shared resolve→contain→allow→capability gate so a handler cannot be added without all checks. Relates to SR-33. Issue #437.'
+  tags:
+  - kilnd
+  - kiln-wasi
+  - filesystem
+  - sandbox
+  - security
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/437
+  provenance:
+    created-by: ai
+    model: claude-fable-5
+    timestamp: 2026-07-16T19:40:00Z
+  release: v0.5.0

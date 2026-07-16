@@ -1,0 +1,21 @@
+artifacts:
+- id: SR-51
+  type: requirement
+  title: kilnd WASI FS containment is symlink-safe (canonicalize, not purely lexical)
+  status: proposed
+  description: 'is_within_sandbox is purely LEXICAL, so where it IS called (fn dispatch) a symlink inside the preopen that points outside is followed — read/write/create/delete outside the sandbox are all reachable (maintainer confirmed the escape is not read-only). wasmtime/cap-std block this via openat2/O_NOFOLLOW + real canonicalization. Fix: resolve the target through the OS (canonicalize / openat-based traversal that refuses symlink escape) and re-check containment on the resolved path, not the lexical join. Must land together with SR-49 (which first makes dispatch_core call the guard at all) so both the missing-check and the weak-check are closed on the live path. Relates to SR-33, SR-49. Issue #419.'
+  tags:
+  - kilnd
+  - kiln-wasi
+  - filesystem
+  - sandbox
+  - symlink
+  - security
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/419
+  provenance:
+    created-by: ai
+    model: claude-fable-5
+    timestamp: 2026-07-16T19:40:00Z
+  release: v0.5.0

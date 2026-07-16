@@ -1,0 +1,18 @@
+artifacts:
+- id: SR-52
+  type: requirement
+  title: The component library API resolves exports without panicking (no .expect())
+  status: proposed
+  description: 'resolve_exports still panics via .expect() at component_instantiation.rs:2804 — the #269/#271 panic-contract fix (a library must return Err, not panic, on malformed input) is incomplete for the library API surface. A crafted/malformed component reaching this path aborts the host process instead of returning a kiln_error::Result. Fix: replace the .expect() with a fail-loud Err (Error::component_* factory) per the CLAUDE.md no-panic-in-library rule; add a regression test that drives the library API with the triggering input and asserts Err, not a panic. Relates to the #269/#271 panic-contract work. Issue #427.'
+  tags:
+  - kiln-component
+  - panic-contract
+  - library-api
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/427
+  provenance:
+    created-by: ai
+    model: claude-fable-5
+    timestamp: 2026-07-16T19:40:00Z
+  release: v0.5.0
