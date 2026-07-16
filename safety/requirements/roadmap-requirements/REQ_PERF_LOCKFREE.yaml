@@ -1,0 +1,14 @@
+artifacts:
+- id: REQ_PERF_LOCKFREE
+  type: requirement
+  title: Lock-free zero-copy pipeline buffers
+  description: |
+    Inter-phase/inter-component data flow shall offer lock-free, zero-copy ring buffers (LMAX Disruptor / GNU Radio 4.0 pattern) with pre-allocated storage and sequence barriers, avoiding dynamic allocation and lock contention on hot paths.
+  status: proposed
+  tags:
+  - performance
+  - lock-free
+  - zero-copy
+  - roadmap
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/223

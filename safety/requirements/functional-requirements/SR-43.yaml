@@ -1,0 +1,19 @@
+artifacts:
+- id: SR-43
+  type: requirement
+  title: kilnd rejects at load a module whose declared memory min exceeds the --memory cap
+  status: verified
+  description: 'Closes the SR-41 ordering gap found by the WCMC analysis (AD-WCMC-001): the SR-41 runtime cap is set AFTER instantiation and only enforced in memory.grow, but Memory::new eagerly allocates the declared min pages BEFORE the cap exists. Fix: kilnd rejects-at-load when a module''s declared memory min (pages*64KiB) exceeds config.max_memory (the --memory cap). Verified: (memory 2000)=128MB rejected at 64MB default, runs under --memory 256MB. KNOWN LIMITATION (in-code + clean-room confirmed): the check is post-instantiate, so the declared min was already allocated by Memory::new before rejection (Peak memory 131072000 observed in the allow case); a pre-allocation reject needs a pre-instantiate engine API (follow-up). Relates to SR-41. AD-WCMC-001. Issue #411.'
+  tags:
+  - kilnd
+  - memory
+  - resource-limit
+  - reject-at-load
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/411
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-11T10:00:00Z
+  release: v0.4.3

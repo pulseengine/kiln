@@ -1,0 +1,21 @@
+artifacts:
+- id: AD-ENV-001
+  type: design-decision
+  title: Multi-environment architecture (std / no_std+alloc / no_std)
+  description: |
+    Four environment configurations supported via conditional compilation: full std, no_std with alloc, no_std without alloc (bounded collections), and bare-metal. Same interfaces work across all environments with different backing implementations.
+  status: implemented
+  tags:
+  - architecture
+  - no-std
+  - platform
+  links:
+  - type: satisfies
+    target: REQ_FUNC_002
+  - type: satisfies
+    target: REQ_LFUNC_006
+  fields:
+    rationale: |
+      Different deployment scenarios require different resource trade-offs. Conditional compilation with trait-based abstractions provides full feature parity across environments.
+    previous-id: ARCH_DEC_ENV_001
+    implementation: '#![cfg_attr(not(feature = "std"), no_std)] across all crates'

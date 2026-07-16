@@ -1,0 +1,24 @@
+artifacts:
+- id: SR-38
+  type: requirement
+  title: Component file-read data return (blocking-read / read-via-stream) uses cabi_realloc'd guest memory
+  status: verified
+  description: 'The remaining end-to-end blocker for #405, uncovered by measuring the SR-37 fix: with get-directories fixed, a preview2 component registers the ''.'' preopen, calls open-at(inside.txt)→descriptor, stat, read-via-stream, then wasi:io/streams input-stream.blocking-read — which FAILED with [Runtime][E07DA] Function not found in exports. Two real defects in the stream-read path (dispatcher.rs input-stream.read/blocking-read): (1) UNOWNED BUFFER — the list<u8> bytes were written to a FIXED raw address (0x100000+handle*0x10000) the guest never allocated. The guest FREES the returned list (wasi-libc copies then frees), so freeing an unallocated pointer corrupted the guest allocator → bad indirect call → E07DA. A fresh cabi_realloc''d buffer is needed PER read (not a reused scratch). (2) NO OFFSET/EOF — blocking-read did std::fs::read (whole file) from offset 0 every call with no position tracking → the guest read loop never terminated. Implementation: the component WASI path is dispatch_canon_lowered (engine.rs), which auto-lowers a handler''s returned CORE VALUES to the retptr via lower_results_to_retptr using the signature Result(ListU8, stream-error) — so blocking-read RETURNS core values [I32(0),I32(buf_ptr),I32(n)] for ok and [I32(1),I32(1)] for closed (NOT a manual retptr write). On-demand buffer allocation (sized to requested len, capped 1MiB) is added in dispatch_canon_lowered before call_import (has &mut self; reentrant cabi_realloc is safe there), set via new HostImportHandler::set_read_buffer_allocation; a sibling branch also added to call_wasi_function for the core-module path. Per-stream read offset (HashMap on the dispatcher) advances by bytes returned; offset>=len yields err(closed) as the guest''s EOF signal. Verified: 2 unit oracles (blocking_read_returns_bytes_in_owned_buffer_and_eofs, blocking_read_fails_loud_without_buffer) + read-only reproducer matches wasmtime (READ:CANARY, clean completion). SR-37 (get-directories) is the done prerequisite; SR-39 (directory enumeration) remains for full #405 closure.'
+  tags:
+  - kilnd
+  - wasi
+  - filesystem
+  - component
+  - canonical-abi
+  - io-streams
+  - bug
+  links:
+  - type: derives-from
+    target: REQ_FUNC_035
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/405
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-09T07:10:00Z
+  release: v0.4.1

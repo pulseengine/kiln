@@ -1,0 +1,29 @@
+artifacts:
+- id: AD-NOSTD-INTERP-001
+  type: design-decision
+  title: Hybrid embedded execution — a no_std interpreter mode alongside synth-AOT, deployed AS a wasm module via synth (amends RFC
+  description: |
+    Kiln shall provide a no_std/no_alloc deployment of its WebAssembly interpreter for on-board embedded execution (gale/gust), IN ADDITION TO the synth-AOT native path — not instead of it — as the alternative for payloads where AOT is not wanted or wished (dynamic / late-loaded modules, migrated instances, untrusted code, or cert contexts that prefer an interpreter's smaller TCB over a compiler's). DEPLOYMENT MECHANISM (the elegant part): kiln itself (no_std/no_alloc) is compiled TO a wasm module, and synth AOT-compiles THAT to native for the target — the SAME pipeline as user code. So wasm is the universal IR, synth is the single compiler in the TCB, and kiln-as-wasm is itself verifiable/attestable (witness MC/DC on the kiln wasm, scry invariants, sigil) like any other module — no separate no_std-Rust→native toolchain is needed. The synth-compiled kiln then loads and interprets wasm on-board. UNIQUE DIFFERENTIATOR: this on-board interpreter runs the FULL Component Model (kiln's direct runtime hosting per AD-COMPONENT-HOST-001) — or plain core wasm — whereas the safety-critical peers (spacewasm, DLR-FT) are core-module-only. It EXTENDS AD-COMPONENT-HOST-001's direct-hosting path from QM/std-reference-only to the embedded target, so embedded gets a runtime-Component-Model option alongside meld-dissolve-to-core. meld (build-time lowering) and synth (AOT hot path) are retained. TIERED TCB (resolves the interpreter-vs-compiler-TCB tension): ship two tiers, not one monolith — (i) a CORE-ONLY minimal interpreter with a small auditable TCB that competes with spacewasm/DLR-FT on their own terms (and beats them on verification evidence), and (ii) an OPT-IN Component-Model layer (the differentiator, ~31k LOC) enabled only where the TCB budget and cert context allow. This keeps the "smaller TCB than a compiler" claim and the "Component Model on-board" claim from fighting each other — chosen per deployment.
+  status: proposed
+  tags:
+  - architecture
+  - embedded
+  - no-std
+  - interpreter
+  - deployment
+  - rfc46-amendment
+  links:
+  - type: satisfies
+    target: REQ_NOSTD_INTERP
+  - type: satisfies
+    target: REQ_FUNC_002
+  fields:
+    rationale: |
+      Peer comparison (#413): NASA spacewasm and DLR-FT interpret ON-BOARD with no AOT; DLR states they chose an interpreter because a compiler defies DO-178C/DO-332 design principles. Putting synth (a compiler) in the embedded cert TCB is a materially harder cert story than an interpreter — the incumbents avoided it deliberately. Kiln already has the ingredients (capability-bounded memory + per-instruction fuel; kiln-runtime is categorized no-std with a std feature and a no-op no_std stub); the no_std gate is a choice. Measured std-dependence is localized and portable: ~90 Mutex/RwLock/thread hits (→ kiln-sync), ~55 std:: hits (→ alloc collections), only ~5 std::fs/io (→ platform callbacks). A focused port, not a rewrite; target shape is DLR-FT's "in-place, almost no deps". Amends RFC #46 ("there is no no_std interpreter"; embedded = synth-AOT only) — requires an RFC #46 doc update + BA sign-off, and touches meld/synth positioning and gale/gust (new on-board target + live migration). Also reconciles the record: REQ_FUNC_002 (baremetal) and REQ_FUNC_033 (kilnd-nostd) are marked implemented but the no_std interpreter is not actually delivered today; this decision is the path to making those claims true. Direction chosen by the maintainer 2026-07-11 (hybrid over stay-course / migration-only).
+    cross-repo-gale: |
+      Imposes a GALE (OS) requirement: gale must (a) load and run the synth-compiled kiln image, and (b) support RUNTIME wasm loading on-target (dynamic module/component load, since on-board interpretation means loading payloads at runtime, not just at build). File a gale-side requirement + confirm the loader/OS-service surface before Phase 3.
+    precedent: |
+      The no_std/no_alloc embedded deployment is NOT speculative — kiln-async (REQ_ASYNC_SCHED) already proves it: it is no_std/no_alloc, forbid(unsafe), and ships as a thumbv7em-none-eabi staticlib linked into gale (v0.3.2). So the interpreter's no_std port follows an ESTABLISHED pattern, and a direct no_std-Rust→native staticlib for gale is the PROVEN baseline deployment (what kiln-async does today) — making this direction low-regret. synth-AOT of wasm modules is separately proven via the jess pipeline (adopt → meld_fuse → synth_compile → renode/QEMU, async-scheduler-plan.md).
+    open-questions: |
+      Only the ELEGANT variant (kiln-as-wasm→synth, vs the proven direct no_std-Rust build) is unproven — the Phase-1 spike must answer: (1) does synth accept + correctly AOT a module as large/complex as the kiln interpreter; (2) interpreter-in-wasm-AOT'd-to-native perf vs the direct no_std-Rust build and vs the peers; (3) bootstrapping/toolchain-trust of compiling the interpreter through the same pipeline it runs. Fallback if wasm→synth is impractical: the direct no_std-Rust build (kiln-async's proven path) — the port work in REQ_NOSTD_INTERP is identical either way; only the final codegen differs. So the port is committed; only the codegen path is spike-gated.
+    upstream-ref: https://github.com/pulseengine/kiln/issues/415

@@ -1,0 +1,19 @@
+artifacts:
+- id: SR-34
+  type: requirement
+  title: 'kilnd loads witness-instrumented cores (real-app scale: multi-memory + high global/branch count)'
+  status: proposed
+  description: 'kilnd must load and run witness-MC/DC-instrumented core modules at real-app scale (e.g. 1413 branches, 4267 globals, 2 memories, 258KB) — currently fails at load with [Runtime][E03ED] Failed to load module. Isolation ruled out WASI, witness output validity (wasm-tools accepts), raw global count (9000 OK), size (116KB OK), and 2-memory declaration (OK) — so the trigger is a combination/interaction specific to the instrumented core, not yet pinned to a line. Blocks the witness MC/DC path on real apps. Issue #391.'
+  tags:
+  - kilnd
+  - decoder
+  - witness
+  - loader
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/391
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-08T06:48:52Z
+  release: v0.5.0

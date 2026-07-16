@@ -1,0 +1,14 @@
+artifacts:
+- id: REQ_CFS_ARCH
+  type: requirement
+  title: cFS-on-WASM reference architecture
+  description: |
+    Kiln shall provide a reference architecture mapping NASA cFS flight- software patterns (PSP -> OSAL -> cFE -> Apps) onto the PulseEngine stack (kiln-platform -> WASI/Gale -> Kiln host services -> WASM components) as P3 async components.
+  status: proposed
+  tags:
+  - cfs
+  - architecture
+  - reference
+  - roadmap
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/231

@@ -1,0 +1,12 @@
+artifacts:
+- id: REQ_FUNC_002
+  type: requirement
+  title: Baremetal support
+  description: |
+    The interpreter shall be executable on bare-metal environments with no reliance on any specific functionality from the provided execution environment, ready for embedding to any environment Rust can compile for.
+  status: implemented
+  tags:
+  - platform
+  - no-std
+  fields:
+    implementation: 'All crates support #![no_std]'

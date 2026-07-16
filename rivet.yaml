@@ -22,6 +22,7 @@ sources:
     format: stpa-yaml
   - path: safety/requirements
     format: generic-yaml
+    layout: per-id
 
 docs:
   - docs

@@ -1,0 +1,23 @@
+artifacts:
+- id: FR-SIMD-EXT
+  type: requirement
+  title: Relaxed SIMD compliance
+  description: |
+    The interpreter shall implement the Relaxed SIMD proposal, including: relaxed fused multiply-add operations (f32x4.relaxed_madd, f32x4.relaxed_nmadd, f64x2.relaxed_madd, f64x2.relaxed_nmadd), relaxed lane selection (i8x16.relaxed_laneselect, i16x8.relaxed_- laneselect, i32x4.relaxed_laneselect, i64x2.relaxed_laneselect), relaxed min/max (f32x4.relaxed_min, f32x4.relaxed_max, f64x2.- relaxed_min, f64x2.relaxed_max), relaxed integer truncation (i32x4.relaxed_trunc_f32x4_s/u, i32x4.relaxed_trunc_f64x2_s/u_- zero), relaxed swizzle (i8x16.relaxed_swizzle), relaxed i16x8.relaxed_q15mulr_s, and relaxed dot product (i16x8.relaxed_dot_i8x16_i7x16_s, i32x4.relaxed_dot_i8x16_- i7x16_add_s). The interpreter shall choose deterministic behavior for all edge cases (NaN handling, out-of-range truncation) and document which deterministic choice is made for each operation.
+  status: proposed
+  tags:
+  - wasm-core
+  - spec-conformance
+  - simd
+  - relaxed-simd
+  traced_to:
+  - H-1
+  links:
+  - type: derives-from
+    target: REQ_LFUNC_018
+  fields:
+    implementation: kiln-runtime/src/stackless/engine.rs
+    spec-reference: WebAssembly Relaxed SIMD Proposal
+    verification-method: test
+    verification-description: |
+      Relaxed SIMD WAST test files pass; deterministic behavior documented for each edge case; fused multiply-add precision verified; lane selection semantics verified

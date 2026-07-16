@@ -1,0 +1,32 @@
+artifacts:
+- id: REQ_WITNESS_COV
+  type: requirement
+  title: Witness MC/DC coverage backend — post-run global snapshot + harness mode
+  description: |
+    Kiln shall act as a coverage backend for the witness MC/DC tool so that instrumented WebAssembly artifacts can be measured under a certifiable, deterministic runtime (and differentially cross-checked against wasmtime as oracle). witness instruments core modules by adding exported mutable globals (__witness_counter_<id>) and reconstructs MC/DC truth tables from their post-run values; wasmtime's component API exposes no way to read an inner core's globals, so kiln — which already decodes/instantiates core modules + Component-Model + WASI 0.2 and reads globals internally — is the enabling runtime. Three concrete capabilities: (1) a post-run exported-global SNAPSHOT API keyed by export name (or by the __witness_counter_* prefix) returning name->integer, reachable from a host driver; (2) a kilnd HARNESS mode (CLI flag and/or WITNESS_MODULE / WITNESS_MANIFEST / WITNESS_OUTPUT env vars) that instantiates + runs the module, invokes the specified export(s), then writes the counter snapshot in witness's counter-snapshot JSON shape; (3) a documented inventory of which wasi:0.2 interfaces are real vs. need no-op stubbing, since coverage runs only require imports satisfied enough that branches execute (correct WASI behaviour is NOT required). Near-term scope is SYNCHRONOUS Component-Model coverage; p3 async-lift/streams are explicitly out of scope (gated on p3 execution maturity; tracked as witness REQ-057 / witness#107B).
+  status: verified
+  release: v0.3.4
+  tags:
+  - verification
+  - mcdc
+  - witness
+  - coverage
+  - cross-tool
+  - roadmap
+  - release-v0.4.0
+  links:
+  - type: derives-from
+    target: REQ_VERIFY_010
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/340
+    cross-ref: pulseengine/witness#110 (strategy + dual-runtime cross-check); witness DEC-003 (counter mechanism); witness REQ-054/FEAT-034 (meld composition)
+    feasibility: |
+      Grounded against the code (2026-06-20): the hard part already exists. ModuleInstance::global_by_name (kiln-runtime/src/module_instance.rs:306) + GlobalWrapper::get (module.rs:4291) already read exported globals by name on a live core instance; Export metadata (name/kind/index, ExportKind::Global) is a DirectMap lookup (module.rs:2823). witness's own pipeline runs `meld fuse component.wasm -o core.wasm` first, so the instrumented artifact is a CORE module — the global_by_name path applies directly, no live-component global traversal needed for the primary path. NEW work is mostly wiring + serialization: a prefix-keyed snapshot accessor, a kilnd --harness / env-var mode emitting witness's JSON shape, and the wasi:0.2 stub inventory (filesystem/cli/clocks/io/random are implemented; coverage cores want no-op stubs). Component-with-live-core global traversal is a later phase (nested-instance lookup) only if a non-fused component path is needed.
+    regime-note: |
+      Keystone for AD-MCDC-001: once kiln is a witness coverage backend it can run its OWN meld-fused components through itself + witness for MC/DC, closing the witness step of the pulseengine-feature-loop for kiln itself (dogfooding the same regime spar/synth/witness already follow).
+    release-note: |
+      Tagged release-v0.4.0 but INDEPENDENT of the kiln-async P3 track; mostly additive wiring, so a candidate to pull forward as a focused sub-release if witness's MC/DC-on-kiln work is gated on it. Release assignment is a planning call (see release-planning).
+    harness-contract: |
+      Pinned with witness (avrabe, 2026-06-20, #340) against witness's crates/witness-core/src/run_record.rs HarnessSnapshot + crates/witness/ src/run.rs run_via_harness. TARGET witness-harness-v1 (branch coverage; v2 MC/DC rows are later — do NOT build yet). (a) JSON the harness writes to WITNESS_OUTPUT: {"schema":"witness-harness-v1","counters":{"<id>":N}} where keys are the BARE numeric branch id as a string ("0","1"; witness does key.parse::<u32>()) — i.e. the harness reads each exported global named __witness_counter_<id>, STRIPS the __witness_counter_ prefix, and emits <id>->value; value is the hit count (counters are i64 globals as of witness v0.32+, overflow-safe). No run-id/hash/manifest in the snapshot — witness stamps those itself. (b) Invocation: witness spawns the harness via sh -c, passing only env vars — WITNESS_MODULE (abs path to the instrumented .wasm, READ this), WITNESS_MANIFEST (abs path, optional for v1), WITNESS_OUTPUT (abs path the harness MUST write). Module path is NOT a CLI arg. witness's own --invoke is ignored in harness mode — the harness chooses which export(s) to run (e.g. _start or named fixture exports), then snapshots counters at the end. Non-zero exit or a missing WITNESS_OUTPUT file = harness failure.
+    progress: |
+      Phase 1 DONE: host-reachable post-run snapshot accessor ModuleInstance::export_global_snapshot(prefix) -> BTreeMap<name,i64>, prefix-filtered, integer-typed, fail-loud on a non-integer matching global. Kept keyed by FULL export name (general accessor); the witness-v1 prefix-strip + JSON envelope is the Phase-2 serialization concern. TDD: 2 tests (kiln-runtime/tests/witness_snapshot_test.rs), mutation-proven. Phase 2 DONE: kilnd witness-harness mode (kilnd/src/witness_harness.rs). When witness invokes kilnd with WITNESS_MODULE + WITNESS_OUTPUT set, harness_requested() routes main to run_from_env() -> run(): load the meld-fused core (fail-loud if a Component), instantiate, invoke the first existing entry of [_start, run, 0, 1, main], snapshot __witness_counter_*, and write {"schema":"witness-harness-v1","counters":{"<id>":N}} (prefix stripped to the bare numeric id witness parses; numeric-ordered) to WITNESS_OUTPUT; non-zero exit on failure per the contract. TDD: 4 tests (3 unit on build_counters_json incl. numeric-order + fail-loud non-numeric; 1 integration over run(), mutation-proven by skipping execute). Verified end-to-end against the real binary: wasm-tools-built instrumented core run via the env contract emitted {"0":3,"1":0}, exit 0. REMAINING (Phase 3, follow-up): wasi:0.2 no-op stub inventory for syscall-heavy fused cores (filesystem/cli/clocks/io/random implemented today; unsatisfied imports currently fail-loud at instantiate); witness-harness-v2 per-row MC/DC (deferred by witness). Dual-runtime cross-check (witness#110) can begin.

@@ -1,0 +1,18 @@
+artifacts:
+- id: REQ_FUNC_036
+  type: requirement
+  title: WASI CLI, clocks, random, and I/O interfaces
+  description: |
+    The runtime shall implement WASI cli (environment, exit, stdin/stdout/ stderr, terminal detection), clocks (wall-clock, monotonic-clock), random (secure get-random-bytes/u64 and insecure variants), and io (streams with blocking-write-and-flush, poll, error) interfaces as defined by WASI Preview 2.
+  status: implemented
+  tags:
+  - wasi
+  - cli
+  - clocks
+  - random
+  - io
+  links:
+  - type: derives-from
+    target: REQ_FUNC_014
+  fields:
+    implementation: kiln-wasi/src/dispatcher.rs

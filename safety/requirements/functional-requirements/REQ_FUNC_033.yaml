@@ -1,0 +1,12 @@
+artifacts:
+- id: REQ_FUNC_033
+  type: requirement
+  title: Multiple runtime deployment modes
+  description: |
+    The interpreter shall support multiple runtime deployment modes through the kilnd daemon: standard mode (kilnd-std), allocation mode (kilnd-alloc), and no-std mode (kilnd-nostd), each with appropriate resource limits and safety constraints.
+  status: implemented
+  tags:
+  - runtime
+  - deployment
+  fields:
+    implementation: kilnd/src/

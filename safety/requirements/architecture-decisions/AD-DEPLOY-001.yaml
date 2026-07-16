@@ -1,0 +1,23 @@
+artifacts:
+- id: AD-DEPLOY-001
+  type: design-decision
+  title: Multi-platform deployment strategy
+  description: |
+    Different deployment environments (server, embedded Linux, QNX, VxWorks, Zephyr RTOS, bare-metal) are supported through the platform abstraction layer with environment-specific memory models, security features, and resource constraints.
+  status: implemented
+  tags:
+  - architecture
+  - platform
+  - deployment
+  links:
+  - type: satisfies
+    target: REQ_PLATFORM_001
+  - type: satisfies
+    target: REQ_FUNC_002
+  - type: satisfies
+    target: REQ_FUNC_033
+  fields:
+    rationale: |
+      Different deployment environments require different memory models and security features. Platform abstraction isolates these differences behind common interfaces.
+    previous-id: ARCH_DEC_DEPLOY_001
+    implementation: kiln-platform/src/

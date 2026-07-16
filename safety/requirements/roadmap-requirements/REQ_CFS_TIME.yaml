@@ -1,0 +1,14 @@
+artifacts:
+- id: REQ_CFS_TIME
+  type: requirement
+  title: cFS Time Services as host extension
+  description: |
+    Kiln shall provide host-native spacecraft time correlation (UTC, TAI, Mission Elapsed Time, Spacecraft Time Correlation Factor) for WASM components, modeled on NASA cFS Time Services.
+  status: proposed
+  tags:
+  - cfs
+  - host-extension
+  - time
+  - roadmap
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/229

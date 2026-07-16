@@ -1,0 +1,23 @@
+artifacts:
+- id: REQ_GC_SUBTYPING
+  type: requirement
+  title: GC reference-type subtyping is spec-correct (decode → validate → link)
+  description: |
+    The interpreter's WebAssembly-GC reference-type subtyping relation shall match the spec across decode, validation, and cross-module linking: a module that declares an invalid `sub` chain must be rejected (assert_invalid), an import whose supplied type is not a subtype of the expected type must fail to link (assert_unlinkable), and a valid subtype relation must be accepted. The relation is currently wrong in BOTH directions (too permissive AND too strict). Issue #149.
+  status: proposed
+  release: v0.5.0
+  tags:
+  - wasm-gc
+  - reference-types
+  - subtyping
+  - spec-conformance
+  - release-v0.3.5
+  links:
+  - type: derives-from
+    target: REQ_FUNC_022
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/149
+    oracle: |
+      WAST conformance is the mechanical oracle (measure-first baseline, 2026-06, testsuite @external/testsuite): type-subtyping.wast = 90 passed / 27 failed. Failure modes characterised: ~7 assert_unlinkable that wrongly LINK (too permissive cross-module import check), 4 assert_invalid 'sub type' that wrongly VALIDATE (too permissive subtype-declaration check), and several `(ref $N) vs (ref $M)` import mismatches that wrongly REJECT (too strict). Run: `cargo-kiln testsuite --run-wast --wast-dir external/testsuite --wast-filter type-subtyping`. The fix must drive 27 down WITHOUT regressing the full suite (historically ~400 regressions when subtyping is touched naively — full-suite gate is mandatory).
+    root-cause: |
+      Root-caused earlier to rec-group canonicalization: `type_canonical_ids` (kiln-decoder/src/{decoder,streaming_decoder}.rs) collapses distinct types so the subtype check returns true on equal canonical ids even when the structural relation should not hold (observed val_idx=6 target=4 true because canon[6]==canon[4]==4). Consumed by the linking import-type check (kiln-build-core/src/wast_execution.rs) and the subtype-declaration validator (kiln-build-core/src/wast_validator.rs). The subtype *walker* reads correct for sub-chains; the canonical-id assignment is the locus. Fix one cluster at a time, full-suite-regression-gated each step.

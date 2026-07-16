@@ -1,0 +1,16 @@
+artifacts:
+- id: REQ_LFUNC_006
+  type: requirement
+  title: No standard library dependency
+  description: |
+    The interpreter shall be implemented in no_std Rust, only relying on functionality provided by core/alloc to enable execution on bare environments where no operating system is available.
+  status: implemented
+  tags:
+  - platform
+  - no-std
+  links:
+  - type: derives-from
+    target: REQ_FUNC_002
+  fields:
+    implementation: 'All core crates: #![cfg_attr(not(feature = "std"), no_std)]'
+    note: kiln-runtime/src/memory.rs has a no_std guard bug (Issue in Stream D)

@@ -1,0 +1,23 @@
+artifacts:
+- id: AD-PATTERNS-001
+  type: design-decision
+  title: Three-tier environment support pattern
+  description: |
+    Trait-based abstractions (MemoryProvider, ComponentFactory, etc.) with environment-specific implementations selected at compile time. BoundedVec, BoundedString, and other bounded collections replace std collections in no_alloc environments.
+  status: implemented
+  tags:
+  - architecture
+  - patterns
+  - no-std
+  links:
+  - type: satisfies
+    target: REQ_FUNC_002
+  - type: satisfies
+    target: REQ_LFUNC_006
+  - type: satisfies
+    target: REQ_MEM_SAFETY_005
+  fields:
+    rationale: |
+      Trait-based abstractions with conditional compilation enable the same API surface across std, no_std+alloc, and no_std+no_alloc environments without runtime overhead. The MemoryProvider abstraction backs the capability-based safe_managed_alloc! allocator, whose RAII guards give deterministic, explicit memory lifetime (no use-after-free / double-free) across all three tiers.
+    previous-id: ARCH_DEC_PATTERNS_001
+    implementation: kiln-foundation/src/safe_memory.rs, kiln-foundation/src/bounded.rs

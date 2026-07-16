@@ -1,0 +1,37 @@
+artifacts:
+- id: REQ_ENGINE_COMPARISON
+  type: requirement
+  title: Benchmark and differentially validate kiln against the safety-critical Rust interpreter field (NASA spacewasm, DLR-FT), not only wasmtime
+  description: |
+    kiln's differential/perf comparisons must include its TRUE peers — the safety-critical Rust WebAssembly interpreters — besides the wasmtime JIT (the "unverified TCB" foil of #283). Two peers, same niche as kiln (Rust, no_std-friendly, fuel-bounded, deterministic, cert-oriented):
+      - NASA spacewasm (github.com/nasa/spacewasm): flight-compliant ground-up
+        Rust interpreter for on-board spacecraft; design levied from
+        flight-software standards; deterministic dynamic-memory model,
+        streaming for low peak memory, CoreMark + libfuzzer; draws on wasmi,
+        wasm3, DLR-FT.
+      - DLR-FT/wasm-interpreter (github.com/DLR-FT/wasm-interpreter): minimal
+        in-place Rust interpreter from DLR Institute of Flight Systems for
+        avionics (ED-12C/DO-178C, ED-217/DO-332); passes the full WAST suite
+        minus unfinished proposals; fuel halt/refill/resume (mirrors kiln's
+        resumable-fuel model); live instance migration. DASC 2025 paper "On
+        the Design of a WebAssembly Interpreter for Aviation." NASA spacewasm's
+        requirements are levied from this work.
+    Two workstreams. (1) Differential correctness — extend SR-35/#401: run a multi-oracle differential across {kiln, wasmtime, spacewasm, DLR-FT, AND the VERIFIED reference interpreter WasmRef-Isabelle (PLDI 2023)}. The tiers carry different signal: WasmRef-Isabelle is the machine-checked GOLD oracle (a kiln-only disagreement with it is a kiln correctness bug, full stop); the safety-critical Rust peers (spacewasm, DLR-FT) are cheap-to-embed cross-checks whose agreement is high-signal and whose disagreement flags a spec-interpretation delta worth a note; wasmtime is the JIT baseline. Per SR-35, "an interpreter you also wrote is not its own oracle" — so the verified leg is load-bearing, not optional. Cross-check the WAST suite + fuzz-generated modules across all engines. (2) Competitive matrix — measure kiln vs the field on WAST conformance pass rate, performance (CoreMark-style + the per-poll micro methodology from REQ_ASYNC_BENCH), peak/deterministic memory, no_std/no_alloc footprint, and resumable-fuel determinism — AND the verification-evidence axis where kiln is meant to LEAD: Verus + Lean/Aeneas proofs, witness MC/DC on the real Wasm, sigil attestation, rivet end-to-end traceability (spacewasm/DLR are cert-DESIGNED but not proof-carrying / MC/DC-attested to this stack level). "Outcompete" = lead decisively on verification evidence while matching or beating on conformance + determinism. Research / benchmark-infrastructure direction, not a defect.
+  status: proposed
+  release: v0.7.0
+  tags:
+  - benchmark
+  - differential-testing
+  - oracle
+  - conformance
+  - positioning
+  - research
+  - direction
+  - release-v0.7.0
+  links:
+  - type: derives-from
+    target: SR-35
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/413
+    note: |
+      Peer field: NASA spacewasm + DLR-FT/wasm-interpreter. Sharpens #283 (positioning vs the unverified Wasmtime TCB) to also cover the cert-designed-but-unproven Rust field. Reuses the WAST mechanical oracle (REQ_FUNC_022) and the executor-comparison bench methodology.

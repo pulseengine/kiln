@@ -1,0 +1,29 @@
+artifacts:
+- id: REQ_NOSTD_INTERP
+  type: requirement
+  title: Kiln interpreter runs no_std for on-board embedded execution (hybrid with synth-AOT)
+  description: |
+    Kiln's interpreter shall build and run in a no_std/no_alloc environment on embedded targets (thumbv7em / gale / gust), so kiln can interpret WebAssembly ON-BOARD alongside the synth-AOT native path — the alternative for payloads where AOT is not wanted (dynamic/late-loaded, migrated, untrusted, or smaller-TCB cert contexts) — matching the deployment model of the safety-critical interpreter field (NASA spacewasm, DLR-FT, #413) while carrying kiln's verification evidence (Verus / Lean / witness MC/DC / scry / sigil). DEPLOYMENT: kiln (no_std/no_alloc) is compiled TO a wasm module that synth AOT-compiles to native for the target — the same pipeline as user code (wasm = universal IR, synth = single compiler, kiln-as-wasm itself attestable). UNIQUE SCOPE: the on-board interpreter runs the FULL Component Model (direct hosting, AD-COMPONENT-HOST-001) or plain core wasm — peers are core-only; this extends AD-COMPONENT-HOST-001's direct-hosting from QM/std-only to embedded. meld + synth (AOT hot path) are RETAINED. Phased: (1) feasibility spike — compile a minimal kiln interpreter to wasm, synth-AOT it to native, interpret a core module under no_std+alloc on thumbv7em with fuel + bounded memory intact; measure size + perf vs a direct no_std-Rust build and vs the peers (go/no-go gate, incl. does synth accept a module this large); (2) port sync primitives (~90 Mutex/RwLock/thread → kiln-sync) and collections (std → alloc/bounded) behind the std-feature boundary; (3) host/ WASI imports via the kiln-builtins platform-callback surface + a GALE OS requirement for runtime wasm loading (dynamic module/component load) and for running the synth-compiled kiln image; (4) Component-Model-on-embedded (bring the direct-hosting path no_std); (5) live-instance migration (state serialize/ restore — DLR-FT parity, gale/gust checkpoint-restart/failover; own track); (6) cert-evidence parity with the std interpreter. Corrects the record: REQ_FUNC_002 (baremetal) and REQ_FUNC_033 (kilnd-nostd) are marked implemented, but RFC #46 routes embedded through synth-AOT only and kiln-runtime is std-bound today — this delivers the actual no_std interpreter. Amends RFC #46 (doc + BA sign-off).
+  status: proposed
+  release: v0.6.0
+  tags:
+  - interpreter
+  - no-std
+  - embedded
+  - migration
+  - rfc46-amendment
+  - roadmap
+  - direction
+  links:
+  - type: derives-from
+    target: REQ_FUNC_002
+  - type: depends-on
+    target: gust:SYSREQ-KILN-002
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/415
+    cross-repo: |
+      Aligns with existing sibling work (rivet externals synced): gust's whole thesis is "kernel = verified wasm dissolved to native, TCB = ~4-fn shim", and gust already tracks the wasm->native-toolchain-in-TCB trust argument (my open-question #3 is gust's existing concern) and a phase-2 kiln integration (gust:STKH-002 eliminate-C-FFI, gust:SYSREQ-KILN-002 end-to-end verified compilation pipeline, gust:SWREQ-KILN-003 synth ARM codegen). gale's north-star is "the dissolved CM composition runs on the kiln/gust stack, kiln-async drives it bare metal" — confirming the no_std/no_alloc embedded precedent. The kiln-as-wasm->synth idea is PHILOSOPHICALLY IDENTICAL to gust's kernel-as-dissolved-wasm, so it fits the existing architecture rather than fighting it. The genuinely-NEW ask for gust is narrowly RUNTIME wasm loading (load a module/component on-target at runtime for the interpreter path) — distinct from gust's build-time dissolve — tracked as a gust gh issue for coordination.
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-11T00:00:00Z

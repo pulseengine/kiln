@@ -1,0 +1,12 @@
+artifacts:
+- id: REQ_QA_010
+  type: requirement
+  title: Fuzzing infrastructure
+  description: |
+    The interpreter shall include fuzzing infrastructure covering bounded collections, memory adapters, component model parser, type bounds, canonical options, and WIT parser fuzzing.
+  status: implemented
+  tags:
+  - testing
+  - quality
+  fields:
+    implementation: fuzz/

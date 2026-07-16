@@ -1,0 +1,16 @@
+artifacts:
+- id: SR-32
+  type: requirement
+  title: All workspace build targets compile and are gated against bit rot in CI
+  status: implemented
+  description: 'Every target in the workspace (lib, bin, tests, examples, benches) shall compile, and CI shall gate cargo build --all-targets (with the necessary feature sets) so broken examples/integration-tests/benches cannot rot invisibly. Root cause of the accumulated rot: CI runs a curated ''cargo-kiln test'' subset, not --all-targets. Approach (user-directed): delete-dead-first (orphaned/removed-module/moved-inline tests), then fix salvageable, then add the CI gate. Issue: bit-rot elimination mandate.'
+  tags:
+  - ci
+  - bit-rot
+  - testing
+  - hygiene
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-07T19:24:29Z
+  release: v0.7.0

@@ -1,0 +1,15 @@
+artifacts:
+- id: REQ_LFUNC_005
+  type: requirement
+  title: Stackless implementation
+  description: |
+    The interpreter shall be stackless, storing the stack of the interpreted bytecode in a traditional data structure rather than using function calls in the host environment.
+  status: implemented
+  tags:
+  - runtime
+  - architecture
+  links:
+  - type: derives-from
+    target: REQ_FUNC_001
+  fields:
+    implementation: kiln-runtime/src/stackless/

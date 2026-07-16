@@ -1,0 +1,20 @@
+artifacts:
+- id: SR-45
+  type: requirement
+  title: The kiln.resource_limits manifest section is applied (wire the dead extraction)
+  status: proposed
+  description: 'The WCMC analysis (AD-WCMC-001) found the kiln.resource_limits section is decoded but NEVER APPLIED (capability_engine.rs:561 TODO). DEEPER FINDING this pass: the extraction fn (kiln-foundation/src/execution.rs:144) is ALSO a stub — returns a default and does NOT read the section (the parser from_bytes_with_provider in kiln-decoder/src/resource_limits_section.rs is never called). So SR-45 is a bigger cross-crate wire: (1) make extract scan+parse the section; (2) thread limits to instantiate; (3) apply max_memory_usage -> set_runtime_max_pages (SR-41), max_call_depth -> engine cap. This is the on-target enforcement point the embedded trust chain (AD-WCMC-001) depends on. Own feature loop. AD-WCMC-001. Issue #415.'
+  tags:
+  - kiln-runtime
+  - resource-limits
+  - manifest
+  - embedded
+  - dead-code
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/415
+  provenance:
+    created-by: ai
+    model: claude-opus-4-8
+    timestamp: 2026-07-11T10:00:00Z
+  release: v0.4.3

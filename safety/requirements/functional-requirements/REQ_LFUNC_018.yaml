@@ -1,0 +1,14 @@
+artifacts:
+- id: REQ_LFUNC_018
+  type: requirement
+  title: WebAssembly Core Spec 3.0 implementation
+  description: |
+    The interpreter shall implement the WebAssembly Core Spec 3.0, including: module validation, value types and reference types, instructions and control flow, function calls and tables, memory and data segments, global variables, exception handling (modern try_table syntax), and SIMD operations.
+  status: implemented
+  tags:
+  - wasm-core
+  - spec-conformance
+  fields:
+    implementation: kiln-runtime/src/stackless/engine.rs
+    spec-reference: WebAssembly Core Spec 3.0 (2025-12-03)
+    note: ~1,500 assert_return failures remain (Issue 149)

@@ -1,0 +1,12 @@
+artifacts:
+- id: REQ_PLATFORM_001
+  type: requirement
+  title: Platform abstraction layer
+  description: |
+    The runtime shall provide a platform abstraction layer (PAL) with distinct backends for target operating systems (macOS, Linux, QNX, Zephyr) and bare-metal environments, selectable via compile-time features. The PAL shall abstract OS-specific APIs for memory allocation/protection and synchronization primitives.
+  status: implemented
+  tags:
+  - platform
+  - architecture
+  fields:
+    implementation: kiln-platform/src/

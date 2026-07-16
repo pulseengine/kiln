@@ -1,0 +1,12 @@
+artifacts:
+- id: REQ_HELPER_ABI_001
+  type: requirement
+  title: Helper runtime C ABI exports
+  description: |
+    The AOT helper runtime (libkiln_helper) shall export a stable C ABI including functions for Wasm operations not efficiently inlined by the AOT compiler: kiln_memory_copy, kiln_memory_fill, kiln_memory_grow, kiln_atomic_wait, kiln_atomic_notify.
+  status: proposed
+  tags:
+  - aot
+  - synth-integration
+  fields:
+    note: 'Related to BA RFC #46 host-wit-bindgen equivalent'

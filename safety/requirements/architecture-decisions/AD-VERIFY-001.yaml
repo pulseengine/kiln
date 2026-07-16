@@ -1,0 +1,19 @@
+artifacts:
+- id: AD-VERIFY-001
+  type: design-decision
+  title: Configurable verification level system
+  description: |
+    Multiple verification levels (Off, Basic, Standard, Full, Sampling, Redundant) configurable per-component and per-deployment scenario. Verification operates independently of the functionality it protects — safety mechanisms can be verified without affecting execution behavior.
+  status: implemented
+  tags:
+  - verification
+  - safety-independence
+  - asil-d
+  links:
+  - type: satisfies
+    target: REQ_SAFETY_004
+  fields:
+    rationale: |
+      Safety mechanism independence (ISO 26262-6:7.4.10) requires that verification systems do not share failure modes with the mechanisms they verify. Configurable levels allow deployment-appropriate trade-offs between coverage and performance.
+    previous-id: SPEC_VERIFY_001, IMPL_VERIFICATION_001
+    implementation: kiln-foundation/src/verification.rs

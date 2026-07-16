@@ -1,0 +1,20 @@
+artifacts:
+- id: AD-COMP-001
+  type: design-decision
+  title: Component-based modular architecture
+  description: |
+    The system is decomposed into independently testable and certifiable components (crates), each with a single well-defined responsibility. Higher layers depend only on lower layers. Platform-specific code is isolated in the Platform Abstraction Layer.
+  status: implemented
+  tags:
+  - architecture
+  - modularity
+  links:
+  - type: satisfies
+    target: REQ_PLATFORM_001
+  - type: satisfies
+    target: REQ_FUNC_002
+  fields:
+    rationale: |
+      Modular design enables independent testing, certification, and platform-specific optimization. Clear separation of concerns allows selective feature inclusion and minimizes dependencies.
+    previous-id: ARCH_DEC_COMP_001
+    implementation: Cargo workspace with 24 specialized crates

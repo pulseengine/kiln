@@ -1,0 +1,14 @@
+artifacts:
+- id: REQ_P3_LIBCOMP
+  type: requirement
+  title: P3 library component instantiation (InlineExports)
+  description: |
+    The runtime shall instantiate P3 async *library* components whose exports reference not-yet-instantiated source instances (InlineExports). Today these fail with "InlineExports source instance not instantiated".
+  status: proposed
+  tags:
+  - component-model
+  - p3
+  - instantiation
+  - roadmap
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/211

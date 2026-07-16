@@ -1,0 +1,14 @@
+artifacts:
+- id: REQ_CFS_EVS
+  type: requirement
+  title: cFS Event Services as host extension
+  description: |
+    Kiln shall provide host-native structured event emission with severity levels, per-event filtering masks, and distribution via the Software Bus, modeled on NASA cFS Event Services.
+  status: proposed
+  tags:
+  - cfs
+  - host-extension
+  - events
+  - roadmap
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/228

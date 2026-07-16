@@ -1,0 +1,14 @@
+artifacts:
+- id: REQ_FUNC_003
+  type: requirement
+  title: Bounded execution
+  description: |
+    The interpreter shall yield back control flow eventually, allowing users to call the interpreter with a bound and expect a result in a finite amount of time or bytecode operations.
+  status: implemented
+  tags:
+  - runtime
+  - safety
+  fields:
+    implementation: kiln-runtime/src/stackless/engine.rs (fuel mechanism)
+    note: |
+      Enforced per-instruction in the StacklessEngine execution loop: one fuel unit is charged per executed instruction and the engine traps when the budget is exhausted. kilnd's `--fuel N` sets the budget (default unbounded). Prior to issue #270 the loop never decremented fuel, so the budget was not actually enforced.
