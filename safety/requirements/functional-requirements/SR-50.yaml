@@ -1,0 +1,21 @@
+artifacts:
+- id: SR-50
+  type: requirement
+  title: kiln WASI filesystem allow-list (is_path_allowed) is actually enforced
+  status: proposed
+  description: 'The per-path filesystem allow-list is dead code. WasiFileSystemCapabilities::allowed_paths is populated (add_allowed_path; kilnd fills it from every --wasi-fs path at lib.rs:1464) and is_path_allowed (capabilities.rs:312) has real logic, but is_path_allowed has ZERO call sites in dispatcher.rs / lib.rs — neither dispatch nor dispatch_core consults it before an FS op. So a user/embedder configuring path restrictions gets NO enforcement (the "configured security control that does nothing" class, cf #412). Compounds SR-49: on dispatch_core there is neither containment (#437) nor allow-list — zero path-based defense. Fix: call is_path_allowed(canonicalized-absolute-path) after the containment check in every FS handler of both paths, denying with access-denied when false. Note: is_path_allowed has an allow-all-on-empty branch — a secondary design tightening, subordinate to it never being called. Relates to SR-33, SR-49. Issue #438.'
+  tags:
+  - kilnd
+  - kiln-wasi
+  - filesystem
+  - allow-list
+  - dead-code
+  - security
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/438
+  provenance:
+    created-by: ai
+    model: claude-fable-5
+    timestamp: 2026-07-16T19:40:00Z
+  release: v0.5.0

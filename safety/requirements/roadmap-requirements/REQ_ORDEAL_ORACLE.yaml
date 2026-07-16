@@ -1,0 +1,19 @@
+artifacts:
+- id: REQ_ORDEAL_ORACLE
+  type: requirement
+  title: Use ordeal as a certified oracle for integer op semantics + effective-address overflow traps
+  status: proposed
+  description: 'Direction (not a defect): adopt ordeal as a certified differential oracle for the runtime''s integer operation semantics and effective-address overflow trap behaviour — a machine-checked reference the interpreter is differentially validated against, complementing the WasmRef-Isabelle leg (REQ_ENGINE_COMPARISON / SR-35) and the verified-oracle direction (#401). Scope to define: which op classes ordeal covers (int arith/div/rem, shifts, effective-address wraparound → out-of-bounds trap), the harness that drives kiln against ordeal, and the pass/fail criterion. Verification-hardening line; a focused pass, needs the external oracle wired. Relates to REQ_ENGINE_COMPARISON, SR-35. Issue #426.'
+  tags:
+  - verification
+  - oracle
+  - differential
+  - integer-semantics
+  - roadmap
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/426
+  provenance:
+    created-by: ai
+    model: claude-fable-5
+    timestamp: 2026-07-16T19:40:00Z
+  release: v0.7.0

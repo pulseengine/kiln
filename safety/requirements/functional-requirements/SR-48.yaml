@@ -1,0 +1,20 @@
+artifacts:
+- id: SR-48
+  type: requirement
+  title: kilnd caps/rejects/reports ALL memories, not just memory index 0
+  status: proposed
+  description: 'The SR-41 runtime cap, the SR-43 reject-at-load, and the SR-42 peak reporting all operate on inst.memory(0) ONLY (kilnd/src/lib.rs:874 gate, :968/:975 peak). A WASM multi-memory module placing an oversized min on memory index >=1 escapes the cap entirely: eager allocation, exit 0 (silent — worse than the single-memory #436 which at least exits 1), and a fabricated peak ("Peak memory: 65536 bytes" while 2.48GB is resident). Measured: (memory 1)(memory 40000) under --memory 65536 → 2.48GB RSS, exit 0. Fix: iterate all inst.memory(i) for the SR-41 cap, the SR-43/SR-46 reject-at-load, and the SR-42 peak sum — or bound total pages across all memories against --memory. Relates to SR-41, SR-42, SR-43, SR-46. AD-WCMC-001. Issue #440.'
+  tags:
+  - kilnd
+  - memory
+  - multi-memory
+  - resource-limit
+  - dos
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/440
+  provenance:
+    created-by: ai
+    model: claude-fable-5
+    timestamp: 2026-07-16T19:40:00Z
+  release: v0.5.0
