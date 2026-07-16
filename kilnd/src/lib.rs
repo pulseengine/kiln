@@ -570,9 +570,13 @@ impl KilndEngine {
                     if self.config.enable_wasi {
                         match kiln_wasi::WasiDispatcher::with_defaults() {
                             Ok(mut dispatcher) => {
-                                // Add filesystem preopens from CLI args
+                                // Add filesystem preopens from CLI args and
+                                // register each as an allowed path so the sandbox
+                                // allow-list is actually enforced on the live path
+                                // (SR-50), not just populated on an unused object.
                                 for path in &self.config.wasi_fs_paths {
                                     let _ = dispatcher.add_preopen(path);
+                                    let _ = dispatcher.add_allowed_path(path);
                                 }
                                 let _ = self.logger.handle_minimal_log(
                                     LogLevel::Info,
@@ -804,9 +808,12 @@ impl KilndEngine {
             if self.config.enable_wasi {
                 match WasiDispatcher::with_defaults() {
                     Ok(mut dispatcher) => {
-                        // Add filesystem preopens from CLI args
+                        // Add filesystem preopens from CLI args and register each
+                        // as an allowed path so the sandbox allow-list is enforced
+                        // on the live path (SR-50).
                         for path in &self.config.wasi_fs_paths {
                             let _ = dispatcher.add_preopen(path);
+                            let _ = dispatcher.add_allowed_path(path);
                         }
                         engine.set_host_handler(Box::new(dispatcher));
                         let _ = self

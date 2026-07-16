@@ -368,6 +368,118 @@ impl WasiDispatcher {
         Ok(handle)
     }
 
+    /// Register a filesystem path the guest is permitted to access, restricting
+    /// access to this subtree in addition to preopen containment (SR-50).
+    ///
+    /// The path is canonicalized so the allow-list compares against the
+    /// OS-resolved real paths the sandbox gate produces (see
+    /// [`Self::resolve_and_authorize`]). A non-empty allow-list is enforced by
+    /// every filesystem handler; an empty allow-list imposes no restriction
+    /// beyond preopen containment.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the path cannot be resolved (it must exist) or if the
+    /// capability path store is full.
+    #[cfg(feature = "std")]
+    pub fn add_allowed_path(&mut self, path: impl AsRef<std::path::Path>) -> Result<()> {
+        let canonical = std::fs::canonicalize(path.as_ref())
+            .map_err(|_| Error::wasi_invalid_argument("Allowed path cannot be resolved"))?;
+        self.capabilities
+            .filesystem
+            .add_allowed_path(&canonical.to_string_lossy())
+    }
+
+    /// The single sandbox gate every filesystem handler routes through before
+    /// touching the host filesystem. Resolves the guest-supplied `guest_path`
+    /// against the preopen `base` and authorizes it:
+    ///
+    /// 1. **Lexical containment** (existence-independent): rejects any `..`
+    ///    traversal or absolute path that `Path::join` let replace the base, so
+    ///    the check also holds for a not-yet-created target (#392, SR-49).
+    /// 2. **Symlink-safe containment** on the OS-resolved real path: canonicalizes
+    ///    the preopen and the target and requires the real target to stay inside
+    ///    the real preopen, so a symlink inside the preopen that points outside is
+    ///    rejected (SR-51). For a not-yet-existing target the parent directory is
+    ///    canonicalized and re-checked, then the final component is appended
+    ///    literally (never following a symlink out on the final component).
+    /// 3. **Allow-list** (only when a non-empty allow-list is configured): the
+    ///    resolved absolute path must fall under an allowed path (SR-50).
+    ///
+    /// The op-specific capability flag (read/write/directory/metadata) is checked
+    /// by the caller before this gate. On any failure a `wasi_permission_denied`
+    /// error is returned, matching the deny behavior of the `dispatch` path and
+    /// wasmtime; the resolved absolute path to use for the host operation is
+    /// returned on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns `wasi_permission_denied` if the path escapes the preopen (lexically
+    /// or via symlink) or is not permitted by a configured allow-list.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn resolve_and_authorize(
+        &self,
+        base: &std::path::Path,
+        guest_path: &str,
+    ) -> Result<std::path::PathBuf> {
+        let joined = base.join(guest_path);
+
+        // (1) Lexical containment — holds for missing targets too.
+        if !is_within_sandbox(base, &joined) {
+            return Err(Error::wasi_permission_denied("Path escapes sandbox"));
+        }
+
+        // (2) Symlink-safe containment on the OS-resolved real path.
+        let real_base = std::fs::canonicalize(base)
+            .map_err(|_| Error::wasi_permission_denied("Preopen base cannot be resolved"))?;
+        let resolved = match std::fs::symlink_metadata(&joined) {
+            // Final component exists (possibly a symlink). Fully resolve it,
+            // following symlinks, and require the real path stays inside. A
+            // symlink pointing outside resolves outside `real_base` → denied; a
+            // dangling symlink fails to canonicalize → denied (fail loud).
+            Ok(_) => std::fs::canonicalize(&joined)
+                .map_err(|_| Error::wasi_permission_denied("Path escapes sandbox via symlink"))?,
+            // Target does not exist at all — resolve the parent (which must exist
+            // and stay inside) and append the final component literally, so a
+            // create/open-create cannot escape and no symlink is followed on the
+            // final component.
+            Err(_) => {
+                let parent = joined
+                    .parent()
+                    .ok_or_else(|| Error::wasi_permission_denied("Path has no parent"))?;
+                let file_name = joined
+                    .file_name()
+                    .ok_or_else(|| Error::wasi_permission_denied("Path has no final component"))?;
+                let real_parent = std::fs::canonicalize(parent).map_err(|_| {
+                    Error::wasi_permission_denied("Parent directory cannot be resolved")
+                })?;
+                if !real_parent.starts_with(&real_base) {
+                    return Err(Error::wasi_permission_denied(
+                        "Path escapes sandbox via symlink",
+                    ));
+                }
+                real_parent.join(file_name)
+            },
+        };
+        if !resolved.starts_with(&real_base) {
+            return Err(Error::wasi_permission_denied(
+                "Path escapes sandbox via symlink",
+            ));
+        }
+
+        // (3) Allow-list — only enforced when a non-empty allow-list is configured.
+        if self.capabilities.filesystem.has_allowed_paths()
+            && !self
+                .capabilities
+                .filesystem
+                .is_path_allowed(&resolved.to_string_lossy())
+        {
+            return Err(Error::wasi_permission_denied("Path not in allow-list"));
+        }
+
+        Ok(resolved)
+    }
+
     /// Get the list of pre-opened directories
     #[cfg(feature = "std")]
     pub fn get_preopens(&self) -> &[(u32, PathBuf)] {
@@ -737,16 +849,11 @@ impl WasiDispatcher {
                     _ => return Err(Error::wasi_invalid_argument("Not a directory descriptor")),
                 };
 
-                // Construct full path
-                let full_path = base_path.join(&path);
-
-                // Reject any path that escapes the preopen — checked lexically so
-                // it holds for not-yet-created files too. `canonicalize` fails on a
-                // missing target, so an existence-gated check would let a write to
-                // `../evil.txt` escape the sandbox (#392 latent hazard).
-                if !is_within_sandbox(&base_path, &full_path) {
-                    return Err(Error::wasi_permission_denied("Path escapes sandbox"));
-                }
+                // Sandbox gate: resolve the guest path against the preopen, then
+                // enforce symlink-safe containment (SR-51) and the configured
+                // allow-list (SR-50). Lexical containment inside the gate still
+                // holds for not-yet-created targets (#392, SR-49).
+                let full_path = self.resolve_and_authorize(&base_path, &path)?;
 
                 // Allocate new handle via resource manager (Preview2 semantics)
                 let path_str = full_path.to_string_lossy();
@@ -947,12 +1054,8 @@ impl WasiDispatcher {
                     _ => return Err(Error::wasi_invalid_argument("Not a directory descriptor")),
                 };
 
-                let full_path = base_path.join(&path);
-
-                // Sandbox check
-                if !is_within_sandbox(&base_path, &full_path) {
-                    return Err(Error::wasi_permission_denied("Path escapes sandbox"));
-                }
+                // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
+                let full_path = self.resolve_and_authorize(&base_path, &path)?;
 
                 match std::fs::create_dir(&full_path) {
                     Ok(()) => Ok(vec![Value::Result(Ok(Box::new(Value::Tuple(vec![]))))]),
@@ -986,12 +1089,8 @@ impl WasiDispatcher {
                     _ => return Err(Error::wasi_invalid_argument("Not a directory descriptor")),
                 };
 
-                let full_path = base_path.join(&path);
-
-                // Sandbox check (lexical — existence-independent)
-                if !is_within_sandbox(&base_path, &full_path) {
-                    return Err(Error::wasi_permission_denied("Path escapes sandbox"));
-                }
+                // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
+                let full_path = self.resolve_and_authorize(&base_path, &path)?;
 
                 match std::fs::remove_file(&full_path) {
                     Ok(()) => Ok(vec![Value::Result(Ok(Box::new(Value::Tuple(vec![]))))]),
@@ -2142,7 +2241,8 @@ impl WasiDispatcher {
                     }));
 
                 if let Some(base) = base_path {
-                    let full_path = base.join(&path_str);
+                    // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
+                    let full_path = self.resolve_and_authorize(&base, &path_str)?;
                     if full_path.exists() {
                         let path_for_resource = full_path.to_string_lossy().to_string();
                         let new_handle = self.resource_manager.create_file_descriptor(
@@ -2238,7 +2338,8 @@ impl WasiDispatcher {
                     }));
 
                 if let Some(base_path) = base {
-                    let full_path = base_path.join(&path_str);
+                    // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
+                    let full_path = self.resolve_and_authorize(&base_path, &path_str)?;
                     match std::fs::metadata(&full_path) {
                         Ok(meta) => {
                             let dtype: u8 = if meta.is_dir() { 3 } else { 6 };
@@ -3186,6 +3287,270 @@ mod tests {
         } else {
             panic!("Expected tuple result");
         }
+        Ok(())
+    }
+
+    // ================================================================
+    // WASI filesystem sandbox-escape regression tests
+    // SR-49 (#437) live-path containment, SR-51 (#419) symlink-safety,
+    // SR-50 (#438) allow-list enforcement. These drive the REAL
+    // `dispatch_core` path that kilnd uses.
+    // ================================================================
+
+    /// A unique temp directory path for an escape-test fixture (not created).
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn sandbox_fixture_dir(tag: &str) -> std::path::PathBuf {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!(
+            "kiln_fs_sandbox_{}_{}_{}",
+            tag,
+            std::process::id(),
+            nanos
+        ))
+    }
+
+    /// Invoke the live `dispatch_core` open-at handler with a guest path.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn core_open_at(
+        dispatcher: &mut WasiDispatcher,
+        mem: &kiln_foundation::traits::SliceMemory,
+        dir_fd: u32,
+        guest_path: &[u8],
+    ) -> Result<Vec<kiln_foundation::values::Value>> {
+        use kiln_foundation::values::Value as CV;
+        use kiln_foundation::MemoryAccessor as _;
+        let path_ptr = 0x1000u32;
+        mem.write_bytes(path_ptr, guest_path)?;
+        dispatcher.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.open-at",
+            &[
+                CV::I32(dir_fd as i32),
+                CV::I32(0), // path-flags
+                CV::I32(path_ptr as i32),
+                CV::I32(guest_path.len() as i32),
+                CV::I32(0), // open-flags
+                CV::I32(0), // descriptor-flags
+            ],
+            Some(mem),
+        )
+    }
+
+    /// SR-49 / #437: the live `dispatch_core` open-at handler must DENY a plain
+    /// lexical `../` escape out of the preopen (no symlink needed). Before the
+    /// fix the handler only did an `exists()` check, so `open-at("../SECRET.txt")`
+    /// returned Ok(descriptor) for a file OUTSIDE the preopen.
+    // rivet: verifies SR-49
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn open_at_denies_lexical_parent_escape_on_core_path() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use std::io::Write as _;
+        MemoryInitializer::ensure_initialized()?;
+
+        let root = sandbox_fixture_dir("openat_lexical");
+        let sandbox = root.join("sandbox");
+        std::fs::create_dir_all(&sandbox).unwrap();
+        // SECRET lives OUTSIDE the preopen.
+        std::fs::File::create(root.join("SECRET.txt"))
+            .unwrap()
+            .write_all(b"TOPSECRET")
+            .unwrap();
+
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let dir_fd = dispatcher.add_preopen(sandbox.clone())?;
+
+        let mem = SliceMemory::with_size(0x10000);
+        let res = core_open_at(&mut dispatcher, &mem, dir_fd, b"../SECRET.txt");
+
+        std::fs::remove_dir_all(&root).ok();
+        assert!(
+            res.is_err(),
+            "open-at must DENY a `../` escape out of the preopen (SR-49), got {:?}",
+            res
+        );
+        Ok(())
+    }
+
+    /// SR-49 / #437: a legitimate open of a file INSIDE the preopen must still
+    /// succeed after the containment gate is added.
+    // rivet: verifies SR-49
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn open_at_allows_file_inside_preopen_on_core_path() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        use std::io::Write as _;
+        MemoryInitializer::ensure_initialized()?;
+
+        let root = sandbox_fixture_dir("openat_inside");
+        let sandbox = root.join("sandbox");
+        std::fs::create_dir_all(&sandbox).unwrap();
+        std::fs::File::create(sandbox.join("inside.txt"))
+            .unwrap()
+            .write_all(b"OK")
+            .unwrap();
+
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let dir_fd = dispatcher.add_preopen(sandbox.clone())?;
+
+        let mem = SliceMemory::with_size(0x10000);
+        let res = core_open_at(&mut dispatcher, &mem, dir_fd, b"inside.txt")?;
+
+        std::fs::remove_dir_all(&root).ok();
+        assert!(
+            matches!(res.first(), Some(CV::I32(0))),
+            "open-at inside the preopen must succeed (result::ok), got {:?}",
+            res
+        );
+        Ok(())
+    }
+
+    /// SR-49 / #437: the live `dispatch_core` stat-at handler must DENY a `../`
+    /// escape. Before the fix it hit `std::fs::metadata(base.join(guest))` with
+    /// no containment check, leaking metadata for files outside the preopen.
+    // rivet: verifies SR-49
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn stat_at_denies_lexical_parent_escape_on_core_path() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        use kiln_foundation::MemoryAccessor as _;
+        use std::io::Write as _;
+        MemoryInitializer::ensure_initialized()?;
+
+        let root = sandbox_fixture_dir("statat_lexical");
+        let sandbox = root.join("sandbox");
+        std::fs::create_dir_all(&sandbox).unwrap();
+        std::fs::File::create(root.join("SECRET.txt"))
+            .unwrap()
+            .write_all(b"TOPSECRET")
+            .unwrap();
+
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let dir_fd = dispatcher.add_preopen(sandbox.clone())?;
+
+        let mem = SliceMemory::with_size(0x10000);
+        let path_ptr = 0x1000u32;
+        let guest = b"../SECRET.txt";
+        mem.write_bytes(path_ptr, guest)?;
+        let res = dispatcher.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.stat-at",
+            &[
+                CV::I32(dir_fd as i32),
+                CV::I32(0),
+                CV::I32(path_ptr as i32),
+                CV::I32(guest.len() as i32),
+            ],
+            Some(&mem),
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+        assert!(
+            res.is_err(),
+            "stat-at must DENY a `../` escape out of the preopen (SR-49), got {:?}",
+            res
+        );
+        Ok(())
+    }
+
+    /// SR-51 / #419: a symlink INSIDE the preopen that points OUTSIDE must not be
+    /// followed. Lexical containment alone (the pre-fix `is_within_sandbox`)
+    /// admits it because the joined path has no `..`. The gate must reject on the
+    /// OS-resolved real path.
+    // rivet: verifies SR-51
+    #[cfg(all(feature = "wasi-filesystem", feature = "std", unix))]
+    #[serial_test::serial]
+    #[test]
+    fn open_at_denies_symlink_escape_on_core_path() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use std::io::Write as _;
+        MemoryInitializer::ensure_initialized()?;
+
+        let root = sandbox_fixture_dir("openat_symlink");
+        let sandbox = root.join("sandbox");
+        std::fs::create_dir_all(&sandbox).unwrap();
+        let secret = root.join("SECRET.txt");
+        std::fs::File::create(&secret)
+            .unwrap()
+            .write_all(b"TOPSECRET")
+            .unwrap();
+        // A symlink inside the preopen pointing OUTSIDE it.
+        std::os::unix::fs::symlink(&secret, sandbox.join("link")).unwrap();
+
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let dir_fd = dispatcher.add_preopen(sandbox.clone())?;
+
+        let mem = SliceMemory::with_size(0x10000);
+        let res = core_open_at(&mut dispatcher, &mem, dir_fd, b"link");
+
+        std::fs::remove_dir_all(&root).ok();
+        assert!(
+            res.is_err(),
+            "open-at must DENY a symlink that escapes the preopen (SR-51), got {:?}",
+            res
+        );
+        Ok(())
+    }
+
+    /// SR-50 / #438: when a non-empty allow-list is configured, a path that is
+    /// inside the preopen but NOT under any allowed path must be DENIED, while a
+    /// path under an allowed path is permitted. Before the fix `is_path_allowed`
+    /// had zero call sites, so the allow-list was silently unenforced.
+    // rivet: verifies SR-50
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn open_at_enforces_nonempty_allowlist_on_core_path() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        use std::io::Write as _;
+        MemoryInitializer::ensure_initialized()?;
+
+        let root = sandbox_fixture_dir("openat_allowlist");
+        let sandbox = root.join("sandbox");
+        let allowed = sandbox.join("allowed");
+        std::fs::create_dir_all(&allowed).unwrap();
+        std::fs::File::create(allowed.join("ok.txt"))
+            .unwrap()
+            .write_all(b"OK")
+            .unwrap();
+        std::fs::File::create(sandbox.join("blocked.txt"))
+            .unwrap()
+            .write_all(b"NO")
+            .unwrap();
+
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let dir_fd = dispatcher.add_preopen(sandbox.clone())?;
+        // Restrict to the `allowed/` subtree only (non-empty allow-list).
+        dispatcher.add_allowed_path(&allowed)?;
+
+        let mem = SliceMemory::with_size(0x10000);
+
+        // Inside the preopen but outside the allow-list → DENIED.
+        let blocked = core_open_at(&mut dispatcher, &mem, dir_fd, b"blocked.txt");
+        // Under the allow-list → permitted.
+        let ok = core_open_at(&mut dispatcher, &mem, dir_fd, b"allowed/ok.txt")?;
+
+        std::fs::remove_dir_all(&root).ok();
+        assert!(
+            blocked.is_err(),
+            "open-at outside the non-empty allow-list must be DENIED (SR-50), got {:?}",
+            blocked
+        );
+        assert!(
+            matches!(ok.first(), Some(CV::I32(0))),
+            "open-at under the allow-list must succeed, got {:?}",
+            ok
+        );
         Ok(())
     }
 }

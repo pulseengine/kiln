@@ -308,6 +308,16 @@ impl WasiFileSystemCapabilities {
         }
     }
 
+    /// Whether a non-empty allow-list is configured.
+    ///
+    /// The sandbox gate only consults [`Self::is_path_allowed`] when this is
+    /// true; an empty allow-list imposes no restriction beyond preopen
+    /// containment (which the dispatcher enforces separately).
+    #[must_use]
+    pub fn has_allowed_paths(&self) -> bool {
+        !self.allowed_paths.is_empty()
+    }
+
     /// Check if a path is allowed
     pub fn is_path_allowed(&self, path: &str) -> bool {
         if self.allowed_paths.is_empty() {
