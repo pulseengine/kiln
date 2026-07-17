@@ -802,6 +802,20 @@ impl KilndEngine {
             // non-terminating module hangs regardless of --fuel (issue #270).
             engine.set_fuel(self.config.max_fuel);
 
+            // SR-46/47/48: hand the --memory cap to the engine BEFORE load.
+            // The engine validates the TOTAL declared minimums of ALL
+            // memories and ALL tables against the cap before any eager
+            // allocation (pre-allocation reject, SR-46) and puts a runtime
+            // grow cap on every instantiated memory and table (SR-41/44/47),
+            // not just index 0 (SR-48). 0 = unlimited (no cap configured).
+            if self.config.max_memory > 0 {
+                engine.set_resource_limits(
+                    kiln_runtime::engine::EngineResourceLimits::from_max_memory_bytes(
+                        self.config.max_memory as u64,
+                    ),
+                );
+            }
+
             // Wire up WASI dispatcher as the host import handler
             // This is the SINGLE dispatch path for ALL host function calls
             #[cfg(feature = "wasi")]
@@ -859,45 +873,19 @@ impl KilndEngine {
                     .handle_minimal_log(LogLevel::Info, "Example host functions registered");
             }
 
-            // Load module
-            let module_handle = engine
-                .load_module(data)
-                .map_err(|_| Error::runtime_execution_error("Failed to load module"))?;
+            // Load module. The engine runs the SR-46/47/48 pre-allocation
+            // gate here (set via set_resource_limits above): a module whose
+            // declared memory/table minimums exceed --memory is rejected
+            // BEFORE the eager min allocation, and every memory/table gets
+            // its runtime grow cap. Propagate the engine's error verbatim so
+            // the gate's reason (e.g. "rejected before allocation") reaches
+            // the user instead of a generic load failure.
+            let module_handle = engine.load_module(data)?;
 
             // Instantiate
             let instance = engine
                 .instantiate(module_handle)
                 .map_err(|_| Error::runtime_execution_error("Failed to instantiate module"))?;
-
-            // SR-41: enforce the configured memory cap (--memory <bytes>, default 64MB)
-            // as a REAL runtime bound on the guest's linear memory — a memory.grow past
-            // it now traps (matching wasmtime with a memory limit), instead of the old
-            // load-time module_size*2 admission estimate that let grow escape.
-            {
-                let cap_pages =
-                    (self.config.max_memory / (64 * 1024)).min(u32::MAX as usize) as u32;
-                if cap_pages > 0 {
-                    if let Ok(inst) = engine.get_instance(instance) {
-                        if let Ok(mem) = inst.memory(0) {
-                            // SR-43: reject-at-load when the module's DECLARED memory min
-                            // exceeds the cap — refuse to run rather than trap mid-execution
-                            // (moves a fixed-RAM overrun from mid-mission to load time).
-                            // NOTE: this runs post-instantiate, so the declared `min` was
-                            // already allocated by Memory::new; rejecting before eager `min`
-                            // allocation needs a pre-instantiate engine API (follow-up).
-                            let declared_min = mem.0.ty.limits.min;
-                            if declared_min > cap_pages {
-                                return Err(Error::new(
-                                    ErrorCategory::Resource,
-                                    codes::CAPACITY_EXCEEDED,
-                                    "Module declared memory min exceeds --memory cap (rejected at load)",
-                                ));
-                            }
-                            mem.0.set_runtime_max_pages(cap_pages);
-                        }
-                    }
-                }
-            }
 
             // Execute function - try common entry points
             let function_name = self.config.function_name.as_deref().unwrap_or("_start");
@@ -969,19 +957,22 @@ impl KilndEngine {
             let fuel_remaining = engine.remaining_fuel().unwrap_or(self.config.max_fuel);
             let fuel_used = self.config.max_fuel.saturating_sub(fuel_remaining);
             self.stats.fuel_consumed = self.stats.fuel_consumed.saturating_add(fuel_used);
-            let peak_mem = engine
-                .get_instance(instance)
-                .ok()
-                .and_then(|inst| inst.memory(0).ok())
-                .map(|m| m.0.peak_memory())
-                .unwrap_or(0);
+            // SR-48: sum peak/current usage across ALL memories, not just
+            // index 0 — a multi-memory module's usage must not be fabricated
+            // from its first memory alone.
+            let (peak_mem, current_mem) = {
+                let inst = engine.get_instance(instance)?;
+                let mut peak: usize = 0;
+                let mut current: usize = 0;
+                for idx in 0..inst.memory_count()? {
+                    let mem = inst.memory(idx as u32)?;
+                    peak = peak.saturating_add(mem.0.peak_memory());
+                    current = current.saturating_add(mem.0.size_in_bytes());
+                }
+                (peak, current)
+            };
             self.stats.peak_memory = self.stats.peak_memory.max(peak_mem);
-            self.stats.current_memory = engine
-                .get_instance(instance)
-                .ok()
-                .and_then(|inst| inst.memory(0).ok())
-                .map(|m| m.0.size_in_bytes())
-                .unwrap_or(0);
+            self.stats.current_memory = current_mem;
 
             self.stats.modules_executed += 1;
         }

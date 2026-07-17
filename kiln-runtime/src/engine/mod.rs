@@ -12,6 +12,7 @@ pub use capability_engine::{
     CapabilityAwareEngine,
     CapabilityEngine,
     EnginePreset,
+    EngineResourceLimits,
     InstanceHandle,
     ModuleHandle,
 };

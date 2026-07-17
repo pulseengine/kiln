@@ -160,6 +160,128 @@ pub enum EnginePreset {
     AsilD,
 }
 
+/// Standard WebAssembly page size in bytes (used when a memory does not
+/// declare a custom page size).
+const DEFAULT_WASM_PAGE_SIZE: u64 = 64 * 1024;
+
+/// Host-imposed resource limits for guest-declared memories and tables,
+/// derived from a single byte budget (kilnd `--memory <bytes>`).
+///
+/// The limits are enforced in two places (SR-46/SR-47/SR-48):
+///
+/// 1. **Pre-allocation gate** in [`CapabilityEngine::load_module`]: the TOTAL
+///    declared minimums across ALL memories (in bytes) and ALL tables (in
+///    elements) are validated against the budget after decoding but BEFORE
+///    `Module::from_kiln_module` runs — i.e. before any eager
+///    `Memory::new`/`Table::new` allocation is committed. Oversized declared
+///    minimums are rejected without allocating them.
+/// 2. **Runtime grow caps**: every memory and every table the module defines
+///    gets `set_runtime_max_pages`/`set_runtime_max_elements`, so
+///    `memory.grow`/`table.grow` past the budget fail at runtime (SR-41/SR-44
+///    guards) — for ALL indices, not just index 0.
+///
+/// Table mapping: a table of N elements costs `N * size_of::<Option<Value>>()`
+/// host bytes (the element slot type of `Table`'s storage vector), so the
+/// element cap is `budget_bytes / size_of::<Option<Value>>()`. This charges
+/// tables against the same byte budget as linear memory using their real
+/// host-side cost rather than a guessed constant.
+///
+/// Residual bound: the load-time gate is a strict TOTAL across all resources;
+/// the runtime grow caps are per-resource (each memory/table individually may
+/// not exceed the budget). A module with M memories can therefore grow to at
+/// most M x budget at runtime; M is fixed and its declared minimums are
+/// totalized at load.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EngineResourceLimits {
+    /// The host byte budget for guest-declared memories and tables.
+    max_memory_bytes: u64,
+}
+
+impl EngineResourceLimits {
+    /// Create limits from a host byte budget (kilnd `--memory <bytes>`).
+    #[must_use]
+    pub fn from_max_memory_bytes(max_memory_bytes: u64) -> Self {
+        Self { max_memory_bytes }
+    }
+
+    /// The host byte budget.
+    #[must_use]
+    pub fn max_memory_bytes(&self) -> u64 {
+        self.max_memory_bytes
+    }
+
+    /// Maximum page count for a memory with the given page size in bytes.
+    #[must_use]
+    pub fn max_pages_for_page_size(&self, page_size_bytes: u64) -> u32 {
+        if page_size_bytes == 0 {
+            // A zero page size is invalid input; grant no pages rather than
+            // dividing by zero. The gate rejects such modules up front.
+            return 0;
+        }
+        (self.max_memory_bytes / page_size_bytes).min(u64::from(u32::MAX)) as u32
+    }
+
+    /// Maximum table element count derived from the byte budget: each table
+    /// slot costs `size_of::<Option<Value>>()` host bytes.
+    #[must_use]
+    pub fn max_table_elements(&self) -> u32 {
+        let slot_bytes = core::mem::size_of::<Option<Value>>() as u64;
+        (self.max_memory_bytes / slot_bytes).min(u64::from(u32::MAX)) as u32
+    }
+
+    /// Validate the DECLARED minimums of all memories and tables in a decoded
+    /// module against this budget — called before any runtime `Memory`/`Table`
+    /// is constructed, so an oversized declared minimum is rejected before its
+    /// eager allocation happens (SR-46). Totals span ALL memories and ALL
+    /// tables (SR-47/SR-48), not just index 0.
+    ///
+    /// Imported memories/tables are not counted: they are allocated (and
+    /// gated) by the providing module when it is loaded by the same engine.
+    fn check_declared_minimums(&self, decoded: &kiln_format::module::Module) -> Result<()> {
+        // Memories: bound the TOTAL declared minimum bytes.
+        let mut total_min_bytes: u64 = 0;
+        for memory in &decoded.memories {
+            let page_size =
+                memory.page_size.map_or(DEFAULT_WASM_PAGE_SIZE, u64::from);
+            if self.max_pages_for_page_size(page_size) == 0 {
+                // The budget cannot express even one page of this memory; a
+                // runtime cap of 0 pages would mean "unlimited" (sentinel),
+                // so fail loud at load instead of silently uncapping.
+                return Err(Error::resource_limit_exceeded(
+                    "Host memory cap is smaller than one memory page (rejected before allocation)",
+                ));
+            }
+            total_min_bytes = total_min_bytes
+                .saturating_add(u64::from(memory.limits.min).saturating_mul(page_size));
+        }
+        if total_min_bytes > self.max_memory_bytes {
+            return Err(Error::resource_limit_exceeded(
+                "Total declared memory minimums exceed the host memory cap (rejected before allocation)",
+            ));
+        }
+
+        // Tables: bound the TOTAL declared minimum elements.
+        let element_cap = self.max_table_elements();
+        let mut total_min_elements: u64 = 0;
+        for table in &decoded.tables {
+            if element_cap == 0 {
+                // Same sentinel consideration as above for tables.
+                return Err(Error::resource_limit_exceeded(
+                    "Host memory cap is smaller than one table element (rejected before allocation)",
+                ));
+            }
+            total_min_elements = total_min_elements.saturating_add(u64::from(table.limits.min));
+        }
+        if total_min_elements > u64::from(element_cap) {
+            return Err(Error::resource_limit_exceeded(
+                "Total declared table minimums exceed the host memory cap (rejected before allocation)",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 /// Trait for capability-aware execution engines
 pub trait CapabilityEngine: Send + Sync {
     /// Get the capability context for this engine
@@ -262,6 +384,10 @@ pub struct CapabilityAwareEngine {
     import_links:      std::collections::HashMap<ModuleHandle, std::collections::HashMap<String, ImportLink>>,
     /// Instance handle to instance_idx mapping for cross-instance calls
     handle_to_idx:     std::collections::HashMap<InstanceHandle, usize>,
+    /// Host-imposed resource limits (kilnd `--memory`): pre-allocation gate on
+    /// declared memory/table minimums + runtime grow caps (SR-46/47/48).
+    /// `None` = no host limits configured.
+    resource_limits:   Option<EngineResourceLimits>,
 }
 
 impl CapabilityAwareEngine {
@@ -316,7 +442,18 @@ impl CapabilityAwareEngine {
             host_manager,
             import_links: std::collections::HashMap::new(),
             handle_to_idx: std::collections::HashMap::new(),
+            resource_limits: None,
         })
+    }
+
+    /// Configure host-imposed resource limits (kilnd `--memory <bytes>`).
+    ///
+    /// Must be set BEFORE `load_module`: the declared memory/table minimums of
+    /// every subsequently loaded module are validated against the budget
+    /// before their eager allocation (SR-46), and every memory/table the
+    /// module defines gets a runtime grow cap (SR-41/44/47/48).
+    pub fn set_resource_limits(&mut self, limits: EngineResourceLimits) {
+        self.resource_limits = Some(limits);
     }
 
     /// Set the host function registry for WASI and custom host functions
@@ -568,8 +705,33 @@ impl CapabilityEngine for CapabilityAwareEngine {
         #[cfg(feature = "tracing")]
         trace!(types = decoded.types.len(), functions = decoded.functions.len(), "Decode successful, converting to runtime module");
 
+        // SR-46/47/48 pre-allocation gate: validate the DECLARED minimums of
+        // ALL memories and ALL tables against the host budget BEFORE
+        // from_kiln_module eagerly allocates them (Memory::new zero-fills the
+        // declared min pages; Table::new allocates the declared min slots).
+        if let Some(limits) = self.resource_limits {
+            limits.check_declared_minimums(&decoded)?;
+        }
+
         // Convert to runtime module (pass by reference, returns Box<Module>)
         let runtime_module = Module::from_kiln_module(&*decoded)?;
+
+        // SR-41/44/47/48: apply the runtime grow caps to EVERY memory and
+        // EVERY table the module defines (instances share these objects via
+        // Arc, so instantiated memories/tables carry the caps). Imported
+        // memories/tables were capped when their providing module was loaded
+        // by this engine.
+        if let Some(limits) = self.resource_limits {
+            for memory in &runtime_module.memories {
+                let page_size = memory.0.page_size_bytes() as u64;
+                memory
+                    .0
+                    .set_runtime_max_pages(limits.max_pages_for_page_size(page_size));
+            }
+            for table in &runtime_module.tables {
+                table.0.set_runtime_max_elements(limits.max_table_elements());
+            }
+        }
         #[cfg(feature = "tracing")]
         trace!("Conversion successful");
 
