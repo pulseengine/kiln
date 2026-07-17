@@ -2,8 +2,8 @@ artifacts:
 - id: SR-51
   type: requirement
   title: kilnd WASI FS containment is symlink-safe (canonicalize, not purely lexical)
-  status: implemented
-  description: 'IMPLEMENTED (PR #442): resolve_and_authorize resolves the target through std::fs::canonicalize and re-checks it stays under the canonicalized preopen root — an existing symlink pointing outside resolves outside and is denied; a dangling symlink fails to canonicalize and is denied (fail loud); a non-existent target resolves its parent (which must exist + stay inside) and appends the final component literally. Verified (unix): test open_at_denies_symlink_escape_on_core_path. --- is_within_sandbox is purely LEXICAL, so where it IS called (fn dispatch) a symlink inside the preopen that points outside is followed — read/write/create/delete outside the sandbox are all reachable (maintainer confirmed the escape is not read-only). wasmtime/cap-std block this via openat2/O_NOFOLLOW + real canonicalization. Fix: resolve the target through the OS (canonicalize / openat-based traversal that refuses symlink escape) and re-check containment on the resolved path, not the lexical join. Must land together with SR-49 (which first makes dispatch_core call the guard at all) so both the missing-check and the weak-check are closed on the live path. Relates to SR-33, SR-49. Issue #419.'
+  status: verified
+  description: 'VERIFIED (PR #442; escape-denial oracles re-run at v0.4.2 cut): resolve_and_authorize resolves the target through std::fs::canonicalize and re-checks it stays under the canonicalized preopen root — an existing symlink pointing outside resolves outside and is denied; a dangling symlink fails to canonicalize and is denied (fail loud); a non-existent target resolves its parent (which must exist + stay inside) and appends the final component literally. Verified (unix): test open_at_denies_symlink_escape_on_core_path. --- is_within_sandbox is purely LEXICAL, so where it IS called (fn dispatch) a symlink inside the preopen that points outside is followed — read/write/create/delete outside the sandbox are all reachable (maintainer confirmed the escape is not read-only). wasmtime/cap-std block this via openat2/O_NOFOLLOW + real canonicalization. Fix: resolve the target through the OS (canonicalize / openat-based traversal that refuses symlink escape) and re-check containment on the resolved path, not the lexical join. Must land together with SR-49 (which first makes dispatch_core call the guard at all) so both the missing-check and the weak-check are closed on the live path. Relates to SR-33, SR-49. Issue #419.'
   tags:
   - kilnd
   - kiln-wasi
@@ -18,4 +18,4 @@ artifacts:
     created-by: ai
     model: claude-fable-5
     timestamp: 2026-07-16T19:40:00Z
-  release: v0.5.0
+  release: v0.4.2

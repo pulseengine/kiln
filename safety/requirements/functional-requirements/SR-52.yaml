@@ -15,4 +15,4 @@ artifacts:
     created-by: ai
     model: claude-fable-5
     timestamp: 2026-07-16T19:40:00Z
-  release: v0.5.0
+  release: v0.4.2
