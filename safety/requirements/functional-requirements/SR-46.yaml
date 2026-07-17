@@ -2,8 +2,8 @@ artifacts:
 - id: SR-46
   type: requirement
   title: kilnd rejects an over-cap declared memory min BEFORE eager allocation (pre-instantiate)
-  status: implemented
-  description: 'IMPLEMENTED (PR #444): EngineResourceLimits::check_declared_minimums runs in load_module AFTER decode but BEFORE Module::from_kiln_module (the eager allocator), bounding TOTAL declared memory minimums across all memories against the host budget — so an over-cap min is rejected before Memory::new zero-fills anything. Subsumes the SR-43 post-instantiate check for memory (still rejects, just earlier). Verified on the real binary: (memory 40000) under --memory 65536 went 5.3GB -> 3.7MB peak RSS, rejected before allocation; control (memory 1) still runs. Tests: oversized_memory_min_rejected_before_allocation, single_memory_min_over_cap_still_rejected. --- The SR-43 reject-at-load runs POST-instantiate, so Memory::new eagerly allocates the declared min pages before the rejection fires — the --memory cap is transiently bypassed and a hostile module forces multi-GB allocation then exits "rejected" (memory-exhaustion DoS). Measured: (memory 40000) under --memory 65536 resident-allocates ~5.3GB RSS before rejecting (vs ~55MB baseline). This is the documented SR-43 follow-up ("rejecting before eager min allocation needs a pre-instantiate engine API"). Fix: build the store ResourceLimiter (memory_growing, consulted for the INITIAL allocation too) from config.max_memory so an over-cap min is denied at Memory::new time, or check declared min against the cap before instantiate. Relates to SR-43, SR-41. AD-WCMC-001. Issue #436.'
+  status: verified
+  description: 'VERIFIED (PR #444; real-binary repro re-run at v0.4.2 cut): EngineResourceLimits::check_declared_minimums runs in load_module AFTER decode but BEFORE Module::from_kiln_module (the eager allocator), bounding TOTAL declared memory minimums across all memories against the host budget — so an over-cap min is rejected before Memory::new zero-fills anything. Subsumes the SR-43 post-instantiate check for memory (still rejects, just earlier). Verified on the real binary: (memory 40000) under --memory 65536 went 5.3GB -> 3.7MB peak RSS, rejected before allocation; control (memory 1) still runs. Tests: oversized_memory_min_rejected_before_allocation, single_memory_min_over_cap_still_rejected. --- The SR-43 reject-at-load runs POST-instantiate, so Memory::new eagerly allocates the declared min pages before the rejection fires — the --memory cap is transiently bypassed and a hostile module forces multi-GB allocation then exits "rejected" (memory-exhaustion DoS). Measured: (memory 40000) under --memory 65536 resident-allocates ~5.3GB RSS before rejecting (vs ~55MB baseline). This is the documented SR-43 follow-up ("rejecting before eager min allocation needs a pre-instantiate engine API"). Fix: build the store ResourceLimiter (memory_growing, consulted for the INITIAL allocation too) from config.max_memory so an over-cap min is denied at Memory::new time, or check declared min against the cap before instantiate. Relates to SR-43, SR-41. AD-WCMC-001. Issue #436.'
   tags:
   - kilnd
   - memory
@@ -17,4 +17,4 @@ artifacts:
     created-by: ai
     model: claude-fable-5
     timestamp: 2026-07-16T19:40:00Z
-  release: v0.5.0
+  release: v0.4.2

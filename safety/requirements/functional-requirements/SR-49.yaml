@@ -2,8 +2,8 @@ artifacts:
 - id: SR-49
   type: requirement
   title: kilnd's live WASI FS path (dispatch_core) enforces preopen containment
-  status: implemented
-  description: 'IMPLEMENTED (PR #442): a shared WasiDispatcher::resolve_and_authorize gate (lexical containment -> symlink-safe canonicalize -> allow-list) now guards ALL five host-FS-touching handlers in both dispatch_core (open-at, stat-at) and dispatch (open-at, create-directory-at, unlink-file-at); denials return Error::wasi_permission_denied (3010). Verified: test open_at/stat_at_denies_lexical_parent_escape_on_core_path drive the real dispatch_core and assert `../SECRET.txt` is denied. --- CRITICAL sandbox bypass. kilnd delegates guest WASI imports to WasiDispatcher::dispatch_core, whose descriptor.open-at/stat-at handlers build base.join(guest_path) and hit the host FS with only an exists() check — NO containment. A guest escapes the --wasi-fs preopen with a plain lexical ../ path (NO symlink needed). The is_within_sandbox guard exists but is wired only into fn dispatch (the component canonical-executor path at :747/:953/:992), never into dispatch_core (the path kilnd actually uses). Distinct from #419 (symlink-through-the-guard). Reproduced against the real dispatch_core: open-at("../SECRET.txt") returned Ok(descriptor) and exfiltrated a file outside the preopen. Fix: call is_within_sandbox (and SR-50 is_path_allowed) in every FS handler of dispatch_core (open/stat/create/remove/unlink); better — route all FS handlers through one shared resolve→contain→allow→capability gate so a handler cannot be added without all checks. Relates to SR-33. Issue #437.'
+  status: verified
+  description: 'VERIFIED (PR #442; escape-denial oracles re-run at v0.4.2 cut): a shared WasiDispatcher::resolve_and_authorize gate (lexical containment -> symlink-safe canonicalize -> allow-list) now guards ALL five host-FS-touching handlers in both dispatch_core (open-at, stat-at) and dispatch (open-at, create-directory-at, unlink-file-at); denials return Error::wasi_permission_denied (3010). Verified: test open_at/stat_at_denies_lexical_parent_escape_on_core_path drive the real dispatch_core and assert `../SECRET.txt` is denied. --- CRITICAL sandbox bypass. kilnd delegates guest WASI imports to WasiDispatcher::dispatch_core, whose descriptor.open-at/stat-at handlers build base.join(guest_path) and hit the host FS with only an exists() check — NO containment. A guest escapes the --wasi-fs preopen with a plain lexical ../ path (NO symlink needed). The is_within_sandbox guard exists but is wired only into fn dispatch (the component canonical-executor path at :747/:953/:992), never into dispatch_core (the path kilnd actually uses). Distinct from #419 (symlink-through-the-guard). Reproduced against the real dispatch_core: open-at("../SECRET.txt") returned Ok(descriptor) and exfiltrated a file outside the preopen. Fix: call is_within_sandbox (and SR-50 is_path_allowed) in every FS handler of dispatch_core (open/stat/create/remove/unlink); better — route all FS handlers through one shared resolve→contain→allow→capability gate so a handler cannot be added without all checks. Relates to SR-33. Issue #437.'
   tags:
   - kilnd
   - kiln-wasi
@@ -17,4 +17,4 @@ artifacts:
     created-by: ai
     model: claude-fable-5
     timestamp: 2026-07-16T19:40:00Z
-  release: v0.5.0
+  release: v0.4.2

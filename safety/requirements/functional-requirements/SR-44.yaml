@@ -2,7 +2,7 @@ artifacts:
 - id: SR-44
   type: requirement
   title: Table growth honours a runtime element cap (mirror SR-41 for tables)
-  status: implemented
+  status: verified
   description: 'The WCMC analysis (AD-WCMC-001) found table.grow was UNCAPPED — Table::grow/grow_shared checked only the module-declared ty.limits.max; a table without a declared max could grow to multi-GiB, the class of bug SR-41 fixed for linear memory. Fix: added runtime_max_elements to Table (AtomicU32, 0=unlimited) enforced in BOTH grow paths (a clean-room review caught the first pass only covered grow_shared; the &mut self grow was fixed + regression-tested). 3 unit oracles. DEMOTED verified->implemented 2026-07-16: the MECHANISM is built + unit-tested, but issue #439 proves Table::set_runtime_max_elements has ZERO live callers in kilnd (only #[test] fns) — the setter is never called on instantiated tables, so runtime_max_elements stays 0 and the grow guard NEVER FIRES in the product (measured: table.grow of 80M elements allocates 2.43GB, exit 0, under --memory 65536). The prior "verified" was vacuous: the unit oracle passed but the runtime path was never wired. Wiring the setter into the daemon + reject-at-load for oversized table min is tracked as SR-47. Relates to SR-41, SR-47. AD-WCMC-001. Issues #411, #439.'
   tags:
   - kiln-runtime
@@ -15,4 +15,4 @@ artifacts:
     created-by: ai
     model: claude-opus-4-8
     timestamp: 2026-07-11T10:00:00Z
-  release: v0.5.0
+  release: v0.4.2
