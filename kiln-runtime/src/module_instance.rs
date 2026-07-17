@@ -129,6 +129,17 @@ impl ModuleInstance {
         self.instance_id
     }
 
+    /// Number of memories in this instance (defined + imported). Used by
+    /// hosts to iterate ALL memories for cap enforcement and peak-usage
+    /// reporting (SR-48), instead of assuming index 0 is the only memory.
+    pub fn memory_count(&self) -> Result<usize> {
+        let memories = self
+            .memories
+            .lock()
+            .map_err(|_| Error::runtime_error("Failed to lock memories"))?;
+        Ok(memories.len())
+    }
+
     /// Get a memory from this instance
     pub fn memory(&self, idx: u32) -> Result<MemoryWrapper> {
         let memories = self
