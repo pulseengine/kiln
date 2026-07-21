@@ -48,24 +48,7 @@ jobs:
         with:
           # We need history to get tags
           fetch-depth: 0
-      
-      - name: Setup Dagger CLI
-        run: |
-          curl -L https://dl.dagger.io/dagger/install.sh | sh
-          echo "$HOME/.dagger/bin" >> $GITHUB_PATH
-          
-      - name: Start Docker service (required for Dagger)
-        run: |
-          # Ensure Docker is running
-          sudo systemctl status docker || sudo systemctl start docker
-          docker version
-      - name: Check Dagger version
-        run: |
-          export PATH="$(pwd)/bin:$PATH"
-          pwd
-          find . -name "dagger"
-          dagger version
-          echo $PATH          
+
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -121,33 +104,22 @@ jobs:
           # Ensure cargo-kiln is compiled and installed
           cargo build --package cargo-kiln
           cargo install --path cargo-kiln --force
-          # Add Dagger to PATH
-          export PATH="$HOME/.dagger/bin:$(pwd)/bin:$PATH"
-          echo $PATH
           # Run coverage analysis in best-effort mode for documentation
           echo "Running coverage analysis in best-effort mode..."
           cargo-kiln coverage --html --best-effort
         env:
           RUST_LOG: info
           RUST_BACKTRACE: 1
-          # Dagger configuration
-          _EXPERIMENTAL_DAGGER_CLOUD_TOKEN: ""
-          DAGGER_LOG_LEVEL: info
           # CI environment flag
           CI: true
 
       - name: Build documentation via cargo-kiln
         run: |
           echo "Building documentation for versions: ${{ env.VERSIONS_TO_BUILD }}"
-          export PATH="$HOME/.dagger/bin:$(pwd)/bin:$PATH"
           cargo-kiln docs --open --private --output-dir ./docs_output
         env:
           RUST_LOG: info
           RUST_BACKTRACE: 1
-          # Dagger configuration
-          _EXPERIMENTAL_DAGGER_CLOUD_TOKEN: ""
-          DAGGER_LOG_LEVEL: info
-          DAGGER_LOG_FORMAT: plain
           # CI environment flag
           CI: true
 

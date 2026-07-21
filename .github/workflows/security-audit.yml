@@ -142,5 +142,4 @@ jobs:
           # Exclude packages with undetected licenses that we've manually verified
           # Using PURL format: pkg:cargo/package@version
           allow-dependencies-licenses: |
-            pkg:cargo/chrono@0.4.*, 
-            pkg:cargo/dagger-sdk@0.11.10
+            pkg:cargo/chrono@0.4.*
