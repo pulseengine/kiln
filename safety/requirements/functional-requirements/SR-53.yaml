@@ -1,0 +1,21 @@
+artifacts:
+- id: SR-53
+  type: requirement
+  title: kilnd rejects an arg-arity mismatch instead of zero-filling params and reporting a wrong result as success
+  status: proposed
+  description: 'kilnd invokes an exported function with ZERO-FILLED arguments when params cannot be supplied, and reports the resulting wrong value as success (exit 0) — argument arity is never checked. Measured (HEAD cab5b3a0): a (func (export "addone") (param i32) (result i32)) invoked as `kilnd mod.wasm --function addone` returns I32(1) (= addone(0), proving the missing param was zero-filled, not trapped) and prints "✓ completed successfully"; wasmtime --invoke addone mod.wasm 5 correctly returns 6. There is no CLI mechanism to pass wasm function params at all (--wasi-arg is WASI argv, not wasm params), so ANY function with >=1 param can only ever be called with zeroed args and its wrong result printed as a definite answer. Same "fabricated success" family as #412. Second manifestation of the same missing check: a spec-invalid component (a canon lift whose declared param arity differs from the backing core func) that wasm-tools validate + wasmtime REJECT is accepted and run by kilnd (rejects a result-type mismatch but not a param-arity mismatch). Root cause: execute_traditional_module (kilnd/src/lib.rs:913) always calls engine.execute(instance, fn, &[]) (empty args); the component path call_direct_export (kiln-component/src/components/component_instantiation.rs:4498) validates only result arity (:4541) and never calls the existing validate_function_args (:4447); the engine zero-fills missing params instead of trapping. Fix: reject at invocation when the target export param arity/types do not match the supplied args (call validate_function_args on BOTH paths) so a param-taking fn invoked with no args errors instead of returning a zero-filled result as success; and validate canon lift param arity against the backing core function during component decode. Optionally add a CLI flag to supply wasm params. Relates to SR-42. Issue #443.'
+  tags:
+  - kilnd
+  - kiln-component
+  - invocation
+  - arity
+  - fabricated-success
+  - correctness
+  - bug
+  fields:
+    upstream-ref: https://github.com/pulseengine/kiln/issues/443
+  provenance:
+    created-by: ai
+    model: claude-fable-5
+    timestamp: 2026-07-21T09:00:00Z
+  release: v0.4.3
