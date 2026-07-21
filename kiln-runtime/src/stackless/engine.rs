@@ -1794,40 +1794,22 @@ impl StacklessEngine {
                     "[EXEC] Function parameter info"
                 );
 
-                // Add provided arguments
-                for (i, arg) in args.iter().enumerate() {
-                    if i < expected_param_count {
-                        locals.push(arg.clone());
-                    }
+                // SR-53 / #443: the argument count MUST match the function's
+                // declared parameter arity. The previous code zero-filled
+                // missing parameters (and silently truncated extras) — a
+                // banned masking fallback that turned wrong answers into
+                // reported successes (the #412 fabricated-reporting family).
+                // FAIL LOUD instead.
+                if args.len() != expected_param_count {
+                    return Err(kiln_error::Error::runtime_type_mismatch(
+                        "function invoked with wrong number of arguments: the \
+                         argument count must match the function's declared \
+                         parameter count (missing parameters are not zero-filled)",
+                    ));
                 }
 
-                // Pad with default values for missing parameters
-                if args.len() < expected_param_count {
-                    for i in args.len()..expected_param_count {
-                        let param_type = func_type.params.get(i)
-                            .ok_or_else(|| kiln_error::Error::runtime_error(
-                                "Parameter index out of bounds - type corrupted"
-                            ))?;
-                        let default_value = match param_type {
-                            kiln_foundation::ValueType::I32 => Value::I32(0),
-                            kiln_foundation::ValueType::I64 => Value::I64(0),
-                            kiln_foundation::ValueType::F32 => Value::F32(FloatBits32(0)),
-                            kiln_foundation::ValueType::F64 => Value::F64(FloatBits64(0)),
-                            kiln_foundation::ValueType::V128 => Value::V128(V128 { bytes: [0u8; 16] }),
-                            kiln_foundation::ValueType::FuncRef => Value::FuncRef(None),
-                            kiln_foundation::ValueType::NullFuncRef => Value::FuncRef(None),
-                            kiln_foundation::ValueType::TypedFuncRef(_, _) => Value::FuncRef(None),
-                            kiln_foundation::ValueType::ExternRef => Value::ExternRef(None),
-                            kiln_foundation::ValueType::ExnRef => Value::ExnRef(None),
-                            kiln_foundation::ValueType::AnyRef => Value::ExternRef(None),
-                            kiln_foundation::ValueType::EqRef => Value::I31Ref(None),
-                            kiln_foundation::ValueType::I31Ref => Value::I31Ref(None),
-                            kiln_foundation::ValueType::StructRef(_) => Value::StructRef(None),
-                            kiln_foundation::ValueType::ArrayRef(_) => Value::ArrayRef(None),
-                            _ => Value::I32(0),
-                        };
-                        locals.push(default_value);
-                    }
+                for arg in &args {
+                    locals.push(arg.clone());
                 }
 
                 #[cfg(feature = "tracing")]

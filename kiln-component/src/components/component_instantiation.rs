@@ -2449,6 +2449,43 @@ impl ComponentInstance {
                 tracing::info!(?main_handle, "Main instance selected (exports _start)");
             }
 
+            // SR-53 / #443: validate each `canon lift`'s declared param arity
+            // against the backing core function in the LIVE instantiated
+            // module — the exact function `call_direct_export` would execute
+            // on `main_handle`. A spec-invalid component whose lift declares
+            // a different param arity than its core function is REJECTED at
+            // load, matching `wasm-tools validate` / wasmtime ("lowered
+            // parameter types do not match parameter types of core
+            // function"). On this scalar-only direct-hosting path every
+            // scalar param lowers to exactly one core param, so the counts
+            // must be equal; lifts with non-scalar params cannot be invoked
+            // on this path at all (argument lowering fails loud), so no
+            // mismatch can execute either way.
+            for target in instance.direct_export_targets.values() {
+                let all_params_scalar = target
+                    .params
+                    .iter()
+                    .all(|vt| Self::format_val_type_to_scalar_component_type(vt).is_ok());
+                if !all_params_scalar {
+                    continue;
+                }
+                let module = engine.get_instance(main_handle)?.module().clone();
+                if let Some(func_idx) = module.find_function_by_name(&target.core_export_name) {
+                    let signature = module.get_function_signature(func_idx).ok_or_else(|| {
+                        Error::validation_error(
+                            "lifted core export has no resolvable function signature",
+                        )
+                    })?;
+                    if signature.params.len() != target.params.len() {
+                        return Err(Error::validation_error(
+                            "canon lift parameter arity does not match the backing \
+                             core function's parameter count (spec-invalid \
+                             component; wasm-tools validate rejects this)",
+                        ));
+                    }
+                }
+            }
+
             // Store the engine AFTER main_handle search (which may have swapped
             // the engine with a nested component's engine for P3 components)
             instance.runtime_engine = Some(Box::new(engine));
@@ -2892,8 +2929,20 @@ impl ComponentInstance {
                 _ => None,
             };
 
-            // Convert the resolved component-level result types into the canonical
-            // ABI `ComponentType` used by the callable function signature.
+            // Convert the resolved component-level param/result types into the
+            // canonical ABI `ComponentType` used by the callable function
+            // signature. Params were previously NOT resolved (always empty),
+            // which made `validate_function_args`'s arity check pass trivially
+            // and let a param-taking export run with zero-filled core
+            // parameters (SR-53, #443).
+            let resolved_params: Vec<ComponentType> = match &direct_target {
+                Some(t) => t
+                    .params
+                    .iter()
+                    .map(Self::format_val_type_to_scalar_component_type)
+                    .collect::<Result<Vec<_>>>()?,
+                None => Vec::new(),
+            };
             let resolved_returns: Vec<ComponentType> = match &direct_target {
                 Some(t) => t
                     .returns
@@ -2968,12 +3017,21 @@ impl ComponentInstance {
                         handle: export.idx as FunctionHandle,
                         signature: FunctionSignature {
                             name: export_name.clone(),
+                            // Real resolved param types so `validate_function_args`
+                            // enforces argument arity instead of passing trivially
+                            // against an always-empty param list (SR-53, #443).
                             #[cfg(feature = "std")]
-                            params: Vec::new(),
+                            params: resolved_params.clone(),
                             #[cfg(not(feature = "std"))]
                             params: {
                                 use kiln_foundation::bounded::BoundedVec;
-                                BoundedVec::new()
+                                let mut pv = BoundedVec::new();
+                                for param in &resolved_params {
+                                    pv.push(param.clone()).map_err(|_| {
+                                        Error::validation_error("Too many function parameters")
+                                    })?;
+                                }
+                                pv
                             },
                             // Real resolved result types so invocation knows how to
                             // lift the core result (#344).
@@ -3121,13 +3179,17 @@ impl ComponentInstance {
                 if component_func_idx == export_func_idx {
                     // Found the lift backing this export. Resolve its core export
                     // name via the `core func` alias for `core_func_idx`, and its
-                    // result types via the component function type at `type_idx`.
+                    // param/result types via the component function type at
+                    // `type_idx`.
                     let core_export_name =
                         Self::resolve_core_func_export_name(parsed, *core_func_idx)?;
 
-                    let returns = match parsed.types.get(*type_idx as usize) {
+                    let (params, returns) = match parsed.types.get(*type_idx as usize) {
                         Some(ty) => match &ty.definition {
-                            ComponentTypeDefinition::Function { results, .. } => results.clone(),
+                            ComponentTypeDefinition::Function { params, results } => (
+                                params.iter().map(|(_, vt)| vt.clone()).collect::<Vec<_>>(),
+                                results.clone(),
+                            ),
                             _ => {
                                 return Err(Error::component_resource_lifecycle_error(
                                     "canon lift type index does not refer to a function type",
@@ -3143,6 +3205,7 @@ impl ComponentInstance {
 
                     return Ok(Some(crate::types::DirectExportTarget {
                         core_export_name,
+                        params,
                         returns,
                     }));
                 }
@@ -4513,6 +4576,19 @@ impl ComponentInstance {
                 )
             })?
             .clone();
+
+        // SR-53 / #443: the supplied argument count must match the lift's
+        // declared parameter arity. This mirrors the result-arity check below;
+        // without it a param-taking export invoked with no args ran with
+        // zero-filled core parameters and its wrong result was reported as
+        // success. (`validate_function_args` performs the same check on the
+        // `call_function` path; this guards direct calls too.)
+        if args.len() != target.params.len() {
+            return Err(Error::runtime_type_mismatch(
+                "direct-hosting argument count does not match the lifted \
+                 component function parameter count",
+            ));
+        }
 
         // Lower scalar component arguments to core WASM values. FAIL LOUD on
         // non-scalar arguments — only scalars are supported on this path.
