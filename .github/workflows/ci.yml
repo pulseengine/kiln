@@ -22,7 +22,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # RUST_LOG: "info,cargo_kiln=debug,dagger_sdk=debug" # Optional: for more detailed Dagger logs
 
 jobs:
   ci_checks_and_docs:
@@ -41,11 +40,6 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Dagger Engine Cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/dagger
-          key: ${{ runner.os }}-dagger-engine
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -59,17 +53,6 @@ jobs:
       - name: Run CI Integrity Checks (lint, fmt, deny, spell, headers, etc.)
         run: cargo-kiln verify --detailed
         continue-on-error: true  # Safety verification has pre-existing findings being addressed
-      - name: Setup Java for PlantUML (if CheckDocsStrict Dagger pipeline needs it from host - unlikely)
-        uses: actions/setup-java@v5
-        if: false # Assuming Dagger pipeline for docs is self-contained
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-      - name: Install Python & PlantUML (if CheckDocsStrict Dagger pipeline needs them - unlikely)
-        if: false # Assuming Dagger pipeline for docs is self-contained
-        run: |
-          sudo apt-get update && sudo apt-get install -y python3-pip plantuml
-          pip3 install -r docs/source/requirements.txt
       - name: Run Strict Documentation Check
         run: cargo-kiln docs --private
       - name: Initialize Requirements File (if missing)
@@ -149,11 +132,6 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - name: Dagger Engine Cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/dagger
-          key: ${{ runner.os }}-dagger-engine
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -295,11 +273,6 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-extended-${{ hashFiles('**/Cargo.lock') }}
-      - name: Dagger Engine Cache
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/dagger
-          key: ${{ runner.os }}-dagger-engine-extended
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
