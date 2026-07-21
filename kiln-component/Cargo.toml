@@ -33,6 +33,9 @@ criterion = { version = "0.8", features = ["html_reports"] }
 # Build + decode synthetic components in unit tests (E5DC2 / #382).
 wat = "1.244"
 kiln-decoder = { workspace = true, features = ["std"] }
+# Engine-driving tests contend on the global capability memory budget
+# (see CLAUDE.md — such tests use serial_test).
+serial_test = "3.4"
 
 [features]
 # By default, enable std to match kiln-runtime's default behavior

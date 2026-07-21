@@ -895,6 +895,44 @@ impl KilndEngine {
             let has_main = engine.has_function(instance, function_name).unwrap_or(false);
 
             if has_main {
+                // SR-53 / #443: reject an argument-arity mismatch BEFORE
+                // invoking. kilnd has no CLI mechanism to pass wasm function
+                // parameters (--wasi-arg is WASI argv, not wasm params), so a
+                // function with >= 1 declared parameter can only ever be
+                // called with missing arguments. The engine used to zero-fill
+                // them and the wrong result was reported as success (the #412
+                // fabricated-reporting family). FAIL LOUD with an actionable
+                // message instead.
+                let declared_params = {
+                    let inst = engine.get_instance(instance)?;
+                    let func_idx =
+                        inst.module().find_function_by_name(function_name).ok_or_else(|| {
+                            Error::runtime_function_not_found("Function not found in exports")
+                        })?;
+                    inst.module()
+                        .get_function_signature(func_idx)
+                        .ok_or_else(|| {
+                            Error::runtime_function_not_found(
+                                "Function signature not found for export",
+                            )
+                        })?
+                        .params
+                        .len()
+                };
+                if declared_params != 0 {
+                    // User-facing diagnostic on stderr: says WHY the call is
+                    // rejected and that kilnd cannot supply wasm params yet.
+                    eprintln!(
+                        "Error: function '{}' expects {} argument(s) but none were \
+                         supplied; kilnd cannot yet pass wasm function parameters",
+                        function_name, declared_params
+                    );
+                    return Err(Error::runtime_type_mismatch(
+                        "exported function expects arguments but none were supplied; \
+                         kilnd cannot yet pass wasm function parameters",
+                    ));
+                }
+
                 // Propagate the engine's error verbatim so the actual cause
                 // (e.g. "fuel exhausted", a trap message) reaches the user
                 // instead of a generic "Function execution failed".

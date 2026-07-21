@@ -206,6 +206,9 @@ pub struct CommandEntry {
 pub struct DirectExportTarget {
     /// Export name of the backing core function (callable on the engine).
     pub core_export_name: String,
+    /// Component-level parameter types declared by the `canon lift`'s function
+    /// type. Supplied arguments must match this arity (SR-53, #443).
+    pub params: Vec<kiln_format::component::FormatValType>,
     /// Component-level result types to lift the core result into.
     pub returns: Vec<kiln_format::component::FormatValType>,
 }
