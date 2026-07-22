@@ -38,9 +38,13 @@ kiln-decoder = { workspace = true, features = ["std"] }
 serial_test = "3.4"
 
 [features]
-# By default, enable std to match kiln-runtime's default behavior
-# This ensures consistent feature resolution across workspace and isolated builds
-default = ["kiln-runtime/std"]
+# Enable kiln-component's OWN std + execution features by default so the crate
+# compiles standalone (`cargo check -p kiln-component`), not only under workspace
+# feature unification. `default = ["kiln-runtime/std"]` used to enable the
+# dependency's std but NOT this crate's own `std`/`kiln-execution`, so the
+# cfg-gated methods (link_imports, call_direct_export, the runtime_engine field)
+# vanished and the isolated build broke while CI stayed green (issue #446).
+default = ["std", "kiln-execution"]
 
 # Standard library support
 std = [
