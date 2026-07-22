@@ -27,6 +27,79 @@ use kiln_foundation::{
 /// Standard custom section name for resource limits
 pub const RESOURCE_LIMITS_SECTION_NAME: &str = "kiln.resource_limits";
 
+/// Extract the `kiln.resource_limits` custom section from a raw WebAssembly
+/// binary (SR-45).
+///
+/// This is the on-target read side of the AD-WCMC-001 trust chain: the
+/// section is authored and signed off-target (sigil), and the runtime applies
+/// it at load time. The three outcomes are strictly distinguished:
+///
+/// - `Ok(None)` — the binary carries NO `kiln.resource_limits` section. This
+///   is the only "no manifest" case; host CLI limits (if any) still apply.
+/// - `Ok(Some(section))` — the section is present, decodes, and validates.
+/// - `Err(_)` — the binary's section framing is malformed, or the section is
+///   PRESENT but undecodable/invalid. A broken manifest must fail loud and
+///   must never be treated as absent (that would silently unbound a module
+///   that declared itself bounded).
+pub fn extract_resource_limits_from_binary(
+    binary: &[u8],
+) -> Result<Option<ResourceLimitsSection>, Error> {
+    use kiln_format::binary::read_leb128_u32;
+
+    // WebAssembly header: 4-byte magic + 4-byte version.
+    if binary.len() < 8 || &binary[0..4] != b"\0asm" {
+        return Err(Error::parse_error(
+            "Not a WebAssembly binary (bad magic) while scanning for resource limits",
+        ));
+    }
+
+    let mut offset = 8;
+    while offset < binary.len() {
+        // Section framing: id byte + LEB128 payload size + payload.
+        let section_id = binary[offset];
+        offset += 1;
+        let (payload_len, len_size) = read_leb128_u32(binary, offset)?;
+        offset += len_size;
+        let payload_end = offset
+            .checked_add(payload_len as usize)
+            .ok_or_else(|| Error::parse_error("Section size overflows while scanning"))?;
+        if payload_end > binary.len() {
+            return Err(Error::parse_error(
+                "Section extends past end of binary while scanning for resource limits",
+            ));
+        }
+        let payload = &binary[offset..payload_end];
+        offset = payload_end;
+
+        if section_id != 0 {
+            continue; // non-custom section
+        }
+
+        // Custom section payload: name (LEB128 length + bytes) + contents.
+        let (name_len, name_len_size) = read_leb128_u32(payload, 0)?;
+        let name_end = name_len_size
+            .checked_add(name_len as usize)
+            .ok_or_else(|| Error::parse_error("Custom section name overflows"))?;
+        if name_end > payload.len() {
+            return Err(Error::parse_error(
+                "Custom section name extends past section payload",
+            ));
+        }
+        let name = core::str::from_utf8(&payload[name_len_size..name_end])
+            .map_err(|_| Error::parse_error("Custom section name is not valid UTF-8"))?;
+        if name != RESOURCE_LIMITS_SECTION_NAME {
+            continue;
+        }
+
+        // Section is PRESENT: decode + validate errors propagate (fail loud).
+        let section = ResourceLimitsSection::decode(&payload[name_end..])?;
+        section.validate()?;
+        return Ok(Some(section));
+    }
+
+    Ok(None)
+}
+
 /// Version of the resource limits format (for future compatibility)
 pub const RESOURCE_LIMITS_VERSION: u32 = 1;
 
@@ -1280,6 +1353,75 @@ mod tests {
         assert!(original.is_complete_for_asil_d());
         assert!(original.validate_asil_d_compliance().is_ok());
         Ok(())
+    }
+
+    /// Minimal valid WebAssembly binary: magic + version, no sections.
+    const EMPTY_MODULE: [u8; 8] = [0, b'a', b's', b'm', 1, 0, 0, 0];
+
+    fn module_with_section(name: &str, payload: &[u8]) -> alloc::vec::Vec<u8> {
+        let mut wasm = EMPTY_MODULE.to_vec();
+        let mut content = alloc::vec![name.len() as u8]; // single-byte LEB128
+        content.extend_from_slice(name.as_bytes());
+        content.extend_from_slice(payload);
+        wasm.push(0); // custom section id
+        wasm.push(content.len() as u8); // single-byte LEB128
+        wasm.extend(content);
+        wasm
+    }
+
+    #[test]
+    fn test_extract_absent_section_is_none() -> kiln_error::Result<()> {
+        // No custom section at all.
+        assert_eq!(extract_resource_limits_from_binary(&EMPTY_MODULE)?, None);
+        // An unrelated custom section does not count as a manifest.
+        let wasm = module_with_section("some.other.section", &[1, 2, 3]);
+        assert_eq!(extract_resource_limits_from_binary(&wasm)?, None);
+        Ok(())
+    }
+
+    #[test]
+    fn test_extract_present_section_roundtrips() -> kiln_error::Result<()> {
+        let provider = kiln_foundation::safe_managed_alloc!(
+            4096,
+            kiln_foundation::budget_aware_provider::CrateId::Decoder
+        )?;
+        let section = ResourceLimitsSection::with_execution_limits(
+            provider,
+            Some(1000),
+            Some(64 * 1024),
+            Some(32),
+            None,
+            None,
+        )?;
+        let payload = section.encode()?;
+        let wasm = module_with_section(RESOURCE_LIMITS_SECTION_NAME, &payload);
+
+        let extracted =
+            extract_resource_limits_from_binary(&wasm)?.expect("present section must be extracted");
+        assert_eq!(extracted.max_fuel_per_step, Some(1000));
+        assert_eq!(extracted.max_memory_usage, Some(64 * 1024));
+        assert_eq!(extracted.max_call_depth, Some(32));
+        Ok(())
+    }
+
+    #[test]
+    fn test_extract_malformed_section_is_error() {
+        // Present but truncated mid-field: version + "present" flag with no value.
+        let wasm = module_with_section(RESOURCE_LIMITS_SECTION_NAME, &[1, 0, 0, 0, 1]);
+        assert!(
+            extract_resource_limits_from_binary(&wasm).is_err(),
+            "a present-but-malformed section must be an error, not treated as absent"
+        );
+
+        // Present but empty payload: not decodable either.
+        let wasm = module_with_section(RESOURCE_LIMITS_SECTION_NAME, &[]);
+        assert!(extract_resource_limits_from_binary(&wasm).is_err());
+    }
+
+    #[test]
+    fn test_extract_non_wasm_binary_is_error() {
+        assert!(extract_resource_limits_from_binary(b"not wasm at all").is_err());
+        assert!(extract_resource_limits_from_binary(&[]).is_err());
     }
 
     #[test]

@@ -16,12 +16,8 @@ use core::sync::atomic::{
 
 // Import decoder function
 use kiln_decoder::decoder::decode_module;
-// Import execution configuration from kiln-foundation where it belongs
-use kiln_foundation::execution::{
-    extract_resource_limits_from_binary,
-    ASILExecutionConfig,
-    ASILExecutionMode,
-};
+// Import the resource-limits manifest extractor (SR-45)
+use kiln_decoder::resource_limits_section::extract_resource_limits_from_binary;
 use kiln_foundation::{
     bounded_collections::BoundedMap,
     budget_aware_provider::CrateId,
@@ -210,6 +206,22 @@ impl EngineResourceLimits {
         self.max_memory_bytes
     }
 
+    /// Combine two limits into the MOST-RESTRICTIVE (minimum) bound (SR-45).
+    ///
+    /// Precedence rule for CLI (`--memory`) vs. module manifest
+    /// (`kiln.resource_limits`): neither side may LOOSEN the other. An
+    /// operator's `--memory` must not override a module's signed
+    /// self-declared bound upward (that would break the AD-WCMC-001 trust
+    /// chain: the qualified bound travels with the binary), and a module's
+    /// manifest must not grant itself more than the operator allows. Taking
+    /// the minimum satisfies both directions.
+    #[must_use]
+    pub fn most_restrictive(self, other: Self) -> Self {
+        Self {
+            max_memory_bytes: self.max_memory_bytes.min(other.max_memory_bytes),
+        }
+    }
+
     /// Maximum page count for a memory with the given page size in bytes.
     #[must_use]
     pub fn max_pages_for_page_size(&self, page_size_bytes: u64) -> u32 {
@@ -386,7 +398,9 @@ pub struct CapabilityAwareEngine {
     handle_to_idx:     std::collections::HashMap<InstanceHandle, usize>,
     /// Host-imposed resource limits (kilnd `--memory`): pre-allocation gate on
     /// declared memory/table minimums + runtime grow caps (SR-46/47/48).
-    /// `None` = no host limits configured.
+    /// `None` = no host limits configured. Combined per-module with the
+    /// module's own `kiln.resource_limits` manifest at load time; the
+    /// most-restrictive bound wins (SR-45).
     resource_limits:   Option<EngineResourceLimits>,
 }
 
@@ -472,17 +486,6 @@ impl CapabilityAwareEngine {
     /// all import resolution to this handler.
     pub fn set_host_handler(&mut self, handler: Box<dyn kiln_foundation::HostImportHandler>) {
         self.inner.set_host_handler(handler);
-    }
-
-    /// Convert engine preset to ASIL execution mode
-    fn preset_to_asil_mode(&self) -> ASILExecutionMode {
-        match self.preset {
-            EnginePreset::QM => ASILExecutionMode::QM,
-            EnginePreset::AsilA => ASILExecutionMode::AsilA,
-            EnginePreset::AsilB => ASILExecutionMode::AsilB,
-            EnginePreset::AsilC => ASILExecutionMode::AsilC,
-            EnginePreset::AsilD => ASILExecutionMode::AsilD,
-        }
     }
 
     /// Create host integration components based on engine preset
@@ -690,14 +693,6 @@ impl CapabilityEngine for CapabilityAwareEngine {
         let operation = MemoryOperation::Allocate { size: binary.len() };
         self.context.verify_operation(CrateId::Runtime, &operation)?;
 
-        // Extract resource limits from binary if available
-        let asil_mode = self.preset_to_asil_mode();
-        let _resource_config =
-            extract_resource_limits_from_binary(binary, asil_mode).unwrap_or(None); // Ignore errors, use defaults if extraction fails
-
-        // TODO: Apply resource limits to execution context
-        // This would integrate with the fuel async executor to enforce limits
-
         // Decode the module using kiln-decoder (Box to avoid stack overflow)
         #[cfg(feature = "tracing")]
         trace!(binary_size = binary.len(), "Decoding module");
@@ -705,23 +700,42 @@ impl CapabilityEngine for CapabilityAwareEngine {
         #[cfg(feature = "tracing")]
         trace!(types = decoded.types.len(), functions = decoded.functions.len(), "Decode successful, converting to runtime module");
 
-        // SR-46/47/48 pre-allocation gate: validate the DECLARED minimums of
-        // ALL memories and ALL tables against the host budget BEFORE
+        // SR-45: extract the module's own `kiln.resource_limits` manifest
+        // (authored and signed off-target — the on-target end of the
+        // AD-WCMC-001 trust chain). Absent section => None (host CLI limits,
+        // if any, still apply). Present-but-malformed section => load error
+        // (fail loud) — a module that declared itself bounded must never
+        // silently run unbounded.
+        let manifest_limits = extract_resource_limits_from_binary(binary)?
+            .and_then(|section| section.max_memory_usage)
+            .map(EngineResourceLimits::from_max_memory_bytes);
+
+        // SR-45 precedence: when BOTH a host CLI bound (`--memory`) and a
+        // manifest bound exist, the MOST-RESTRICTIVE (minimum) wins — the
+        // operator cannot loosen the module's signed bound and the module
+        // cannot loosen the operator's cap (see `most_restrictive`).
+        let effective_limits = match (self.resource_limits, manifest_limits) {
+            (Some(host), Some(manifest)) => Some(host.most_restrictive(manifest)),
+            (host, manifest) => host.or(manifest),
+        };
+
+        // SR-45/46/47/48 pre-allocation gate: validate the DECLARED minimums
+        // of ALL memories and ALL tables against the effective budget BEFORE
         // from_kiln_module eagerly allocates them (Memory::new zero-fills the
         // declared min pages; Table::new allocates the declared min slots).
-        if let Some(limits) = self.resource_limits {
+        if let Some(limits) = effective_limits {
             limits.check_declared_minimums(&decoded)?;
         }
 
         // Convert to runtime module (pass by reference, returns Box<Module>)
         let runtime_module = Module::from_kiln_module(&*decoded)?;
 
-        // SR-41/44/47/48: apply the runtime grow caps to EVERY memory and
+        // SR-41/44/45/47/48: apply the runtime grow caps to EVERY memory and
         // EVERY table the module defines (instances share these objects via
         // Arc, so instantiated memories/tables carry the caps). Imported
         // memories/tables were capped when their providing module was loaded
         // by this engine.
-        if let Some(limits) = self.resource_limits {
+        if let Some(limits) = effective_limits {
             for memory in &runtime_module.memories {
                 let page_size = memory.0.page_size_bytes() as u64;
                 memory

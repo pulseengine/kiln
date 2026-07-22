@@ -4,14 +4,11 @@
 //! This module provides a fluent builder interface for creating WebAssembly
 //! engines with proper ASIL-level configuration and resource limits.
 
-use kiln_error::Result;
+use kiln_decoder::resource_limits_section::extract_resource_limits_from_binary;
+use kiln_error::{Error, Result};
 use kiln_foundation::{
     capabilities::MemoryCapabilityContext,
-    execution::{
-        extract_resource_limits_from_binary,
-        ASILExecutionConfig,
-        ASILExecutionMode,
-    },
+    execution::ASILExecutionMode,
 };
 
 use crate::engine::{
@@ -23,23 +20,20 @@ use crate::engine::{
 #[derive(Debug)]
 pub struct EngineBuilder {
     /// Target ASIL level for the engine
-    asil_level:      Option<ASILExecutionMode>,
+    asil_level:     Option<ASILExecutionMode>,
     /// Engine preset (overrides ASIL level if set)
-    preset:          Option<EnginePreset>,
+    preset:         Option<EnginePreset>,
     /// Custom capability context (overrides both ASIL level and preset)
-    custom_context:  Option<MemoryCapabilityContext>,
-    /// Resource limits configuration from binary
-    resource_config: Option<ASILExecutionConfig>,
+    custom_context: Option<MemoryCapabilityContext>,
 }
 
 impl EngineBuilder {
     /// Create a new engine builder
     pub fn new() -> Self {
         Self {
-            asil_level:      None,
-            preset:          None,
-            custom_context:  None,
-            resource_config: None,
+            asil_level:     None,
+            preset:         None,
+            custom_context: None,
         }
     }
 
@@ -58,12 +52,6 @@ impl EngineBuilder {
     /// Set a custom capability context (overrides all other settings)
     pub fn with_custom_context(mut self, context: MemoryCapabilityContext) -> Self {
         self.custom_context = Some(context);
-        self
-    }
-
-    /// Set resource limits configuration from a WebAssembly binary
-    pub fn with_resource_config(mut self, config: ASILExecutionConfig) -> Self {
-        self.resource_config = Some(config);
         self
     }
 
@@ -92,26 +80,24 @@ impl EngineBuilder {
         Self::new().with_preset(EnginePreset::AsilD)
     }
 
-    /// Create an engine from a WebAssembly binary with embedded resource limits
+    /// Create an engine builder from a WebAssembly binary, selecting the ASIL
+    /// level from the binary's `kiln.resource_limits` manifest (SR-45).
+    ///
+    /// - Manifest present with a qualified ASIL level: that level is selected.
+    /// - Manifest present without a qualified level: QM (the manifest's
+    ///   numeric limits are enforced separately by
+    ///   `CapabilityAwareEngine::load_module`, regardless of level).
+    /// - Manifest absent: QM.
+    /// - Manifest present but malformed, or an unknown qualified level:
+    ///   `Err` — never silently downgraded (fail loud).
     pub fn from_binary(binary: &[u8]) -> Result<Self> {
-        // Function is now imported at the top
-
-        // Try to extract resource limits from the binary
-        // Start with ASIL-D for maximum compatibility, then work down
-        for asil_mode in &[
-            ASILExecutionMode::AsilD,
-            ASILExecutionMode::AsilC,
-            ASILExecutionMode::AsilB,
-            ASILExecutionMode::AsilA,
-            ASILExecutionMode::QM,
-        ] {
-            if let Ok(Some(config)) = extract_resource_limits_from_binary(binary, *asil_mode) {
-                return Ok(Self::new().with_asil_level(config.mode).with_resource_config(config));
-            }
-        }
-
-        // No resource limits found, default to QM
-        Ok(Self::qm())
+        let Some(section) = extract_resource_limits_from_binary(binary)? else {
+            return Ok(Self::qm());
+        };
+        let Some(level) = section.qualified_asil_level() else {
+            return Ok(Self::qm());
+        };
+        Ok(Self::new().with_asil_level(parse_qualified_asil_level(level)?))
     }
 
     /// Build the engine with the configured settings
@@ -143,9 +129,32 @@ impl EngineBuilder {
     }
 }
 
+/// Map a manifest's qualified ASIL level string to an execution mode.
+///
+/// Whitespace is trimmed and matching is ASCII-case-insensitive (section
+/// authors have historically emitted levels like `"ASIL-D "`). An unknown
+/// level is an error — a signed manifest claiming a qualification the runtime
+/// does not recognize must not be silently reinterpreted (SR-45, fail loud).
+fn parse_qualified_asil_level(level: &str) -> Result<ASILExecutionMode> {
+    let normalized = level.trim();
+    for (name, mode) in [
+        ("QM", ASILExecutionMode::QM),
+        ("ASIL-A", ASILExecutionMode::AsilA),
+        ("ASIL-B", ASILExecutionMode::AsilB),
+        ("ASIL-C", ASILExecutionMode::AsilC),
+        ("ASIL-D", ASILExecutionMode::AsilD),
+    ] {
+        if normalized.eq_ignore_ascii_case(name) {
+            return Ok(mode);
+        }
+    }
+    Err(Error::parse_error(
+        "Unknown qualified ASIL level in kiln.resource_limits manifest",
+    ))
+}
+
 impl Default for EngineBuilder {
     fn default() -> Self {
         Self::new()
     }
 }
-
