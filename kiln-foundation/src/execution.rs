@@ -125,27 +125,3 @@ impl ExecutionStats {
         self.execution_time_us = time_us;
     }
 }
-
-/// Extract resource limits configuration from WebAssembly binary
-///
-/// This function attempts to extract ASIL-compliant resource limits
-/// from a WebAssembly binary's custom sections.
-///
-/// # Arguments
-///
-/// * `binary` - The WebAssembly binary data
-/// * `asil_mode` - The target ASIL execution mode
-///
-/// # Returns
-///
-/// Returns `Ok(Some(config))` if resource limits are found and valid,
-/// `Ok(None)` if no resource limits are found, or `Err` if the binary is
-/// invalid.
-pub fn extract_resource_limits_from_binary(
-    _binary: &[u8],
-    asil_mode: ASILExecutionMode,
-) -> kiln_error::Result<Option<ASILExecutionConfig>> {
-    // TODO: Implement actual resource limits extraction from custom sections
-    // For now, return a default configuration based on ASIL mode
-    Ok(Some(ASILExecutionConfig::new(asil_mode)))
-}
