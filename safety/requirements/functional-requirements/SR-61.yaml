@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-61
+    type: requirement
+    title: kilnd dereferences the Canonical-ABI return area and reports values, not the pointer
+    status: proposed
+    description: "REPORTED BY A CONSUMER (kiln#505, jess). v0.5.0's --invoke reaches exports on a meld-fused core module and executes them — all five falcon-cascade stages run, each driven with its own arity — but every Canonical-ABI export returns an i32 that is a POINTER INTO THE RETURN AREA, not the result. Measured by jess through kiln 0.5.0: mixer#mix returns i32 9488 for (1.0,0.0,0.0,0.5), for (0.0,1.0,0.0,0.9) and for (0.25,0.25,0.25,0.125) — CONSTANT ACROSS INPUTS. wasmtime returns 9488 for the same calls, so the two engines agree, but agreeing on a fixed address is not evidence about the arithmetic: a differential built on it would pass even if one engine computed garbage. jess therefore had to label their kiln check an EXECUTION check rather than a value differential. Consequence: kiln is the only one of their four engines (wasmtime, Renode, silicon, kiln) that cannot report a value over the SHIPPED core module — the artifact that actually gets lowered. Fix needs the return area's length and field layout, which is derivable from the WIT but NOT from the core type (the derivation #393 showed is easy to get wrong), so this is gated on the meld signature manifest carrying return_area size+layout (SR-60, meld#400). Once available: dereference the returned pointer, decode the fields per layout, and print values (e.g. the four f32 PWM words) instead of an address. A raw escape hatch (--read-result <bytes> / --dump-mem <addr> <len>) was suggested by the reporter and would unblock them sooner without the manifest, at the cost of the caller knowing the layout. NOTE the reporter also confirms v0.5.0 delivered real value: SR-58's export listing is what surfaced that their previous check invoked a nonexistent 'run-stabilization' on the fused core — a permanently-inconclusive no-op — so 0.5.0 turned that into a real executed result. Relates to SR-60, SR-59, SR-58. Issue #505."
+    tags: [kilnd, invoke, canonical-abi, return-area, differential-oracle]
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-09-09T15:22:23Z
+    release: v0.6.0
