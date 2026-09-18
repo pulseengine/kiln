@@ -1,0 +1,13 @@
+artifacts:
+
+  - id: SR-62
+    type: requirement
+    title: kilnd refuses --arg for a core parameter that is a Canonical-ABI pointer, instead of passing a garbage address
+    status: proposed
+    description: "SHIPPED DEFECT in v0.5.0, found while answering meld#400 and VERIFIED on the binary, not inferred. SR-59 delivered --arg for core scalars, and for genuinely flat exports (falcon ekf#estimate 6xf32, mixer#mix 4xf32) that is correct. But meld's finding 1 established that three of the five falcon stages — position/attitude/rate#tick — flatten to 18/19/18 values, over MAX_FLAT_PARAMS=16, so canon_lift lowers their arguments through the callee's realloc and the single remaining core parameter is a POINTER, not a value. Their core type is (i32)->(i32), identical to a genuine scalar export. MEASURED against a fixture of that exact shape: 'kilnd --invoke tick_like --arg 99999 ptr.wasm' returns '[0] i32 99999', exit 0 — kilnd accepts an arbitrary integer for a pointer parameter, passes it into guest memory, and reports a clean run. On the real cascade that is a garbage pointer reported as success: the #412 fabricated-reporting family again, in code kiln shipped. ROOT CAUSE: from the core type alone a runtime CANNOT distinguish a scalar i32 from a lowered-arguments pointer — meld's finding 2 proved the same thing from the emitter side (f(x:u32)->u32 and rate#tick(18xf32)->record both flatten to (i32)->(i32) under the Canonical ABI reference implementation). Only the WIT distinguishes them. FIX is gated on SR-60's manifest: flat_param_count + needs{memory,realloc} are exactly the fields that let kilnd detect 'this i32 is a pointer' and REFUSE with an actionable message, rather than pass a number. So the manifest closes a hole in a shipped release, not only an unimplemented feature. Until the manifest exists kiln has no sound way to tell the cases apart, so this cannot be fixed independently — but the v0.5.0 release note should not be read as 'the scalar surface is safe for every (i32) export'. Relates to SR-59 (which shipped the surface), SR-60 (the fields that fix it), SR-61 (return-area dereference), meld#400 findings 1 and 2."
+    tags: [kilnd, invoke, canonical-abi, fabricated-success, shipped-defect, bug]
+    provenance:
+      created-by: ai
+      model: claude-opus-5
+      timestamp: 2026-09-18T04:24:47Z
+    release: v0.6.0
