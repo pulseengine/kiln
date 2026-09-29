@@ -1025,6 +1025,82 @@ impl KilndEngine {
                 // SR-59 / #480: parse `--arg` values against the declared CORE
                 // parameter types. Arity must match exactly — a missing argument
                 // is never zero-filled (SR-53).
+                // SR-60/SR-62 (#480, meld#400): if the fused module carries
+                // meld's signature manifest, consult it BEFORE building a call.
+                // The core type alone cannot distinguish a genuine scalar
+                // parameter from a pointer to a lowered argument block — both
+                // present as `(i32) -> i32` — so without the manifest kilnd
+                // accepted an arbitrary integer for a pointer and reported the
+                // resulting run as success. The manifest is the only thing in
+                // the artifact that knows the difference.
+                // NOTE: gated on `component-model`, which is the feature that
+                // actually pulls in kiln-decoder (there is no `decoder`
+                // feature — a cfg on one would silently compile this guard
+                // away, which is how a check becomes vacuous).
+                #[cfg(feature = "component-model")]
+                {
+                    use kiln_decoder::signature_manifest::extract_signature_manifest_from_binary;
+
+                    // Absent manifest is not an error; a present-but-broken one is.
+                    if let Some(manifest) = extract_signature_manifest_from_binary(data)? {
+                        if let Some(sig) = manifest.find(function_name) {
+                            if sig.realloc_is_unreachable() {
+                                eprintln!(
+                                    "Error: export '{}' needs the callee's realloc to lower its \
+                                     arguments, but the manifest reports no reachable allocator \
+                                     for it (realloc: null). The export is not callable in this \
+                                     fused module.",
+                                    function_name
+                                );
+                                return Err(Error::runtime_type_mismatch(
+                                    "export requires an allocator that the fused module does not \
+                                     export",
+                                ));
+                            }
+
+                            if sig.params_are_indirect() {
+                                eprintln!(
+                                    "Error: export '{}' takes {} value(s) that the Canonical ABI \
+                                     flattened into {} core parameter(s) — the parameter is a \
+                                     POINTER to a lowered argument block, not a value.",
+                                    function_name,
+                                    sig.flat_param_count,
+                                    sig.core.params.len()
+                                );
+                                eprintln!(
+                                    "Passing a number here would write an arbitrary address into \
+                                     guest memory and report the result as success. Building the \
+                                     block requires lowering typed values through the callee's \
+                                     realloc, which kilnd cannot do yet (SR-60)."
+                                );
+                                return Err(Error::runtime_type_mismatch(
+                                    "export takes indirectly-lowered arguments; kilnd cannot \
+                                     construct them",
+                                ));
+                            }
+
+                            // The cross-check: `core` is read back by meld from the
+                            // emitted function type, so a disagreement with what
+                            // this module actually declares means one side is wrong
+                            // and calling would be guessing which.
+                            if sig.core.params.len() != declared_params {
+                                eprintln!(
+                                    "Error: signature manifest disagrees with the module for \
+                                     '{}': manifest says {} core parameter(s), the module \
+                                     declares {}.",
+                                    function_name,
+                                    sig.core.params.len(),
+                                    declared_params
+                                );
+                                return Err(Error::runtime_type_mismatch(
+                                    "signature manifest disagrees with the module's declared \
+                                     function type",
+                                ));
+                            }
+                        }
+                    }
+                }
+
                 let call_args = self.config.call_args.clone();
                 if call_args.len() != declared_params {
                     eprintln!(
