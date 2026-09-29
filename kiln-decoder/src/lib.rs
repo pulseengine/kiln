@@ -101,6 +101,8 @@ pub mod custom_section_handler;
 
 // Resource limits section - now ASIL-D compatible (no external dependencies)
 pub mod resource_limits_section;
+/// Reader for meld's `meld.signature-manifest` custom section (SR-60, #480).
+pub mod signature_manifest;
 
 // TOML configuration parser for resource limits (std only for tooling)
 #[cfg(feature = "std")]

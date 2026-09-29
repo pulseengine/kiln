@@ -27,6 +27,11 @@ wat = { version = "1.244.0", optional = true }
 # TOML configuration (for tooling)
 toml = { version = "1.1", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
+# meld's signature manifest is JSON. serde_json is already in the workspace
+# graph (cargo-kiln, kiln-build-core, reqwest), so this adds no new crate to
+# the audited dependency set — and hand-rolling a JSON parser for input a
+# runtime acts on is exactly where silent misreads live (SR-60).
+serde_json = { version = "1.0", optional = true }
 
 [dev-dependencies]
 criterion = "0.8"
@@ -38,7 +43,7 @@ wat = "1.244.0"
 [features]
 default = []
 # Binary choice: std OR no_std (no alloc middle ground)
-std = ["kiln-format/std", "kiln-foundation/std", "kiln-foundation/kiln-allocator", "dep:toml", "dep:serde"]
+std = ["kiln-format/std", "kiln-foundation/std", "kiln-foundation/kiln-allocator", "dep:toml", "dep:serde", "dep:serde_json"]
 # For compatibility with verification script
 # This is a no-op since the crate is no_std by default
 no_std = []
