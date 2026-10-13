@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-LOWER-001
+    type: design-decision
+    title: Argument lowering consumes a meld-provided parameter-area layout; kiln does not derive Canonical-ABI layouts itself
+    status: proposed
+    release: v0.6.0
+    description: "SR-60 must call exports whose parameters flatten past MAX_FLAT_PARAMS=16, e.g. relay falcon-v1.140.0 controller#step (26 flattened values: nested records plus four option<...>; core type (i32)->(i32)). The caller allocates a block through the callee's realloc and writes each value at its Canonical-ABI offset. MEASURED 2026-10-14 on meld 0.61.0 --emit-manifest: the manifest gives return_area{size,align,layout} for results but nothing equivalent for parameters, only wit.params as rendered WIT text. DECISION: kiln consumes a typed parameter-area description from meld (size, align, per-field offset/type, recursive for records and options; requested in meld#469) and cross-checks it against wit.params, refusing on disagreement. Input values use WAVE syntax, the syntax wasmtime --invoke accepts, so the same call text runs on both engines for a direct differential. CONSEQUENCE: SR-60 cannot reach implemented until meld ships the parameter layout; if it does not land in time, moving SR-60 to v0.7.0 is the maintainer's call (not moved here). Meanwhile kiln keeps refusing indirect parameters (SR-62)."
+    tags: [canonical-abi, lowering, signature-manifest, meld-400]
+    fields:
+      alternatives-considered: "(1) Compute the parameter layout in kiln from wit.params text: rejected, duplicates meld's ABI logic with no cross-check, and a wrong offset writes garbage that the callee reports as a valid result. (2) Raw byte input (--arg-bytes) with the caller supplying the block: rejected as the primary path, moves the same derivation onto every user. (3) kiln-specific value syntax: rejected in favour of WAVE so kiln and wasmtime runs are directly comparable."
+      rationale: "Re-deriving Canonical-ABI memory layouts from WIT text is the derivation #393 showed is easy to get wrong, and replacing such derivations with checks is the reason the manifest exists (meld#400). kiln already applies this to core signatures and return areas; parameters follow the same rule."
+    links:
+      - type: satisfies
+        target: SR-60
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-13T22:42:18Z
