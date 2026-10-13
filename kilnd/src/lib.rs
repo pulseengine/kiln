@@ -1037,6 +1037,10 @@ impl KilndEngine {
                 // actually pulls in kiln-decoder (there is no `decoder`
                 // feature — a cfg on one would silently compile this guard
                 // away, which is how a check becomes vacuous).
+                // The manifest entry outlives this block: SR-61 needs it after
+                // the call to read the return area.
+                #[cfg(feature = "component-model")]
+                let mut manifest_sig = None;
                 #[cfg(feature = "component-model")]
                 {
                     use kiln_decoder::signature_manifest::extract_signature_manifest_from_binary;
@@ -1044,6 +1048,7 @@ impl KilndEngine {
                     // Absent manifest is not an error; a present-but-broken one is.
                     if let Some(manifest) = extract_signature_manifest_from_binary(data)? {
                         if let Some(sig) = manifest.find(function_name) {
+                            manifest_sig = Some(sig.clone());
                             if sig.realloc_is_unreachable() {
                                 eprintln!(
                                     "Error: export '{}' needs the callee's realloc to lower its \
@@ -1140,7 +1145,103 @@ impl KilndEngine {
                 // instead of a generic "Function execution failed".
                 let results = engine.execute(instance, function_name, &parsed_args)?;
 
-                if !results.is_empty() {
+                // SR-61 / #505: when the result is returned through memory, the
+                // i32 the export returned is the ADDRESS of the result. It is
+                // constant across inputs, so printing it reported nothing about
+                // the computation. Read the return area, decode each field by
+                // its WIT type, run the post-return, and only then print.
+                #[cfg(feature = "component-model")]
+                let return_area_sig =
+                    manifest_sig.as_ref().filter(|sig| sig.return_area.is_some());
+                #[cfg(not(feature = "component-model"))]
+                let return_area_sig: Option<&()> = None;
+
+                #[cfg(feature = "component-model")]
+                if let Some(sig) = return_area_sig {
+                    use kiln_foundation::Value;
+
+                    let area = sig.return_area.as_ref().ok_or_else(|| {
+                        Error::runtime_execution_error("return area vanished from the manifest")
+                    })?;
+                    let ptr = match results.as_slice() {
+                        [Value::I32(p)] => *p as u32,
+                        other => {
+                            eprintln!(
+                                "Error: the manifest says '{}' returns its result through \
+                                 memory, so it must return exactly one i32 address; it returned \
+                                 {:?}.",
+                                function_name, other
+                            );
+                            return Err(Error::runtime_type_mismatch(
+                                "export with a return area did not return a single i32 address",
+                            ));
+                        },
+                    };
+                    if area.align == 0 || ptr % area.align != 0 {
+                        eprintln!(
+                            "Error: '{}' returned address {} for a return area that the \
+                             manifest requires to be {}-byte aligned.",
+                            function_name, ptr, area.align
+                        );
+                        return Err(Error::runtime_type_mismatch(
+                            "return-area address violates the manifest alignment",
+                        ));
+                    }
+                    let memory_name = sig.memory.as_deref().ok_or_else(|| {
+                        eprintln!(
+                            "Error: the manifest gives '{}' a return area but names no memory \
+                             to read it from.",
+                            function_name
+                        );
+                        Error::runtime_type_mismatch("return area with no memory in the manifest")
+                    })?;
+                    let memory = engine.get_instance(instance)?.memory_by_name(memory_name)?;
+                    let in_bounds = (ptr as usize)
+                        .checked_add(area.size as usize)
+                        .is_some_and(|end| end <= memory.size_bytes());
+                    if !in_bounds {
+                        eprintln!(
+                            "Error: '{}' returned address {} for a {}-byte return area, which \
+                             runs past the end of memory '{}' ({} bytes).",
+                            function_name,
+                            ptr,
+                            area.size,
+                            memory_name,
+                            memory.size_bytes()
+                        );
+                        return Err(Error::memory_out_of_bounds(
+                            "return area lies outside the export's memory",
+                        ));
+                    }
+                    let mut bytes = vec![0u8; area.size as usize];
+                    memory.read(ptr, &mut bytes)?;
+                    let fields = sig.decode_return_area(&bytes).map_err(|e| {
+                        eprintln!(
+                            "Error: cannot decode the return area of '{}': {}.",
+                            function_name, e
+                        );
+                        Error::from(e)
+                    })?;
+
+                    // Canonical ABI: post-return runs after the caller has read
+                    // the results and receives the core results as arguments.
+                    // The bytes are already copied, so it may free the area.
+                    if let Some(post) = sig.post_return.as_deref() {
+                        engine.execute(instance, post, &results)?;
+                    }
+
+                    println!(
+                        "\n✓ Function '{}' returned a {}-byte record through memory:",
+                        function_name, area.size
+                    );
+                    for (name, value) in &fields {
+                        println!("  {name}: {value}");
+                    }
+                }
+
+                if return_area_sig.is_some() {
+                    // Reported above.
+                } else if !results.is_empty() {
                     println!(
                         "\n✓ Function '{}' returned {} value(s):",
                         function_name,
