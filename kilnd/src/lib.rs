@@ -1071,10 +1071,10 @@ impl KilndEngine {
                                     "Passing a number here would write an arbitrary address into \
                                      guest memory and report the result as success. Building the \
                                      block requires lowering typed values through the callee's \
-                                     realloc, which kilnd cannot do yet (SR-60)."
+                                     realloc, which kiln cannot do yet (SR-60)."
                                 );
                                 return Err(Error::runtime_type_mismatch(
-                                    "export takes indirectly-lowered arguments; kilnd cannot \
+                                    "export takes indirectly-lowered arguments; kiln cannot \
                                      construct them",
                                 ));
                             }
