@@ -5,7 +5,7 @@ artifacts:
   description: |
     The embedded base shall provide a cooperative async scheduler backing the WASM Component Model P3 async ABI (task/stream/future/waitable-set, credit-based backpressure) for synth-compiled targets on gale/Zephyr/ Cortex-M. It shall be no_std with NO alloc (fixed-capacity bounded structures only), fuel-bounded (poll slice = a fuel budget, integrating kiln's per-instruction fuel metering), and formally verified: Verus for queue/table/FSM invariants on the real Rust, and Lean+Aeneas refinement reusing spar's complete EDF/RM/RTA proofs for termination, bounded latency (WCRT), and schedulability. Replaces the deleted ~32k-LOC simulation module (kiln-component/src/async_/) which contradicted RFC #46 and was never integrated. Design: docs/architecture/async-scheduler-plan.md. Phase 0 scaffold landed (kiln-async crate: types, FSM, bounded ready queue; intrinsics stubbed; builds no_std/no_alloc for thumbv7em).
   status: implemented
-  release: v0.6.0
+  release: v0.7.0
   tags:
   - async
   - scheduler
