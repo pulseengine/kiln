@@ -15,7 +15,7 @@
 
 use std::{fs, process::Command};
 
-const KILND: &str = env!("CARGO_BIN_EXE_kilnd");
+const KILN: &str = env!("CARGO_BIN_EXE_kiln");
 
 /// A fused-command-shaped module: no `_start`, a canonical `wasi:cli/run` export
 /// that sets a flag, and a decoy `"0"` export taking parameters (the shape that
@@ -41,7 +41,7 @@ fn fused_command_shaped(name: &str) -> std::path::PathBuf {
 fn canonical_run_export_is_preferred_over_a_numbered_decoy() {
     let p = fused_command_shaped("kilnd_sr57_canonical.wasm");
 
-    let out = Command::new(KILND).arg(&p).output().unwrap();
+    let out = Command::new(KILN).arg(&p).output().unwrap();
     let combined = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -68,7 +68,7 @@ fn the_canonical_entry_is_the_function_that_actually_ran() {
     let p = fused_command_shaped("kilnd_sr57_ran.wasm");
 
     // `ran` returns 1 only if the canonical run export executed and set it.
-    let out = Command::new(KILND)
+    let out = Command::new(KILN)
         .args(["--invoke", "wasi:cli/run@0.2.6#run"])
         .arg(&p)
         .output()
@@ -91,7 +91,7 @@ fn numbered_entry_fallback_still_works_when_there_is_no_canonical_name() {
     let p = std::env::temp_dir().join("kilnd_sr57_numbered.wasm");
     fs::write(&p, wat::parse_str(wat).unwrap()).unwrap();
 
-    let out = Command::new(KILND).arg(&p).output().unwrap();
+    let out = Command::new(KILN).arg(&p).output().unwrap();
     assert!(
         out.status.success(),
         "a module exposing only numbered entries must still run via the fallback: {}",

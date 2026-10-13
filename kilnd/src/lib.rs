@@ -114,7 +114,7 @@ fn parse_call_args(
                 .map_err(|_| Error::runtime_type_mismatch("argument is not a valid f64")),
             other => {
                 eprintln!(
-                    "Error: parameter {} of '{}' has type {:?}, which kilnd cannot construct \
+                    "Error: parameter {} of '{}' has type {:?}, which kiln cannot construct \
                      from the command line; only core scalars (i32/i64/f32/f64) are supported.",
                     idx, function_name, other
                 );
@@ -1120,7 +1120,7 @@ impl KilndEngine {
                         if function_name.contains('#') && declared_params > 2 {
                             eprintln!(
                                 "Note: '{}' looks like a component export whose WIT types were \
-                                 flattened to {} core parameters by the canonical ABI. kilnd \
+                                 flattened to {} core parameters by the canonical ABI. kiln \
                                  can pass core scalars (i32/i64/f32/f64) but cannot yet build \
                                  component-typed values (list/record/string) — the fused module \
                                  carries no WIT type information (pulseengine/meld#400).",
@@ -1498,8 +1498,12 @@ pub struct SimpleArgs {
 
 #[cfg(feature = "std")]
 impl SimpleArgs {
-    /// Parse command line arguments without external dependencies
-    pub fn parse() -> Result<Self> {
+    /// Parse command line arguments without external dependencies.
+    ///
+    /// `bin_name` is the installed name of the invoked binary (`kiln`, or the
+    /// deprecated `kilnd` alias — SR-64); `--version`, help and usage errors
+    /// report it.
+    pub fn parse(bin_name: &str) -> Result<Self> {
         let args: Vec<String> = env::args().collect();
         let mut result = Self {
             module_path: None,
@@ -1544,14 +1548,14 @@ impl SimpleArgs {
                 "--version" | "-V" => {
                     // PulseEngine CLI baseline: `<binary-name> <semver>`, exit 0.
                     // kiln executes other tools' artifacts (e.g. witness --harness
-                    // cross-checks run modules under kilnd), so "which runtime
+                    // cross-checks run modules under kiln), so "which runtime
                     // produced this run" must be answerable. Issue #486.
-                    println!("kilnd {}", env!("CARGO_PKG_VERSION"));
+                    println!("{bin_name} {}", env!("CARGO_PKG_VERSION"));
                     process::exit(0);
                 },
                 "--help" | "-h" => {
-                    println!("WebAssembly Runtime Daemon (kilnd)");
-                    println!("Usage: kilnd [OPTIONS] <module.wasm>");
+                    println!("Kiln WebAssembly Runtime ({bin_name})");
+                    println!("Usage: {bin_name} [OPTIONS] <module.wasm>");
                     println!();
                     println!("Options:");
                     println!("  --function <name>     Function to execute (default: start)");
@@ -1706,8 +1710,8 @@ impl SimpleArgs {
                 // CLI baseline (usage errors are 2, not 1). Issue #486.
                 unknown => {
                     eprintln!("error: unrecognized argument '{unknown}'");
-                    eprintln!("Usage: kilnd [OPTIONS] <module.wasm>");
-                    eprintln!("Try 'kilnd --help' for available options.");
+                    eprintln!("Usage: {bin_name} [OPTIONS] <module.wasm>");
+                    eprintln!("Try '{bin_name} --help' for available options.");
                     process::exit(2);
                 },
             }
@@ -1718,16 +1722,58 @@ impl SimpleArgs {
     }
 }
 
+/// Run [`run`] on a thread with a larger stack — module parsing and type
+/// validation can recurse deeply, needing more than the platform default. 8MB
+/// works on Linux/macOS/VxWorks; override with the `KILN_STACK_SIZE` env var
+/// (in bytes). Shared by the `kiln` binary and the deprecated `kilnd` alias.
+///
+/// # Errors
+///
+/// Returns whatever [`run`] returns.
+///
+/// # Panics
+///
+/// Panics if the runtime thread cannot be spawned or itself panics.
+#[cfg(feature = "std")]
+pub fn run_on_large_stack(bin_name: &'static str) -> Result<()> {
+    let stack_size: usize = std::env::var("KILN_STACK_SIZE")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8 * 1024 * 1024); // 8MB default
+
+    std::thread::Builder::new()
+        .stack_size(stack_size)
+        .spawn(move || run(bin_name))
+        .expect("Failed to spawn main thread")
+        .join()
+        .expect("Main thread panicked")
+}
+
+/// Name of the deprecated binary alias. v0.6.0 ships it next to `kiln`; it is
+/// removed in v0.7.0 (SR-64, issue #486 ask 3).
+pub const DEPRECATED_BIN_NAME: &str = "kilnd";
+
 /// Main entry point
-/// Run the kilnd daemon: parse CLI arguments, build the [`KilndConfig`], and
+/// Run the runtime CLI: parse CLI arguments, build the [`KilndConfig`], and
 /// execute the requested module (or the witness-harness flow). This is the
 /// std entry point the binary calls from `fn main` (on a large-stack thread).
+///
+/// `bin_name` is the installed name of the invoked binary (the binary passes
+/// `env!("CARGO_BIN_NAME")`). Invoking the deprecated [`DEPRECATED_BIN_NAME`]
+/// alias prints a warning on stderr — never stdout, which callers parse.
 ///
 /// # Errors
 ///
 /// Returns an error if argument parsing, module loading, or execution fails.
 #[cfg(feature = "std")]
-pub fn run() -> Result<()> {
+pub fn run(bin_name: &str) -> Result<()> {
+    if bin_name == DEPRECATED_BIN_NAME {
+        eprintln!(
+            "warning: `{DEPRECATED_BIN_NAME}` is deprecated and will be removed in v0.7.0; \
+             use `kiln` instead"
+        );
+    }
+
     // Initialize tracing subscriber if tracing feature is enabled
     #[cfg(feature = "tracing")]
     {
@@ -1760,9 +1806,9 @@ pub fn run() -> Result<()> {
     }
 
     // Parse arguments first to check for --help
-    let args = SimpleArgs::parse()?;
+    let args = SimpleArgs::parse(bin_name)?;
 
-    println!("WebAssembly Runtime Daemon (kilnd)");
+    println!("Kiln WebAssembly Runtime ({bin_name})");
     println!("===================================");
 
     // Create configuration from arguments
