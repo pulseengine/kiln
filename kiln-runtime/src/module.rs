@@ -22,8 +22,6 @@ use kiln_format::{
     DataSegment as KilnDataSegment,
     ElementSegment as KilnElementSegment,
 };
-// Re-export for module_builder
-pub use kiln_foundation::types::LocalEntry;
 use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
