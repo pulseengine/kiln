@@ -345,11 +345,6 @@ enum Commands {
         /// Output directory for documentation
         #[arg(long)]
         output_dir: Option<String>,
-
-        /// Generate multi-version documentation (comma-separated list of
-        /// versions)
-        #[arg(long)]
-        multi_version: Option<String>,
     },
 
     /// Run coverage analysis
@@ -1361,17 +1356,7 @@ async fn main() -> Result<()> {
             open,
             private,
             output_dir,
-            multi_version,
-        } => {
-            cmd_docs(
-                &build_system,
-                *open,
-                *private,
-                output_dir.clone(),
-                multi_version.clone(),
-            )
-            .await
-        },
+        } => cmd_docs(&build_system, *open, *private, output_dir.clone()).await,
         Commands::Coverage {
             html,
             open,
@@ -2114,49 +2099,7 @@ async fn cmd_docs(
     open: bool,
     private: bool,
     output_dir: Option<String>,
-    multi_version: Option<String>,
 ) -> Result<()> {
-    use kiln_build_core::tools::ToolManager;
-
-    // Check if multi-version documentation is requested
-    if let Some(versions_str) = multi_version {
-        let versions: Vec<String> = versions_str
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        if versions.is_empty() {
-            anyhow::bail!("No versions specified for multi-version documentation");
-        }
-
-        println!(
-            "📚 Generating multi-version documentation for: {:?}",
-            versions
-        );
-        build_system
-            .generate_multi_version_docs(versions)
-            .context("Multi-version documentation generation failed")?;
-
-        return Ok(());
-    }
-
-    // Check documentation dependencies first
-    let tool_manager = ToolManager::new();
-    let python_status = tool_manager.check_tool("python3");
-    let venv_status = tool_manager.check_tool("python-venv");
-
-    if !python_status.available {
-        println!("⚠️  Python not available - generating Rust API docs only");
-        println!("   💡 Install Python 3.8+ to enable comprehensive documentation generation");
-    } else if !venv_status.available {
-        println!("⚠️  Python venv not available - generating Rust API docs only");
-        println!("   💡 Python virtual environment support needed for documentation dependencies");
-    } else {
-        println!("📚 Python environment ready - will generate comprehensive documentation");
-    }
-
-    // Generate documentation with enhanced functionality
     if let Some(out_dir) = output_dir {
         build_system.generate_docs_with_output_dir(private, open, Some(out_dir))
     } else {

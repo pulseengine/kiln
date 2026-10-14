@@ -129,7 +129,7 @@ category = "Safety"
 verification_method = "Static Analysis + Formal Verification"
 source_files = ["kiln-runtime/src/memory.rs", "kiln-foundation/src/bounded.rs"]
 test_files = ["kiln-runtime/src/memory_test.rs"]
-documentation_files = ["docs/source/safety/memory_safety.rst"]
+documentation_files = []
 status = "Implemented"
 platform = ["all"]
 
@@ -142,7 +142,7 @@ category = "Safety"
 verification_method = "Static Analysis"
 source_files = ["kiln-*/src/**/*.rs"]
 test_files = ["xtask/src/check_panics.rs"]
-documentation_files = ["docs/source/safety/panic_handling.rst"]
+documentation_files = []
 status = "Implemented"
 platform = ["all"]
 "#;

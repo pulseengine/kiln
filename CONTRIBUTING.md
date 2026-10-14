@@ -4,16 +4,10 @@ Thank you for your interest in contributing to Kiln!
 
 ## Quick Start
 
-For complete contribution guidelines, please see our comprehensive documentation:
-
-**📚 [Developer Documentation](./docs/source/developer/index.rst)**
-
-### Essential Links
-
-- **[Development Setup](./docs/source/developer/setup/index.rst)** - Environment setup and toolchain installation
-- **[Contributing Guide](./docs/source/developer/contributing/index.rst)** - Complete contribution process
-- **[Build System](./docs/source/developer/build_system/index.rst)** - Build commands and configuration
-- **[Testing](./docs/source/developer/testing/index.rst)** - Test requirements and procedures
+- **Architecture:** [RFC #46 toolchain architecture](./docs/architecture/rfc46-toolchain-architecture.md)
+- **Rules and conventions** (memory system, error handling, no fallbacks, testing): [CLAUDE.md](./CLAUDE.md)
+- **Requirements and traceability** live in rivet (`safety/`); see `rivet docs`.
+- **API documentation:** `cargo-kiln docs --open`
 
 ### Quick Commands
 

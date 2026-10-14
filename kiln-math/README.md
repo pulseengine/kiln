@@ -171,4 +171,3 @@ fn execute_numeric_instruction(opcode: u8, lhs: Value, rhs: Value) -> Result<Val
 
 - [API Documentation](https://docs.rs/kiln-math)
 - [WebAssembly Numeric Instructions](https://webassembly.github.io/spec/core/syntax/instructions.html#numeric-instructions)
-- [CPU Acceleration Guide](../docs/source/architecture/cpu_acceleration.rst)

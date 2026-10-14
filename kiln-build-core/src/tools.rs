@@ -174,31 +174,6 @@ impl ToolManager {
             },
         );
 
-        // Documentation tools
-        tools.insert(
-            "python3".to_string(),
-            ToolInfo {
-                name: "python3".to_string(),
-                description: "Python interpreter for documentation".to_string(),
-                install_command: "Install Python from https://python.org or via package manager"
-                    .to_string(),
-                required: false,
-                used_by: vec!["docs"].into_iter().map(String::from).collect(),
-            },
-        );
-
-        tools.insert(
-            "python-venv".to_string(),
-            ToolInfo {
-                name: "python-venv".to_string(),
-                description: "Python virtual environment support".to_string(),
-                install_command: "Included with Python 3.8+ - install Python if missing"
-                    .to_string(),
-                required: false,
-                used_by: vec!["docs"].into_iter().map(String::from).collect(),
-            },
-        );
-
         Self {
             tools,
             version_config,
@@ -237,8 +212,6 @@ impl ToolManager {
             "kani" => self.check_kani(),
             "cargo-fuzz" => self.check_cargo_fuzz(),
             "git" => self.check_git(),
-            "python3" => self.check_python3(),
-            "python-venv" => self.check_python_venv(),
             "aarch64-unknown-linux-gnu" => self.check_rustup_target("aarch64-unknown-linux-gnu"),
             "x86_64-unknown-linux-gnu" => self.check_rustup_target("x86_64-unknown-linux-gnu"),
             "thumbv7em-none-eabihf" => self.check_rustup_target("thumbv7em-none-eabihf"),
@@ -843,37 +816,6 @@ impl ToolManager {
         self.check_command_version("git", &["--version"])
     }
 
-    fn check_python3(&self) -> ToolStatus {
-        self.check_command_version("python3", &["--version"])
-    }
-
-    fn check_python_venv(&self) -> ToolStatus {
-        let output = Command::new("python3").args(["-m", "venv", "--help"]).output();
-
-        match output {
-            Ok(output) if output.status.success() => ToolStatus {
-                available: true,
-                version: Some("available".to_string()),
-                error: None,
-                version_status: VersionStatus::Unknown, // Will be enhanced by version check
-                needs_action: false,
-            },
-            Ok(output) => ToolStatus {
-                available: false,
-                version: None,
-                error: Some(String::from_utf8_lossy(&output.stderr).to_string()),
-                version_status: VersionStatus::Unknown,
-                needs_action: true,
-            },
-            Err(e) => ToolStatus {
-                available: false,
-                version: None,
-                error: Some(e.to_string()),
-                version_status: VersionStatus::Unknown,
-                needs_action: true,
-            },
-        }
-    }
 
     fn check_rustup_target(&self, target: &str) -> ToolStatus {
         // Check if rustup target is installed

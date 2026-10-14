@@ -225,7 +225,6 @@ jobs:
           path: |
             safety-verification-full.json
             safety-verification-report.html
-            docs/source/_generated_safety_summary.rst
           retention-days: 90
       - name: Safety Verification Gate
         run: cargo-kiln verify --asil d

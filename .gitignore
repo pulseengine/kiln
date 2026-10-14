@@ -1,11 +1,4 @@
 target/
-docs/_build/
-docs/build/
-docs/source/kiln*
-docs/source/changelog.md
-
-# Documentation virtual environment
-.venv-docs/
 
 # Ignore all WASM files but keep WAT files which are the source format
 *.wasm
@@ -24,16 +17,10 @@ kiln/testsuite
 wast_failed.md
 kiln/target
 kilnd/target
-docs/source/_generated_symbols.rst
-docs/source/_generated_coverage_summary.rst
-docs/source/_static/versions.json
 implementation_summary.md
 decoder.agent.prompt.md decoder.plan.md
 
 **/.claude/settings.local.json
-
-# Generated Sphinx-Needs source requirements file
-docs/source/implementation/source_requirements.rst
 docs_artifact_final/
 docs_output/
 

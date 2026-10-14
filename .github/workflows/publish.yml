@@ -1,4 +1,4 @@
-# Workflow for deploying Sphinx documentation to GitHub Pages
+# Workflow for deploying the Rust API documentation to GitHub Pages
 name: Deploy Documentation to Pages
 
 on:
@@ -128,15 +128,6 @@ jobs:
           # Create the expected artifact directory
           mkdir -p ./docs_artifact_final
           
-          # Copy Sphinx HTML documentation if it exists
-          if [ -d "./docs_output/sphinx/html" ]; then
-            echo "📚 Found Sphinx documentation"
-            cp -r ./docs_output/sphinx/html/* ./docs_artifact_final/
-          elif [ -d "./docs/build/html" ]; then
-            echo "📚 Found Sphinx documentation (fallback path)"
-            cp -r ./docs/build/html/* ./docs_artifact_final/
-          fi
-          
           # Copy Rust API documentation
           if [ -d "./docs_output/doc" ]; then
             echo "📖 Found Rust API documentation"
@@ -148,23 +139,22 @@ jobs:
             cp -r ./target/doc/* ./docs_artifact_final/api/
           fi
           
-          # Create a simple index.html if none exists
-          if [ ! -f "./docs_artifact_final/index.html" ]; then
-            echo "⚠️  No index.html found, creating redirect to API docs"
-            cat > ./docs_artifact_final/index.html << 'EOF'
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset="utf-8">
-              <title>Kiln Documentation</title>
-              <meta http-equiv="refresh" content="0; url=api/kiln/index.html">
-          </head>
-          <body>
-              <p>Redirecting to <a href="api/kiln/index.html">Kiln API Documentation</a>...</p>
-          </body>
-          </html>
-          EOF
+          # Index page linking every crate that was actually documented. The
+          # previous redirect pointed at api/kiln/, which is never built (404).
+          crates=$(find ./docs_artifact_final/api -mindepth 2 -maxdepth 2 -name index.html 2>/dev/null \
+            | sed -E 's#^\./docs_artifact_final/##; s#/index\.html$##' | sort)
+          if [ -z "$crates" ]; then
+            echo "::error::No Rust API documentation was generated; refusing to publish an empty site"
+            exit 1
           fi
+          {
+            echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Kiln API Documentation</title></head>'
+            echo '<body><h1>Kiln API Documentation</h1><ul>'
+            for c in $crates; do
+              echo "<li><a href=\"$c/index.html\">${c#api/}</a></li>"
+            done
+            echo '</ul></body></html>'
+          } > ./docs_artifact_final/index.html
           
           # List what we're uploading
           echo "📦 Documentation artifact contents:"

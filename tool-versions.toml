@@ -242,37 +242,6 @@ supported = true
 constraints = ["no_std_lints", "embedded_lints", "bare_metal_lints"]
 supported = true
 
-# Documentation tools
-[tools.python3]
-version = "3.8.0"
-requirement_type = "Minimum"
-install_command = "Install Python from https://python.org or via package manager"
-version_check_args = ["--version"]
-version_pattern = "Python (\\d+\\.\\d+\\.\\d+)"
-required = false
-used_by = ["docs"]
-description = "Python interpreter for Sphinx documentation generation"
-
-[tools.python-venv]
-version = "3.8.0"
-requirement_type = "Minimum"
-install_command = "Included with Python 3.8+ - install Python if missing"
-version_check_args = ["-m", "venv", "--help"]
-version_pattern = "Python (\\d+\\.\\d+\\.\\d+)"
-required = false
-used_by = ["docs"]
-description = "Python virtual environment support for isolated documentation dependencies"
-
-[tools.plantuml]
-version = "1.2023.0"
-requirement_type = "Minimum"
-install_command = "Install PlantUML - see https://plantuml.com/download"
-version_check_args = ["-version"]
-version_pattern = "PlantUML version (\\d+\\.\\d+\\.\\d+)"
-required = false
-used_by = ["docs"]
-description = "UML diagram generator for documentation"
-
 # Version history and changelog
 # When updating versions, add entries here for tracking:
 #
