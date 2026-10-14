@@ -1,4 +1,4 @@
-//! kilnd refuses calls the signature manifest says it cannot make (SR-60/SR-62).
+//! kiln refuses calls the signature manifest says it cannot make (SR-60/SR-62).
 //!
 //! The core type alone cannot distinguish a genuine scalar parameter from a
 //! pointer to a lowered argument block — both present as `(i32) -> i32`. v0.5.0
@@ -15,7 +15,7 @@
 
 use std::{fs, process::Command};
 
-const KILND: &str = env!("CARGO_BIN_EXE_kilnd");
+const KILN: &str = env!("CARGO_BIN_EXE_kiln");
 
 /// Append a custom section carrying `json` under meld's section name.
 fn with_manifest(module_wat: &str, json: &str) -> Vec<u8> {
@@ -68,7 +68,7 @@ fn manifest(flat: u32, realloc: &str) -> String {
 fn run(bytes: &[u8], name: &str, args: &[&str]) -> (Option<i32>, String) {
     let path = std::env::temp_dir().join(name);
     fs::write(&path, bytes).unwrap();
-    let mut cmd = Command::new(KILND);
+    let mut cmd = Command::new(KILN);
     cmd.args(["--invoke", "take_one"]);
     for a in args {
         cmd.args(["--arg", a]);

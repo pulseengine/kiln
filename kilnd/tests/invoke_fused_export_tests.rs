@@ -17,7 +17,7 @@
 
 use std::{fs, process::Command};
 
-const KILND: &str = env!("CARGO_BIN_EXE_kilnd");
+const KILN: &str = env!("CARGO_BIN_EXE_kiln");
 
 /// A library-shaped core module: no `_start`, one zero-arg exported function
 /// carrying a canonical WIT-style name of the kind meld emits.
@@ -44,7 +44,7 @@ fn write_fixture(name: &str) -> std::path::PathBuf {
 fn invoke_resolves_a_canonical_export_on_the_core_path() {
     let path = write_fixture("kilnd_sr58_invoke.wasm");
 
-    let out = Command::new(KILND)
+    let out = Command::new(KILN)
         .args(["--invoke", CANONICAL_EXPORT])
         .arg(&path)
         .output()
@@ -76,7 +76,7 @@ fn invoke_resolves_a_canonical_export_on_the_core_path() {
 fn library_module_without_invoke_lists_the_invokable_exports() {
     let path = write_fixture("kilnd_sr58_list.wasm");
 
-    let out = Command::new(KILND).arg(&path).output().unwrap();
+    let out = Command::new(KILN).arg(&path).output().unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
 
     assert!(
@@ -101,7 +101,7 @@ fn library_module_without_invoke_lists_the_invokable_exports() {
 fn function_flag_still_works_and_invoke_takes_precedence() {
     let path = write_fixture("kilnd_sr58_prec.wasm");
 
-    let via_function = Command::new(KILND)
+    let via_function = Command::new(KILN)
         .args(["--function", CANONICAL_EXPORT])
         .arg(&path)
         .output()
@@ -112,7 +112,7 @@ fn function_flag_still_works_and_invoke_takes_precedence() {
     );
 
     // --invoke names a real export, --function names a missing one: --invoke wins.
-    let both = Command::new(KILND)
+    let both = Command::new(KILN)
         .args(["--function", "does_not_exist", "--invoke", CANONICAL_EXPORT])
         .arg(&path)
         .output()

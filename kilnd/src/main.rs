@@ -1,4 +1,4 @@
-//! # kilnd binary entry point
+//! # kiln binary entry point
 //!
 //! Thin wrapper around the [`kilnd`] library. A binary — not a library — must
 //! own the process-level items: the no_std `#[global_allocator]` and
@@ -20,23 +20,10 @@ static ALLOCATOR: LockedHeap = LockedHeap::empty();
 #[cfg(all(not(feature = "std"), feature = "enable-panic-handler"))]
 static mut HEAP: [u8; 64 * 1024] = [0; 64 * 1024]; // 64KB heap
 
-/// std entry point. Runs the daemon on a thread with a larger stack — module
-/// parsing and type validation can recurse deeply, needing more than the
-/// platform default. 8MB works on Linux/macOS/VxWorks; override with the
-/// `KILN_STACK_SIZE` env var (in bytes).
+/// std entry point for the `kiln` binary. See [`kilnd::run_on_large_stack`].
 #[cfg(feature = "std")]
 fn main() -> kiln_error::Result<()> {
-    let stack_size: usize = std::env::var("KILN_STACK_SIZE")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(8 * 1024 * 1024); // 8MB default
-
-    std::thread::Builder::new()
-        .stack_size(stack_size)
-        .spawn(kilnd::run)
-        .expect("Failed to spawn main thread")
-        .join()
-        .expect("Main thread panicked")
+    kilnd::run_on_large_stack(env!("CARGO_BIN_NAME"))
 }
 
 /// no_std entry point (embedded / bare-metal): initialize the allocator, then

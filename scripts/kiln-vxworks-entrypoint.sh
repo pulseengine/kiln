@@ -11,15 +11,15 @@ cd /workspace
 
 case "${1:-help}" in
   build)
-    echo "=== Cross-compiling kilnd for VxWorks ==="
-    cargo build --bin kilnd --target x86_64-wrs-vxworks \
+    echo "=== Cross-compiling kiln for VxWorks ==="
+    cargo build --bin kiln --target x86_64-wrs-vxworks \
       --features "std,kiln-execution,platform-vxworks"
-    echo "Built: target/x86_64-wrs-vxworks/debug/kilnd"
+    echo "Built: target/x86_64-wrs-vxworks/debug/kiln"
     ;;
 
   test)
-    echo "=== Cross-compiling kilnd for VxWorks ==="
-    cargo build --bin kilnd --target x86_64-wrs-vxworks \
+    echo "=== Cross-compiling kiln for VxWorks ==="
+    cargo build --bin kiln --target x86_64-wrs-vxworks \
       --features "std,kiln-execution,platform-vxworks"
 
     echo "=== Downloading test components ==="
@@ -33,7 +33,7 @@ case "${1:-help}" in
 
     echo "=== Preparing QEMU disk ==="
     mkdir -p /tmp/kiln-disk
-    cp target/x86_64-wrs-vxworks/debug/kilnd /tmp/kiln-disk/kilnd.vxe
+    cp target/x86_64-wrs-vxworks/debug/kiln /tmp/kiln-disk/kiln.vxe
     cp /tmp/wasm-components/release-0.2.0/rust/hello_rust.wasm /tmp/kiln-disk/
 
     KERNEL=$(find "${WIND_SDK_HOME}" -name "vxWorks" -path "*/bsps/*" | head -1)
@@ -54,7 +54,7 @@ case "${1:-help}" in
 
   *)
     echo "Usage: docker run -v \$(pwd):/workspace kiln-vxworks <command>"
-    echo "  build   Cross-compile kilnd for VxWorks"
+    echo "  build   Cross-compile kiln for VxWorks"
     echo "  test    Build + run smoke tests in VxWorks QEMU"
     echo "  shell   Interactive shell with VxWorks SDK"
     ;;

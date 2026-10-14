@@ -13,7 +13,7 @@
 
 use std::{fs, process::Command};
 
-const KILND: &str = env!("CARGO_BIN_EXE_kilnd");
+const KILN: &str = env!("CARGO_BIN_EXE_kiln");
 
 fn fixture(name: &str) -> std::path::PathBuf {
     let wat = r#"(module
@@ -28,7 +28,7 @@ fn fixture(name: &str) -> std::path::PathBuf {
 }
 
 fn run(path: &std::path::Path, args: &[&str]) -> (bool, String) {
-    let out = Command::new(KILND).args(args).arg(path).output().unwrap();
+    let out = Command::new(KILN).args(args).arg(path).output().unwrap();
     let combined = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),

@@ -1,5 +1,5 @@
 #!/usr/bin/expect -f
-# VxWorks QEMU smoke test for kilnd
+# VxWorks QEMU smoke test for kiln
 
 set timeout 120
 
@@ -20,17 +20,17 @@ expect {
 send "cd /bd0a\r"
 expect "->"
 
-# Run kilnd --help to verify binary works
-send "kilnd.vxe --help\r"
+# Run kiln --help to verify binary works
+send "kiln.vxe --help\r"
 expect {
-  "Usage:" { puts "\n>>> kilnd --help works" }
-  "signal 11" { puts "\n>>> CRASH: kilnd --help signal 11"; exit 1 }
-  timeout { puts "\n>>> TIMEOUT: kilnd --help"; exit 1 }
+  "Usage:" { puts "\n>>> kiln --help works" }
+  "signal 11" { puts "\n>>> CRASH: kiln --help signal 11"; exit 1 }
+  timeout { puts "\n>>> TIMEOUT: kiln --help"; exit 1 }
 }
 expect "->"
 
-# Run kilnd with hello_rust.wasm
-send "kilnd.vxe hello_rust.wasm\r"
+# Run kiln with hello_rust.wasm
+send "kiln.vxe hello_rust.wasm\r"
 expect {
   "Hello wasm component world from Rust!" {
     puts "\n>>> PASS: hello_rust.wasm"
