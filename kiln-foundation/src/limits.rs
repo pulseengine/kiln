@@ -194,8 +194,13 @@ pub mod platform {
     /// Maximum imports in a module
     pub const MAX_IMPORTS: usize = 16384;
 
-    /// Maximum exports in a module
-    pub const MAX_EXPORTS: usize = 16384;
+    /// Maximum exports in a module.
+    ///
+    /// The WebAssembly JS API's implementation limit (also wasmtime's and the
+    /// browsers'). witness MC/DC instrumentation exports one global per branch
+    /// counter, so real instrumented modules exceed 16,384: the released
+    /// hello_go example carries 35,581 exports once instrumented (SR-34, #391).
+    pub const MAX_EXPORTS: usize = 100_000;
 
     /// Maximum elements in an element segment
     pub const MAX_ELEMENT_ITEMS: usize = 65536;

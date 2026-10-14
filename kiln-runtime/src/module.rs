@@ -105,11 +105,91 @@ type CustomSections = BoundedMap<
     16,
     RuntimeProvider,
 >;
-type ExportMap = kiln_foundation::direct_map::DirectMap<
-    kiln_foundation::bounded::BoundedString<256>,
-    Export,
-    256, // Increased from 64 to handle TinyGo modules with many exports
->;
+type ExportName = kiln_foundation::bounded::BoundedString<256>;
+
+/// A module's export table, in declaration order (SR-34, #391).
+///
+/// Real modules carry thousands of exports: witness MC/DC instrumentation
+/// exports one global per branch counter (4,092 for the released hello_rust
+/// example, 35,581 for hello_go). A fixed inline table with linear lookup does
+/// not scale to that, so entries live on the heap with a name index. The bound
+/// is the decoder's [`kiln_foundation::limits::MAX_EXPORTS`]: exceeding it is
+/// a capacity error, never a silent truncation.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExportMap {
+    entries: Vec<(ExportName, Export)>,
+    index: alloc::collections::BTreeMap<ExportName, usize>,
+}
+
+impl ExportMap {
+    /// Create an empty export table.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Insert or replace an export, returning the previous value for `key`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a capacity error once the table holds `limits::MAX_EXPORTS`
+    /// entries and `key` is new.
+    pub fn insert(&mut self, key: ExportName, value: Export) -> Result<Option<Export>> {
+        if let Some(&i) = self.index.get(&key) {
+            return Ok(Some(core::mem::replace(&mut self.entries[i].1, value)));
+        }
+        if self.entries.len() >= kiln_foundation::limits::MAX_EXPORTS {
+            return Err(Error::new(
+                kiln_error::ErrorCategory::Capacity,
+                kiln_error::codes::CAPACITY_EXCEEDED,
+                "Module export table exceeds the platform export limit",
+            ));
+        }
+        self.index.insert(key.clone(), self.entries.len());
+        self.entries.push((key, value));
+        Ok(None)
+    }
+
+    /// Look up an export by name.
+    pub fn get(&self, key: &ExportName) -> Option<&Export> {
+        self.index.get(key).map(|&i| &self.entries[i].1)
+    }
+
+    /// Look up an export by name, mutably.
+    pub fn get_mut(&mut self, key: &ExportName) -> Option<&mut Export> {
+        let i = *self.index.get(key)?;
+        Some(&mut self.entries[i].1)
+    }
+
+    /// Whether an export with this name exists.
+    pub fn contains_key(&self, key: &ExportName) -> bool {
+        self.index.contains_key(key)
+    }
+
+    /// Number of exports.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Whether the table is empty.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Export names, in declaration order.
+    pub fn keys(&self) -> impl Iterator<Item = &ExportName> {
+        self.entries.iter().map(|(k, _)| k)
+    }
+
+    /// Exports, in declaration order.
+    pub fn values(&self) -> impl Iterator<Item = &Export> {
+        self.entries.iter().map(|(_, v)| v)
+    }
+
+    /// `(name, export)` pairs, in declaration order.
+    pub fn iter(&self) -> impl Iterator<Item = (&ExportName, &Export)> {
+        self.entries.iter().map(|(k, v)| (k, v))
+    }
+}
 
 // Additional type aliases for struct fields to use unified RuntimeProvider
 type BoundedExportName = kiln_foundation::bounded::BoundedString<128>;
@@ -1868,7 +1948,7 @@ impl Module {
             data: Vec::new(),
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            exports: kiln_foundation::direct_map::DirectMap::new(),
+            exports: ExportMap::new(),
             name: None,
             binary: None,
             validated: false,
@@ -1925,7 +2005,7 @@ impl Module {
             data: Vec::new(), // Vec in std mode for large data segments
             start: kiln_module.start,
             custom_sections: custom_sections_map,
-            exports: kiln_foundation::direct_map::DirectMap::new(),
+            exports: ExportMap::new(),
             name: None,
             binary: None,
             validated: false,
@@ -3497,7 +3577,7 @@ impl Module {
             data: Vec::new(),
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            exports: kiln_foundation::direct_map::DirectMap::new(),
+            exports: ExportMap::new(),
             name: None,
             binary: None,
             validated: false,
@@ -3964,7 +4044,7 @@ impl kiln_foundation::traits::FromBytes for Module {
             data: Vec::new(),
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            exports: kiln_foundation::direct_map::DirectMap::new(),
+            exports: ExportMap::new(),
             name,
             binary: None,
             validated,
