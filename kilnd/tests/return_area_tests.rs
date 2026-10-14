@@ -1,4 +1,4 @@
-//! kilnd reports the values in a Canonical-ABI return area, not the pointer
+//! kiln reports the values in a Canonical-ABI return area, not the pointer
 //! (SR-61, issue #505).
 //!
 //! A component export whose result does not fit in one core value returns an
@@ -12,7 +12,7 @@
 
 use std::{fs, process::Command};
 
-const KILND: &str = env!("CARGO_BIN_EXE_kilnd");
+const KILN: &str = env!("CARGO_BIN_EXE_kiln");
 
 /// Append meld's manifest custom section carrying `json`.
 fn with_manifest(module_wat: &str, json: &str) -> Vec<u8> {
@@ -74,7 +74,7 @@ const POST: &str = r#""cabi_post_p:i/m@1.0.0#mix""#;
 fn run(bytes: &[u8], file: &str, args: &[&str]) -> (Option<i32>, String, String) {
     let path = std::env::temp_dir().join(file);
     fs::write(&path, bytes).unwrap();
-    let mut cmd = Command::new(KILND);
+    let mut cmd = Command::new(KILN);
     cmd.args(["--invoke", "p:i/m@1.0.0#mix"]);
     for a in args {
         cmd.args(["--arg", a]);
