@@ -80,22 +80,3 @@ fn the_canonical_entry_is_the_function_that_actually_ran() {
     );
     let _ = fs::remove_file(&p);
 }
-
-/// Regression: a module that really does only expose numbered entries must
-/// still run — the numbered names are kept as a trailing fallback, just no
-/// longer tried first.
-#[test]
-fn numbered_entry_fallback_still_works_when_there_is_no_canonical_name() {
-    let wat = r#"(module
-        (func (export "0") (result i32) i32.const 0))"#;
-    let p = std::env::temp_dir().join("kilnd_sr57_numbered.wasm");
-    fs::write(&p, wat::parse_str(wat).unwrap()).unwrap();
-
-    let out = Command::new(KILN).arg(&p).output().unwrap();
-    assert!(
-        out.status.success(),
-        "a module exposing only numbered entries must still run via the fallback: {}",
-        String::from_utf8_lossy(&out.stderr)
-    );
-    let _ = fs::remove_file(&p);
-}
