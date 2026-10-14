@@ -3,7 +3,7 @@ artifacts:
   - id: SR-63
     type: requirement
     title: kiln reads meld's signature manifest and refuses exports it cannot call correctly
-    status: implemented
+    status: verified
     description: "IMPLEMENTED (PR #517). Split out of SR-60 because SR-60's scope is LOWERING component-typed arguments (list/record/string), which is not done — the reader is the prerequisite, not the lowering. Reads meld's 'meld.signature-manifest' custom section (JSON v1, meld#400) in kiln-decoder/src/signature_manifest.rs with the SR-45 discipline: absent -> Ok(None), present-but-malformed -> Err, unknown version -> refuse the whole manifest. kilnd consults it before building a call and refuses when flat_param_count disagrees with the core arity (parameters are a pointer — closes SR-62), when needs.realloc is true and realloc is null (allocator unreachable), and when 'core' disagrees with the module's declared function type. Verified on the real relay falcon-v1.139 cascade fused by meld 0.58.3 --emit-manifest: attitude/position/rate#tick detected indirect (19/18/18 flat behind 1 core i32), ekf/mixer flat; named reallocs meld:realloc/2,/4,/6 and memory confirmed present; core cross-checked against real function types. Before: --invoke rate#tick --arg 99999 -> success, exit 0. After: refused, exit 1. Tests: 6 reader + 6 refusal. Relates to SR-60 (lowering, still proposed), SR-62, SR-61, meld#400."
     tags: [kiln-decoder, kilnd, signature-manifest, meld, fail-loud]
     provenance:
@@ -11,3 +11,5 @@ artifacts:
       model: claude-opus-5-5
       timestamp: 2026-10-13T20:00:30Z
     release: v0.6.0
+    fields:
+      verification-evidence: "2026-10-15 on the release binary at main 60a812eb: kiln reads the meld.signature-manifest section emitted by meld 0.62.0 for the relay falcon-v1.140.0 cascade and mixer — it refuses controller#step (indirect params) and decodes return areas for mixer#mix and observer#read-state from it. Reader tests (absent=None, malformed=Err, unknown version refused, indirect/realloc detection) green."
