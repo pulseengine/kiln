@@ -60,7 +60,7 @@ fn manifest(flat: u32, realloc: &str) -> String {
             "flat_param_count":{flat},
             "needs":{{"memory":true,"realloc":true}},
             "memory":"memory","realloc":{realloc},"post_return":null,
-            "return_area":{{"size":16,"align":4,"layout":[]}}
+            "return_area":null
         }}]}}"#
     )
 }
