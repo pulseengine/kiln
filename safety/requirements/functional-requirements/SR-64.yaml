@@ -3,7 +3,7 @@ artifacts:
   - id: SR-64
     type: requirement
     title: The released runtime binary is named kiln; kilnd remains one release as a deprecated alias that warns on stderr
-    status: proposed
+    status: implemented
     release: v0.6.0
     description: "Issue #486 ask 3, decided by the maintainer 2026-10-13. Repo kiln, tarball kiln-vX.Y.Z-<triple>, but the binary inside was kilnd — and the name says daemon while the CLI is a one-shot runner. The varve roster lists kiln, so a user looking for the command 'kiln' found none. DECISION: v0.6.0 ships the binary 'kiln' as the primary name; 'kilnd' ships alongside it for exactly one release (removed in v0.7.0) and prints a one-line deprecation warning on STDERR on every invocation, leaving stdout unchanged so existing callers (witness --harness) keep parsing. Each binary reports its own installed name per the PulseEngine CLI baseline: 'kiln --version' prints 'kiln <semver>', 'kilnd --version' prints 'kilnd <semver>'. Usage/help text uses the invoked name. VERIFIED BY: kilnd/tests binary-name tests (kiln --version/--help exit 0 with the kiln name and no warning; kilnd --version prints kilnd and warns on stderr) plus the release workflow asserting both binaries are in every archive and that the packaged 'kiln --version' equals the tag. Relates to SR-59 (the CLI surface), #486."
     tags: [cli, naming, release, issue-486]
