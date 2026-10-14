@@ -71,4 +71,4 @@ type = "Runtime"
 asil_level = "AsilB"
 implementations = ["kiln-component/src/threading/advanced_threading_builtins.rs", "kiln-component/src/threading/thread_builtins.rs"]
 tests = ["kiln-component/tests/"]
-documentation = ["docs/source/requirements.rst"]
+documentation = []

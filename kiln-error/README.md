@@ -36,4 +36,3 @@ fn parse_module(bytes: &[u8]) -> KilnResult<Module> {
 ## See Also
 
 - [API Documentation](https://docs.rs/kiln-error)
-- [Error Handling Guide](../docs/source/development/error_handling.rst)

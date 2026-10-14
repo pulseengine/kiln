@@ -119,5 +119,4 @@ START.call_once(|| {
 ## See Also
 
 - [API Documentation](https://docs.rs/kiln-sync)
-- [Synchronization Guide](../docs/source/architecture/sync.rst)
-- [Kiln Architecture](../docs/source/architecture/)
+- [Kiln Architecture](../docs/architecture/rfc46-toolchain-architecture.md)

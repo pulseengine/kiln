@@ -40,4 +40,3 @@ runtime.register_log_handler(handler);
 ## See Also
 
 - [API Documentation](https://docs.rs/kiln-logging)
-- [Component Model Guide](../docs/source/user_guide/component_model.rst)

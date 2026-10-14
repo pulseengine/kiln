@@ -392,44 +392,6 @@ impl ToolVersionConfig {
             },
         );
 
-        // Documentation tools
-        tools.insert(
-            "python3".to_string(),
-            ToolVersion {
-                version: "3.8.0".to_string(),
-                requirement_type: VersionRequirement::Minimum,
-                install_command: "Install Python from https://python.org or via package manager"
-                    .to_string(),
-                version_check_args: vec!["--version".to_string()],
-                version_pattern: Some(r"Python (\d+\.\d+\.\d+)".to_string()),
-                required: false,
-                used_by: vec!["docs".to_string()],
-                description: "Python interpreter for Sphinx documentation generation".to_string(),
-                target_specific: HashMap::new(),
-            },
-        );
-
-        tools.insert(
-            "python-venv".to_string(),
-            ToolVersion {
-                version: "3.8.0".to_string(),
-                requirement_type: VersionRequirement::Minimum,
-                install_command: "Included with Python 3.8+ - install Python if missing"
-                    .to_string(),
-                version_check_args: vec![
-                    "-m".to_string(),
-                    "venv".to_string(),
-                    "--help".to_string(),
-                ],
-                version_pattern: Some(r"Python (\d+\.\d+\.\d+)".to_string()),
-                required: false,
-                used_by: vec!["docs".to_string()],
-                description: "Python virtual environment support for isolated \
-                                     documentation dependencies"
-                    .to_string(),
-                target_specific: HashMap::new(),
-            },
-        );
 
         Self {
             tools,

@@ -1,6 +1,7 @@
 version: 2
 updates:
-  # Check for updates to Rust crate dependencies
+  # Check for updates to Rust crate dependencies.
+  # Grouped: one PR per run instead of one per crate, so CI runs once.
   - package-ecosystem: "cargo"
     directory: "/"
     schedule:
@@ -10,13 +11,11 @@ updates:
       - "dependencies"
       - "rust"
     groups:
-      dev-dependencies:
+      cargo:
         patterns:
-          - "criterion"
-          - "proptest"
-          - "pretty_assertions"
+          - "*"
 
-  # Check for updates to GitHub Actions
+  # Check for updates to GitHub Actions (grouped, as above)
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -25,13 +24,7 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
-
-  # Check for updates to Python dependencies (for documentation)
-  - package-ecosystem: "pip"
-    directory: "/docs"
-    schedule:
-      interval: "monthly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "documentation"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
