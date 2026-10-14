@@ -4867,7 +4867,7 @@ impl ComponentInstance {
                         custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone()).map_err(|e| {
                             Error::runtime_execution_error("Failed to create custom_sections")
                         })?,
-                        exports: kiln_foundation::direct_map::DirectMap::new(),
+                        exports: kiln_runtime::module::ExportMap::new(),
                         name: None,
                         binary: None,
                         validated: false,

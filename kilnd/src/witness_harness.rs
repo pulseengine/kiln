@@ -67,12 +67,6 @@ pub fn build_counters_json(snapshot: &BTreeMap<String, i64>, prefix: &str) -> Re
     Ok(json)
 }
 
-/// Entry exports tried, in order, to drive the instrumented module. `_start` and
-/// `run` are the synchronous WASI/command entries; `0`/`1`/`main` cover
-/// meld-fused P3 cores whose entry is a numbered `wasi:cli/run` export. The first
-/// that exists is invoked; if none do, the harness fails loud.
-const ENTRY_CANDIDATES: &[&str] = &["_start", "run", "0", "1", "main"];
-
 /// Fuel budget for a coverage run. Generous but finite so a non-terminating
 /// module is a bounded failure, never an unbounded hang (cf. SM-RES-002).
 #[cfg(all(feature = "std", feature = "kiln-execution"))]
@@ -124,6 +118,14 @@ pub fn run(module_path: &std::path::Path, output_path: &std::path::Path) -> Resu
         .map_err(|_| Error::runtime_error("failed to create engine"))?;
     engine.set_fuel(DEFAULT_HARNESS_FUEL);
 
+    // SR-34 / #391: instrumented real apps are WASI programs, so the harness
+    // needs the same WASI host the normal run path wires. No preopens: the
+    // harness grants no filesystem access.
+    #[cfg(feature = "wasi")]
+    engine.set_host_handler(Box::new(kiln_wasi::WasiDispatcher::with_defaults().map_err(
+        |_| Error::runtime_error("failed to create the WASI dispatcher for the harness"),
+    )?));
+
     let module_handle = engine
         .load_module(&wasm)
         .map_err(|_| Error::runtime_execution_error("failed to load WITNESS_MODULE"))?;
@@ -131,15 +133,39 @@ pub fn run(module_path: &std::path::Path, output_path: &std::path::Path) -> Resu
         .instantiate(module_handle)
         .map_err(|_| Error::runtime_execution_error("failed to instantiate WITNESS_MODULE"))?;
 
-    let entry = ENTRY_CANDIDATES
-        .iter()
-        .copied()
-        .find(|name| engine.has_function(instance, name).unwrap_or(false))
-        .ok_or_else(|| {
-            Error::runtime_function_not_found(
-                "no witness harness entry export found (_start/run/0/1/main)",
-            )
-        })?;
+    // SR-34 / #391: the program's entry is `_start`, or — for a meld-fused
+    // command, which has none — its canonical `wasi:cli/run@<ver>#run` export.
+    // Nothing else is guessed: running some other export would report the
+    // coverage of whatever happened to execute (the fused hello_go's `"0"` is
+    // an adapter shim taking parameters).
+    let entry: String = if engine.has_function(instance, "_start").unwrap_or(false) {
+        String::from("_start")
+    } else {
+        let inst = engine
+            .get_instance(instance)
+            .map_err(|_| Error::runtime_error("failed to access instance"))?;
+        let mut runs = inst.module().exports.iter().filter_map(|(_k, e)| {
+            let name = e.name.as_str().unwrap_or("");
+            (e.kind == kiln_runtime::module::ExportKind::Function
+                && name.starts_with("wasi:cli/run@")
+                && name.ends_with("#run"))
+            .then(|| String::from(name))
+        });
+        match (runs.next(), runs.next()) {
+            (Some(run), None) => run,
+            (Some(_), Some(_)) => {
+                return Err(Error::runtime_error(
+                    "WITNESS_MODULE exports more than one wasi:cli/run entry; refusing to pick one",
+                ));
+            },
+            (None, _) => {
+                return Err(Error::runtime_function_not_found(
+                    "WITNESS_MODULE has no command entry (_start or wasi:cli/run@<ver>#run)",
+                ));
+            },
+        }
+    };
+    let entry = entry.as_str();
 
     // Drive the instrumented branches. Propagate the engine error verbatim
     // (fuel exhaustion, traps) rather than masking it.
@@ -203,8 +229,11 @@ mod tests {
     /// End-to-end: `run` loads a core, invokes `_start` (which hits a counter
     /// twice), and writes the v1 snapshot reflecting the post-run value.
     // rivet: verifies REQ_WITNESS_COV
+    // Engines draw on the shared global capability memory budget; run the
+    // engine-building tests serially (CLAUDE.md).
     #[cfg(all(feature = "std", feature = "kiln-execution"))]
     #[test]
+    #[serial_test::serial]
     fn run_executes_entry_and_writes_v1_snapshot() {
         let wasm = wat::parse_str(
             r#"(module
@@ -228,5 +257,98 @@ mod tests {
 
         let _ = std::fs::remove_file(&module_path);
         let _ = std::fs::remove_file(&output_path);
+    }
+
+    /// SR-34 / #391: real apps are WASI programs. Every released pulseengine
+    /// example calls WASI on its first line, so a harness without a WASI host
+    /// failed all of them ("WASI function called but no host_handler").
+    // rivet: verifies SR-34
+    #[cfg(all(feature = "std", feature = "kiln-execution", feature = "wasi"))]
+    #[test]
+    #[serial_test::serial]
+    fn run_provides_wasi_to_the_instrumented_module() {
+        let wasm = wat::parse_str(
+            r#"(module
+                (import "wasi:cli/stdout@0.2.6" "get-stdout" (func $get_stdout (result i32)))
+                (global $c (export "__witness_counter_0") (mut i64) (i64.const 0))
+                (func (export "_start")
+                    (drop (call $get_stdout))
+                    (global.set $c (i64.add (global.get $c) (i64.const 1)))))"#,
+        )
+        .expect("wat fixture parses");
+
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let module_path = dir.join(format!("kilnd_witness_wasi_mod_{pid}.wasm"));
+        let output_path = dir.join(format!("kilnd_witness_wasi_out_{pid}.json"));
+        std::fs::write(&module_path, &wasm).unwrap();
+
+        let result = run(&module_path, &output_path);
+        let got = std::fs::read_to_string(&output_path);
+        let _ = std::fs::remove_file(&module_path);
+        let _ = std::fs::remove_file(&output_path);
+
+        result.expect("a WASI-importing instrumented module must run under the harness");
+        assert_eq!(
+            got.unwrap(),
+            r#"{"schema":"witness-harness-v1","counters":{"0":1}}"#
+        );
+    }
+
+    fn run_wat(wat: &str, tag: &str) -> (Result<()>, Option<String>) {
+        let wasm = wat::parse_str(wat).expect("wat fixture parses");
+        let dir = std::env::temp_dir();
+        let pid = std::process::id();
+        let module_path = dir.join(format!("kilnd_witness_{tag}_mod_{pid}.wasm"));
+        let output_path = dir.join(format!("kilnd_witness_{tag}_out_{pid}.json"));
+        std::fs::write(&module_path, &wasm).unwrap();
+        let result = run(&module_path, &output_path);
+        let got = std::fs::read_to_string(&output_path).ok();
+        let _ = std::fs::remove_file(&module_path);
+        let _ = std::fs::remove_file(&output_path);
+        (result, got)
+    }
+
+    /// SR-34 / #391: a meld-fused command (Go, C) has no `_start`; its entry
+    /// is the canonical `wasi:cli/run@<ver>#run`. The harness used to guess
+    /// positional names and ran the fused hello_go's `"0"` — an adapter shim
+    /// that takes parameters — instead of the program.
+    // rivet: verifies SR-34
+    #[cfg(all(feature = "std", feature = "kiln-execution"))]
+    #[test]
+    #[serial_test::serial]
+    fn run_uses_the_canonical_cli_run_entry_not_positional_exports() {
+        let (result, got) = run_wat(
+            r#"(module
+                (global $c (export "__witness_counter_0") (mut i64) (i64.const 0))
+                (func (export "0") (param i32) unreachable)
+                (func (export "wasi:cli/run@0.2.0#run") (result i32)
+                    (global.set $c (i64.add (global.get $c) (i64.const 1)))
+                    (i32.const 0)))"#,
+            "canonical",
+        );
+        result.expect("the canonical run export must be the entry");
+        assert_eq!(
+            got.unwrap(),
+            r#"{"schema":"witness-harness-v1","counters":{"0":1}}"#
+        );
+    }
+
+    /// Without `_start` or a `wasi:cli/run` export there is nothing to run as
+    /// a program; guessing another export would report coverage of whatever
+    /// happened to execute.
+    #[cfg(all(feature = "std", feature = "kiln-execution"))]
+    #[test]
+    #[serial_test::serial]
+    fn run_refuses_a_module_without_a_command_entry() {
+        let (result, got) = run_wat(
+            r#"(module
+                (global (export "__witness_counter_0") (mut i64) (i64.const 0))
+                (func (export "main"))
+                (func (export "0")))"#,
+            "noentry",
+        );
+        assert!(result.is_err(), "must refuse instead of guessing an entry");
+        assert!(got.is_none(), "no snapshot may be written for a run that did not happen");
     }
 }

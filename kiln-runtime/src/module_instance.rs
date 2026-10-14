@@ -1609,7 +1609,7 @@ impl FromBytes for ModuleInstance {
             data: Vec::new(),
             start: None,
             custom_sections: kiln_foundation::bounded_collections::BoundedMap::new(provider.clone())?,
-            exports: kiln_foundation::direct_map::DirectMap::new(),
+            exports: crate::module::ExportMap::new(),
             name: None,
             binary: None,
             validated: false,
