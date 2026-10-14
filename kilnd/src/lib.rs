@@ -1259,62 +1259,48 @@ impl KilndEngine {
             } else {
                 // No `_start` — this is a meld-fused module.
                 //
-                // SR-57 / #480: prefer a DETERMINISTIC lookup of the canonical
-                // entry name meld emits. meld preserves each component export
-                // under its canonical WIT name, so a fused wasi:cli command
-                // component carries `wasi:cli/run@<version>#run` (verified on
-                // hello_rust: the fused module exports both `_start` and
-                // `wasi:cli/run@0.2.6#run`). Find that by scanning the export
-                // table rather than guessing positional names.
-                //
-                // The numbered exports ("0", "1", ...) are kept as a trailing
-                // fallback because some P3-fused modules expose only those, but
-                // they are a guess and are tried last, not first.
-                let mut executed = false;
-
-                let canonical_run: Option<String> = engine
+                // SR-57 / #480, #530: the entry is exactly one
+                // `wasi:cli/run@<version>#run` function export, which meld
+                // preserves under its canonical WIT name. Positional names
+                // ("0", "1", "main") are never entries. The chosen entry's error
+                // is final: it is propagated, not retried as another export.
+                let run_entries: Vec<String> = engine
                     .get_instance(instance)
-                    .ok()
-                    .and_then(|inst| {
-                        inst.module()
-                            .exports
-                            .iter()
-                            .filter(|(_k, e)| {
-                                e.kind == kiln_runtime::module::ExportKind::Function
-                            })
-                            .find_map(|(_k, e)| {
-                                let n = e.name.as_str().unwrap_or("");
-                                (n.contains("wasi:cli/run") && n.ends_with("#run"))
-                                    .then(|| n.to_string())
-                            })
-                    });
+                    .map_err(|_| Error::runtime_error("Failed to read instance exports"))?
+                    .module()
+                    .exports
+                    .iter()
+                    .filter(|(_k, e)| e.kind == kiln_runtime::module::ExportKind::Function)
+                    .filter_map(|(_k, e)| {
+                        let n = e.name.as_str().unwrap_or("");
+                        (n.starts_with("wasi:cli/run@") && n.ends_with("#run"))
+                            .then(|| n.to_string())
+                    })
+                    .collect();
 
-                let mut candidates: Vec<&str> = Vec::new();
-                if let Some(ref name) = canonical_run {
-                    candidates.push(name.as_str());
-                }
-                candidates.extend_from_slice(&["0", "1", "_start", "main"]);
-
-                for entry in &candidates {
-                    if engine.has_function(instance, entry).unwrap_or(false) {
-                        let _ = self.logger.handle_minimal_log(
-                            LogLevel::Info,
-                            "Executing Meld-fused P3 module entry point",
-                        );
-                        match engine.execute(instance, entry, &[]) {
-                            Ok(results) => {
-                                if !results.is_empty() {
-                                    println!("\n✓ Entry '{}' returned: {:?}", entry, results);
-                                }
-                                executed = true;
-                                break;
-                            },
-                            Err(_) => continue,
-                        }
+                if run_entries.len() > 1 {
+                    eprintln!(
+                        "Error: this module exports more than one wasi:cli/run entry; \
+                         refusing to pick one:"
+                    );
+                    for name in &run_entries {
+                        eprintln!("  {name}");
                     }
+                    return Err(Error::runtime_error(
+                        "More than one wasi:cli/run entry exported",
+                    ));
                 }
 
-                if !executed {
+                if let Some(entry) = run_entries.first() {
+                    let _ = self.logger.handle_minimal_log(
+                        LogLevel::Info,
+                        "Executing Meld-fused P3 module entry point",
+                    );
+                    let results = engine.execute(instance, entry, &[])?;
+                    if !results.is_empty() {
+                        println!("\n✓ Entry '{}' returned: {:?}", entry, results);
+                    }
+                } else {
                     // SR-58 / #480: a module with no command entry is very often
                     // a LIBRARY/reactor component (e.g. scry exports
                     // `pulseengine:scry/analyzer@0.1.0#analyze` and no
@@ -1347,7 +1333,7 @@ impl KilndEngine {
                     if invokable.is_empty() {
                         let _ = self.logger.handle_minimal_log(
                             LogLevel::Error,
-                            "No entry point found (_start or P3 fused entries)",
+                            "No entry point found (_start or wasi:cli/run@<version>#run)",
                         );
                     } else {
                         eprintln!(
