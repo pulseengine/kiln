@@ -3033,9 +3033,9 @@ mod tests {
         };
 
         // Read the actual ref_null.wast file
-        let wast_path = "/Users/r/git/wrt2/external/testsuite/ref_null.wast";
-        let wast_content =
-            std::fs::read_to_string(wast_path).expect("Failed to read ref_null.wast");
+        let wast_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../external/testsuite/ref_null.wast");
+        let wast_content = std::fs::read_to_string(wast_path)
+            .unwrap_or_else(|e| panic!("Failed to read {}: {}", wast_path, e));
 
         let buf = ParseBuffer::new(&wast_content).expect("Failed to create buffer");
         let wast: Wast = parser::parse(&buf).expect("Failed to parse WAST");
