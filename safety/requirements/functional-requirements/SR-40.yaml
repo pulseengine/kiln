@@ -14,4 +14,4 @@ artifacts:
     created-by: ai
     model: claude-opus-4-8
     timestamp: 2026-07-10T00:10:00Z
-  release: v0.7.0
+  release: v0.8.0
