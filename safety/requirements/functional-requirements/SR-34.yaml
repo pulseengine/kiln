@@ -2,7 +2,7 @@ artifacts:
 - id: SR-34
   type: requirement
   title: 'kilnd loads witness-instrumented cores (real-app scale: multi-memory + high global/branch count)'
-  status: implemented
+  status: verified
   description: "IMPLEMENTED (branch feat/sr-34-witness-scale). Issue #391: witness-MC/DC-instrumented cores failed to load at real-app scale. ROOT CAUSES MEASURED 2026-10-14 (released pulseengine/wasm-component-examples v0.5.0, fused by meld 0.61.0, instrumented by witness 0.44.0): witness exports one global per branch counter, so instrumented cores carry thousands of exports (hello_rust 4,092; hello_c_cli 1,291; hello_go 35,581). (1) the runtime export table was a 256-entry inline DirectMap with linear lookup -> '[Capacity][E03F8] DirectMap capacity exceeded' on every instrumented component; (2) the decoder's default-profile MAX_EXPORTS was 16,384 -> '[Parse][E03F2] Module exceeds maximum export count' for Go. Fixing load exposed two harness defects on the real path: (3) witness harness mode built its engine with NO WASI host, so every real (WASI) app failed at its first WASI call; (4) the harness guessed entries ('_start','run','0','1','main') and ran the fused hello_go's '0' adapter shim instead of the program. FIX: ExportMap in kiln-runtime is heap-backed (declaration-ordered Vec + BTreeMap index), bounded by limits::MAX_EXPORTS with a capacity error, never truncation; default-profile MAX_EXPORTS raised to 100,000 (the WebAssembly JS-API implementation limit); the harness wires the WASI dispatcher (no preopens) and uses _start, else exactly one wasi:cli/run@<ver>#run, else refuses. MEASURED on the binary: all six instrumented components run under 'kiln --wasi' with the same program output as uninstrumented; 'witness run --harness kiln' + 'witness report' gives hello_rust 30/1350, hello_c_cli 41/423, hello_cpp_cli 40/423, datetime 73/1456, hello_go 954/11825 branches reached; C and Rust counter files are byte-identical across runs (Go reaches the same 954 branches; hit counts vary with its random-seeded runtime). calculator exits 1 without arguments and the harness correctly refuses that run. NOT COVERED: no independent counter cross-check (wasmtime cannot run these fused cores: WASI p2 imports undefined for a bare core). TESTS: kilnd/tests/export_scale_tests.rs (4,100 / 36,000 exports load; lookup resolves an export deep in a 3,000-entry table) and witness_harness unit tests (WASI provided; canonical run entry over a decoy '0'; refusal without a command entry). Related defect on the normal path filed as #530."
   tags:
   - kilnd
@@ -12,6 +12,7 @@ artifacts:
   - bug
   fields:
     upstream-ref: https://github.com/pulseengine/kiln/issues/391
+    verification-evidence: "2026-10-15 on the release binary at main 60a812eb (+ version bump only): wasm-component-examples v0.5.0 fused by meld 0.62.0 (origin/main), instrumented by witness 0.44.0; 'witness run --harness kiln' exit 0 and 'witness report': hello_rust 30/1350, hello_c_cli 41/423, hello_go 948/11825 branches reached. Note: hello_go's reached set varies between runs (954 on 2026-10-14) because its runtime seeds from wasi:random; C/Rust are byte-identical across runs. kilnd/tests/export_scale_tests.rs (3) and witness_harness unit tests (7) green."
   provenance:
     created-by: ai
     model: claude-opus-4-8
