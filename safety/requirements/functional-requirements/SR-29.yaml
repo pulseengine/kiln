@@ -2,7 +2,7 @@ artifacts:
 - id: SR-29
   type: requirement
   title: Multi-core Component-Model components run on kiln after meld fusion, with the same program output as wasmtime
-  status: implemented
+  status: verified
   description: "RE-SCOPED by the maintainer 2026-10-14 (was: kilnd's DIRECT multi-core component instantiation links cross-core user imports, #375). Since RFC #46 kiln refuses Component-Model components and meld fuses a component's core modules into one core module at build time, so cross-core linking is meld's job and the direct path is unreachable by design. The requirement is now the property users need on the supported path: a released multi-core command component, fused with meld, runs on kiln with the same program output as wasmtime running the original component. EVIDENCE (2026-10-14, kiln main after #536, meld 0.61.0 --emit-manifest, wasmtime 42.0.1): pulseengine/wasm-component-examples v0.5.0 — hello_c_cli, hello_cpp_cli, hello_go, hello_rust, datetime (4 core modules each) run with exit 0 and stdout identical to wasmtime; calculator matches (usage text, exit 1); library/P3 components are refused by both engines for having no run entry; p3_cli reports its real error (unsupported P3 import) instead of a masked one. TO VERIFY at the v0.6.0 cut: re-run this corpus on the release binary. Known gap, tracked separately: kiln instantiates modules with unresolved imports (yolo_inference imports wasi:nn) where wasmtime refuses (SR-65, #527, v0.7.0)."
   tags:
   - component-model
@@ -11,6 +11,7 @@ artifacts:
   - linking
   fields:
     upstream-ref: https://github.com/pulseengine/kiln/issues/375
+    verification-evidence: "2026-10-15 on the release binary at main 60a812eb (+ version bump only): pulseengine/wasm-component-examples v0.5.0 fused by meld 0.62.0 (origin/main dbeae1d) --emit-manifest, run with 'kiln --wasi' vs wasmtime 42.0.1 on the original components: hello_c_cli, hello_cpp_cli, hello_go, hello_rust, datetime (4 core modules each) exit 0 with stdout identical; calculator exit 1 on both with the same usage text (differs only in argv[0], the file name). Known separate gap: unresolved imports accepted at instantiation (SR-65, #527, v0.7.0)."
   provenance:
     created-by: ai
     model: claude-opus-4-8
