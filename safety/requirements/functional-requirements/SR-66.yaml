@@ -1,0 +1,12 @@
+artifacts:
+
+  - id: SR-66
+    type: requirement
+    title: The deprecated kilnd alias is removed; kiln is the only released binary
+    status: proposed
+    description: "Follow-up promised by SR-64 and the v0.6.0 release notes: kilnd shipped in v0.6.0 only, as a deprecated alias, and is removed in v0.7.0. Remove the [[bin]] kilnd target and src/bin/kilnd.rs, DEPRECATED_BIN_NAME handling, the kilnd assertions in release.yml and archive packaging, and the alias tests. Consumers to move first: jess (jess#287: scripts/jess-build.sh, tools/xruntime/kiln-check.sh) and the varve layer entry kiln:v0.6.0:kilnd (varve#258/#266). Verified by: kilnd absent from the release archive; kiln --version == tag."
+    tags: [cli, naming, deprecation, sr-64-followup]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-15T10:50:38Z
