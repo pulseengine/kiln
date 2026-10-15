@@ -1,7 +1,7 @@
 name: Release
 
 # Tag-triggered: builds the kiln runtime CLI (plus its deprecated `kilnd`
-# alias, v0.6.0 only — SR-64) for five targets, then
+# alias, until its removal in v0.8.0 — SR-64/SR-70) for five targets, then
 # publishes a standardised PulseEngine release. Pattern mirrors
 # pulseengine/relay/.github/workflows/release.yml (itself derived from
 # the synth standard) — cosign-signed SHA256SUMS.txt, CycloneDX SBOM,
@@ -160,7 +160,7 @@ jobs:
           ARCHIVE="kiln-${VERSION}-${TARGET}.tar.gz"
           mkdir -p staging
           # `kiln` is the runtime binary; `kilnd` is its deprecated alias,
-          # shipped for v0.6.0 only (SR-64).
+          # shipped until its removal in v0.8.0 (SR-64, SR-70).
           cp "target/${TARGET}/release/kiln" staging/
           cp "target/${TARGET}/release/kilnd" staging/
           cp kilnd/README.md staging/README.md 2>/dev/null || true
