@@ -54,8 +54,8 @@ cross-toolchain-hazards:
     tools: [synth, kiln-builtins]
     description: >
       Synth compiles Meld-lowered core modules to native ELF for gale.
-      Synth's synth-abi crate computes element sizes for the native call
-      ABI. When Synth-compiled code runs on gale with kiln-builtins as
+      Synth must compute element sizes for the native call ABI. When
+      Synth-compiled code runs on gale with kiln-builtins as
       the host intrinsic library, the argument layout in native calls to
       kiln-builtins must match what kiln-builtins expects to read. This
       is a native ABI boundary, not a Wasm-level boundary.
@@ -69,7 +69,13 @@ cross-toolchain-hazards:
       primary: "End-to-end fixtures: compile with Synth, run on Kiln"
       secondary: "Shared Rocq spec for element sizing"
     kiln-implementation: kiln-component/src/canonical_abi/
-    synth-implementation: synth-abi/src/layout.rs
+    # UNIMPLEMENTED on the synth side (kiln#510, synth#1277): synth-abi is
+    # not linked into the synth compiler (absent from synth-cli's dependency
+    # closure; 0 synth_abi symbols in the binary), so checking
+    # synth-abi/src/layout.rs against kiln would say nothing about the code
+    # synth emits. Re-point this at synth's compile path once it uses a
+    # canonical-ABI layout (synth will post on synth#1277).
+    synth-implementation: null
     requirement: SR-24
 
   # =========================================================================
@@ -145,8 +151,15 @@ cross-toolchain-hazards:
     mitigation:
       primary: "Version tag in Meld's custom section, checked by Kiln at load time"
       secondary: "Shared integration test suite using pinned Meld output artifacts"
-    kiln-implementation: kiln-decoder/src/custom_sections.rs
-    meld-implementation: meld-core/src/fusion/output.rs
+    # Re-pointed 2026-10-15 (the previous paths, kiln-decoder/src/custom_sections.rs
+    # and meld-core/src/fusion/output.rs, do not exist). PARTIAL: meld's
+    # `meld.signature-manifest` section carries a major version and kiln refuses
+    # an unknown one (SR-63, kiln v0.6.0). Gaps: the section is opt-in
+    # (`meld fuse --emit-manifest`), kiln reads it when building an invocation
+    # rather than at load, and it versions the export signatures, not trampoline
+    # encoding or name mangling.
+    kiln-implementation: kiln-decoder/src/signature_manifest.rs
+    meld-implementation: meld-core/src/signature_manifest.rs
     requirement: SR-11
 
   # =========================================================================
@@ -176,8 +189,13 @@ cross-toolchain-hazards:
     mitigation:
       primary: "Versioned ABI header shared between Synth and kiln-builtins via build dependency"
       secondary: "ABI version magic number embedded in ELF, checked at load time by kiln-builtins"
-    kiln-implementation: kiln-builtins/src/abi.rs
-    synth-implementation: synth-codegen/src/abi/builtins.rs
+    # UNIMPLEMENTED on both sides (found while triaging kiln#510, 2026-10-15):
+    # kiln-builtins/src/abi.rs does not exist (kiln-builtins is a single
+    # lib.rs with no ABI version mechanism), and synth has no
+    # synth-codegen/src/abi/builtins.rs. Neither mitigation above (shared
+    # versioned header, ABI magic checked at load) is implemented yet.
+    kiln-implementation: null
+    synth-implementation: null
     requirement: SR-24
 
 # =========================================================================

@@ -1,0 +1,12 @@
+artifacts:
+
+  - id: SR-67
+    type: requirement
+    title: WASI calls are not traced to stderr unless tracing is enabled, and trace records never split program output
+    status: proposed
+    description: "Issue #542. The v0.6.0 release binary prints a [WASI-TRACE] line on stderr for every WASI call, unconditionally and interleaved mid-line with the program's own stderr, so any stderr differential must scrub kiln's output first (needed in the v0.6.0 SR-29 verification for calculator). CLAUDE.md requires the kiln_foundation::tracing framework, filtered by RUST_LOG. Verified by: a release-binary run of a WASI component prints only the program's own stderr by default; with RUST_LOG enabling WASI tracing, each record is a whole line."
+    tags: [observability, tracing, stderr, issue-542]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-15T10:50:38Z
