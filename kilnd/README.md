@@ -5,7 +5,7 @@ support. `kiln <module.wasm>` runs a module and exits; it is not a daemon.
 
 The binary was called `kilnd` up to v0.5.0. v0.6.0 ships `kilnd` alongside
 `kiln` as a deprecated alias that behaves the same but prints a warning on
-stderr; the alias is removed in v0.7.0.
+stderr; the alias is removed in v0.8.0.
 
 ## Components
 

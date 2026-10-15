@@ -1837,7 +1837,7 @@ pub fn run_on_large_stack(bin_name: &'static str) -> Result<()> {
 }
 
 /// Name of the deprecated binary alias. v0.6.0 ships it next to `kiln`; it is
-/// removed in v0.7.0 (SR-64, issue #486 ask 3).
+/// removed in v0.8.0 (SR-64, issue #486 ask 3).
 pub const DEPRECATED_BIN_NAME: &str = "kilnd";
 
 /// Main entry point
@@ -1856,7 +1856,7 @@ pub const DEPRECATED_BIN_NAME: &str = "kilnd";
 pub fn run(bin_name: &str) -> Result<()> {
     if bin_name == DEPRECATED_BIN_NAME {
         eprintln!(
-            "warning: `{DEPRECATED_BIN_NAME}` is deprecated and will be removed in v0.7.0; \
+            "warning: `{DEPRECATED_BIN_NAME}` is deprecated and will be removed in v0.8.0; \
              use `kiln` instead"
         );
     }
