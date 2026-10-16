@@ -1,0 +1,12 @@
+artifacts:
+
+  - id: SR-71
+    type: requirement
+    title: kiln reads its own configuration files as YAML through rivet-yaml; TOML remains only for formats others define
+    status: proposed
+    description: "Issue #548, org policy (maintainer, 2026-10-13): a repository reads its own inputs through rivet's YAML stack (rivet-yaml, rivet v0.41.0, replacing the archived serde_yaml whose unsafe-libyaml dependency is RUSTSEC-2024-0449). Migrate kiln-owned TOML inputs: cargo-kiln config (cargo-kiln/src/helpers/config.rs), KilnTestConfig (cargo-kiln/src/test_config.rs), the legacy requirements file (kiln-build-core/src/requirements/legacy.rs), the allowed-unsafe config (kiln-build-core/src/verify.rs), tool-versions.toml (kiln-build-core/src/tool_versions.rs), and the resource-limits/qualification config (kiln-decoder/src/toml_config.rs); lower priority the JSON diagnostic cache (kiln-build-core/src/cache.rs). STAYS: rust-toolchain.toml, cargo/audit/coverage JSON parsers, and the meld signature manifest — its JSON shape is defined by meld (meld#400), so by the policy's own rule (formats someone else defines) it is not kiln's to change. rivet-yaml is a git dependency (not on crates.io): check it against the supply-chain/audit gates before adopting. Verified by: the migrated configs load through rivet_yaml::from_str, the old TOML parsers and the toml dependency (where unused) are removed, and cargo audit stays clean. No release assigned (maintainer to scope)."
+    tags: [config, yaml, rivet-yaml, org-policy, issue-548]
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-16T04:48:26Z
