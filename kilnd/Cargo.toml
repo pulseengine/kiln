@@ -18,7 +18,7 @@ name = "kilnd"
 path = "src/lib.rs"
 
 # The runtime CLI. `kiln` is the released name; `kilnd` is a deprecated std-only
-# alias that warns on stderr, shipped for v0.6.0 only and removed in v0.7.0
+# alias that warns on stderr, shipped in v0.6.0 and v0.7.0 and removed in v0.8.0
 # (SR-64, issue #486 ask 3).
 [[bin]]
 name = "kiln"

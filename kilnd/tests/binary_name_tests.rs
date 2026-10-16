@@ -86,7 +86,11 @@ fn kilnd_alias_warns_on_stderr_and_points_at_kiln() {
         "warning must name the replacement; got {stderr:?}"
     );
     assert!(
-        stderr.contains("v0.7.0"),
+        stderr.contains("v0.8.0"),
         "warning must say when the alias goes away; got {stderr:?}"
+    );
+    assert!(
+        !stderr.contains("v0.7.0"),
+        "warning must not mention v0.7.0; got {stderr:?}"
     );
 }
