@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-LINK-001
+    type: design-decision
+    title: One table of served WASI imports drives both dispatch and the link-time import check
+    status: proposed
+    release: v0.7.0
+    description: "Maintainer decision 2026-10-15/16. SR-65 requires instantiation to refuse imports that nothing can serve. WASI imports are served by WasiDispatcher::dispatch_core (kiln-wasi/src/dispatcher.rs), a large match on (interface, function) with cfg-gated arms whose fallthrough returns 'Unknown WASI function' only at call time. DECISION: a single const table of (interface, function) entries, under the same cfg gates as the dispatch arms, is the source of truth; dispatch_core dispatches through it and HostImportHandler gains a resolves(module, function) query backed by the same table; instantiation checks every import against host handler resolves(), registered host functions and linked modules, and refuses listing every unresolved module::name before running anything. An agreement test fails if any table entry does not dispatch or any dispatch arm is missing from the table."
+    tags: [linking, instantiation, wasi, single-source, issue-527]
+    fields:
+      alternatives-considered: "(1) A macro generating both the match arms and the list from one declaration: strongest guarantee but a large rewrite of a big file. (2) A separate hand-written list plus a test that every listed entry dispatches: smallest change, but a newly added dispatch arm can be forgotten in the list without any test failing. (3) Trial-calling imports at instantiation: has side effects, rejected."
+      rationale: "A second hand-maintained list of supported imports drifts from the dispatcher: a new arm forgotten in the list would make a valid module be refused, an entry without an arm would accept a module that fails at call time — the exact late failure SR-65 removes. Sharing one table makes them agree by construction, and the agreement test catches the remaining hand-written link between table and handler."
+    links:
+      - type: satisfies
+        target: SR-65
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-16T04:52:01Z

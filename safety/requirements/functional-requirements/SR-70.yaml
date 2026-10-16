@@ -3,7 +3,7 @@ artifacts:
   - id: SR-70
     type: requirement
     title: The kilnd deprecation notice states its actual removal release (v0.8.0)
-    status: proposed
+    status: implemented
     release: v0.7.0
     description: "Maintainer decision 2026-10-15: the kilnd alias is kept through v0.7.0 and removed in v0.8.0 (SR-66 moved to v0.8.0), to give consumers (jess#287, the varve layer entry from varve#266) time to switch to kiln. v0.6.0's binary warns 'will be removed in v0.7.0', and its release notes and SR-64 say the same; a deprecation notice that names the wrong release is a false statement in the product. Change the stderr warning, the kilnd entry-point doc, release.yml/README wording and SR-64's text to v0.8.0. Verified by: kilnd/tests/binary_name_tests asserting the warning names v0.8.0, and the v0.7.0 release binary's kilnd --version stderr."
     tags: [cli, deprecation, sr-64-followup]
