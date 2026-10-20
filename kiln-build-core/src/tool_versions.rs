@@ -73,13 +73,13 @@ pub struct ToolVersionConfig {
     pub rust_toolchain: Option<RustToolchainConfig>,
 }
 
-/// TOML file structure for tool versions
+/// YAML file structure for tool versions
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolVersionsToml {
+pub struct ToolVersionsFile {
     /// Configuration metadata
     pub metadata: VersionConfigMetadata,
     /// Tool specifications
-    pub tools: HashMap<String, ToolVersionToml>,
+    pub tools: HashMap<String, ToolVersionEntry>,
 }
 
 /// Rust toolchain configuration from rust-toolchain.toml
@@ -97,9 +97,9 @@ pub struct RustToolchainConfig {
     pub targets: Vec<String>,
 }
 
-/// Tool version as stored in TOML file
+/// Tool version as stored in the YAML file
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ToolVersionToml {
+pub struct ToolVersionEntry {
     /// Required version (exact, minimum, or range)
     pub version: String,
     /// Version requirement type
@@ -121,12 +121,12 @@ pub struct ToolVersionToml {
     pub description: String,
     /// Target-specific configurations
     #[serde(default)]
-    pub target_specific: HashMap<String, TargetToolConfigToml>,
+    pub target_specific: HashMap<String, TargetToolConfigEntry>,
 }
 
-/// Target-specific tool configuration in TOML format
+/// Target-specific tool configuration in YAML format
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TargetToolConfigToml {
+pub struct TargetToolConfigEntry {
     /// Override version for this target
     pub version: Option<String>,
     /// Override installation command for this target
@@ -166,10 +166,10 @@ impl Default for ToolVersionConfig {
 impl ToolVersionConfig {
     /// Load configuration from file or use default workspace detection
     pub fn load_from_workspace() -> Result<Self, crate::error::BuildError> {
-        // Try to find workspace root and load tool-versions.toml
+        // Try to find workspace root and load tool-versions.yaml
         match crate::detect_workspace_root() {
             Ok(workspace_root) => {
-                let config_path = workspace_root.join("tool-versions.toml");
+                let config_path = workspace_root.join("tool-versions.yaml");
                 let mut config = if config_path.exists() {
                     Self::load_from_file(&config_path)?
                 } else {
@@ -197,15 +197,15 @@ impl ToolVersionConfig {
         use crate::error::BuildError;
 
         let content = std::fs::read_to_string(config_path)
-            .map_err(|e| BuildError::Tool(format!("Failed to read tool-versions.toml: {}", e)))?;
+            .map_err(|e| BuildError::Tool(format!("Failed to read tool-versions.yaml: {}", e)))?;
 
-        let toml_config: ToolVersionsToml = toml::from_str(&content)
-            .map_err(|e| BuildError::Tool(format!("Failed to parse tool-versions.toml: {}", e)))?;
+        let file_config: ToolVersionsFile = rivet_yaml::from_str(&content)
+            .map_err(|e| BuildError::Tool(format!("Failed to parse tool-versions.yaml: {}", e)))?;
 
-        // Convert from TOML format to internal format
+        // Convert from file format to internal format
         let mut tools = HashMap::new();
-        for (name, toml_tool) in toml_config.tools {
-            let requirement_type = match toml_tool.requirement_type.as_str() {
+        for (name, file_tool) in file_config.tools {
+            let requirement_type = match file_tool.requirement_type.as_str() {
                 "Exact" => VersionRequirement::Exact,
                 "Minimum" => VersionRequirement::Minimum,
                 "Compatible" => VersionRequirement::Compatible,
@@ -215,7 +215,7 @@ impl ToolVersionConfig {
 
             // Convert target-specific configurations
             let mut target_specific = HashMap::new();
-            for (target, target_config) in toml_tool.target_specific {
+            for (target, target_config) in file_tool.target_specific {
                 target_specific.insert(
                     target,
                     TargetToolConfig {
@@ -231,18 +231,18 @@ impl ToolVersionConfig {
             tools.insert(
                 name,
                 ToolVersion {
-                    version: toml_tool.version,
+                    version: file_tool.version,
                     requirement_type,
-                    install_command: toml_tool.install_command,
-                    version_check_args: toml_tool.version_check_args,
-                    version_pattern: if toml_tool.version_pattern.is_empty() {
+                    install_command: file_tool.install_command,
+                    version_check_args: file_tool.version_check_args,
+                    version_pattern: if file_tool.version_pattern.is_empty() {
                         None
                     } else {
-                        Some(toml_tool.version_pattern)
+                        Some(file_tool.version_pattern)
                     },
-                    required: toml_tool.required,
-                    used_by: toml_tool.used_by,
-                    description: toml_tool.description,
+                    required: file_tool.required,
+                    used_by: file_tool.used_by,
+                    description: file_tool.description,
                     target_specific,
                 },
             );
@@ -250,7 +250,7 @@ impl ToolVersionConfig {
 
         Ok(ToolVersionConfig {
             tools,
-            metadata: toml_config.metadata,
+            metadata: file_config.metadata,
             rust_toolchain: None, // Will be loaded separately if available
         })
     }
@@ -551,14 +551,14 @@ impl ToolVersionConfig {
         self.tools.keys().map(String::as_str).collect()
     }
 
-    /// Save configuration to TOML string
-    pub fn to_toml(&self) -> Result<String, toml::ser::Error> {
-        toml::to_string_pretty(self)
+    /// Save configuration to YAML string
+    pub fn to_yaml(&self) -> Result<String, rivet_yaml::Error> {
+        rivet_yaml::to_string(self)
     }
 
-    /// Load configuration from TOML string
-    pub fn from_toml(toml_str: &str) -> Result<Self, toml::de::Error> {
-        toml::from_str(toml_str)
+    /// Load configuration from YAML string
+    pub fn from_yaml(yaml_str: &str) -> Result<Self, rivet_yaml::Error> {
+        rivet_yaml::from_str(yaml_str)
     }
 }
 
@@ -686,11 +686,33 @@ mod tests {
     }
 
     #[test]
+    fn test_checked_in_tool_versions_yaml_loads() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("tool-versions.yaml");
+        let config = ToolVersionConfig::load_from_file(&path).unwrap();
+        assert_eq!(config.tools["kani"].version, "0.63.0");
+        assert_eq!(
+            config.tools["kani"].requirement_type,
+            VersionRequirement::Exact
+        );
+        assert_eq!(config.tools["rustc"].target_specific.len(), 5);
+    }
+
+    #[test]
+    fn test_malformed_tool_versions_yaml_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tool-versions.yaml");
+        std::fs::write(&path, "tools: [unterminated").unwrap();
+        assert!(ToolVersionConfig::load_from_file(&path).is_err());
+    }
+
+    #[test]
     fn test_config_serialization() {
         let config = ToolVersionConfig::default();
-        let toml_str = config.to_toml().expect("Should serialize to TOML");
+        let yaml_str = config.to_yaml().expect("Should serialize to YAML");
         let loaded_config =
-            ToolVersionConfig::from_toml(&toml_str).expect("Should deserialize from TOML");
+            ToolVersionConfig::from_yaml(&yaml_str).expect("Should deserialize from YAML");
 
         assert_eq!(config.tools.len(), loaded_config.tools.len());
         assert_eq!(

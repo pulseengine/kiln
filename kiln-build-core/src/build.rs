@@ -1024,11 +1024,11 @@ impl BuildSystem {
 
         let req_path = requirements_file
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| self.workspace.root.join("requirements.toml"));
+            .unwrap_or_else(|| self.workspace.root.join("requirements.yaml"));
 
         if !req_path.exists() {
             println!(
-                "{} No requirements.toml found at {}",
+                "{} No requirements.yaml found at {}",
                 "⚠️".bright_yellow(),
                 req_path.display()
             );
@@ -1089,7 +1089,7 @@ impl BuildSystem {
 
         let req_path = path
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| self.workspace.root.join("requirements.toml"));
+            .unwrap_or_else(|| self.workspace.root.join("requirements.yaml"));
 
         if req_path.exists() {
             return Err(BuildError::Verification(format!(

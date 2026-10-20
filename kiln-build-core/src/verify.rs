@@ -41,13 +41,13 @@ pub struct AllowedUnsafeBlock {
 }
 
 impl AllowedUnsafeConfig {
-    /// Load allowed unsafe configuration from a TOML file
+    /// Load allowed unsafe configuration from a YAML file
     pub fn load_from_file(path: &Path) -> BuildResult<Self> {
         let content = std::fs::read_to_string(path).map_err(|e| {
             BuildError::Verification(format!("Failed to read allowed unsafe config: {}", e))
         })?;
 
-        toml::from_str(&content).map_err(|e| {
+        rivet_yaml::from_str(&content).map_err(|e| {
             BuildError::Verification(format!("Failed to parse allowed unsafe config: {}", e))
         })
     }
@@ -133,9 +133,9 @@ pub struct VerificationOptions {
 
 impl Default for VerificationOptions {
     fn default() -> Self {
-        // Try to load allowed-unsafe.toml if it exists
+        // Try to load allowed-unsafe.yaml if it exists
         let allowed_unsafe = std::env::current_dir().ok().and_then(|cwd| {
-            let config_path = cwd.join("allowed-unsafe.toml");
+            let config_path = cwd.join("allowed-unsafe.yaml");
             if config_path.exists() {
                 AllowedUnsafeConfig::load_from_file(&config_path).ok()
             } else {
@@ -858,5 +858,36 @@ mod tests {
 
         assert!(check.passed);
         assert_eq!(check.name, "Test Check");
+    }
+
+    #[test]
+    fn test_allowed_unsafe_yaml_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("allowed-unsafe.yaml");
+        std::fs::write(
+            &path,
+            "allowed:\n  - file: kiln-a/src/lib.rs\n    line: 7\n    reason: needed\n",
+        )
+        .unwrap();
+
+        let config = AllowedUnsafeConfig::load_from_file(&path).unwrap();
+        assert_eq!(config.allowed.len(), 1);
+        assert_eq!(config.allowed[0].line, Some(7));
+        assert!(config.is_allowed(Path::new("kiln-a/src/lib.rs"), 7).is_some());
+    }
+
+    #[test]
+    fn test_allowed_unsafe_malformed_yaml_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("allowed-unsafe.yaml");
+        std::fs::write(&path, "allowed: [unterminated").unwrap();
+        assert!(AllowedUnsafeConfig::load_from_file(&path).is_err());
+    }
+
+    #[test]
+    fn test_checked_in_allowed_unsafe_yaml_loads() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("allowed-unsafe.yaml");
+        let config = AllowedUnsafeConfig::load_from_file(&path).unwrap();
+        assert!(!config.allowed.is_empty());
     }
 }

@@ -307,8 +307,8 @@ edition = "2021"
                 },
                 ProjectFeature::SafetyVerification => {
                     fs::write(
-                        workspace_root.join("requirements.toml"),
-                        "[requirements]\n[requirements.safety]\nlevel = \"ASIL-D\"\n",
+                        workspace_root.join("requirements.yaml"),
+                        "requirements:\n  safety:\n    level: ASIL-D\n",
                     )?;
                 },
                 _ => {}, // Other features can be added as needed

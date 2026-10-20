@@ -28,7 +28,7 @@ pub struct CargoKilnConfig {
     pub requirements_file: Option<String>,
 
     /// Default tool versions to use
-    pub tool_versions: Option<toml::Value>,
+    pub tool_versions: Option<rivet_yaml::Value>,
 
     /// Custom diagnostic filters
     pub diagnostic_filters: Option<DiagnosticFilters>,
@@ -50,7 +50,7 @@ impl Default for CargoKilnConfig {
             output_format: Some("human".to_string()),
             default_asil: Some("qm".to_string()),
             enable_cache: Some(true),
-            requirements_file: Some("requirements.toml".to_string()),
+            requirements_file: Some("requirements.yaml".to_string()),
             tool_versions: None,
             diagnostic_filters: None,
             browser_command: None,
@@ -58,12 +58,17 @@ impl Default for CargoKilnConfig {
     }
 }
 
+/// Parse a cargo-kiln YAML configuration document
+fn parse_config(content: &str) -> Result<CargoKilnConfig> {
+    rivet_yaml::from_str(content).map_err(|e| anyhow::anyhow!("{e}"))
+}
+
 /// Load configuration from file if it exists
 pub fn load_config_file(workspace_root: &Path) -> Result<CargoKilnConfig> {
     let config_paths = [
-        workspace_root.join(".cargo-kiln.toml"),
-        workspace_root.join("cargo-kiln.toml"),
-        workspace_root.join(".config").join("cargo-kiln.toml"),
+        workspace_root.join(".cargo-kiln.yaml"),
+        workspace_root.join("cargo-kiln.yaml"),
+        workspace_root.join(".config").join("cargo-kiln.yaml"),
     ];
 
     for config_path in &config_paths {
@@ -72,11 +77,9 @@ pub fn load_config_file(workspace_root: &Path) -> Result<CargoKilnConfig> {
                 format!("Failed to read config file: {}", config_path.display())
             })?;
 
-            let config: CargoKilnConfig = toml::from_str(&content).with_context(|| {
+            return parse_config(&content).with_context(|| {
                 format!("Failed to parse config file: {}", config_path.display())
-            })?;
-
-            return Ok(config);
+            });
         }
     }
 
@@ -157,7 +160,7 @@ where
 
 /// Initialize a sample configuration file
 pub fn init_config_file(workspace_root: &Path, force: bool) -> Result<PathBuf> {
-    let config_path = workspace_root.join(".cargo-kiln.toml");
+    let config_path = workspace_root.join(".cargo-kiln.yaml");
 
     if config_path.exists() && !force {
         return Err(anyhow::anyhow!(
@@ -167,7 +170,8 @@ pub fn init_config_file(workspace_root: &Path, force: bool) -> Result<PathBuf> {
     }
 
     let default_config = CargoKilnConfig::default();
-    let content = toml::to_string_pretty(&default_config)
+    let content = rivet_yaml::to_string(&default_config)
+        .map_err(|e| anyhow::anyhow!("{e}"))
         .context("Failed to serialize default configuration")?;
 
     std::fs::write(&config_path, content)
@@ -257,4 +261,40 @@ pub fn create_and_open_html_report(
     }
 
     Ok(report_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_yaml_config() {
+        let yaml = "output_format: json\n\
+                    default_asil: asil-d\n\
+                    enable_cache: true\n\
+                    requirements_file: requirements.yaml\n\
+                    diagnostic_filters:\n  default_severity:\n    - error\n    - warning\n";
+        let config = parse_config(yaml).unwrap();
+        assert_eq!(config.output_format.as_deref(), Some("json"));
+        assert_eq!(config.enable_cache, Some(true));
+        assert_eq!(
+            config.diagnostic_filters.unwrap().default_severity,
+            Some(vec!["error".to_string(), "warning".to_string()])
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_yaml_config() {
+        assert!(parse_config("output_format: [unterminated").is_err());
+    }
+
+    #[test]
+    fn default_config_round_trips_through_yaml() {
+        let content = rivet_yaml::to_string(&CargoKilnConfig::default()).unwrap();
+        let parsed = parse_config(&content).unwrap();
+        assert_eq!(
+            parsed.requirements_file.as_deref(),
+            Some("requirements.yaml")
+        );
+    }
 }

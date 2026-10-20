@@ -1,0 +1,243 @@
+# Kiln Build System Tool Version Requirements
+# This file specifies exact tool versions required for reproducible builds.
+#
+# When you change versions here:
+# 1. Run `cargo-kiln setup --check` to verify compatibility
+# 2. Run `cargo-kiln setup --install` to update tools
+# 3. Commit this file to track version changes
+
+metadata:
+  config_version: "1.0.0"
+  last_updated: "2025-06-19 12:00:00 UTC"
+  description: Kiln build system tool version requirements
+
+tools:
+  # Core tools (always required)
+  cargo:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: Install Rust from https://rustup.rs/
+    version_check_args: ["--version"]
+    version_pattern: 'cargo (\d+\.\d+\.\d+)'
+    required: true
+    used_by: [build, test, check, clean]
+
+  rustc:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: Install Rust from https://rustup.rs/
+    version_check_args: ["--version"]
+    version_pattern: 'rustc (\d+\.\d+\.\d+)'
+    required: true
+    used_by: [build, test]
+    # Target-specific configurations for real-time and embedded platforms
+    target_specific:
+      aarch64-unknown-linux-gnu:
+        constraints: [linux, posix, std_available]
+        supported: true
+      x86_64-unknown-linux-gnu:
+        constraints: [linux, posix, std_available]
+        supported: true
+      thumbv7em-none-eabihf:
+        constraints: [no_std, cortex_m, real_time, deterministic]
+        supported: true
+      riscv32imac-unknown-none-elf:
+        constraints: [no_std, riscv, bare_metal, real_time]
+        supported: true
+      riscv64gc-unknown-none-elf:
+        constraints: [no_std, riscv, bare_metal, real_time]
+        supported: true
+
+  # Rust toolchain components (managed via rustup)
+  clippy:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: rustup component add clippy
+    version_check_args: [clippy, "--version"]
+    version_pattern: 'clippy (\d+\.\d+\.\d+)'
+    required: false
+    used_by: [check, ci]
+    description: Rust linter for code quality checks
+    target_specific:
+      aarch64-unknown-linux-gnu:
+        constraints: [linux_lints, posix_lints]
+        supported: true
+      x86_64-unknown-linux-gnu:
+        constraints: [linux_lints, posix_lints]
+        supported: true
+      thumbv7em-none-eabihf:
+        constraints: [no_std_lints, embedded_lints, real_time_lints]
+        supported: true
+      riscv32imac-unknown-none-elf:
+        constraints: [no_std_lints, embedded_lints, bare_metal_lints]
+        supported: true
+      riscv64gc-unknown-none-elf:
+        constraints: [no_std_lints, embedded_lints, bare_metal_lints]
+        supported: true
+
+  rustfmt:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: rustup component add rustfmt
+    version_check_args: [fmt, "--version"]
+    version_pattern: 'rustfmt (\d+\.\d+\.\d+)'
+    required: false
+    used_by: [check, ci]
+    description: Rust code formatter
+
+  # Formal verification tools
+  kani:
+    version: "0.63.0"
+    requirement_type: Exact
+    install_command: cargo install --locked --version 0.63.0 kani-verifier && cargo kani setup
+    version_check_args: ["--version"]
+    version_pattern: 'kani (\d+\.\d+\.\d+)'
+    required: false
+    used_by: [kani-verify, verify]
+    description: CBMC-based formal verification for Rust
+
+  # Fuzzing tools
+  cargo-fuzz:
+    version: "0.12.0"
+    requirement_type: Minimum
+    install_command: cargo install --locked --version 0.12.0 cargo-fuzz
+    version_check_args: [fuzz, "--version"]
+    version_pattern: 'cargo-fuzz (\d+\.\d+\.\d+)'
+    required: false
+    used_by: [fuzz]
+    description: Coverage-guided fuzzing for Rust
+
+  # Version control
+  git:
+    version: "2.30.0"
+    requirement_type: Minimum
+    install_command: Please install Git from https://git-scm.com/
+    version_check_args: ["--version"]
+    version_pattern: 'git version (\d+\.\d+\.\d+)'
+    required: false
+    used_by: [setup]
+    description: Distributed version control
+
+  # Coverage analysis tools
+  llvm-cov:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: rustup component add llvm-tools-preview
+    version_check_args: ["--version"]
+    version_pattern: 'llvm-cov (\d+\.\d+\.\d+)'
+    required: false
+    used_by: [coverage]
+    description: LLVM coverage analysis tools
+
+  # Documentation tools
+  mdbook:
+    version: "0.4.0"
+    requirement_type: Minimum
+    install_command: cargo install --locked mdbook
+    version_check_args: ["--version"]
+    version_pattern: 'mdbook v(\d+\.\d+\.\d+)'
+    required: false
+    used_by: [docs]
+    description: Book generation from Markdown
+
+  # Security audit tools
+  cargo-audit:
+    version: "0.18.0"
+    requirement_type: Minimum
+    install_command: cargo install --locked cargo-audit
+    version_check_args: [audit, "--version"]
+    version_pattern: 'cargo-audit (\d+\.\d+\.\d+)'
+    required: false
+    used_by: [verify, ci]
+    description: Security vulnerability database audit
+
+  # Dependency checking tools
+  cargo-udeps:
+    version: "0.1.45"
+    requirement_type: Minimum
+    install_command: cargo install --locked cargo-udeps
+    version_check_args: [udeps, "--version"]
+    version_pattern: 'cargo-udeps (\d+\.\d+\.\d+)'
+    required: false
+    used_by: [check]
+    description: Find unused dependencies
+
+  # Memory safety analysis
+  miri:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: rustup component add miri
+    version_check_args: ["--version"]
+    version_pattern: 'miri (\d+\.\d+\.\d+)'
+    required: false
+    used_by: [verify, test]
+    description: Rust interpreter for detecting undefined behavior
+
+  # Performance profiling
+  cargo-flamegraph:
+    version: "0.6.0"
+    requirement_type: Minimum
+    install_command: cargo install --locked flamegraph
+    version_check_args: [flamegraph, "--version"]
+    version_pattern: 'cargo-flamegraph (\d+\.\d+\.\d+)'
+    required: false
+    used_by: [profile]
+    description: Flame graph profiling for Rust
+
+  # Cross-compilation targets for embedded and real-time platforms
+  aarch64-unknown-linux-gnu:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: rustup target add aarch64-unknown-linux-gnu
+    version_check_args: [target, list, "--installed"]
+    version_pattern: aarch64-unknown-linux-gnu
+    required: false
+    used_by: [build, test]
+    description: Linux ARM64 compilation target
+
+  x86_64-unknown-linux-gnu:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: rustup target add x86_64-unknown-linux-gnu
+    version_check_args: [target, list, "--installed"]
+    version_pattern: x86_64-unknown-linux-gnu
+    required: false
+    used_by: [build, test]
+    description: Linux x86_64 compilation target
+
+  thumbv7em-none-eabihf:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: rustup target add thumbv7em-none-eabihf
+    version_check_args: [target, list, "--installed"]
+    version_pattern: thumbv7em-none-eabihf
+    required: false
+    used_by: [build, test]
+    description: ARM Cortex-M4F/M7F bare metal target for Zephyr/VxWorks
+
+  riscv32imac-unknown-none-elf:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: rustup target add riscv32imac-unknown-none-elf
+    version_check_args: [target, list, "--installed"]
+    version_pattern: riscv32imac-unknown-none-elf
+    required: false
+    used_by: [build, test]
+    description: RISC-V 32-bit bare metal target for embedded platforms
+
+  riscv64gc-unknown-none-elf:
+    version: "1.86.0"
+    requirement_type: Minimum
+    install_command: rustup target add riscv64gc-unknown-none-elf
+    version_check_args: [target, list, "--installed"]
+    version_pattern: riscv64gc-unknown-none-elf
+    required: false
+    used_by: [build, test]
+    description: RISC-V 64-bit bare metal target for embedded platforms
+
+# Version history and changelog
+# When updating versions, add entries here for tracking:
+#
+# version_history:
+#   "2025-06-19": Initial tool version configuration
+#   "2025-06-20": Updated kani to 0.63.0 for improved CBMC backend

@@ -241,7 +241,7 @@ impl ContextDetector {
             || self.has_files_matching("**/fuzz_targets/**/*.rs");
 
         // Check for safety verification
-        features.has_safety_verification = self.workspace_root.join("requirements.toml").exists()
+        features.has_safety_verification = self.workspace_root.join("requirements.yaml").exists()
             || self.has_files_matching("**/*safety*.rs")
             || self.has_files_matching("**/*verification*.rs");
 

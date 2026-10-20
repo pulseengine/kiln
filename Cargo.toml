@@ -35,6 +35,8 @@ version = "0.6.0"
 [workspace.dependencies]
 anyhow = "1.0"
 wit-bindgen = "0.41.0"
+# kiln's own configuration files are read as YAML through rivet's YAML stack (SR-71, #548)
+rivet-yaml = { git = "https://github.com/pulseengine/rivet", tag = "v0.41.0" }
 
 # Internal crate versions
 kiln-error = { path = "kiln-error", version = "0.6.0", default-features = false }

@@ -1,6 +1,6 @@
 //! Test configuration file support for cargo-kiln
 //!
-//! This module provides support for loading test configuration from TOML files,
+//! This module provides support for loading test configuration from YAML files,
 //! allowing users to customize test execution without command-line arguments.
 
 use std::{collections::HashMap, fs, path::Path};
@@ -129,13 +129,14 @@ impl Default for KilnTestConfig {
 }
 
 impl KilnTestConfig {
-    /// Load configuration from a TOML file
+    /// Load configuration from a YAML file
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content =
             fs::read_to_string(path.as_ref()).context("Failed to read test configuration file")?;
 
-        let config: KilnTestConfig =
-            toml::from_str(&content).context("Failed to parse test configuration TOML")?;
+        let config: KilnTestConfig = rivet_yaml::from_str(&content)
+            .map_err(|e| anyhow::anyhow!("{e}"))
+            .context("Failed to parse test configuration YAML")?;
 
         config.validate().context("Test configuration validation failed")?;
 
@@ -147,10 +148,11 @@ impl KilnTestConfig {
         Self::load_from_file(path).unwrap_or_default()
     }
 
-    /// Save configuration to a TOML file
+    /// Save configuration to a YAML file
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let content =
-            toml::to_string_pretty(self).context("Failed to serialize test configuration")?;
+        let content = rivet_yaml::to_string(self)
+            .map_err(|e| anyhow::anyhow!("{e}"))
+            .context("Failed to serialize test configuration")?;
 
         fs::write(path.as_ref(), content).context("Failed to write test configuration file")?;
 
@@ -326,17 +328,17 @@ mod tests {
     #[test]
     fn test_config_serialization() {
         let config = KilnTestConfig::example_config();
-        let toml_str = toml::to_string_pretty(&config).unwrap();
+        let yaml_str = rivet_yaml::to_string(&config).unwrap();
 
         // Should be able to round-trip
-        let parsed: KilnTestConfig = toml::from_str(&toml_str).unwrap();
+        let parsed: KilnTestConfig = rivet_yaml::from_str(&yaml_str).unwrap();
         assert_eq!(parsed.default_asil, config.default_asil);
     }
 
     #[test]
     fn test_config_file_operations() {
         let temp_dir = TempDir::new().unwrap();
-        let config_path = temp_dir.path().join("test-config.toml");
+        let config_path = temp_dir.path().join("test-config.yaml");
 
         let config = KilnTestConfig::example_config();
         config.save_to_file(&config_path).unwrap();

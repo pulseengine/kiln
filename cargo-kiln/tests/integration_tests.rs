@@ -270,7 +270,7 @@ mod workspace_tests {
         // Verify features
         assert!(context.file_exists("tests/integration.rs"));
         assert!(context.file_exists("README.md"));
-        assert!(context.file_exists("requirements.toml"));
+        assert!(context.file_exists("requirements.yaml"));
 
         // Verify git setup
         assert!(context.file_exists(".git/config"));

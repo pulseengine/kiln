@@ -224,7 +224,7 @@ The build system includes sophisticated tool version management with configurabl
 - Generate tool configuration: `cargo-kiln tool-versions generate`
 - Check specific tool: `cargo-kiln tool-versions check --tool kani`
 
-Tool versions are managed via `tool-versions.toml` in the workspace root, specifying exact/minimum version requirements and installation commands. This ensures reproducible builds and consistent development environments.
+Tool versions are managed via `tool-versions.yaml` in the workspace root, specifying exact/minimum version requirements and installation commands. This ensures reproducible builds and consistent development environments.
 
 ## Build Matrix Verification
 - **Comprehensive verification**: `cargo-kiln verify-matrix --report`
