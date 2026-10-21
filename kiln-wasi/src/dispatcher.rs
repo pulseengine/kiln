@@ -2160,14 +2160,23 @@ impl WasiDispatcher {
                     _ => return Err(Error::wasi_invalid_argument("resource-drop requires handle argument")),
                 };
 
-                // Release the file handle duplicated for a file input-stream (closing it)
-                // and its read position.
-                self.stream_files.remove(&handle);
-                self.stream_offsets.remove(&handle);
-
-                // Remove from resource manager (Preview2 semantics)
-                // Intentionally ignore if resource was already removed
-                drop(self.resource_manager.remove_resource(handle));
+                // Only a stream handle is released here. Any other handle (a preopen,
+                // a file descriptor, a directory-entry-stream) belongs to another
+                // resource type and must keep its slot: freeing it would let a guest
+                // release resources it does not hold through a stream drop.
+                let is_stream = self.resource_manager.get_resource(handle).is_ok_and(|r| {
+                    matches!(
+                        r.resource_type(),
+                        WasiResourceType::InputStream { .. } | WasiResourceType::OutputStream { .. }
+                    )
+                }) && !self.dir_streams.contains_key(&handle);
+                if is_stream {
+                    // Release the file handle duplicated for a file input-stream
+                    // (closing it) and its read position.
+                    self.stream_files.remove(&handle);
+                    self.stream_offsets.remove(&handle);
+                    drop(self.resource_manager.remove_resource(handle));
+                }
                 Ok(vec![])
             }
 
@@ -3137,9 +3146,11 @@ impl WasiDispatcher {
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
             ("wasi:filesystem/types", "[resource-drop]directory-entry-stream") => {
                 // Release the directory snapshot and the stream's resource-table slot.
+                // Only a handle that really is a directory-entry-stream frees a slot.
                 let handle = Self::core_u32(args, 0, "resource-drop: missing stream")?;
-                self.dir_streams.remove(&handle);
-                drop(self.resource_manager.remove_resource(handle));
+                if self.dir_streams.remove(&handle).is_some() {
+                    drop(self.resource_manager.remove_resource(handle));
+                }
                 Ok(vec![])
             }
 
@@ -4841,6 +4852,48 @@ mod tests {
             assert!(state_gone, "dir_streams entry must be removed");
             assert_eq!(after, before - 1, "the resource slot must be freed");
             assert!(all_ok, "read-directory/drop cycles must never exhaust the table");
+            Ok(())
+        }
+
+        /// A drop frees only a handle of the dropped resource's own type: dropping a
+        /// preopen descriptor's handle through a stream or directory-entry-stream drop
+        /// must not free the preopen's slot (resource type confusion).
+        // rivet: verifies SR-72
+        #[serial_test::serial]
+        #[test]
+        fn stream_drops_never_free_a_handle_of_another_resource_type() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_drop_confusion");
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            assert!(d.resource_manager.is_valid_handle(dir), "preopen must own a slot");
+            let before = d.resource_manager.resource_count();
+
+            d.dispatch_core(
+                FS,
+                "[resource-drop]directory-entry-stream",
+                &[CV::I32(dir as i32)],
+                Some(&mem),
+            )?;
+            d.dispatch_core(
+                "wasi:io/streams@0.2.0",
+                "[resource-drop]input-stream",
+                &[CV::I32(dir as i32)],
+                Some(&mem),
+            )?;
+            d.dispatch_core(
+                "wasi:io/streams@0.2.0",
+                "[resource-drop]output-stream",
+                &[CV::I32(dir as i32)],
+                Some(&mem),
+            )?;
+
+            let still_valid = d.resource_manager.is_valid_handle(dir);
+            let after = d.resource_manager.resource_count();
+            std::fs::remove_dir_all(&root).ok();
+            assert!(still_valid, "a stream drop must not free the preopen's slot");
+            assert_eq!(after, before, "no slot may be freed by a drop of another type");
             Ok(())
         }
 
