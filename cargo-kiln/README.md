@@ -67,7 +67,7 @@ Both patterns work identically - the same binary automatically detects how it's 
 - `wasm create-test <output>` - Create minimal test module
 
 #### Requirements Management (SCORE Methodology)
-- `requirements init` - Initialize requirements.toml
+- `requirements init` - Initialize requirements.yaml
 - `requirements verify` - Verify requirements against implementation  
 - `requirements score` - Show compliance scores
 - `requirements matrix` - Generate traceability matrix
@@ -245,7 +245,7 @@ cargo-kiln tool-versions check --verbose
 # Check specific tool only
 cargo-kiln tool-versions check --tool kani
 
-# Generate tool-versions.toml configuration file
+# Generate tool-versions.yaml configuration file
 cargo-kiln tool-versions generate
 
 # Generate comprehensive configuration (all tools)
@@ -255,7 +255,7 @@ cargo-kiln tool-versions generate --all
 cargo-kiln tool-versions update --all
 ```
 
-The tool version system uses a `tool-versions.toml` file in the workspace root to specify:
+The tool version system uses a `tool-versions.yaml` file in the workspace root to specify:
 - Exact version requirements (e.g., kani must be exactly 0.63.0)
 - Minimum version requirements (e.g., git must be at least 2.30.0)
 - Installation commands for each tool

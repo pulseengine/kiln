@@ -1,6 +1,6 @@
-//! TOML configuration parser for resource limits
+//! YAML configuration parser for resource limits
 //!
-//! This module provides TOML-based configuration for resource limits,
+//! This module provides YAML-based configuration (read through `rivet-yaml`) for resource limits,
 //! primarily used by tooling (cargo-kiln) which can use std features.
 //! The parsed configuration is then converted to ASIL-D compatible
 //! binary format for embedding in WebAssembly modules.
@@ -22,24 +22,24 @@ use crate::resource_limits_section::{
     ResourceLimitsSection, ResourceTypeLimit,
 };
 
-/// TOML configuration structure for resource limits
+/// YAML configuration structure for resource limits
 /// This is only available with std feature for tooling
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TomlResourceLimits {
+pub struct YamlResourceLimits {
     /// Version of the configuration format
     #[serde(default = "default_version")]
     pub version: u32,
 
     /// Execution limits
-    pub execution: Option<TomlExecutionLimits>,
+    pub execution: Option<YamlExecutionLimits>,
 
     /// Resource type specific limits
     #[serde(default)]
-    pub resources: HashMap<String, TomlResourceTypeLimit>,
+    pub resources: HashMap<String, YamlResourceTypeLimit>,
 
     /// Qualification information
-    pub qualification: Option<TomlQualification>,
+    pub qualification: Option<YamlQualification>,
 }
 
 #[cfg(feature = "std")]
@@ -49,7 +49,7 @@ fn default_version() -> u32 {
 
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TomlExecutionLimits {
+pub struct YamlExecutionLimits {
     /// Maximum fuel per execution step
     pub max_fuel_per_step: Option<u64>,
 
@@ -68,7 +68,7 @@ pub struct TomlExecutionLimits {
 
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TomlResourceTypeLimit {
+pub struct YamlResourceTypeLimit {
     /// Maximum number of handles
     pub max_handles: Option<u32>,
 
@@ -85,7 +85,7 @@ pub struct TomlResourceTypeLimit {
 
 #[cfg(feature = "std")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TomlQualification {
+pub struct YamlQualification {
     /// Binary hash (as hex string)
     pub binary_hash: Option<String>,
 
@@ -94,18 +94,18 @@ pub struct TomlQualification {
 }
 
 #[cfg(feature = "std")]
-impl TomlResourceLimits {
-    /// Load configuration from a TOML file
+impl YamlResourceLimits {
+    /// Load configuration from a YAML file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let contents = fs::read_to_string(path)
-            .map_err(|_| Error::runtime_execution_error("Failed to read TOML file"))?;
+            .map_err(|_| Error::runtime_execution_error("Failed to read YAML file"))?;
 
         Self::from_str(&contents)
     }
 
-    /// Parse configuration from a TOML string
-    pub fn from_str(toml_str: &str) -> Result<Self, Error> {
-        toml::from_str(toml_str).map_err(|_| Error::parse_error("Invalid TOML format"))
+    /// Parse configuration from a YAML string
+    pub fn from_str(yaml_str: &str) -> Result<Self, Error> {
+        rivet_yaml::from_str(yaml_str).map_err(|_| Error::parse_error("Invalid YAML format"))
     }
 
     /// Convert to ASIL-D compatible ResourceLimitsSection
@@ -134,24 +134,24 @@ impl TomlResourceLimits {
         }
 
         // Convert resource type limits
-        for (name, toml_limit) in &self.resources {
+        for (name, yaml_limit) in &self.resources {
             if name.len() > MAX_RESOURCE_NAME_LEN {
                 return Err(Error::parse_error("Resource name too long"));
             }
 
             let mut limit = ResourceTypeLimit::new(provider.clone())?;
-            limit.max_handles = toml_limit.max_handles;
+            limit.max_handles = yaml_limit.max_handles;
             limit.max_memory =
-                toml_limit.max_memory.as_ref().map(|s| parse_memory_size(s)).transpose()?;
-            limit.max_operations_per_second = toml_limit.max_operations_per_second;
+                yaml_limit.max_memory.as_ref().map(|s| parse_memory_size(s)).transpose()?;
+            limit.max_operations_per_second = yaml_limit.max_operations_per_second;
 
             // Validate custom limits count
-            if toml_limit.custom.len() > MAX_CUSTOM_LIMITS_PER_TYPE {
+            if yaml_limit.custom.len() > MAX_CUSTOM_LIMITS_PER_TYPE {
                 return Err(Error::runtime_execution_error("Too many custom limits"));
             }
 
             // Add custom limits
-            for (custom_name, value) in &toml_limit.custom {
+            for (custom_name, value) in &yaml_limit.custom {
                 if custom_name.len() > MAX_RESOURCE_NAME_LEN {
                     return Err(Error::parse_error("Custom limit name too long"));
                 }
@@ -237,37 +237,36 @@ mod tests {
     }
 
     #[test]
-    fn test_toml_parsing() {
-        let toml_str = r#"
-version = 1
+    fn test_yaml_parsing() {
+        let yaml_str = r#"
+version: 1
 
-[execution]
-max_fuel_per_step = 1000000
-max_memory_usage = "64M"
-max_call_depth = 100
-max_instructions_per_step = 10000
-max_execution_slice_ms = 50
+execution:
+  max_fuel_per_step: 1000000
+  max_memory_usage: "64M"
+  max_call_depth: 100
+  max_instructions_per_step: 10000
+  max_execution_slice_ms: 50
 
-[resources.filesystem]
-max_handles = 128
-max_memory = "16M"
-max_operations_per_second = 1000
+resources:
+  filesystem:
+    max_handles: 128
+    max_memory: "16M"
+    max_operations_per_second: 1000
+    custom:
+      max_file_size: 10485760
+      max_path_length: 4096
+  network:
+    max_handles: 64
+    max_memory: "8M"
+    max_operations_per_second: 500
 
-[resources.filesystem.custom]
-max_file_size = 10485760
-max_path_length = 4096
-
-[resources.network]
-max_handles = 64
-max_memory = "8M"
-max_operations_per_second = 500
-
-[qualification]
-binary_hash = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-asil_level = "ASIL-D"
+qualification:
+  binary_hash: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  asil_level: "ASIL-D"
 "#;
 
-        let config = TomlResourceLimits::from_str(toml_str).unwrap();
+        let config = YamlResourceLimits::from_str(yaml_str).unwrap();
         assert_eq!(config.version, 1);
         assert_eq!(
             config.execution.as_ref().unwrap().max_fuel_per_step,
@@ -282,5 +281,20 @@ asil_level = "ASIL-D"
         assert_eq!(section.max_fuel_per_step, Some(1000000));
         assert_eq!(section.max_memory_usage, Some(64 * 1024 * 1024));
         assert_eq!(section.qualified_asil_level(), Some("ASIL-D"));
+    }
+
+    #[test]
+    fn test_malformed_yaml_is_an_error() {
+        assert!(YamlResourceLimits::from_str("version: [unterminated").is_err());
+    }
+
+    #[test]
+    fn test_example_resource_limits_file_loads() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("examples")
+            .join("resource_limits.yaml");
+        let config = YamlResourceLimits::from_file(path).unwrap();
+        assert_eq!(config.resources.len(), 4);
+        assert!(config.qualification.is_some());
     }
 }

@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use clap::Args;
 use kiln_decoder::{
     resource_limits_section::RESOURCE_LIMITS_SECTION_NAME,
-    toml_config::{TomlQualification, TomlResourceLimits},
+    yaml_config::{YamlQualification, YamlResourceLimits},
 };
 
 use crate::helpers::{OutputManager, output_result};
@@ -67,12 +67,12 @@ pub struct EmbedLimitsArgs {
 /// Execute the embed-limits command
 #[must_use]
 pub fn execute(args: EmbedLimitsArgs, output: &OutputManager) -> Result<()> {
-    // Read the TOML configuration
+    // Read the YAML configuration
     output.progress(&format!(
         "Reading configuration from {}",
         args.config_file.display()
     ));
-    let mut config = TomlResourceLimits::from_file(&args.config_file).map_err(|e| {
+    let mut config = YamlResourceLimits::from_file(&args.config_file).map_err(|e| {
         anyhow::anyhow!(
             "Failed to read configuration from {}: {}",
             args.config_file.display(),
@@ -83,22 +83,22 @@ pub fn execute(args: EmbedLimitsArgs, output: &OutputManager) -> Result<()> {
     // Override ASIL level if specified
     if let Some(asil_level) = &args.asil_level {
         if let Some(ref mut qual) = config.qualification {
-            // Note: TomlQualification structure may need updating to match
+            // Note: YamlQualification structure may need updating to match
             // actual fields
         } else {
-            // Note: TomlQualification structure may need updating
-            // config.qualification = Some(TomlQualification::default());
+            // Note: YamlQualification structure may need updating
+            // config.qualification = Some(YamlQualification::default());
         }
     }
 
     // Override binary hash if specified
     if let Some(binary_hash) = &args.binary_hash {
         if let Some(ref mut qual) = config.qualification {
-            // Note: TomlQualification structure may need updating to match
+            // Note: YamlQualification structure may need updating to match
             // actual fields
         } else {
-            // Note: TomlQualification structure may need updating
-            // config.qualification = Some(TomlQualification::default());
+            // Note: YamlQualification structure may need updating
+            // config.qualification = Some(YamlQualification::default());
         }
     }
 

@@ -24,7 +24,7 @@
         pkgs = import nixpkgs { inherit system overlays; };
 
         # Pinned Rust toolchain. Kept in sync with rust-toolchain.toml and
-        # tool-versions.toml (stable 1.86.0; edition 2024 needs >= 1.85).
+        # tool-versions.yaml (stable 1.86.0; edition 2024 needs >= 1.85).
         # rustc-dev/llvm-tools are included for clippy, coverage (llvm-cov),
         # and rust-analyzer.
         rustToolchain = pkgs.rust-bin.stable."1.86.0".default.override {

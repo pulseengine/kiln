@@ -271,12 +271,12 @@ dependencies = [
  "kiln-foundation",
  "num_cpus",
  "reqwest",
+ "rivet-yaml",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror",
  "tokio",
- "toml",
  "which",
 ]
 
@@ -467,6 +467,12 @@ name = "core_detect"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f8f80099a98041a3d1622845c271458a2d73e688351bf3cb999266764b81d48"
+
+[[package]]
+name = "countme"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7704b5fdd17b18ae31c4c1da5a2e0305a2bf17b5249300a9ee9ed7b72114c636"
 
 [[package]]
 name = "cpufeatures"
@@ -854,6 +860,12 @@ dependencies = [
  "crunchy",
  "num-traits",
 ]
+
+[[package]]
+name = "hashbrown"
+version = "0.15.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
 
 [[package]]
 name = "hashbrown"
@@ -1306,6 +1318,7 @@ dependencies = [
  "md5",
  "pathdiff",
  "regex",
+ "rivet-yaml",
  "serde",
  "serde_json",
  "tempfile",
@@ -1358,10 +1371,10 @@ dependencies = [
  "kiln-foundation",
  "log",
  "proptest",
+ "rivet-yaml",
  "serde",
  "serde_json",
  "tempfile",
- "toml",
  "wat",
 ]
 
@@ -2458,6 +2471,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-yaml"
+version = "0.41.0"
+source = "git+https://github.com/pulseengine/rivet?tag=v0.41.0#c15754a3c09e224d502dea3ba31f3435d1ae48d5"
+dependencies = [
+ "indexmap",
+ "itoa",
+ "rowan",
+ "ryu",
+ "serde",
+]
+
+[[package]]
+name = "rowan"
+version = "0.16.2"
+source = "git+https://github.com/pulseengine/rowan.git?branch=fix%2Fmiri-soundness-v3#9e7abd1161634377d278cde0c504c101ac003941"
+dependencies = [
+ "countme",
+ "hashbrown 0.15.5",
+ "rustc-hash",
+ "text-size",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2591,6 +2627,12 @@ dependencies = [
  "tempfile",
  "wait-timeout",
 ]
+
+[[package]]
+name = "ryu"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "safetensors"
@@ -2957,6 +2999,12 @@ dependencies = [
  "rustix",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "text-size"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f18aa187839b2bdb1ad2fa35ead8c4c2976b64e4363c386d45ac0f7ee85c9233"
 
 [[package]]
 name = "thiserror"

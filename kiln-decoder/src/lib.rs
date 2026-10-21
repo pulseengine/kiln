@@ -104,9 +104,9 @@ pub mod resource_limits_section;
 /// Reader for meld's `meld.signature-manifest` custom section (SR-60, #480).
 pub mod signature_manifest;
 
-// TOML configuration parser for resource limits (std only for tooling)
+// YAML configuration parser for resource limits (std only for tooling)
 #[cfg(feature = "std")]
-pub mod toml_config;
+pub mod yaml_config;
 
 // Most re-exports temporarily disabled for demo - keep only essential ones
 // Component functionality (std only)

@@ -301,7 +301,7 @@ enum Commands {
     /// Generate test configuration file
     TestConfig {
         /// Output path for configuration file
-        #[arg(long, default_value = "kiln-test.toml")]
+        #[arg(long, default_value = "kiln-test.yaml")]
         output: String,
 
         /// Generate example configuration
@@ -328,7 +328,7 @@ enum Commands {
         detailed: bool,
 
         /// Path to allowed unsafe configuration file
-        #[arg(long, default_value = "allowed-unsafe.toml")]
+        #[arg(long, default_value = "allowed-unsafe.yaml")]
         allowed_unsafe: String,
     },
 
@@ -678,10 +678,10 @@ enum AsilArg {
 /// Requirements management subcommands
 #[derive(Subcommand, Clone)]
 enum RequirementsCommand {
-    /// Initialize a sample requirements.toml file
+    /// Initialize a sample requirements.yaml file
     Init {
         /// Path for the requirements file
-        #[arg(default_value = "requirements.toml")]
+        #[arg(default_value = "requirements.yaml")]
         path: String,
 
         /// Force overwrite if file exists
@@ -692,7 +692,7 @@ enum RequirementsCommand {
     /// Verify requirements against implementation
     Verify {
         /// Path to requirements file
-        #[arg(default_value = "requirements.toml")]
+        #[arg(default_value = "requirements.yaml")]
         path: String,
 
         /// Show detailed verification results
@@ -707,7 +707,7 @@ enum RequirementsCommand {
     /// Show compliance scores for all requirements
     Score {
         /// Path to requirements file
-        #[arg(default_value = "requirements.toml")]
+        #[arg(default_value = "requirements.yaml")]
         path: String,
 
         /// Group scores by ASIL level
@@ -726,7 +726,7 @@ enum RequirementsCommand {
     /// Generate requirements traceability matrix
     Matrix {
         /// Path to requirements file
-        #[arg(default_value = "requirements.toml")]
+        #[arg(default_value = "requirements.yaml")]
         path: String,
 
         /// Output format (markdown, html, json)
@@ -741,7 +741,7 @@ enum RequirementsCommand {
     /// List requirements needing attention
     Missing {
         /// Path to requirements file
-        #[arg(default_value = "requirements.toml")]
+        #[arg(default_value = "requirements.yaml")]
         path: String,
 
         /// Show requirements missing implementation
@@ -854,7 +854,7 @@ enum SafetyCommand {
         asil: AsilArg,
 
         /// Path to requirements file
-        #[arg(long, default_value = "requirements.toml")]
+        #[arg(long, default_value = "requirements.yaml")]
         requirements: String,
 
         /// Include test results integration
@@ -877,7 +877,7 @@ enum SafetyCommand {
         asil: AsilArg,
 
         /// Path to requirements file
-        #[arg(long, default_value = "requirements.toml")]
+        #[arg(long, default_value = "requirements.yaml")]
         requirements: String,
 
         /// Path to test results (JSON format)
@@ -892,7 +892,7 @@ enum SafetyCommand {
     /// Generate comprehensive safety report
     Report {
         /// Path to requirements file
-        #[arg(long, default_value = "requirements.toml")]
+        #[arg(long, default_value = "requirements.yaml")]
         requirements: String,
 
         /// Include all ASIL levels in report
@@ -1010,7 +1010,7 @@ enum SafetyCommand {
     /// Verify documentation compliance for safety requirements
     VerifyDocs {
         /// Path to requirements file
-        #[arg(long, default_value = "requirements.toml")]
+        #[arg(long, default_value = "requirements.yaml")]
         requirements: String,
 
         /// Target ASIL level for documentation verification
@@ -1033,7 +1033,7 @@ enum SafetyCommand {
     /// Generate documentation compliance report
     DocsReport {
         /// Path to requirements file
-        #[arg(long, default_value = "requirements.toml")]
+        #[arg(long, default_value = "requirements.yaml")]
         requirements: String,
 
         /// Include all ASIL levels in report
@@ -1061,7 +1061,7 @@ enum TestCoverageArg {
 /// Tool version management subcommands
 #[derive(Subcommand, Clone)]
 enum ToolVersionCommand {
-    /// Generate tool-versions.toml configuration file
+    /// Generate tool-versions.yaml configuration file
     Generate {
         /// Overwrite existing file
         #[arg(long)]
@@ -1083,7 +1083,7 @@ enum ToolVersionCommand {
         tool: Option<String>,
     },
 
-    /// Update tool-versions.toml with current installed versions
+    /// Update tool-versions.yaml with current installed versions
     Update {
         /// Update specific tool only
         #[arg(long)]
@@ -1956,7 +1956,7 @@ async fn cmd_verify(
     options.detailed_reports = detailed;
 
     // Load allowed unsafe configuration if it exists
-    let allowed_unsafe_path = build_system.workspace_root().join("allowed-unsafe.toml");
+    let allowed_unsafe_path = build_system.workspace_root().join("allowed-unsafe.yaml");
     if allowed_unsafe_path.exists() {
         match kiln_build_core::verify::AllowedUnsafeConfig::load_from_file(&allowed_unsafe_path) {
             Ok(config) => {
@@ -2747,7 +2747,7 @@ async fn cmd_tool_versions(build_system: &BuildSystem, command: ToolVersionComma
     match command {
         ToolVersionCommand::Generate { force, all } => {
             let workspace_root = build_system.workspace_root();
-            let config_path = workspace_root.join("tool-versions.toml");
+            let config_path = workspace_root.join("tool-versions.yaml");
 
             if config_path.exists() && !force {
                 anyhow::bail!(
@@ -2756,7 +2756,7 @@ async fn cmd_tool_versions(build_system: &BuildSystem, command: ToolVersionComma
                 );
             }
 
-            println!("{} Generating tool-versions.toml...", "📝".bright_blue());
+            println!("{} Generating tool-versions.yaml...", "📝".bright_blue());
 
             // Load current config or create new one
             let config = if all {
@@ -2767,12 +2767,12 @@ async fn cmd_tool_versions(build_system: &BuildSystem, command: ToolVersionComma
                 ToolVersionConfig::create_fallback_config()
             };
 
-            // Convert to TOML and write to file
-            let toml_content =
-                config.to_toml().context("Failed to serialize tool version configuration")?;
+            // Convert to YAML and write to file
+            let yaml_content =
+                config.to_yaml().context("Failed to serialize tool version configuration")?;
 
-            std::fs::write(&config_path, toml_content)
-                .context("Failed to write tool-versions.toml")?;
+            std::fs::write(&config_path, yaml_content)
+                .context("Failed to write tool-versions.yaml")?;
 
             println!("  ✅ Generated {}", config_path.display());
             println!(
@@ -2829,10 +2829,10 @@ async fn cmd_tool_versions(build_system: &BuildSystem, command: ToolVersionComma
         },
 
         ToolVersionCommand::Update { tool, all } => {
-            println!("{} Updating tool-versions.toml...", "🔄".bright_blue());
+            println!("{} Updating tool-versions.yaml...", "🔄".bright_blue());
 
             let workspace_root = build_system.workspace_root();
-            let config_path = workspace_root.join("tool-versions.toml");
+            let config_path = workspace_root.join("tool-versions.yaml");
 
             if !config_path.exists() {
                 anyhow::bail!(
@@ -3517,7 +3517,7 @@ async fn cmd_requirements(
                 std::fs::create_dir_all(&output_dir)?;
 
                 // Generate sample requirements file
-                let req_path = PathBuf::from(&output_dir).join("requirements.toml");
+                let req_path = PathBuf::from(&output_dir).join("requirements.yaml");
                 Requirements::init_sample(&req_path)?;
 
                 println!("✅ Created sample requirements at {}", req_path.display());

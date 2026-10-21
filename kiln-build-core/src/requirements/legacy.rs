@@ -25,6 +25,45 @@ use crate::{
     error::{BuildError, BuildResult},
 };
 
+/// Sample requirements file written by `Requirements::init_sample`
+const SAMPLE_REQUIREMENTS_YAML: &str = r#"metadata:
+  project: "Kiln - WebAssembly Runtime"
+  version: "0.2.0"
+  asil_level: ASIL-D
+  verification_method: SCORE-inspired
+
+requirement:
+  - id: REQ-SAFETY-001
+    name: Memory Safety
+    description: All memory operations shall be bounds-checked and verified
+    asil_level: ASIL-D
+    category: Safety
+    verification_method: Static Analysis + Formal Verification
+    source_files:
+      - kiln-runtime/src/memory.rs
+      - kiln-foundation/src/bounded.rs
+    test_files:
+      - kiln-runtime/src/memory_test.rs
+    documentation_files: []
+    status: Implemented
+    platform:
+      - all
+  - id: REQ-SAFETY-002
+    name: No Panic in Production
+    description: Production code shall not contain panic! macros
+    asil_level: ASIL-D
+    category: Safety
+    verification_method: Static Analysis
+    source_files:
+      - "kiln-*/src/**/*.rs"
+    test_files:
+      - xtask/src/check_panics.rs
+    documentation_files: []
+    status: Implemented
+    platform:
+      - all
+"#;
+
 /// Requirements file structure
 #[derive(Debug, Deserialize)]
 pub struct Requirements {
@@ -90,13 +129,18 @@ pub struct RequirementsVerificationResult {
 }
 
 impl Requirements {
-    /// Load requirements from TOML file
+    /// Load requirements from YAML file
     pub fn load(path: &Path) -> BuildResult<Self> {
         let content = std::fs::read_to_string(path).map_err(|e| {
             BuildError::Workspace(format!("Failed to read requirements file: {}", e))
         })?;
 
-        toml::from_str(&content)
+        Self::from_yaml(&content)
+    }
+
+    /// Parse requirements from a YAML document
+    pub fn from_yaml(content: &str) -> BuildResult<Self> {
+        rivet_yaml::from_str(content)
             .map_err(|e| BuildError::Verification(format!("Failed to parse requirements: {}", e)))
     }
 
@@ -114,45 +158,12 @@ impl Requirements {
 
     /// Initialize a sample requirements file
     pub fn init_sample(path: &Path) -> BuildResult<()> {
-        let sample = r#"[metadata]
-project = "Kiln - WebAssembly Runtime"
-version = "0.2.0"
-asil_level = "ASIL-D"
-verification_method = "SCORE-inspired"
-
-[[requirement]]
-id = "REQ-SAFETY-001"
-name = "Memory Safety"
-description = "All memory operations shall be bounds-checked and verified"
-asil_level = "ASIL-D"
-category = "Safety"
-verification_method = "Static Analysis + Formal Verification"
-source_files = ["kiln-runtime/src/memory.rs", "kiln-foundation/src/bounded.rs"]
-test_files = ["kiln-runtime/src/memory_test.rs"]
-documentation_files = []
-status = "Implemented"
-platform = ["all"]
-
-[[requirement]]
-id = "REQ-SAFETY-002"
-name = "No Panic in Production"
-description = "Production code shall not contain panic! macros"
-asil_level = "ASIL-D"
-category = "Safety"
-verification_method = "Static Analysis"
-source_files = ["kiln-*/src/**/*.rs"]
-test_files = ["xtask/src/check_panics.rs"]
-documentation_files = []
-status = "Implemented"
-platform = ["all"]
-"#;
-
-        std::fs::write(path, sample).map_err(|e| {
+        std::fs::write(path, SAMPLE_REQUIREMENTS_YAML).map_err(|e| {
             BuildError::Verification(format!("Failed to write requirements file: {}", e))
         })?;
 
         println!(
-            "{} Created sample requirements.toml at {}",
+            "{} Created sample requirements.yaml at {}",
             "✅".bright_green(),
             path.display()
         );
@@ -451,5 +462,27 @@ impl EnhancedRequirementsVerifier {
     /// Get mutable requirement registry
     pub fn registry_mut(&mut self) -> &mut RequirementRegistry {
         &mut self.registry
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sample_requirements_yaml_loads() {
+        let requirements = Requirements::from_yaml(SAMPLE_REQUIREMENTS_YAML).unwrap();
+        assert_eq!(requirements.metadata.project, "Kiln - WebAssembly Runtime");
+        assert_eq!(requirements.requirement.len(), 2);
+        assert_eq!(requirements.requirement[0].id, "REQ-SAFETY-001");
+        assert_eq!(
+            requirements.requirement[1].source_files,
+            vec!["kiln-*/src/**/*.rs"]
+        );
+    }
+
+    #[test]
+    fn malformed_requirements_yaml_is_an_error() {
+        assert!(Requirements::from_yaml("metadata: [unterminated").is_err());
     }
 }

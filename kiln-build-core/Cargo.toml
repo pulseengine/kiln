@@ -27,7 +27,9 @@ pathdiff = "0.2"
 colored = "3.1.1"
 regex = "1.10"
 
-# Configuration parsing
+# Configuration parsing: kiln's own configs are YAML (SR-71); toml remains only
+# for rust-toolchain.toml, whose format is defined by rustup.
+rivet-yaml = { workspace = true }
 toml = "1.1"
 md5 = "0.8"
 

@@ -51,5 +51,10 @@ ignore = [
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-allow-git = []
+# SR-71 / #548 org policy: repos read their own inputs through rivet's YAML stack (rivet-yaml, git-only).
+# rowan is rivet-yaml's own git dependency (pulseengine fork, rivet's workspace manifest), pulled in transitively.
+allow-git = [
+    "https://github.com/pulseengine/rivet",
+    "https://github.com/pulseengine/rowan",
+]
 allow-registry = ["https://github.com/rust-lang/crates.io-index"] 

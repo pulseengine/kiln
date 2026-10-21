@@ -328,7 +328,7 @@ impl BuildSystem {
         // This would integrate with the existing requirements module
         use crate::requirements::Requirements;
 
-        let req_path = self.workspace.root.join("requirements.toml");
+        let req_path = self.workspace.root.join("requirements.yaml");
         if !req_path.exists() {
             return Ok(RequirementsCheckResult {
                 success: true, // Not having requirements is OK
