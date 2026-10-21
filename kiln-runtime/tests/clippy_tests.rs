@@ -16,6 +16,7 @@ mod tests {
     use kiln_foundation::budget_aware_provider::CrateId;
     use kiln_runtime::engine::{
         CapabilityAwareEngine,
+        CapabilityEngine,
         EnginePreset,
     };
 

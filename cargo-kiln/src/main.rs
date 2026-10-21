@@ -300,9 +300,10 @@ enum Commands {
 
     /// Generate test configuration file
     TestConfig {
-        /// Output path for configuration file
+        /// Output path for configuration file (not `--output`, which is the
+        /// global output-format flag)
         #[arg(long, default_value = "kiln-test.yaml")]
-        output: String,
+        path: String,
 
         /// Generate example configuration
         #[arg(long)]
@@ -1327,8 +1328,8 @@ async fn main() -> Result<()> {
             filter,
             test_threads,
         } => cmd_test_no_std(filter.clone(), *test_threads, &mut global).await,
-        Commands::TestConfig { output, example } => {
-            cmd_test_config(output.clone(), *example, &mut global).await
+        Commands::TestConfig { path, example } => {
+            cmd_test_config(path.clone(), *example, &mut global).await
         },
         Commands::Verify {
             asil,

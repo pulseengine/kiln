@@ -3,9 +3,11 @@ use std::sync::Arc;
 use kiln_error::Result;
 use kiln_foundation::{
     safe_memory::SafeSlice,
+    clean_core_types::CoreMemoryType,
     types::{
         Limits,
-        ValueType,
+        RefType,
+        TableType,
     },
     values::{
         FuncRef,
@@ -17,40 +19,43 @@ use kiln_runtime::{
     memory::Memory,
     module::Module,
     table::Table,
-    types::MemoryType,
 };
 
 #[test]
 fn test_safe_memory_integration() -> Result<()> {
     // Create memory with full verification level
-    let mem_type = MemoryType {
-        limits: Limits {
+    let mem_type = CoreMemoryType {
+        limits:    Limits {
             min: 1,
             max: Some(2),
         },
+        shared:    false,
+        memory64:  false,
+        page_size: None,
     };
     let mut memory = Memory::new(mem_type)?;
     memory.set_verification_level(VerificationLevel::Full);
 
     // Create table with full verification level
-    let table_type = kiln_runtime::types::TableType {
-        element_type: ValueType::FuncRef,
+    let table_type = TableType {
+        element_type: RefType::Funcref,
         limits:       Limits {
             min: 10,
             max: Some(20),
         },
+        table64:      false,
     };
-    let mut table = Table::new(table_type, Value::FuncRef(None))?;
+    let mut table = Table::new(table_type)?;
     table.set_verification_level(VerificationLevel::Full);
 
     // Test memory write and read with safe memory operations
     let data = [0, 1, 2, 3, 4, 5, 6, 7];
     memory.write(0, &data)?;
 
-    // Read the data back using a safe slice
-    let slice = memory.get_safe_slice(0, data.len())?;
-    let read_data = slice.data()?;
-    assert_eq!(read_data, &data);
+    // Read the data back (get_safe_slice is disabled for ASIL-B; read() is the safe path)
+    let mut read_data = [0u8; 8];
+    memory.read(0, &mut read_data)?;
+    assert_eq!(read_data, data);
 
     // Fill some memory
     memory.fill(100, 0x42, 16)?;
@@ -91,13 +96,13 @@ fn test_safe_memory_integration() -> Result<()> {
     );
 
     // Test memory copy between Memory instances
-    let mem_arc = Arc::new(memory.clone());
+    let mem_arc = Arc::new((*memory).clone());
     memory.copy_within_or_between(mem_arc, 0, 200, data.len())?;
 
     // Verify copy worked correctly
-    let copy_slice = memory.get_safe_slice(200, data.len())?;
-    let copy_data = copy_slice.data()?;
-    assert_eq!(copy_data, &data);
+    let mut copy_data = [0u8; 8];
+    memory.read(200, &mut copy_data)?;
+    assert_eq!(copy_data, data);
 
     // Verify memory integrity
     memory.verify_integrity()?;
@@ -116,7 +121,7 @@ fn test_module_binary_loading() -> Result<()> {
     ];
 
     // Test that our module can load from this binary
-    let result = Module::load_from_binary(minimal_wasm_binary);
+    let result = Module::new_empty()?.load_from_binary(minimal_wasm_binary);
 
     // For now, we just test that the function doesn't panic
     // In a real implementation, we would check that the module is properly decoded

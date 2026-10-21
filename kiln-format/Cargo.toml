@@ -85,6 +85,11 @@ wit-parsing = []
 
 # Disable panic handler for library builds to avoid conflicts
 
+# wit_parser_bounded only exists with the wit-parsing feature
+[[example]]
+name = "debug_bounded_wit"
+required-features = ["wit-parsing"]
+
 [lints]
 workspace = true
 

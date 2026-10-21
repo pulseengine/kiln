@@ -30,13 +30,17 @@ mod output_tests {
 
     #[test]
     fn test_simple_response() {
-        let response = SimpleResponse::new("Test message");
+        let response = SimpleResponse::success("Test message");
+        assert!(response.success);
         assert_eq!(response.message, "Test message");
-        assert!(response.details.is_empty());
+        assert!(response.details.is_none());
 
-        let detailed_response = response.with_detail("Additional detail");
-        assert_eq!(detailed_response.details.len(), 1);
-        assert_eq!(detailed_response.details[0], "Additional detail");
+        let detailed_response =
+            response.with_details(serde_json::Value::String("Additional detail".to_string()));
+        assert_eq!(
+            detailed_response.details,
+            Some(serde_json::Value::String("Additional detail".to_string()))
+        );
     }
 }
 
@@ -420,7 +424,7 @@ mod error_handling_tests {
 
     #[test]
     fn test_categorized_error_creation() {
-        let error = CategorizedError::system_error("Test error message");
+        let error = CategorizedError::new(ErrorCategory::Build, "Test error message");
 
         assert_eq!(error.category, ErrorCategory::Build);
         assert_eq!(error.message, "Test error message");
@@ -430,7 +434,7 @@ mod error_handling_tests {
 
     #[test]
     fn test_categorized_error_with_context() {
-        let error = CategorizedError::configuration_error("Config error")
+        let error = CategorizedError::new(ErrorCategory::Configuration, "Config error")
             .with_context("File: config.toml")
             .with_context("Line: 15")
             .with_suggestion("Check the configuration syntax")
@@ -444,7 +448,7 @@ mod error_handling_tests {
 
     #[test]
     fn test_error_formatting_human() {
-        let error = CategorizedError::system_error("Missing dependency")
+        let error = CategorizedError::new(ErrorCategory::Tool, "Missing dependency")
             .with_context("Required: rustc")
             .with_suggestion("Install rustc");
 
@@ -461,7 +465,7 @@ mod error_handling_tests {
 
     #[test]
     fn test_error_formatting_json() {
-        let error = CategorizedError::runtime_execution_error("Invalid input")
+        let error = CategorizedError::new(ErrorCategory::Validation, "Invalid input")
             .with_context("Input: invalid_value")
             .with_suggestion("Use valid input");
 

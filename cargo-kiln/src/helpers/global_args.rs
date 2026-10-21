@@ -68,7 +68,7 @@ pub struct GlobalArgs {
     pub diff_only: bool,
 
     /// Filter options builder (lazily created)
-    filter_options: Option<FilterOptionsBuilder>,
+    pub(crate) filter_options: Option<FilterOptionsBuilder>,
 
     // Raw filter data for lazy initialization
     pub filter_severity: Option<Vec<String>>,

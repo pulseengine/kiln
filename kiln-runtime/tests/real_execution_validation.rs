@@ -14,6 +14,7 @@ use kiln_error::{
 use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
+    safe_memory::Provider,
     values::Value,
 };
 use kiln_runtime::{
@@ -56,7 +57,7 @@ const COUNTER_WASM: &[u8] = &[
 fn test_instruction_parsing_integration() -> Result<()> {
     // Test that our instruction parsing actually works
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_kiln_module(&decoded)?;
+    let runtime_module: Arc<Module> = Arc::from(Module::from_kiln_module(&decoded)?);
 
     // Verify that functions have parsed instructions
     assert!(
@@ -64,7 +65,10 @@ fn test_instruction_parsing_integration() -> Result<()> {
         "Module should have functions"
     );
 
-    let function = runtime_module.functions.get(0)?;
+    let function = runtime_module
+        .functions
+        .get(0)
+        .ok_or_else(|| Error::runtime_error("Module should have function 0"))?;
     assert!(
         !function.body.is_empty(),
         "Function body should contain parsed instructions"
@@ -82,7 +86,7 @@ fn test_instruction_parsing_integration() -> Result<()> {
 fn test_stackless_engine_execution() -> Result<()> {
     // Test real execution through the stackless engine
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_kiln_module(&decoded)?;
+    let runtime_module: Arc<Module> = Arc::from(Module::from_kiln_module(&decoded)?);
 
     // Create stackless engine
     let mut engine = StacklessEngine::new();
@@ -92,11 +96,11 @@ fn test_stackless_engine_execution() -> Result<()> {
     let instance_arc = Arc::new(instance);
 
     // Set current module
-    let _instance_idx = engine.set_current_module(instance_arc)?;
+    let instance_idx = engine.set_current_module(instance_arc)?;
 
     // Execute function 0 (the add function) with test arguments
     let args = vec![Value::I32(15), Value::I32(27)];
-    let results = engine.execute(0, 0, args)?;
+    let results = engine.execute(instance_idx, 0, args)?;
 
     // Verify execution results
     assert_eq!(results.len(), 1, "Should return exactly one result");
@@ -115,7 +119,7 @@ fn test_stackless_engine_execution() -> Result<()> {
 fn test_memory_bounded_execution() -> Result<()> {
     // Test execution with bounded memory constraints (ASIL-B compliance)
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_kiln_module(&decoded)?;
+    let runtime_module: Arc<Module> = Arc::from(Module::from_kiln_module(&decoded)?);
 
     // Verify all collections are bounded
     assert!(
@@ -128,7 +132,10 @@ fn test_memory_bounded_execution() -> Result<()> {
     );
 
     // Test that function body uses bounded instructions
-    let function = runtime_module.functions.get(0)?;
+    let function = runtime_module
+        .functions
+        .get(0)
+        .ok_or_else(|| Error::runtime_error("Module should have function 0"))?;
     assert!(
         function.body.instructions.capacity() > 0,
         "Instructions should use bounded collections"
@@ -142,19 +149,19 @@ fn test_memory_bounded_execution() -> Result<()> {
 fn test_multiple_function_calls() -> Result<()> {
     // Test multiple executions to verify engine state management
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_kiln_module(&decoded)?;
+    let runtime_module: Arc<Module> = Arc::from(Module::from_kiln_module(&decoded)?);
 
     let mut engine = StacklessEngine::new();
     let instance = ModuleInstance::new(runtime_module, 0)?;
     let instance_arc = Arc::new(instance);
-    let _instance_idx = engine.set_current_module(instance_arc)?;
+    let instance_idx = engine.set_current_module(instance_arc)?;
 
     // Execute multiple times with different arguments
     let test_cases = vec![(10, 20, 30), (0, 42, 42), (100, 200, 300), (-5, 10, 5)];
 
     for (a, b, expected) in test_cases {
         let args = vec![Value::I32(a), Value::I32(b)];
-        let results = engine.execute(0, 0, args)?;
+        let results = engine.execute(instance_idx, 0, args)?;
 
         assert_eq!(results.len(), 1);
         if let Value::I32(result) = &results[0] {
@@ -193,9 +200,12 @@ fn test_instruction_dispatch_coverage() -> Result<()> {
     // Test that our instruction parser and dispatcher can handle basic instruction
     // types
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_kiln_module(&decoded)?;
+    let runtime_module: Arc<Module> = Arc::from(Module::from_kiln_module(&decoded)?);
 
-    let function = runtime_module.functions.get(0)?;
+    let function = runtime_module
+        .functions
+        .get(0)
+        .ok_or_else(|| Error::runtime_error("Module should have function 0"))?;
 
     // Verify we have the expected instruction types for add function
     // The add function should contain: local.get 0, local.get 1, i32.add, end
@@ -213,10 +223,10 @@ fn test_instruction_dispatch_coverage() -> Result<()> {
     let mut engine = StacklessEngine::new();
     let instance = ModuleInstance::new(runtime_module, 0)?;
     let instance_arc = Arc::new(instance);
-    let _instance_idx = engine.set_current_module(instance_arc)?;
+    let instance_idx = engine.set_current_module(instance_arc)?;
 
     let args = vec![Value::I32(7), Value::I32(11)];
-    let results = engine.execute(0, 0, args)?;
+    let results = engine.execute(instance_idx, 0, args)?;
 
     assert_eq!(results.len(), 1);
     if let Value::I32(result) = &results[0] {
@@ -231,16 +241,16 @@ fn test_instruction_dispatch_coverage() -> Result<()> {
 fn test_error_handling_and_bounds() -> Result<()> {
     // Test error handling for invalid operations
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_kiln_module(&decoded)?;
+    let runtime_module: Arc<Module> = Arc::from(Module::from_kiln_module(&decoded)?);
 
     let mut engine = StacklessEngine::new();
     let instance = ModuleInstance::new(runtime_module, 0)?;
     let instance_arc = Arc::new(instance);
-    let _instance_idx = engine.set_current_module(instance_arc)?;
+    let instance_idx = engine.set_current_module(instance_arc)?;
 
     // Test with wrong number of arguments (should handle gracefully)
     let args = vec![Value::I32(10)]; // Missing second argument
-    let result = engine.execute(0, 0, args);
+    let result = engine.execute(instance_idx, 0, args);
 
     // Engine should either handle gracefully or return an error
     match result {
@@ -258,7 +268,7 @@ fn test_error_handling_and_bounds() -> Result<()> {
 fn test_asil_b_compliance_features() -> Result<()> {
     // Test ASIL-B specific compliance features
     let decoded = decode_module(SIMPLE_ADD_WASM)?;
-    let runtime_module = Module::from_kiln_module(&decoded)?;
+    let runtime_module: Arc<Module> = Arc::from(Module::from_kiln_module(&decoded)?);
 
     // Verify deterministic behavior - same inputs should give same outputs
     let mut engine1 = StacklessEngine::new();
@@ -267,12 +277,12 @@ fn test_asil_b_compliance_features() -> Result<()> {
     let instance1 = ModuleInstance::new(runtime_module.clone(), 0)?;
     let instance2 = ModuleInstance::new(runtime_module, 1)?;
 
-    let _idx1 = engine1.set_current_module(Arc::new(instance1))?;
-    let _idx2 = engine2.set_current_module(Arc::new(instance2))?;
+    let idx1 = engine1.set_current_module(Arc::new(instance1))?;
+    let idx2 = engine2.set_current_module(Arc::new(instance2))?;
 
     let args = vec![Value::I32(123), Value::I32(456)];
-    let result1 = engine1.execute(0, 0, args.clone())?;
-    let result2 = engine2.execute(0, 0, args)?;
+    let result1 = engine1.execute(idx1, 0, args.clone())?;
+    let result2 = engine2.execute(idx2, 0, args)?;
 
     assert_eq!(result1, result2, "Results should be deterministic");
     println!("✓ Deterministic execution verified for ASIL-B compliance");

@@ -7,7 +7,6 @@
 
 #[cfg(feature = "std")]
 use std::vec::Vec;
-use std::vec::Vec;
 
 use kiln_error::Result;
 use kiln_foundation::{
@@ -91,6 +90,30 @@ impl ControlContext for DemoContext {
     fn call_indirect(&mut self, table_idx: u32, type_idx: u32) -> Result<()> {
         self.indirect_call = Some((table_idx, type_idx));
         Ok(())
+    }
+
+    fn return_call(&mut self, func_idx: u32) -> Result<()> {
+        self.called_function = Some(func_idx);
+        self.returned = true;
+        Ok(())
+    }
+
+    fn return_call_indirect(&mut self, table_idx: u32, type_idx: u32) -> Result<()> {
+        self.indirect_call = Some((table_idx, type_idx));
+        self.returned = true;
+        Ok(())
+    }
+
+    fn execute_br_on_null(&mut self, _label: u32) -> Result<()> {
+        Err(kiln_error::Error::not_implemented_error(
+            "br_on_null is not demonstrated by this example",
+        ))
+    }
+
+    fn execute_br_on_non_null(&mut self, _label: u32) -> Result<()> {
+        Err(kiln_error::Error::not_implemented_error(
+            "br_on_non_null is not demonstrated by this example",
+        ))
     }
 
     fn trap(&mut self, _message: &str) -> Result<()> {

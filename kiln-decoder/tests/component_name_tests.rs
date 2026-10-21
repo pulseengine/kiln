@@ -132,7 +132,7 @@ fn test_custom_section_with_name() {
 
     // Create custom section content with "name" as the identifier
     let mut custom_section_content = Vec::new();
-    custom_section_content.extend_from_slice(&binary::write_string("name"));
+    custom_section_content.extend_from_slice(&binary::with_alloc::write_string("name"));
     custom_section_content.extend_from_slice(&name_section_data);
 
     // Create a component with just the custom section
@@ -144,7 +144,7 @@ fn test_custom_section_with_name() {
 
     // Custom section
     binary.push(binary::COMPONENT_CUSTOM_SECTION_ID);
-    binary.extend_from_slice(&binary::write_leb128_u32(
+    binary.extend_from_slice(&binary::with_alloc::write_leb128_u32(
         custom_section_content.len() as u32
     ));
     binary.extend_from_slice(&custom_section_content);

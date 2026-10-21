@@ -167,7 +167,7 @@ fn main() -> Result<()> {
 
     ArithmeticOp::F32Add.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   3.14 + 2.71 = {}", result.value);
+        println!("   3.14 + 2.71 = {}", result.value());
     }
     context.stack.clear();
 
@@ -175,7 +175,7 @@ fn main() -> Result<()> {
     context.push_arithmetic_value(Value::F32(FloatBits32::from_float(3.0)))?;
     ArithmeticOp::F32Div.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   10.0 / 3.0 = {}", result.value);
+        println!("   10.0 / 3.0 = {}", result.value());
     }
     context.stack.clear();
 
@@ -187,7 +187,7 @@ fn main() -> Result<()> {
     println!("   Input: 16.0");
     ArithmeticOp::F32Sqrt.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   sqrt(16.0) = {}", result.value);
+        println!("   sqrt(16.0) = {}", result.value());
     }
     context.stack.clear();
 
@@ -196,7 +196,7 @@ fn main() -> Result<()> {
     println!("   Input: -42.5");
     ArithmeticOp::F32Abs.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   abs(-42.5) = {}", result.value);
+        println!("   abs(-42.5) = {}", result.value());
     }
     context.stack.clear();
 
@@ -205,7 +205,7 @@ fn main() -> Result<()> {
     println!("   Input: 2.3");
     ArithmeticOp::F32Ceil.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   ceil(2.3) = {}", result.value);
+        println!("   ceil(2.3) = {}", result.value());
     }
     context.stack.clear();
 
@@ -214,7 +214,7 @@ fn main() -> Result<()> {
     println!("   Input: 2.8");
     ArithmeticOp::F32Floor.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   floor(2.8) = {}", result.value);
+        println!("   floor(2.8) = {}", result.value());
     }
     context.stack.clear();
 
@@ -223,7 +223,7 @@ fn main() -> Result<()> {
     println!("   Input: -2.8");
     ArithmeticOp::F32Trunc.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   trunc(-2.8) = {} (towards zero)", result.value);
+        println!("   trunc(-2.8) = {} (towards zero)", result.value());
     }
     context.stack.clear();
 
@@ -232,7 +232,7 @@ fn main() -> Result<()> {
     println!("   Input: 2.5");
     ArithmeticOp::F32Nearest.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   nearest(2.5) = {} (round to even)", result.value);
+        println!("   nearest(2.5) = {} (round to even)", result.value());
     }
     context.stack.clear();
 
@@ -244,7 +244,7 @@ fn main() -> Result<()> {
 
     ArithmeticOp::F32Min.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   min(5.7, 3.2) = {}", result.value);
+        println!("   min(5.7, 3.2) = {}", result.value());
     }
     context.stack.clear();
 
@@ -252,7 +252,7 @@ fn main() -> Result<()> {
     context.push_arithmetic_value(Value::F32(FloatBits32::from_float(3.2)))?;
     ArithmeticOp::F32Max.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   max(5.7, 3.2) = {}", result.value);
+        println!("   max(5.7, 3.2) = {}", result.value());
     }
     context.stack.clear();
 
@@ -264,7 +264,7 @@ fn main() -> Result<()> {
     println!("   Input: 42.0");
     ArithmeticOp::F32Neg.execute(&mut context)?;
     if let Some(Value::F32(result)) = context.peek() {
-        println!("   neg(42.0) = {}", result.value);
+        println!("   neg(42.0) = {}", result.value());
     }
     context.stack.clear();
 
@@ -276,7 +276,7 @@ fn main() -> Result<()> {
     if let Some(Value::F32(result)) = context.peek() {
         println!(
             "   copysign(42.0, -1.0) = {} (42.0 with sign of -1.0)",
-            result.value
+            result.value()
         );
     }
     context.stack.clear();
@@ -301,7 +301,7 @@ fn main() -> Result<()> {
 
     ArithmeticOp::F64Add.execute(&mut context)?;
     if let Some(Value::F64(result)) = context.peek() {
-        println!("   π + e = {}", result.value);
+        println!("   π + e = {}", result.value());
     }
     context.stack.clear();
 
@@ -309,7 +309,7 @@ fn main() -> Result<()> {
     println!("   Input: 2.0");
     ArithmeticOp::F64Sqrt.execute(&mut context)?;
     if let Some(Value::F64(result)) = context.peek() {
-        println!("   sqrt(2.0) = {}", result.value);
+        println!("   sqrt(2.0) = {}", result.value());
     }
 
     println!("\n=== Demo Complete ===");

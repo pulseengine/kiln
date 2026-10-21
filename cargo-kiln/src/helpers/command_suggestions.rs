@@ -280,7 +280,7 @@ impl CommandSuggestionEngine {
     }
 
     /// Calculate similarity between two strings
-    fn calculate_similarity(&self, a: &str, b: &str) -> f64 {
+    pub(crate) fn calculate_similarity(&self, a: &str, b: &str) -> f64 {
         let max_len = a.len().max(b.len());
         if max_len == 0 {
             return 1.0;
