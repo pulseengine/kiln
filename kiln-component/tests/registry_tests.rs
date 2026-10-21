@@ -152,18 +152,17 @@ fn test_missing_conversion() {
 fn test_chained_conversion_errors() {
     let mut registry = TypeConversionRegistry::new();
 
-    // Create a nested error
-    let nested_error = ConversionError {
-        kind: ConversionErrorKind::InvalidVariant,
-        source_type: "InnerType",
-        target_type: "OuterType",
-        context: Some("Inner conversion failed".to_string()),
-        source: None,
-    };
-
-    // Register a conversion that returns a chained error
+    // Register a conversion that returns a chained error; the registered
+    // closure is `Fn`, so the nested error is built on each call.
     registry.register(
         |_src: &SimpleSource| -> Result<SimpleTarget, ConversionError> {
+            let nested_error = ConversionError {
+                kind: ConversionErrorKind::InvalidVariant,
+                source_type: "InnerType",
+                target_type: "OuterType",
+                context: Some("Inner conversion failed".to_string()),
+                source: None,
+            };
             Err(ConversionError {
                 kind: ConversionErrorKind::ConversionFailed,
                 source_type: std::any::type_name::<SimpleSource>(),
