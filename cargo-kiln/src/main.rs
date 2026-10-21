@@ -5,7 +5,7 @@
 //! of justfile, xtask, and shell scripts with a single, AI-friendly tool.
 
 // Standard library imports
-use std::{path::PathBuf, process};
+use std::{io::IsTerminal, path::PathBuf, process};
 
 // External crates
 use anyhow::{Context, Result};
@@ -1110,7 +1110,7 @@ enum KilndVariant {
 /// Determine if colors should be used based on output format and terminal
 fn should_use_colors(output_format: &OutputFormat) -> bool {
     match output_format {
-        OutputFormat::Human => atty::is(atty::Stream::Stdout),
+        OutputFormat::Human => std::io::stdout().is_terminal(),
         OutputFormat::Json | OutputFormat::JsonLines => false,
     }
 }

@@ -3,8 +3,9 @@
 //! Provides a unified way to pass global CLI arguments to all subcommands
 //! and helper functions, ensuring consistent behavior across the application.
 
+use std::io::IsTerminal;
+
 use anyhow::Result;
-use atty::{self, Stream};
 use kiln_build_core::{
     config::BuildProfile,
     diagnostics::Severity,
@@ -131,7 +132,7 @@ impl GlobalArgs {
     pub fn from_cli(cli: &Cli) -> Result<Self> {
         let output_format: OutputFormat = cli.output.into();
         let use_colors = match output_format {
-            OutputFormat::Human => atty::is(Stream::Stdout),
+            OutputFormat::Human => std::io::stdout().is_terminal(),
             OutputFormat::Json | OutputFormat::JsonLines => false,
         };
         let output = OutputManager::new(output_format.clone()).with_color(use_colors);

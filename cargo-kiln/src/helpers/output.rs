@@ -4,6 +4,7 @@
 //! supporting human-readable, JSON, and JSON Lines formats.
 
 use std::fmt::Display;
+use std::io::IsTerminal;
 
 use anyhow::Result;
 use colored::Colorize;
@@ -70,7 +71,7 @@ where
 
 /// Check if output format supports colors
 pub fn supports_colors(format: &OutputFormat) -> bool {
-    matches!(format, OutputFormat::Human) && atty::is(atty::Stream::Stdout)
+    matches!(format, OutputFormat::Human) && std::io::stdout().is_terminal()
 }
 
 /// Create a simple JSON response for operations without complex data
@@ -122,7 +123,7 @@ impl OutputManager {
     pub fn new(format: OutputFormat) -> Self {
         Self {
             format,
-            colored: atty::is(atty::Stream::Stdout),
+            colored: std::io::stdout().is_terminal(),
         }
     }
 
