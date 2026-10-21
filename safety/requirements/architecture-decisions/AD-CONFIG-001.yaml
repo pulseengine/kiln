@@ -1,0 +1,19 @@
+artifacts:
+
+  - id: AD-CONFIG-001
+    type: design-decision
+    title: kiln's own configuration files are YAML read through rivet-yaml; formats other tools define keep their own parser
+    status: implemented
+    release: v0.7.0
+    description: "Org policy (maintainer, 2026-10-13, issue #548): a repository reads its own inputs through rivet's YAML stack. DECISION: cargo-kiln config, KilnTestConfig, the legacy requirements file, allowed-unsafe, tool-versions and the decoder's resource-limits config are YAML files parsed with rivet_yaml::from_str (one workspace dependency, rivet tag v0.41.0). rust-toolchain.toml (rustup), Cargo manifests (cargo), cargo/audit/coverage JSON and the meld signature manifest (meld#400) keep their defining tool's format. Consequence: rivet-yaml is git-only, and it pulls rivet's pulseengine/rowan fork; deny.toml allow-git names exactly those two pulseengine sources, pinned by Cargo.lock. Implemented in #550 (bc5a5194)."
+    tags: [config, yaml, rivet-yaml, org-policy, supply-chain, issue-548]
+    fields:
+      alternatives: "(1) Keep TOML for kiln's own configs: contradicts the org policy. (2) serde_yaml or serde_yml: archived/unsafe-libyaml advisory. (3) Convert every format including rust-toolchain.toml and meld's JSON manifest: those formats are defined by rustup and meld, not kiln."
+      rationale: serde_yaml is archived and its unsafe-libyaml dependency is RUSTSEC-2024-0449; one YAML stack across the org means one parser to audit. Formats another tool defines are that tool's contract, so converting them would break the contract, not follow the policy.
+    links:
+      - type: satisfies
+        target: SR-71
+    provenance:
+      created-by: ai
+      model: claude-opus-5-5
+      timestamp: 2026-10-21T03:59:21Z
