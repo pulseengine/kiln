@@ -216,20 +216,15 @@ impl CfiControlFlowProtection {
 }
 
 /// Calling convention types for platform compatibility
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum CallingConvention {
     /// WebAssembly standard calling convention
+    #[default]
     WebAssembly,
     /// System V ABI (Linux, macOS)
     SystemV,
     /// Windows Fastcall convention
     WindowsFastcall,
-}
-
-impl Default for CallingConvention {
-    fn default() -> Self {
-        Self::WebAssembly
-    }
 }
 
 /// Software CFI configuration options
@@ -314,12 +309,6 @@ impl CfiExecutionContext {
             max_labels:               128,
             valid_branch_targets:     kiln_foundation::bounded::BoundedVec::new(provider3)?,
         })
-    }
-}
-
-impl Default for CfiExecutionContext {
-    fn default() -> Self {
-        Self::new().expect("Failed to create CfiExecutionContext with default provider")
     }
 }
 

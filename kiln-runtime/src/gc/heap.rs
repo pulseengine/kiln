@@ -312,7 +312,9 @@ impl<const SIZE: usize> GcHeap<SIZE> {
             return Err(Error::memory_error("Array index out of bounds"));
         }
 
-        let offset = gc_ref.offset().unwrap(); // Safe: already validated in array_len
+        let offset = gc_ref
+            .offset()
+            .ok_or_else(|| Error::memory_error("Null GC reference"))?;
         let obj_offset = offset as usize;
 
         // Get object size for bounds check
@@ -347,7 +349,9 @@ impl<const SIZE: usize> GcHeap<SIZE> {
             return Err(Error::memory_error("Array index out of bounds"));
         }
 
-        let offset = gc_ref.offset().unwrap();
+        let offset = gc_ref
+            .offset()
+            .ok_or_else(|| Error::memory_error("Null GC reference"))?;
         let obj_offset = offset as usize;
 
         // Skip header (8 bytes) + length (4 bytes)

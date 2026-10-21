@@ -35,7 +35,7 @@ use kiln_foundation::values::{GcStructRef, GcArrayRef};
 // and then re-internalized. Uses thread-local storage for safety.
 use std::cell::RefCell;
 thread_local! {
-    static EXTERN_TABLE: RefCell<Vec<Value>> = RefCell::new(Vec::new());
+    static EXTERN_TABLE: RefCell<Vec<Value>> = const { RefCell::new(Vec::new()) };
 }
 
 use kiln_error::Result;
@@ -603,6 +603,7 @@ impl StacklessEngine {
     /// - For imported tags: returns the import source (module_name, field_name)
     /// - For exported local tags (with registered instance): returns (registered_name, export_name)
     /// - For non-exported local tags: returns None (only matches within same module)
+    ///
     /// Resolve a tag to its canonical identity by following import chains.
     ///
     /// Two tags are the same if and only if they originate from the same
@@ -1623,13 +1624,14 @@ impl StacklessEngine {
         // This allows us to call &mut self methods (like execute, call_wasi_function)
         // during execution without borrow checker conflicts.
         let instance = {
-            let found = self.instances.get(&instance_id);
-            if found.is_none() {
-                #[cfg(feature = "tracing")]
-                trace!(instance_id = instance_id, "[INNER_EXEC] Instance not found");
-                return Err(kiln_error::Error::runtime_execution_error("Instance not found"));
+            match self.instances.get(&instance_id) {
+                Some(found) => found.clone(),
+                None => {
+                    #[cfg(feature = "tracing")]
+                    trace!(instance_id = instance_id, "[INNER_EXEC] Instance not found");
+                    return Err(kiln_error::Error::runtime_execution_error("Instance not found"));
+                },
             }
-            found.unwrap().clone()
         };
 
         // Check if this function is aliased and get the correct module
@@ -1688,8 +1690,7 @@ impl StacklessEngine {
                     {
                         // Check if this is a canon-lowered function
                         #[cfg(feature = "wasi")]
-                        if export_name.starts_with("__canon_lower_") {
-                            let canon_suffix = &export_name["__canon_lower_".len()..];
+                        if let Some(canon_suffix) = export_name.strip_prefix("__canon_lower_") {
                             if let Some(sep_pos) = canon_suffix.rfind("::") {
                                 let interface = &canon_suffix[..sep_pos];
                                 let function = &canon_suffix[sep_pos + 2..];
@@ -2187,9 +2188,8 @@ impl StacklessEngine {
                                         // that should be dispatched via the canonical ABI executor,
                                         // not as cross-instance calls.
                                         #[cfg(feature = "wasi")]
-                                        if export_name.starts_with("__canon_lower_") {
+                                        if let Some(canon_suffix) = export_name.strip_prefix("__canon_lower_") {
                                             // Parse interface::function from __canon_lower_{interface}::{function}
-                                            let canon_suffix = &export_name["__canon_lower_".len()..];
                                             if let Some(sep_pos) = canon_suffix.rfind("::") {
                                                 let interface = &canon_suffix[..sep_pos];
                                                 let function = &canon_suffix[sep_pos + 2..];
@@ -6569,7 +6569,9 @@ impl StacklessEngine {
                             // Per WebAssembly spec: save result values, pop stack to
                             // entry height, push result values back.
                             if !block_stack.is_empty() {
-                                let (block_type, start_pc, block_type_idx, entry_stack_height) = block_stack.pop().unwrap();
+                                let (block_type, start_pc, block_type_idx, entry_stack_height) = block_stack
+                                    .pop()
+                                    .ok_or_else(|| kiln_error::Error::runtime_execution_error("Block stack empty at block end"))?;
                                 #[cfg(feature = "tracing")]
                                 trace!("End at pc={} (closes {} from pc={}, depth now {}, entry_height={})", pc, block_type, start_pc, block_depth, entry_stack_height);
 
@@ -12042,7 +12044,7 @@ impl StacklessEngine {
         // Get args from global state (set by kilnd before execution)
         // This is more reliable than using internal dispatcher since it
         // ensures we use the same args that will be returned by get-arguments
-        let args: Vec<String> = kiln_wasi::get_global_wasi_args();
+        let args: Vec<String> = kiln_wasi::get_global_wasi_args()?;
 
         if args.is_empty() {
             #[cfg(feature = "tracing")]
@@ -12184,7 +12186,7 @@ impl StacklessEngine {
     #[cfg(feature = "wasi")]
     fn allocate_wasi_read_buffer(&mut self, instance_id: usize, len: u32) -> Result<Option<(u32, u32)>> {
         const MAX_READ_BUF: u32 = 1 << 20; // 1 MiB cap; reads clamp to this, guest loops for more
-        let size = len.min(MAX_READ_BUF).max(1);
+        let size = len.clamp(1, MAX_READ_BUF);
 
         let instance = self.instances.get(&instance_id)
             .ok_or_else(|| kiln_error::Error::runtime_error("Instance not found"))?
@@ -12357,7 +12359,7 @@ impl StacklessEngine {
 
             #[cfg(feature = "wasi")]
             let args_alloc = if module_name.contains("wasi:cli/environment") && field_name == "get-arguments" {
-                let wasi_args = kiln_wasi::get_global_wasi_args();
+                let wasi_args = kiln_wasi::get_global_wasi_args()?;
                 if !wasi_args.is_empty() {
                     match self.allocate_wasi_args_memory(instance_id, &wasi_args) {
                         Ok(alloc) => alloc,

@@ -810,8 +810,7 @@ impl MemoryValue {
     pub fn set_debug_name(&self, name: &str) -> Result<()> {
         let mut memory = self.memory.write();
 
-        memory.set_debug_name(name);
-        Ok(())
+        memory.set_debug_name(name)
     }
 
     /// Verifies the integrity of the memory

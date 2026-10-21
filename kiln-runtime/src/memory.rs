@@ -283,6 +283,10 @@ pub struct Memory {
 }
 
 impl Clone for Memory {
+    #[allow(
+        clippy::unwrap_used,
+        reason = "Clone cannot return an error; a poisoned memory lock means a thread panicked mid-access and the contents must not be copied"
+    )]
     fn clone(&self) -> Self {
         // Create new SafeMemoryHandler by copying bytes from the data
         let current_bytes = self.data.lock().unwrap().to_vec().unwrap_or_default();
@@ -326,6 +330,10 @@ impl Clone for Memory {
 }
 
 impl PartialEq for Memory {
+    #[allow(
+        clippy::unwrap_used,
+        reason = "PartialEq cannot return an error; a poisoned memory lock means a thread panicked mid-access and the contents must not be compared"
+    )]
     fn eq(&self, other: &Self) -> bool {
         // Compare memory data by extracting bytes from Mutex
         let self_data = self.data.lock().unwrap().to_vec().unwrap_or_default();
@@ -410,6 +418,15 @@ impl kiln_foundation::traits::FromBytes for Memory {
 }
 
 impl Memory {
+    /// Locks the memory data, failing if a thread panicked while holding the lock.
+    fn lock_data(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, SafeMemoryHandler<LargeMemoryProvider>>> {
+        self.data
+            .lock()
+            .map_err(|_| Error::poisoned_lock("Memory data lock poisoned by a panicked thread"))
+    }
+
     /// Returns the effective page size in bytes for this memory instance.
     /// Uses the custom page size from the memory type if set, otherwise
     /// falls back to the standard WebAssembly page size (65536 bytes).
@@ -522,15 +539,18 @@ impl Memory {
     }
 
     /// Sets a debug name for this memory instance
-    pub fn set_debug_name(&mut self, name: &str) {
-        self.debug_name = Some(
-            kiln_foundation::bounded::BoundedString::try_from_str(name)
-                .unwrap_or_else(|_| {
-                    // If name is too long, truncate it
-                    kiln_foundation::bounded::BoundedString::from_str_truncate(name)
-                    .unwrap()
-                }),
-        );
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the name cannot be stored even after truncation.
+    pub fn set_debug_name(&mut self, name: &str) -> Result<()> {
+        let bounded = match kiln_foundation::bounded::BoundedString::try_from_str(name) {
+            Ok(bounded) => bounded,
+            // If name is too long, truncate it
+            Err(_) => kiln_foundation::bounded::BoundedString::from_str_truncate(name)?,
+        };
+        self.debug_name = Some(bounded);
+        Ok(())
     }
 
     /// Returns the debug name of this memory instance, if any
@@ -581,7 +601,7 @@ impl Memory {
     pub fn buffer(&self) -> Result<alloc::vec::Vec<u8>> {
         // Use the SafeMemoryHandler to get data through a safe slice to ensure
         // memory integrity is verified during the operation
-        let data_guard = self.data.lock().unwrap();
+        let data_guard = self.lock_data()?;
         let data_size = data_guard.size();
         if data_size == 0 {
             return Ok(alloc::vec::Vec::new());
@@ -708,7 +728,7 @@ impl Memory {
         let new_size = wasm_offset_to_usize(new_page_count)? * self.page_size_bytes();
 
         // Resize the underlying data
-        self.data.lock().unwrap().resize(new_size)?;
+        self.lock_data()?.resize(new_size)?;
 
         // Update the page count
         let old_pages = self.current_pages.swap(new_page_count, Ordering::Relaxed);
@@ -773,7 +793,7 @@ impl Memory {
         let new_size = wasm_offset_to_usize(new_page_count)? * self.page_size_bytes();
 
         // Resize the underlying data
-        self.data.lock().unwrap().resize(new_size)?;
+        self.lock_data()?.resize(new_size)?;
 
         // Update the page count
         let old_pages = self.current_pages.swap(new_page_count, Ordering::Relaxed);
@@ -813,7 +833,7 @@ impl Memory {
 
         // Read from memory with Mutex locking
         {
-            let data_guard = self.data.lock().unwrap();
+            let data_guard = self.lock_data()?;
             let safe_slice = data_guard.get_slice(offset_usize, size)?;
             buffer.copy_from_slice(safe_slice.data()?);
             // DEBUG: Track reads from allocator region
@@ -869,7 +889,7 @@ impl Memory {
         self.increment_access_count(offset_usize, size);
 
         // Use the SafeMemoryHandler's write_data method for efficient direct writing
-        self.data.lock().unwrap().write_data(offset_usize, buffer)?;
+        self.lock_data()?.write_data(offset_usize, buffer)?;
 
         // Update the peak memory usage
         self.update_peak_memory();
@@ -931,7 +951,7 @@ impl Memory {
         self.increment_access_count(offset_usize, size);
 
         // ASIL-B: Thread-safe write with Mutex
-        self.data.lock().unwrap().write_data(offset_usize, buffer)?;
+        self.lock_data()?.write_data(offset_usize, buffer)?;
 
         // Update metrics
         self.update_peak_memory();
@@ -953,7 +973,7 @@ impl Memory {
     ///
     /// Returns an error if the offset is out of bounds
     pub fn get_byte(&self, offset: u32) -> Result<u8> {
-        if !self.verify_bounds(offset, 1) {
+        if !self.verify_bounds(offset, 1)? {
             return Err(Error::validation_error("Memory access out of bounds"));
         }
 
@@ -961,7 +981,7 @@ impl Memory {
         self.increment_access_count(offset_usize, 1);
 
         // Use SafeMemoryHandler to get a safe slice
-        let data_guard = self.data.lock().unwrap();
+        let data_guard = self.lock_data()?;
 
         let slice = data_guard.get_slice(offset_usize, 1)?;
         let data = slice.data()?;
@@ -983,7 +1003,7 @@ impl Memory {
     ///
     /// Returns an error if the offset is out of bounds
     pub fn set_byte(&mut self, offset: u32, value: u8) -> Result<()> {
-        if !self.verify_bounds(offset, 1) {
+        if !self.verify_bounds(offset, 1)? {
             return Err(Error::validation_error("Memory access out of bounds"));
         }
 
@@ -1005,25 +1025,25 @@ impl Memory {
     /// # Returns
     ///
     /// True if the access is within bounds, false otherwise
-    fn verify_bounds(&self, offset: u32, len: u32) -> bool {
+    fn verify_bounds(&self, offset: u32, len: u32) -> Result<bool> {
         if len == 0 {
-            return true;
+            return Ok(true);
         }
 
         // Get current data size
-        let data_size = self.data.lock().unwrap().len();
+        let data_size = self.lock_data()?.len();
 
         // Get the last byte that would be accessed
         let end_offset = match offset.checked_add(len) {
             Some(end) => match wasm_offset_to_usize(end) {
                 Ok(end_usize) => end_usize,
-                Err(_) => return false, // Conversion error
+                Err(_) => return Ok(false), // Conversion error
             },
-            None => return false, // Overflow
+            None => return Ok(false), // Overflow
         };
 
         // Check if the end offset is within bounds (inclusive)
-        end_offset <= data_size
+        Ok(end_offset <= data_size)
     }
 
     /// Check alignment for memory accesses
@@ -1035,7 +1055,7 @@ impl Memory {
         let addr = wasm_offset_to_usize(addr)?;
         let access_size = wasm_offset_to_usize(access_size)?;
 
-        let data_size = self.data.lock().unwrap().size();
+        let data_size = self.lock_data()?.size();
 
         if addr + access_size > data_size {
             return Err(Error::validation_error("Memory access out of bounds"));
@@ -1115,7 +1135,7 @@ impl Memory {
         F: FnOnce(u32, &[u8]) -> Result<()> + Send + 'static,
     {
         // Get the current memory data
-        let data = self.data.lock().unwrap().to_vec()?;
+        let data = self.lock_data()?.to_vec()?;
 
         // Execute the hook immediately with current state
         hook(self.current_pages.load(Ordering::Relaxed), &data)?;
@@ -1135,7 +1155,7 @@ impl Memory {
         F: FnOnce(u32, &[u8]) -> Result<()> + Send + 'static,
     {
         // Get the current memory data
-        let data = self.data.lock().unwrap().to_vec()?;
+        let data = self.lock_data()?.to_vec()?;
 
         // Execute the hook immediately with current state
         hook(self.current_pages.load(Ordering::Relaxed), &data)?;
@@ -1153,7 +1173,7 @@ impl Memory {
         let expected_size = wasm_offset_to_usize(pages).unwrap_or(0) * PAGE_SIZE;
 
         // Verify memory size is consistent
-        let data_size = self.data.lock().unwrap().size();
+        let data_size = self.lock_data()?.size();
 
         if data_size != expected_size {
             return Err(Error::validation_error("Memory size mismatch"));
@@ -1188,7 +1208,7 @@ impl Memory {
         size: usize,
     ) -> Result<()> {
         // Bounds check for source
-        let src_data_size = src_mem.data.lock().unwrap().size();
+        let src_data_size = src_mem.lock_data()?.size();
 
         let src_end = match src_addr.checked_add(size) {
             Some(end) if end <= src_data_size => end,
@@ -1196,7 +1216,7 @@ impl Memory {
         };
 
         // Bounds check for destination
-        let dst_data_size = self.data.lock().unwrap().size();
+        let dst_data_size = self.lock_data()?.size();
 
         let dst_end = match dst_addr.checked_add(size) {
             Some(end) if end <= dst_data_size => end,
@@ -1212,7 +1232,7 @@ impl Memory {
         src_mem.increment_access_count(src_addr, size);
 
         // Use SafeSlice for source memory access
-        let src_data_guard = src_mem.data.lock().unwrap();
+        let src_data_guard = src_mem.lock_data()?;
 
         let src_slice = src_data_guard.get_slice(src_addr, size)?;
         let src_data = src_slice.data()?;
@@ -1222,7 +1242,7 @@ impl Memory {
         temp_buf.extend_from_slice(src_data);
 
         // Get destination memory data using provider-aware method
-        let mut dst_data_guard = self.data.lock().unwrap();
+        let mut dst_data_guard = self.lock_data()?;
 
         let data_size = dst_data_guard.size();
         let dst_slice = dst_data_guard.get_slice(0, data_size)?;
@@ -1297,7 +1317,7 @@ impl Memory {
             let fill_buffer = vec![val; chunk_size];
 
             // Write directly to the data handler with safety verification
-            self.data.lock().unwrap().verify_access(current_dst, chunk_size)?;
+            self.lock_data()?.verify_access(current_dst, chunk_size)?;
 
             // Write the buffer data using memory write method
             self.write(current_dst as u32, &fill_buffer)?;
@@ -1337,7 +1357,7 @@ impl Memory {
         };
 
         // Destination bounds check
-        let data_size = self.data.lock().unwrap().size();
+        let data_size = self.lock_data()?.size();
 
         let dst_end = match dst.checked_add(size) {
             Some(end) if end <= data_size => end,
@@ -1393,7 +1413,7 @@ impl Memory {
 
             // Verify destination access is valid using the SafeMemoryHandler
             {
-                let mut data_guard = self.data.lock().unwrap();
+                let mut data_guard = self.lock_data()?;
                 data_guard.verify_access(dst_offset, chunk_size)?;
                 // Write the source data directly to the destination
                 data_guard.write_data(dst_offset, src_data)?;
@@ -1831,12 +1851,17 @@ impl Memory {
     /// # Arguments
     ///
     /// * `level` - The new verification level
-    pub fn set_verification_level(&mut self, level: VerificationLevel) {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the memory data lock is poisoned.
+    pub fn set_verification_level(&mut self, level: VerificationLevel) -> Result<()> {
         // Update our own verification level
         self.verification_level = level;
 
         // Propagate to the memory handler
-        self.data.lock().unwrap().set_verification_level(level);
+        self.lock_data()?.set_verification_level(level);
+        Ok(())
     }
 
     /// Gets the current verification level
@@ -1850,15 +1875,15 @@ impl Memory {
     }
 
     /// Get the memory statistics
-    fn memory_stats(&self) -> MemoryStats {
-        let total_size = self.data.lock().unwrap().size();
+    fn memory_stats(&self) -> Result<MemoryStats> {
+        let total_size = self.lock_data()?.size();
 
-        MemoryStats {
+        Ok(MemoryStats {
             total_size,
             access_count:    self.access_count() as usize, // Convert u64 to usize
             unique_regions:  self.unique_regions(),
             max_access_size: self.max_access_size(),
-        }
+        })
     }
 
     // Note: This functionality is now handled in update_access_metrics
@@ -1877,15 +1902,15 @@ impl Memory {
     /// # Returns
     ///
     /// A string containing the statistics
-    pub fn safety_stats(&self) -> alloc::string::String {
-        let memory_stats = self.memory_stats();
+    pub fn safety_stats(&self) -> Result<alloc::string::String> {
+        let memory_stats = self.memory_stats()?;
         let access_count = self.access_count();
         let peak_memory = self.peak_memory();
         let max_access = self.max_access_size();
         let unique_regions = self.unique_regions();
 
         // Create a string with formatted stats
-        "Memory Safety Stats: [Runtime memory]".to_string()
+        Ok("Memory Safety Stats: [Runtime memory]".to_string())
     }
 
     /// Returns a `SafeSlice` representing the entire memory
@@ -1937,7 +1962,7 @@ impl Memory {
         let new_byte_size = wasm_offset_to_usize(new_size_pages)? * PAGE_SIZE;
         // Placeholder: Assumes SafeMemoryHandler has a method like `resize`
         // that takes &self and handles locking internally.
-        self.data.lock().unwrap().resize(new_byte_size)?;
+        self.lock_data()?.resize(new_byte_size)?;
 
         self.current_pages.store(new_size_pages, Ordering::Relaxed);
         self.update_peak_memory();

@@ -35,7 +35,7 @@ fn test_safe_memory_integration() -> Result<()> {
         page_size: None,
     };
     let mut memory = Memory::new(mem_type)?;
-    memory.set_verification_level(VerificationLevel::Full);
+    memory.set_verification_level(VerificationLevel::Full)?;
 
     // Create table with full verification level
     let table_type = TableType {

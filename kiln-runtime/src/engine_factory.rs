@@ -265,10 +265,11 @@ impl LazyEngine {
 
     /// Get or create the underlying engine
     pub fn get_or_create(&mut self) -> Result<&mut dyn RuntimeEngine> {
-        if self.engine.is_none() {
-            self.engine = Some(EngineFactory::create(self.config.clone())?);
-        }
-        Ok(self.engine.as_mut().unwrap().as_mut())
+        let engine = match self.engine.take() {
+            Some(engine) => engine,
+            None => EngineFactory::create(self.config.clone())?,
+        };
+        Ok(self.engine.insert(engine).as_mut())
     }
 
     /// Check if the engine has been initialized

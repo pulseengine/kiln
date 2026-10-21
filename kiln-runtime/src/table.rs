@@ -126,6 +126,10 @@ impl Debug for Table {
 }
 
 impl Clone for Table {
+    #[allow(
+        clippy::expect_used,
+        reason = "Clone cannot return an error; a poisoned table lock means a thread panicked mid-access and the contents must not be copied"
+    )]
     fn clone(&self) -> Self {
         let source_elements = self.elements.lock()
             .expect("Table mutex poisoned during clone");
@@ -142,6 +146,10 @@ impl Clone for Table {
 }
 
 impl PartialEq for Table {
+    #[allow(
+        clippy::expect_used,
+        reason = "PartialEq cannot return an error; a poisoned table lock means a thread panicked mid-access and the contents must not be compared"
+    )]
     fn eq(&self, other: &Self) -> bool {
         if self.ty != other.ty
             || self.debug_name != other.debug_name
@@ -159,6 +167,12 @@ impl PartialEq for Table {
 
 impl Eq for Table {}
 
+// `Default` is required by the `BoundedVec` element bound (slot initialisation) and
+// cannot return an error.
+#[allow(
+    clippy::expect_used,
+    reason = "Default is a BoundedVec element bound and cannot return Result; a 0..1 funcref table has no failure path"
+)]
 impl Default for Table {
     fn default() -> Self {
         use kiln_foundation::types::{
@@ -903,10 +917,10 @@ impl TableManager {
     }
 
     /// Add a table to the manager
-    pub fn add_table(&mut self, table: Table) -> u32 {
+    pub fn add_table(&mut self, table: Table) -> Result<u32> {
         let index = self.tables.len() as u32;
-        self.tables.push(table).expect("Failed to add table to manager");
-        index
+        self.tables.push(table)?;
+        Ok(index)
     }
 
     /// Get a table by index
@@ -933,12 +947,6 @@ impl TableManager {
     /// Get the number of tables
     pub fn table_count(&self) -> u32 {
         self.tables.len() as u32
-    }
-}
-
-impl Default for TableManager {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default TableManager")
     }
 }
 

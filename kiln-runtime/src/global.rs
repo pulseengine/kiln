@@ -101,13 +101,16 @@ impl Global {
     }
 }
 
+// `Default` is required by the `BoundedVec` element bound (slot initialisation) and
+// cannot return an error.
+#[allow(
+    clippy::expect_used,
+    reason = "Default is a BoundedVec element bound and cannot return Result; an i32 immutable zero global has no failure path"
+)]
 impl Default for Global {
     fn default() -> Self {
         use kiln_foundation::{
-            types::{
-                GlobalType,
-                ValueType,
-            },
+            types::ValueType,
             values::Value,
         };
         Self::new(ValueType::I32, false, Value::I32(0))
