@@ -385,3 +385,70 @@ jobs:
             --target x86_64-wrs-vxworks \
             --features "platform-vxworks,real-time,std"
           echo "VxWorks cross-compilation and linking succeeded"
+  # SR-68: prove the static musl release build BEFORE a release. Builds `kiln`
+  # exactly the way release.yml does (cargo-zigbuild), checks it is statically
+  # linked, then runs it in a glibc-less Alpine container.
+  musl_static_build:
+    name: Static musl build (SR-68)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl,aarch64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ci-musl
+      - name: Install zig + cargo-zigbuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user ziglang==0.14.1
+          cargo install cargo-zigbuild --version 0.20.1 --locked
+          echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
+      - name: Build kiln (x86_64-unknown-linux-musl)
+        run: cargo zigbuild --release --target x86_64-unknown-linux-musl -p kilnd
+      - name: Build kiln (aarch64-unknown-linux-musl, build-only)
+        run: cargo zigbuild --release --target aarch64-unknown-linux-musl -p kilnd
+      - name: Assert binaries are statically linked
+        shell: bash
+        run: |
+          set -euo pipefail
+          for T in x86_64-unknown-linux-musl aarch64-unknown-linux-musl; do
+            for BIN in kiln kilnd; do
+              DESC="$(file -L "target/${T}/release/${BIN}")"
+              echo "$DESC"
+              case "$DESC" in
+                *"dynamically linked"*) echo "::error::${T}/${BIN} is dynamically linked"; exit 1 ;;
+                *"statically linked"*|*"static-pie linked"*) ;;
+                *) echo "::error::${T}/${BIN} is not reported as statically linked"; exit 1 ;;
+              esac
+            done
+          done
+          # A static binary has no dynamic loader dependencies. ldd exits
+          # non-zero ("not a dynamic executable") for the x86_64 binary.
+          if ldd target/x86_64-unknown-linux-musl/release/kiln; then
+            echo "::error::ldd found dynamic dependencies"; exit 1
+          fi
+      - name: Run kiln in an Alpine container
+        shell: bash
+        run: |
+          set -euo pipefail
+          WANT="kiln $(cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[] | select(.name == "kilnd") | .version')"
+          # Smallest valid core module: (module (func (export "_start")))
+          mkdir -p musl-smoke
+          printf '\x00asm\x01\x00\x00\x00\x01\x04\x01\x60\x00\x00\x03\x02\x01\x00\x07\x0a\x01\x06_start\x00\x00\x0a\x04\x01\x02\x00\x0b' > musl-smoke/empty.wasm
+          cp target/x86_64-unknown-linux-musl/release/kiln musl-smoke/kiln
+          docker run --rm -v "$PWD/musl-smoke:/work:ro" -w /work \
+            alpine:3.22.2@sha256:4b7ce07002c69e8f3d704a9c5d6fd3053be500b7f1c69fc0d80990c2ad8dd412 \
+            sh -euc '
+              cat /etc/alpine-release
+              ls /lib/ld-linux* 2>/dev/null && { echo "glibc loader present; not a glibc-less test"; exit 1; }
+              GOT="$(./kiln --version)"
+              echo "kiln --version -> $GOT"
+              [ "$GOT" = "'"$WANT"'" ]
+              ./kiln empty.wasm
+              echo "kiln empty.wasm exit 0"
+            '

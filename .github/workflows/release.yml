@@ -1,7 +1,8 @@
 name: Release
 
 # Tag-triggered: builds the kiln runtime CLI (plus its deprecated `kilnd`
-# alias, until its removal in v0.8.0 — SR-64/SR-70) for five targets, then
+# alias, until its removal in v0.8.0 — SR-64/SR-70) for seven targets
+# (including static x86_64/aarch64 musl — SR-68), then
 # publishes a standardised PulseEngine release. Pattern mirrors
 # pulseengine/relay/.github/workflows/release.yml (itself derived from
 # the synth standard) — cosign-signed SHA256SUMS.txt, CycloneDX SBOM,
@@ -73,6 +74,19 @@ jobs:
             os: ubuntu-latest
             archive: tar.gz
             cross: true
+          # Static musl builds (SR-68): run without glibc (Alpine, distroless,
+          # RHEL 8, Ubuntu 20.04). Built with cargo-zigbuild; the binaries are
+          # fully static, so both are executed on the x86_64 runner for the
+          # --version check (aarch64 via qemu-user).
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+            zigbuild: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            archive: tar.gz
+            zigbuild: true
+            runner_prefix: qemu-aarch64-static
           - target: x86_64-apple-darwin
             os: macos-14
             archive: tar.gz
@@ -103,8 +117,47 @@ jobs:
         if: matrix.cross
         run: cargo install cross --git https://github.com/cross-rs/cross --locked
 
+      # Static musl targets: zig is the C compiler/linker (no musl-gcc needed,
+      # same recipe for x86_64 and aarch64). Versions are pinned exactly.
+      - name: Install zig + cargo-zigbuild (musl only)
+        if: matrix.zigbuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user ziglang==0.14.1
+          cargo install cargo-zigbuild --version 0.20.1 --locked
+          echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
+
+      - name: Install qemu-user (musl aarch64 only)
+        if: matrix.runner_prefix
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-user-static
+
+      - name: Build kilnd (musl, static)
+        if: matrix.zigbuild
+        shell: bash
+        run: cargo zigbuild --release --target "$TARGET" -p kilnd
+
+      # SR-68: the musl archive must be genuinely static, or it will not run
+      # on glibc-less systems. `file` reports "statically linked" for static
+      # non-PIE and "static-pie linked" for static PIE; a dynamic ELF reports
+      # "dynamically linked" and fails here.
+      - name: Assert musl binaries are statically linked
+        if: matrix.zigbuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          for BIN in kiln kilnd; do
+            DESC="$(file -L "target/${TARGET}/release/${BIN}")"
+            echo "$DESC"
+            case "$DESC" in
+              *"dynamically linked"*) echo "::error::${BIN} is dynamically linked"; exit 1 ;;
+              *"statically linked"*|*"static-pie linked"*) ;;
+              *) echo "::error::${BIN} is not reported as statically linked"; exit 1 ;;
+            esac
+          done
+
       - name: Build kilnd (native)
-        if: ${{ !matrix.cross }}
+        if: ${{ !matrix.cross && !matrix.zigbuild }}
         shell: bash
         run: cargo build --release --target "$TARGET" -p kilnd
 
@@ -129,6 +182,8 @@ jobs:
         if: ${{ !matrix.cross }}
         env:
           INPUT_TAG: ${{ inputs.tag }}
+          # Empty except for musl aarch64, which runs under qemu-user.
+          RUN_PREFIX: ${{ matrix.runner_prefix }}
         shell: bash
         run: |
           set -euo pipefail
@@ -136,7 +191,7 @@ jobs:
           EXE=""
           if [ "$ARCHIVE_KIND" = "zip" ]; then EXE=".exe"; fi
           for BIN in kiln kilnd; do
-            GOT="$("target/${TARGET}/release/${BIN}${EXE}" --version | tr -d '\r')"
+            GOT="$($RUN_PREFIX "target/${TARGET}/release/${BIN}${EXE}" --version | tr -d '\r')"
             WANT="${BIN} ${VERSION#v}"
             if [ "$GOT" != "$WANT" ]; then
               echo "::error::${BIN} --version printed '${GOT}', expected '${WANT}'"
