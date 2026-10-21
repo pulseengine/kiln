@@ -232,12 +232,10 @@ impl OutputFormatter for HumanFormatter {
         if self.group_by_file {
             // Group diagnostics by file
             let grouped = collection.group_by_file();
-            let mut files: Vec<_> = grouped.keys().collect();
-            files.sort();
+            let mut files: Vec<_> = grouped.iter().collect();
+            files.sort_by(|a, b| a.0.cmp(b.0));
 
-            for file in files {
-                let diagnostics = grouped.get(file).unwrap();
-
+            for (file, diagnostics) in files {
                 // File header
                 if self.use_colors {
                     output.push_str(&format!("\n{}\n", file.bright_white().underline()));

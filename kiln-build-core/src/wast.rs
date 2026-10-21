@@ -2003,13 +2003,8 @@ fn has_multiple_memories_or_tables(binary: &[u8], expected_message: &str) -> boo
     }
 
     let expected_lower = expected_message.to_lowercase();
-    if expected_lower == "multiple memories" && memory_count > 1 {
-        true
-    } else if expected_lower == "multiple tables" && table_count > 1 {
-        true
-    } else {
-        false
-    }
+    (expected_lower == "multiple memories" && memory_count > 1)
+        || (expected_lower == "multiple tables" && table_count > 1)
 }
 
 fn contains_malformed_keyword(error_msg: &str, expected_msg: &str) -> bool {

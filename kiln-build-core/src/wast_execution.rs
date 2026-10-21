@@ -1440,11 +1440,7 @@ impl WastEngine {
             let defined_idx = table_idx - num_table_imports;
             // Module.tables contains defined tables (not imports)
             // Access the inner Table's type directly
-            if let Some(table_wrapper) = module.tables.get(defined_idx) {
-                Some(table_wrapper.0.ty.clone())
-            } else {
-                None
-            }
+            module.tables.get(defined_idx).map(|table_wrapper| table_wrapper.0.ty.clone())
         }
     }
 
@@ -2113,7 +2109,7 @@ fn precise_ref_types_equal(
         (Some((a_null, a_ht)), Some((b_null, b_ht))) => {
             a_null == b_null && a_ht == b_ht
         }
-        (Some(_), None) | (None, Some(_)) => {
+        (Some(precise), None) | (None, Some(precise)) => {
             // One has precise info, one doesn't. For abstract ref types that
             // lose info (FuncRef, ExternRef), the precise info is the authority.
             // For non-ref or concrete ref types, ValueType is sufficient.
@@ -2131,7 +2127,7 @@ fn precise_ref_types_equal(
                         // The side with precise info tells us the nullability.
                         // The side without precise info is assumed nullable
                         // (since the shorthand forms like 0x70 are nullable).
-                        let (precise_null, _) = a_precise.or(b_precise).unwrap();
+                        let (precise_null, _) = precise;
                         // If the precise side says non-nullable but the other side
                         // decoded to a nullable shorthand, they're different.
                         precise_null // If nullable, they match; if non-nullable, mismatch
