@@ -434,6 +434,64 @@ pub fn get_wasi_function_signature(interface: &str, function: &str) -> Option<Wa
                 Some(Box::new(WasiComponentType::U8)),
             )],
         )),
+        // SR-72: descriptor read/write/sync-data and directory mutation. Every error-code is
+        // the u8-sized `error-code` enum.
+        ("wasi:filesystem/types", "[method]descriptor.read") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle, WasiComponentType::U64, WasiComponentType::U64],
+            vec![WasiComponentType::Result(
+                // tuple<list<u8>, bool>
+                Some(Box::new(WasiComponentType::Tuple(vec![
+                    WasiComponentType::ListU8,
+                    WasiComponentType::Bool,
+                ]))),
+                Some(Box::new(WasiComponentType::U8)),
+            )],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.write") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle, WasiComponentType::ListU8, WasiComponentType::U64],
+            vec![WasiComponentType::Result(
+                Some(Box::new(WasiComponentType::U64)), // filesize
+                Some(Box::new(WasiComponentType::U8)),
+            )],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.sync-data") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle],
+            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::U8)))],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.create-directory-at") |
+        ("wasi:filesystem/types", "[method]descriptor.remove-directory-at") |
+        ("wasi:filesystem/types", "[method]descriptor.unlink-file-at") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle, WasiComponentType::String],
+            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::U8)))],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.rename-at") => Some(WasiFunctionSignature::new(
+            // self, old-path, new-descriptor, new-path
+            vec![WasiComponentType::Handle, WasiComponentType::String, WasiComponentType::Handle, WasiComponentType::String],
+            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::U8)))],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.link-at") => Some(WasiFunctionSignature::new(
+            // self, old-path-flags, old-path, new-descriptor, new-path
+            vec![
+                WasiComponentType::Handle,
+                WasiComponentType::U32,
+                WasiComponentType::String,
+                WasiComponentType::Handle,
+                WasiComponentType::String,
+            ],
+            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::U8)))],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.symlink-at") => Some(WasiFunctionSignature::new(
+            // self, old-path (link contents), new-path
+            vec![WasiComponentType::Handle, WasiComponentType::String, WasiComponentType::String],
+            vec![WasiComponentType::Result(None, Some(Box::new(WasiComponentType::U8)))],
+        )),
+        ("wasi:filesystem/types", "[method]descriptor.readlink-at") => Some(WasiFunctionSignature::new(
+            vec![WasiComponentType::Handle, WasiComponentType::String],
+            vec![WasiComponentType::Result(
+                Some(Box::new(WasiComponentType::String)),
+                Some(Box::new(WasiComponentType::U8)),
+            )],
+        )),
         // SR-39: directory enumeration.
         ("wasi:filesystem/types", "[method]descriptor.read-directory") => Some(WasiFunctionSignature::new(
             vec![WasiComponentType::Handle],
@@ -1137,6 +1195,11 @@ fn lower_type_to_memory(
                 *offset += canonical_flat_size(inner_ty);
             }
         }
+        WasiComponentType::Result(ok_ty, err_ty)
+            if result_exact_align(ok_ty.as_deref(), err_ty.as_deref()) != 4 =>
+        {
+            lower_exact_result(ok_ty.as_deref(), err_ty.as_deref(), core_values, val_idx, memory, offset)?;
+        }
         WasiComponentType::Result(ok_ty, err_ty) => {
             // discriminant (i32) + payload
             let disc = core_values.get(*val_idx).and_then(|v| match v {
@@ -1167,6 +1230,71 @@ fn lower_type_to_memory(
             // Unit has no representation — skip
         }
     }
+    Ok(())
+}
+
+/// Alignment of a `result` whose payloads are all 1-byte (`u8`/`bool`/absent) or
+/// 8-byte scalar (`u64`/`s64`/`f64`) types — the shapes `lower_exact_result` writes
+/// per the canonical ABI (discriminant byte, payload at the payload alignment).
+/// Returns 4 for every other payload, which keeps the sequential 4-byte layout.
+fn result_exact_align(ok: Option<&WasiComponentType>, err: Option<&WasiComponentType>) -> u32 {
+    fn payload_align(ty: Option<&WasiComponentType>) -> u32 {
+        match ty {
+            None | Some(WasiComponentType::U8 | WasiComponentType::S8 | WasiComponentType::Bool) => 1,
+            Some(WasiComponentType::U64 | WasiComponentType::S64 | WasiComponentType::F64) => 8,
+            Some(_) => 4,
+        }
+    }
+    let (a, b) = (payload_align(ok), payload_align(err));
+    if a == 4 || b == 4 { 4 } else { a.max(b) }
+}
+
+/// Lower a `result<ok, err>` (shapes accepted by `result_exact_align`) with the exact
+/// canonical-ABI layout: a one-byte discriminant, then the payload at the result's
+/// alignment. Missing or mistyped core values are errors, never silently zero.
+fn lower_exact_result(
+    ok: Option<&WasiComponentType>,
+    err: Option<&WasiComponentType>,
+    core_values: &[Value],
+    val_idx: &mut usize,
+    memory: &dyn kiln_foundation::MemoryAccessor,
+    offset: &mut u32,
+) -> Result<()> {
+    fn payload_size(ty: Option<&WasiComponentType>) -> u32 {
+        match ty {
+            None => 0,
+            Some(WasiComponentType::U8 | WasiComponentType::S8 | WasiComponentType::Bool) => 1,
+            Some(_) => 8,
+        }
+    }
+    let align = result_exact_align(ok, err);
+    let start = *offset;
+    let disc = match core_values.get(*val_idx) {
+        Some(Value::I32(d)) if *d == 0 || *d == 1 => *d,
+        _ => return Err(kiln_error::Error::runtime_error("result lowering: missing or invalid discriminant")),
+    };
+    *val_idx += 1;
+    memory.write_bytes(start, &[disc as u8])?;
+    let payload_off = start + align;
+    let payload = if disc == 0 { ok } else { err };
+    match payload {
+        None => {},
+        Some(WasiComponentType::U8 | WasiComponentType::S8 | WasiComponentType::Bool) => {
+            match core_values.get(*val_idx) {
+                Some(Value::I32(v)) => memory.write_bytes(payload_off, &[*v as u8])?,
+                _ => return Err(kiln_error::Error::runtime_error("result lowering: missing 1-byte payload")),
+            }
+            *val_idx += 1;
+        },
+        Some(_) => {
+            match core_values.get(*val_idx) {
+                Some(Value::I64(v)) => memory.write_bytes(payload_off, &v.to_le_bytes())?,
+                _ => return Err(kiln_error::Error::runtime_error("result lowering: missing 8-byte payload")),
+            }
+            *val_idx += 1;
+        },
+    }
+    *offset = payload_off + payload_size(ok).max(payload_size(err));
     Ok(())
 }
 
@@ -1945,5 +2073,108 @@ impl Wasip2Host {
                 Ok(())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod sr72_lowering_tests {
+    use super::*;
+    use kiln_foundation::traits::SliceMemory;
+    use kiln_foundation::MemoryAccessor;
+
+    const RETPTR: u32 = 0x100;
+    const FS: &str = "wasi:filesystem/types";
+
+    fn lower(function: &str, values: &[Value]) -> Result<SliceMemory> {
+        let sig = get_wasi_function_signature(FS, function)
+            .unwrap_or_else(|| panic!("{function} must have a signature"));
+        assert!(sig.result_needs_retptr(), "{function} returns via retptr");
+        let mem = SliceMemory::with_size(0x1000);
+        mem.write_bytes(RETPTR, &[0xAA; 32])?;
+        let mut offset = RETPTR;
+        lower_results_to_retptr(&sig.results, values, &mem, &mut offset)?;
+        Ok(mem)
+    }
+
+    fn bytes(mem: &SliceMemory, at: u32, n: usize) -> Vec<u8> {
+        let mut b = vec![0u8; n];
+        mem.read_bytes(at, &mut b).unwrap();
+        b
+    }
+
+    // rivet: verifies SR-72
+    #[test]
+    fn unit_ok_error_code_results_use_the_canonical_one_byte_layout() -> Result<()> {
+        // result<_, error-code>: align 1 -> discriminant byte at 0, error byte at 1,
+        // nothing past offset 2 touched.
+        for function in [
+            "[method]descriptor.sync-data",
+            "[method]descriptor.create-directory-at",
+            "[method]descriptor.remove-directory-at",
+            "[method]descriptor.unlink-file-at",
+            "[method]descriptor.rename-at",
+            "[method]descriptor.link-at",
+            "[method]descriptor.symlink-at",
+        ] {
+            let ok = lower(function, &[Value::I32(0)])?;
+            assert_eq!(bytes(&ok, RETPTR, 3), vec![0, 0xAA, 0xAA], "{function} ok");
+            let err = lower(function, &[Value::I32(1), Value::I32(20)])?;
+            assert_eq!(bytes(&err, RETPTR, 3), vec![1, 20, 0xAA], "{function} err");
+        }
+        Ok(())
+    }
+
+    // rivet: verifies SR-72
+    #[test]
+    fn write_result_places_the_u64_payload_at_offset_8() -> Result<()> {
+        let ok = lower("[method]descriptor.write", &[Value::I32(0), Value::I64(0x0102_0304_0506)])?;
+        assert_eq!(bytes(&ok, RETPTR, 1), vec![0]);
+        assert_eq!(bytes(&ok, RETPTR + 8, 8), 0x0102_0304_0506u64.to_le_bytes().to_vec());
+        let err = lower("[method]descriptor.write", &[Value::I32(1), Value::I32(3)])?;
+        assert_eq!(bytes(&err, RETPTR, 1), vec![1]);
+        assert_eq!(bytes(&err, RETPTR + 8, 1), vec![3]);
+        Ok(())
+    }
+
+    // rivet: verifies SR-72
+    #[test]
+    fn read_result_lowers_list_and_eof_flag() -> Result<()> {
+        // result<tuple<list<u8>, bool>, error-code>: disc @0, list ptr @4, len @8, bool @12.
+        let ok = lower(
+            "[method]descriptor.read",
+            &[Value::I32(0), Value::I32(0x4000), Value::I32(7), Value::I32(1)],
+        )?;
+        assert_eq!(bytes(&ok, RETPTR, 1), vec![0]);
+        assert_eq!(bytes(&ok, RETPTR + 4, 4), 0x4000u32.to_le_bytes().to_vec());
+        assert_eq!(bytes(&ok, RETPTR + 8, 4), 7u32.to_le_bytes().to_vec());
+        assert_eq!(bytes(&ok, RETPTR + 12, 1), vec![1]);
+        let err = lower("[method]descriptor.read", &[Value::I32(1), Value::I32(3)])?;
+        assert_eq!(bytes(&err, RETPTR, 1), vec![1]);
+        assert_eq!(bytes(&err, RETPTR + 4, 1), vec![3]);
+        Ok(())
+    }
+
+    // rivet: verifies SR-72
+    #[test]
+    fn readlink_result_lowers_string() -> Result<()> {
+        let ok = lower(
+            "[method]descriptor.readlink-at",
+            &[Value::I32(0), Value::I32(0x4000), Value::I32(5)],
+        )?;
+        assert_eq!(bytes(&ok, RETPTR, 1), vec![0]);
+        assert_eq!(bytes(&ok, RETPTR + 4, 4), 0x4000u32.to_le_bytes().to_vec());
+        assert_eq!(bytes(&ok, RETPTR + 8, 4), 5u32.to_le_bytes().to_vec());
+        Ok(())
+    }
+
+    // rivet: verifies SR-72
+    #[test]
+    fn lowering_fails_loud_on_missing_core_values_for_exact_layout_results() {
+        let mem = SliceMemory::with_size(0x1000);
+        let sig = get_wasi_function_signature(FS, "[method]descriptor.write").unwrap();
+        let mut offset = RETPTR;
+        // ok discriminant but no u64 payload
+        let res = lower_results_to_retptr(&sig.results, &[Value::I32(0)], &mem, &mut offset);
+        assert!(res.is_err(), "missing payload must be an error, not a zero");
     }
 }

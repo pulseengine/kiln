@@ -750,6 +750,22 @@ impl StacklessEngine {
             {
                 // directory-entry name string: no len arg, use a filename-sized buffer.
                 512
+            } else if interface.contains("wasi:filesystem/types")
+                && function == "[method]descriptor.read"
+            {
+                // descriptor.read: list<u8> sized to the requested length
+                // (args = [self, length: i64, offset: i64, retptr]); at least 1 byte so a
+                // zero-length read still gets a guest-owned (empty) list. SR-72.
+                match args.get(1) {
+                    Some(Value::I64(n)) => u32::try_from(*n).unwrap_or(u32::MAX).max(1),
+                    _ => 0,
+                }
+            } else if interface.contains("wasi:filesystem/types")
+                && function == "[method]descriptor.readlink-at"
+            {
+                // readlink-at: string result; a link target never exceeds a path-sized
+                // buffer (the host refuses, rather than truncates, anything longer). SR-72.
+                4096
             } else {
                 0
             };
