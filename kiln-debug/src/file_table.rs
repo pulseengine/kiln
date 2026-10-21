@@ -206,7 +206,10 @@ pub struct FilePath<'a> {
 impl<'a> FilePath<'a> {
     /// Check if this is a relative path
     pub fn is_relative(&self) -> bool {
-        self.directory.is_none() || !self.directory.as_ref().unwrap().as_str().starts_with('/')
+        match self.directory.as_ref() {
+            None => true,
+            Some(directory) => !directory.as_str().starts_with('/'),
+        }
     }
 
     /// Get the filename only (no directory)

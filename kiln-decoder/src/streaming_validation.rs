@@ -314,35 +314,35 @@ impl StreamingValidator {
         }
 
         // Validate known section IDs
-        match section_id {
-            0 => self.add_issue(ValidationIssue::new(
+        let known_section_name = match section_id {
+            1 => Some("Type"),
+            2 => Some("Import"),
+            3 => Some("Function"),
+            4 => Some("Table"),
+            5 => Some("Memory"),
+            6 => Some("Global"),
+            7 => Some("Export"),
+            8 => Some("Start"),
+            9 => Some("Element"),
+            10 => Some("Code"),
+            11 => Some("Data"),
+            12 => Some("DataCount"),
+            _ => None,
+        };
+        match (section_id, known_section_name) {
+            (0, _) => self.add_issue(ValidationIssue::new(
                 ValidationSeverity::Info,
                 offset,
                 "Custom section",
             ))?,
-            1..=12 => {
-                let section_name = match section_id {
-                    1 => "Type",
-                    2 => "Import",
-                    3 => "Function",
-                    4 => "Table",
-                    5 => "Memory",
-                    6 => "Global",
-                    7 => "Export",
-                    8 => "Start",
-                    9 => "Element",
-                    10 => "Code",
-                    11 => "Data",
-                    12 => "DataCount",
-                    _ => unreachable!(),
-                };
+            (_, Some(section_name)) => {
                 self.add_issue(ValidationIssue::new(
                     ValidationSeverity::Info,
                     offset,
                     format!("{} section", section_name),
                 ))?;
             },
-            _ => {
+            (_, None) => {
                 self.add_issue(
                     ValidationIssue::new(
                         ValidationSeverity::Warning,
@@ -522,12 +522,6 @@ impl StreamingValidator {
             validation_passed: self.validation_passed(),
             stats: self.stats.clone(),
         }
-    }
-}
-
-impl Default for StreamingValidator {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default validator")
     }
 }
 
