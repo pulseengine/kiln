@@ -292,7 +292,7 @@ pub extern "C" fn __meld_get_memory_base() -> *mut u8 {
     unsafe extern "C" {
         static __wasm_memory_start: u8;
     }
-    unsafe { &raw const __wasm_memory_start as *mut u8 }
+    &raw const __wasm_memory_start as *mut u8
 }
 
 /// Canonical ABI allocator for linear memory.
@@ -357,7 +357,8 @@ pub extern "C" fn cabi_realloc(
 
 /// Get the current platform, if initialized.
 ///
-/// Used internally by WASI dispatch handlers to access platform callbacks.
+/// Test-only accessor for the registered platform callbacks.
+#[cfg(test)]
 #[inline]
 fn platform() -> Option<&'static Platform> {
     let p = PLATFORM.load(Ordering::Acquire);

@@ -132,7 +132,7 @@ impl MemoryInitializer {
             // OnceLock can only be set once. If it was already set (e.g., after
             // a test called reset()), the existing context remains valid since
             // budgets are compile-time constants. Silently succeed in this case.
-            let _ = GLOBAL_CAPABILITY_CONTEXT.set(context);
+            GLOBAL_CAPABILITY_CONTEXT.set(context).ok();
         }
 
         #[cfg(not(feature = "std"))]
