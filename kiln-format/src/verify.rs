@@ -4,10 +4,11 @@
 //! handling system. These proofs only run with Kani and are isolated from
 //! normal compilation and testing.
 
-// Only compile Kani verification code when documentation is being generated
-// or when explicitly running cargo kani. This prevents interference with
-// coverage testing.
-#[cfg(any(doc, kani))]
+// Only compile Kani verification code when explicitly running cargo kani.
+// It must not be gated on `doc`: rustdoc sets `cfg(doc)` for doctests and
+// `cargo doc`, and these harnesses do not currently compile (stale `state`
+// import), which broke every kiln-format doctest run.
+#[cfg(kani)]
 pub mod kani_verification {
     use crate::{
         binary::*,
@@ -89,5 +90,5 @@ pub mod kani_verification {
 }
 
 // Expose the verification module in docs but not for normal compilation
-#[cfg(any(doc, kani))]
+#[cfg(kani)]
 pub use kani_verification::*;

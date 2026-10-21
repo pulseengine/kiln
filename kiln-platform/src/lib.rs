@@ -598,7 +598,28 @@ mod tests {
 
         // Test that we can detect basic capabilities
         assert!(capabilities.memory.allocation_granularity > 0);
+
+        // Capabilities come from the selected platform feature: a POSIX
+        // platform supports a WebAssembly runtime; with no platform feature the
+        // documented fallback is minimal capabilities, which do not.
+        #[cfg(any(
+            all(feature = "platform-linux", target_os = "linux"),
+            all(feature = "platform-macos", target_os = "macos"),
+            all(feature = "platform-qnx", target_os = "nto")
+        ))]
         assert!(capabilities.supports_wasm_runtime());
+
+        #[cfg(not(any(
+            all(feature = "platform-linux", target_os = "linux"),
+            all(feature = "platform-macos", target_os = "macos"),
+            all(feature = "platform-qnx", target_os = "nto"),
+            feature = "platform-zephyr",
+            feature = "platform-tock"
+        )))]
+        assert!(
+            !capabilities.supports_wasm_runtime(),
+            "no platform feature selected: detection must report minimal capabilities"
+        );
 
         let paradigm = capabilities.recommended_paradigm();
         assert!(paradigm == "SecurityFirst" || paradigm == "RealTime" || paradigm == "Posix");
