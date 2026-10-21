@@ -2,7 +2,6 @@
 
 #[cfg(feature = "std")]
 use kiln_format::ast::*;
-use kiln_foundation::budget_aware_provider::CrateId;
 
 #[cfg(feature = "std")]
 #[test]
@@ -20,14 +19,9 @@ fn test_source_span() {
 #[cfg(feature = "std")]
 #[test]
 fn test_identifier() {
-    use kiln_format::wit_parser::WitBoundedString;
-    use kiln_foundation::{
-        safe_managed_alloc,
-        NoStdProvider,
-    };
+    use kiln_foundation::BoundedString;
 
-    let provider = safe_managed_alloc!(8192, CrateId::Format).unwrap();
-    let name = WitBoundedString::from_str("test", provider).unwrap();
+    let name = BoundedString::<64>::try_from_str("test").unwrap();
     let span = SourceSpan::new(0, 4, 0);
 
     let ident = Identifier::new(name, span);
@@ -74,14 +68,9 @@ fn test_type_expr() {
     assert_eq!(primitive.span(), SourceSpan::empty());
 
     // Test that we can create a named type
-    use kiln_format::wit_parser::WitBoundedString;
-    use kiln_foundation::{
-        safe_managed_alloc,
-        NoStdProvider,
-    };
+    use kiln_foundation::BoundedString;
 
-    let provider = safe_managed_alloc!(8192, CrateId::Format).unwrap();
-    let name = WitBoundedString::from_str("MyType", provider).unwrap();
+    let name = BoundedString::<64>::try_from_str("MyType").unwrap();
     let ident = Identifier::new(name, SourceSpan::new(0, 6, 0));
 
     let named = TypeExpr::Named(NamedType {

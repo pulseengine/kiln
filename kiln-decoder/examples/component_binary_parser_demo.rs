@@ -58,9 +58,9 @@ fn demo_validation_levels() -> Result<()> {
 
     let binary = create_demo_component_binary();
 
-    // Minimal validation
-    let component1 = parse_component_binary_with_validation(&binary, ValidationLevel::Minimal)?;
-    println!("✅ Minimal validation: Success");
+    // Basic validation
+    let component1 = parse_component_binary_with_validation(&binary, ValidationLevel::Basic)?;
+    println!("✅ Basic validation: Success");
 
     // Standard validation (default)
     let component2 = parse_component_binary_with_validation(&binary, ValidationLevel::Standard)?;

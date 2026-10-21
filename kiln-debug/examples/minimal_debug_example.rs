@@ -8,9 +8,6 @@
 //! optional features are disabled. Only basic section registration is
 //! available.
 
-#![no_std]
-#![no_main]
-
 use kiln_debug::prelude::*;
 
 // Example module bytes
@@ -19,8 +16,7 @@ const MODULE_BYTES: &[u8] = &[
     0x01, 0x00, 0x00, 0x00, // version 1
 ];
 
-#[unsafe(no_mangle)]
-pub extern "C" fn minimal_debug_usage() -> bool {
+fn minimal_debug_usage() -> bool {
     // Create debug info parser - returns Result now
     let mut debug_info = match DwarfDebugInfo::new(MODULE_BYTES) {
         Ok(info) => info,
@@ -36,8 +32,7 @@ pub extern "C" fn minimal_debug_usage() -> bool {
 }
 
 /// Example showing conditional compilation based on features
-#[unsafe(no_mangle)]
-pub extern "C" fn conditional_debug_features() -> u32 {
+fn conditional_debug_features() -> u32 {
     let mut debug_info = match DwarfDebugInfo::new(MODULE_BYTES) {
         Ok(info) => info,
         Err(_) => return 0,
@@ -65,4 +60,8 @@ pub extern "C" fn conditional_debug_features() -> u32 {
     feature_count
 }
 
-// Panic handler removed - provided by kiln-platform crate
+fn main() {
+    let has_debug_info = minimal_debug_usage();
+    let feature_count = conditional_debug_features();
+    println!("has_debug_info={has_debug_info} feature_count={feature_count}");
+}

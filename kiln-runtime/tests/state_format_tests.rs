@@ -47,7 +47,7 @@ fn test_basic_serialization() {
     assert!(has_state_sections(&module.custom_sections));
 
     // Find the state section
-    let found = module.find_custom_section(&StateSection::Stack.name);
+    let found = module.find_custom_section(&StateSection::Stack.name());
     assert!(found.is_some());
 
     // Extract the state section data
@@ -74,8 +74,8 @@ fn test_state_section_format() {
         create_state_section(StateSection::Memory, &test_data, CompressionType::None).unwrap();
 
     // Verify section names
-    assert_eq!(section1.name, StateSection::Globals.name);
-    assert_eq!(section2.name, StateSection::Memory.name);
+    assert_eq!(section1.name, StateSection::Globals.name());
+    assert_eq!(section2.name, StateSection::Memory.name());
 
     // Extract and verify data
     let (header1, data1) = extract_state_section(&section1).unwrap();

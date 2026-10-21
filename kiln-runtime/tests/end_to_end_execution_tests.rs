@@ -12,17 +12,18 @@ use kiln_error::{
     codes,
     Error,
     ErrorCategory,
+    Result,
 };
 use kiln_foundation::{
     budget_aware_provider::CrateId,
     safe_managed_alloc,
     values::Value,
-    Result,
 };
 use kiln_runtime::engine::{
     CapabilityAwareEngine,
     CapabilityEngine,
     EnginePreset,
+    ModuleHandle,
 };
 
 /// Simple WebAssembly module that adds two numbers
@@ -79,7 +80,7 @@ fn test_module_loading_pipeline() -> Result<()> {
     let module_handle = engine.load_module(SIMPLE_ADD_WASM)?;
 
     // Verify handle is valid
-    assert!(module_handle.index() > 0);
+    assert_ne!(module_handle, ModuleHandle::default());
 
     Ok(())
 }
@@ -213,7 +214,7 @@ fn test_error_handling() -> Result<()> {
     assert!(result.is_err());
 
     // Test function call on non-existent instance
-    let fake_handle = kiln_runtime::engine::InstanceHandle::new();
+    let fake_handle = kiln_runtime::engine::InstanceHandle::from_index(u32::MAX as usize);
     let result = engine.execute(fake_handle, "test", &[]);
     assert!(result.is_err());
 

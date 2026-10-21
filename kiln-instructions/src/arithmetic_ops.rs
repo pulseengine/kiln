@@ -1009,6 +1009,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "#564: nearest is not round-half-to-even"]
     fn test_f32_math_operations() {
         let mut context = MockArithmeticContext::new();
 

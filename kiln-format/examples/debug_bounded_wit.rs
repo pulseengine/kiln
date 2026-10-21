@@ -19,8 +19,8 @@ fn main() -> Result<(), kiln_error::Error> {
     match parser.parse(input) {
         Ok(()) => {
             println!("✓ Parse completed successfully");
-            println!("Worlds found: {}", parser.world_count);
-            println!("Interfaces found: {}", parser.interface_count);
+            println!("Worlds found: {}", parser.world_count());
+            println!("Interfaces found: {}", parser.interface_count());
 
             for world in parser.worlds() {
                 if let Ok(name) = world.name.as_str() {
@@ -42,7 +42,7 @@ fn main() -> Result<(), kiln_error::Error> {
     match simple_parser.parse(simple) {
         Ok(()) => {
             println!("✓ Simple parse completed");
-            println!("Worlds found: {}", simple_parser.world_count);
+            println!("Worlds found: {}", simple_parser.world_count());
         },
         Err(e) => {
             println!("✗ Simple parse failed: {:?}", e);
