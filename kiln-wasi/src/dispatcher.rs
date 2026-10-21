@@ -2481,8 +2481,7 @@ impl WasiDispatcher {
                         // result<ok=descriptor>: discriminant=0, payload=handle
                         Ok(vec![CoreValue::I32(0), CoreValue::I32(new_handle as i32)])
                     } else {
-                        // error-code::no-entry = 12
-                        Ok(vec![CoreValue::I32(1), CoreValue::I32(12)])
+                        Ok(fs_err(fs_error::NO_ENTRY))
                     }
                 } else {
                     // error-code::bad-descriptor = 3
@@ -2522,10 +2521,7 @@ impl WasiDispatcher {
                                 CoreValue::I64(0), CoreValue::I32(0), // status-change-timestamp
                             ])
                         }
-                        Err(_) => {
-                            // error-code::io = 17
-                            Ok(vec![CoreValue::I32(1), CoreValue::I32(17)])
-                        }
+                        Err(e) => Ok(fs_err(Self::fs_error_code(&e))),
                     }
                 } else {
                     Ok(vec![CoreValue::I32(1), CoreValue::I32(3)]) // bad-descriptor
@@ -2576,7 +2572,7 @@ impl WasiDispatcher {
                                 CoreValue::I64(0), CoreValue::I32(0),
                             ])
                         }
-                        Err(_) => Ok(vec![CoreValue::I32(1), CoreValue::I32(12)]) // no-entry
+                        Err(e) => Ok(fs_err(Self::fs_error_code(&e)))
                     }
                 } else {
                     Ok(vec![CoreValue::I32(1), CoreValue::I32(3)])
@@ -2621,7 +2617,7 @@ impl WasiDispatcher {
                 });
                 let dir_path = match dir_path {
                     Some(p) => p,
-                    None => return Ok(vec![CoreValue::I32(1), CoreValue::I32(8)]), // err::bad-descriptor
+                    None => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
                 };
                 let mut entries: Vec<(u8, String)> = Vec::new();
                 match std::fs::read_dir(&dir_path) {
@@ -2639,7 +2635,7 @@ impl WasiDispatcher {
                             entries.push((tycode, ent.file_name().to_string_lossy().into_owned()));
                         }
                     }
-                    Err(_) => return Ok(vec![CoreValue::I32(1), CoreValue::I32(8)]),
+                    Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
                 }
                 let handle = self.resource_manager.create_input_stream(&format!("dir:{}", fd))?;
                 self.dir_streams.insert(handle, (entries, 0));
@@ -4152,6 +4148,88 @@ mod tests {
             "open-at under the allow-list must succeed, got {:?}",
             ok
         );
+        Ok(())
+    }
+
+    /// The existing filesystem arms must report the `wasi:filesystem/types`
+    /// `error-code` enum indices from the WIT (declaration order): bad-descriptor=3,
+    /// io=13, no-entry=20. They previously used 8 / 17 / 12, which are different codes
+    /// (file-too-large / unknown / invalid).
+    // rivet: verifies SR-72
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    #[serial_test::serial]
+    #[test]
+    fn existing_fs_arms_report_wit_error_code_indices() -> Result<()> {
+        use kiln_foundation::traits::SliceMemory;
+        use kiln_foundation::values::Value as CV;
+        use kiln_foundation::MemoryAccessor as _;
+        MemoryInitializer::ensure_initialized()?;
+
+        let root = sandbox_fixture_dir("wit_error_codes");
+        let sandbox = root.join("sandbox");
+        std::fs::create_dir_all(&sandbox).unwrap();
+        std::fs::write(sandbox.join("gone.txt"), b"x").unwrap();
+
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+        let dir_fd = dispatcher.add_preopen(sandbox.clone())?;
+        let mem = SliceMemory::with_size(0x10000);
+
+        let code = |res: Result<Vec<CV>>| match res.as_deref() {
+            Ok([CV::I32(1), CV::I32(c)]) => Some(*c),
+            _ => None,
+        };
+
+        // open-at / stat-at of a missing entry: no-entry (20).
+        let open_missing = code(core_open_at(&mut dispatcher, &mem, dir_fd, b"missing.txt"));
+        let guest = b"missing.txt";
+        mem.write_bytes(0x1000, guest)?;
+        let stat_at_missing = code(dispatcher.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.stat-at",
+            &[CV::I32(dir_fd as i32), CV::I32(0), CV::I32(0x1000), CV::I32(guest.len() as i32)],
+            Some(&mem),
+        ));
+        // open-at relative to a descriptor that is not a preopen: bad-descriptor (3).
+        let open_bad_fd = code(core_open_at(&mut dispatcher, &mem, 9999, b"x"));
+        // stat of a descriptor whose file vanished: no-entry (20), not a catch-all.
+        let fd = match core_open_at(&mut dispatcher, &mem, dir_fd, b"gone.txt")?.as_slice() {
+            [CV::I32(0), CV::I32(h)] => *h as u32,
+            other => panic!("open-at must succeed, got {:?}", other),
+        };
+        std::fs::remove_file(sandbox.join("gone.txt")).unwrap();
+        let stat_vanished = code(dispatcher.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.stat",
+            &[CV::I32(fd as i32), CV::I32(0x100)],
+            Some(&mem),
+        ));
+        // read-directory on an unknown descriptor: bad-descriptor (3).
+        let readdir_bad = code(dispatcher.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.read-directory",
+            &[CV::I32(9999), CV::I32(0x100)],
+            Some(&mem),
+        ));
+        // read-directory on a path that cannot be listed (a file): not-directory (24).
+        std::fs::write(sandbox.join("plain.txt"), b"x").unwrap();
+        let plain = match core_open_at(&mut dispatcher, &mem, dir_fd, b"plain.txt")?.as_slice() {
+            [CV::I32(0), CV::I32(h)] => *h as u32,
+            other => panic!("open-at must succeed, got {:?}", other),
+        };
+        let readdir_file = code(dispatcher.dispatch_core(
+            "wasi:filesystem/types",
+            "[method]descriptor.read-directory",
+            &[CV::I32(plain as i32), CV::I32(0x100)],
+            Some(&mem),
+        ));
+        std::fs::remove_dir_all(&root).ok();
+
+        assert_eq!(open_missing, Some(20), "open-at missing -> no-entry");
+        assert_eq!(stat_at_missing, Some(20), "stat-at missing -> no-entry");
+        assert_eq!(open_bad_fd, Some(3), "open-at bad dir fd -> bad-descriptor");
+        assert_eq!(stat_vanished, Some(20), "stat of vanished file -> no-entry");
+        assert_eq!(readdir_bad, Some(3), "read-directory bad fd -> bad-descriptor");
+        assert_eq!(readdir_file, Some(24), "read-directory on a file -> not-directory");
         Ok(())
     }
 
