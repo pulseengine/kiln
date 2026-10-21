@@ -3136,6 +3136,10 @@ impl WasiDispatcher {
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
             ("wasi:filesystem/types", "[resource-drop]directory-entry-stream") => {
+                // Release the directory snapshot and the stream's resource-table slot.
+                let handle = Self::core_u32(args, 0, "resource-drop: missing stream")?;
+                self.dir_streams.remove(&handle);
+                drop(self.resource_manager.remove_resource(handle));
                 Ok(vec![])
             }
 
@@ -4781,6 +4785,62 @@ mod tests {
             assert_eq!(err_code(&read), Some(BAD_DESCRIPTOR));
             assert!(preopen_kept, "a preopen entry must never be removed");
             assert!(is_ok(&reopen), "got {:?}", reopen);
+            Ok(())
+        }
+
+        /// Dropping a directory-entry-stream removes its snapshot and frees its
+        /// resource slot, so repeated read-directory calls cannot exhaust the table.
+        // rivet: verifies SR-72
+        #[serial_test::serial]
+        #[test]
+        fn directory_entry_stream_drop_releases_state_and_slot() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_drop_dirstream");
+            std::fs::write(sandbox.join("a.txt"), b"a").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let read_dir = |d: &mut WasiDispatcher| {
+                call(d, &mem, "[method]descriptor.read-directory", &[CV::I32(dir as i32), CV::I32(0x100)])
+            };
+            let stream = match read_dir(&mut d)?.as_slice() {
+                [CV::I32(0), CV::I32(h)] => *h as u32,
+                other => panic!("read-directory must succeed, got {:?}", other),
+            };
+            assert!(d.dir_streams.contains_key(&stream));
+            let before = d.resource_manager.resource_count();
+
+            d.dispatch_core(
+                FS,
+                "[resource-drop]directory-entry-stream",
+                &[CV::I32(stream as i32)],
+                Some(&mem),
+            )?;
+            let state_gone = !d.dir_streams.contains_key(&stream);
+            let after = d.resource_manager.resource_count();
+
+            // Cycle far past the 256-slot cap: only possible if drops free slots.
+            let mut all_ok = true;
+            for _ in 0..600 {
+                match read_dir(&mut d) {
+                    Ok(v) => match v.as_slice() {
+                        [CV::I32(0), CV::I32(h)] => {
+                            d.dispatch_core(
+                                FS,
+                                "[resource-drop]directory-entry-stream",
+                                &[CV::I32(*h)],
+                                Some(&mem),
+                            )?;
+                        },
+                        _ => all_ok = false,
+                    },
+                    Err(_) => all_ok = false,
+                }
+            }
+            std::fs::remove_dir_all(&root).ok();
+            assert!(state_gone, "dir_streams entry must be removed");
+            assert_eq!(after, before - 1, "the resource slot must be freed");
+            assert!(all_ok, "read-directory/drop cycles must never exhaust the table");
             Ok(())
         }
 
