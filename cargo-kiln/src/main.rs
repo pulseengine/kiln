@@ -32,7 +32,7 @@ mod test_config;
 #[cfg(test)]
 mod testing;
 
-use commands::{TestValidateArgs, cmd_embed_limits, execute_test_validate};
+use commands::{TestValidateArgs, VexArgs, cmd_embed_limits, cmd_vex, execute_test_validate};
 use helpers::{
     AutoFixManager, GlobalArgs, OutputManager, TestConfig, output_diagnostics, run_asil_tests,
     run_no_std_tests,
@@ -655,6 +655,9 @@ enum Commands {
         #[arg(long = "replace")]
         replace: bool,
     },
+
+    /// Generate a CycloneDX VEX document for the released binaries (SR-69)
+    Vex(VexArgs),
 
     /// Show comprehensive diagnostic system help
     #[command(name = "help-diagnostics", hide = true)]
@@ -1542,6 +1545,7 @@ async fn main() -> Result<()> {
             };
             cmd_embed_limits(args, &global.output)
         },
+        Commands::Vex(args) => cmd_vex(args.clone(), &global.output),
         Commands::HelpDiagnostics => {
             print_diagnostic_help();
             Ok(())

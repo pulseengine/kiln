@@ -1,0 +1,226 @@
+name: VEX re-issue
+
+# SR-69: a release's CycloneDX VEX is re-issued when a new RustSec advisory
+# matches a shipped release. Daily, this workflow regenerates the VEX for the
+# LATEST release tag — that tag's Cargo.lock and SBOM, today's advisory
+# database, the generator from main — and compares the set of
+# (advisory, state) pairs with the VEX published on the release. If it
+# differs (or the release has no VEX yet) it opens ONE issue carrying the new
+# VEX. It never modifies release assets and never signs anything: a human
+# decides whether to publish a re-issued VEX (and re-sign the sums).
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vex-reissue
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_AUDIT_VERSION: "0.22.1"
+  CYCLONEDX_CLI_VERSION: v0.33.1
+  CYCLONEDX_CLI_SHA256: bfc8b2538da86fe239bc53658bbb63c1c8c510a293c1e6891aa5bea5d3c58746
+
+jobs:
+  reissue:
+    name: Re-issue VEX for the latest release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Find the latest release tag
+        id: latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::latest release tag '$TAG' is not vX.Y.Z"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      # The generator comes from main: older tags predate `cargo-kiln vex`.
+      - uses: actions/checkout@v7
+        with:
+          path: tool
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.latest.outputs.tag }}
+          path: release-src
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit --version "$CARGO_AUDIT_VERSION"
+
+      - name: Build the generator (cargo-kiln from main)
+        working-directory: tool
+        run: cargo build --release -p cargo-kiln
+
+      - name: Download the release SBOM and published VEX
+        id: assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.latest.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BARE="${TAG#v}"
+          mkdir -p published
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "kiln-${BARE}.cdx.json" --dir published
+          test -f "published/kiln-${BARE}.cdx.json"
+          # The VEX asset is optional only for releases cut before SR-69.
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' > asset-names.txt
+          if grep -qx "kiln-${BARE}.vex.cdx.json" asset-names.txt; then
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern "kiln-${BARE}.vex.cdx.json" --dir published
+            echo "has_published_vex=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_published_vex=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Regenerate the VEX against the tag's Cargo.lock
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BARE="${TAG#v}"
+          TARGET_ARGS=()
+          while read -r TARGET; do
+            TARGET_ARGS+=(--target "$TARGET")
+          done < <(grep -E '^ +- target: ' release-src/.github/workflows/release.yml | sed 's/^ *- target: //')
+          test "${#TARGET_ARGS[@]}" -gt 0
+          mkdir -p out
+          cd release-src
+          ../tool/target/release/cargo-kiln vex \
+            --sbom "../published/kiln-${BARE}.cdx.json" \
+            --out "../out/kiln-${BARE}.vex.cdx.json" \
+            "${TARGET_ARGS[@]}"
+
+      - name: Validate the VEX against the CycloneDX schema
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BARE="${TAG#v}"
+          SPEC="$(jq -r '.specVersion' "out/kiln-${BARE}.vex.cdx.json")"
+          curl --fail --silent --show-error --location \
+            --output cyclonedx-cli \
+            "https://github.com/CycloneDX/cyclonedx-cli/releases/download/${CYCLONEDX_CLI_VERSION}/cyclonedx-linux-x64"
+          echo "${CYCLONEDX_CLI_SHA256}  cyclonedx-cli" | sha256sum --check -
+          chmod +x cyclonedx-cli
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./cyclonedx-cli validate \
+            --input-file "out/kiln-${BARE}.vex.cdx.json" \
+            --input-format json \
+            --input-version "v${SPEC//./_}" \
+            --fail-on-errors
+
+      - name: Compare (advisory, state) with the published VEX
+        id: compare
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+          HAS_PUBLISHED_VEX: ${{ steps.assets.outputs.has_published_vex }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BARE="${TAG#v}"
+          PAIRS='[.vulnerabilities[] | "\(.id) \(.analysis.state)"] | sort | unique | .[]'
+          jq -r "$PAIRS" "out/kiln-${BARE}.vex.cdx.json" > new-pairs.txt
+          if [ "$HAS_PUBLISHED_VEX" = "true" ]; then
+            jq -r "$PAIRS" "published/kiln-${BARE}.vex.cdx.json" > old-pairs.txt
+          else
+            : > old-pairs.txt
+          fi
+          if diff -u old-pairs.txt new-pairs.txt > pairs.diff; then
+            echo "::notice::VEX for $TAG is up to date"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            cat pairs.diff
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "fingerprint=$(sha256sum new-pairs.txt | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the regenerated VEX
+        if: steps.compare.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: vex-reissue-${{ steps.latest.outputs.tag }}
+          path: out/
+          retention-days: 90
+
+      # One issue per distinct (advisory, state) set: the fingerprint is
+      # stored in the issue body and searched across open AND closed issues,
+      # so a closed issue is not reopened daily.
+      - name: Open an issue with the new VEX
+        if: steps.compare.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.latest.outputs.tag }}
+          FINGERPRINT: ${{ steps.compare.outputs.fingerprint }}
+          HAS_PUBLISHED_VEX: ${{ steps.assets.outputs.has_published_vex }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BARE="${TAG#v}"
+          gh label create vex-reissue --repo "$GITHUB_REPOSITORY" \
+            --color B60205 --description "SR-69: VEX needs re-issue" --force
+          gh issue list --repo "$GITHUB_REPOSITORY" --label vex-reissue --state all \
+            --limit 200 --json body --jq '.[].body' > existing-bodies.txt
+          if grep -qF "vex-fingerprint: ${FINGERPRINT}" existing-bodies.txt; then
+            echo "::notice::an issue for this (advisory, state) set already exists"
+            exit 0
+          fi
+          {
+            echo "The advisory analysis of **${TAG}** no longer matches its published VEX."
+            if [ "$HAS_PUBLISHED_VEX" != "true" ]; then
+              echo
+              echo "The release carries no \`kiln-${BARE}.vex.cdx.json\` (it predates SR-69)."
+            fi
+            echo
+            echo "Advisories and states now (\`cargo audit\` against ${TAG}'s Cargo.lock):"
+            echo
+            echo '```'
+            cat new-pairs.txt
+            echo '```'
+            echo
+            echo "Diff against the published VEX:"
+            echo
+            echo '```diff'
+            cat pairs.diff
+            echo '```'
+            echo
+            echo "Regenerated, schema-validated VEX: artifact \`vex-reissue-${TAG}\` of ${RUN_URL}."
+            echo "Nothing was published or signed. To re-issue, a maintainer reviews the VEX,"
+            echo "uploads it to the release, and re-signs \`SHA256SUMS.txt\`."
+            echo
+            echo "<details><summary>VEX JSON</summary>"
+            echo
+            echo '```json'
+            cat "out/kiln-${BARE}.vex.cdx.json"
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+            echo "<!-- vex-fingerprint: ${FINGERPRINT} -->"
+          } > issue-body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "VEX re-issue needed for ${TAG}" \
+            --label vex-reissue \
+            --body-file issue-body.md
