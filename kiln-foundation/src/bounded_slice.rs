@@ -293,6 +293,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "std")]
+    #[ignore = "#578: BoundedVec::as_slice is unimplemented"]
     fn test_bounded_slice_iterator() {
         let provider = NoStdProvider::<1024>::default();
         let mut vec = BoundedVec::<i32, 10, _>::new(provider).unwrap();

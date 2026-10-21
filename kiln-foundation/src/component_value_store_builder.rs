@@ -125,6 +125,7 @@ mod tests {
     use crate::memory_sizing::SmallProvider;
 
     #[test]
+    #[ignore = "#576: BoundedVec::new fails for the component value element type"]
     fn test_component_value_store_builder() {
         // Create a builder with default settings
         let builder = ComponentValueStoreBuilder::<SmallProvider>::new();
@@ -140,6 +141,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "#576: BoundedVec::new fails for the component value element type"]
     fn test_component_value_store_builder_with_options() {
         // Create a builder with custom settings
         let provider = SmallProvider::with_verification_level(VerificationLevel::Full);

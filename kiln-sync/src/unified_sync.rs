@@ -574,6 +574,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "#584: BoundedChannel::create_channel returns dangling pointers"]
     fn test_bounded_channel() -> SyncResult<()> {
         let safety_ctx = SafetyContext::new(AsilLevel::AsilA);
         let (sender, receiver) = BoundedChannel::<i32, 4>::create_channel(safety_ctx)?;

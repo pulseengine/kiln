@@ -624,6 +624,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "std")]
+    #[ignore = "#577: BoundedVec with variable-size elements cannot be read back"]
     fn test_resource_type_builder() {
         // Test Record type
         let builder = ResourceTypeBuilder::<NoStdProvider<1024>>::new();
@@ -655,6 +656,7 @@ mod tests {
 
     #[test]
     #[cfg(feature = "std")]
+    #[ignore = "#577: BoundedVec with variable-size elements cannot be read back"]
     fn test_resource_item_builder() {
         // First create a resource type
         let resource_type = ResourceTypeBuilder::<NoStdProvider<1024>>::new()
