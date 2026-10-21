@@ -125,7 +125,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --user ziglang==0.14.1
-          cargo install cargo-zigbuild --version 0.20.1 --locked
+          cargo install cargo-zigbuild --version 0.23.4 --locked
           echo "$(python3 -m site --user-base)/bin" >> "$GITHUB_PATH"
 
       - name: Install qemu-user (musl aarch64 only)
