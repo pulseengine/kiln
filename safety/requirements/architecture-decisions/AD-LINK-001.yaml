@@ -3,7 +3,7 @@ artifacts:
   - id: AD-LINK-001
     type: design-decision
     title: One table of served WASI imports drives both dispatch and the link-time import check
-    status: proposed
+    status: implemented
     release: v0.7.0
     description: "Maintainer decision 2026-10-15/16. SR-65 requires instantiation to refuse imports that nothing can serve. WASI imports are served by WasiDispatcher::dispatch_core (kiln-wasi/src/dispatcher.rs), a large match on (interface, function) with cfg-gated arms whose fallthrough returns 'Unknown WASI function' only at call time. DECISION: a single const table of (interface, function) entries, under the same cfg gates as the dispatch arms, is the source of truth; dispatch_core dispatches through it and HostImportHandler gains a resolves(module, function) query backed by the same table; instantiation checks every import against host handler resolves(), registered host functions and linked modules, and refuses listing every unresolved module::name before running anything. An agreement test fails if any table entry does not dispatch or any dispatch arm is missing from the table."
     tags: [linking, instantiation, wasi, single-source, issue-527]
