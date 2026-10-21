@@ -52,6 +52,11 @@ pub struct Import {
     pub value: ExternValue,
 }
 
+// `Default` is required by the `BoundedVec` element bound and cannot return an error.
+#[allow(
+    clippy::expect_used,
+    reason = "Default is a BoundedVec element bound and cannot return Result; a unit component type on a fixed-size provider has no failure path"
+)]
 impl Default for Import {
     fn default() -> Self {
         #[cfg(feature = "std")]
@@ -140,25 +145,27 @@ impl FromBytes for Import {
 
 impl Import {
     /// Creates a new import
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the unit component type cannot be created.
     pub fn new(
         namespace: Namespace<ComponentProvider>,
         name: String,
         ty: ExternType,
         value: ExternValue,
-    ) -> Self {
+    ) -> Result<Self> {
         use kiln_foundation::safe_memory::NoStdProvider;
         // Default import type based on ExternType - this is a simplified mapping
-        let import_type = ImportType::Function(
-            KilnComponentType::unit(NoStdProvider::<4096>::default())
-                .expect("Failed to create unit component type"),
-        );
-        Self {
+        let import_type =
+            ImportType::Function(KilnComponentType::unit(NoStdProvider::<4096>::default())?);
+        Ok(Self {
             namespace,
             name,
             import_type,
             ty,
             value,
-        }
+        })
     }
 
     /// Creates a new import with explicit import type
@@ -216,7 +223,7 @@ impl Import {
         value: ExternValue,
     ) -> Result<Self> {
         let format_type = bidirectional::runtime_to_format_extern_type(&ty)?;
-        Ok(Self::new(namespace, name, format_type, value))
+        Self::new(namespace, name, format_type, value)
     }
 }
 

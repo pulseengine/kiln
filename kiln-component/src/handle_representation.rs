@@ -254,7 +254,7 @@ impl HandleRepresentationManager {
             representations: BoundedMap::new(),
             metadata: BoundedMap::new(),
             access_policies: { BoundedVec::new().unwrap() },
-            type_registry: GenerativeTypeRegistry::new(),
+            type_registry: GenerativeTypeRegistry::new()?,
             bounds_checker: TypeBoundsChecker::new()?,
             virt_manager: None,
             next_handle_id: AtomicU32::new(1),
@@ -614,7 +614,7 @@ impl HandleRepresentationManager {
                 let expected_type_id = crate::types::TypeId(expected_type);
                 let is_subtype = self.bounds_checker.check_subtype(type_id, expected_type_id);
                 if is_subtype != crate::type_bounds::RelationResult::Satisfied {
-                    return Err(HandleRepresentationError {
+                    Err(HandleRepresentationError {
                         kind: HandleRepresentationErrorKind::TypeMismatch,
                         message: {
                             #[cfg(feature = "std")]
@@ -650,7 +650,7 @@ impl HandleRepresentationManager {
         if representation.component_id != component_id
             && !self.has_shared_access(component_id, handle)
         {
-            return Err(HandleRepresentationError {
+            Err(HandleRepresentationError {
                 kind: HandleRepresentationErrorKind::AccessDenied,
                 message: {
                     #[cfg(feature = "std")]
@@ -670,7 +670,7 @@ impl HandleRepresentationManager {
         match operation {
             HandleOperation::Read { .. } => {
                 if !representation.access_rights.can_read {
-                    return Err(HandleRepresentationError {
+                    Err(HandleRepresentationError {
                         kind: HandleRepresentationErrorKind::AccessDenied,
                         message: {
                             #[cfg(feature = "std")]
@@ -688,7 +688,7 @@ impl HandleRepresentationManager {
             },
             HandleOperation::Write { .. } => {
                 if !representation.access_rights.can_write {
-                    return Err(HandleRepresentationError {
+                    Err(HandleRepresentationError {
                         kind: HandleRepresentationErrorKind::AccessDenied,
                         message: {
                             #[cfg(feature = "std")]
@@ -706,7 +706,7 @@ impl HandleRepresentationManager {
             },
             HandleOperation::Drop => {
                 if !representation.access_rights.can_drop {
-                    return Err(HandleRepresentationError {
+                    Err(HandleRepresentationError {
                         kind: HandleRepresentationErrorKind::AccessDenied,
                         message: {
                             #[cfg(feature = "std")]
@@ -724,7 +724,7 @@ impl HandleRepresentationManager {
             },
             HandleOperation::Share { .. } => {
                 if !representation.access_rights.can_share {
-                    return Err(HandleRepresentationError {
+                    Err(HandleRepresentationError {
                         kind: HandleRepresentationErrorKind::AccessDenied,
                         message: {
                             #[cfg(feature = "std")]
@@ -742,7 +742,7 @@ impl HandleRepresentationManager {
             },
             HandleOperation::Borrow { .. } => {
                 if !representation.access_rights.can_borrow {
-                    return Err(HandleRepresentationError {
+                    Err(HandleRepresentationError {
                         kind: HandleRepresentationErrorKind::AccessDenied,
                         message: {
                             #[cfg(feature = "std")]
@@ -816,7 +816,7 @@ impl HandleRepresentationManager {
                 });
 
                 if !operation_allowed {
-                    return Err(HandleRepresentationError {
+                    Err(HandleRepresentationError {
                         kind: HandleRepresentationErrorKind::OperationNotSupported,
                         message: {
                             #[cfg(feature = "std")]
@@ -950,12 +950,6 @@ impl HandleRepresentationManager {
         {
             0
         }
-    }
-}
-
-impl Default for HandleRepresentationManager {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default HandleRepresentationManager")
     }
 }
 

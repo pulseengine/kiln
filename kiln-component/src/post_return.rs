@@ -912,7 +912,7 @@ impl PostReturnRegistry {
             if let Some(pending) = self.pending_cleanups.get(&instance_id) {
                 all_tasks.extend(pending.iter().cloned());
             }
-            all_tasks.sort_by(|a, b| b.priority.cmp(&a.priority));
+            all_tasks.sort_by_key(|task| core::cmp::Reverse(task.priority));
         }
         #[cfg(not(any(feature = "std",)))]
         {
@@ -1385,11 +1385,5 @@ pub mod helpers {
                 parameters: param_vec,
             },
         })
-    }
-}
-
-impl Default for PostReturnRegistry {
-    fn default() -> Self {
-        Self::new(1024).expect("Failed to allocate memory for PostReturnRegistry")
     }
 }

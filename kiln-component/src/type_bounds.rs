@@ -564,12 +564,6 @@ impl TypeBoundsChecker {
     }
 }
 
-impl Default for TypeBoundsChecker {
-    fn default() -> Self {
-        Self::new().expect("Failed to allocate memory for TypeBoundsChecker")
-    }
-}
-
 impl fmt::Display for RelationResult {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

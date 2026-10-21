@@ -297,14 +297,8 @@ impl ResourceTable {
     }
 }
 
-impl Default for ResourceTable {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default ResourceTable")
-    }
-}
-
 // Apply traits to the main types
 impl_basic_traits!(Resource, Resource::new(0, 0));
-impl_basic_traits!(ResourceTable, ResourceTable::new().unwrap());
+impl_basic_traits!(ResourceTable, ResourceTable::new()?);
 impl_basic_traits!(MemoryStrategy, MemoryStrategy::default());
 impl_basic_traits!(VerificationLevel, VerificationLevel::default());

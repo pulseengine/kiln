@@ -1,8 +1,14 @@
 #[cfg(not(feature = "std"))]
-use alloc::{collections::BTreeMap, vec::Vec};
+use alloc::{
+    collections::{BTreeMap, btree_map::Entry},
+    vec::Vec,
+};
 use core::sync::atomic::{AtomicU32, Ordering};
 #[cfg(feature = "std")]
-use std::{collections::BTreeMap, vec::Vec};
+use std::{
+    collections::{BTreeMap, btree_map::Entry},
+    vec::Vec,
+};
 
 use kiln_foundation::{
     bounded::{BoundedVec, MAX_GENERATIVE_TYPES},
@@ -139,14 +145,14 @@ pub struct GenerativeTypeRegistry {
 }
 
 impl GenerativeTypeRegistry {
-    pub fn new() -> Self {
-        Self {
+    pub fn new() -> core::result::Result<Self, ComponentError> {
+        Ok(Self {
             next_type_id: AtomicU32::new(1),
             instance_types: BTreeMap::new(),
             type_bounds: BTreeMap::new(),
             resource_mappings: BTreeMap::new(),
-            bounds_checker: TypeBoundsChecker::new().expect("Failed to create TypeBoundsChecker"),
-        }
+            bounds_checker: TypeBoundsChecker::new()?,
+        })
     }
 
     pub fn create_generative_type(
@@ -163,11 +169,16 @@ impl GenerativeTypeRegistry {
             generation: 0,
         };
 
-        let instance_types = self.instance_types.entry(instance_id).or_insert_with(|| {
-            let provider = safe_managed_alloc!(65536, CrateId::Component)
-                .expect("Failed to allocate memory for instance types");
-            BoundedVec::new(provider).expect("Failed to create BoundedVec")
-        });
+        let instance_types = match self.instance_types.entry(instance_id) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let provider = safe_managed_alloc!(65536, CrateId::Component)
+                    .map_err(|_| ComponentError::AllocationFailed)?;
+                let types =
+                    BoundedVec::new(provider).map_err(|_| ComponentError::AllocationFailed)?;
+                entry.insert(types)
+            },
+        };
 
         instance_types
             .push(generative_type.clone())
@@ -197,11 +208,16 @@ impl GenerativeTypeRegistry {
         type_id: TypeId,
         bound: TypeBound,
     ) -> core::result::Result<(), ComponentError> {
-        let bounds = self.type_bounds.entry(type_id).or_insert_with(|| {
-            let provider = safe_managed_alloc!(65536, CrateId::Component)
-                .expect("Failed to allocate memory for type bounds");
-            BoundedVec::new(provider).expect("Failed to create BoundedVec")
-        });
+        let bounds = match self.type_bounds.entry(type_id) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => {
+                let provider = safe_managed_alloc!(65536, CrateId::Component)
+                    .map_err(|_| ComponentError::AllocationFailed)?;
+                let new_bounds =
+                    BoundedVec::new(provider).map_err(|_| ComponentError::AllocationFailed)?;
+                entry.insert(new_bounds)
+            },
+        };
 
         bounds.push(bound.clone()).map_err(|_| ComponentError::TooManyTypeBounds)?;
 
@@ -386,8 +402,3 @@ impl GenerativeTypeRegistry {
     }
 }
 
-impl Default for GenerativeTypeRegistry {
-    fn default() -> Self {
-        Self::new()
-    }
-}

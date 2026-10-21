@@ -335,18 +335,16 @@ pub struct RuntimeInstance {
     verification_level: VerificationLevel,
 }
 
-impl Default for RuntimeInstance {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl RuntimeInstance {
     /// Creates a new runtime instance
-    pub fn new() -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the component's resource table cannot be allocated.
+    pub fn new() -> Result<Self> {
+        Ok(Self {
             id: 0,
-            component: Component::new(KilnComponentType::default()),
+            component: Component::new(KilnComponentType::default())?,
             state: crate::types::ComponentInstanceState::Initialized,
             resource_manager: None,
             memory: None,
@@ -380,7 +378,7 @@ impl RuntimeInstance {
             globals: HashMap::new(),
             module_instance: None,
             verification_level: VerificationLevel::Standard,
-        }
+        })
     }
 
     /// Register an exported function
@@ -562,11 +560,6 @@ impl RuntimeInstance {
 #[derive(Debug)]
 struct ModuleInstance {
     // Implementation details would go here
-}
-
-/// Helper function to convert FormatValType to ValueType
-fn convert_to_valuetype(val_type_pair: &(String, FormatValType)) -> ValueType {
-    format_val_type_to_value_type(&val_type_pair.1).expect("Failed to convert format value type")
 }
 
 /// Represents an external value
@@ -892,8 +885,12 @@ impl Host {
 
 impl Component {
     /// Creates a new component with the given type
-    pub fn new(component_type: KilnComponentType) -> Self {
-        Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the component's resource table cannot be allocated.
+    pub fn new(component_type: KilnComponentType) -> Result<Self> {
+        Ok(Self {
             id: None,
             component_type,
             types: Vec::new(),
@@ -905,11 +902,11 @@ impl Component {
             callback_registry: None,
             runtime: None,
             interceptor: None,
-            resource_table: ResourceTable::new().expect("Failed to create resource table"),
+            resource_table: ResourceTable::new()?,
             built_in_requirements: None,
             original_binary: None,
             verification_level: kiln_foundation::verification::VerificationLevel::Standard,
-        }
+        })
     }
 
     /// Add a function export to the component

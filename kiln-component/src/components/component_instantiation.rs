@@ -1650,7 +1650,6 @@ impl ComponentInstance {
                                         if let Err(e) = engine
                                             .remap_import_links(module_handle, instance_handle)
                                         {
-                                        } else {
                                         }
 
                                         // Register canon-lowered functions for this instance.
@@ -2113,7 +2112,7 @@ impl ComponentInstance {
         // Build minimal runtime component
         // In future: this will hold the actual converted data
         let component_type = crate::components::component::KilnComponentType::default();
-        let mut runtime_component = RuntimeComponent::new(component_type);
+        let mut runtime_component = RuntimeComponent::new(component_type)?;
 
         // Store module binaries in runtime component
         runtime_component.modules = module_binaries;
@@ -2154,8 +2153,6 @@ impl ComponentInstance {
                         let h = InstanceHandle::from_index(idx as usize);
                         for ep in &core_entry_points_for_nested {
                             let has = nested_engine.has_function(h, ep).unwrap_or(false);
-                            if has {
-                            }
                             if has {
                                 if let Some(ne) = nested.instance.runtime_engine.take() {
                                     nested_engine_for_start = Some((ne, h));
@@ -2812,16 +2809,12 @@ impl ComponentInstance {
                     ExternType::Type(bounds) => {
                     },
                 }
-            } else {
             }
 
             // Show additional metadata
-            if export.name.is_resource {
-            }
             if let Some(ref semver) = export.name.semver {
             }
             if let Some(ref integrity) = export.name.integrity {
-            } else {
             }
         }
 
@@ -2884,7 +2877,6 @@ impl ComponentInstance {
 
             // Show package reference if present
             if let Some(ref pkg) = import.name.package {
-            } else {
             }
         }
 
@@ -2984,11 +2976,11 @@ impl ComponentInstance {
                 },
                 Sort::Instance => {
                     // Instance export - use placeholder value
-                    ExportValue::Value(crate::types::Value::Bool(false).into())
+                    ExportValue::Value(crate::types::Value::Bool(false).try_into()?)
                 },
                 _ => {
                     // Other sorts - use placeholder value
-                    ExportValue::Value(crate::types::Value::Bool(false).into())
+                    ExportValue::Value(crate::types::Value::Bool(false).try_into()?)
                 },
             };
 
@@ -3505,94 +3497,15 @@ impl ComponentInstance {
 
             // Display module details
 
-            let func_imports = module_info
-                .imports
-                .iter()
-                .filter(|i| matches!(i.import_type, kiln_decoder::ImportType::Function(_)))
-                .count();
-            let memory_imports = module_info
-                .imports
-                .iter()
-                .filter(|i| matches!(i.import_type, kiln_decoder::ImportType::Memory))
-                .count();
-            let table_imports = module_info
-                .imports
-                .iter()
-                .filter(|i| matches!(i.import_type, kiln_decoder::ImportType::Table))
-                .count();
-            let global_imports = module_info
-                .imports
-                .iter()
-                .filter(|i| matches!(i.import_type, kiln_decoder::ImportType::Global))
-                .count();
-
-            if func_imports > 0 {
-            }
-            if memory_imports > 0 {
-            }
-            if table_imports > 0 {
-            }
-            if global_imports > 0 {
-            }
-
-            let func_exports = module_info
-                .exports
-                .iter()
-                .filter(|e| matches!(e.export_type, kiln_decoder::ExportType::Function))
-                .count();
-            let memory_exports = module_info
-                .exports
-                .iter()
-                .filter(|e| matches!(e.export_type, kiln_decoder::ExportType::Memory))
-                .count();
-            let table_exports = module_info
-                .exports
-                .iter()
-                .filter(|e| matches!(e.export_type, kiln_decoder::ExportType::Table))
-                .count();
-            let global_exports = module_info
-                .exports
-                .iter()
-                .filter(|e| matches!(e.export_type, kiln_decoder::ExportType::Global))
-                .count();
-
-            if func_exports > 0 {
-            }
-            if memory_exports > 0 {
-            }
-            if table_exports > 0 {
-            }
-            if global_exports > 0 {
-            }
-
             // Show memory requirements if present
             if let Some((min_pages, max_pages)) = module_info.memory_pages {
                 print!("    ├─ Memory: {} pages", min_pages);
                 if let Some(max) = max_pages {
-                } else {
                 }
             }
 
             // Show start function if present
             if let Some(start_idx) = module_info.start_function {
-            } else {
-            }
-
-            // Show a few key exports
-            if !module_info.exports.is_empty() {
-                for (eidx, export) in module_info.exports.iter().take(3).enumerate() {
-                    let export_type = match &export.export_type {
-                        kiln_decoder::ExportType::Function => "Function",
-                        kiln_decoder::ExportType::Table => "Table",
-                        kiln_decoder::ExportType::Memory => "Memory",
-                        kiln_decoder::ExportType::Global => "Global",
-                    };
-                    if eidx < 2 {
-                    } else {
-                    }
-                }
-                if module_info.exports.len() > 3 {
-                }
             }
 
             // Instantiate the module using kiln-runtime
@@ -3638,75 +3551,37 @@ impl ComponentInstance {
     fn instantiate_core_modules_parallel(
         module_binaries: &[Vec<u8>],
     ) -> Result<Vec<kiln_runtime::module::Module>> {
-        use std::sync::{Arc, Mutex};
-        use std::time::Instant;
-
-        let start_time = Instant::now();
-
-        // Shared results vector protected by Mutex
-        let results: Arc<Mutex<Vec<Option<kiln_runtime::module::Module>>>> =
-            Arc::new(Mutex::new(vec![None; module_binaries.len()]));
-
-        // Shared error tracking
-        let errors: Arc<Mutex<Vec<(usize, String)>>> = Arc::new(Mutex::new(Vec::new()));
-
-
-        // Use scoped threads to safely borrow module_binaries
+        // Use scoped threads to safely borrow module_binaries; each thread returns
+        // its own result so no shared state (and no lock) is needed.
         std::thread::scope(|scope| {
-            let mut handles = Vec::new();
+            let handles: Vec<_> = module_binaries
+                .iter()
+                .enumerate()
+                .map(|(idx, binary)| {
+                    scope.spawn(move || Self::instantiate_single_module(idx, binary))
+                })
+                .collect();
 
-            for (idx, binary) in module_binaries.iter().enumerate() {
-                let results = Arc::clone(&results);
-                let errors = Arc::clone(&errors);
-
-                let handle = scope.spawn(move || {
-                    let thread_start = Instant::now();
-
-                    // Parse and instantiate the module
-                    match Self::instantiate_single_module(idx, binary) {
-                        Ok(module) => {
-                            let elapsed = thread_start.elapsed();
-
-                            // Store result
-                            let mut results_guard = results.lock().unwrap();
-                            results_guard[idx] = Some(module);
-                        },
-                        Err(e) => {
-                            let mut errors_guard = errors.lock().unwrap();
-                            errors_guard.push((idx, format!("{}", e)));
-                        },
-                    }
-                });
-
-                handles.push(handle);
-            }
-
-            // Wait for all threads to complete
+            // Wait for all threads to complete, preserving module order
+            let mut instantiated_modules = Vec::with_capacity(handles.len());
+            let mut any_failed = false;
             for handle in handles {
-                let _ = handle.join();
+                match handle.join() {
+                    Ok(Ok(module)) => instantiated_modules.push(module),
+                    Ok(Err(_)) | Err(_) => any_failed = true,
+                }
             }
-        });
 
-        let total_elapsed = start_time.elapsed();
-
-        // Check for errors
-        let errors_guard = errors.lock().unwrap();
-        if !errors_guard.is_empty() {
-            for (idx, err) in errors_guard.iter() {
+            if any_failed {
+                return Err(Error::new(
+                    kiln_error::ErrorCategory::RuntimeTrap,
+                    kiln_error::codes::RUNTIME_ERROR,
+                    "One or more modules failed to instantiate",
+                ));
             }
-            return Err(Error::new(
-                kiln_error::ErrorCategory::RuntimeTrap,
-                kiln_error::codes::RUNTIME_ERROR,
-                "One or more modules failed to instantiate",
-            ));
-        }
 
-        // Collect successful results
-        let results_guard = results.lock().unwrap();
-        let instantiated_modules: Vec<kiln_runtime::module::Module> =
-            results_guard.iter().filter_map(|opt| opt.as_ref().cloned()).collect();
-
-        Ok(instantiated_modules)
+            Ok(instantiated_modules)
+        })
     }
 
     /// Instantiate a single module (helper for parallel processing)
@@ -3790,7 +3665,6 @@ impl ComponentInstance {
 
                     export_map.insert(name_str.to_string(), idx);
                 }
-            } else {
             }
         }
 
@@ -3810,7 +3684,6 @@ impl ComponentInstance {
                 if import_count > 0 {
                     host_imports[idx].push(format!("({}  imports)", import_count));
                 }
-            } else {
             }
         }
 
@@ -3922,7 +3795,6 @@ impl ComponentInstance {
             if let Some(start_idx) = module.start {
                 total_start_functions += 1;
                 execution_plan.push((idx, "_start".to_string(), start_idx, true));
-            } else {
             }
 
             // Count exported functions
@@ -3939,35 +3811,13 @@ impl ComponentInstance {
             total_exported_functions += func_exports.len();
 
             if !func_exports.is_empty() {
-                for (fidx, (fname, findex)) in func_exports.iter().enumerate().take(3) {
-                    if fidx < 2 {
-                    } else {
-                    }
+                for (fname, findex) in func_exports.iter().take(3) {
                     execution_plan.push((idx, fname.clone(), *findex, false));
                 }
-                if func_exports.len() > 3 {
-                }
-            } else {
             }
 
             // Show function count
             let func_count = module.functions.len();
-        }
-
-
-        // Execution plan summary
-
-
-        // Show execution order
-        if !execution_plan.is_empty() {
-            for (seq, (module_idx, func_name, func_idx, is_start)) in
-                execution_plan.iter().enumerate().take(5)
-            {
-                let marker = if *is_start { "[START]" } else { "" };
-            }
-            if execution_plan.len() > 5 {
-            }
-        } else {
         }
 
 
@@ -4031,7 +3881,7 @@ impl ComponentInstance {
     #[cfg(feature = "std")]
     fn initialize_engine(
         modules: &[kiln_runtime::module::Module],
-        execution_plan: &[(usize, String, u32, bool)],
+        _execution_plan: &[(usize, String, u32, bool)],
         host_registry: Option<std::sync::Arc<kiln_host::CallbackRegistry>>,
     ) -> Result<Box<dyn kiln_runtime::engine_factory::RuntimeEngine>> {
         use kiln_runtime::engine_factory::{
@@ -4062,16 +3912,6 @@ impl ComponentInstance {
         // Set host registry for WASI and custom host functions
         if let Some(registry) = host_registry {
             engine.set_host_registry(registry);
-        }
-
-        // Show what's ready
-
-        let start_count = execution_plan.iter().filter(|(_, _, _, is_start)| *is_start).count();
-        let export_count = execution_plan.len() - start_count;
-
-        if start_count > 0 {
-        }
-        if export_count > 0 {
         }
 
         Ok(engine)
@@ -4823,7 +4663,6 @@ impl ComponentInstance {
                 if let Some(e) = last_error {
                     return Err(e);
                 }
-            } else {
             }
         }
 
@@ -4925,7 +4764,9 @@ impl ComponentInstance {
                 let read_memory = {
                     let mem = instance_memory.clone();
                     move |ptr: u32, len: u32| -> std::result::Result<Vec<u8>, String> {
-                        let inst_lock = mem.lock().unwrap();
+                        let inst_lock = mem
+                            .lock()
+                            .map_err(|_| "Instance memory lock poisoned".to_string())?;
                         if let Some(ref inst) = *inst_lock {
                             // Use public API to get memory
                             match inst.memory(0) {
@@ -4947,7 +4788,9 @@ impl ComponentInstance {
                 let _write_memory = {
                     let mem = instance_memory.clone();
                     move |ptr: u32, data: &[u8]| -> std::result::Result<(), String> {
-                        let inst_lock = mem.lock().unwrap();
+                        let inst_lock = mem
+                            .lock()
+                            .map_err(|_| "Instance memory lock poisoned".to_string())?;
                         if let Some(ref inst) = *inst_lock {
                             // Use public API to get memory
                             match inst.memory(0) {
@@ -5171,7 +5014,9 @@ impl ComponentInstance {
                 #[cfg(feature = "std")]
                 match engine.get_instance(instance) {
                     Ok(inst_arc) => {
-                        let mut lock = instance_memory.lock().unwrap();
+                        let mut lock = instance_memory.lock().map_err(|_| {
+                            Error::runtime_error("Instance memory lock poisoned")
+                        })?;
                         *lock = Some(inst_arc.clone());
                     }
                     Err(_e) => {

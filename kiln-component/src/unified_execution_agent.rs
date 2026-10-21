@@ -952,7 +952,7 @@ impl UnifiedExecutionAgent {
     ) -> kiln_error::Result<Vec<ComponentValue<ComponentProvider>>> {
         let mut component_values = Vec::new();
         for value in values {
-            component_values.push(value.clone().into());
+            component_values.push(value.clone().try_into()?);
         }
         Ok(component_values)
     }
@@ -1004,13 +1004,6 @@ impl fmt::Display for UnifiedExecutionState {
 
 // Traits already imported at line 404 from kiln_runtime
 
-impl Default for UnifiedExecutionAgent {
-    fn default() -> Self {
-        Self::new_default()
-            .expect("Failed to create default UnifiedExecutionAgent: memory allocation error")
-    }
-}
-
 impl PartialEq for UnifiedExecutionAgent {
     fn eq(&self, other: &Self) -> bool {
         // Simple equality based on configuration
@@ -1051,4 +1044,4 @@ macro_rules! impl_basic_traits {
 }
 
 // Apply macro to UnifiedExecutionAgent
-impl_basic_traits!(UnifiedExecutionAgent, UnifiedExecutionAgent::default());
+impl_basic_traits!(UnifiedExecutionAgent, UnifiedExecutionAgent::new_default()?);

@@ -332,11 +332,9 @@ impl QuotaNode {
         self.last_updated = timestamp;
 
         // Update status based on new usage
-        let usage_percent = if self.max_quota > 0 {
-            (self.current_usage * 100 / self.max_quota) as u8
-        } else {
-            0
-        };
+        let usage_percent = (self.current_usage * 100)
+            .checked_div(self.max_quota)
+            .map_or(0, |percent| percent as u8);
 
         self.status = if usage_percent >= self.critical_threshold {
             QuotaStatus::Critical
@@ -395,11 +393,9 @@ impl QuotaNode {
 
     /// Get utilization percentage
     pub fn utilization_percent(&self) -> u8 {
-        if self.max_quota == 0 {
-            0
-        } else {
-            (self.current_usage * 100 / self.max_quota) as u8
-        }
+        (self.current_usage * 100)
+            .checked_div(self.max_quota)
+            .map_or(0, |percent| percent as u8)
     }
 }
 
@@ -800,12 +796,6 @@ impl DynamicQuotaManager {
     fn get_current_time(&self) -> u64 {
         // In a real implementation, would use proper time measurement
         0
-    }
-}
-
-impl Default for DynamicQuotaManager {
-    fn default() -> Self {
-        Self::new().unwrap()
     }
 }
 

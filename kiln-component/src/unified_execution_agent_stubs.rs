@@ -159,9 +159,11 @@ impl ComponentRuntimeBridge {
 }
 
 /// Component value conversion stubs
-impl From<KilnComponentValue<ComponentProvider>> for Value {
-    fn from(cv: KilnComponentValue<ComponentProvider>) -> Self {
-        match cv {
+impl TryFrom<KilnComponentValue<ComponentProvider>> for Value {
+    type Error = kiln_error::Error;
+
+    fn try_from(cv: KilnComponentValue<ComponentProvider>) -> core::result::Result<Self, Self::Error> {
+        Ok(match cv {
             KilnComponentValue::Bool(b) => Value::Bool(b),
             KilnComponentValue::U8(v) => Value::U8(v),
             KilnComponentValue::U16(v) => Value::U16(v),
@@ -178,26 +180,27 @@ impl From<KilnComponentValue<ComponentProvider>> for Value {
             KilnComponentValue::String(s) => {
                 let provider = safe_managed_alloc!(2048, CrateId::Component)
                     .unwrap_or_else(|_| NoStdProvider::default());
-                let bounded_str = kiln_foundation::bounded::BoundedString::try_from_str(&s)
-                    .expect("Failed to convert string");
+                let bounded_str = kiln_foundation::bounded::BoundedString::try_from_str(&s)?;
                 Value::String(bounded_str)
             },
             #[cfg(not(any(feature = "std",)))]
             KilnComponentValue::String(s) => {
                 let _provider = safe_managed_alloc!(2048, CrateId::Component)
                     .unwrap_or_else(|_| NoStdProvider::default());
-                let bounded_str = kiln_foundation::bounded::BoundedString::try_from_str(s.as_str())
-                    .expect("Failed to convert string");
+                let bounded_str =
+                    kiln_foundation::bounded::BoundedString::try_from_str(s.as_str())?;
                 Value::String(bounded_str)
             },
             _ => Value::Bool(false), // Fallback
-        }
+        })
     }
 }
 
-impl From<Value> for KilnComponentValue<ComponentProvider> {
-    fn from(v: Value) -> Self {
-        match v {
+impl TryFrom<Value> for KilnComponentValue<ComponentProvider> {
+    type Error = kiln_error::Error;
+
+    fn try_from(v: Value) -> core::result::Result<Self, Self::Error> {
+        Ok(match v {
             Value::Bool(b) => KilnComponentValue::Bool(b),
             Value::U8(v) => KilnComponentValue::U8(v),
             Value::U16(v) => KilnComponentValue::U16(v),
@@ -212,8 +215,7 @@ impl From<Value> for KilnComponentValue<ComponentProvider> {
             Value::Char(c) => KilnComponentValue::Char(c),
             #[cfg(feature = "std")]
             Value::String(s) => {
-                let string =
-                    s.as_str().expect("Failed to get string slice").to_string();
+                let string = s.as_str()?.to_string();
                 KilnComponentValue::String(string)
             },
             #[cfg(not(any(feature = "std",)))]
@@ -227,7 +229,7 @@ impl From<Value> for KilnComponentValue<ComponentProvider> {
                 }
             },
             _ => KilnComponentValue::Bool(false), // Fallback
-        }
+        })
     }
 }
 

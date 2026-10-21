@@ -88,7 +88,10 @@ impl BuiltinHandler for ResourceCreateHandler {
         };
 
         // Create a new resource based on the representation
-        let mut manager = self.resource_manager.lock().unwrap();
+        let mut manager = self
+            .resource_manager
+            .lock()
+            .map_err(|_| Error::runtime_error("Resource manager lock poisoned"))?;
         let id = manager.add_host_resource(rep)?;
 
         // Return the resource ID
@@ -186,7 +189,10 @@ impl BuiltinHandler for ResourceDropHandler {
         };
 
         // Drop the resource
-        let mut manager = self.resource_manager.lock().unwrap();
+        let mut manager = self
+            .resource_manager
+            .lock()
+            .map_err(|_| Error::runtime_error("Resource manager lock poisoned"))?;
         if !manager.has_resource(id)? {
             return Err(Error::new(
                 kiln_error::ErrorCategory::Resource,
@@ -290,14 +296,19 @@ impl BuiltinHandler for ResourceRepHandler {
         };
 
         // Get the resource representation
-        let manager = self.resource_manager.lock().unwrap();
+        let manager = self
+            .resource_manager
+            .lock()
+            .map_err(|_| Error::runtime_error("Resource manager lock poisoned"))?;
         if !manager.has_resource(id)? {
             return Err(Error::runtime_execution_error("Resource not found"));
         }
 
         // Get the resource as u32
         let resource = manager.get_host_resource::<u32>(id)?;
-        let rep = *resource.lock().unwrap();
+        let rep = *resource
+            .lock()
+            .map_err(|_| Error::runtime_error("Host resource lock poisoned"))?;
 
         // Return the representation
         Ok(vec![ComponentValue::U32(rep)])
@@ -395,7 +406,10 @@ impl BuiltinHandler for ResourceGetHandler {
         };
 
         // Find or create resource with this representation
-        let mut manager = self.resource_manager.lock().unwrap();
+        let mut manager = self
+            .resource_manager
+            .lock()
+            .map_err(|_| Error::runtime_error("Resource manager lock poisoned"))?;
 
         // For now, always create a new resource
         // TODO: Implement resource lookup once get_resources_iter is available

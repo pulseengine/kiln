@@ -492,7 +492,10 @@ impl CallRouter {
 
         // Update call state
         {
-            let context = self.active_calls.get_mut(&call_id).unwrap();
+            let context = self
+                .active_calls
+                .get_mut(&call_id)
+                .ok_or_else(|| Error::runtime_execution_error("Active call not found"))?;
             context.state = CallState::Executing;
         }
 
@@ -502,7 +505,10 @@ impl CallRouter {
 
         // Update call state and statistics based on result
         {
-            let context = self.active_calls.get_mut(&call_id).unwrap();
+            let context = self
+                .active_calls
+                .get_mut(&call_id)
+                .ok_or_else(|| Error::runtime_execution_error("Active call not found"))?;
             match &result {
                 Ok(_) => {
                     context.state = CallState::Completed;
@@ -668,11 +674,10 @@ impl CallStack {
 
     /// Pop a call frame from the stack
     pub fn pop_frame(&mut self) -> Result<CallFrame> {
-        if self.frames.is_empty() {
-            return Err(Error::runtime_execution_error("Call stack is empty"));
-        }
-
-        let frame = self.frames.pop().unwrap();
+        let frame = self
+            .frames
+            .pop()
+            .ok_or_else(|| Error::runtime_execution_error("Call stack is empty"))?;
         self.current_depth -= 1;
         Ok(frame)
     }

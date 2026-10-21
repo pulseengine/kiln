@@ -572,7 +572,10 @@ impl BlastZoneManager {
         let containment_policy = {
             #[cfg(feature = "std")]
             {
-                let zone = self.zones.get_mut(&zone_id).unwrap();
+                let zone = self
+                    .zones
+                    .get_mut(&zone_id)
+                    .ok_or_else(|| Error::runtime_error("Blast zone not found"))?;
                 let should_contain = zone.record_failure(component_id, reason, timestamp);
                 if should_contain {
                     zone.config.containment_policy
@@ -722,12 +725,6 @@ impl BlastZoneManager {
         let source_matches = policy.source_zone.is_none_or(|z| z == source_zone);
         let target_matches = policy.target_zone.is_none_or(|z| z == target_zone);
         source_matches && target_matches
-    }
-}
-
-impl Default for BlastZoneManager {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default BlastZoneManager")
     }
 }
 

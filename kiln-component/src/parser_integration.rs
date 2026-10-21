@@ -403,7 +403,7 @@ impl ComponentLoader {
 
     /// Convert parsed component to runtime component
     pub fn to_runtime_component(&self, parsed: &ParsedComponent) -> kiln_error::Result<Component> {
-        let mut component = Component::new(KilnComponentType::new()?);
+        let mut component = Component::new(KilnComponentType::new()?)?;
 
         // NOTE: Type conversion is not implemented because ParsedComponent stores
         // kiln_foundation::ComponentType<P> but Component::add_type expects

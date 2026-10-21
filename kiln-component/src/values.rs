@@ -29,8 +29,14 @@ use crate::memory_layout::{MemoryLayout, calculate_layout};
 type CanonicalValType = ComponentValType;
 
 /// Convert from CanonicalValType to kiln_format::component::ValType
-pub fn convert_common_to_format_valtype(common_type: &CanonicalValType) -> KilnFormatValType {
-    match common_type {
+///
+/// # Errors
+///
+/// Returns an error if a flag or enum name cannot be read from its bounded string.
+pub fn convert_common_to_format_valtype(
+    common_type: &CanonicalValType,
+) -> Result<KilnFormatValType> {
+    Ok(match common_type {
         CanonicalValType::Bool => KilnFormatValType::Bool,
         CanonicalValType::S8 => KilnFormatValType::S8,
         CanonicalValType::U8 => KilnFormatValType::U8,
@@ -69,44 +75,24 @@ pub fn convert_common_to_format_valtype(common_type: &CanonicalValType) -> KilnF
             // Convert BoundedVec<WasmName> to Vec<String>
             let string_names: Vec<String> = names
                 .iter()
-                .map(|name| {
+                .map(|name| -> Result<String> {
                     // WasmName wraps BoundedString - need to convert properly
-                    let bytes = name.inner().as_bytes().unwrap_or_else(|_| {
-                        // Return empty slice on error
-                        match name.inner().slice() {
-                            Ok(s) => s,
-                            Err(_) => {
-                                // Return an empty safe slice - this is safe because we're referencing static empty data
-                                kiln_foundation::safe_memory::Slice::new(&[])
-                                    .expect("Failed to create empty slice - this should never happen")
-                            },
-                        }
-                    });
-                    String::from_utf8_lossy(bytes.as_ref()).to_string()
+                    let bytes = name.inner().as_bytes()?;
+                    Ok(String::from_utf8_lossy(bytes.as_ref()).to_string())
                 })
-                .collect();
+                .collect::<Result<Vec<String>>>()?;
             KilnFormatValType::Flags(string_names)
         },
         CanonicalValType::Enum(variants) => {
             // Convert BoundedVec<WasmName> to Vec<String>
             let string_variants: Vec<String> = variants
                 .iter()
-                .map(|v| {
+                .map(|v| -> Result<String> {
                     // WasmName wraps BoundedString - need to convert properly
-                    let bytes = v.inner().as_bytes().unwrap_or_else(|_| {
-                        // Return empty slice on error
-                        match v.inner().slice() {
-                            Ok(s) => s,
-                            Err(_) => {
-                                // Return an empty safe slice - this is safe because we're referencing static empty data
-                                kiln_foundation::safe_memory::Slice::new(&[])
-                                    .expect("Failed to create empty slice - this should never happen")
-                            },
-                        }
-                    });
-                    String::from_utf8_lossy(bytes.as_ref()).to_string()
+                    let bytes = v.inner().as_bytes()?;
+                    Ok(String::from_utf8_lossy(bytes.as_ref()).to_string())
                 })
-                .collect();
+                .collect::<Result<Vec<String>>>()?;
             KilnFormatValType::Enum(string_variants)
         },
         CanonicalValType::Option(_inner_type) => {
@@ -130,7 +116,7 @@ pub fn convert_common_to_format_valtype(common_type: &CanonicalValType) -> KilnF
             // Since KilnFormatValType::Result requires a concrete type, we'll use Void
             KilnFormatValType::Result(Box::new(KilnFormatValType::Void))
         },
-    }
+    })
 }
 
 /// Convert from kiln_format::component::ValType to CanonicalValType
@@ -205,7 +191,7 @@ pub fn convert_format_to_common_valtype(format_type: &KilnFormatValType) -> Cano
 // Serialization and deserialization functions for ComponentValue
 pub fn serialize_component_value(value: &ComponentComponentValue) -> Result<Vec<u8>> {
     let common_type = value.get_type()?;
-    let format_type = convert_common_to_format_valtype(&common_type);
+    let format_type = convert_common_to_format_valtype(&common_type)?;
 
     // Serialize the value based on its type
     let mut buffer = Vec::new();

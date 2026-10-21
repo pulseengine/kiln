@@ -991,12 +991,6 @@ impl Default for CallPermissions {
     }
 }
 
-impl Default for CrossComponentCallManager {
-    fn default() -> Self {
-        Self::new().expect("Failed to create CrossComponentCallManager: memory allocation failed")
-    }
-}
-
 impl fmt::Display for ResourceTransferPolicy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

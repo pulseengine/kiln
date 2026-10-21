@@ -471,13 +471,6 @@ impl KilnComponentType {
     }
 }
 
-impl Default for KilnComponentType {
-    fn default() -> Self {
-        Self::new()
-            .expect("Failed to allocate memory for KilnComponentType::default")
-    }
-}
-
 /// Builder for KilnComponentType
 pub struct KilnComponentTypeBuilder {
     /// Component imports
@@ -705,13 +698,6 @@ impl RuntimeInstance {
     /// Set the verification level
     pub fn set_verification_level(&mut self, level: VerificationLevel) {
         self.verification_level = level;
-    }
-}
-
-impl Default for RuntimeInstance {
-    fn default() -> Self {
-        Self::new()
-            .expect("Failed to allocate memory for RuntimeInstance::default")
     }
 }
 
@@ -946,12 +932,6 @@ impl Component {
     }
 }
 
-impl Default for Component {
-    fn default() -> Self {
-        Self::new().expect("Failed to allocate memory for Component::default")
-    }
-}
-
 /// Builder for Component in no_std environment
 pub struct ComponentBuilder {
     /// Component type
@@ -1073,7 +1053,10 @@ impl ComponentBuilder {
 
     /// Build the component
     pub fn build(self) -> Result<Component> {
-        let component_type = self.component_type.unwrap_or_default();
+        let component_type = match self.component_type {
+            Some(component_type) => component_type,
+            None => KilnComponentType::new()?,
+        };
         let resource_table = match self.resource_table {
             Some(table) => table,
             None => ResourceTable::new()?,

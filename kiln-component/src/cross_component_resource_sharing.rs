@@ -282,7 +282,16 @@ impl CrossComponentResourceSharingManager {
                     resource: None,
                 }
             })?,
-            type_registry: GenerativeTypeRegistry::new(),
+            type_registry: GenerativeTypeRegistry::new().map_err(|_| ResourceSharingError {
+                kind: ResourceSharingErrorKind::ResourceLimitExceeded,
+                #[cfg(feature = "std")]
+                message: "Failed to create type registry".to_string(),
+                #[cfg(not(feature = "std"))]
+                message: "Failed to create type registry",
+                source_component: None,
+                target_component: None,
+                resource: None,
+            })?,
             bounds_checker: TypeBoundsChecker::new().map_err(|_| ResourceSharingError {
                 kind: ResourceSharingErrorKind::ResourceLimitExceeded,
                 #[cfg(feature = "std")]
@@ -1097,12 +1106,6 @@ impl CrossComponentResourceSharingManager {
         {
             0
         }
-    }
-}
-
-impl Default for CrossComponentResourceSharingManager {
-    fn default() -> Self {
-        Self::new().unwrap()
     }
 }
 

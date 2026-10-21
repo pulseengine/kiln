@@ -1174,14 +1174,6 @@ impl VirtualizationManager {
     }
 }
 
-impl Default for VirtualizationManager {
-    fn default() -> Self {
-        // Use new() which properly handles allocation or panic in development
-        Self::new()
-            .expect("VirtualizationManager allocation should not fail in default construction")
-    }
-}
-
 pub fn create_memory_capability(max_size: usize) -> Capability {
     Capability::Memory { max_size }
 }

@@ -481,9 +481,3 @@ impl CanonicalMemoryPool {
         }
     }
 }
-
-impl Default for CanonicalMemoryPool {
-    fn default() -> Self {
-        Self::new().expect("Failed to create CanonicalMemoryPool")
-    }
-}
