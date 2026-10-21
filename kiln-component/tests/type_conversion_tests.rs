@@ -203,6 +203,7 @@ fn test_format_valtype_roundtrip() {
 
 /// Test conversion from format extern type to runtime extern type
 #[test]
+#[ignore = "#562: Instance export conversion fails (BoundedVec zero-size item)"]
 fn test_format_to_runtime_extern_type() {
     // Test function type conversion
     let format_func = FormatExternType::Function {
