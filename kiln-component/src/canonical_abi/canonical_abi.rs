@@ -27,18 +27,21 @@
 //! ```no_run
 //! use kiln_component::canonical_abi::{
 //!     CanonicalABI,
-//!     ComponentType,
-//!     ComponentValue,
+//!     SimpleMemory,
 //! };
 //!
-//! // Create a canonical ABI instance
+//! # fn main() -> kiln_error::Result<()> {
+//! // Create a canonical ABI instance and a linear memory to operate on
 //! let abi = CanonicalABI::new();
+//! let mut memory = SimpleMemory::new(1024);
 //!
-//! // Lift an i32 from memory
-//! let value = abi.lift_i32(&memory, 0)?;
+//! // Lift an s32 from memory
+//! let value = abi.lift_s32(&memory, 0)?;
 //!
 //! // Lower a string to memory
-//! abi.lower_string(&mut memory, 100, "hello")?;
+//! abi.lower_string(&mut memory, "hello", 100)?;
+//! # Ok(())
+//! # }
 //! ```
 
 // Cross-environment imports

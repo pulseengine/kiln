@@ -80,6 +80,9 @@
 //!         min: 1,
 //!         max: Some(2),
 //!     },
+//!     shared: false,
+//!     memory64: false,
+//!     page_size: None, // standard 64KB pages
 //! };
 //!
 //! // Create a new memory instance

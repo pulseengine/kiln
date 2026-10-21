@@ -51,8 +51,8 @@ use kiln_error::Result;
 /// map.insert("foo", 42)?;
 /// map.insert("bar", 100)?;
 ///
-/// assert_eq!(map.get("foo"), Some(&42));
-/// assert_eq!(map.get("baz"), None);
+/// assert_eq!(map.get(&"foo"), Some(&42));
+/// assert_eq!(map.get(&"baz"), None);
 /// # Ok::<(), kiln_error::Error>(())
 /// ```
 #[derive(Debug)]
@@ -165,8 +165,8 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
     /// let mut map = StaticMap::<&str, u32, 10>::new();
     /// map.insert("foo", 42)?;
     ///
-    /// assert_eq!(map.get("foo"), Some(&42));
-    /// assert_eq!(map.get("bar"), None);
+    /// assert_eq!(map.get(&"foo"), Some(&42));
+    /// assert_eq!(map.get(&"bar"), None);
     /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[inline]
@@ -209,8 +209,8 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
     /// let mut map = StaticMap::<&str, u32, 10>::new();
     /// map.insert("foo", 42)?;
     ///
-    /// assert_eq!(map.remove("foo"), Some(42));
-    /// assert_eq!(map.remove("foo"), None);
+    /// assert_eq!(map.remove(&"foo"), Some(42));
+    /// assert_eq!(map.remove(&"foo"), None);
     /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn remove(&mut self, key: &K) -> Option<V> {
@@ -363,8 +363,8 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
     ///
     /// let mut map = StaticMap::<&str, u32, 10>::new();
     ///
-    /// map.entry("key").or_insert(42);
-    /// assert_eq!(map.get("key"), Some(&42));
+    /// map.entry("key").or_insert(42)?;
+    /// assert_eq!(map.get(&"key"), Some(&42));
     /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V, N> {
@@ -403,7 +403,7 @@ impl<K: Ord, V, const N: usize> StaticMap<K, V, N> {
     ///
     /// let value = map.get_mut_or_insert("key", 42)?;
     /// *value = 100;
-    /// assert_eq!(map.get("key"), Some(&100));
+    /// assert_eq!(map.get(&"key"), Some(&100));
     /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn get_mut_or_insert(&mut self, key: K, default: V) -> Result<&mut V> {

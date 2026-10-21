@@ -504,7 +504,7 @@ pub mod parking_impl {
         /// # Examples
         ///
         /// ```
-        /// use kiln_sync::parking_impl::KilnParkingRwLock;
+        /// use kiln_sync::KilnParkingRwLock;
         /// let lock = KilnParkingRwLock::new(0);
         /// ```
         pub fn new(data: T) -> Self {

@@ -46,24 +46,30 @@
 //! # Usage
 //!
 //! ```rust
+//! # fn main() -> kiln_error::Result<()> {
+//! use kiln_foundation::safety_system::AsilLevel;
 //! use kiln_host::bounded_host_integration::*;
 //!
 //! // Create manager with embedded system limits
-//! let limits = HostIntegrationLimits::embedded);
+//! let limits = HostIntegrationLimits::embedded();
 //! let mut manager = BoundedHostIntegrationManager::new(limits)?;
 //!
 //! // Register safety-critical host function
-//! let safety_function = create_safety_check_function);
+//! let safety_function = create_safety_check_function();
 //! let function_id = manager.register_function(safety_function)?;
 //!
 //! // Call function with safety verification
+//! let parameters = vec![1u8, 2, 3];
 //! let context = BoundedCallContext::new(
 //!     function_id,
 //!     ComponentInstanceId(1),
 //!     parameters,
-//!     AsilLevel::AsilC as u8
-//! ;
+//!     AsilLevel::AsilC as u8,
+//! );
 //! let result = manager.call_function(function_id, context)?;
+//! # let _ = result;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! # Cross-References

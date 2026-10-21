@@ -1564,7 +1564,7 @@ where
     /// # vec.push(2).unwrap();
     /// # vec.push(3).unwrap();
     /// let standard_vec = vec.to_vec().unwrap();
-    /// assert_eq!(standard_vec, vec![1, 2, 3];
+    /// assert_eq!(standard_vec, vec![1, 2, 3]);
     /// ```
     #[cfg(feature = "std")]
     pub fn to_vec(&self) -> Result<std::vec::Vec<T>> {
@@ -1613,8 +1613,8 @@ where
     /// # vec.push(1).unwrap();
     /// # vec.push(2).unwrap();
     /// # vec.push(3).unwrap();
-    /// # assert_eq!(vec.len(), 3;
-    /// vec.clear);
+    /// # assert_eq!(vec.len(), 3);
+    /// vec.clear().unwrap();
     /// assert_eq!(vec.len(), 0);
     /// ```
     pub fn clear(&mut self) -> core::result::Result<(), BoundedError> {
@@ -1674,8 +1674,8 @@ where
     /// # vec.push(2).unwrap();
     /// # vec.push(3).unwrap();
     /// let old_value = vec.set(1, 42).unwrap();
-    /// assert_eq!(old_value, 2;
-    /// # assert_eq!(vec.get(1).unwrap(), 42;
+    /// assert_eq!(old_value, 2);
+    /// # assert_eq!(vec.get(1).unwrap(), 42);
     /// ```
     pub fn set(&mut self, index: usize, value: T) -> core::result::Result<T, BoundedError> {
         if index >= self.length {
@@ -1797,8 +1797,8 @@ where
     /// # vec.push(3).unwrap();
     /// vec.insert(1, 2).unwrap();
     /// # assert_eq!(vec.get(0).unwrap(), 1);
-    /// # assert_eq!(vec.get(1).unwrap(), 2;
-    /// # assert_eq!(vec.get(2).unwrap(), 3;
+    /// # assert_eq!(vec.get(1).unwrap(), 2);
+    /// # assert_eq!(vec.get(2).unwrap(), 3);
     /// ```
     pub fn insert(&mut self, index: usize, value: T) -> core::result::Result<(), BoundedError> {
         if index > self.length {
@@ -1922,10 +1922,10 @@ where
     /// # vec.push(2).unwrap();
     /// # vec.push(3).unwrap();
     /// let removed = vec.remove(1).unwrap();
-    /// assert_eq!(removed, 2;
+    /// assert_eq!(removed, 2);
     /// # assert_eq!(vec.get(0).unwrap(), 1);
-    /// # assert_eq!(vec.get(1).unwrap(), 3;
-    /// # assert_eq!(vec.len(), 2;
+    /// # assert_eq!(vec.get(1).unwrap(), 3);
+    /// # assert_eq!(vec.len(), 2);
     /// ```
     pub fn remove(&mut self, index: usize) -> core::result::Result<T, BoundedError> {
         if index >= self.length {
@@ -2027,8 +2027,8 @@ where
     /// # vec.push(1).unwrap();
     /// # vec.push(2).unwrap();
     /// # vec.push(3).unwrap();
-    /// assert!(vec.contains(&2).unwrap();
-    /// assert!(!vec.contains(&4).unwrap();
+    /// assert!(vec.contains(&2).unwrap());
+    /// assert!(!vec.contains(&4).unwrap());
     /// ```
     pub fn contains(&self, item: &T) -> core::result::Result<bool, BoundedError>
     where
@@ -2071,7 +2071,7 @@ where
     /// # vec.push(1).unwrap();
     /// # vec.push(2).unwrap();
     /// # vec.push(3).unwrap();
-    /// # assert_eq!(vec.len(), 3;
+    /// # assert_eq!(vec.len(), 3);
     /// vec.truncate(1).unwrap();
     /// assert_eq!(vec.len(), 1);
     /// # assert_eq!(vec.get(0).unwrap(), 1);
@@ -2131,7 +2131,7 @@ where
     /// # vec.push(2).unwrap();
     /// # vec.push(3).unwrap();
     /// vec.swap(0, 2).unwrap();
-    /// assert_eq!(vec.get(0).unwrap(), 3;
+    /// assert_eq!(vec.get(0).unwrap(), 3);
     /// assert_eq!(vec.get(2).unwrap(), 1);
     /// ```
     pub fn swap(&mut self, a: usize, b: usize) -> core::result::Result<(), BoundedError> {
@@ -2190,8 +2190,8 @@ where
     /// # vec.push(2).unwrap();
     /// # vec.push(3).unwrap();
     /// vec.reverse().unwrap();
-    /// assert_eq!(vec.get(0).unwrap(), 3;
-    /// assert_eq!(vec.get(1).unwrap(), 2;
+    /// assert_eq!(vec.get(0).unwrap(), 3);
+    /// assert_eq!(vec.get(1).unwrap(), 2);
     /// assert_eq!(vec.get(2).unwrap(), 1);
     /// ```
     pub fn reverse(&mut self) -> core::result::Result<(), BoundedError> {
@@ -2237,9 +2237,9 @@ where
     /// # vec.push(3).unwrap();
     /// # vec.push(4).unwrap();
     /// vec.retain(|&x| x % 2 == 0).unwrap();
-    /// assert_eq!(vec.len(), 2;
-    /// assert_eq!(vec.get(0).unwrap(), 2;
-    /// assert_eq!(vec.get(1).unwrap(), 4;
+    /// assert_eq!(vec.len(), 2);
+    /// assert_eq!(vec.get(0).unwrap(), 2);
+    /// assert_eq!(vec.get(1).unwrap(), 4);
     /// ```
     pub fn retain<F>(&mut self, mut f: F) -> core::result::Result<(), BoundedError>
     where
@@ -2310,9 +2310,9 @@ where
     /// # vec.push(1).unwrap();
     /// # vec.push(3).unwrap();
     /// # vec.push(5).unwrap();
-    /// assert_eq!(vec.binary_search(&1).unwrap(), Ok(0;
-    /// assert_eq!(vec.binary_search(&2).unwrap(), Err(1;
-    /// assert_eq!(vec.binary_search(&6).unwrap(), Err(3;
+    /// assert_eq!(vec.binary_search(&1).unwrap(), Ok(0));
+    /// assert_eq!(vec.binary_search(&2).unwrap(), Err(1));
+    /// assert_eq!(vec.binary_search(&6).unwrap(), Err(3));
     /// ```
     pub fn binary_search(
         &self,
@@ -2400,7 +2400,7 @@ where
     /// # vec.push((3, 4)).unwrap();
     /// # vec.push((5, 6)).unwrap();
     /// let result = vec.binary_search_by(|&(a, _)| a.cmp(&3)).unwrap();
-    /// assert_eq!(result, Ok(1;
+    /// assert_eq!(result, Ok(1));
     /// ```
     pub fn binary_search_by<F>(
         &self,
@@ -2492,7 +2492,7 @@ where
     /// # vec.push((3, 100)).unwrap();
     /// # vec.push((5, 200)).unwrap();
     /// let result = vec.binary_search_by_key(&3, |&(a, _)| a).unwrap();
-    /// assert_eq!(result, Ok(1;
+    /// assert_eq!(result, Ok(1));
     /// ```
     pub fn binary_search_by_key<B, F>(
         &self,
@@ -2526,10 +2526,10 @@ where
     /// # vec.push(2).unwrap();
     /// vec.sort().unwrap();
     /// assert_eq!(vec.get(0).unwrap(), 1);
-    /// assert_eq!(vec.get(1).unwrap(), 2;
-    /// assert_eq!(vec.get(2).unwrap(), 3;
-    /// assert_eq!(vec.get(3).unwrap(), 4;
-    /// assert_eq!(vec.get(4).unwrap(), 5;
+    /// assert_eq!(vec.get(1).unwrap(), 2);
+    /// assert_eq!(vec.get(2).unwrap(), 3);
+    /// assert_eq!(vec.get(3).unwrap(), 4);
+    /// assert_eq!(vec.get(4).unwrap(), 5);
     /// ```
     #[cfg(feature = "std")]
     pub fn sort(&mut self) -> core::result::Result<(), BoundedError>
@@ -2622,19 +2622,19 @@ where
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let mut vec = BoundedVec::<(i32, &str), 10, _>::new(provider).unwrap();
-    /// # vec.push((5, "five")).unwrap();
-    /// # vec.push((3, "three")).unwrap();
-    /// # vec.push((1, "one")).unwrap();
-    /// # vec.push((4, "four")).unwrap();
-    /// # vec.push((2, "two")).unwrap();
+    /// # let mut vec = BoundedVec::<(i32, u32), 10, _>::new(provider).unwrap();
+    /// # vec.push((5, 50)).unwrap();
+    /// # vec.push((3, 30)).unwrap();
+    /// # vec.push((1, 10)).unwrap();
+    /// # vec.push((4, 40)).unwrap();
+    /// # vec.push((2, 20)).unwrap();
     /// // Sort by the numeric key
     /// vec.sort_by_key(|k| k.0).unwrap();
     /// assert_eq!(vec.get(0).unwrap().0, 1);
-    /// assert_eq!(vec.get(1).unwrap().0, 2;
-    /// assert_eq!(vec.get(2).unwrap().0, 3;
-    /// assert_eq!(vec.get(3).unwrap().0, 4;
-    /// assert_eq!(vec.get(4).unwrap().0, 5;
+    /// assert_eq!(vec.get(1).unwrap().0, 2);
+    /// assert_eq!(vec.get(2).unwrap().0, 3);
+    /// assert_eq!(vec.get(3).unwrap().0, 4);
+    /// assert_eq!(vec.get(4).unwrap().0, 5);
     /// ```
     #[cfg(feature = "std")]
     pub fn sort_by_key<K, F>(&mut self, mut f: F) -> core::result::Result<(), BoundedError>
@@ -2665,13 +2665,13 @@ where
     /// # vec.push(3).unwrap();
     /// # vec.push(3).unwrap();
     /// # vec.push(4).unwrap();
-    /// # assert_eq!(vec.len(), 7;
+    /// # assert_eq!(vec.len(), 7);
     /// vec.dedup().unwrap();
-    /// assert_eq!(vec.len(), 4;
+    /// assert_eq!(vec.len(), 4);
     /// assert_eq!(vec.get(0).unwrap(), 1);
-    /// assert_eq!(vec.get(1).unwrap(), 2;
-    /// assert_eq!(vec.get(2).unwrap(), 3;
-    /// assert_eq!(vec.get(3).unwrap(), 4;
+    /// assert_eq!(vec.get(1).unwrap(), 2);
+    /// assert_eq!(vec.get(2).unwrap(), 3);
+    /// assert_eq!(vec.get(3).unwrap(), 4);
     /// ```
     #[cfg(feature = "std")]
     pub fn dedup(&mut self) -> core::result::Result<(), BoundedError>
@@ -2702,7 +2702,7 @@ where
     /// # vec.push(31).unwrap();
     /// # vec.push(32).unwrap();
     /// # vec.push(40).unwrap();
-    /// # assert_eq!(vec.len(), 7;
+    /// # assert_eq!(vec.len(), 7);
     /// // Deduplicate based on integer division by 10
     /// vec.dedup_by(|a, b| a / 10 == b / 10).unwrap();
     /// assert_eq!(vec.len(), 4);
@@ -2779,22 +2779,22 @@ where
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let mut vec = BoundedVec::<(i32, &str), 10, _>::new(provider).unwrap();
-    /// # vec.push((1, "one")).unwrap();
-    /// # vec.push((2, "two")).unwrap();
-    /// # vec.push((2, "dos")).unwrap();
-    /// # vec.push((3, "three")).unwrap();
-    /// # vec.push((3, "tres")).unwrap();
-    /// # vec.push((3, "drei")).unwrap();
-    /// # vec.push((4, "four")).unwrap();
-    /// # assert_eq!(vec.len(), 7;
+    /// # let mut vec = BoundedVec::<(i32, u32), 10, _>::new(provider).unwrap();
+    /// # vec.push((1, 10)).unwrap();
+    /// # vec.push((2, 20)).unwrap();
+    /// # vec.push((2, 21)).unwrap();
+    /// # vec.push((3, 30)).unwrap();
+    /// # vec.push((3, 31)).unwrap();
+    /// # vec.push((3, 32)).unwrap();
+    /// # vec.push((4, 40)).unwrap();
+    /// # assert_eq!(vec.len(), 7);
     /// // Deduplicate based on the first element of each tuple
     /// vec.dedup_by_key(|e| e.0).unwrap();
-    /// assert_eq!(vec.len(), 4;
+    /// assert_eq!(vec.len(), 4);
     /// assert_eq!(vec.get(0).unwrap().0, 1);
-    /// assert_eq!(vec.get(1).unwrap().0, 2;
-    /// assert_eq!(vec.get(2).unwrap().0, 3;
-    /// assert_eq!(vec.get(3).unwrap().0, 4;
+    /// assert_eq!(vec.get(1).unwrap().0, 2);
+    /// assert_eq!(vec.get(2).unwrap().0, 3);
+    /// assert_eq!(vec.get(3).unwrap().0, 4);
     /// ```
     #[cfg(feature = "std")]
     pub fn dedup_by_key<K, F>(&mut self, mut key: F) -> core::result::Result<(), BoundedError>
@@ -2826,11 +2826,11 @@ where
     /// # vec.push(5).unwrap();
     /// let replacement = [10, 20, 30];
     /// vec.replace_range(1..4, &replacement).unwrap();
-    /// assert_eq!(vec.len(), 4); // 1 + 3 items replaced 3 items
+    /// assert_eq!(vec.len(), 5); // 3 items replaced by 3 items: length unchanged
     /// assert_eq!(vec.get(0).unwrap(), 1);
-    /// assert_eq!(vec.get(1).unwrap(), 10;
-    /// assert_eq!(vec.get(2).unwrap(), 20;
-    /// assert_eq!(vec.get(3).unwrap(), 30;
+    /// assert_eq!(vec.get(1).unwrap(), 10);
+    /// assert_eq!(vec.get(2).unwrap(), 20);
+    /// assert_eq!(vec.get(3).unwrap(), 30);
     /// ```
     #[cfg(feature = "std")]
     pub fn replace_range<R>(
@@ -2940,12 +2940,12 @@ where
     /// # vec.push(1).unwrap();
     /// let items = [2, 3, 4, 5];
     /// vec.extend_from_slice(&items).unwrap();
-    /// assert_eq!(vec.len(), 5;
+    /// assert_eq!(vec.len(), 5);
     /// assert_eq!(vec.get(0).unwrap(), 1);
-    /// assert_eq!(vec.get(1).unwrap(), 2;
-    /// assert_eq!(vec.get(2).unwrap(), 3;
-    /// assert_eq!(vec.get(3).unwrap(), 4;
-    /// assert_eq!(vec.get(4).unwrap(), 5;
+    /// assert_eq!(vec.get(1).unwrap(), 2);
+    /// assert_eq!(vec.get(2).unwrap(), 3);
+    /// assert_eq!(vec.get(3).unwrap(), 4);
+    /// assert_eq!(vec.get(4).unwrap(), 5);
     /// ```
     pub fn extend_from_slice(&mut self, other: &[T]) -> core::result::Result<(), BoundedError> {
         record_global_operation(OperationType::CollectionWrite, self.verification_level);
@@ -3941,8 +3941,7 @@ impl<const N_BYTES: usize>
     /// # use kiln_foundation::bounded::BoundedString;
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
-    /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let mut s = BoundedString::<10, _>::from_str_truncate("Hello").unwrap();
+    /// # let mut s = BoundedString::<10>::from_str_truncate("Hello").unwrap();
     /// s.push_str(", World!").unwrap();
     /// assert_eq!(s.as_str().unwrap(), "Hello, Wor"); // Truncated to fit capacity
     /// ```
@@ -3978,8 +3977,7 @@ impl<const N_BYTES: usize>
     /// # use kiln_foundation::bounded::BoundedString;
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
-    /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let mut s = BoundedString::<10, _>::from_str_truncate("Hello", provider).unwrap();
+    /// # let mut s = BoundedString::<10>::from_str_truncate("Hello").unwrap();
     /// s.clear().unwrap();
     /// assert!(s.is_empty());
     /// ```
@@ -3996,10 +3994,9 @@ impl<const N_BYTES: usize>
     /// # use kiln_foundation::bounded::BoundedString;
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
-    /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let s = BoundedString::<10, _>::from_str_truncate("Hello, World", provider).unwrap();
-    /// assert!(s.starts_with("Hello").unwrap();
-    /// assert!(!s.starts_with("World").unwrap();
+    /// # let s = BoundedString::<20>::from_str_truncate("Hello, World").unwrap();
+    /// assert!(s.starts_with("Hello").unwrap());
+    /// assert!(!s.starts_with("World").unwrap());
     /// ```
     pub fn starts_with(&self, prefix: &str) -> core::result::Result<bool, BoundedError> {
         let s = self.as_str()?;
@@ -4014,10 +4011,9 @@ impl<const N_BYTES: usize>
     /// # use kiln_foundation::bounded::BoundedString;
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
-    /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let s = BoundedString::<10, _>::from_str_truncate("Hello, Wor", provider).unwrap();
-    /// assert!(s.ends_with("Wor").unwrap();
-    /// assert!(!s.ends_with("World").unwrap();
+    /// # let s = BoundedString::<10>::from_str_truncate("Hello, Wor").unwrap();
+    /// assert!(s.ends_with("Wor").unwrap());
+    /// assert!(!s.ends_with("World").unwrap());
     /// ```
     pub fn ends_with(&self, suffix: &str) -> core::result::Result<bool, BoundedError> {
         let s = self.as_str()?;
@@ -4041,10 +4037,9 @@ impl<const N_BYTES: usize>
     /// # use kiln_foundation::bounded::BoundedString;
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
-    /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let mut s = BoundedString::<10, _>::from_str_truncate("Hello").unwrap();
+    /// # let mut s = BoundedString::<10>::from_str_truncate("Hello").unwrap();
     /// s.push_char('!').unwrap();
-    /// assert_eq!(s.as_str().unwrap(), "Hello!";
+    /// assert_eq!(s.as_str().unwrap(), "Hello!");
     /// ```
     pub fn push_char(&mut self, c: char) -> core::result::Result<(), BoundedError> {
         let mut buf = [0u8; 4]; // UTF-8 encoding of a char is at most 4 bytes
@@ -4069,10 +4064,9 @@ impl<const N_BYTES: usize>
     /// # use kiln_foundation::bounded::BoundedString;
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
-    /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let s = BoundedString::<20, _>::from_str_truncate("Hello WORLD", provider).unwrap();
+    /// # let s = BoundedString::<20>::from_str_truncate("Hello WORLD").unwrap();
     /// let lowercase = s.to_lowercase().unwrap();
-    /// assert_eq!(lowercase.as_str().unwrap(), "hello world";
+    /// assert_eq!(lowercase.as_str().unwrap(), "hello world");
     /// ```
     #[cfg(feature = "std")]
     pub fn to_lowercase(&self) -> core::result::Result<Self, BoundedError> {
@@ -4094,10 +4088,9 @@ impl<const N_BYTES: usize>
     /// # use kiln_foundation::bounded::BoundedString;
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
-    /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let s = BoundedString::<20, _>::from_str_truncate("Hello World", provider).unwrap();
+    /// # let s = BoundedString::<20>::from_str_truncate("Hello World").unwrap();
     /// let uppercase = s.to_uppercase().unwrap();
-    /// assert_eq!(uppercase.as_str().unwrap(), "HELLO WORLD";
+    /// assert_eq!(uppercase.as_str().unwrap(), "HELLO WORLD");
     /// ```
     #[cfg(feature = "std")]
     pub fn to_uppercase(&self) -> core::result::Result<Self, BoundedError> {
@@ -4115,9 +4108,8 @@ impl<const N_BYTES: usize>
     /// # use kiln_foundation::bounded::BoundedString;
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
-    /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let s = BoundedString::<10, _>::from_str_truncate("Hello", provider).unwrap();
-    /// assert_eq!(s.capacity(), 10;
+    /// # let s = BoundedString::<10>::from_str_truncate("Hello").unwrap();
+    /// assert_eq!(s.capacity(), 10);
     /// ```
     pub fn capacity(&self) -> usize {
         N_BYTES
@@ -4131,10 +4123,9 @@ impl<const N_BYTES: usize>
     /// # use kiln_foundation::bounded::BoundedString;
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
-    /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let s = BoundedString::<20, _>::from_str_truncate("Hello World", provider).unwrap();
-    /// assert!(s.contains("World").unwrap();
-    /// assert!(!s.contains("Rust").unwrap();
+    /// # let s = BoundedString::<20>::from_str_truncate("Hello World").unwrap();
+    /// assert!(s.contains("World").unwrap());
+    /// assert!(!s.contains("Rust").unwrap());
     /// ```
     pub fn contains(&self, substring: &str) -> core::result::Result<bool, BoundedError> {
         let s = self.as_str()?;
@@ -4347,13 +4338,12 @@ impl<const N_BYTES: usize>
     /// # use kiln_foundation::bounded::BoundedString;
     /// # use kiln_foundation::{safe_managed_alloc, budget_aware_provider::CrateId};
     /// #
-    /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
-    /// # let s = BoundedString::<20, _>::from_str_truncate("Hello,World,Rust", provider).unwrap();
+    /// # let s = BoundedString::<20>::from_str_truncate("Hello,World,Rust").unwrap();
     /// let parts = s.split(',').unwrap();
-    /// assert_eq!(parts.len(), 3;
-    /// assert_eq!(parts[0].as_str().unwrap(), "Hello";
-    /// assert_eq!(parts[1].as_str().unwrap(), "World";
-    /// assert_eq!(parts[2].as_str().unwrap(), "Rust";
+    /// assert_eq!(parts.len(), 3);
+    /// assert_eq!(parts[0].as_str().unwrap(), "Hello");
+    /// assert_eq!(parts[1].as_str().unwrap(), "World");
+    /// assert_eq!(parts[2].as_str().unwrap(), "Rust");
     /// ```
     pub fn split(&self, delimiter: char) -> core::result::Result<Vec<Self>, BoundedError> {
         let s = self.as_str()?;

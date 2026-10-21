@@ -55,6 +55,8 @@
 //!     AsilLevel,
 //!     SafetyContext,
 //!     SafetyStandard,
+//!     SafetyStandardConversion,
+//!     SafetyStandardType,
 //!     UniversalSafetyContext,
 //! };
 //!

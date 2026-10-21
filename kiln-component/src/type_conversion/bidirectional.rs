@@ -11,8 +11,9 @@
 //!     format_to_runtime_extern_type, runtime_to_format_extern_type
 //! };
 //! use kiln_format::component::FormatValType;
-//! use kiln_format::component::KilnExternType as FormatExternType;
-//! use kiln_foundation::KilnExternType as RuntimeKilnExternType;
+//! use kiln_format::component::ExternType as FormatExternType;
+//! use kiln_foundation::component::ExternType as RuntimeExternType;
+//! use kiln_foundation::NoStdProvider;
 //!
 //! // Convert a format function type to a runtime function type
 //! let format_func = FormatExternType::Function {
@@ -20,7 +21,8 @@
 //!     results: vec![FormatValType::S32],
 //! };
 //!
-//! let runtime_func = format_to_runtime_extern_type(&format_func).unwrap();
+//! let runtime_func: RuntimeExternType<NoStdProvider<64>> =
+//!     format_to_runtime_extern_type(&format_func).unwrap();
 //!
 //! // Convert back to format type
 //! let format_func_again = runtime_to_format_extern_type(&runtime_func).unwrap();
@@ -161,7 +163,7 @@ pub fn convert_types_to_format_valtype<P: kiln_foundation::MemoryProvider>(
 ///
 /// let i32_type = ValueType::I32;
 /// let format_type = value_type_to_format_val_type(&i32_type).unwrap();
-/// assert!(matches!(format_type, kiln_format::component::ValType::S32);
+/// assert!(matches!(format_type, kiln_format::component::FormatValType::S32));
 /// ```
 pub fn value_type_to_format_val_type(value_type: &ValueType) -> Result<FormatValType> {
     match value_type {
@@ -228,11 +230,11 @@ pub fn value_type_to_format_val_type(value_type: &ValueType) -> Result<FormatVal
 ///
 /// ```
 /// use kiln_component::type_conversion::bidirectional::format_val_type_to_value_type;
-/// use kiln_format::component::ValType;
+/// use kiln_format::component::FormatValType;
 ///
-/// let s32_type = ValType::S32;
+/// let s32_type = FormatValType::S32;
 /// let core_type = format_val_type_to_value_type(&s32_type).unwrap();
-/// assert!(matches!(core_type, kiln_foundation::types::ValueType::I32);
+/// assert!(matches!(core_type, kiln_foundation::types::ValueType::I32));
 /// ```
 pub fn format_val_type_to_value_type(format_val_type: &FormatValType) -> Result<ValueType> {
     convert_format_valtype_to_valuetype(format_val_type)
@@ -257,9 +259,9 @@ pub fn format_val_type_to_value_type(format_val_type: &FormatValType) -> Result<
 /// use kiln_component::type_conversion::bidirectional::types_valtype_to_valuetype;
 /// use kiln_foundation::component_value::ValType;
 ///
-/// let s32_type = ValType::S32;
+/// let s32_type: ValType<kiln_foundation::NoStdProvider<64>> = ValType::S32;
 /// let core_type = types_valtype_to_valuetype(&s32_type).unwrap();
-/// assert!(matches!(core_type, kiln_foundation::types::ValueType::I32);
+/// assert!(matches!(core_type, kiln_foundation::types::ValueType::I32));
 /// ```
 pub fn types_valtype_to_valuetype<P: kiln_foundation::MemoryProvider>(
     types_val_type: &KilnTypesValType<P>,
@@ -286,8 +288,9 @@ pub fn types_valtype_to_valuetype<P: kiln_foundation::MemoryProvider>(
 /// use kiln_foundation::types::ValueType;
 ///
 /// let i32_type = ValueType::I32;
-/// let runtime_type = value_type_to_types_valtype(&i32_type;
-/// assert!(matches!(runtime_type, kiln_foundation::component_value::ValType::S32);
+/// let runtime_type: kiln_foundation::component_value::ValType<kiln_foundation::NoStdProvider<64>> =
+///     value_type_to_types_valtype(&i32_type);
+/// assert!(matches!(runtime_type, kiln_foundation::component_value::ValType::S32));
 /// ```
 pub fn value_type_to_types_valtype<P: kiln_foundation::MemoryProvider>(
     value_type: &ValueType,
@@ -332,11 +335,12 @@ pub fn value_type_to_types_valtype<P: kiln_foundation::MemoryProvider>(
 ///
 /// ```
 /// use kiln_component::type_conversion::bidirectional::format_valtype_to_types_valtype;
-/// use kiln_format::component::ValType;
+/// use kiln_format::component::FormatValType;
 ///
-/// let string_type = ValType::String;
-/// let runtime_type = format_valtype_to_types_valtype(&string_type;
-/// assert!(matches!(runtime_type, kiln_foundation::component_value::ValType::String);
+/// let string_type = FormatValType::String;
+/// let runtime_type: kiln_foundation::component_value::ValType<kiln_foundation::NoStdProvider<64>> =
+///     format_valtype_to_types_valtype(&string_type);
+/// assert!(matches!(runtime_type, kiln_foundation::component_value::ValType::String));
 /// ```
 pub fn format_valtype_to_types_valtype<P: kiln_foundation::MemoryProvider>(
     format_val_type: &FormatValType,
@@ -381,9 +385,9 @@ pub fn format_to_types_valtype<P: kiln_foundation::MemoryProvider>(
 /// use kiln_component::type_conversion::bidirectional::types_valtype_to_format_valtype;
 /// use kiln_foundation::component_value::ValType;
 ///
-/// let string_type = ValType::String;
-/// let format_type = types_valtype_to_format_valtype(&string_type;
-/// assert!(matches!(format_type, kiln_format::component::ValType::String);
+/// let string_type: ValType<kiln_foundation::NoStdProvider<64>> = ValType::String;
+/// let format_type = types_valtype_to_format_valtype(&string_type);
+/// assert!(matches!(format_type, kiln_format::component::FormatValType::String));
 /// ```
 pub fn types_valtype_to_format_valtype<P: kiln_foundation::MemoryProvider>(
     types_val_type: &KilnTypesValType<P>,
@@ -480,15 +484,18 @@ pub fn types_valtype_to_format_valtype<P: kiln_foundation::MemoryProvider>(
 ///
 /// ```
 /// use kiln_component::type_conversion::bidirectional::format_to_runtime_extern_type;
-/// use kiln_format::component::KilnExternType as FormatExternType;
-/// use kiln_format::component::ValType as FormatValType;
+/// use kiln_format::component::ExternType as FormatExternType;
+/// use kiln_format::component::FormatValType;
+/// use kiln_foundation::NoStdProvider;
+/// use kiln_foundation::component::ExternType as RuntimeExternType;
 ///
 /// let format_func = FormatExternType::Function {
 ///     params: vec![("param".to_owned(), FormatValType::S32)],
 ///     results: vec![FormatValType::S32],
 /// };
 ///
-/// let runtime_func = format_to_runtime_extern_type(&format_func).unwrap();
+/// let runtime_func: RuntimeExternType<NoStdProvider<64>> =
+///     format_to_runtime_extern_type(&format_func).unwrap();
 /// ```
 pub fn format_to_runtime_extern_type<P: kiln_foundation::MemoryProvider>(
     format_extern_type: &FormatExternType,
@@ -596,15 +603,13 @@ pub fn format_to_runtime_extern_type<P: kiln_foundation::MemoryProvider>(
 ///
 /// ```
 /// use kiln_component::type_conversion::bidirectional::runtime_to_format_extern_type;
-/// use kiln_foundation::{KilnExternType, component::FuncType};
-/// use kiln_foundation::types::ValueType;
+/// use kiln_foundation::NoStdProvider;
+/// use kiln_foundation::component::ExternType;
+/// use kiln_foundation::types::{FuncType, ValueType};
 ///
-/// let func_type = FuncType {
-///     params: vec![ValueType::I32],
-///     results: vec![ValueType::I32],
-/// };
+/// let func_type = FuncType::new([ValueType::I32], [ValueType::I32]).unwrap();
 ///
-/// let runtime_func = KilnExternType::Func(func_type;
+/// let runtime_func: ExternType<NoStdProvider<64>> = ExternType::Func(func_type);
 /// let format_func = runtime_to_format_extern_type(&runtime_func).unwrap();
 /// ```
 pub fn runtime_to_format_extern_type<P: kiln_foundation::MemoryProvider>(
@@ -870,9 +875,9 @@ impl<P: kiln_foundation::MemoryProvider> IntoFormatType<FormatValType> for KilnT
 /// use kiln_component::type_conversion::bidirectional::format_constvalue_to_types_componentvalue;
 /// use kiln_format::component::ConstValue;
 ///
-/// let s32_val = ConstValue::S32(42;
+/// let s32_val = ConstValue::S32(42);
 /// let runtime_val = format_constvalue_to_types_componentvalue(&s32_val).unwrap();
-/// assert!(matches!(runtime_val, kiln_foundation::component_value::KilnComponentValue::S32(42);
+/// assert!(matches!(runtime_val, kiln_foundation::component_value::ComponentValue::S32(42)));
 /// ```
 pub fn format_constvalue_to_types_componentvalue(
     format_const_value: &FormatConstValue,
@@ -917,11 +922,12 @@ pub fn format_constvalue_to_types_componentvalue(
 ///
 /// ```
 /// use kiln_component::type_conversion::bidirectional::types_componentvalue_to_format_constvalue;
-/// use kiln_foundation::component_value::KilnComponentValue;
+/// use kiln_component::bounded_component_infra::ComponentProvider;
+/// use kiln_foundation::component_value::ComponentValue;
 ///
-/// let s32_val = KilnComponentValue::S32(42;
+/// let s32_val: ComponentValue<ComponentProvider> = ComponentValue::S32(42);
 /// let format_val = types_componentvalue_to_format_constvalue(&s32_val).unwrap();
-/// assert!(matches!(format_val, kiln_format::component::ConstValue::S32(42);
+/// assert!(matches!(format_val, kiln_format::component::ConstValue::S32(42)));
 /// ```
 pub fn types_componentvalue_to_format_constvalue(
     types_component_value: &KilnComponentValue<ComponentProvider>,

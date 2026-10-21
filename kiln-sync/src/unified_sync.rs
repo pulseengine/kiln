@@ -19,21 +19,25 @@
 //! # Usage
 //!
 //! ```rust
-//! use kiln_foundation::safety_system::{
-//!     AsilLevel,
-//!     SafetyContext,
-//! };
 //! use kiln_sync::unified_sync::{
+//!     AsilLevel,
 //!     BoundedChannel,
 //!     SafeMutex,
+//!     SafetyContext,
 //! };
 //!
 //! // Create a safety-aware mutex
 //! let safety_ctx = SafetyContext::new(AsilLevel::AsilC);
-//! let mutex = SafeMutex::new(42, safety_ctx)?;
+//! let mutex = SafeMutex::new(42, safety_ctx);
+//! {
+//!     let mut guard = mutex.lock().unwrap();
+//!     *guard = 43;
+//! }
+//! assert_eq!(*mutex.lock().unwrap(), 43);
 //!
-//! // Use bounded channels for communication
-//! let (sender, receiver) = BoundedChannel::<i32, 16>::new()?;
+//! // Create a bounded channel (sender and receiver handles)
+//! let channel_ctx = SafetyContext::new(AsilLevel::AsilC);
+//! let (_sender, _receiver) = BoundedChannel::<i32, 16>::create_channel(channel_ctx).unwrap();
 //! ```
 
 use core::{

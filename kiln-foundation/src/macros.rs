@@ -16,8 +16,10 @@
 /// # Examples
 ///
 /// ```rust
+/// # fn main() -> kiln_error::Result<()> {
 /// use kiln_foundation::{
 ///     safe_managed_alloc,
+///     BoundedVec,
 ///     CrateId,
 /// };
 ///
@@ -25,10 +27,12 @@
 /// let provider = safe_managed_alloc!(1024, CrateId::Component)?;
 ///
 /// // Use provider for bounded collections
-/// let mut vec = BoundedVec::new(provider)?;
+/// let mut vec: BoundedVec<u32, 16, _> = BoundedVec::new(provider)?;
 /// vec.push(42)?;
 ///
 /// // Memory automatically returned on drop
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Safety
@@ -50,8 +54,8 @@
 #[macro_export]
 macro_rules! managed_alloc {
     ($size:expr, $crate_id:expr) => {{
-        // Ensure memory system is initialized (ignore errors for convenience)
-        drop($crate::memory_init::MemoryInitializer::initialize);
+        // An init failure surfaces as the allocation error below.
+        let _ = $crate::memory_init::MemoryInitializer::initialize();
 
         // Create allocation through modern capability factory
         $crate::kiln_memory_system::CapabilityKilnFactory::create_provider::<$size>($crate_id)
@@ -66,19 +70,25 @@ macro_rules! managed_alloc {
 /// # Examples
 ///
 /// ```rust
+/// # fn main() -> kiln_error::Result<()> {
 /// use kiln_foundation::{
 ///     create_provider,
 ///     safe_memory::NoStdProvider,
 ///     CrateId,
 /// };
 ///
-/// // Create typed provider
-/// let guard = create_provider!(NoStdProvider<4096>, CrateId::Foundation)?;
+/// // Create typed provider (the macro currently always allocates a 1024-byte
+/// // provider, so the provider type must be `NoStdProvider<1024>`)
+/// let guard = create_provider!(NoStdProvider<1024>, CrateId::Foundation)?;
+/// # let _ = guard;
+/// # Ok(())
+/// # }
 /// ```
 #[macro_export]
 macro_rules! create_provider {
     ($provider_type:ty, $crate_id:expr) => {{
-        drop($crate::memory_init::MemoryInitializer::initialize);
+        // An init failure surfaces as the allocation error below.
+        let _ = $crate::memory_init::MemoryInitializer::initialize();
         // MIGRATION NOTE: create_typed_provider moved to capability system
         // This macro now requires explicit size specification in provider type
         $crate::kiln_memory_system::CapabilityKilnFactory::create_provider::<1024>($crate_id)
@@ -92,6 +102,7 @@ macro_rules! create_provider {
 /// # Examples
 ///
 /// ```rust
+/// # fn main() -> kiln_error::Result<()> {
 /// use kiln_foundation::{
 ///     hierarchical_budget,
 ///     CrateId,
@@ -108,6 +119,9 @@ macro_rules! create_provider {
 ///         ("temp", 100_000, MemoryPriority::Low),
 ///     ]
 /// };
+/// # let _ = budget;
+/// # Ok(())
+/// # }
 /// ```
 #[macro_export]
 macro_rules! hierarchical_budget {
@@ -138,7 +152,8 @@ macro_rules! hierarchical_budget {
 /// use kiln_foundation::memory_region;
 ///
 /// // Compile-time validated region
-/// let region = memory_region!(start: 0, size: 4096;
+/// let region = memory_region!(start: 0, size: 4096);
+/// assert_eq!(region.size(), 4096);
 /// ```
 #[macro_export]
 macro_rules! memory_region {
@@ -154,10 +169,24 @@ macro_rules! memory_region {
 /// # Examples
 ///
 /// ```rust
-/// use kiln_foundation::{allocation_token, CrateId};
+/// # fn main() -> kiln_error::Result<()> {
+/// use kiln_foundation::{
+///     allocation_token,
+///     memory_init::{
+///         get_global_capability_context,
+///         MemoryInitializer,
+///     },
+///     CrateId,
+/// };
 ///
-/// let token = allocation_token!(size: 1024, crate_id: CrateId::Foundation;
-/// let guard = token.allocate()?;
+/// MemoryInitializer::initialize()?;
+/// let context = get_global_capability_context()?;
+///
+/// let token = allocation_token!(size: 1024, crate_id: CrateId::Foundation);
+/// let guard = token.allocate(context)?;
+/// # let _ = guard;
+/// # Ok(())
+/// # }
 /// ```
 #[macro_export]
 macro_rules! allocation_token {
@@ -173,10 +202,14 @@ macro_rules! allocation_token {
 /// # Examples
 ///
 /// ```rust
+/// # fn main() -> kiln_error::Result<()> {
 /// use kiln_foundation::{auto_provider, CrateId};
 ///
 /// // Automatically sized for typical usage
 /// let guard = auto_provider!(CrateId::Component, typical_usage: "bounded_collections")?;
+/// # let _ = guard;
+/// # Ok(())
+/// # }
 /// ```
 #[macro_export]
 macro_rules! auto_provider {
@@ -204,13 +237,17 @@ macro_rules! auto_provider {
 /// # Examples
 ///
 /// ```rust
+/// # fn main() -> kiln_error::Result<()> {
 /// use kiln_foundation::{
 ///     debug_alloc,
 ///     CrateId,
 /// };
 ///
-/// #[cfg(debug_assertions)]
-/// let guard = debug_alloc!(1024, CrateId::Component, "parsing logic")?;
+/// // The macro propagates allocation errors with `?` itself and yields the provider
+/// let guard = debug_alloc!(1024, CrateId::Component, "parsing logic");
+/// # let _ = guard;
+/// # Ok(())
+/// # }
 /// ```
 #[cfg(debug_assertions)]
 #[macro_export]
@@ -221,7 +258,7 @@ macro_rules! debug_alloc {
             "Allocating {} bytes for {} in {}",
             $size,
             $purpose,
-            $crate_id.name()
+            $crate::memory_coordinator::CrateIdentifier::name(&$crate_id)
         );
 
         let guard = $crate::safe_managed_alloc!($size, $crate_id)?;

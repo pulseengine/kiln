@@ -1813,7 +1813,10 @@ impl<P: Provider> SafeMemoryHandler<P> {
     /// # let provider = safe_managed_alloc!(1024, CrateId::Foundation).unwrap();
     /// # let handler = SafeMemoryHandler::new(provider);
     /// let data = handler.to_vec().unwrap();
-    /// assert!(data.is_empty())); // Empty handler has no data
+    /// // A freshly allocated provider is fully zero-initialized: all bytes are
+    /// // valid to read and none holds data yet.
+    /// assert_eq!(data.len(), 1024);
+    /// assert!(data.iter().all(|&b| b == 0));
     /// ```
     #[cfg(feature = "std")]
     pub fn to_vec(&self) -> Result<std::vec::Vec<u8>> {

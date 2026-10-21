@@ -25,25 +25,27 @@ kiln-sync = "0.1"
 ### Basic Usage
 
 ```rust
-use kiln_sync::{Mutex, RwLock, Once};
+use kiln_sync::{Mutex, RwLock, KilnOnce};
 
 // Mutex for exclusive access
 let mutex = Mutex::new(42);
 {
-    let mut guard = mutex.lock().unwrap();
+    let mut guard = mutex.lock();
     *guard = 100;
 }
 
 // RwLock for concurrent reads
 let rwlock = RwLock::new(vec![1, 2, 3]);
-let read_guard = rwlock.read().unwrap();
+let read_guard = rwlock.read();
 println!("Data: {:?}", *read_guard);
 
-// Once for one-time initialization
-static INIT: Once = Once::new();
-INIT.call_once(|| {
+// KilnOnce for one-time initialization
+static INIT: KilnOnce<u32> = KilnOnce::new();
+let value = INIT.get_or_init(|| {
     println!("Initialized!");
+    7
 });
+assert_eq!(*value, 7);
 ```
 
 ## Environment Support
@@ -73,7 +75,7 @@ Spin-lock based implementations, no heap allocation.
 use kiln_sync::Mutex;
 
 let mutex = Mutex::new(String::from("hello"));
-let guard = mutex.lock().unwrap();
+let guard = mutex.lock();
 println!("{}", *guard);
 ```
 
@@ -84,28 +86,31 @@ use kiln_sync::RwLock;
 let lock = RwLock::new(5);
 
 // Multiple readers
-let r1 = lock.read().unwrap();
-let r2 = lock.read().unwrap();
+let r1 = lock.read();
+let r2 = lock.read();
 assert_eq!(*r1, 5);
 assert_eq!(*r2, 5);
 drop(r1);
 drop(r2);
 
 // Exclusive writer
-let mut w = lock.write().unwrap();
+let mut w = lock.write();
 *w = 10;
 ```
 
 ### KilnOnce
 ```rust
-use kiln_sync::Once;
+use kiln_sync::KilnOnce;
 
-static START: Once = Once::new();
-
-START.call_once(|| {
+fn setup_runtime() -> u32 {
     // Expensive initialization here
-    setup_runtime();
-});
+    42
+}
+
+static START: KilnOnce<u32> = KilnOnce::new();
+
+let runtime = START.get_or_init(setup_runtime);
+assert_eq!(*runtime, 42);
 ```
 
 ## Performance Characteristics

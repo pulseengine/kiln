@@ -387,6 +387,7 @@ impl MemoryFactory {
     ///     budget_aware_provider::CrateId,
     /// };
     ///
+    /// # fn parse_function() -> kiln_error::Result<u32> { Ok(0) }
     /// // Enter a module parsing scope
     /// let _scope = MemoryFactory::enter_module_scope(CrateId::Decoder)?;
     ///
@@ -395,7 +396,7 @@ impl MemoryFactory {
     /// functions.push(parse_function()?);
     ///
     /// // When _scope drops, memory resets to checkpoint
-    /// # Ok::<(), kiln_foundation::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     pub fn enter_module_scope(
         crate_id: CrateId,
@@ -450,7 +451,7 @@ impl MemoryFactory {
     /// // Check system health
     /// if !MemoryFactory::is_system_healthy() {
     ///     let report = MemoryFactory::get_safety_report();
-    ///     eprintln!("System health degraded: score={}", report.health_score)));
+    ///     eprintln!("System health degraded: score={}", report.health_score);
     /// }
     ///
     /// // Manual deallocation tracking
@@ -462,7 +463,7 @@ impl MemoryFactory {
     ///          report.total_allocations,
     ///          report.failed_allocations,
     ///          report.health_score);
-    /// # Ok::<(), kiln_foundation::Error>(())
+    /// # Ok::<(), kiln_error::Error>(())
     /// ```
     #[cfg(doc)]
     pub fn example() {}

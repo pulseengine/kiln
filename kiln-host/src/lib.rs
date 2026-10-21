@@ -20,6 +20,13 @@
 //! ## Usage
 //!
 //! ```rust,no_run
+//! // This example needs the `std` feature (`with_component_name`,
+//! // `with_host_id` and `Vec`-based return values are std-only); the hidden
+//! // `main` wrappers make it a no-op when the crate is built without `std`.
+//! # #[cfg(not(feature = "std"))]
+//! # fn main() {}
+//! # #[cfg(feature = "std")]
+//! # fn main() {
 //! # use kiln_host::prelude::*;
 //! # use kiln_foundation::Value;
 //!
@@ -28,10 +35,11 @@
 //!     .with_host_function("my_module", "my_function",
 //!         HostFunctionHandler::new(|_| Ok(vec![Value::I32(42)])))
 //!     .with_component_name("my_component")
-//!     .with_host_id("my_host";
+//!     .with_host_id("my_host");
 //!
 //! // Build the host
-//! let registry = builder.build().expect(".expect("Failed to build host"));")
+//! let registry = builder.build().expect("Failed to build host");
+//! # }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
