@@ -198,6 +198,12 @@ struct InterComponentHandler {
 
 #[cfg(all(feature = "wasi", feature = "kiln-execution"))]
 impl kiln_foundation::traits::HostImportHandler for InterComponentHandler {
+    fn resolves(&self, module: &str, function: &str) -> bool {
+        // call_import routes a known interface to its component and every
+        // other import to WASI.
+        self.routes.contains_key(module) || self.wasi.resolves(module, function)
+    }
+
     fn call_import(
         &mut self,
         module: &str,
@@ -968,10 +974,20 @@ impl KilndEngine {
             // the user instead of a generic load failure.
             let module_handle = engine.load_module(data)?;
 
-            // Instantiate
-            let instance = engine
-                .instantiate(module_handle)
-                .map_err(|_| Error::runtime_execution_error("Failed to instantiate module"))?;
+            // SR-65: name every import nothing resolves before instantiate
+            // refuses the module, so the user sees which ones are missing.
+            let unresolved = engine.unresolved_imports(module_handle)?;
+            if !unresolved.is_empty() {
+                eprintln!(
+                    "kiln: refusing to instantiate: {} unresolved import(s):",
+                    unresolved.len()
+                );
+                for (import_module, import_name) in &unresolved {
+                    eprintln!("  {import_module}::{import_name}");
+                }
+            }
+
+            let instance = engine.instantiate(module_handle)?;
 
             // Execute function - try common entry points
             // SR-58 / #480: `--invoke <export>` must work on the meld-fused core
