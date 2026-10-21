@@ -2160,6 +2160,11 @@ impl WasiDispatcher {
                     _ => return Err(Error::wasi_invalid_argument("resource-drop requires handle argument")),
                 };
 
+                // Release the file handle duplicated for a file input-stream (closing it)
+                // and its read position.
+                self.stream_files.remove(&handle);
+                self.stream_offsets.remove(&handle);
+
                 // Remove from resource manager (Preview2 semantics)
                 // Intentionally ignore if resource was already removed
                 drop(self.resource_manager.remove_resource(handle));
@@ -3106,7 +3111,30 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[resource-drop]descriptor") |
+            ("wasi:filesystem/types", "[resource-drop]descriptor") => {
+                // Dropping a descriptor ends its lifetime: remove the file descriptor
+                // `open-at` created, which closes the kept File and frees its slot in
+                // the resource table.
+                //
+                // A PREOPEN is never removed. `get-directories` hands out the preopen's
+                // fixed handle (it does not mint a fresh own<descriptor> per call), and
+                // every later path-based call resolves against it, so removing it would
+                // permanently disable the preopen. Per the canonical ABI a drop only
+                // ends the guest's use of that handle; here there is no guest-side
+                // state to release for it, so the drop is a no-op.
+                let handle = Self::core_u32(args, 0, "resource-drop: missing descriptor")?;
+                if self.preopen_base(handle).is_none() {
+                    if let Some(FileDescriptorEntry { fd_type: FileDescriptorType::RegularFile(_), .. }) =
+                        self.fd_table.get(&handle)
+                    {
+                        self.fd_table.remove(&handle);
+                        drop(self.resource_manager.remove_resource(handle));
+                    }
+                }
+                Ok(vec![])
+            }
+
+            #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
             ("wasi:filesystem/types", "[resource-drop]directory-entry-stream") => {
                 Ok(vec![])
             }
@@ -4656,6 +4684,165 @@ mod tests {
             std::fs::remove_dir_all(&root).ok();
             assert_eq!(res, vec![CV::I32(0), CV::I32(0x4000), CV::I32(8)]);
             assert_eq!(&got, b"original", "stream read must hit the ORIGINAL inode");
+            Ok(())
+        }
+
+        fn drop_descriptor(d: &mut WasiDispatcher, mem: &SliceMemory, h: u32) -> Result<Vec<CV>> {
+            d.dispatch_core(FS, "[resource-drop]descriptor", &[CV::I32(h as i32)], Some(mem))
+        }
+
+        fn drop_stream(d: &mut WasiDispatcher, mem: &SliceMemory, h: u32) -> Result<Vec<CV>> {
+            d.dispatch_core(
+                "wasi:io/streams",
+                "[resource-drop]input-stream",
+                &[CV::I32(h as i32)],
+                Some(mem),
+            )
+        }
+
+        fn stream_of(d: &mut WasiDispatcher, mem: &SliceMemory, fd: u32) -> Result<Vec<CV>> {
+            call(d, mem, "[method]descriptor.read-via-stream", &[
+                CV::I32(fd as i32), CV::I64(0), CV::I32(0x100),
+            ])
+        }
+
+        /// Dropping the input-stream releases the duplicated File and the offset; a
+        /// read on the dropped stream sees a closed stream.
+        // rivet: verifies SR-72
+        #[serial_test::serial]
+        #[test]
+        fn input_stream_drop_releases_the_duplicated_handle() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_drop_stream");
+            std::fs::write(sandbox.join("f.txt"), b"hello").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let fd = open_file(&mut d, &mem, dir, b"f.txt")?;
+            let stream = match stream_of(&mut d, &mem, fd)?.as_slice() {
+                [CV::I32(0), CV::I32(h)] => *h as u32,
+                other => panic!("read-via-stream must succeed, got {:?}", other),
+            };
+            // One successful read so a stream offset exists.
+            d.set_read_buffer_allocation(0x4000, 2);
+            call_stream_read(&mut d, &mem, stream)?;
+            assert!(d.stream_files.contains_key(&stream) && d.stream_offsets.contains_key(&stream));
+
+            drop_stream(&mut d, &mem, stream)?;
+            let files_gone = !d.stream_files.contains_key(&stream);
+            let offsets_gone = !d.stream_offsets.contains_key(&stream);
+            d.set_read_buffer_allocation(0x4000, 16);
+            let after = call_stream_read(&mut d, &mem, stream)?;
+            std::fs::remove_dir_all(&root).ok();
+            assert!(files_gone, "stream_files entry must be removed (File closed)");
+            assert!(offsets_gone, "stream_offsets entry must be removed");
+            // stream-error::closed
+            assert_eq!(after, vec![CV::I32(1), CV::I32(1)]);
+            Ok(())
+        }
+
+        fn call_stream_read(d: &mut WasiDispatcher, mem: &SliceMemory, stream: u32) -> Result<Vec<CV>> {
+            d.dispatch_core(
+                "wasi:io/streams",
+                "[method]input-stream.blocking-read",
+                &[CV::I32(stream as i32), CV::I64(2)],
+                Some(mem),
+            )
+        }
+
+        /// Dropping a descriptor removes its table entry (closing the kept File); a
+        /// read on it is bad-descriptor. A preopen's handle is never removed.
+        // rivet: verifies SR-72
+        #[serial_test::serial]
+        #[test]
+        fn descriptor_drop_releases_the_kept_file_but_never_a_preopen() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_drop_desc");
+            std::fs::write(sandbox.join("f.txt"), b"hello").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let fd = open_file(&mut d, &mem, dir, b"f.txt")?;
+            assert!(d.fd_table.contains_key(&fd));
+
+            drop_descriptor(&mut d, &mem, fd)?;
+            let entry_gone = !d.fd_table.contains_key(&fd);
+            d.set_read_buffer_allocation(0x4000, 16);
+            let read = call(&mut d, &mem, "[method]descriptor.read", &[
+                CV::I32(fd as i32), CV::I64(5), CV::I64(0), CV::I32(0x100),
+            ]);
+
+            // Dropping the preopen's handle must leave it usable.
+            drop_descriptor(&mut d, &mem, dir)?;
+            let preopen_kept = d.fd_table.contains_key(&dir) && d.preopen_base(dir).is_some();
+            let reopen = open_with_flags(&mut d, &mem, dir, b"f.txt", DESC_READ);
+            std::fs::remove_dir_all(&root).ok();
+            assert!(entry_gone, "fd_table entry must be removed (File closed)");
+            assert_eq!(err_code(&read), Some(BAD_DESCRIPTOR));
+            assert!(preopen_kept, "a preopen entry must never be removed");
+            assert!(is_ok(&reopen), "got {:?}", reopen);
+            Ok(())
+        }
+
+        /// Handles count toward the resource cap: opening past it is refused, and a
+        /// drop frees a slot again.
+        // rivet: verifies SR-72
+        #[serial_test::serial]
+        #[test]
+        fn open_and_stream_handles_are_capped_and_drops_free_slots() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_cap");
+            std::fs::write(sandbox.join("f.txt"), b"hello").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+
+            // Descriptors: open until refused.
+            let mut opened = Vec::new();
+            let mut refused = false;
+            for _ in 0..1000 {
+                match open_with_flags(&mut d, &mem, dir, b"f.txt", DESC_READ) {
+                    Ok(v) => match v.as_slice() {
+                        [CV::I32(0), CV::I32(h)] => opened.push(*h as u32),
+                        other => panic!("unexpected {:?}", other),
+                    },
+                    Err(_) => {
+                        refused = true;
+                        break;
+                    },
+                }
+            }
+            assert!(refused, "opening past the resource cap must be refused");
+            assert!(opened.len() <= 256);
+
+            // Free two slots, then fill them with streams until refused.
+            let keep = opened[0];
+            drop_descriptor(&mut d, &mem, opened[1])?;
+            drop_descriptor(&mut d, &mem, opened[2])?;
+            let mut streams = Vec::new();
+            let mut stream_refused = false;
+            for _ in 0..10 {
+                match stream_of(&mut d, &mem, keep) {
+                    Ok(v) => match v.as_slice() {
+                        [CV::I32(0), CV::I32(h)] => streams.push(*h as u32),
+                        other => panic!("unexpected {:?}", other),
+                    },
+                    Err(_) => {
+                        stream_refused = true;
+                        break;
+                    },
+                }
+            }
+            let stream_files = d.stream_files.len();
+            assert_eq!(streams.len(), 2, "exactly the two freed slots are usable");
+            assert!(stream_refused, "stream handles past the cap must be refused");
+            assert_eq!(stream_files, 2, "a refused stream must not leave a File behind");
+
+            // Dropping a stream frees its slot.
+            drop_stream(&mut d, &mem, streams[0])?;
+            let again = stream_of(&mut d, &mem, keep);
+            std::fs::remove_dir_all(&root).ok();
+            assert!(is_ok(&again), "got {:?}", again);
             Ok(())
         }
 
