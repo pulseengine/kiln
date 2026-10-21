@@ -1,30 +1,22 @@
 //! Safety-Critical Error Handling Tests
 //!
-//! This module ensures that all errors are handled through Result<T,E>
-//! and that no panics occur in any error condition. All error paths
-//! are tested to verify graceful degradation.
+//! This module tests that all error conditions are handled gracefully
+//! with proper error returns instead of panics, ensuring robust operation
+//! in safety-critical environments.
 //!
 //! # Safety Requirements
-//! - SW-REQ-ID: REQ_ERR_001 - No panic paths allowed
-//! - SW-REQ-ID: REQ_ERR_002 - Explicit error propagation
+//! - SW-REQ-ID: REQ_ERR_001 - Graceful error handling
+//! - SW-REQ-ID: REQ_ERR_002 - No panic on resource exhaustion
 //! - ASIL Level: ASIL-C
 
 #![forbid(unsafe_code)]
 
-extern crate alloc;
-
 use kiln_component::{
     bounded_component_infra::*,
-    canonical_abi::{CanonicalABI, CanonicalOptions},
-    resource_management::ResourceTable,
-    resources::resource_lifecycle::{
-        Resource, ResourceLifecycleManager, ResourceMetadata, ResourceType,
-    },
+    resource_management::{ResourceError, ResourceTable},
+    resources::resource_lifecycle::ResourceLifecycleManager,
 };
-use kiln_foundation::{
-    KilnError,
-    bounded::{BoundedString, BoundedVec},
-};
+use kiln_error::codes;
 
 #[cfg(test)]
 mod error_handling_tests {
@@ -33,26 +25,19 @@ mod error_handling_tests {
     /// Test that capacity exceeded returns error, not panic
     #[test]
     fn test_no_panic_on_capacity_exceeded() {
-        let vec_result = new_component_vec::<u32>();
-        assert!(vec_result.is_ok());
-
-        let mut vec = vec_result.unwrap();
+        let mut vec = new_component_vec::<u32>();
 
         // Fill to capacity
         for i in 0..MAX_COMPONENT_INSTANCES {
-            let result = vec.try_push(i as u32);
+            let result = vec.push(i as u32);
             assert!(result.is_ok());
         }
 
         // All subsequent pushes should return error, not panic
         for i in 0..100 {
-            let result = vec.try_push(i);
-            match result {
-                Err(KilnError::CapacityExceeded) => {
-                    // Expected - no panic
-                },
-                Ok(_) => panic!("Push should have failed"),
-                Err(e) => panic!("Unexpected error: {:?}", e),
+            match vec.push(i) {
+                Err(e) => assert_eq!(e.code, codes::FOUNDATION_BOUNDED_CAPACITY_EXCEEDED),
+                Ok(()) => panic!("Push should have failed"),
             }
         }
     }
@@ -60,64 +45,41 @@ mod error_handling_tests {
     /// Test error handling in string operations
     #[test]
     fn test_string_error_handling() {
-        let name_result = new_component_name();
-        assert!(name_result.is_ok());
-
-        let mut name = name_result.unwrap();
-
         // Test empty string
-        let result = name.try_set("Error");
-        assert!(result.is_ok());
-        assert_eq!(name.len(), 0);
+        let empty = bounded_component_name_from_str("").unwrap();
+        assert_eq!(empty.len(), 0);
 
         // Test exact limit
         let exact_limit = "a".repeat(MAX_COMPONENT_NAME_LEN);
-        let result = name.try_set(&exact_limit);
-        assert!(result.is_ok());
+        let name = bounded_component_name_from_str(&exact_limit).unwrap();
+        assert_eq!(name.len(), MAX_COMPONENT_NAME_LEN);
 
         // Test over limit - should return error
         let over_limit = "a".repeat(MAX_COMPONENT_NAME_LEN + 1);
-        let result = name.try_set(&over_limit);
-        match result {
-            Err(KilnError::CapacityExceeded) => {
-                // Expected
-            },
-            _ => panic!("Expected CapacityExceeded error"),
+        match bounded_component_name_from_str(&over_limit) {
+            Err(e) => assert_eq!(e.code, codes::FOUNDATION_BOUNDED_CAPACITY_EXCEEDED),
+            Ok(_) => panic!("Expected capacity-exceeded error"),
         }
 
-        // Original value should be unchanged after error
+        // The previously built name is unchanged by the failed construction
         assert_eq!(name.len(), MAX_COMPONENT_NAME_LEN);
     }
 
     /// Test map error handling
     #[test]
     fn test_map_error_handling() {
-        let map_result = new_type_map::<u32>();
-        assert!(map_result.is_ok());
+        let mut map = new_type_map::<u32>();
 
-        let mut map = map_result.unwrap();
-
-        // Test duplicate key handling
         let key1 = 42u32;
-        let result1 = map.try_insert(key1, 100);
-        assert!(result1.is_ok());
+        assert_eq!(map.insert(key1, 100).unwrap(), None);
 
-        // Insert with same key should handle gracefully
-        let result2 = map.try_insert(key1, 200);
-        match result2 {
-            Ok(_) => {
-                // Key was updated
-                assert_eq!(map.get(&key1), Some(&200));
-            },
-            Err(_) => {
-                // Or error was returned - both are valid
-            },
-        }
+        // Insert with same key replaces the value and returns the old one
+        assert_eq!(map.insert(key1, 200).unwrap(), Some(100));
+        assert_eq!(map.get(&key1), Some(&200));
 
         // Test non-existent key lookup
         let missing_key = 999u32;
-        let value = map.get(&missing_key);
-        assert_eq!(value, None); // Should return None, not panic
+        assert_eq!(map.get(&missing_key), None); // Should return None, not panic
     }
 
     /// Test resource table error handling
@@ -125,51 +87,24 @@ mod error_handling_tests {
     fn test_resource_table_error_handling() {
         let mut table = ResourceTable::new();
 
-        // Test invalid handle operations
-        let invalid_handle = 0xFFFFFFFF;
+        // u32::MAX is the reserved invalid handle
+        let invalid_handle = 0xFFFF_FFFF;
 
-        // Deallocate non-existent handle
         let result = table.deallocate(invalid_handle);
-        assert!(result.is_err());
-        match result {
-            Err(KilnError::InvalidHandle) => {
-                // Expected
-            },
-            _ => panic!("Expected InvalidHandle error"),
-        }
+        assert_eq!(result, Err(ResourceError::InvalidHandle));
 
-        // Get non-existent handle
         let result = table.get(invalid_handle);
-        assert!(result.is_err());
+        assert!(matches!(result, Err(ResourceError::InvalidHandle)));
+
+        // A well-formed handle that was never allocated is not found
+        assert_eq!(table.deallocate(12345), Err(ResourceError::NotFound));
 
         // Allocate and deallocate correctly
         let handle = table.allocate().expect("Failed to allocate");
         assert!(table.deallocate(handle).is_ok());
 
         // Double deallocate should error
-        let result = table.deallocate(handle);
-        assert!(result.is_err());
-    }
-
-    /// Test canonical ABI error handling
-    #[test]
-    fn test_canonical_abi_error_handling() {
-        let abi = CanonicalABI::new();
-
-        // Test with null memory
-        let null_memory = core::ptr::null();
-        let options = CanonicalOptions::default();
-
-        // These operations should handle null memory gracefully
-        // (Note: actual implementation details may vary)
-
-        // Test invalid offset
-        let result = abi.lift_flat_value(null_memory, 0xFFFFFFFF, &options);
-        assert!(result.is_err());
-
-        // Test invalid size
-        let result = abi.lower_flat_value(null_memory, 0, usize::MAX, &options);
-        assert!(result.is_err());
+        assert_eq!(table.deallocate(handle), Err(ResourceError::NotFound));
     }
 
     /// Test resource lifecycle error handling
@@ -177,84 +112,61 @@ mod error_handling_tests {
     fn test_resource_lifecycle_error_handling() {
         let mut manager = ResourceLifecycleManager::new();
 
-        let resource_type = ResourceType {
-            type_idx: 1,
-            name: bounded_component_name_from_str("TestResource").unwrap(),
-            destructor: Some(100),
-        };
+        manager
+            .register_type(1, "TestResource", Some(100))
+            .expect("Failed to register resource type");
 
-        let metadata = ResourceMetadata {
-            created_at: Some(0),
-            last_accessed: None,
-            creator: 0,
-            owner: 0,
-            user_data: None,
-        };
+        // Creating a resource of an unregistered type is an error
+        assert!(manager.create_resource(2, 0, None).is_err());
 
-        // Create resource
-        let handle = manager
-            .create_resource(resource_type, metadata)
-            .expect("Failed to create resource");
+        let handle = manager.create_resource(1, 0, None).expect("Failed to create resource");
 
         // Test invalid operations
         let invalid_handle = handle + 1000;
 
         // Borrow non-existent resource
-        let result = manager.borrow_resource(invalid_handle);
-        assert!(result.is_err());
+        assert!(manager.borrow_resource(invalid_handle, 1, false).is_err());
 
         // Release non-existent borrow
-        let result = manager.release_borrow(invalid_handle);
-        assert!(result.is_err());
+        assert!(manager.release_borrow(invalid_handle, 1).is_err());
 
         // Transfer non-existent resource
-        let result = manager.transfer_ownership(invalid_handle, 999);
-        assert!(result.is_err());
+        assert!(manager.transfer_ownership(invalid_handle, 0, 999).is_err());
 
         // Drop non-existent resource
-        let result = manager.drop_resource(invalid_handle);
-        assert!(result.is_err());
+        assert!(manager.drop_resource(invalid_handle).is_err());
 
         // Test double operations
         assert!(manager.drop_resource(handle).is_ok());
-        let result = manager.drop_resource(handle);
-        assert!(result.is_err()); // Already dropped
+        assert!(manager.drop_resource(handle).is_err()); // Already dropped
     }
 
     /// Test stack overflow protection
     #[test]
     fn test_stack_overflow_protection() {
-        let stack_result = new_call_stack::<u32>();
-        assert!(stack_result.is_ok());
-
-        let mut stack = stack_result.unwrap();
+        let mut stack = new_call_stack::<u32>();
 
         // Push until full
         while !stack.is_full() {
-            assert!(stack.try_push(1).is_ok());
+            assert!(stack.push(1).is_ok());
         }
 
         // Further pushes should error, not overflow
         for _ in 0..100 {
-            let result = stack.try_push(2);
-            assert!(result.is_err());
+            assert!(stack.push(2).is_err());
         }
 
         // Pop should still work
         assert_eq!(stack.pop(), Some(1));
 
         // Can push again after pop
-        assert!(stack.try_push(3).is_ok());
+        assert!(stack.push(3).is_ok());
     }
 
     /// Test empty collection operations
     #[test]
     fn test_empty_collection_operations() {
-        // Test empty vector operations
-        let vec_result = new_component_vec::<u32>();
-        assert!(vec_result.is_ok());
-
-        let mut vec = vec_result.unwrap();
+        let mut vec = new_component_vec::<u32>();
 
         // Pop from empty should return None, not panic
         assert_eq!(vec.pop(), None);
@@ -264,34 +176,25 @@ mod error_handling_tests {
             assert_eq!(vec.pop(), None);
         }
 
-        // Test empty map operations
-        let map_result = new_type_map::<String>();
-        assert!(map_result.is_ok());
-
-        let map = map_result.unwrap();
+        let map = new_type_map::<String>();
 
         // Get from empty map
         let key = 42u32;
         assert_eq!(map.get(&key), None);
 
         // Iteration over empty map should work
-        let count = map.iter().count();
-        assert_eq!(count, 0);
+        assert_eq!(map.iter().count(), 0);
     }
 
     /// Test boundary value error handling
     #[test]
     fn test_boundary_value_errors() {
-        // Test with maximum indices
-        let vec_result = new_type_map::<u32>();
-        assert!(vec_result.is_ok());
-
-        let mut map = vec_result.unwrap();
+        let mut map = new_type_map::<u32>();
 
         // Insert at boundary values
-        assert!(map.try_insert(0, 100).is_ok());
-        assert!(map.try_insert(u32::MAX, 200).is_ok());
-        assert!(map.try_insert(u32::MAX / 2, 300).is_ok());
+        assert!(map.insert(0, 100).is_ok());
+        assert!(map.insert(u32::MAX, 200).is_ok());
+        assert!(map.insert(u32::MAX / 2, 300).is_ok());
 
         // Lookup at boundaries
         assert_eq!(map.get(&0), Some(&100));
@@ -302,96 +205,49 @@ mod error_handling_tests {
     /// Test error propagation through layers
     #[test]
     fn test_error_propagation() {
-        fn allocate_nested() -> kiln_error::Result<BoundedComponentVec<BoundedExportVec<u32>>> {
-            let mut outer = new_component_vec()?;
+        fn allocate_nested(
+            count: usize,
+        ) -> kiln_error::Result<BoundedMemoryVec<BoundedComponentName>> {
+            let mut outer = BoundedMemoryVec::new();
 
-            // Try to allocate nested vectors
-            for _ in 0..10 {
-                let inner = new_export_vec()?;
-                outer.try_push(inner)?;
+            for i in 0..count {
+                let inner = bounded_component_name_from_str(&format!("name_{}", i))?;
+                outer.push(inner)?;
             }
 
             Ok(outer)
         }
 
-        // Should propagate any allocation errors
-        match allocate_nested() {
-            Ok(_) => {
-                // Success case
-            },
-            Err(e) => {
-                // Error propagated correctly
-                match e {
-                    KilnError::OutOfMemory => {},
-                    KilnError::CapacityExceeded => {},
-                    _ => panic!("Unexpected error type: {:?}", e),
-                }
-            },
+        // Within capacity: success
+        let nested = allocate_nested(MAX_MEMORY_INSTANCES).unwrap();
+        assert_eq!(nested.len(), MAX_MEMORY_INSTANCES);
+
+        // Beyond capacity: the push error propagates through `?`
+        match allocate_nested(MAX_MEMORY_INSTANCES + 1) {
+            Err(e) => assert_eq!(e.code, codes::FOUNDATION_BOUNDED_CAPACITY_EXCEEDED),
+            Ok(_) => panic!("Expected capacity-exceeded error"),
         }
-    }
-
-    /// Test that all operations return Result
-    #[test]
-    fn test_all_operations_return_result() {
-        // This test verifies the API design
-        // All operations that can fail should return Result<T, E>
-
-        let vec_result: kiln_error::Result<_> = new_component_vec::<u32>();
-        assert!(vec_result.is_ok());
-
-        let map_result: kiln_error::Result<_> = new_export_map::<u32>();
-        assert!(map_result.is_ok());
-
-        let string_result: kiln_error::Result<_> = new_component_name();
-        assert!(string_result.is_ok());
-
-        let bounded_string_result: kiln_error::Result<_> = bounded_component_name_from_str("test");
-        assert!(bounded_string_result.is_ok());
-
-        // All constructors return Result, enabling proper error handling
     }
 
     /// Test error recovery
     #[test]
     fn test_error_recovery() {
-        let vec_result = new_component_vec::<u32>();
-        assert!(vec_result.is_ok());
-
-        let mut vec = vec_result.unwrap();
+        let mut vec = new_component_vec::<u32>();
 
         // Fill vector
         while !vec.is_full() {
-            vec.try_push(1).unwrap();
+            vec.push(1).unwrap();
         }
 
         // Cause error
-        assert!(vec.try_push(2).is_err());
+        assert!(vec.push(2).is_err());
 
         // Vector should still be usable
         assert_eq!(vec.len(), MAX_COMPONENT_INSTANCES);
         assert_eq!(vec.pop(), Some(1));
 
         // Can continue operations after error
-        assert!(vec.try_push(3).is_ok());
+        assert!(vec.push(3).is_ok());
         assert_eq!(vec.len(), MAX_COMPONENT_INSTANCES);
-    }
-}
-
-#[cfg(all(test, not(feature = "std")))]
-mod no_std_error_tests {
-    use super::*;
-
-    /// Test error handling in no_std environment
-    #[test]
-    fn test_no_std_error_handling() {
-        // Verify error types work without std
-        let error = KilnError::CapacityExceeded;
-
-        // Error should have a representation
-        let _ = format!("{:?}", error);
-
-        // Result type should work
-        let result: kiln_error::Result<()> = Err(KilnError::OutOfMemory);
-        assert!(result.is_err());
     }
 }

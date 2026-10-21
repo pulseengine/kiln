@@ -178,16 +178,6 @@ component-model-all = [
 decoder = ["dep:kiln-decoder"]
 
 
-[[example]]
-name = "component_info_simple"
-path = "examples/component_info_simple.rs"
-required-features = ["std"]
-
-[[example]]
-name = "interceptor_example"
-path = "examples/interceptor_example.rs"
-required-features = ["std"]
-
 [[bench]]
 name = "kiln_allocator_benchmarks"
 harness = false

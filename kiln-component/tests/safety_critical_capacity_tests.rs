@@ -11,15 +11,8 @@
 
 #![forbid(unsafe_code)]
 
-extern crate alloc;
-
 use kiln_component::bounded_component_infra::*;
-#[cfg(not(feature = "std"))]
-use kiln_foundation::collections::StaticMap as BoundedHashMap;
-use kiln_foundation::{
-    KilnError, bounded::BoundedString, budget_aware_provider::CrateId,
-    collections::StaticVec as BoundedVec, managed_alloc,
-};
+use kiln_error::codes;
 
 #[cfg(test)]
 mod capacity_limit_tests {
@@ -28,15 +21,11 @@ mod capacity_limit_tests {
     /// Test vector capacity limits are enforced
     #[test]
     fn test_bounded_vec_capacity_limit() {
-        // Test component instance vector
-        let result = new_component_vec::<u32>();
-        assert!(result.is_ok(), "Failed to create component vector");
-
-        let mut vec = result.unwrap();
+        let mut vec = new_component_vec::<u32>();
 
         // Fill to capacity
         for i in 0..MAX_COMPONENT_INSTANCES {
-            let push_result = vec.try_push(i as u32);
+            let push_result = vec.push(i as u32);
             assert!(
                 push_result.is_ok(),
                 "Failed to push within capacity at index {}",
@@ -49,27 +38,21 @@ mod capacity_limit_tests {
         assert!(vec.is_full());
 
         // Try to exceed capacity - should return error, not panic
-        let overflow_result = vec.try_push(999);
-        assert!(overflow_result.is_err());
+        let overflow_result = vec.push(999);
         match overflow_result {
-            Err(KilnError::CapacityExceeded) => {
-                // Expected error
-            },
-            _ => panic!("Expected CapacityExceeded error"),
+            Err(e) => assert_eq!(e.code, codes::FOUNDATION_BOUNDED_CAPACITY_EXCEEDED),
+            Ok(()) => panic!("Expected capacity-exceeded error"),
         }
     }
 
     /// Test export vector capacity enforcement
     #[test]
     fn test_export_vec_capacity() {
-        let result = new_export_vec::<u32>();
-        assert!(result.is_ok());
-
-        let mut vec = result.unwrap();
+        let mut vec = new_export_vec::<u32>();
 
         // Test partial fill
         for i in 0..100 {
-            let push_result = vec.try_push(i);
+            let push_result = vec.push(i);
             assert!(push_result.is_ok());
         }
 
@@ -78,24 +61,23 @@ mod capacity_limit_tests {
 
         // Fill remaining capacity
         for i in 100..MAX_COMPONENT_EXPORTS {
-            let push_result = vec.try_push(i as u32);
-            assert!(push_result.is_ok());
+            assert!(vec.push(i as u32).is_ok());
         }
 
         assert!(vec.is_full());
 
         // Verify overflow handling
-        let overflow = vec.try_push(0);
-        assert!(matches!(overflow, Err(KilnError::CapacityExceeded)));
+        let overflow = vec.push(0);
+        match overflow {
+            Err(e) => assert_eq!(e.code, codes::FOUNDATION_BOUNDED_CAPACITY_EXCEEDED),
+            Ok(()) => panic!("Expected capacity-exceeded error"),
+        }
     }
 
     /// Test resource handle vector limits
     #[test]
     fn test_resource_vec_limits() {
-        let result = new_resource_vec::<u64>();
-        assert!(result.is_ok());
-
-        let mut vec = result.unwrap();
+        let mut vec = new_resource_vec::<u64>();
 
         // Test batch operations near capacity
         let batch_size = 100;
@@ -104,14 +86,14 @@ mod capacity_limit_tests {
         for batch in 0..num_batches {
             for i in 0..batch_size {
                 let handle = (batch * batch_size + i) as u64;
-                assert!(vec.try_push(handle).is_ok());
+                assert!(vec.push(handle).is_ok());
             }
         }
 
         // Fill remaining
         let remaining = MAX_RESOURCE_HANDLES % batch_size;
         for i in 0..remaining {
-            assert!(vec.try_push(i as u64).is_ok());
+            assert!(vec.push(i as u64).is_ok());
         }
 
         assert_eq!(vec.len(), MAX_RESOURCE_HANDLES);
@@ -127,10 +109,7 @@ mod capacity_limit_tests {
             return_addr: u32,
         }
 
-        let result = new_call_stack::<CallFrame>();
-        assert!(result.is_ok());
-
-        let mut stack = result.unwrap();
+        let mut stack = new_call_stack::<CallFrame>();
 
         // Simulate deep recursion up to limit
         for depth in 0..MAX_CALL_STACK_DEPTH {
@@ -139,7 +118,7 @@ mod capacity_limit_tests {
                 return_addr: (depth * 4) as u32,
             };
 
-            let push_result = stack.try_push(frame);
+            let push_result = stack.push(frame);
             assert!(push_result.is_ok(), "Failed at depth {}", depth);
         }
 
@@ -151,44 +130,36 @@ mod capacity_limit_tests {
             return_addr: 0,
         };
 
-        let overflow_result = stack.try_push(overflow_frame);
+        let overflow_result = stack.push(overflow_frame);
         assert!(overflow_result.is_err());
+        let top = stack.last().unwrap();
+        assert_eq!(top.function_idx, (MAX_CALL_STACK_DEPTH - 1) as u32);
+        assert_eq!(top.return_addr, ((MAX_CALL_STACK_DEPTH - 1) * 4) as u32);
     }
 
     /// Test bounded string capacity
     #[test]
     fn test_bounded_string_limits() {
-        // Test component name
-        let name_result = new_component_name();
-        assert!(name_result.is_ok());
-
-        let mut name = name_result.unwrap();
-
-        // Create a string at the limit
+        // A name exactly at the limit is accepted
         let long_string = "a".repeat(MAX_COMPONENT_NAME_LEN);
-        let set_result = name.try_set(&long_string);
-        assert!(set_result.is_ok());
+        let name = bounded_component_name_from_str(&long_string).unwrap();
         assert_eq!(name.len(), MAX_COMPONENT_NAME_LEN);
 
-        // Try to exceed limit
+        // A name beyond the limit is rejected
         let too_long = "a".repeat(MAX_COMPONENT_NAME_LEN + 1);
-        let overflow_result = name.try_set(&too_long);
+        let overflow_result = bounded_component_name_from_str(&too_long);
         assert!(overflow_result.is_err());
     }
 
     /// Test export map capacity
     #[test]
     fn test_export_map_capacity() {
-        // Test with simple u32 keys instead of BoundedString
-        let map_result = new_type_map::<String>();
-        assert!(map_result.is_ok());
+        // Test with simple u32 keys instead of bounded names
+        let mut map = new_type_map::<String>();
 
-        let mut map = map_result.unwrap();
-
-        // Fill map to capacity
+        // Fill map partway
         for i in 0..100 {
-            // Use fewer entries for testing
-            let insert_result = map.try_insert(i as u32, format!("value_{}", i));
+            let insert_result = map.insert(i as u32, format!("value_{}", i));
             assert!(insert_result.is_ok(), "Failed to insert at index {}", i);
         }
 
@@ -202,33 +173,27 @@ mod capacity_limit_tests {
     /// Test type map limits
     #[test]
     fn test_type_map_limits() {
-        let map_result = new_type_map::<String>();
-        assert!(map_result.is_ok());
-
-        let mut map = map_result.unwrap();
+        let mut map = new_type_map::<String>();
 
         // Test sparse insertions
         for i in (0..MAX_TYPE_DEFINITIONS).step_by(10) {
-            let insert_result = map.try_insert(i as u32, format!("type_{}", i));
+            let insert_result = map.insert(i as u32, format!("type_{}", i));
             assert!(insert_result.is_ok());
         }
 
-        let expected_count = MAX_TYPE_DEFINITIONS / 10;
+        let expected_count = MAX_TYPE_DEFINITIONS.div_ceil(10);
         assert_eq!(map.len(), expected_count);
     }
 
     /// Test operand stack limits
     #[test]
     fn test_operand_stack_limits() {
-        let stack_result = new_operand_stack::<i64>();
-        assert!(stack_result.is_ok());
-
-        let mut stack = stack_result.unwrap();
+        let mut stack = new_operand_stack::<i64>();
 
         // Simulate computation that uses full stack
         for i in 0..MAX_OPERAND_STACK_SIZE {
             let value = i as i64 * 2;
-            assert!(stack.try_push(value).is_ok());
+            assert!(stack.push(value).is_ok());
         }
 
         assert_eq!(stack.len(), MAX_OPERAND_STACK_SIZE);
@@ -252,20 +217,20 @@ mod capacity_limit_tests {
             size: u32,
         }
 
-        let vec_result = new_memory_vec::<MockMemory>();
-        assert!(vec_result.is_ok());
-
-        let mut vec = vec_result.unwrap();
+        let mut vec = BoundedMemoryVec::<MockMemory>::new();
 
         for i in 0..MAX_MEMORY_INSTANCES {
             let mem = MockMemory {
                 base: i as u64 * 65536,
                 size: 65536,
             };
-            assert!(vec.try_push(mem).is_ok());
+            assert!(vec.push(mem).is_ok());
         }
 
         assert_eq!(vec.len(), MAX_MEMORY_INSTANCES);
+        let last = vec.last().unwrap();
+        assert_eq!(last.base, (MAX_MEMORY_INSTANCES as u64 - 1) * 65536);
+        assert_eq!(last.size, 65536);
     }
 
     /// Test post-return callback limits
@@ -273,10 +238,7 @@ mod capacity_limit_tests {
     fn test_post_return_callback_limits() {
         type Callback = fn() -> kiln_error::Result<()>;
 
-        let vec_result = new_post_return_vec::<Callback>();
-        assert!(vec_result.is_ok());
-
-        let mut vec = vec_result.unwrap();
+        let mut vec = BoundedPostReturnVec::<Callback>::new();
 
         fn dummy_callback() -> kiln_error::Result<()> {
             Ok(())
@@ -284,27 +246,24 @@ mod capacity_limit_tests {
 
         // Fill to capacity
         for _ in 0..MAX_POST_RETURN_CALLBACKS {
-            assert!(vec.try_push(dummy_callback).is_ok());
+            assert!(vec.push(dummy_callback).is_ok());
         }
 
         assert!(vec.is_full());
 
         // Verify overflow protection
-        let overflow = vec.try_push(dummy_callback);
+        let overflow = vec.push(dummy_callback);
         assert!(overflow.is_err());
     }
 
     /// Test that clear operations work correctly
     #[test]
     fn test_clear_operations() {
-        let vec_result = new_component_vec::<u32>();
-        assert!(vec_result.is_ok());
-
-        let mut vec = vec_result.unwrap();
+        let mut vec = new_component_vec::<u32>();
 
         // Fill partially
         for i in 0..10 {
-            vec.try_push(i).unwrap();
+            vec.push(i).unwrap();
         }
 
         assert_eq!(vec.len(), 10);
@@ -315,17 +274,14 @@ mod capacity_limit_tests {
         assert!(vec.is_empty());
 
         // Can push again after clear
-        assert!(vec.try_push(42).is_ok());
+        assert!(vec.push(42).is_ok());
         assert_eq!(vec.len(), 1);
     }
 
     /// Test capacity after operations
     #[test]
     fn test_capacity_invariants() {
-        let vec_result = new_import_vec::<String>();
-        assert!(vec_result.is_ok());
-
-        let mut vec = vec_result.unwrap();
+        let mut vec = new_import_vec::<String>();
 
         // Capacity should remain constant
         let initial_capacity = vec.capacity();
@@ -333,7 +289,7 @@ mod capacity_limit_tests {
 
         // Add some elements
         for i in 0..100 {
-            vec.try_push(format!("import_{}", i)).unwrap();
+            vec.push(format!("import_{}", i)).unwrap();
         }
 
         assert_eq!(vec.capacity(), initial_capacity);
@@ -359,10 +315,7 @@ mod capacity_limit_tests {
             size: usize,
         }
 
-        let map_result = new_resource_type_map::<ResourceTypeInfo>();
-        assert!(map_result.is_ok());
-
-        let mut map = map_result.unwrap();
+        let mut map = new_resource_type_map::<ResourceTypeInfo>();
 
         // Fill to capacity
         for i in 0..MAX_RESOURCE_TYPES {
@@ -370,7 +323,7 @@ mod capacity_limit_tests {
                 name: format!("resource_type_{}", i),
                 size: i * 8,
             };
-            assert!(map.try_insert(i as u32, info).is_ok());
+            assert!(map.insert(i as u32, info).is_ok());
         }
 
         assert_eq!(map.len(), MAX_RESOURCE_TYPES);
@@ -379,7 +332,9 @@ mod capacity_limit_tests {
         for i in 0..MAX_RESOURCE_TYPES {
             let info = map.get(&(i as u32));
             assert!(info.is_some());
-            assert_eq!(info.unwrap().name, format!("resource_type_{}", i));
+            let info = info.unwrap();
+            assert_eq!(info.name, format!("resource_type_{}", i));
+            assert_eq!(info.size, i * 8);
         }
     }
 }
@@ -391,16 +346,9 @@ mod safety_critical_feature_tests {
     /// Test that safety-critical builds enforce stricter limits
     #[test]
     fn test_safety_critical_enforcement() {
-        // In safety-critical mode, all allocations should use Kiln allocator
-        let vec_result = new_component_vec::<u32>();
-        assert!(vec_result.is_ok());
-
-        let vec = vec_result.unwrap();
+        let vec = new_component_vec::<u32>();
 
         // Verify the vector is using bounded allocation
         assert_eq!(vec.capacity(), MAX_COMPONENT_INSTANCES);
-
-        // In safety-critical mode, capacity should be immutable
-        // (This is enforced by the BoundedVec implementation)
     }
 }
