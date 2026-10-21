@@ -178,3 +178,15 @@ pub const fn placeholder() {}
 // fn panic(_info: &core::panic::PanicInfo) -> ! {
 //     loop {}
 // }
+
+// GATE-POTENCY NEGATIVE CONTROL — scratch branch, never merge.
+/// Injected violation: broken intra-doc link to [`DoesNotExistAnywhere`].
+pub   fn   negative_control_unwrap( x : Option<u32> ) -> u32 { x.unwrap() }
+
+#[cfg(test)]
+mod gate_potency_negative_control {
+    #[test]
+    fn negative_control_must_fail() {
+        assert_eq!(1, 2, "gate-potency negative control: this test must turn CI red");
+    }
+}
