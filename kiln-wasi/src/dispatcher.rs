@@ -196,6 +196,12 @@ pub struct FileDescriptorEntry {
     pub read: bool,
     /// Whether this descriptor can be written to
     pub write: bool,
+    /// The file handle `open-at` opened (after sandbox authorization) for this
+    /// descriptor. `descriptor.read`/`write`/`sync-data` operate on this handle
+    /// only and never reopen by path, so a symlink swapped in after `open-at`
+    /// cannot redirect them. `None` for everything `open-at` did not open
+    /// (std streams, preopens, stream handles, directories).
+    pub file: Option<std::fs::File>,
 }
 
 /// WASI Dispatcher - unified entry point for all WASI function calls
@@ -258,16 +264,19 @@ impl WasiDispatcher {
                 fd_type: FileDescriptorType::Stdin,
                 read: true,
                 write: false,
+                file: None,
             });
             fd_table.insert(1, FileDescriptorEntry {
                 fd_type: FileDescriptorType::Stdout,
                 read: false,
                 write: true,
+                file: None,
             });
             fd_table.insert(2, FileDescriptorEntry {
                 fd_type: FileDescriptorType::Stderr,
                 read: false,
                 write: true,
+                file: None,
             });
         }
 
@@ -360,6 +369,7 @@ impl WasiDispatcher {
             fd_type: FileDescriptorType::PreopenDirectory(path.clone()),
             read: self.capabilities.filesystem.read_access,
             write: self.capabilities.filesystem.write_access,
+            file: None,
         });
 
         // Add to preopens list
@@ -633,6 +643,50 @@ impl WasiDispatcher {
             ErrorKind::DirectoryNotEmpty => fs_error::NOT_EMPTY,
             _ => fs_error::IO,
         }
+    }
+
+    /// Open `path` (already authorized by [`Self::resolve_and_authorize`]) and return
+    /// the handle the descriptor will keep. The file is opened first and the path is
+    /// re-inspected afterwards without following symlinks: if the path is now a
+    /// symlink, or no longer names the inode that was opened, a symlink was swapped in
+    /// between authorization and open and the open is refused. After this the
+    /// descriptor operates on the handle, never on the path again.
+    ///
+    /// The outer `Err` is a sandbox violation; the inner `Err` is a host I/O error.
+    #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
+    fn open_authorized_file(
+        path: &std::path::Path,
+        read: bool,
+        write: bool,
+    ) -> Result<std::result::Result<std::fs::File, std::io::Error>> {
+        let file = match std::fs::OpenOptions::new()
+            .read(read || !write)
+            .write(write)
+            .open(path)
+        {
+            Ok(f) => f,
+            Err(e) => return Ok(Err(e)),
+        };
+        let swapped = Error::wasi_permission_denied("Path changed during open (symlink swap)");
+        let on_disk = match std::fs::symlink_metadata(path) {
+            Ok(m) => m,
+            Err(_) => return Err(swapped),
+        };
+        if on_disk.file_type().is_symlink() {
+            return Err(swapped);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt as _;
+            let opened = match file.metadata() {
+                Ok(m) => m,
+                Err(e) => return Ok(Err(e)),
+            };
+            if opened.dev() != on_disk.dev() || opened.ino() != on_disk.ino() {
+                return Err(swapped);
+            }
+        }
+        Ok(Ok(file))
     }
 
     /// Get the list of pre-opened directories
@@ -1023,6 +1077,7 @@ impl WasiDispatcher {
                     fd_type: FileDescriptorType::RegularFile(full_path.clone()),
                     read: self.capabilities.filesystem.read_access,
                     write: self.capabilities.filesystem.write_access,
+                    file: None,
                 });
 
                 #[cfg(feature = "tracing")]
@@ -2399,16 +2454,29 @@ impl WasiDispatcher {
                     // Sandbox gate: resolve → contain (symlink-safe) → allow-list.
                     let full_path = self.resolve_and_authorize(&base, &path_str)?;
                     if full_path.exists() {
+                        let read_access = self.capabilities.filesystem.read_access;
+                        let write_access = self.capabilities.filesystem.write_access;
+                        // Keep the opened handle: read/write/sync-data use it and never
+                        // reopen by path (TOCTOU). Directories get no file handle.
+                        let file = if full_path.is_dir() {
+                            None
+                        } else {
+                            match Self::open_authorized_file(&full_path, read_access, write_access)? {
+                                Ok(f) => Some(f),
+                                Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
+                            }
+                        };
                         let path_for_resource = full_path.to_string_lossy().to_string();
                         let new_handle = self.resource_manager.create_file_descriptor(
                             &path_for_resource,
-                            self.capabilities.filesystem.read_access,
-                            self.capabilities.filesystem.write_access,
+                            read_access,
+                            write_access,
                         )?;
                         self.fd_table.insert(new_handle, FileDescriptorEntry {
                             fd_type: FileDescriptorType::RegularFile(full_path),
-                            read: self.capabilities.filesystem.read_access,
-                            write: self.capabilities.filesystem.write_access,
+                            read: read_access,
+                            write: write_access,
+                            file,
                         });
                         // result<ok=descriptor>: discriminant=0, payload=handle
                         Ok(vec![CoreValue::I32(0), CoreValue::I32(new_handle as i32)])
@@ -2532,6 +2600,7 @@ impl WasiDispatcher {
                     fd_type,
                     read: true,
                     write: false,
+                    file: None,
                 });
                 Ok(vec![CoreValue::I32(0), CoreValue::I32(stream_handle as i32)])
             }
@@ -2640,8 +2709,13 @@ impl WasiDispatcher {
                 let offset = Self::core_u64(args, 2, "read: missing offset")?;
                 let read_buf = self.read_buf_alloc.take();
 
-                let (path, readable) = match self.fd_table.get(&fd) {
-                    Some(FileDescriptorEntry { fd_type: FileDescriptorType::RegularFile(p), read, .. }) => (p.clone(), *read),
+                if !self.capabilities.filesystem.read_access {
+                    return Err(Error::wasi_permission_denied("Filesystem read access denied"));
+                }
+                // Only a file handle open-at opened is readable: never a stream handle,
+                // and never a path re-opened here (TOCTOU).
+                let (file, readable) = match self.fd_table.get(&fd) {
+                    Some(FileDescriptorEntry { fd_type: FileDescriptorType::RegularFile(_), read, file: Some(f), .. }) => (f, *read),
                     Some(FileDescriptorEntry { fd_type: FileDescriptorType::PreopenDirectory(_), .. }) => {
                         return Ok(fs_err(fs_error::IS_DIRECTORY));
                     },
@@ -2657,21 +2731,18 @@ impl WasiDispatcher {
                 let mem = memory.ok_or_else(|| Error::wasi_invalid_argument("read: no memory"))?;
 
                 use std::io::{Read as _, Seek as _};
-                let mut file = match std::fs::File::open(&path) {
-                    Ok(f) => f,
-                    Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
-                };
-                let file_len = match file.metadata() {
+                let mut handle: &std::fs::File = file;
+                let file_len = match handle.metadata() {
                     Ok(m) => m.len(),
                     Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
                 };
-                if let Err(e) = file.seek(std::io::SeekFrom::Start(offset)) {
+                if let Err(e) = handle.seek(std::io::SeekFrom::Start(offset)) {
                     return Ok(fs_err(Self::fs_error_code(&e)));
                 }
                 // Never return more than the guest asked for or than the engine allocated.
                 let want = core::cmp::min(length, u64::from(buf_size));
                 let mut data = Vec::new();
-                if let Err(e) = file.take(want).read_to_end(&mut data) {
+                if let Err(e) = handle.take(want).read_to_end(&mut data) {
                     return Ok(fs_err(Self::fs_error_code(&e)));
                 }
                 mem.write_bytes(buf_ptr, &data)?;
@@ -2694,8 +2765,9 @@ impl WasiDispatcher {
                 let buf_len = Self::core_u32(args, 2, "write: missing buffer len")?;
                 let offset = Self::core_u64(args, 3, "write: missing offset")?;
 
-                let (path, writable) = match self.fd_table.get(&fd) {
-                    Some(FileDescriptorEntry { fd_type: FileDescriptorType::RegularFile(p), write, .. }) => (p.clone(), *write),
+                // Only the handle open-at opened is written; never a re-opened path.
+                let (file, writable) = match self.fd_table.get(&fd) {
+                    Some(FileDescriptorEntry { fd_type: FileDescriptorType::RegularFile(_), write, file: Some(f), .. }) => (f, *write),
                     Some(FileDescriptorEntry { fd_type: FileDescriptorType::PreopenDirectory(_), .. }) => {
                         return Ok(fs_err(fs_error::IS_DIRECTORY));
                     },
@@ -2709,14 +2781,11 @@ impl WasiDispatcher {
                 let data = Self::read_guest_bytes(mem, buf_ptr, buf_len)?;
 
                 use std::io::{Seek as _, Write as _};
-                let mut file = match std::fs::OpenOptions::new().write(true).open(&path) {
-                    Ok(f) => f,
-                    Err(e) => return Ok(fs_err(Self::fs_error_code(&e))),
-                };
+                let mut handle: &std::fs::File = file;
                 // Seeking past the end then writing extends the file with zeros.
-                if let Err(e) = file
+                if let Err(e) = handle
                     .seek(std::io::SeekFrom::Start(offset))
-                    .and_then(|_| file.write_all(&data))
+                    .and_then(|_| handle.write_all(&data))
                 {
                     return Ok(fs_err(Self::fs_error_code(&e)));
                 }
@@ -2729,18 +2798,35 @@ impl WasiDispatcher {
                 // Core: (i32 fd, i32 retptr). A no-op success when the descriptor is not
                 // open for writing (per the WIT).
                 let fd = Self::core_u32(args, 0, "sync-data: missing descriptor")?;
-                let (path, writable) = match self.fd_table.get(&fd) {
+                // A file syncs the handle open-at opened (never a re-opened path). A
+                // preopen directory has no guest-opened handle; its path is the
+                // host-configured root, which the guest cannot replace (the sandbox
+                // refuses any operation on the preopen itself).
+                let synced = match self.fd_table.get(&fd) {
                     Some(FileDescriptorEntry {
-                        fd_type: FileDescriptorType::RegularFile(p) | FileDescriptorType::PreopenDirectory(p),
+                        fd_type: FileDescriptorType::RegularFile(_),
+                        write,
+                        file: Some(f),
+                        ..
+                    }) => {
+                        if !*write {
+                            return Ok(vec![CoreValue::I32(0)]);
+                        }
+                        f.sync_data()
+                    },
+                    Some(FileDescriptorEntry {
+                        fd_type: FileDescriptorType::PreopenDirectory(p),
                         write,
                         ..
-                    }) => (p.clone(), *write),
+                    }) => {
+                        if !*write {
+                            return Ok(vec![CoreValue::I32(0)]);
+                        }
+                        std::fs::File::open(p).and_then(|d| d.sync_data())
+                    },
                     _ => return Ok(fs_err(fs_error::BAD_DESCRIPTOR)),
                 };
-                if !writable {
-                    return Ok(vec![CoreValue::I32(0)]);
-                }
-                match std::fs::File::open(&path).and_then(|f| f.sync_data()) {
+                match synced {
                     Ok(()) => Ok(vec![CoreValue::I32(0)]),
                     Err(e) => Ok(fs_err(Self::fs_error_code(&e))),
                 }
@@ -2870,14 +2956,9 @@ impl WasiDispatcher {
                 };
                 // The link's own location passes the sandbox gate...
                 let new_full = self.resolve_and_authorize_nofollow(&base, &new_guest)?;
-                // ...and its contents must be relative and never climb out of the
-                // preopen (absolute / escaping targets are `not-permitted`).
-                let real_base = std::fs::canonicalize(&base)
-                    .map_err(|_| Error::wasi_permission_denied("Preopen base cannot be resolved"))?;
-                let link_dir = new_full
-                    .parent()
-                    .ok_or_else(|| Error::wasi_permission_denied("Path has no parent"))?;
-                if !symlink_target_stays_inside(&real_base, link_dir, std::path::Path::new(&contents)) {
+                // ...and its contents must be relative with no `..` component
+                // (absolute or `..`-bearing targets are `not-permitted`).
+                if !symlink_target_is_safe(std::path::Path::new(&contents)) {
                     return Ok(fs_err(fs_error::NOT_PERMITTED));
                 }
                 #[cfg(unix)]
@@ -2903,6 +2984,9 @@ impl WasiDispatcher {
                 let path_ptr = Self::core_u32(args, 1, "readlink-at: missing path ptr")?;
                 let path_len = Self::core_u32(args, 2, "readlink-at: missing path len")?;
                 let read_buf = self.read_buf_alloc.take();
+                if !self.capabilities.filesystem.read_access {
+                    return Err(Error::wasi_permission_denied("Filesystem read access denied"));
+                }
                 let mem = memory.ok_or_else(|| Error::wasi_invalid_argument("readlink-at: no memory"))?;
                 let guest_path = Self::read_guest_path(mem, path_ptr, path_len)?;
                 let base = match self.preopen_base(fd) {
@@ -3419,31 +3503,17 @@ mod fs_error {
     pub const NOT_PERMITTED: i32 = 31;
 }
 
-/// True iff a symlink whose contents are `contents`, created in the directory
-/// `link_dir` (already resolved to a real path inside `real_base`), can only ever
-/// point inside `real_base`: relative, and no `..` step ever climbs out of it.
-/// Checked lexically at every step, so `../<preopen-name>/x` is refused too.
+/// True iff a symlink with these `contents` may be created: relative, with no
+/// `..` component at all. Lexically resolving `..` can disagree with the kernel
+/// when a component is itself a symlink, so the simplest safe rule is to refuse
+/// every `..` (and every absolute / prefixed target), even one that would stay
+/// inside the preopen.
 #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-fn symlink_target_stays_inside(
-    real_base: &std::path::Path,
-    link_dir: &std::path::Path,
-    contents: &std::path::Path,
-) -> bool {
+fn symlink_target_is_safe(contents: &std::path::Path) -> bool {
     use std::path::Component;
-    let mut cur = link_dir.to_path_buf();
-    for component in contents.components() {
-        match component {
-            Component::Normal(part) => cur.push(part),
-            Component::CurDir => {},
-            Component::ParentDir => {
-                if !cur.pop() || !cur.starts_with(real_base) {
-                    return false;
-                }
-            },
-            Component::RootDir | Component::Prefix(_) => return false,
-        }
-    }
-    cur.starts_with(real_base)
+    contents
+        .components()
+        .all(|c| matches!(c, Component::Normal(_) | Component::CurDir))
 }
 
 /// Core-value result for `result<_, error-code>` / `result<T, error-code>` errors.
@@ -3588,6 +3658,7 @@ mod tests {
             fd_type: FileDescriptorType::RegularFile(path.clone()),
             read: true,
             write: false,
+            file: None,
         });
 
         let mem = SliceMemory::with_size(0x10000);
@@ -3651,6 +3722,7 @@ mod tests {
             fd_type: FileDescriptorType::RegularFile(path.clone()),
             read: true,
             write: false,
+            file: None,
         });
         let mem = SliceMemory::with_size(0x1000);
         // NOTE: no set_read_buffer_allocation.
@@ -3695,6 +3767,7 @@ mod tests {
             fd_type: FileDescriptorType::PreopenDirectory(dir.clone()),
             read: true,
             write: false,
+            file: None,
         });
 
         let mem = SliceMemory::with_size(0x10000);
@@ -4838,14 +4911,180 @@ mod tests {
             let dir = d.add_preopen(sandbox.clone())?;
             let mem = SliceMemory::with_size(0x10000);
             let flat = symlink(&mut d, &mem, dir, b"a.txt", b"l1");
-            // `..` that stays inside the preopen (sub/ -> sandbox/a.txt) is fine.
-            let up = symlink(&mut d, &mem, dir, b"../a.txt", b"sub/l2");
+            let nested = symlink(&mut d, &mem, dir, b"sub/./x", b"l2");
             let t1 = std::fs::read_link(sandbox.join("l1")).ok();
-            let t2 = std::fs::read_link(sandbox.join("sub/l2")).ok();
+            let t2 = std::fs::read_link(sandbox.join("l2")).ok();
             std::fs::remove_dir_all(&root).ok();
-            assert!(is_ok(&flat) && is_ok(&up), "got {:?} / {:?}", flat, up);
+            assert!(is_ok(&flat) && is_ok(&nested), "got {:?} / {:?}", flat, nested);
             assert_eq!(t1, Some(std::path::PathBuf::from("a.txt")));
-            assert_eq!(t2, Some(std::path::PathBuf::from("../a.txt")));
+            assert_eq!(t2, Some(std::path::PathBuf::from("sub/./x")));
+            Ok(())
+        }
+
+        /// Lexical `..` handling can disagree with the kernel when a component is
+        /// itself a symlink, so ANY `..` component in the link contents is refused,
+        /// even one that stays lexically inside the preopen.
+        // rivet: verifies SR-72
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn symlink_at_refuses_any_parent_dir_component_in_target() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_symlink_dotdot");
+            std::fs::create_dir_all(sandbox.join("sub")).unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let inside = symlink(&mut d, &mem, dir, b"sub/../x", b"l1");
+            let up_inside = symlink(&mut d, &mem, dir, b"../a.txt", b"sub/l2");
+            let made = ["l1", "sub/l2"]
+                .iter()
+                .any(|n| std::fs::symlink_metadata(sandbox.join(n)).is_ok());
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(err_code(&inside), Some(NOT_PERMITTED));
+            assert_eq!(err_code(&up_inside), Some(NOT_PERMITTED));
+            assert!(!made, "a refused symlink-at must never be performed");
+            Ok(())
+        }
+
+        /// TOCTOU: read/write/sync-data must operate on the handle open-at opened,
+        /// never reopen by path. A symlink swapped in afterwards must not redirect them.
+        // rivet: verifies SR-72
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn read_write_sync_use_the_opened_handle_not_the_path() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_toctou");
+            let outside = root.join("OUTSIDE.txt");
+            std::fs::write(&outside, b"OUTSIDE-SECRET").unwrap();
+            std::fs::write(sandbox.join("f.txt"), b"original").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let fd = open_file(&mut d, &mem, dir, b"f.txt")?;
+
+            // Swap the path for a symlink to a file outside the preopen.
+            std::fs::rename(sandbox.join("f.txt"), sandbox.join("f.orig")).unwrap();
+            std::os::unix::fs::symlink(&outside, sandbox.join("f.txt")).unwrap();
+
+            d.set_read_buffer_allocation(0x4000, 64);
+            let read = call(&mut d, &mem, "[method]descriptor.read", &[
+                CV::I32(fd as i32), CV::I64(64), CV::I64(0), CV::I32(0x100),
+            ]);
+            let [wp, wl] = put(&mem, 0x3000, b"XX");
+            let write = call(&mut d, &mem, "[method]descriptor.write", &[
+                CV::I32(fd as i32), wp, wl, CV::I64(0), CV::I32(0x100),
+            ]);
+            let sync = call(&mut d, &mem, "[method]descriptor.sync-data", &[
+                CV::I32(fd as i32), CV::I32(0x100),
+            ]);
+            let mut got = [0u8; 8];
+            mem.read_bytes(0x4000, &mut got)?;
+            let outside_now = std::fs::read(&outside).unwrap();
+            let orig_now = std::fs::read(sandbox.join("f.orig")).unwrap();
+            std::fs::remove_dir_all(&root).ok();
+
+            assert!(is_ok(&read), "got {:?}", read);
+            assert_eq!(&got, b"original", "read must hit the ORIGINAL inode");
+            assert!(is_ok(&write) && is_ok(&sync), "got {:?} / {:?}", write, sync);
+            assert_eq!(outside_now, b"OUTSIDE-SECRET", "the outside file must never be touched");
+            assert_eq!(orig_now, b"XXiginal", "write must land in the original inode");
+            Ok(())
+        }
+
+        /// A symlink already swapped in BEFORE open-at opens the file must not be
+        /// followed out of the sandbox either.
+        // rivet: verifies SR-72
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn open_at_hands_out_no_handle_when_path_is_a_symlink() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_open_sym");
+            std::fs::write(root.join("OUTSIDE.txt"), b"S").unwrap();
+            std::os::unix::fs::symlink(root.join("OUTSIDE.txt"), sandbox.join("f.txt")).unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let res = core_open_at(&mut d, &mem, dir, b"f.txt");
+            std::fs::remove_dir_all(&root).ok();
+            assert!(res.is_err(), "symlink escape on open-at must be denied, got {:?}", res);
+            Ok(())
+        }
+
+        // rivet: verifies SR-72
+        #[serial_test::serial]
+        #[test]
+        fn read_refuses_stream_handles_and_descriptors_without_an_opened_file() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_read_stream");
+            std::fs::write(sandbox.join("f.txt"), b"hello").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let fd = open_file(&mut d, &mem, dir, b"f.txt")?;
+            let stream = match call(&mut d, &mem, "[method]descriptor.read-via-stream", &[
+                CV::I32(fd as i32), CV::I64(0), CV::I32(0x100),
+            ])?
+            .as_slice()
+            {
+                [CV::I32(0), CV::I32(h)] => *h as u32,
+                other => panic!("read-via-stream must succeed, got {:?}", other),
+            };
+            d.set_read_buffer_allocation(0x4000, 16);
+            let read = call(&mut d, &mem, "[method]descriptor.read", &[
+                CV::I32(stream as i32), CV::I64(5), CV::I64(0), CV::I32(0x100),
+            ]);
+            let [wp, wl] = put(&mem, 0x3000, b"X");
+            let write = call(&mut d, &mem, "[method]descriptor.write", &[
+                CV::I32(stream as i32), wp, wl, CV::I64(0), CV::I32(0x100),
+            ]);
+            let content = std::fs::read(sandbox.join("f.txt")).unwrap();
+            std::fs::remove_dir_all(&root).ok();
+            assert_eq!(err_code(&read), Some(BAD_DESCRIPTOR));
+            assert_eq!(err_code(&write), Some(BAD_DESCRIPTOR));
+            assert_eq!(content, b"hello");
+            Ok(())
+        }
+
+        // rivet: verifies SR-72
+        #[serial_test::serial]
+        #[test]
+        fn read_requires_the_read_capability() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_read_cap");
+            std::fs::write(sandbox.join("f.txt"), b"hello").unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            let fd = open_file(&mut d, &mem, dir, b"f.txt")?;
+            d.capabilities.filesystem.read_access = false;
+            d.set_read_buffer_allocation(0x4000, 16);
+            let res = call(&mut d, &mem, "[method]descriptor.read", &[
+                CV::I32(fd as i32), CV::I64(5), CV::I64(0), CV::I32(0x100),
+            ]);
+            std::fs::remove_dir_all(&root).ok();
+            assert!(res.is_err(), "read without read access must be refused, got {:?}", res);
+            Ok(())
+        }
+
+        // rivet: verifies SR-72
+        #[cfg(unix)]
+        #[serial_test::serial]
+        #[test]
+        fn readlink_at_requires_the_read_capability() -> Result<()> {
+            MemoryInitializer::ensure_initialized()?;
+            let (root, sandbox) = fixture("sr72_readlink_cap");
+            std::os::unix::fs::symlink("a.txt", sandbox.join("l")).unwrap();
+            let mut d = WasiDispatcher::with_defaults()?;
+            let dir = d.add_preopen(sandbox.clone())?;
+            let mem = SliceMemory::with_size(0x10000);
+            d.capabilities.filesystem.read_access = false;
+            d.set_read_buffer_allocation(0x4000, 64);
+            let res = path_call(&mut d, &mem, "[method]descriptor.readlink-at", dir, b"l");
+            std::fs::remove_dir_all(&root).ok();
+            assert!(res.is_err(), "readlink-at without read access must be refused, got {:?}", res);
             Ok(())
         }
 
