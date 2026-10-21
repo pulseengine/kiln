@@ -503,6 +503,13 @@ impl Error {
         Self::new(ErrorCategory::Runtime, codes::FUNCTION_NOT_FOUND, message)
     }
 
+    /// Create a runtime import-not-found error: an import nothing resolves,
+    /// so instantiation must fail (SR-65)
+    #[must_use]
+    pub const fn runtime_import_not_found(message: &'static str) -> Self {
+        Self::new(ErrorCategory::Runtime, codes::RUNTIME_IMPORT_NOT_FOUND_ERROR, message)
+    }
+
     /// Create a runtime null reference error
     #[must_use]
     pub const fn runtime_null_reference(message: &'static str) -> Self {

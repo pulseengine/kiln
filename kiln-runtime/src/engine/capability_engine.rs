@@ -488,6 +488,48 @@ impl CapabilityAwareEngine {
         self.inner.set_host_handler(handler);
     }
 
+    /// Every import of a loaded module that nothing resolves, as
+    /// `(module, name)` in import order. [`instantiate`] refuses a module for
+    /// which this is non-empty, before running anything (SR-65).
+    ///
+    /// A function import resolves through a link to another instance or an
+    /// import the engine serves (P3 builtin, host registry, host handler). A
+    /// table, memory, global or tag import resolves only through a link: the
+    /// host serves none.
+    ///
+    /// [`instantiate`]: CapabilityEngine::instantiate
+    pub fn unresolved_imports(&self, module_handle: ModuleHandle) -> Result<Vec<(String, String)>> {
+        use crate::module::RuntimeImportDesc;
+
+        let module = self
+            .modules
+            .get(&module_handle)
+            .ok_or_else(|| Error::resource_not_found("Module not found"))?;
+        let links = self.import_links.get(&module_handle);
+
+        let mut unresolved = Vec::new();
+        for (i, (import_module, import_name)) in module.import_order.iter().enumerate() {
+            let import_key = if import_module.is_empty() {
+                import_name.clone()
+            } else {
+                format!("{}::{}", import_module, import_name)
+            };
+            if links.is_some_and(|links| links.contains_key(&import_key)) {
+                continue;
+            }
+            let desc = module.import_types.get(i).ok_or_else(|| {
+                Error::runtime_import_not_found("Import has no recorded type")
+            })?;
+            if matches!(desc, RuntimeImportDesc::Function(_))
+                && self.inner.serves_import(import_module, import_name)
+            {
+                continue;
+            }
+            unresolved.push((import_module.clone(), import_name.clone()));
+        }
+        Ok(unresolved)
+    }
+
     /// Create host integration components based on engine preset
     fn create_host_integration(
         preset: &EnginePreset,
@@ -803,6 +845,14 @@ impl CapabilityEngine for CapabilityAwareEngine {
             .modules
             .get(&module_handle)
             .ok_or_else(|| Error::resource_not_found("Module not found"))?;
+
+        // SR-65: an import nothing resolves fails instantiation, before any
+        // memory is initialised or the start function runs.
+        if !self.unresolved_imports(module_handle)?.is_empty() {
+            return Err(Error::runtime_import_not_found(
+                "Module has unresolved imports; instantiation refused",
+            ));
+        }
 
         // Verify capability for instance allocation
         let operation = MemoryOperation::Allocate {

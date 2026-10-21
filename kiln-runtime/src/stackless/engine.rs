@@ -428,6 +428,70 @@ fn pop_atomic_address(operand_stack: &mut Vec<Value>, memarg_offset: u64) -> kil
     }
 }
 
+/// A P3 async builtin that meld-fused modules import from `$root` or
+/// `[export]$root`. [`P3Builtin::from_import`] is the only place these import
+/// names are recognised, for dispatch and for the link-time check (SR-65).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum P3Builtin {
+    /// `[context-get-N]`
+    ContextGet(u32),
+    /// `[context-set-N]`
+    ContextSet(u32),
+    /// `[task-return]...`
+    TaskReturn,
+    /// `[waitable-set-new]`
+    WaitableSetNew,
+    /// `[waitable-set-poll]`
+    WaitableSetPoll,
+    /// `[waitable-set-drop]`
+    WaitableSetDrop,
+    /// `[waitable-join]`
+    WaitableJoin,
+    /// `[task-cancel]`
+    TaskCancel,
+}
+
+impl P3Builtin {
+    /// The builtin an import names, if it is one.
+    fn from_import(module_name: &str, field_name: &str) -> Option<Self> {
+        if module_name != "$root" && module_name != "[export]$root" {
+            return None;
+        }
+
+        // Strip optional instance suffix ($2, $3, …) added by Meld for
+        // second/third component instance of the same type.
+        let base_name = match field_name.rfind('$') {
+            Some(pos) if field_name[pos + 1..].chars().all(|c| c.is_ascii_digit()) => {
+                &field_name[..pos]
+            },
+            _ => field_name,
+        };
+
+        if let Some(slot) = Self::context_slot(base_name, "[context-get-") {
+            return Some(Self::ContextGet(slot));
+        }
+        if let Some(slot) = Self::context_slot(base_name, "[context-set-") {
+            return Some(Self::ContextSet(slot));
+        }
+        if base_name.starts_with("[task-return]") {
+            return Some(Self::TaskReturn);
+        }
+        match base_name {
+            "[waitable-set-new]" => Some(Self::WaitableSetNew),
+            "[waitable-set-poll]" => Some(Self::WaitableSetPoll),
+            "[waitable-set-drop]" => Some(Self::WaitableSetDrop),
+            "[waitable-join]" => Some(Self::WaitableJoin),
+            "[task-cancel]" => Some(Self::TaskCancel),
+            _ => None,
+        }
+    }
+
+    /// The slot N of `<prefix>N]`, or `None` if the name is not that shape.
+    fn context_slot(name: &str, prefix: &str) -> Option<u32> {
+        name.strip_prefix(prefix)?.strip_suffix(']')?.parse().ok()
+    }
+}
+
 impl StacklessEngine {
     /// Create a new stackless engine
     pub fn new() -> Self {
@@ -610,30 +674,10 @@ impl StacklessEngine {
         field_name: &str,
         args: &[Value],
     ) -> Option<Result<Vec<Value>>> {
-        // Only handle $root and [export]$root namespaces
-        if module_name != "$root" && module_name != "[export]$root" {
-            return None;
-        }
-
-        // Strip optional instance suffix ($2, $3, …) added by Meld for
-        // second/third component instance of the same type.
-        let base_name = if let Some(pos) = field_name.rfind('$') {
-            // Only strip if the suffix is numeric
-            if field_name[pos+1..].chars().all(|c| c.is_ascii_digit()) {
-                &field_name[..pos]
-            } else {
-                field_name
-            }
-        } else {
-            field_name
-        };
-
-        match base_name {
+        match P3Builtin::from_import(module_name, field_name)? {
             // ── [context-get-N] ──────────────────────────────────────
             // () -> i32 — return the value stored in context slot N
-            name if name.starts_with("[context-get-") => {
-                let slot_str = &name["[context-get-".len()..name.len()-1];
-                let slot: u32 = slot_str.parse().unwrap_or(0);
+            P3Builtin::ContextGet(slot) => {
                 let val = self.p3_context_slots
                     .get(&(instance_id, slot))
                     .copied()
@@ -643,9 +687,7 @@ impl StacklessEngine {
 
             // ── [context-set-N] ──────────────────────────────────────
             // (i32) -> () — store value in context slot N
-            name if name.starts_with("[context-set-") => {
-                let slot_str = &name["[context-set-".len()..name.len()-1];
-                let slot: u32 = slot_str.parse().unwrap_or(0);
+            P3Builtin::ContextSet(slot) => {
                 let val = match args.first() {
                     Some(Value::I32(v)) => *v,
                     _ => 0,
@@ -657,7 +699,7 @@ impl StacklessEngine {
             // ── [task-return]N ───────────────────────────────────────
             // Variadic signature — captures ALL args as the task result.
             // The async-lift wrapper calls this to signal completion.
-            name if name.starts_with("[task-return]") => {
+            P3Builtin::TaskReturn => {
                 self.p3_task_return_values
                     .insert(instance_id, args.to_vec());
                 Some(Ok(vec![]))
@@ -665,7 +707,7 @@ impl StacklessEngine {
 
             // ── [waitable-set-new] ───────────────────────────────────
             // () -> i32 — allocate a new waitable set handle
-            "[waitable-set-new]" => {
+            P3Builtin::WaitableSetNew => {
                 let handle = self.p3_next_waitable_set;
                 self.p3_next_waitable_set += 1;
                 Some(Ok(vec![Value::I32(handle as i32)]))
@@ -674,30 +716,58 @@ impl StacklessEngine {
             // ── [waitable-set-poll] ──────────────────────────────────
             // (i32, i32) -> i32  — poll set; synchronous mode: return 0
             // (no pending async work in single-threaded interpreter)
-            "[waitable-set-poll]" => {
+            P3Builtin::WaitableSetPoll => {
                 Some(Ok(vec![Value::I32(0)]))
             }
 
             // ── [waitable-set-drop] ──────────────────────────────────
             // (i32) -> () — destroy waitable set (no-op)
-            "[waitable-set-drop]" => {
+            P3Builtin::WaitableSetDrop => {
                 Some(Ok(vec![]))
             }
 
             // ── [waitable-join] ──────────────────────────────────────
             // (i32, i32) -> () — join waitable to set (no-op for sync)
-            "[waitable-join]" => {
+            P3Builtin::WaitableJoin => {
                 Some(Ok(vec![]))
             }
 
             // ── [task-cancel] ────────────────────────────────────────
             // () -> () or (i32) -> i32 — cancel task (no-op for sync)
-            "[task-cancel]" => {
+            P3Builtin::TaskCancel => {
                 Some(Ok(vec![]))
             }
-
-            _ => None, // Not a P3 builtin
         }
+    }
+
+    /// Whether this engine serves the function import `module::name` without
+    /// a link to another instance: a P3 builtin, a registered host function,
+    /// or an import the host handler resolves (SR-65). Each source answers
+    /// from the same lookup its call path dispatches through.
+    pub fn serves_import(&self, module_name: &str, field_name: &str) -> bool {
+        if P3Builtin::from_import(module_name, field_name).is_some() {
+            return true;
+        }
+        if let Some(ref registry) = self.host_registry {
+            if Self::registry_serves(registry, module_name, field_name) {
+                return true;
+            }
+        }
+        match self.host_handler {
+            Some(ref handler) => handler.resolves(module_name, field_name),
+            None => false,
+        }
+    }
+
+    /// Whether a host-registry function serves `module::name`. The registry is
+    /// only consulted for non-WASI imports; WASI goes through the host handler,
+    /// which marshals stack arguments.
+    fn registry_serves(
+        registry: &kiln_host::CallbackRegistry,
+        module_name: &str,
+        field_name: &str,
+    ) -> bool {
+        !module_name.starts_with("wasi:") && registry.has_host_function(module_name, field_name)
     }
 
     /// Retrieve and clear the task-return values captured for an instance.
@@ -12250,32 +12320,25 @@ impl StacklessEngine {
         //
         // The host_registry is kept for non-WASI host functions that don't need stack args.
         if let Some(ref registry) = self.host_registry {
-            // Only use host_registry for non-WASI functions
-            // WASI functions need proper stack argument marshalling done below
-            if !module_name.starts_with("wasi:") {
+            if Self::registry_serves(registry, module_name, field_name) {
                 #[cfg(feature = "tracing")]
-                debug!("WASI: Checking host registry for {}::{}", module_name, field_name);
+                debug!("WASI: Found {} in host registry, calling implementation", field_name);
 
-                if registry.has_host_function(module_name, field_name) {
-                    #[cfg(feature = "tracing")]
-                    debug!("WASI: Found {} in host registry, calling implementation", field_name);
-
-                    let args: Vec<kiln_foundation::Value> = vec![];
-                    let mut dummy_engine: i32 = 0;
-                    match registry.call_host_function(&mut dummy_engine, module_name, field_name, args) {
-                        Ok(result) => {
-                            #[cfg(feature = "tracing")]
-                            debug!("WASI: Host function {} returned successfully", field_name);
-                            if let Some(val) = result.first() {
-                                return Ok(Some(val.clone()));
-                            }
-                            return Ok(None);
+                let args: Vec<kiln_foundation::Value> = vec![];
+                let mut dummy_engine: i32 = 0;
+                match registry.call_host_function(&mut dummy_engine, module_name, field_name, args) {
+                    Ok(result) => {
+                        #[cfg(feature = "tracing")]
+                        debug!("WASI: Host function {} returned successfully", field_name);
+                        if let Some(val) = result.first() {
+                            return Ok(Some(val.clone()));
                         }
-                        Err(e) => {
-                            #[cfg(feature = "tracing")]
-                            debug!("WASI: Host function {} failed: {:?}", field_name, e);
-                            return Err(e);
-                        }
+                        return Ok(None);
+                    }
+                    Err(e) => {
+                        #[cfg(feature = "tracing")]
+                        debug!("WASI: Host function {} failed: {:?}", field_name, e);
+                        return Err(e);
                     }
                 }
             }
@@ -13307,3 +13370,26 @@ impl Default for StacklessEngine {
 pub type StacklessCallbackRegistry = ();
 /// Type alias for execution stack (placeholder implementation).
 pub type StacklessStack = ();
+
+#[cfg(test)]
+mod p3_builtin_tests {
+    use super::P3Builtin;
+
+    /// SR-65: the link-time check and P3 dispatch share one name lookup. A
+    /// malformed slot is not a builtin (it used to dispatch as slot 0), so the
+    /// import is refused at instantiation instead of running against slot 0.
+    // rivet: verifies SR-65
+    #[test]
+    fn p3_builtin_names_are_recognised_only_in_the_root_namespaces() {
+        assert_eq!(P3Builtin::from_import("$root", "[context-get-1]"), Some(P3Builtin::ContextGet(1)));
+        assert_eq!(
+            P3Builtin::from_import("[export]$root", "[context-set-0]$2"),
+            Some(P3Builtin::ContextSet(0))
+        );
+        assert_eq!(P3Builtin::from_import("$root", "[task-return]foo"), Some(P3Builtin::TaskReturn));
+        assert_eq!(P3Builtin::from_import("$root", "[waitable-join]"), Some(P3Builtin::WaitableJoin));
+        assert_eq!(P3Builtin::from_import("$root", "[context-get-x]"), None);
+        assert_eq!(P3Builtin::from_import("$root", "[stream-new-0]"), None);
+        assert_eq!(P3Builtin::from_import("env", "[waitable-join]"), None);
+    }
+}

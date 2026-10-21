@@ -204,6 +204,335 @@ pub struct FileDescriptorEntry {
     pub file: Option<std::fs::File>,
 }
 
+/// A WASI function served by [`WasiDispatcher::dispatch_core`].
+///
+/// [`SERVED_WASI_IMPORTS`] is the only place an import name is recognised:
+/// `dispatch_core` looks the import up there and matches on the variant, and
+/// the link-time check ([`HostImportHandler::resolves`]) asks the same table
+/// (AD-LINK-001). A variant missing from the table is never constructed and
+/// fails the build as dead code; a variant without a dispatch arm fails the
+/// match's exhaustiveness. Each variant carries the same cfg gate as its arm.
+///
+/// [`HostImportHandler::resolves`]: kiln_foundation::HostImportHandler::resolves
+// The workspace allows dead code; here an unconstructed variant is exactly
+// the table/dispatch disagreement AD-LINK-001 must catch, so deny it.
+#[deny(dead_code)]
+#[cfg(feature = "std")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WasiFn {
+    GetStdout,
+    GetStderr,
+    GetStdin,
+    GetArguments,
+    GetEnvironment,
+    InitialCwd,
+    GetTerminalStdin,
+    GetTerminalStdout,
+    GetTerminalStderr,
+    TerminalResourceDrop,
+    CliExit,
+    PreviewOneProcExit,
+    Poll,
+    PollableBlock,
+    PollableDrop,
+    OutputStreamCheckWrite,
+    OutputStreamSubscribe,
+    #[cfg(feature = "wasi-io")]
+    OutputStreamBlockingWriteAndFlush,
+    #[cfg(feature = "wasi-io")]
+    OutputStreamWrite,
+    #[cfg(feature = "wasi-io")]
+    OutputStreamBlockingFlush,
+    StreamDrop,
+    InputStreamRead,
+    InputStreamSubscribe,
+    ErrorDrop,
+    ErrorToDebugString,
+    #[cfg(feature = "wasi-clocks")]
+    WallClockNow,
+    #[cfg(feature = "wasi-clocks")]
+    WallClockResolution,
+    #[cfg(feature = "wasi-clocks")]
+    MonotonicClockNow,
+    #[cfg(feature = "wasi-clocks")]
+    MonotonicClockResolution,
+    #[cfg(feature = "wasi-random")]
+    GetRandomBytes,
+    #[cfg(feature = "wasi-random")]
+    GetRandomU64,
+    #[cfg(feature = "wasi-random")]
+    InsecureSeed,
+    #[cfg(feature = "wasi-random")]
+    GetInsecureRandomBytes,
+    #[cfg(feature = "wasi-random")]
+    GetInsecureRandomU64,
+    #[cfg(feature = "nn-preview2")]
+    NnLoad,
+    #[cfg(feature = "nn-preview2")]
+    NnInitExecutionContext,
+    #[cfg(feature = "nn-preview2")]
+    NnSetInput,
+    #[cfg(feature = "nn-preview2")]
+    NnCompute,
+    #[cfg(feature = "nn-preview2")]
+    NnGetOutput,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorGetType,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorOpenAt,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorStat,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorStatAt,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorReadViaStream,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorReadDirectory,
+    #[cfg(feature = "wasi-filesystem")]
+    ReadDirectoryEntry,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorMetadataHash,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorDrop,
+    #[cfg(feature = "wasi-filesystem")]
+    DirectoryEntryStreamDrop,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorRead,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorWrite,
+    #[cfg(feature = "wasi-filesystem")]
+    DescriptorSyncData,
+    #[cfg(feature = "wasi-filesystem")]
+    CreateDirectoryAt,
+    #[cfg(feature = "wasi-filesystem")]
+    RemoveDirectoryAt,
+    #[cfg(feature = "wasi-filesystem")]
+    UnlinkFileAt,
+    #[cfg(feature = "wasi-filesystem")]
+    RenameAt,
+    #[cfg(feature = "wasi-filesystem")]
+    LinkAt,
+    #[cfg(feature = "wasi-filesystem")]
+    SymlinkAt,
+    #[cfg(feature = "wasi-filesystem")]
+    ReadlinkAt,
+    #[cfg(feature = "wasi-filesystem")]
+    GetDirectories,
+    #[cfg(feature = "wasi-sockets")]
+    TcpCreateSocket,
+    #[cfg(feature = "wasi-sockets")]
+    TcpStartConnect,
+    #[cfg(feature = "wasi-sockets")]
+    TcpStartBind,
+    #[cfg(feature = "wasi-sockets")]
+    TcpListen,
+    #[cfg(feature = "wasi-sockets")]
+    TcpAccept,
+    #[cfg(feature = "wasi-sockets")]
+    TcpSend,
+    #[cfg(feature = "wasi-sockets")]
+    TcpReceive,
+    #[cfg(feature = "wasi-sockets")]
+    TcpShutdown,
+    #[cfg(feature = "wasi-sockets")]
+    UdpCreateSocket,
+    #[cfg(feature = "wasi-sockets")]
+    UdpStartBind,
+    #[cfg(feature = "wasi-sockets")]
+    UdpSend,
+    #[cfg(feature = "wasi-sockets")]
+    UdpReceive,
+    #[cfg(feature = "wasi-sockets")]
+    ResolveAddresses,
+}
+
+/// Every `(interface, function)` import kiln serves, interface without its
+/// `@version`. Shared by dispatch and the link-time import check (SR-65,
+/// AD-LINK-001); see [`WasiFn`].
+#[cfg(feature = "std")]
+const SERVED_WASI_IMPORTS: &[(&str, &str, WasiFn)] = &[
+    ("wasi:cli/stdout", "get-stdout", WasiFn::GetStdout),
+    ("wasi:cli/stderr", "get-stderr", WasiFn::GetStderr),
+    ("wasi:cli/stdin", "get-stdin", WasiFn::GetStdin),
+    ("wasi:cli/environment", "get-arguments", WasiFn::GetArguments),
+    ("wasi:cli/environment", "get-environment", WasiFn::GetEnvironment),
+    ("wasi:cli/environment", "initial-cwd", WasiFn::InitialCwd),
+    ("wasi:cli/terminal-stdin", "get-terminal-stdin", WasiFn::GetTerminalStdin),
+    ("wasi:cli/terminal-stdout", "get-terminal-stdout", WasiFn::GetTerminalStdout),
+    ("wasi:cli/terminal-stderr", "get-terminal-stderr", WasiFn::GetTerminalStderr),
+    ("wasi:cli/terminal-input", "[resource-drop]terminal-input", WasiFn::TerminalResourceDrop),
+    ("wasi:cli/terminal-output", "[resource-drop]terminal-output", WasiFn::TerminalResourceDrop),
+    ("wasi:cli/exit", "exit", WasiFn::CliExit),
+    ("wasi_snapshot_preview1", "proc_exit", WasiFn::PreviewOneProcExit),
+    ("wasi:io/poll", "poll", WasiFn::Poll),
+    ("wasi:io/poll", "[method]pollable.block", WasiFn::PollableBlock),
+    ("wasi:io/poll", "pollable.block", WasiFn::PollableBlock),
+    ("wasi:io/poll", "[resource-drop]pollable", WasiFn::PollableDrop),
+    ("wasi:io/streams", "[method]output-stream.check-write", WasiFn::OutputStreamCheckWrite),
+    ("wasi:io/streams", "output-stream.check-write", WasiFn::OutputStreamCheckWrite),
+    ("wasi:io/streams", "[method]output-stream.subscribe", WasiFn::OutputStreamSubscribe),
+    ("wasi:io/streams", "output-stream.subscribe", WasiFn::OutputStreamSubscribe),
+    #[cfg(feature = "wasi-io")]
+    (
+        "wasi:io/streams",
+        "[method]output-stream.blocking-write-and-flush",
+        WasiFn::OutputStreamBlockingWriteAndFlush,
+    ),
+    #[cfg(feature = "wasi-io")]
+    (
+        "wasi:io/streams",
+        "output-stream.blocking-write-and-flush",
+        WasiFn::OutputStreamBlockingWriteAndFlush,
+    ),
+    #[cfg(feature = "wasi-io")]
+    ("wasi:io/streams", "[method]output-stream.write", WasiFn::OutputStreamWrite),
+    #[cfg(feature = "wasi-io")]
+    ("wasi:io/streams", "output-stream.write", WasiFn::OutputStreamWrite),
+    #[cfg(feature = "wasi-io")]
+    ("wasi:io/streams", "[method]output-stream.blocking-flush", WasiFn::OutputStreamBlockingFlush),
+    #[cfg(feature = "wasi-io")]
+    ("wasi:io/streams", "output-stream.blocking-flush", WasiFn::OutputStreamBlockingFlush),
+    ("wasi:io/streams", "[resource-drop]output-stream", WasiFn::StreamDrop),
+    ("wasi:io/streams", "[resource-drop]input-stream", WasiFn::StreamDrop),
+    ("wasi:io/streams", "[method]input-stream.read", WasiFn::InputStreamRead),
+    ("wasi:io/streams", "input-stream.read", WasiFn::InputStreamRead),
+    ("wasi:io/streams", "[method]input-stream.blocking-read", WasiFn::InputStreamRead),
+    ("wasi:io/streams", "input-stream.blocking-read", WasiFn::InputStreamRead),
+    ("wasi:io/streams", "[method]input-stream.subscribe", WasiFn::InputStreamSubscribe),
+    ("wasi:io/streams", "input-stream.subscribe", WasiFn::InputStreamSubscribe),
+    ("wasi:io/error", "[resource-drop]error", WasiFn::ErrorDrop),
+    ("wasi:io/error", "[method]error.to-debug-string", WasiFn::ErrorToDebugString),
+    #[cfg(feature = "wasi-clocks")]
+    ("wasi:clocks/wall-clock", "now", WasiFn::WallClockNow),
+    #[cfg(feature = "wasi-clocks")]
+    ("wasi:clocks/wall-clock", "resolution", WasiFn::WallClockResolution),
+    #[cfg(feature = "wasi-clocks")]
+    ("wasi:clocks/monotonic-clock", "now", WasiFn::MonotonicClockNow),
+    #[cfg(feature = "wasi-clocks")]
+    ("wasi:clocks/monotonic-clock", "resolution", WasiFn::MonotonicClockResolution),
+    #[cfg(feature = "wasi-random")]
+    ("wasi:random/random", "get-random-bytes", WasiFn::GetRandomBytes),
+    #[cfg(feature = "wasi-random")]
+    ("wasi:random/random", "get-random-u64", WasiFn::GetRandomU64),
+    #[cfg(feature = "wasi-random")]
+    ("wasi:random/insecure-seed", "insecure-seed", WasiFn::InsecureSeed),
+    #[cfg(feature = "wasi-random")]
+    ("wasi:random/insecure", "get-insecure-random-bytes", WasiFn::GetInsecureRandomBytes),
+    #[cfg(feature = "wasi-random")]
+    ("wasi:random/insecure", "get-insecure-random-u64", WasiFn::GetInsecureRandomU64),
+    #[cfg(feature = "nn-preview2")]
+    ("wasi:nn/inference", "load", WasiFn::NnLoad),
+    #[cfg(feature = "nn-preview2")]
+    ("wasi:nn/inference", "init-execution-context", WasiFn::NnInitExecutionContext),
+    #[cfg(feature = "nn-preview2")]
+    ("wasi:nn/inference", "set-input", WasiFn::NnSetInput),
+    #[cfg(feature = "nn-preview2")]
+    ("wasi:nn/inference", "compute", WasiFn::NnCompute),
+    #[cfg(feature = "nn-preview2")]
+    ("wasi:nn/inference", "get-output", WasiFn::NnGetOutput),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.get-type", WasiFn::DescriptorGetType),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.open-at", WasiFn::DescriptorOpenAt),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.stat", WasiFn::DescriptorStat),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.stat-at", WasiFn::DescriptorStatAt),
+    #[cfg(feature = "wasi-filesystem")]
+    (
+        "wasi:filesystem/types",
+        "[method]descriptor.read-via-stream",
+        WasiFn::DescriptorReadViaStream,
+    ),
+    #[cfg(feature = "wasi-filesystem")]
+    (
+        "wasi:filesystem/types",
+        "[method]descriptor.read-directory",
+        WasiFn::DescriptorReadDirectory,
+    ),
+    #[cfg(feature = "wasi-filesystem")]
+    (
+        "wasi:filesystem/types",
+        "[method]directory-entry-stream.read-directory-entry",
+        WasiFn::ReadDirectoryEntry,
+    ),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.metadata-hash", WasiFn::DescriptorMetadataHash),
+    #[cfg(feature = "wasi-filesystem")]
+    (
+        "wasi:filesystem/types",
+        "[method]descriptor.metadata-hash-at",
+        WasiFn::DescriptorMetadataHash,
+    ),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[resource-drop]descriptor", WasiFn::DescriptorDrop),
+    #[cfg(feature = "wasi-filesystem")]
+    (
+        "wasi:filesystem/types",
+        "[resource-drop]directory-entry-stream",
+        WasiFn::DirectoryEntryStreamDrop,
+    ),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.read", WasiFn::DescriptorRead),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.write", WasiFn::DescriptorWrite),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.sync-data", WasiFn::DescriptorSyncData),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.create-directory-at", WasiFn::CreateDirectoryAt),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.remove-directory-at", WasiFn::RemoveDirectoryAt),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.unlink-file-at", WasiFn::UnlinkFileAt),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.rename-at", WasiFn::RenameAt),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.link-at", WasiFn::LinkAt),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.symlink-at", WasiFn::SymlinkAt),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/types", "[method]descriptor.readlink-at", WasiFn::ReadlinkAt),
+    #[cfg(feature = "wasi-filesystem")]
+    ("wasi:filesystem/preopens", "get-directories", WasiFn::GetDirectories),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/tcp", "create-tcp-socket", WasiFn::TcpCreateSocket),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/tcp", "start-connect", WasiFn::TcpStartConnect),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/tcp", "start-bind", WasiFn::TcpStartBind),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/tcp", "listen", WasiFn::TcpListen),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/tcp", "accept", WasiFn::TcpAccept),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/tcp", "send", WasiFn::TcpSend),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/tcp", "receive", WasiFn::TcpReceive),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/tcp", "shutdown", WasiFn::TcpShutdown),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/udp", "create-udp-socket", WasiFn::UdpCreateSocket),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/udp", "start-bind", WasiFn::UdpStartBind),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/udp", "send", WasiFn::UdpSend),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/udp", "receive", WasiFn::UdpReceive),
+    #[cfg(feature = "wasi-sockets")]
+    ("wasi:sockets/ip-name-lookup", "resolve-addresses", WasiFn::ResolveAddresses),
+];
+
+/// The served WASI function an import names, if kiln serves it. The import's
+/// interface may carry an `@version`; the table is keyed without it.
+#[cfg(feature = "std")]
+fn served_wasi_fn(interface: &str, function: &str) -> Option<WasiFn> {
+    let base_interface = WasiDispatcher::strip_version(interface);
+    SERVED_WASI_IMPORTS
+        .iter()
+        .find(|(i, f, _)| *i == base_interface && *f == function)
+        .map(|(_, _, served)| *served)
+}
+
 /// WASI Dispatcher - unified entry point for all WASI function calls
 pub struct WasiDispatcher {
     /// WASI capabilities for this dispatcher
@@ -1536,28 +1865,37 @@ impl WasiDispatcher {
         // DEBUG: trace WASI calls
         eprintln!("[WASI-TRACE] {}::{} args={:?}", base_interface, function, args);
 
-        match (base_interface, function) {
+        // The served-imports table is the only place an import name is
+        // recognised; instantiation refuses imports it does not list (SR-65).
+        let Some(served) = served_wasi_fn(interface, function) else {
+            #[cfg(feature = "tracing")]
+            warn!(interface = %base_interface, function = %function, "unknown WASI function in dispatch_core");
+
+            return Err(Error::runtime_not_implemented("Unknown WASI function"));
+        };
+
+        match served {
             // Simple functions that don't need memory
-            ("wasi:cli/stdout", "get-stdout") => {
+            WasiFn::GetStdout => {
                 // Preview2: dynamically allocate output-stream resource
                 let handle = self.resource_manager.create_output_stream("stdout")?;
                 Ok(vec![CoreValue::I32(handle as i32)])
             }
 
-            ("wasi:cli/stderr", "get-stderr") => {
+            WasiFn::GetStderr => {
                 // Preview2: dynamically allocate output-stream resource
                 let handle = self.resource_manager.create_output_stream("stderr")?;
                 Ok(vec![CoreValue::I32(handle as i32)])
             }
 
-            ("wasi:cli/stdin", "get-stdin") => {
+            WasiFn::GetStdin => {
                 // Preview2: dynamically allocate input-stream resource
                 let handle = self.resource_manager.create_input_stream("stdin")?;
                 Ok(vec![CoreValue::I32(handle as i32)])
             }
 
             // Environment functions
-            ("wasi:cli/environment", "get-arguments") => {
+            WasiFn::GetArguments => {
                 // Canonical ABI for list<string> return:
                 // - First argument is the RETURN POINTER where we write (list_ptr, list_len)
                 // - We need to allocate space for the list elements and string data
@@ -1705,7 +2043,7 @@ impl WasiDispatcher {
                 }
             }
 
-            ("wasi:cli/environment", "get-environment") => {
+            WasiFn::GetEnvironment => {
                 // Similar to get-arguments but for env vars
                 // For now, return empty list
                 Ok(vec![CoreValue::I32(0), CoreValue::I32(0)])
@@ -1716,7 +2054,7 @@ impl WasiDispatcher {
             // ================================================================
             // C/C++ runtime needs these to determine buffering behavior
 
-            ("wasi:cli/terminal-stdin", "get-terminal-stdin") => {
+            WasiFn::GetTerminalStdin => {
                 // option<terminal-input> lowered: write discriminant 0 (None) at retptr
                 if let (Some(mem), Some(CoreValue::I32(retptr))) = (memory, args.first()) {
                     mem.write_bytes(*retptr as u32, &0u32.to_le_bytes())?;
@@ -1724,7 +2062,7 @@ impl WasiDispatcher {
                 Ok(vec![])
             }
 
-            ("wasi:cli/terminal-stdout", "get-terminal-stdout") => {
+            WasiFn::GetTerminalStdout => {
                 // option<terminal-output> lowered: write discriminant 0 (None) at retptr
                 if let (Some(mem), Some(CoreValue::I32(retptr))) = (memory, args.first()) {
                     mem.write_bytes(*retptr as u32, &0u32.to_le_bytes())?;
@@ -1732,19 +2070,28 @@ impl WasiDispatcher {
                 Ok(vec![])
             }
 
-            ("wasi:cli/terminal-stderr", "get-terminal-stderr") => {
+            WasiFn::GetTerminalStderr => {
                 // option<terminal-output> lowered: write discriminant 0 (None) at retptr
                 if let (Some(mem), Some(CoreValue::I32(retptr))) = (memory, args.first()) {
                     mem.write_bytes(*retptr as u32, &0u32.to_le_bytes())?;
                 }
                 Ok(vec![])
+            }
+
+            WasiFn::TerminalResourceDrop => {
+                // get-terminal-* above always returns none, so no terminal
+                // handle is ever issued; dropping one drops an invalid handle,
+                // which traps in the Canonical ABI.
+                Err(Error::runtime_trap_error(
+                    "Dropped a terminal handle that was never issued",
+                ))
             }
 
             // ================================================================
             // wasi:io/poll - Async I/O polling interfaces
             // ================================================================
 
-            ("wasi:io/poll", "poll") => {
+            WasiFn::Poll => {
                 // poll(pollables: list<borrow<pollable>>) -> list<u32>
                 // Returns indices of ready pollables
                 // For simple synchronous execution, return first item ready
@@ -1761,13 +2108,13 @@ impl WasiDispatcher {
                 Ok(vec![])
             }
 
-            ("wasi:io/poll", "[method]pollable.block" | "pollable.block") => {
+            WasiFn::PollableBlock => {
                 // block() -> void - block until pollable is ready
                 // For synchronous execution, return immediately
                 Ok(vec![])
             }
 
-            ("wasi:io/poll", "[resource-drop]pollable") => {
+            WasiFn::PollableDrop => {
                 // Drop pollable resource - no action needed for simple impl
                 Ok(vec![])
             }
@@ -1776,7 +2123,7 @@ impl WasiDispatcher {
             // wasi:io/streams - Additional stream operations
             // ================================================================
 
-            ("wasi:io/streams", "[method]output-stream.check-write" | "output-stream.check-write") => {
+            WasiFn::OutputStreamCheckWrite => {
                 // check-write(self) -> result<u64, stream-error>
                 // Returns number of bytes that can be written without blocking
                 // Return large value to indicate ready for writes
@@ -1793,7 +2140,7 @@ impl WasiDispatcher {
                 Ok(vec![])
             }
 
-            ("wasi:io/streams", "[method]output-stream.subscribe" | "output-stream.subscribe") => {
+            WasiFn::OutputStreamSubscribe => {
                 // subscribe(self) -> pollable
                 // Return a pollable handle (use 0 for simple impl)
                 Ok(vec![CoreValue::I32(0)])
@@ -1801,7 +2148,7 @@ impl WasiDispatcher {
 
             // Clock functions
             #[cfg(feature = "wasi-clocks")]
-            ("wasi:clocks/wall-clock", "now") => {
+            WasiFn::WallClockNow => {
                 use kiln_platform::time::PlatformTime;
 
                 if !self.capabilities.clocks.realtime_access {
@@ -1861,7 +2208,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(feature = "wasi-clocks")]
-            ("wasi:clocks/wall-clock", "resolution") => {
+            WasiFn::WallClockResolution => {
                 // 1 nanosecond resolution
                 // Per Canonical ABI: datetime record is written to retptr in memory
                 if let Some(mem) = memory {
@@ -1889,7 +2236,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(feature = "wasi-clocks")]
-            ("wasi:clocks/monotonic-clock", "now") => {
+            WasiFn::MonotonicClockNow => {
                 use kiln_platform::time::PlatformTime;
 
                 if !self.capabilities.clocks.monotonic_access {
@@ -1902,7 +2249,7 @@ impl WasiDispatcher {
 
             // I/O functions that need memory access
             #[cfg(feature = "wasi-io")]
-            ("wasi:io/streams", "[method]output-stream.blocking-write-and-flush" | "output-stream.blocking-write-and-flush") => {
+            WasiFn::OutputStreamBlockingWriteAndFlush => {
                 #[cfg(feature = "tracing")]
                 trace!(args = ?args, has_memory = memory.is_some(), "blocking-write-and-flush dispatch");
 
@@ -2056,7 +2403,7 @@ impl WasiDispatcher {
 
             // [method]output-stream.write - non-blocking write (may be partial)
             #[cfg(feature = "wasi-io")]
-            ("wasi:io/streams", "[method]output-stream.write" | "output-stream.write") => {
+            WasiFn::OutputStreamWrite => {
                 #[cfg(feature = "tracing")]
                 trace!(args = ?args, has_memory = memory.is_some(), "output-stream.write dispatch");
 
@@ -2141,7 +2488,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(feature = "wasi-io")]
-            ("wasi:io/streams", "[method]output-stream.blocking-flush" | "output-stream.blocking-flush") => {
+            WasiFn::OutputStreamBlockingFlush => {
                 #[cfg(feature = "std")]
                 {
                     use std::io::{self, Write};
@@ -2153,7 +2500,7 @@ impl WasiDispatcher {
             }
 
             // Resource drops - properly remove from resource manager
-            ("wasi:io/streams", "[resource-drop]output-stream" | "[resource-drop]input-stream") => {
+            WasiFn::StreamDrop => {
                 // Extract handle from args
                 let handle = match args.first() {
                     Some(CoreValue::I32(h)) => *h as u32,
@@ -2181,12 +2528,12 @@ impl WasiDispatcher {
             }
 
             // Error resource drop (no resource tracking needed)
-            ("wasi:io/error", "[resource-drop]error") => {
+            WasiFn::ErrorDrop => {
                 Ok(vec![])
             }
 
             // CLI exit
-            ("wasi:cli/exit", "exit") => {
+            WasiFn::CliExit => {
                 let status_ok = match args.first() {
                     Some(CoreValue::I32(0)) => true,
                     _ => false,
@@ -2207,7 +2554,7 @@ impl WasiDispatcher {
             }
 
             // WASI Preview1 proc_exit - used by some components for exit
-            ("wasi_snapshot_preview1", "proc_exit") => {
+            WasiFn::PreviewOneProcExit => {
                 let exit_code = match args.first() {
                     Some(CoreValue::I32(code)) => *code,
                     _ => 0,
@@ -2231,7 +2578,7 @@ impl WasiDispatcher {
             // These provide ML inference capabilities for WebAssembly components
             // Note: nn-preview2 feature enables the synchronous sync_bridge module
             #[cfg(all(feature = "nn-preview2", feature = "std"))]
-            ("wasi:nn/inference", "load") => {
+            WasiFn::NnLoad => {
                 use crate::nn::nn_load;
 
                 // Args: (data_ptr: i32, data_len: i32, encoding: i32, target: i32)
@@ -2267,7 +2614,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "nn-preview2", feature = "std"))]
-            ("wasi:nn/inference", "init-execution-context") => {
+            WasiFn::NnInitExecutionContext => {
                 use crate::nn::nn_init_execution_context;
 
                 // Args: (graph_id: i32)
@@ -2282,7 +2629,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "nn-preview2", feature = "std"))]
-            ("wasi:nn/inference", "set-input") => {
+            WasiFn::NnSetInput => {
                 use crate::nn::nn_set_input;
 
                 // Args: (context_id, index, tensor_ptr, tensor_len, dims_ptr, dims_count, type)
@@ -2337,7 +2684,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "nn-preview2", feature = "std"))]
-            ("wasi:nn/inference", "compute") => {
+            WasiFn::NnCompute => {
                 use crate::nn::nn_compute;
 
                 // Args: (context_id: i32)
@@ -2352,7 +2699,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "nn-preview2", feature = "std"))]
-            ("wasi:nn/inference", "get-output") => {
+            WasiFn::NnGetOutput => {
                 use crate::nn::nn_get_output;
 
                 // Args: (context_id, index, out_ptr, out_capacity)
@@ -2392,7 +2739,7 @@ impl WasiDispatcher {
             // ================================================================
 
             #[cfg(feature = "wasi-random")]
-            ("wasi:random/random", "get-random-bytes") => {
+            WasiFn::GetRandomBytes => {
                 use kiln_platform::random::PlatformRandom;
 
                 // Check random capability
@@ -2450,7 +2797,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(feature = "wasi-random")]
-            ("wasi:random/random", "get-random-u64") => {
+            WasiFn::GetRandomU64 => {
                 use kiln_platform::random::PlatformRandom;
 
                 if !self.capabilities.random.secure_random {
@@ -2467,7 +2814,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(feature = "wasi-random")]
-            ("wasi:random/insecure-seed", "insecure-seed") => {
+            WasiFn::InsecureSeed => {
                 use kiln_platform::random::PlatformRandom;
                 let mut bytes = [0u8; 16];
                 PlatformRandom::get_secure_bytes(&mut bytes)
@@ -2481,7 +2828,7 @@ impl WasiDispatcher {
             // wasi:filesystem/types - descriptor operations (core dispatch)
             // ================================================================
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.get-type") => {
+            WasiFn::DescriptorGetType => {
                 // get-type(self: borrow<descriptor>) -> result<descriptor-type, error-code>
                 // Core lowering: (i32 handle, i32 retptr)
                 let fd = match args.first() {
@@ -2497,7 +2844,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.open-at") => {
+            WasiFn::DescriptorOpenAt => {
                 // open-at(self, path-flags, path, open-flags, descriptor-flags) -> result<descriptor, error-code>
                 // Core: (i32 fd, i32 path_flags, i32 path_ptr, i32 path_len, i32 open_flags, i32 desc_flags, i32 retptr)
                 let dir_fd = match args.first() {
@@ -2576,7 +2923,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.stat") => {
+            WasiFn::DescriptorStat => {
                 // stat(self) -> result<descriptor-stat, error-code>
                 // Core: (i32 fd, i32 retptr)
                 let fd = match args.first() {
@@ -2615,7 +2962,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.stat-at") => {
+            WasiFn::DescriptorStatAt => {
                 // stat-at(self, path-flags, path) -> result<descriptor-stat, error-code>
                 let dir_fd = match args.first() {
                     Some(CoreValue::I32(v)) => *v as u32,
@@ -2666,7 +3013,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.read-via-stream") => {
+            WasiFn::DescriptorReadViaStream => {
                 // read-via-stream(self, offset: u64) -> result<input-stream, error-code>
                 let fd = match args.first() {
                     Some(CoreValue::I32(v)) => *v as u32,
@@ -2695,7 +3042,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.read-directory") => {
+            WasiFn::DescriptorReadDirectory => {
                 // read-directory(self) -> result<directory-entry-stream, error-code>
                 // Snapshot the directory's entries now; the guest walks them via
                 // read-directory-entry. `.`/`..` are excluded (std::fs::read_dir omits them),
@@ -2736,7 +3083,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]directory-entry-stream.read-directory-entry") => {
+            WasiFn::ReadDirectoryEntry => {
                 // read-directory-entry(self) -> result<option<directory-entry>, error-code>
                 // directory-entry = record { type: descriptor-type, name: string }. Core values:
                 //   ok(some): [I32(0), I32(1), I32(type), I32(name_ptr), I32(name_len)]
@@ -2786,7 +3133,7 @@ impl WasiDispatcher {
             // operation is never performed.
             // ----------------------------------------------------------------
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.read") => {
+            WasiFn::DescriptorRead => {
                 // read(self, length: filesize, offset: filesize)
                 //   -> result<tuple<list<u8>, bool>, error-code>
                 // Core: (i32 fd, i64 length, i64 offset, i32 retptr)
@@ -2845,7 +3192,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.write") => {
+            WasiFn::DescriptorWrite => {
                 // write(self, buffer: list<u8>, offset: filesize) -> result<filesize, error-code>
                 // Core: (i32 fd, i32 buf_ptr, i32 buf_len, i64 offset, i32 retptr)
                 //   ok: [I32(0), I64(bytes written)]
@@ -2882,7 +3229,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.sync-data") => {
+            WasiFn::DescriptorSyncData => {
                 // sync-data(self) -> result<_, error-code>
                 // Core: (i32 fd, i32 retptr). A no-op success when the descriptor is not
                 // open for writing (per the WIT).
@@ -2922,9 +3269,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.create-directory-at")
-            | ("wasi:filesystem/types", "[method]descriptor.remove-directory-at")
-            | ("wasi:filesystem/types", "[method]descriptor.unlink-file-at") => {
+            WasiFn::CreateDirectoryAt | WasiFn::RemoveDirectoryAt | WasiFn::UnlinkFileAt => {
                 // f(self, path: string) -> result<_, error-code>
                 // Core: (i32 fd, i32 path_ptr, i32 path_len, i32 retptr)
                 let fd = Self::core_u32(args, 0, "directory op: missing descriptor")?;
@@ -2956,7 +3301,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.rename-at") => {
+            WasiFn::RenameAt => {
                 // rename-at(self, old-path, new-descriptor: borrow<descriptor>, new-path)
                 //   -> result<_, error-code>
                 // Core: (i32 fd, i32 old_ptr, i32 old_len, i32 new_fd, i32 new_ptr, i32 new_len, i32 retptr)
@@ -2985,7 +3330,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.link-at") => {
+            WasiFn::LinkAt => {
                 // link-at(self, old-path-flags, old-path, new-descriptor, new-path)
                 //   -> result<_, error-code>
                 // Core: (i32 fd, i32 flags, i32 old_ptr, i32 old_len, i32 new_fd,
@@ -3026,7 +3371,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.symlink-at") => {
+            WasiFn::SymlinkAt => {
                 // symlink-at(self, old-path: string /* link contents */, new-path: string)
                 //   -> result<_, error-code>
                 // Core: (i32 fd, i32 contents_ptr, i32 contents_len, i32 new_ptr, i32 new_len, i32 retptr)
@@ -3064,7 +3409,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.readlink-at") => {
+            WasiFn::ReadlinkAt => {
                 // readlink-at(self, path: string) -> result<string, error-code>
                 // Core: (i32 fd, i32 path_ptr, i32 path_len, i32 retptr)
                 //   ok: [I32(0), I32(string ptr), I32(string len)]
@@ -3112,15 +3457,14 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[method]descriptor.metadata-hash") |
-            ("wasi:filesystem/types", "[method]descriptor.metadata-hash-at") => {
+            WasiFn::DescriptorMetadataHash => {
                 // Return a simple hash based on file path
                 // metadata-hash-value: { upper: u64, lower: u64 }
                 Ok(vec![CoreValue::I32(0), CoreValue::I64(0), CoreValue::I64(0)])
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[resource-drop]descriptor") => {
+            WasiFn::DescriptorDrop => {
                 // Dropping a descriptor ends its lifetime: remove the file descriptor
                 // `open-at` created, which closes the kept File and frees its slot in
                 // the resource table.
@@ -3144,7 +3488,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(all(feature = "wasi-filesystem", feature = "std"))]
-            ("wasi:filesystem/types", "[resource-drop]directory-entry-stream") => {
+            WasiFn::DirectoryEntryStreamDrop => {
                 // Release the directory snapshot and the stream's resource-table slot.
                 // Only a handle that really is a directory-entry-stream frees a slot.
                 let handle = Self::core_u32(args, 0, "resource-drop: missing stream")?;
@@ -3155,8 +3499,7 @@ impl WasiDispatcher {
             }
 
             // wasi:io/streams - input stream read operations
-            ("wasi:io/streams", "[method]input-stream.read" | "input-stream.read") |
-            ("wasi:io/streams", "[method]input-stream.blocking-read" | "input-stream.blocking-read") => {
+            WasiFn::InputStreamRead => {
                 // read(self: borrow<input-stream>, len: u64) -> result<list<u8>, stream-error>
                 //
                 // Returns CORE VALUES; the caller (dispatch_canon_lowered) lowers them to the
@@ -3223,7 +3566,7 @@ impl WasiDispatcher {
                 Ok(vec![CoreValue::I32(0), CoreValue::I32(buf_ptr as i32), CoreValue::I32(n as i32)])
             }
 
-            ("wasi:io/streams", "[method]input-stream.subscribe" | "input-stream.subscribe") => {
+            WasiFn::InputStreamSubscribe => {
                 // Return a pollable handle (reuse input stream creation)
                 let handle = self.resource_manager.create_input_stream("pollable")?;
                 Ok(vec![CoreValue::I32(handle as i32)])
@@ -3231,7 +3574,7 @@ impl WasiDispatcher {
 
             // wasi:filesystem/preopens - core dispatch
             #[cfg(feature = "wasi-filesystem")]
-            ("wasi:filesystem/preopens", "get-directories") => {
+            WasiFn::GetDirectories => {
                 // Return list<tuple<descriptor, string>> at retptr.
                 //
                 // The canonical-ABI return area at retptr is only 8 bytes (the list
@@ -3295,7 +3638,7 @@ impl WasiDispatcher {
             // ================================================================
             // wasi:cli/environment - initial-cwd (core dispatch)
             // ================================================================
-            ("wasi:cli/environment", "initial-cwd") => {
+            WasiFn::InitialCwd => {
                 // Return the actual current working directory
                 // Core lowering: option<string> = (discriminant, ptr, len) via retptr
                 #[cfg(feature = "std")]
@@ -3336,7 +3679,7 @@ impl WasiDispatcher {
             // ================================================================
             // wasi:io/error - error.to-debug-string (core dispatch)
             // ================================================================
-            ("wasi:io/error", "[method]error.to-debug-string") => {
+            WasiFn::ErrorToDebugString => {
                 // Returns a debug string for the error resource
                 // Core lowering: string = (ptr, len) via retptr
                 if let Some(mem) = memory {
@@ -3362,7 +3705,7 @@ impl WasiDispatcher {
             // wasi:clocks/monotonic-clock - resolution (core dispatch)
             // ================================================================
             #[cfg(feature = "wasi-clocks")]
-            ("wasi:clocks/monotonic-clock", "resolution") => {
+            WasiFn::MonotonicClockResolution => {
                 if !self.capabilities.clocks.monotonic_access {
                     return Err(Error::wasi_permission_denied("Monotonic clock access denied"));
                 }
@@ -3374,7 +3717,7 @@ impl WasiDispatcher {
             // wasi:random/insecure - insecure random (core dispatch)
             // ================================================================
             #[cfg(feature = "wasi-random")]
-            ("wasi:random/insecure", "get-insecure-random-bytes") => {
+            WasiFn::GetInsecureRandomBytes => {
                 use kiln_platform::random::PlatformRandom;
 
                 if !self.capabilities.random.pseudo_random {
@@ -3405,7 +3748,7 @@ impl WasiDispatcher {
             }
 
             #[cfg(feature = "wasi-random")]
-            ("wasi:random/insecure", "get-insecure-random-u64") => {
+            WasiFn::GetInsecureRandomU64 => {
                 use kiln_platform::random::PlatformRandom;
 
                 if !self.capabilities.random.pseudo_random {
@@ -3423,106 +3766,94 @@ impl WasiDispatcher {
             // wasi:sockets/* - Socket interfaces (core dispatch)
             // ================================================================
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/tcp", "create-tcp-socket") => {
+            WasiFn::TcpCreateSocket => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_tcp_create(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/tcp", "start-connect") => {
+            WasiFn::TcpStartConnect => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_tcp_connect(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/tcp", "start-bind") => {
+            WasiFn::TcpStartBind => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_tcp_bind(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/tcp", "listen") => {
+            WasiFn::TcpListen => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_tcp_listen(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/tcp", "accept") => {
+            WasiFn::TcpAccept => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_tcp_accept(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/tcp", "send") => {
+            WasiFn::TcpSend => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_tcp_send(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/tcp", "receive") => {
+            WasiFn::TcpReceive => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_tcp_recv(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/tcp", "shutdown") => {
+            WasiFn::TcpShutdown => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_tcp_shutdown(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/udp", "create-udp-socket") => {
+            WasiFn::UdpCreateSocket => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_udp_create(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/udp", "start-bind") => {
+            WasiFn::UdpStartBind => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_udp_bind(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/udp", "send") => {
+            WasiFn::UdpSend => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_udp_send(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/udp", "receive") => {
+            WasiFn::UdpReceive => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_udp_recv(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
             }
 
             #[cfg(all(feature = "wasi-sockets", feature = "std"))]
-            ("wasi:sockets/ip-name-lookup", "resolve-addresses") => {
+            WasiFn::ResolveAddresses => {
                 let wasi_args = Self::core_to_component_values(args);
                 let results = wasi_resolve_addresses(&mut () as &mut dyn core::any::Any, wasi_args)?;
                 Ok(Self::component_to_core_values(&results))
-            }
-
-            // ================================================================
-            // Unknown function - return error
-            // ================================================================
-            _ => {
-                #[cfg(feature = "tracing")]
-                warn!(interface = %base_interface, function = %function, "unknown WASI function in dispatch_core");
-
-                Err(Error::runtime_not_implemented(
-                    "Unknown WASI function"
-                ))
             }
         }
     }
@@ -3563,6 +3894,10 @@ impl WasiDispatcher {
 /// without knowing about WASI specifics.
 #[cfg(feature = "std")]
 impl kiln_foundation::HostImportHandler for WasiDispatcher {
+    fn resolves(&self, module: &str, function: &str) -> bool {
+        served_wasi_fn(module, function).is_some()
+    }
+
     fn call_import(
         &mut self,
         module: &str,
@@ -3659,6 +3994,75 @@ fn fs_err(code: i32) -> Vec<kiln_foundation::values::Value> {
 mod tests {
     use super::*;
     use kiln_foundation::memory_init::MemoryInitializer;
+
+    /// AD-LINK-001: the link-time check and dispatch read one table. Every
+    /// listed import resolves under any `@version`; an import the table does
+    /// not list neither resolves nor dispatches. (That every variant has a
+    /// row and an arm is enforced at compile time; see `WasiFn`.)
+    // rivet: verifies SR-65
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn link_check_and_dispatch_agree_on_served_imports() -> Result<()> {
+        use kiln_foundation::HostImportHandler;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+
+        for (interface, function, _) in SERVED_WASI_IMPORTS {
+            assert!(dispatcher.resolves(interface, function), "{interface}::{function}");
+            let versioned = format!("{interface}@0.2.6");
+            assert!(dispatcher.resolves(&versioned, function), "{versioned}::{function}");
+        }
+
+        for (interface, function) in [
+            ("no:such/iface@1.0.0", "missing"),
+            ("wasi:cli/stdout@0.2.0", "no-such-function"),
+        ] {
+            assert!(!dispatcher.resolves(interface, function), "{interface}::{function}");
+            let err = dispatcher
+                .dispatch_core(interface, function, &[], None)
+                .expect_err("an unlisted import must not dispatch");
+            assert_eq!(err.message, "Unknown WASI function");
+        }
+        Ok(())
+    }
+
+    /// kiln never issues a terminal handle (`get-terminal-*` returns `none`),
+    /// so it serves the terminal resource drops, and a drop can only name a
+    /// handle that was never issued: it traps instead of succeeding silently.
+    // rivet: verifies SR-65
+    #[cfg(feature = "std")]
+    #[serial_test::serial]
+    #[test]
+    fn terminal_resource_drops_resolve_and_trap_on_an_unissued_handle() -> Result<()> {
+        use kiln_foundation::HostImportHandler;
+        MemoryInitializer::ensure_initialized()?;
+        let mut dispatcher = WasiDispatcher::with_defaults()?;
+
+        for (interface, function) in [
+            ("wasi:cli/terminal-input@0.2.6", "[resource-drop]terminal-input"),
+            ("wasi:cli/terminal-output@0.2.6", "[resource-drop]terminal-output"),
+        ] {
+            assert!(dispatcher.resolves(interface, function), "{interface}::{function}");
+            let err = dispatcher
+                .dispatch_core(interface, function, &[kiln_foundation::values::Value::I32(1)], None)
+                .expect_err("dropping a terminal handle kiln never issued must trap");
+            assert_eq!(err.category, kiln_error::ErrorCategory::RuntimeTrap);
+        }
+        Ok(())
+    }
+
+    /// Each import name is listed once; a second row for the same name would
+    /// never be reached.
+    // rivet: verifies SR-65
+    #[cfg(feature = "std")]
+    #[test]
+    fn served_imports_table_lists_each_import_once() {
+        let mut seen = std::collections::HashSet::new();
+        for (interface, function, _) in SERVED_WASI_IMPORTS {
+            assert!(seen.insert((interface, function)), "duplicate row {interface}::{function}");
+        }
+    }
 
     /// The #392 sandbox-escape hazard: a write to a not-yet-existing `../target`
     /// must be rejected. An existence-gated (canonicalize) check would admit it

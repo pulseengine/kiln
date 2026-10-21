@@ -70,6 +70,11 @@ pub struct WastEngine {
 /// No-op host handler for spectest print functions
 struct SpectestHandler;
 impl kiln_foundation::HostImportHandler for SpectestHandler {
+    // call_import accepts every import as a no-op, so every import resolves.
+    fn resolves(&self, _module: &str, _function: &str) -> bool {
+        true
+    }
+
     fn call_import(
         &mut self, _module: &str, _function: &str,
         _args: &[kiln_foundation::Value],

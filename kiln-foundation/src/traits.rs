@@ -1604,6 +1604,15 @@ impl MemoryAccessor for SliceMemory {
 /// All host calls go through this trait, ensuring clean separation.
 #[cfg(feature = "std")]
 pub trait HostImportHandler: Send + Sync {
+    /// Whether this handler serves the import `module::function`.
+    ///
+    /// Instantiation uses this to refuse a module whose imports nothing can
+    /// serve, before running anything (SR-65). It must agree with
+    /// [`call_import`](Self::call_import): an import it reports as served must
+    /// not fail as unknown at call time, and one it does not serve must not be
+    /// reachable through `call_import`.
+    fn resolves(&self, module: &str, function: &str) -> bool;
+
     /// Call a host import function
     ///
     /// # Arguments
