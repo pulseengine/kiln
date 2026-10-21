@@ -11,6 +11,7 @@ name: Release
 # Required release assets, per the standardised pattern:
 #   kiln-vX.Y.Z-<triple>.{tar.gz|zip}          # cross-compiled kiln (+ kilnd alias) binaries
 #   kiln-X.Y.Z.cdx.json                         # CycloneDX SBOM (kilnd toolchain)
+#   kiln-X.Y.Z.vex.cdx.json                     # CycloneDX VEX: advisory analysis vs the SBOM (SR-69)
 #   rivet-snapshot-vX.Y.Z.json                  # audit-ready rivet artifact graph
 #   SHA256SUMS.txt                              # one checksum file over all assets
 #   SHA256SUMS.txt.sig                          # cosign detached signature
@@ -343,12 +344,67 @@ jobs:
           echo "::notice::Toolchain SBOM written to release-assets/kiln-${BARE}.cdx.json"
           ls -la release-assets/
 
+      # SR-69: CycloneDX VEX beside the SBOM. `cargo-kiln vex` runs
+      # `cargo audit --json` for this tag's Cargo.lock and decides, per
+      # advisory, whether the package is in kilnd's normal dependency tree
+      # for any release target (affected -> exploitable; otherwise
+      # not_affected / code_not_present). The release targets are read from
+      # this workflow's own build matrix, so they cannot drift. Generated
+      # before SHA256SUMS so the cosign signature covers it.
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit --version 0.22.1
+
+      - name: Generate VEX (CycloneDX)
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
+          BARE="${VERSION#v}"
+          TARGET_ARGS=()
+          while read -r TARGET; do
+            TARGET_ARGS+=(--target "$TARGET")
+          done < <(grep -E '^ +- target: ' .github/workflows/release.yml | sed 's/^ *- target: //')
+          test "${#TARGET_ARGS[@]}" -gt 0
+          cargo run --release -p cargo-kiln -- vex \
+            --sbom "release-assets/kiln-${BARE}.cdx.json" \
+            --out "release-assets/kiln-${BARE}.vex.cdx.json" \
+            "${TARGET_ARGS[@]}"
+          ls -la "release-assets/kiln-${BARE}.vex.cdx.json"
+
+      # The validator is pinned to an exact release and verified by sha256;
+      # any schema violation fails the release.
+      - name: Validate VEX against the CycloneDX schema
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          CYCLONEDX_CLI_VERSION: v0.33.1
+          CYCLONEDX_CLI_SHA256: bfc8b2538da86fe239bc53658bbb63c1c8c510a293c1e6891aa5bea5d3c58746
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${INPUT_TAG:-${GITHUB_REF#refs/tags/}}"
+          BARE="${VERSION#v}"
+          SPEC="$(jq -r '.specVersion' "release-assets/kiln-${BARE}.vex.cdx.json")"
+          curl --fail --silent --show-error --location \
+            --output cyclonedx-cli \
+            "https://github.com/CycloneDX/cyclonedx-cli/releases/download/${CYCLONEDX_CLI_VERSION}/cyclonedx-linux-x64"
+          echo "${CYCLONEDX_CLI_SHA256}  cyclonedx-cli" | sha256sum --check -
+          chmod +x cyclonedx-cli
+          DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 ./cyclonedx-cli validate \
+            --input-file "release-assets/kiln-${BARE}.vex.cdx.json" \
+            --input-format json \
+            --input-version "v${SPEC//./_}" \
+            --fail-on-errors
+
       - name: Generate SHA256 checksums
         shell: bash
         run: |
           set -euo pipefail
           cd release-assets
           sha256sum ./* > SHA256SUMS.txt
+          # SR-69: the VEX must be covered by the signed sums.
+          grep -q '\.vex\.cdx\.json$' SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       # ── SLSA build provenance (GitHub-native) ────────────────────────

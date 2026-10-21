@@ -5,6 +5,8 @@
 
 pub mod embed_limits;
 pub mod test_validate;
+pub mod vex;
 
 pub use embed_limits::execute as cmd_embed_limits;
 pub use test_validate::{TestValidateArgs, execute_test_validate};
+pub use vex::{VexArgs, execute as cmd_vex};
