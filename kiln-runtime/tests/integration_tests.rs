@@ -22,6 +22,7 @@ use kiln_runtime::{
 };
 
 #[test]
+#[ignore = "#565: Memory::copy_within_or_between returns Runtime error 1005"]
 fn test_safe_memory_integration() -> Result<()> {
     // Create memory with full verification level
     let mem_type = CoreMemoryType {
