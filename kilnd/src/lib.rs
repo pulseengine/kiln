@@ -749,13 +749,15 @@ impl KilndEngine {
             // This is needed for components that call get-arguments (e.g., calculator).
             #[cfg(all(feature = "kiln-execution", feature = "wasi"))]
             if self.config.enable_wasi {
-                if let Err(e) = instance.pre_allocate_wasi_args() {
-                    eprintln!("[WASI-PREALLOC] Failed: {}", e);
+                if let Err(_e) = instance.pre_allocate_wasi_args() {
+                    #[cfg(feature = "tracing")]
+                    kiln_foundation::tracing::warn!(error = %_e, "WASI args pre-allocation failed");
                 }
                 // Pre-allocate cabi_realloc'd memory for get-directories so a component
                 // can actually use --wasi-fs preopens (SR-37 / #405).
-                if let Err(e) = instance.pre_allocate_wasi_preopens() {
-                    eprintln!("[WASI-PREALLOC] preopens failed: {}", e);
+                if let Err(_e) = instance.pre_allocate_wasi_preopens() {
+                    #[cfg(feature = "tracing")]
+                    kiln_foundation::tracing::warn!(error = %_e, "WASI preopens pre-allocation failed");
                 }
             }
 
@@ -1882,17 +1884,22 @@ pub fn run(bin_name: &str) -> Result<()> {
         // Set up tracing with environment-based filtering
         // Use RUST_LOG environment variable to control verbosity
         // e.g., RUST_LOG=debug,kiln_runtime=trace
-        let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+        // Without RUST_LOG nothing is traced: diagnostics must never reach a
+        // program's stderr unless the user asks for them (SR-67). The fmt
+        // subscriber formats each record into one buffer and writes it to stderr
+        // as a single whole line.
+        let filter = EnvFilter::builder()
+            .with_default_directive(tracing::level_filters::LevelFilter::OFF.into())
+            .from_env_lossy();
 
         fmt()
             .with_env_filter(filter)
+            .with_writer(std::io::stderr)
             .with_target(true)
             .with_thread_ids(false)
             .with_file(true)
             .with_line_number(true)
             .init();
-
-        eprintln!("[TRACING] Tracing initialized - use RUST_LOG env var to control output");
     }
 
     // witness MC/DC coverage harness mode (#340 — REQ_WITNESS_COV / AD-MCDC-001):

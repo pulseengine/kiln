@@ -1868,10 +1868,13 @@ impl WasiDispatcher {
     ) -> Result<Vec<kiln_foundation::values::Value>> {
         use kiln_foundation::values::Value as CoreValue;
 
+        #[cfg(feature = "tracing")]
         let base_interface = Self::strip_version(interface);
 
-        // DEBUG: trace WASI calls
-        eprintln!("[WASI-TRACE] {}::{} args={:?}", base_interface, function, args);
+        // Per-call trace; emitted only when the `tracing` feature is built in and
+        // RUST_LOG enables it. Never written directly to stderr (SR-67).
+        #[cfg(feature = "tracing")]
+        trace!(interface = %base_interface, function = %function, args = ?args, "WASI call");
 
         // The served-imports table is the only place an import name is
         // recognised; instantiation refuses imports it does not list (SR-65).
