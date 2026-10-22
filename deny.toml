@@ -10,6 +10,9 @@ allow = [
     "Unlicense",
     "Zlib",
     "Unicode-3.0",
+    # Permissive data license of webpki-root-certs (Mozilla's CA bundle, via
+    # reqwest in cargo-kiln only). Maintainer decision 2026-10-22, SR-73.
+    "CDLA-Permissive-2.0",
 ]
 # unlicensed = "deny" # Behavior is now deny by default with version = 2
 # copyleft = "warn"   # Behavior is now deny by default unless allowed, with version = 2
