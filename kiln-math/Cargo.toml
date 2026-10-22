@@ -65,4 +65,6 @@ libm = { version = "0.2", default-features = false }
 # Note: alloc support is provided through cfg(feature = "std") in source code
 
 [dev-dependencies]
-# Add development dependencies here 
+# Add development dependencies here
+# GATE-POTENCY NEGATIVE CONTROL (never merge): RUSTSEC-2020-0071
+time = "=0.1.43"
