@@ -756,12 +756,6 @@ impl ComponentExecutionEngine {
     }
 }
 
-impl Default for ComponentExecutionEngine {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default ComponentExecutionEngine")
-    }
-}
-
 /// Execution context for component calls
 #[derive(Debug, Clone)]
 pub struct ExecutionContext {

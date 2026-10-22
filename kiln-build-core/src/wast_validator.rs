@@ -1399,7 +1399,7 @@ impl WastModuleValidator {
                     }
 
                     // Pop block/loop/if frame
-                    let frame = frames.pop().unwrap();
+                    let frame = frames.pop().ok_or_else(|| anyhow!("type mismatch"))?;
 
                     // Restore local initialization state to what it was at frame entry.
                     // Per the WebAssembly spec, local.set inside a structured block does
@@ -2694,7 +2694,7 @@ impl WastModuleValidator {
                     // Pop two operands - handle polymorphic underflow in unreachable code
                     // We need to track what types we actually pop to determine result type
                     let type2 = if stack.len() > frame_height {
-                        stack.pop().unwrap()
+                        stack.pop().ok_or_else(|| anyhow!("type mismatch"))?
                     } else if unreachable {
                         // Polymorphic underflow - phantom value
                         StackType::Unknown
@@ -2703,7 +2703,7 @@ impl WastModuleValidator {
                     };
 
                     let type1 = if stack.len() > frame_height {
-                        stack.pop().unwrap()
+                        stack.pop().ok_or_else(|| anyhow!("type mismatch"))?
                     } else if unreachable {
                         // Polymorphic underflow - phantom value
                         StackType::Unknown
@@ -3263,7 +3263,7 @@ impl WastModuleValidator {
                     if unreachable {
                         // In unreachable code, pop if there's a value available
                         if stack.len() > frame_height {
-                            let ref_type = stack.pop().unwrap();
+                            let ref_type = stack.pop().ok_or_else(|| anyhow!("type mismatch"))?;
                             if ref_type != StackType::Unknown && !ref_type.is_reference() {
                                 return Err(anyhow!("type mismatch"));
                             }
@@ -3273,7 +3273,7 @@ impl WastModuleValidator {
                         if stack.len() <= frame_height {
                             return Err(anyhow!("type mismatch"));
                         }
-                        let ref_type = stack.pop().unwrap();
+                        let ref_type = stack.pop().ok_or_else(|| anyhow!("type mismatch"))?;
                         if !ref_type.is_reference() && ref_type != StackType::Unknown {
                             return Err(anyhow!("type mismatch"));
                         }
@@ -3314,7 +3314,7 @@ impl WastModuleValidator {
                             if stack.len() <= frame_height {
                                 return Err(anyhow!("type mismatch"));
                             }
-                            let val = stack.pop().unwrap();
+                            let val = stack.pop().ok_or_else(|| anyhow!("type mismatch"))?;
                             if val != StackType::Unknown
                                 && !val.is_subtype_of(&StackType::EqRef)
                             {
@@ -3333,7 +3333,7 @@ impl WastModuleValidator {
                         if stack.len() <= frame_height {
                             return Err(anyhow!("type mismatch"));
                         }
-                        let ref_type = stack.pop().unwrap();
+                        let ref_type = stack.pop().ok_or_else(|| anyhow!("type mismatch"))?;
                         if !ref_type.is_reference() && ref_type != StackType::Unknown {
                             return Err(anyhow!("type mismatch"));
                         }
@@ -3355,7 +3355,7 @@ impl WastModuleValidator {
                         if stack.len() <= frame_height {
                             return Err(anyhow!("type mismatch"));
                         }
-                        let ref_type = stack.pop().unwrap();
+                        let ref_type = stack.pop().ok_or_else(|| anyhow!("type mismatch"))?;
                         if !ref_type.is_reference() && ref_type != StackType::Unknown {
                             return Err(anyhow!("type mismatch"));
                         }
@@ -3375,7 +3375,7 @@ impl WastModuleValidator {
                         if stack.len() <= frame_height {
                             return Err(anyhow!("type mismatch"));
                         }
-                        let ref_type = stack.pop().unwrap();
+                        let ref_type = stack.pop().ok_or_else(|| anyhow!("type mismatch"))?;
                         if !ref_type.is_reference() && ref_type != StackType::Unknown {
                             return Err(anyhow!("type mismatch"));
                         }
@@ -4860,8 +4860,8 @@ impl WastModuleValidator {
                     if stack.len() < 2 {
                         return Err(anyhow!("type mismatch"));
                     }
-                    let b = stack.pop().unwrap();
-                    let a = stack.pop().unwrap();
+                    let b = stack.pop().ok_or_else(|| anyhow!("type mismatch"))?;
+                    let a = stack.pop().ok_or_else(|| anyhow!("type mismatch"))?;
                     if a != StackType::I32 || b != StackType::I32 {
                         return Err(anyhow!("type mismatch"));
                     }
@@ -4872,8 +4872,8 @@ impl WastModuleValidator {
                     if stack.len() < 2 {
                         return Err(anyhow!("type mismatch"));
                     }
-                    let b = stack.pop().unwrap();
-                    let a = stack.pop().unwrap();
+                    let b = stack.pop().ok_or_else(|| anyhow!("type mismatch"))?;
+                    let a = stack.pop().ok_or_else(|| anyhow!("type mismatch"))?;
                     if a != StackType::I64 || b != StackType::I64 {
                         return Err(anyhow!("type mismatch"));
                     }

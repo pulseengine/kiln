@@ -626,7 +626,7 @@ impl ComponentLinker {
         self.next_instance_id += 1;
 
         // Create Component from definition (using new constructor)
-        let mut comp = Component::new(crate::components::component::KilnComponentType::default());
+        let mut comp = Component::new(crate::components::component::KilnComponentType::default())?;
 
         // Set the component ID
         #[cfg(feature = "std")]

@@ -377,13 +377,8 @@ impl BoundedWitParser {
         self.interface_count = 0;
         self.warnings.clear();
 
-        for world in &mut self.worlds {
-            *world = None;
-        }
-
-        for interface in &mut self.interfaces {
-            *interface = None;
-        }
+        self.worlds.fill(None);
+        self.interfaces.fill(None);
     }
 
     /// Bounded parsing implementation with comprehensive validation

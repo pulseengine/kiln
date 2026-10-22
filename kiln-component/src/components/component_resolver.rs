@@ -126,7 +126,7 @@ pub struct ComponentResolver {
 impl ComponentResolver {
     pub fn new() -> core::result::Result<Self, ComponentError> {
         Ok(Self {
-            type_registry: GenerativeTypeRegistry::new(),
+            type_registry: GenerativeTypeRegistry::new()?,
             bounds_checker: TypeBoundsChecker::new()?,
             import_cache: BTreeMap::new(),
             export_cache: BTreeMap::new(),
@@ -347,12 +347,6 @@ impl ComponentResolver {
     /// Get bounds checker mutable reference
     pub fn bounds_checker_mut(&mut self) -> &mut TypeBoundsChecker {
         &mut self.bounds_checker
-    }
-}
-
-impl Default for ComponentResolver {
-    fn default() -> Self {
-        Self::new().expect("Failed to create ComponentResolver")
     }
 }
 

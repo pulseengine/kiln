@@ -345,9 +345,3 @@ impl WasiInstanceProvider {
         ]
     }
 }
-
-impl Default for WasiInstanceProvider {
-    fn default() -> Self {
-        Self::new().expect("Failed to create WasiInstanceProvider")
-    }
-}

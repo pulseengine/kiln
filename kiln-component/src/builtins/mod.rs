@@ -347,13 +347,11 @@ impl BuiltinRegistry {
     pub fn register_handler(&mut self, handler: Box<dyn BuiltinHandler>) {
         // Check if we already have a handler for this built-in type
         let builtin_type = handler.builtin_type();
-        if self.handlers.iter().any(|h| h.builtin_type() == builtin_type) {
+        match self.handlers.iter().position(|h| h.builtin_type() == builtin_type) {
             // Replace the existing handler
-            let idx = self.handlers.iter().position(|h| h.builtin_type() == builtin_type).unwrap();
-            self.handlers[idx] = handler;
-        } else {
+            Some(idx) => self.handlers[idx] = handler,
             // Add a new handler
-            self.handlers.push(handler);
+            None => self.handlers.push(handler),
         }
     }
 

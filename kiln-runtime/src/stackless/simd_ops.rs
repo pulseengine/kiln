@@ -461,7 +461,7 @@ pub fn i8x16_max_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
 pub fn i8x16_avgr_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..16 {
-        r[i] = ((a[i] as u16 + b[i] as u16 + 1) / 2) as u8;
+        r[i] = (a[i] as u16 + b[i] as u16).div_ceil(2) as u8;
     }
     r
 }
@@ -501,11 +501,11 @@ pub fn i8x16_narrow_i16x8_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..8 {
         let va = get_i16(a, i) as i32;
-        r[i] = va.max(-128).min(127) as i8 as u8;
+        r[i] = va.clamp(-128, 127) as i8 as u8;
     }
     for i in 0..8 {
         let vb = get_i16(b, i) as i32;
-        r[i + 8] = vb.max(-128).min(127) as i8 as u8;
+        r[i + 8] = vb.clamp(-128, 127) as i8 as u8;
     }
     r
 }
@@ -515,11 +515,11 @@ pub fn i8x16_narrow_i16x8_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..8 {
         let va = get_i16(a, i) as i32;
-        r[i] = va.max(0).min(255) as u8;
+        r[i] = va.clamp(0, 255) as u8;
     }
     for i in 0..8 {
         let vb = get_i16(b, i) as i32;
-        r[i + 8] = vb.max(0).min(255) as u8;
+        r[i + 8] = vb.clamp(0, 255) as u8;
     }
     r
 }
@@ -715,11 +715,11 @@ pub fn i16x8_narrow_i32x4_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..4 {
         let va = get_i32(a, i) as i64;
-        set_i16(&mut r, i, va.max(-32768).min(32767) as i16);
+        set_i16(&mut r, i, va.clamp(-32768, 32767) as i16);
     }
     for i in 0..4 {
         let vb = get_i32(b, i) as i64;
-        set_i16(&mut r, i + 4, vb.max(-32768).min(32767) as i16);
+        set_i16(&mut r, i + 4, vb.clamp(-32768, 32767) as i16);
     }
     r
 }
@@ -729,11 +729,11 @@ pub fn i16x8_narrow_i32x4_u(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
     let mut r = [0u8; 16];
     for i in 0..4 {
         let va = get_i32(a, i) as i64;
-        set_u16(&mut r, i, va.max(0).min(65535) as u16);
+        set_u16(&mut r, i, va.clamp(0, 65535) as u16);
     }
     for i in 0..4 {
         let vb = get_i32(b, i) as i64;
-        set_u16(&mut r, i + 4, vb.max(0).min(65535) as u16);
+        set_u16(&mut r, i + 4, vb.clamp(0, 65535) as u16);
     }
     r
 }
@@ -781,7 +781,7 @@ pub fn i16x8_q15mulr_sat_s(a: &[u8; 16], b: &[u8; 16]) -> [u8; 16] {
         let va = get_i16(a, i) as i32;
         let vb = get_i16(b, i) as i32;
         let product = ((va * vb) + 0x4000) >> 15;
-        set_i16(&mut r, i, product.max(-32768).min(32767) as i16);
+        set_i16(&mut r, i, product.clamp(-32768, 32767) as i16);
     }
     r
 }

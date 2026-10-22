@@ -226,7 +226,7 @@ impl RealtimeMonitor {
         use kiln_foundation::monitoring::MEMORY_MONITOR;
 
         let monitor_stats = MEMORY_MONITOR.get_statistics();
-        let total_allocated = 0; // TODO: Get from capability context
+        let total_allocated: usize = 0; // TODO: Get from capability context
 
         // Collect per-crate utilization
         let mut crate_utilization = [0usize; 16];
@@ -251,17 +251,17 @@ impl RealtimeMonitor {
 
         for (i, &_crate_id) in crates.iter().enumerate() {
             // TODO: Get allocation info from capability context
-            let allocated = 0; // TODO: context.get_crate_allocation(crate_id);
-            let budget = 0; // TODO: context.get_crate_budget(crate_id);
-            if budget > 0 {
-                crate_utilization[i] = (allocated * 100) / budget;
+            let allocated: usize = 0; // TODO: context.get_crate_allocation(crate_id);
+            let budget: usize = 0; // TODO: context.get_crate_budget(crate_id);
+            if let Some(utilization) = (allocated * 100).checked_div(budget) {
+                crate_utilization[i] = utilization;
             }
         }
 
         // Collect shared pool utilization (using total system stats)
-        let total_budget = 0; // TODO: Get from capability context
-        let shared_pool_utilization =
-            if total_budget > 0 { (total_allocated * 100) / total_budget } else { 0 };
+        let total_budget: usize = 0; // TODO: Get from capability context
+        // A zero budget (not yet wired to the capability context) reports 0% utilization.
+        let shared_pool_utilization = (total_allocated * 100).checked_div(total_budget).unwrap_or(0);
 
         Ok(MemorySample {
             timestamp,

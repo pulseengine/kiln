@@ -564,12 +564,6 @@ pub enum AgentMigrationStatus {
     Completed,
 }
 
-impl Default for AgentRegistry {
-    fn default() -> Self {
-        Self::new().expect("Failed to create default AgentRegistry")
-    }
-}
-
 impl Default for AgentCreationOptions {
     fn default() -> Self {
         Self {

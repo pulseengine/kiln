@@ -197,6 +197,12 @@ pub struct ResourceTypeLimit<
     pub custom_limits: CustomLimitsMap<P>,
 }
 
+// `Default` is required by the `BoundedMap` value-type bound, so it cannot be
+// removed, and `Default::default` cannot return an error.
+#[allow(
+    clippy::expect_used,
+    reason = "BoundedMap::new with a default provider is infallible; Default cannot return Result"
+)]
 impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default
     for ResourceTypeLimit<P>
 {
@@ -301,26 +307,6 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
     }
 }
 
-impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq> Default
-    for ResourceLimitsSection<P>
-{
-    fn default() -> Self {
-        let provider = P::default();
-        Self {
-            version: RESOURCE_LIMITS_VERSION,
-            max_fuel_per_step: None,
-            max_memory_usage: None,
-            max_call_depth: None,
-            max_instructions_per_step: None,
-            max_execution_slice_ms: None,
-            resource_type_limits: BoundedMap::new(provider)
-                .expect("ASIL-D: Default map creation must succeed"),
-            qualification_hash: None,
-            qualified_asil_level: None,
-        }
-    }
-}
-
 impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
     ResourceLimitsSection<P>
 {
@@ -342,8 +328,8 @@ impl<P: kiln_foundation::MemoryProvider + Clone + Default + PartialEq + Eq>
     }
 
     /// Create a new resource limits section with default provider
-    pub fn with_default_provider() -> Self {
-        Self::default()
+    pub fn with_default_provider() -> Result<Self, Error> {
+        Self::new(P::default())
     }
 
     /// Create resource limits section with execution limits only

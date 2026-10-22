@@ -89,11 +89,9 @@ impl BudgetAwareResourceTablePool {
             component_id: self.component_id,
             active_tables: self.active_tables,
             max_tables: self.max_tables,
-            utilization_percent: if self.max_tables > 0 {
-                (self.active_tables * 100) / self.max_tables
-            } else {
-                0
-            },
+            utilization_percent: (self.active_tables * 100)
+                .checked_div(self.max_tables)
+                .unwrap_or(0),
         }
     }
 }

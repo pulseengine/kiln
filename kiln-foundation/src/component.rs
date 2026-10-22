@@ -1087,22 +1087,17 @@ where
             ComponentAlias::InstanceExport(_) => 0u8,
             ComponentAlias::CoreInstanceExport(_) => 1u8,
             ComponentAlias::Outer(_) => 2u8,
-            ComponentAlias::_Phantom(_) => {
-                // Safety: _Phantom variant exists only for type parameter P
-                // and should never be constructed at runtime
-                unreachable!("_Phantom variant should never be instantiated")
-            },
+            // _Phantom exists only to carry the type parameter P and is never
+            // constructed; serialization rejects it, so its tag is never persisted.
+            ComponentAlias::_Phantom(_) => 3u8,
         };
         discriminant_byte.update_checksum(checksum);
         match self {
             ComponentAlias::InstanceExport(e) => e.update_checksum(checksum),
             ComponentAlias::CoreInstanceExport(e) => e.update_checksum(checksum),
             ComponentAlias::Outer(e) => e.update_checksum(checksum),
-            ComponentAlias::_Phantom(_) => {
-                // Safety: _Phantom variant exists only for type parameter P
-                // and should never be constructed at runtime
-                unreachable!("_Phantom variant should never be instantiated")
-            },
+            // _Phantom carries no payload; its discriminant byte is all there is to hash.
+            ComponentAlias::_Phantom(_) => {},
         }
     }
 }

@@ -202,19 +202,14 @@ pub use host_provider::component_model_provider::{
 pub use host_provider::resource_manager::WasiResourceManager;
 
 /// WASI version enumeration
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum WasiVersion {
     /// WASI Preview2 (component model)
+    #[default]
     Preview2,
     /// WASI Preview3 (future - async/threading)
     #[cfg(feature = "preview3-prep")]
     Preview3,
-}
-
-impl Default for WasiVersion {
-    fn default() -> Self {
-        Self::Preview2
-    }
 }
 
 /// WASI host provider trait for integration with different execution engines

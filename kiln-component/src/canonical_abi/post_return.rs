@@ -193,14 +193,6 @@ pub struct PostReturnStats {
     pub max_operation_time_us: u64,
 }
 
-impl Default for PostReturnContext {
-    fn default() -> Self {
-        // For Default trait, we prefer to panic rather than return invalid state
-        // This ensures capability-based allocation is always properly initialized
-        Self::new().expect("Failed to create PostReturnContext with proper capability allocation")
-    }
-}
-
 impl PostReturnContext {
     /// Create a new post-return context
     pub fn new() -> Result<Self> {
@@ -240,7 +232,7 @@ impl PostReturnContext {
         // Sort by priority (highest first)
         #[cfg(feature = "std")]
         {
-            self.entries.sort_by(|a, b| b.priority.cmp(&a.priority));
+            self.entries.sort_by_key(|entry| core::cmp::Reverse(entry.priority));
         }
         #[cfg(not(feature = "std"))]
         {
@@ -333,7 +325,6 @@ impl PostReturnContext {
 
         // Handle collected errors based on recovery mode
         if !errors.is_empty() && self.error_recovery == ErrorRecoveryMode::StopOnError {
-            let (_resource_type, _error) = errors.into_iter().next().unwrap();
             return Err(Error::runtime_execution_error("Post-return cleanup failed"));
         }
 

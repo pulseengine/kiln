@@ -306,7 +306,7 @@ impl CoreModuleAdapter {
     pub fn to_component(&self) -> Result<Component> {
         #[cfg(feature = "std")]
         let mut component =
-            Component::new(crate::components::component::KilnComponentType::default());
+            Component::new(crate::components::component::KilnComponentType::default())?;
         #[cfg(not(feature = "std"))]
         let mut component = Component::new()?;
 

@@ -240,10 +240,7 @@ impl InstrumentationPoint {
         )?;
         let bounded_point_type: kiln_foundation::bounded::BoundedString<
             64,
-        > = kiln_foundation::bounded::BoundedString::from_str_truncate(point_type)
-            .unwrap_or_else(|_| {
-                kiln_foundation::bounded::BoundedString::from_str_truncate("").unwrap()
-            });
+        > = kiln_foundation::bounded::BoundedString::from_str_truncate(point_type)?;
         Ok(Self {
             location,
             point_type: bounded_point_type,

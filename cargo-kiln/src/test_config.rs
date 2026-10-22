@@ -166,8 +166,7 @@ impl KilnTestConfig {
 
         // Validate ASIL levels
         for (level, config) in &self.asil {
-            if config.min_coverage.is_some() {
-                let coverage = config.min_coverage.unwrap();
+            if let Some(coverage) = config.min_coverage {
                 if !(0.0..=100.0).contains(&coverage) {
                     anyhow::bail!(
                         "Invalid coverage percentage for ASIL-{}: {}",

@@ -77,63 +77,48 @@ impl DecodedCache {
     }
 
     /// Get cached imports, parsing if not cached
-    ///
-    /// # Panics
-    ///
-    /// This function will not panic as `unwrap()` is called on a value that was
-    /// just set to `Some`.
     pub fn get_imports(&mut self, binary: &[u8]) -> Result<&Vec<ImportInfo>> {
-        if self.import_cache.is_none() {
-            let imports = parse_imports_from_binary(binary)?;
-            self.import_cache = Some(imports);
-
-            // Also cache as section data
-            if let Some(ref imports) = self.import_cache {
+        let imports = match self.import_cache.take() {
+            Some(imports) => imports,
+            None => {
+                let imports = parse_imports_from_binary(binary)?;
+                // Also cache as section data
                 self.sections.insert(2, SectionData::Imports(imports.clone()));
-            }
-        }
+                imports
+            },
+        };
 
-        Ok(self.import_cache.as_ref().unwrap())
+        Ok(self.import_cache.insert(imports))
     }
 
     /// Get cached exports, parsing if not cached
-    ///
-    /// # Panics
-    ///
-    /// This function will not panic as `unwrap()` is called on a value that was
-    /// just set to `Some`.
     pub fn get_exports(&mut self, binary: &[u8]) -> Result<&Vec<ExportInfo>> {
-        if self.export_cache.is_none() {
-            let exports = parse_exports_from_binary(binary)?;
-            self.export_cache = Some(exports);
-
-            // Also cache as section data
-            if let Some(ref exports) = self.export_cache {
+        let exports = match self.export_cache.take() {
+            Some(exports) => exports,
+            None => {
+                let exports = parse_exports_from_binary(binary)?;
+                // Also cache as section data
                 self.sections.insert(7, SectionData::Exports(exports.clone()));
-            }
-        }
+                exports
+            },
+        };
 
-        Ok(self.export_cache.as_ref().unwrap())
+        Ok(self.export_cache.insert(exports))
     }
 
     /// Get cached builtin imports, parsing if not cached
-    ///
-    /// # Panics
-    ///
-    /// This function will not panic as `unwrap()` is called on a value that was
-    /// just set to `Some`.
     pub fn get_builtin_imports(&mut self, binary: &[u8]) -> Result<&Vec<String>> {
-        if self.builtin_imports.is_none() {
-            let imports = self.get_imports(binary)?;
-            let builtins: Vec<String> = imports
+        let builtins = match self.builtin_imports.take() {
+            Some(builtins) => builtins,
+            None => self
+                .get_imports(binary)?
                 .iter()
                 .filter(|import| import.module == "wasi_builtin")
                 .map(|import| import.name.clone())
-                .collect();
-            self.builtin_imports = Some(builtins);
-        }
+                .collect(),
+        };
 
-        Ok(self.builtin_imports.as_ref().unwrap())
+        Ok(self.builtin_imports.insert(builtins))
     }
 
     /// Check if a section is cached
@@ -248,11 +233,6 @@ impl CacheManager {
     }
 
     /// Get or create cache for a binary
-    ///
-    /// # Panics
-    ///
-    /// This function will not panic as `unwrap()` is called on a value that was
-    /// just inserted into the hashmap.
     pub fn get_cache(&mut self, binary: &[u8]) -> Result<&mut DecodedCache> {
         let hash = calculate_hash(binary);
 
@@ -279,7 +259,9 @@ impl CacheManager {
             self.caches.insert(hash, cache);
         }
 
-        Ok(self.caches.get_mut(&hash).unwrap())
+        self.caches.get_mut(&hash).ok_or_else(|| {
+            kiln_error::Error::runtime_error("decoded cache entry missing after insertion")
+        })
     }
 
     /// Clear all caches

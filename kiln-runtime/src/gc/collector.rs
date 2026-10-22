@@ -186,7 +186,10 @@ impl GcCollector {
         let (kind, payload_offset, payload_len) = {
             let obj = heap.get(gc_ref)?;
             let header = obj.header();
-            let offset = gc_ref.offset().unwrap() as usize + HEADER_SIZE;
+            let offset = gc_ref
+                .offset()
+                .ok_or_else(|| Error::memory_error("Null GC reference"))? as usize
+                + HEADER_SIZE;
             (header.kind(), offset, obj.payload().len())
         };
 

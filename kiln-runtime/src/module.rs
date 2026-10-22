@@ -368,6 +368,12 @@ impl Import {
     }
 }
 
+// `Default` is required by the `BoundedMap` value bound (slot initialisation) and
+// cannot return an error.
+#[allow(
+    clippy::expect_used,
+    reason = "Default is a BoundedMap value bound and cannot return Result; an empty BoundedString has no failure path"
+)]
 impl Default for Import {
     fn default() -> Self {
         Self {
@@ -438,19 +444,6 @@ pub struct Function {
     pub locals:   BoundedLocalsVec,
     /// The parsed instructions that make up the function body
     pub body:     KilnExpr,
-}
-
-impl Default for Function {
-    fn default() -> Self {
-        let provider = create_runtime_provider()
-            .expect("Failed to create runtime provider for Function::default()");
-        Self {
-            type_idx: 0,
-            locals:   BoundedLocalsVec::new(provider)
-                .expect("Failed to create locals vector for Function::default()"),
-            body:     KilnExpr::default(),
-        }
-    }
 }
 
 impl PartialEq for Function {
@@ -4080,25 +4073,6 @@ use kiln_foundation::component::ExternType; // For error handling
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TableWrapper(pub Arc<Table>);
 
-impl Default for TableWrapper {
-    fn default() -> Self {
-        use kiln_foundation::types::{
-            Limits,
-            RefType,
-            TableType,
-        };
-        let table_type = TableType {
-            element_type: RefType::Funcref,
-            limits:       Limits {
-                min: 0,
-                max: Some(1),
-            },
-            table64: false,
-        };
-        Self::new(Table::new(table_type).expect("Failed to create Table for TableWrapper::default()"))
-    }
-}
-
 impl TableWrapper {
     /// Create a new table wrapper
     pub fn new(table: Table) -> Self {
@@ -4192,25 +4166,6 @@ impl MemoryGuard {
 /// Wrapper for shared memory instances.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemoryWrapper(pub Arc<Memory>);
-
-impl Default for MemoryWrapper {
-    fn default() -> Self {
-        // FAIL LOUD AND EARLY: This violates the NO FALLBACK LOGIC rule from CLAUDE.md
-        // Memory must always be explicitly created or shared - there should never be
-        // a fallback default memory.
-        //
-        // This Default is only provided because BoundedVec requires it, but it should
-        // NEVER be used in practice. If this panic fires, it means:
-        // - Wrapper modules aren't properly inheriting memory from Module 0
-        // - Memory specifications weren't being properly linked during instantiation
-        // - Instances are being created without required memory
-        panic!(
-            "CRITICAL: MemoryWrapper::default() called - this indicates a memory linking bug. \
-             Memories must be explicitly created or shared, never defaulted. \
-             Check that all modules properly inherit or share memory from Module 0."
-        );
-    }
-}
 
 impl AsRef<Arc<Memory>> for MemoryWrapper {
     fn as_ref(&self) -> &Arc<Memory> {
@@ -4341,17 +4296,6 @@ impl PartialEq for GlobalWrapper {
 }
 
 impl Eq for GlobalWrapper {}
-
-impl Default for GlobalWrapper {
-    fn default() -> Self {
-        use kiln_foundation::{
-            types::ValueType,
-            values::Value,
-        };
-        Self::new(Global::new(ValueType::I32, false, Value::I32(0))
-            .expect("Failed to create Global for GlobalWrapper::default()"))
-    }
-}
 
 impl GlobalWrapper {
     /// Create a new global wrapper
@@ -4551,12 +4495,12 @@ impl FromBytes for MemoryWrapper {
 
         // FAIL LOUD AND EARLY: This violates the NO FALLBACK LOGIC rule
         // Memories must be shared from Module 0, not created during deserialization
-        panic!(
-            "CRITICAL: MemoryWrapper::from_bytes called - this indicates a memory linking bug. \
-             Wrapper modules should inherit memory from Module 0 through shared-everything linking, \
-             not create new memories during deserialization. The hardcoded 1-page memory (min: 1, max: Some(1)) \
-             was masking a bug where wrapper modules weren't properly sharing Module 0's memory."
-        );
+        // Wrapper modules should inherit memory from Module 0 through shared-everything
+        // linking, not create new memories during deserialization. A hardcoded 1-page
+        // memory here previously masked wrapper modules not sharing Module 0's memory.
+        Err(Error::runtime_error(
+            "MemoryWrapper::from_bytes called - memory linking bug: memories must be shared from Module 0, not deserialized",
+        ))
     }
 }
 

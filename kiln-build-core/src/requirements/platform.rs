@@ -271,7 +271,9 @@ impl PlatformVerificationEngine {
             diagnostics.add_diagnostics(discovery_diagnostics.diagnostics);
         }
 
-        let limits = self.verified_limits.as_ref().unwrap();
+        let limits = self.verified_limits.as_ref().ok_or_else(|| {
+            BuildError::Verification("Platform limits were not discovered".to_string())
+        })?;
 
         // ASIL-specific validation
         let asil_requirements = self.get_asil_requirements(asil_level);

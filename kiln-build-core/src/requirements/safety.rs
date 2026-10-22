@@ -294,7 +294,7 @@ impl SafetyVerificationFramework {
                             &result.test_name,
                             format!(
                                 "Updated coverage for {} to {:?}",
-                                requirement_id, &new_coverage
+                                requirement_id, new_coverage
                             ),
                             "coverage-update",
                         );

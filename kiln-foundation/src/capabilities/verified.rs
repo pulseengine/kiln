@@ -321,12 +321,10 @@ impl<const N: usize> VerifiedMemoryCapability<N> {
                     ));
                 }
             },
-            MemoryOperation::Allocate { size } => {
-                if *size > N {
-                    return Err(Error::runtime_execution_error(
-                        "Allocation size exceeds verified bounds",
-                    ));
-                }
+            MemoryOperation::Allocate { size } if *size > N => {
+                return Err(Error::runtime_execution_error(
+                    "Allocation size exceeds verified bounds",
+                ));
             },
             _ => {
                 // Other operations don't need runtime verification

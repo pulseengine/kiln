@@ -89,13 +89,23 @@ impl CanonicalOptions {
     }
 
     /// Binary std/no_std choice
-    pub fn with_realloc(mut self, func_index: u32, manager: Arc<RwLock<ReallocManager>>) -> Self {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the realloc manager lock is poisoned.
+    pub fn with_realloc(
+        mut self,
+        func_index: u32,
+        manager: Arc<RwLock<ReallocManager>>,
+    ) -> Result<Self> {
         self.realloc = Some(func_index);
 
         // Register with the manager before storing it
         {
             #[cfg(feature = "std")]
-            let mut mgr = manager.write().expect("Realloc manager lock poisoned");
+            let mut mgr = manager
+                .write()
+                .map_err(|_| Error::poisoned_lock("Realloc manager lock poisoned"))?;
             #[cfg(not(feature = "std"))]
             let mut mgr = manager.write();
             let _ = mgr.register_realloc(self.instance_id, func_index);
@@ -103,7 +113,7 @@ impl CanonicalOptions {
 
         self.realloc_manager = Some(manager);
 
-        self
+        Ok(self)
     }
 
     /// Set post-return function
@@ -164,7 +174,9 @@ impl<'a> CanonicalLiftContext<'a> {
         let ptr = if let Some(manager) = &self.options.realloc_manager {
             // Binary std/no_std choice
             #[cfg(feature = "std")]
-            let mut mgr = manager.write().expect("Realloc manager lock poisoned");
+            let mut mgr = manager
+                .write()
+                .map_err(|_| Error::poisoned_lock("Realloc manager lock poisoned"))?;
             #[cfg(not(feature = "std"))]
             let mut mgr = manager.write();
 
@@ -245,7 +257,9 @@ impl<'a> CanonicalLiftContext<'a> {
         // Binary std/no_std choice
         if let Some(manager) = &self.options.realloc_manager {
             #[cfg(feature = "std")]
-            let mut mgr = manager.write().expect("Realloc manager lock poisoned");
+            let mut mgr = manager
+                .write()
+                .map_err(|_| Error::poisoned_lock("Realloc manager lock poisoned"))?;
             #[cfg(not(feature = "std"))]
             let mut mgr = manager.write();
 
@@ -292,7 +306,9 @@ impl<'a> CanonicalLowerContext<'a> {
         let ptr = if let Some(manager) = &self.options.realloc_manager {
             // Binary std/no_std choice
             #[cfg(feature = "std")]
-            let mut mgr = manager.write().expect("Realloc manager lock poisoned");
+            let mut mgr = manager
+                .write()
+                .map_err(|_| Error::poisoned_lock("Realloc manager lock poisoned"))?;
             #[cfg(not(feature = "std"))]
             let mut mgr = manager.write();
 
@@ -399,7 +415,6 @@ impl CanonicalOptionsBuilder {
         self.realloc_manager = Some(manager);
         self
     }
-
     pub fn with_post_return(mut self, func_index: u32) -> Self {
         self.post_return = Some(func_index);
         self
@@ -415,11 +430,11 @@ impl CanonicalOptionsBuilder {
         self
     }
 
-    pub fn build(self) -> CanonicalOptions {
+    pub fn build(self) -> Result<CanonicalOptions> {
         let mut options = CanonicalOptions::new(self.memory, self.instance_id);
 
         if let (Some(func_index), Some(manager)) = (self.realloc, self.realloc_manager) {
-            options = options.with_realloc(func_index, manager);
+            options = options.with_realloc(func_index, manager)?;
         }
 
         if let Some(func_index) = self.post_return {
@@ -430,6 +445,6 @@ impl CanonicalOptionsBuilder {
             options = options.with_memory_grow(func_index);
         }
 
-        options.with_string_encoding(self.string_encoding)
+        Ok(options.with_string_encoding(self.string_encoding))
     }
 }

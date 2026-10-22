@@ -346,7 +346,9 @@ impl MatrixVerifier {
 
         // Build test
         print!("  Building... ");
-        std::io::stdout().flush().unwrap();
+        std::io::stdout()
+            .flush()
+            .map_err(|e| BuildError::Tool(format!("Failed to flush stdout: {}", e)))?;
 
         let mut build_cmd = Command::new("cargo");
         build_cmd.arg("build").arg("-p").arg(&config.package);
@@ -374,7 +376,9 @@ impl MatrixVerifier {
 
         // Test execution
         print!("  Testing... ");
-        std::io::stdout().flush().unwrap();
+        std::io::stdout()
+            .flush()
+            .map_err(|e| BuildError::Tool(format!("Failed to flush stdout: {}", e)))?;
 
         let mut test_cmd = Command::new("cargo");
         test_cmd.arg("test").arg("-p").arg(&config.package);
@@ -415,7 +419,9 @@ impl MatrixVerifier {
         let asil_check_passed = if matches!(config.asil_level, AsilLevel::AsilC | AsilLevel::AsilD)
         {
             print!("  ASIL compliance check... ");
-            std::io::stdout().flush().unwrap();
+            std::io::stdout()
+            .flush()
+            .map_err(|e| BuildError::Tool(format!("Failed to flush stdout: {}", e)))?;
 
             let check_result = self.check_asil_compliance(&config.package, &config.features);
             match check_result {
@@ -539,8 +545,9 @@ impl MatrixVerifier {
         // Check if cargo-kani is available
         let check_kani = Command::new("cargo").arg("kani").arg("--version").output();
 
-        if check_kani.is_err() || !check_kani.unwrap().status.success() {
-            return None;
+        match check_kani {
+            Ok(output) if output.status.success() => {},
+            _ => return None,
         }
 
         println!();

@@ -472,17 +472,6 @@ impl InstantiationContext {
     }
 }
 
-impl Default for InstantiationContext {
-    fn default() -> Self {
-        Self::new().unwrap_or_else(|_| Self {
-            canonical_abi: CanonicalABI::new(64),
-            resource_manager: ResourceLifecycleManager::new(),
-            execution_engine: ComponentExecutionEngine::default(),
-            next_instance_id: 0,
-        })
-    }
-}
-
 /// Component instantiation implementation
 impl Component {
     /// Instantiate a component with the provided imports

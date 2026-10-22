@@ -166,7 +166,9 @@ impl<const N: usize> FutureTable<N> {
             Some(FutureState::Ready) => Err(Error::invalid_state_error(
                 "kiln-async: cannot park a reader on an already-ready future",
             )),
-            None => unreachable!("live_slot_mut guarantees an occupied slot"),
+            None => Err(Error::invalid_state_error(
+                "kiln-async: live_slot_mut returned a slot with no state",
+            )),
         }
     }
 
@@ -185,7 +187,9 @@ impl<const N: usize> FutureTable<N> {
             Some(FutureState::Ready) => Err(Error::invalid_state_error(
                 "kiln-async: future already completed (single-shot write)",
             )),
-            None => unreachable!("live_slot_mut guarantees an occupied slot"),
+            None => Err(Error::invalid_state_error(
+                "kiln-async: live_slot_mut returned a slot with no state",
+            )),
         }
     }
 

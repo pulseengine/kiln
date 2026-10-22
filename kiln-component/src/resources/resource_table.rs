@@ -661,12 +661,18 @@ impl ResourceTable {
         match operation {
             FormatResourceOperation::Rep => {
                 // Representation operation - convert resource to its representation
-                let _resource = self.resources.get(&handle).unwrap();
+                let _resource = self
+                    .resources
+                    .get(&handle)
+                    .ok_or_else(|| Error::resource_error("Resource not found"))?;
                 Ok(ComponentValue::U32(handle))
             },
             FormatResourceOperation::Drop => {
                 // Drop operation - remove the resource from the table
-                let _resource = self.resources.remove(&handle).unwrap();
+                let _resource = self
+                    .resources
+                    .remove(&handle)
+                    .ok_or_else(|| Error::resource_error("Resource not found"))?;
                 Ok(ComponentValue::Void)
             },
             FormatResourceOperation::New => {

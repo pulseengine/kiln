@@ -224,7 +224,15 @@ impl CodeValidator {
         let mut poor_documentation = Vec::new();
 
         for crate_path in &crates {
-            let crate_name = crate_path.file_name().unwrap().to_string_lossy();
+            let crate_name = crate_path
+                .file_name()
+                .ok_or_else(|| {
+                    BuildError::Workspace(format!(
+                        "Crate path has no directory name: {}",
+                        crate_path.display()
+                    ))
+                })?
+                .to_string_lossy();
 
             // Check README.md
             let readme_path = crate_path.join("README.md");

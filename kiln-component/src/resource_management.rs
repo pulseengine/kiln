@@ -107,7 +107,7 @@ pub enum ResourceData {
     Bytes(BoundedVec<u8, 4096>),
     /// Custom data pointer (for std only)
     #[cfg(feature = "std")]
-    Custom(Box<dyn std::any::Any + Send + Sync>),
+    Custom(std::sync::Arc<dyn std::any::Any + Send + Sync>),
     /// External resource reference
     External(u64),
 }
@@ -117,7 +117,7 @@ impl Clone for ResourceData {
         match self {
             Self::Bytes(b) => Self::Bytes(b.clone()),
             #[cfg(feature = "std")]
-            Self::Custom(_) => panic!("Cannot clone Custom resource data"),
+            Self::Custom(data) => Self::Custom(std::sync::Arc::clone(data)),
             Self::External(id) => Self::External(*id),
         }
     }
@@ -878,7 +878,7 @@ pub fn create_resource_data_external(reference: u64) -> ResourceData {
 /// Helper function to create resource data from custom data (std only)
 #[cfg(feature = "std")]
 pub fn create_resource_data_custom<T: std::any::Any + Send + Sync>(data: T) -> ResourceData {
-    ResourceData::Custom(Box::new(data))
+    ResourceData::Custom(std::sync::Arc::new(data))
 }
 
 /// Helper function to create a resource type
@@ -969,19 +969,16 @@ impl Default for ResourceHandle {
     }
 }
 
-impl Default for ResourceData {
-    fn default() -> Self {
-        Self::Bytes({
-            let provider = safe_managed_alloc!(65536, CrateId::Component).unwrap();
-            BoundedVec::new().unwrap()
-        })
-    }
-}
-
 // Apply macro to types that need traits
 impl_basic_traits_tuple!(ResourceHandle, ResourceHandle::default());
 impl_basic_traits_tuple!(ResourceTypeId, ResourceTypeId::default());
-impl_basic_traits_enum!(ResourceData, ResourceData::default());
+impl_basic_traits_enum!(
+    ResourceData,
+    ResourceData::Bytes({
+        let _provider = safe_managed_alloc!(65536, CrateId::Component)?;
+        BoundedVec::new()
+    })
+);
 
 #[cfg(test)]
 mod tests {

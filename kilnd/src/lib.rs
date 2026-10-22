@@ -724,7 +724,7 @@ impl KilndEngine {
                     > = std::collections::HashMap::new();
 
                     for nested in instance.nested_component_instances.iter_mut() {
-                        for (export_name, _) in &nested.exports {
+                        for export_name in nested.exports.keys() {
                             routes.insert(export_name.clone(), nested.instance_index as usize);
                         }
                         // Take the engine from the nested instance and wrap in Arc<Mutex>
@@ -1832,11 +1832,8 @@ impl SimpleArgs {
 ///
 /// # Errors
 ///
-/// Returns whatever [`run`] returns.
-///
-/// # Panics
-///
-/// Panics if the runtime thread cannot be spawned or itself panics.
+/// Returns whatever [`run`] returns, or an error if the runtime thread cannot
+/// be spawned or itself panics.
 #[cfg(feature = "std")]
 pub fn run_on_large_stack(bin_name: &'static str) -> Result<()> {
     let stack_size: usize = std::env::var("KILN_STACK_SIZE")
@@ -1847,9 +1844,9 @@ pub fn run_on_large_stack(bin_name: &'static str) -> Result<()> {
     std::thread::Builder::new()
         .stack_size(stack_size)
         .spawn(move || run(bin_name))
-        .expect("Failed to spawn main thread")
+        .map_err(|_| Error::runtime_error("Failed to spawn main thread"))?
         .join()
-        .expect("Main thread panicked")
+        .map_err(|_| Error::runtime_error("Main thread panicked"))?
 }
 
 /// Name of the deprecated binary alias. v0.6.0 ships it next to `kiln`; it is

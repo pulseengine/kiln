@@ -63,23 +63,27 @@ pub fn set_global_wasi_args(args: Vec<String>) {
 ///
 /// Falls back to `std::env::args()` if no global args are set
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if the global WASI args mutex is poisoned (a thread panicked while
-/// holding the lock).
+/// Returns an error if the global WASI args mutex is poisoned (a thread
+/// panicked while holding the lock).
 #[cfg(feature = "std")]
-pub fn get_global_wasi_args() -> Vec<String> {
+pub fn get_global_wasi_args() -> Result<Vec<String>> {
     // Per CLAUDE.md: fail loud and early. A poisoned mutex means a thread panicked
     // while holding the lock - the data may be in an inconsistent state.
     let global_args = GLOBAL_WASI_ARGS
         .lock()
-        .expect("GLOBAL_WASI_ARGS mutex poisoned - a thread panicked while holding the lock")
+        .map_err(|_| {
+            Error::wasi_runtime_error(
+                "GLOBAL_WASI_ARGS mutex poisoned - a thread panicked while holding the lock",
+            )
+        })?
         .clone();
     if global_args.is_empty() {
         // Fall back to actual process args
-        std::env::args().collect()
+        Ok(std::env::args().collect())
     } else {
-        global_args
+        Ok(global_args)
     }
 }
 
@@ -87,23 +91,27 @@ pub fn get_global_wasi_args() -> Vec<String> {
 ///
 /// Falls back to `std::env::vars()` if no global env vars are set
 ///
-/// # Panics
+/// # Errors
 ///
-/// Panics if the global WASI env mutex is poisoned (a thread panicked while
-/// holding the lock).
+/// Returns an error if the global WASI env mutex is poisoned (a thread
+/// panicked while holding the lock).
 #[cfg(feature = "std")]
-pub fn get_global_wasi_env() -> Vec<(String, String)> {
+pub fn get_global_wasi_env() -> Result<Vec<(String, String)>> {
     // Per CLAUDE.md: fail loud and early. A poisoned mutex means a thread panicked
     // while holding the lock - the data may be in an inconsistent state.
     let global_env = GLOBAL_WASI_ENV
         .lock()
-        .expect("GLOBAL_WASI_ENV mutex poisoned - a thread panicked while holding the lock")
+        .map_err(|_| {
+            Error::wasi_runtime_error(
+                "GLOBAL_WASI_ENV mutex poisoned - a thread panicked while holding the lock",
+            )
+        })?
         .clone();
     if global_env.is_empty() {
         // Fall back to actual process environment
-        std::env::vars().collect()
+        Ok(std::env::vars().collect())
     } else {
-        global_env
+        Ok(global_env)
     }
 }
 
@@ -652,8 +660,8 @@ impl WasiDispatcher {
         // Populate from global state
         #[cfg(feature = "std")]
         {
-            dispatcher.args = get_global_wasi_args();
-            dispatcher.env_vars = get_global_wasi_env();
+            dispatcher.args = get_global_wasi_args()?;
+            dispatcher.env_vars = get_global_wasi_env()?;
         }
         Ok(dispatcher)
     }
@@ -1193,7 +1201,7 @@ impl WasiDispatcher {
                 // Get args - prefer local args, fall back to global thread-local args
                 #[cfg(feature = "std")]
                 let args_to_use: Vec<String> = if self.args.is_empty() {
-                    get_global_wasi_args()
+                    get_global_wasi_args()?
                 } else {
                     self.args.clone()
                 };
@@ -1215,7 +1223,7 @@ impl WasiDispatcher {
                 // Get env vars - prefer local env_vars, fall back to global then process env
                 #[cfg(feature = "std")]
                 let env_to_use: Vec<(String, String)> = if self.env_vars.is_empty() {
-                    get_global_wasi_env()
+                    get_global_wasi_env()?
                 } else {
                     self.env_vars.clone()
                 };
@@ -1906,7 +1914,7 @@ impl WasiDispatcher {
                 // Get args - prefer local args, fall back to global args
                 #[cfg(feature = "std")]
                 let args_to_use: Vec<String> = if self.args.is_empty() {
-                    get_global_wasi_args()
+                    get_global_wasi_args()?
                 } else {
                     self.args.clone()
                 };
@@ -2819,8 +2827,13 @@ impl WasiDispatcher {
                 let mut bytes = [0u8; 16];
                 PlatformRandom::get_secure_bytes(&mut bytes)
                     .map_err(|_| Error::wasi_capability_unavailable("Random not available"))?;
-                let v0 = u64::from_le_bytes(bytes[..8].try_into().unwrap());
-                let v1 = u64::from_le_bytes(bytes[8..].try_into().unwrap());
+                let (lo, hi) = bytes.split_at(8);
+                let v0 = u64::from_le_bytes(lo.try_into().map_err(|_| {
+                    Error::wasi_runtime_error("insecure-seed: low half is not 8 bytes")
+                })?);
+                let v1 = u64::from_le_bytes(hi.try_into().map_err(|_| {
+                    Error::wasi_runtime_error("insecure-seed: high half is not 8 bytes")
+                })?);
                 Ok(vec![CoreValue::I64(v0 as i64), CoreValue::I64(v1 as i64)])
             }
 
@@ -2836,7 +2849,7 @@ impl WasiDispatcher {
                     _ => return Err(Error::wasi_invalid_argument("get-type: missing descriptor")),
                 };
                 let is_dir = self.preopens.iter().any(|(preopen_fd, _)| *preopen_fd == fd)
-                    || self.fd_table.get(&fd).map_or(false, |e| matches!(e.fd_type, FileDescriptorType::PreopenDirectory(_)));
+                    || self.fd_table.get(&fd).is_some_and(|e| matches!(e.fd_type, FileDescriptorType::PreopenDirectory(_)));
                 // descriptor-type enum: 3=directory, 6=regular-file
                 let dtype = if is_dir { 3i32 } else { 6i32 };
                 // result<ok, _>: discriminant=0, payload=dtype
