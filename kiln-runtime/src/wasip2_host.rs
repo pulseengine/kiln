@@ -1899,7 +1899,8 @@ impl Wasip2Host {
                 Ok(vec![Value::I32((handle + 1000) as i32)])
             },
             _ => {
-                eprintln!("[WASIP2] Unknown function: {}/{}", base_interface, function);
+                #[cfg(feature = "tracing")]
+                kiln_foundation::tracing::warn!(interface = %base_interface, function = %function, "unknown wasip2 function");
                 Err(kiln_error::Error::runtime_error("Unknown wasip2 function"))
             }
         }

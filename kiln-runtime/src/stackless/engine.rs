@@ -1198,20 +1198,33 @@ impl StacklessEngine {
         let ends_to_skip = original_block_count - 1 - target_block_idx;
         let mut depth = ends_to_skip as i32;
         let mut new_pc = frame.pc; // frame.pc points to instruction after the Call
-        eprintln!("[DEBUG-EXN-HANDLER] ends_to_skip={}, depth={}, starting_pc={}, instructions.len()={}", ends_to_skip, depth, new_pc, instructions.len());
-        eprintln!("[DEBUG-EXN-HANDLER] original_block_count={}, target_block_idx={}, try_block_idx={}", original_block_count, target_block_idx, try_block_idx);
-        eprintln!("[DEBUG-EXN-HANDLER] handler_label={}, handler_is_ref={}", handler_label, handler_is_ref);
-        eprintln!("[DEBUG-EXN-HANDLER] stack_len={}", frame.operand_stack.len());
-        eprintln!("[DEBUG-EXN-HANDLER] block_stack_len={}, block_depth={}", frame.block_stack.len(), frame.block_depth);
+        #[cfg(feature = "tracing")]
+        trace!(
+            ends_to_skip = ends_to_skip,
+            depth = depth,
+            starting_pc = new_pc,
+            instructions_len = instructions.len(),
+            original_block_count = original_block_count,
+            target_block_idx = target_block_idx,
+            try_block_idx = try_block_idx,
+            handler_label = handler_label,
+            handler_is_ref = handler_is_ref,
+            stack_len = frame.operand_stack.len(),
+            block_stack_len = frame.block_stack.len(),
+            block_depth = frame.block_depth,
+            "exception handler resume scan"
+        );
         while new_pc < instructions.len() && depth >= 0 {
-            eprintln!("[DEBUG-EXN-HANDLER] scan pc={}, depth={}, instr={:?}", new_pc, depth, core::mem::discriminant(&instructions[new_pc]));
+            #[cfg(feature = "tracing")]
+            trace!(pc = new_pc, depth = depth, instr = ?core::mem::discriminant(&instructions[new_pc]), "exception handler scan");
             match &instructions[new_pc] {
                 Instruction::Block { .. } | Instruction::Loop { .. } | Instruction::If { .. } | Instruction::TryTable { .. } | Instruction::Try { .. } => {
                     depth += 1;
                 }
                 Instruction::End => {
                     if depth == 0 {
-                        eprintln!("[DEBUG-EXN-HANDLER] Found target End at pc={}", new_pc);
+                        #[cfg(feature = "tracing")]
+                        trace!(pc = new_pc, "exception handler found target End");
                         break;
                     }
                     depth -= 1;
@@ -1221,7 +1234,8 @@ impl StacklessEngine {
             new_pc += 1;
         }
         frame.pc = new_pc;
-        eprintln!("[DEBUG-EXN-HANDLER] Final frame.pc={}", frame.pc);
+        #[cfg(feature = "tracing")]
+        trace!(pc = frame.pc, "exception handler resume pc");
 
         true
     }
@@ -1264,7 +1278,7 @@ impl StacklessEngine {
 
         #[cfg(feature = "tracing")]
         if !links_to_remap.is_empty() {
-            tracing::debug!(
+            debug!(
                 old_id = old_id,
                 new_id = new_id,
                 count = links_to_remap.len(),
@@ -4909,7 +4923,6 @@ impl StacklessEngine {
                             #[cfg(feature = "tracing")]
                             trace!(
                                 instance_id = instance_id,
-                                addr = addr,
                                 offset = format_args!("{:#x}", offset),
                                 value = value & 0xFF,
                                 "[I64Store8] Store low 8 bits of i64"
@@ -4943,7 +4956,6 @@ impl StacklessEngine {
                             #[cfg(feature = "tracing")]
                             trace!(
                                 instance_id = instance_id,
-                                addr = addr,
                                 offset = format_args!("{:#x}", offset),
                                 value = value & 0xFFFF,
                                 "[I64Store16] Store low 16 bits of i64"
@@ -4977,7 +4989,6 @@ impl StacklessEngine {
                             #[cfg(feature = "tracing")]
                             trace!(
                                 instance_id = instance_id,
-                                addr = addr,
                                 offset = format_args!("{:#x}", offset),
                                 value = value & 0xFFFFFFFF,
                                 "[I64Store32] Store low 32 bits of i64"
